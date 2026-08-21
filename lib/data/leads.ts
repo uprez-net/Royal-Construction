@@ -428,15 +428,14 @@ export async function getLeads(
       // above already carries an OR for the search terms, and a second OR at
       // this level overwrites it in the object literal, so searching while the
       // Follow-ups tab was open would have silently ignored the search text.
+      // Now keyed off the LeadTask table rather than the two date columns on
+      // Lead, so this stays in step with what the Follow-ups tab lists. The
+      // columns are still written for now and are dropped once nothing reads
+      // them; the tasks are the source of truth from here.
       ...(hasOpenTask && {
         AND: [
           { stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] as LeadStage[] } },
-          {
-            OR: [
-              { followupDate: { not: null }, followupCompletedAt: null },
-              { meetingDate: { not: null }, meetingCompletedAt: null },
-            ],
-          },
+          { tasks: { some: { completedAt: null } } },
         ],
       }),
       ...(isMeetingScheduledFilterActive && {

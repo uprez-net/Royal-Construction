@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Phone,
@@ -13,10 +13,17 @@ import {
   CalendarDays,
   CalendarRange,
   TimerReset,
+  Check,
 } from "lucide-react";
 import { Lead, LeadStage } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
-import { dialablePhone, isTerminalStage } from "@/lib/leads/lead-helpers";
+import { dialablePhone } from "@/lib/leads/lead-helpers";
+import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
+import {
+  completeTask,
+  fetchOpenTasks,
+  type LeadTaskRow,
+} from "@/lib/leads/task-service";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -34,14 +41,6 @@ import { toZonedTime } from "date-fns-tz";
 interface FollowupsViewProps {
   loading: boolean;
   leads: Lead[];
-  followupStats: {
-    totalFollowUps: number;
-    pendingFollowUps: number;
-    upcomingFollowUps: number;
-    totalMeetings: number;
-    pendingMeetings: number;
-    upcomingMeetings: number;
-  } | null;
   onLeadUpdate: (lead: Lead) => void;
   onLeadDelete: (leadId: number) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
@@ -120,32 +119,47 @@ function formatDate(dateStr: string | null): string {
   return format(date, "EEE, MMM d");
 }
 
+/** Due today or earlier. Module scope so the memo hooks below stay memoizable. */
+function isDue(t: LeadTaskRow, today: Date): boolean {
+  if (t.dueDate === null) return false;
+  const d = parseISO(t.dueDate);
+  return isBefore(d, today) || isEqual(d, today);
+}
+
 interface FollowupItemProps {
-  lead: Lead;
+  task: LeadTaskRow;
+  /** Only needed to open the email modal, which wants a whole Lead. */
+  lead: Lead | undefined;
   index: number;
   onLeadUpdate: (lead: Lead) => void;
+  onDone: (taskId: number) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
 function FollowupItem({
+  task,
   lead,
   index,
   onLeadUpdate,
+  onDone,
   showToast,
 }: FollowupItemProps) {
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [closing, setClosing] = useState(false);
   const handleCall = () => {
-    const dial = dialablePhone(lead.phone);
+    const dial = dialablePhone(task.lead.phone ?? "");
     if (dial) window.location.href = `tel:${dial}`;
   };
 
-  const stageConfig = getStageConfig(lead.stage);
+  const typeLabel =
+    LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type;
+  const stageConfig = getStageConfig(task.lead.stage);
   const todayStr = getAustralianDate(0);
-  const isToday = isSameDay(parseISO(lead.followupDate || ""), todayStr);
+  const isToday = task.dueDate ? isSameDay(parseISO(task.dueDate), todayStr) : false;
 
   return (
     <div className={`fu-item ${isToday ? "fu-item-today" : ""}`}>
-      {showEmailModal && (
+      {showEmailModal && lead && (
         <EmailFlowModal
           lead={lead}
           onClose={() => setShowEmailModal(false)}
@@ -166,7 +180,7 @@ function FollowupItem({
       <div className="fu-item-body">
         <div className="fu-item-top">
           <div className="fu-item-name-row">
-            <span className="fu-item-name">{lead.name}</span>
+            <span className="fu-item-name">{task.lead.name}</span>
             <span
               className="fu-stage-pill"
               style={{
@@ -174,21 +188,22 @@ function FollowupItem({
                 color: isToday ? "var(--warning)" : stageConfig.color,
               }}
             >
-              {lead.stage}
+              {task.lead.stage}
             </span>
+            <span className="fu-type-pill">{typeLabel}</span>
           </div>
           <div className="fu-item-meta">
             <span className="fu-meta-chip">
               <Calendar size={12} />
-              {formatDate(lead.followupDate)}
+              {task.dueDate ? formatDate(task.dueDate) : "No date"}
             </span>
             <span className="fu-meta-chip">
               <Clock size={12} />
-              {lead.followupTime}
+              {task.dueTime ?? ""}
             </span>
             <span className="fu-meta-chip">
               <User size={12} />
-              {lead.assignedUser?.name || "Unassigned"}
+              {task.lead.assignedName || "Unassigned"}
             </span>
           </div>
         </div>
@@ -197,18 +212,18 @@ function FollowupItem({
             uses display:contents, so a missing cell would shunt the actions
             into the notes column on any lead without a note. */}
         <div
-          className={`fu-notes-block${lead.followupNotes ? "" : " fu-notes-empty"}`}
-          title={lead.followupNotes || undefined}
+          className={`fu-notes-block${task.notes ? "" : " fu-notes-empty"}`}
+          title={task.notes || undefined}
         >
-          {lead.followupNotes}
+          {task.notes}
         </div>
 
         <div className="fu-item-actions">
           <button
             type="button"
             className="fu-action-btn fu-action-call"
-            title={`Call ${lead.name}`}
-            aria-label={`Call ${lead.name}`}
+            title={`Call ${task.lead.name}`}
+            aria-label={`Call ${task.lead.name}`}
             onClick={(event) => {
               event.stopPropagation();
               handleCall();
@@ -220,8 +235,15 @@ function FollowupItem({
           <button
             type="button"
             className="fu-action-btn fu-action-email"
-            title={`Send follow-up email to ${lead.name}`}
-            aria-label={`Send follow-up email to ${lead.name}`}
+            title={
+              lead
+                ? `Send follow-up email to ${task.lead.name}`
+                : "Open the lead to email from here"
+            }
+            aria-label={`Send follow-up email to ${task.lead.name}`}
+            // The modal wants a whole Lead. Tasks are fetched independently of
+            // the lead page, so one can arrive without its lead loaded.
+            disabled={!lead}
             onClick={(event) => {
               event.stopPropagation();
               setShowEmailModal(true);
@@ -229,6 +251,28 @@ function FollowupItem({
           >
             <Mail size={14} />
             <span>Email</span>
+          </button>
+          <button
+            type="button"
+            className="fu-action-btn"
+            title={`Mark this ${typeLabel.toLowerCase()} done`}
+            aria-label={`Mark ${task.lead.name} ${typeLabel.toLowerCase()} done`}
+            disabled={closing}
+            onClick={async (event) => {
+              event.stopPropagation();
+              setClosing(true);
+              try {
+                await completeTask(task.id);
+                onDone(task.id);
+              } catch {
+                showToast("Could not close the task. Please try again.", "error");
+              } finally {
+                setClosing(false);
+              }
+            }}
+          >
+            <Check size={14} />
+            <span>Done</span>
           </button>
         </div>
       </div>
@@ -239,83 +283,94 @@ function FollowupItem({
 function FollowupsView({
   loading,
   leads,
-  followupStats,
   onLeadUpdate,
   showToast,
 }: FollowupsViewProps) {
   const dispatch = useAppDispatch();
 
-  // Keyed off the dates, not the stage. Every bucket below already filtered on
-  // a date, so the stage clause did no work except hide leads: on production 19
-  // leads at other stages carried a scheduled date this tab refused to show,
-  // five of them Contacted and one No Response.
-  //
-  // Terminal leads are excluded, and that part is not optional. Thirteen closed
-  // or won leads carry stale dates and would otherwise appear as live work.
-  const relevantLeads = useMemo(
-    () =>
-      leads.filter(
-        (lead) =>
-          !isTerminalStage(lead.stage) &&
-          (lead.followupDate || lead.meetingDate),
-      ),
-    [leads],
-  );
+  // Tasks, not leads with dates. The old buckets read followupDate and
+  // meetingDate off the Lead, which allowed one follow-up and one meeting per
+  // lead ever and overwrote the previous one on every save.
+  const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const busy = loading || tasksLoading;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenTasks(controller.signal)
+      .then(setTasks)
+      .catch(() => {
+        /* Aborted on unmount, or the request failed. An empty list renders the
+           "All caught up" state, which is the same thing the tab showed before
+           tasks existed, so there is nothing to recover here. */
+      })
+      .finally(() => setTasksLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  /** Drop a closed task from the list without refetching the whole tab. */
+  const handleTaskDone = useCallback((taskId: number) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  }, []);
+
+  /** The full Lead, for the email modal. Missing is fine; the button disables. */
+  const leadsById = useMemo(() => {
+    const m = new Map<number, Lead>();
+    for (const l of leads) m.set(l.id, l);
+    return m;
+  }, [leads]);
 
   const today = getAustralianDate();
 
-  const pendingFollowups = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        lead.followupDate &&
-        !lead.followupCompletedAt &&
-        (isBefore(parseISO(lead.followupDate), today) ||
-          isEqual(parseISO(lead.followupDate), today)),
-    );
-  }, [relevantLeads, today]);
+  const meetings = useMemo(() => tasks.filter((t) => t.type === "MEETING"), [tasks]);
+  const nonMeetings = useMemo(() => tasks.filter((t) => t.type !== "MEETING"), [tasks]);
 
-  const upcomingFollowups = useMemo(() => {
-    return relevantLeads
-      .filter(
-        (lead) =>
-          lead.followupDate &&
-          !lead.followupCompletedAt &&
-          isAfter(parseISO(lead.followupDate), today),
-      )
-      .sort(
-        (a, b) =>
-          parseISO(a.followupDate!).getTime() -
-          parseISO(b.followupDate!).getTime(),
-      );
-  }, [relevantLeads, today]);
+  // Undated tasks count as pending. They are work nobody has scheduled, and
+  // hiding them is how 5 production leads ended up parked while the tab said
+  // "All caught up".
+  const pendingFollowups = useMemo(
+    () => nonMeetings.filter((t) => t.dueDate === null || isDue(t, today)),
+    [nonMeetings, today],
+  );
 
-  const pendingMeetings = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        lead.meetingDate &&
-        !lead.meetingCompletedAt &&
-        (isBefore(parseISO(lead.meetingDate), today) ||
-          isEqual(parseISO(lead.meetingDate), today)),
-    );
-  }, [relevantLeads, today]);
+  const upcomingFollowups = useMemo(
+    () =>
+      nonMeetings
+        .filter((t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today))
+        .sort((a, b) => parseISO(a.dueDate!).getTime() - parseISO(b.dueDate!).getTime()),
+    [nonMeetings, today],
+  );
 
-  const upcomingMeetings = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        lead.meetingDate &&
-        !lead.meetingCompletedAt &&
-        isAfter(parseISO(lead.meetingDate), today),
-    );
-  }, [relevantLeads, today]);
+  const pendingMeetings = useMemo(
+    () => meetings.filter((t) => t.dueDate === null || isDue(t, today)),
+    [meetings, today],
+  );
 
-  const stats = followupStats ?? {
-    totalFollowUps: pendingFollowups.length + upcomingFollowups.length,
-    pendingFollowUps: pendingFollowups.length,
-    upcomingFollowUps: upcomingFollowups.length,
-    totalMeetings: pendingMeetings.length + upcomingMeetings.length,
-    pendingMeetings: pendingMeetings.length,
-    upcomingMeetings: upcomingMeetings.length,
-  };
+  const upcomingMeetings = useMemo(
+    () => meetings.filter((t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today)),
+    [meetings, today],
+  );
+
+  // Derived from the same list the rows come from, so the counts and the list
+  // can no longer disagree. Production showed three different numbers for this
+  // on one screen: the card said 10 pending, the tab said 0, the panel said 4.
+  const liveStats = useMemo(
+    () => ({
+      totalFollowUps: nonMeetings.length,
+      pendingFollowUps: pendingFollowups.length,
+      upcomingFollowUps: upcomingFollowups.length,
+      totalMeetings: meetings.length,
+      pendingMeetings: pendingMeetings.length,
+      upcomingMeetings: upcomingMeetings.length,
+    }),
+    [nonMeetings, pendingFollowups, upcomingFollowups, meetings, pendingMeetings, upcomingMeetings],
+  );
+
+  // No server fallback any more. The counts and the rows are derived from one
+  // list, so they cannot disagree. Production showed three different numbers
+  // for this on a single screen: the card said 10 pending, the tab said 0,
+  // and the panel said 4, because each counted a different thing.
+  const stats = liveStats;
 
   return (
     <div className="followups-view">
@@ -344,12 +399,14 @@ function FollowupsView({
                   </p>
                 </div>
               ) : (
-                pendingFollowups.map((lead, index) => (
+                pendingFollowups.map((task, index) => (
                   <FollowupItem
-                    key={lead.id}
-                    lead={lead}
+                    key={task.id}
+                    task={task}
+                    lead={leadsById.get(task.leadId)}
                     index={index}
                     onLeadUpdate={onLeadUpdate}
+                    onDone={handleTaskDone}
                     showToast={showToast}
                   />
                 ))
@@ -366,13 +423,13 @@ function FollowupsView({
                 <h3 className="fu-card-title">Upcoming Reminders</h3>
               </div>
             </div>
-            {!loading ? (
+            {!busy ? (
               <div className="fu-reminders">
-                {upcomingFollowups.slice(0, 5).map((lead) => {
-                  const sc = getStageConfig(lead.stage);
+                {upcomingFollowups.slice(0, 5).map((task) => {
+                  const sc = getStageConfig(task.lead.stage);
                   return (
                     <div
-                      key={lead.id}
+                      key={task.id}
                       className="fu-reminder-item"
                       style={
                         { "--reminder-accent": sc.dot } as React.CSSProperties
@@ -380,13 +437,13 @@ function FollowupsView({
                     >
                       <div className="fu-reminder-date-col">
                         <span className="fu-reminder-day-label">
-                          {formatDate(lead.followupDate)}
+                          {task.dueDate ? formatDate(task.dueDate) : "No date"}
                         </span>
                       </div>
                       <div className="fu-reminder-info">
-                        <span className="fu-reminder-name">{lead.name}</span>
+                        <span className="fu-reminder-name">{task.lead.name}</span>
                         <span className="fu-reminder-time">
-                          {lead.followupTime}
+                          {task.dueTime ?? ""}
                         </span>
                       </div>
                     </div>

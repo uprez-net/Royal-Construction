@@ -2885,3 +2885,143 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+/* ── Task form ─────────────────────────────────────────────────────────
+   Two chip groups and a note. Both groups replace values people were
+   already typing into the follow-up notes box, so the options are the
+   strings from production rather than a designed set. */
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-body);
+}
+
+.task-form-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.task-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  width: 34px;
+  flex-shrink: 0;
+}
+
+.task-chip-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.task-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color);
+  background: hsl(var(--background));
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1.6;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.task-chip:hover {
+  border-color: var(--rule-strong, var(--border-color));
+  color: var(--text-primary);
+}
+
+.task-chip-on {
+  background: var(--stage-4, #0f766e);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.task-chip:focus-visible,
+.task-btn:focus-visible {
+  outline: 2px solid var(--stage-4, #0f766e);
+  outline-offset: 2px;
+}
+
+.task-form-input {
+  flex: 1;
+  min-width: 160px;
+  font-size: 12px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: var(--text-primary);
+}
+
+.task-form-error {
+  font-size: 11.5px;
+  color: var(--critical, #a81e17);
+  margin: 0;
+}
+
+.task-form-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.task-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: hsl(var(--background));
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.task-btn-primary {
+  background: var(--stage-4, #0f766e);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.task-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The task type, shown on every row so the list reads as work rather than
+   as a list of leads that happen to have dates. */
+.fu-type-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-body);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-chip,
+  .fu-item {
+    transition: none;
+  }
+}
