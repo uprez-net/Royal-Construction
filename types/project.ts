@@ -322,12 +322,12 @@ export interface UIMilestone extends MilestoneWithFilesTradiesUpdates {
 }
 
 export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
-  Deposit: "Deposit (5%)",
-  Slab: "Slab (15%)",
-  Frame: "Frame (25%)",
-  Lockup: "Lock Up (25%)",
-  Interior_Fit_Out: "Interior Fit-Out (20%)",
-  Final: "Final (10%)",
+  Deposit: "Deposit",
+  Slab: "Slab",
+  Frame: "Frame",
+  Lockup: "Lock Up",
+  Interior_Fit_Out: "Interior Fit-Out",
+  Final: "Final",
 }
 
 export const PROJECT_STAGE_PERCENTAGE: Record<ProjectStage, number> = {
