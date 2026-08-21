@@ -177,6 +177,15 @@ export function JobSetupPanel({
               }
             />
           </Field>
+          <Field label="Total Linens">
+            <Input
+              placeholder="Auto-filled from lead requirements"
+              value={job.linenCount}
+              onChange={(event) =>
+                onJobChange({ linenCount: parseInt(event.target.value) || 0 })
+              }
+            />
+          </Field>
           <Field label="Council">
             <Input
               placeholder="Auto-filled from Site Location"

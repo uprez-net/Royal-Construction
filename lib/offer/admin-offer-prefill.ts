@@ -228,6 +228,9 @@ export function reevaluateFormulaCostLines(
     | "balconySqm"
     | "voidSqm"
     | "kitchenSqm"
+    | "bedrooms"
+    | "bathrooms"
+    | "linenCount"
   >,
   area: OfferAreaCalculator,
 ): readonly OfferWorkspaceCostLine[] {
@@ -261,6 +264,9 @@ export function reevaluateFormulaCostLines(
       basis.balconySqm +
       basis.voidSqm +
       basis.kitchenSqm,
+    TOTAL_SHOWERS: job.bathrooms,
+    TOTAL_BEDROOMS: job.bedrooms,
+    TOTAL_LINENS: job.linenCount,
   };
 
   const scope = buildFormulaScope(rateConstants, measurements);
