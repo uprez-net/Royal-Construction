@@ -17,6 +17,9 @@ export const milestoneTemplates: MilestoneTemplate[] = [
   { order: 5, name: "Sydney Water Co-ordinator Inspection", parentId: 4, projectStage: ProjectStage.Slab, relatedCostLines: ["ON-SITE WATER/SEWER/SYDNEY WATER APPROVAL"] },
   { order: 6, name: "Engineer Inspection", parentId: 4, projectStage: ProjectStage.Slab },
   { order: 7, name: "Certifier Inspection", parentId: 4, projectStage: ProjectStage.Slab },
+  { order: 8, name: "Slab price certifier", parentId: 7, projectStage: ProjectStage.Slab },
+  { order: 9, name: "Slab pour certifier", parentId: 7, projectStage: ProjectStage.Slab },
+  
 
   { order: 8, name: "Follow Up Certificates Issued", parentId: null, projectStage: ProjectStage.Slab },
   { order: 9, name: "Internal Plumbing (Underground)", parentId: null, projectStage: ProjectStage.Slab, relatedCostLines: ["PLUMBER"] },
