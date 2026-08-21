@@ -345,11 +345,16 @@ export function ProjectMilestonesTab({
               })?.[0];
 
               const isActiveStage = stage === firstActiveStage;
-              const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
+              // const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
               const projectBudget = Number(project.totalBudget);
-              const stageBudget = Number.isFinite(projectBudget)
-                ? stagePercentage * projectBudget
-                : null;
+              const stageBudget = milestones.reduce((sum, milestone) => {
+                const milestoneBudget = Number(milestone.budget);
+                return sum + (Number.isFinite(milestoneBudget) ? milestoneBudget : 0);
+              }, 0);
+              const stagePercentage = projectBudget > 0 ? stageBudget / projectBudget : 0;
+              // const stageBudget = Number.isFinite(projectBudget)
+              //   ? stagePercentage * projectBudget
+              //   : null;
 
               // Sort milestone by status Completed > Active > Pending
               const sortedMilestones = [...milestones].sort((a, b) => {
@@ -397,7 +402,7 @@ export function ProjectMilestonesTab({
                               : "text-foreground",
                         )}
                       >
-                        {PROJECT_STAGE_LABELS[stage] ?? stage}
+                        {PROJECT_STAGE_LABELS[stage] ?? stage} {`(${Math.round(stagePercentage * 100)}%)`}
                       </h3>
 
                       {isAdmin && (

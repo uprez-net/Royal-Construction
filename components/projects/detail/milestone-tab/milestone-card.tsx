@@ -6,7 +6,7 @@ import {
   TradieScheduleWithTradieAndMilestone,
   UIMilestone,
 } from "@/types/project";
-import { dateFormat, formatStatus } from "@/utils/formatters";
+import { currency, dateFormat, formatStatus } from "@/utils/formatters";
 import { ReactNode } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   Wrench,
   ChevronDown,
   BanIcon,
+  DollarSign,
 } from "lucide-react";
 import {
   Collapsible,
@@ -134,7 +135,7 @@ export function MilestoneCard({
         <div
           className={cn(
             "min-w-0 flex-1",
-            milestone.status === "NOT_REQUIRED"&& "opacity-70 line-through",
+            milestone.status === "NOT_REQUIRED" && "opacity-70 line-through",
           )}
         >
           <div className="flex flex-wrap items-center gap-2">
@@ -205,6 +206,27 @@ export function MilestoneCard({
                   .join(", ")}
               </MilestoneMetaLine>
             ) : null}
+
+            {isAdmin && (
+              <>
+                {/* Milestone Budget Data */}
+                {parseFloat(milestone.budget) > 0 && (
+                  <MilestoneMetaLine
+                    icon={<DollarSign className="h-3.5 w-3.5" />}
+                  >
+                    Budget: {currency.format(parseFloat(milestone.budget))}
+                  </MilestoneMetaLine>
+                )}
+                {/* Milestone Spent Data */}
+                {milestone.spend && parseFloat(milestone.spend) > 0 && (
+                  <MilestoneMetaLine
+                    icon={<DollarSign className="h-3.5 w-3.5" />}
+                  >
+                    Spent: {currency.format(parseFloat(milestone.spend))}
+                  </MilestoneMetaLine>
+                )}
+              </>
+            )}
           </div>
         </div>
 

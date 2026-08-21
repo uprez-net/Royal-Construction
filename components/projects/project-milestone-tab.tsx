@@ -16,8 +16,9 @@ import {
 } from "@/components/ui/collapsible";
 import { ProjectWithStats } from "@/types/project";
 import { dateFormat } from "@/utils/formatters";
-import { ProjectStage } from "@prisma/client";
+import { MilestoneStatus, ProjectStage } from "@prisma/client";
 import { Badge } from "../ui/badge";
+import { cn } from "@/lib/utils";
 
 interface MilestoneTabProps {
   project: ProjectWithStats;
@@ -154,14 +155,44 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
             const hasActiveMilestone = milestones.some(
               (milestone) => milestone.status === "ACTIVE",
             );
+            const isStageComplete = milestones.every(
+              (milestone) => milestone.status !== "PENDING",
+            );
+            // Sort milestone by status Completed > Active > Pending
+            const sortedMilestones = [...milestones].sort((a, b) => {
+              const statusOrder: Record<MilestoneStatus, number> = {
+                DONE: 0,
+                ACTIVE: 1,
+                PENDING: 2,
+                NOT_REQUIRED: 3,
+              };
+              return statusOrder[a.status] - statusOrder[b.status];
+            });
 
             return (
               <Collapsible
                 key={stage}
                 defaultOpen={hasActiveMilestone}
-                className="rounded-lg border border-border/70 bg-card"
+                className={cn(
+                  "rounded-lg border bg-card transition-colors",
+                  isStageComplete
+                    ? "border-emerald-500/30 bg-emerald-500/5"
+                    : hasActiveMilestone
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border/70",
+                )}
               >
-                <CollapsibleTrigger className="group flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                <CollapsibleTrigger
+                  className={cn(
+                    "group flex w-full items-center justify-between px-4 py-3",
+                    "transition-colors hover:bg-muted/40",
+                    "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                    isStageComplete && "hover:bg-emerald-500/10",
+                    hasActiveMilestone &&
+                      !isStageComplete &&
+                      "hover:bg-primary/10",
+                  )}
+                >
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-foreground">
                       {stage}
@@ -169,6 +200,25 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {isStageComplete && (
+                      <Badge
+                        variant="default"
+                        className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-medium hover:bg-emerald-600"
+                      >
+                        <Check className="size-3.5" aria-hidden="true" />
+                        Complete
+                      </Badge>
+                    )}
+
+                    {hasActiveMilestone && (
+                      <Badge
+                        variant="secondary"
+                        className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                      >
+                        <ListChecks className="size-3.5" aria-hidden="true" />
+                        Active
+                      </Badge>
+                    )}
                     <Badge
                       variant="secondary"
                       className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
@@ -187,7 +237,7 @@ export function MilestoneTab({ project }: MilestoneTabProps) {
 
                 <CollapsibleContent>
                   <div className="space-y-2 border-t border-border/70 p-3">
-                    {milestones.map((milestone) => {
+                    {sortedMilestones.map((milestone) => {
                       const config = milestoneStatusConfig(milestone.status);
 
                       const StatusIcon = config.icon;
