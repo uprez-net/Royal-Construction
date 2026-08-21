@@ -90,7 +90,9 @@ async function seed() {
       introText: INITIAL_OFFER_DRAFT.introText,
       // The admin's inclusion copy is the page-4 wording, which now lives as
       // the `summary` on each inclusion entry.
+      inclusionSchedule: [...INITIAL_OFFER_DRAFT.inclusionSchedule],
       inclusions: [...INITIAL_OFFER_DRAFT.inclusionHighlights],
+      exclusions: [...INITIAL_OFFER_DRAFT.exclusionBullets],
       termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
     },
     hbfcClaim: {

@@ -8,17 +8,18 @@ import {
 import { SaveChangesButton } from "./shared/save-changes-button";
 import { OfferCardHeading } from "../new-workflow/offer-workspace-card-heading";
 import {
-  inclusionsChanged,
+  inclusionsScheduleChanged,
   saveOfferContent,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { FieldLabel } from "@/components/ui/field";
 import { BulletListEditor } from "./shared/bullet-list-editor";
 import { FilePenLine } from "lucide-react";
+import { InclusionScheduleRow } from "@/types/admin-offer-content";
 
 export function OfferInclusionsPage() {
   const dispatch = useAppDispatch();
-  const inclusions = useAppSelector(
-    (s) => s.adminOfferContent.data.offerContent.inclusions,
+  const inclusionSchedule = useAppSelector(
+    (s) => s.adminOfferContent.data.offerContent.inclusionSchedule,
   );
   const dirty = useAppSelector((s) => s.adminOfferContent.dirty.offerContent);
   const saving = useAppSelector((s) => s.adminOfferContent.saving.offerContent);
@@ -35,10 +36,10 @@ export function OfferInclusionsPage() {
       </CardHeader>
       <CardContent className="grid gap-6 pt-4">
         <label>
-          <FieldLabel>Inclusion bullets</FieldLabel>
+          <FieldLabel>Inclusion Schedule</FieldLabel>
           <BulletListEditor
-            value={inclusions}
-            onChange={(lines) => dispatch(inclusionsChanged(lines))}
+            value={inclusionSchedule}
+            onChange={(lines) => dispatch(inclusionsScheduleChanged(lines as InclusionScheduleRow[]))}
             addLabel="Add bullet"
             placeholder="Inclusion text"
           />

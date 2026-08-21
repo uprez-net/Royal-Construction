@@ -162,7 +162,12 @@ function resolveDraft(
   return {
     headline: c.headline,
     introText: c.introText,
-    exclusionBullets: [...OFFER_EXCLUDES_BULLETS],
+    exclusionBullets: [
+      ...OFFER_EXCLUDES_BULLETS,
+      ...c.exclusions
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !OFFER_EXCLUDES_BULLETS.includes(line)),
+    ],
     // Admin-configured inclusion copy IS the selling list — short lines for the
     // page beside the price. It is not schedule wording, so it no longer gets
     // turned into contract rows.
@@ -175,7 +180,23 @@ function resolveDraft(
             line.length > 0 && !STANDARD_INCLUSION_HIGHLIGHTS.includes(line),
         ),
     ],
-    inclusionSchedule: [...STANDARD_INCLUSION_ENTRIES],
+    inclusionSchedule: [
+      ...STANDARD_INCLUSION_ENTRIES,
+      ...c.inclusionSchedule
+        .map((row) => ({
+          spec: row.spec,
+          category: row.category,
+        }))
+        .filter(
+          (row) =>
+            row.spec.trim().length > 0 &&
+            !STANDARD_INCLUSION_ENTRIES.some(
+              (standard) =>
+                standard.spec === row.spec &&
+                standard.category === row.category,
+            ),
+        ),
+    ],
     termsSummary: c.termsAndConditions,
   };
 }
@@ -262,8 +283,7 @@ export function reevaluateFormulaCostLines(
       basis.porchSqm +
       basis.grannyFlatSqm +
       basis.balconySqm +
-      basis.voidSqm +
-      basis.kitchenSqm,
+      basis.voidSqm,
     TOTAL_SHOWERS: job.bathrooms,
     TOTAL_BEDROOMS: job.bedrooms,
     TOTAL_LINENS: job.linenCount,

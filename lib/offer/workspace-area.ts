@@ -155,8 +155,7 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
     basis.garageSqm +
     basis.voidSqm +
     basis.grannyFlatSqm +
-    basis.balconySqm +
-    basis.kitchenSqm,
+    basis.balconySqm,
   );
 }
 

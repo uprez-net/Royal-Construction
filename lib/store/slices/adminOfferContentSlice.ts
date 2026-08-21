@@ -11,6 +11,7 @@ import {
   type OfferExclusion,
   EMPTY_ADMIN_OFFER_CONTENT,
   HBFCClaimData,
+  InclusionScheduleRow,
 } from "@/types/admin-offer-content";
 import {
   saveBuildScopeAction,
@@ -250,8 +251,18 @@ const slice = createSlice({
       state.dirty.offerScope = true;
       state.error.offerScope = null;
     },
+    exclusionsListChanged(state, action: PayloadAction<string[]>) {
+      state.data.offerContent.exclusions = action.payload;
+      state.dirty.offerContent = true;
+      state.error.offerContent = null;
+    },
     inclusionsChanged(state, action: PayloadAction<string[]>) {
       state.data.offerContent.inclusions = action.payload;
+      state.dirty.offerContent = true;
+      state.error.offerContent = null;
+    },
+    inclusionsScheduleChanged(state, action: PayloadAction<InclusionScheduleRow[]>) {
+      state.data.offerContent.inclusionSchedule = action.payload;
       state.dirty.offerContent = true;
       state.error.offerContent = null;
     },
@@ -336,7 +347,9 @@ export const {
   allowanceRemoved,
   exclusionUpserted,
   exclusionRemoved,
+  exclusionsListChanged,
   inclusionsChanged,
+  inclusionsScheduleChanged,
   headlineChanged,
   introTextChanged,
   termsAndConditionsChanged,
