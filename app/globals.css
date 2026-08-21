@@ -1475,17 +1475,36 @@
 
 /* ── Followup list ─────────────────── */
 .fu-list {
-  padding: 6px 8px 8px;
+  padding: 4px 6px 6px;
 }
 
 /* ── Single followup item ──────────── */
+/* One row per task, not four stacked blocks.
+   Was: name, meta chips, a full-width notes box and the buttons on separate
+   lines, about 130px per lead. With 13 open follow-ups that is 1700px of
+   scrolling to read thirteen short facts, while two thirds of the width sat
+   empty. The grid puts them side by side and the notes column takes the slack. */
 .fu-item {
-  display: flex;
-  gap: 14px;
-  padding: 14px 12px;
-  border-radius: 10px;
+  display: grid;
+  grid-template-columns:
+    26px                    /* number */
+    minmax(150px, 1.1fr)    /* name + stage */
+    auto                    /* date, time, assignee */
+    minmax(0, 1.3fr)        /* notes, truncated */
+    auto;                   /* actions */
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 7px 10px;
+  border-radius: 8px;
   transition: background 0.15s;
   position: relative;
+}
+
+/* Both wrappers dissolve so their children become cells of .fu-item. */
+.fu-item-body,
+.fu-item-top {
+  display: contents;
 }
 
 .fu-item.fu-item-today {
@@ -1530,25 +1549,17 @@
 }
 
 /* ── Item body ─────────────────────── */
-.fu-item-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.fu-item-top {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .fu-item-name-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fu-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fu-item-name {
@@ -1573,7 +1584,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .fu-meta-chip {
@@ -1595,21 +1606,44 @@
 }
 
 /* ── Notes block ───────────────────── */
+/* Inline and single-line. A three-word note does not need a bordered panel
+   spanning the page; the title attribute carries anything that overflows. */
 .fu-notes-block {
   font-size: 12px;
   color: var(--text-secondary);
-  padding: 8px 10px;
+  padding: 3px 9px;
   background: var(--bg-body);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border-color);
-  line-height: 1.55;
+  line-height: 1.6;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fu-notes-block.fu-notes-empty {
+  background: none;
+  border-color: transparent;
+}
+
+@media (max-width: 1100px) {
+  .fu-item {
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: start;
+  }
+  .fu-item-meta,
+  .fu-notes-block,
+  .fu-item-actions {
+    grid-column: 2;
+  }
 }
 
 /* ── Action buttons ────────────────── */
 .fu-item-actions {
   display: flex;
   gap: 6px;
-  padding-top: 2px;
+  justify-content: flex-end;
 }
 
 .fu-action-btn {

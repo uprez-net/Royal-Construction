@@ -193,9 +193,15 @@ function FollowupItem({
           </div>
         </div>
 
-        {lead.followupNotes && (
-          <div className="fu-notes-block">{lead.followupNotes}</div>
-        )}
+        {/* Always rendered, even when empty. The row is a grid and the body
+            uses display:contents, so a missing cell would shunt the actions
+            into the notes column on any lead without a note. */}
+        <div
+          className={`fu-notes-block${lead.followupNotes ? "" : " fu-notes-empty"}`}
+          title={lead.followupNotes || undefined}
+        >
+          {lead.followupNotes}
+        </div>
 
         <div className="fu-item-actions">
           <button

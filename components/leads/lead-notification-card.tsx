@@ -115,7 +115,8 @@ export function LeadNotificationCard() {
 
       return {
         key: `followup-${lead.id}`,
-        label: `Follow-up due for ${lead.name} — was it completed?`,
+        label: lead.name,
+        kind: "Follow-up",
         scheduledDate,
         status,
         action: () =>
@@ -133,7 +134,8 @@ export function LeadNotificationCard() {
 
       return {
         key: `meeting-${lead.id}`,
-        label: `Meeting review needed for ${lead.name}`,
+        label: lead.name,
+        kind: "Meeting",
         scheduledDate,
         status,
         action: () =>
@@ -156,7 +158,7 @@ export function LeadNotificationCard() {
       <CardHeader className="border-b border-border/70 pb-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base font-semibold">
-            Follow Up and Meeting Scheduled Updates
+            Overdue and due today
           </CardTitle>
           <Button
             variant="ghost"
@@ -177,42 +179,40 @@ export function LeadNotificationCard() {
       </CardHeader>
 
       {!updatesCollapsed && (
-        <CardContent className="pt-4">
+        <CardContent className="pt-3">
           {notificationItems.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
               No pending follow up or meeting updates.
             </div>
           ) : (
             <div
               className={cn(
-                "space-y-2",
-                notificationItems.length > 2 &&
-                  "max-h-42.5 overflow-y-auto pr-2 no-scrollbar",
+                "space-y-1",
+                notificationItems.length > 6 &&
+                  "max-h-60 overflow-y-auto pr-2 no-scrollbar",
               )}
             >
               {notificationItems.map((item) => (
                 <div
                   key={item.key}
-                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"
+                  className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm"
                 >
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">{item.label}</p>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <CalendarDays className="h-4 w-4" />
-                        <span>Scheduled At: {item.scheduledDate}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 font-medium text-amber-700">
-                        <Clock3 className="h-4 w-4" />
-                        <span>{item.status}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button size="sm" variant="outline" onClick={item.action}>
-                    <Eye className="mr-1 h-4 w-4" />
+                  <span className="w-16 shrink-0 text-xs font-medium text-amber-700">
+                    {item.kind}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-semibold text-slate-900">
+                    {item.label}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-slate-600">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {item.scheduledDate}
+                  </span>
+                  <span className="flex w-32 shrink-0 items-center gap-1 justify-end font-medium text-amber-700">
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {item.status}
+                  </span>
+                  <Button size="sm" variant="outline" className="h-7 shrink-0 px-2" onClick={item.action}>
+                    <Eye className="mr-1 h-3.5 w-3.5" />
                     Review
                   </Button>
                 </div>
