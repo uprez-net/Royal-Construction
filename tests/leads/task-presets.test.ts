@@ -52,24 +52,31 @@ test("the presets cover the intervals people actually typed", () => {
 });
 
 const SYDNEY = "Australia/Sydney";
-const inSydney = (d: Date) =>
+const sydneyOf = (d: Date) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: SYDNEY,
     year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).format(d);
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  })
+    .formatToParts(d)
+    .reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== "literal") acc[p.type] = p.value;
+      return acc;
+    }, {});
 
 test("a preset lands on Sydney midnight, whatever zone the machine is in", () => {
   // Asserted in Sydney, not in the runner's local zone. CI runs UTC and a
   // developer's laptop does not, so getHours() would give two different
   // answers for the same correct instant.
   const due = dueDateFromPreset(1, new Date("2026-08-21T06:30:00.000Z"));
-  assert.match(inSydney(due), /^2026-08-22, 00:00$/);
+  const p = sydneyOf(due);
+  assert.equal(`${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`, "2026-08-22 00:00");
 });
 
 test("a preset advances by whole days across a month boundary", () => {
   const due = dueDateFromPreset(7, new Date("2026-08-28T09:00:00.000Z"));
-  assert.match(inSydney(due), /^2026-09-04, 00:00$/);
+  const p = sydneyOf(due);
+  assert.equal(`${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`, "2026-09-04 00:00");
 });
 
 test("every type has a label and a verb", () => {

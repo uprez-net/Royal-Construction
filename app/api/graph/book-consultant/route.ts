@@ -118,8 +118,35 @@ async function findConflictingEvent(
   return null;
 }
 
-const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
-const toTimeOnly = (date: Date) => date.toTimeString().slice(0, 5);
+/**
+ * Sydney, not the machine.
+ *
+ * These fed history entries only, where being an hour out was invisible. They
+ * now carry the actual consultation time, and every server process runs UTC:
+ * toTimeString() on Vercel turns a 1pm Sydney appointment into "03:00", and
+ * toISOString() rolls the date backwards for anything after 10am.
+ */
+const SYDNEY_TZ = 'Australia/Sydney';
+const sydneyParts = (date: Date) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: SYDNEY_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== 'literal') acc[p.type] = p.value;
+      return acc;
+    }, {});
+
+const toDateOnly = (date: Date) => {
+  const p = sydneyParts(date);
+  return `${p.year}-${p.month}-${p.day}`;
+};
+const toTimeOnly = (date: Date) => {
+  const p = sydneyParts(date);
+  return `${p.hour}:${p.minute}`;
+};
 
 function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
   const noteIndex = existing.findIndex(entry => entry.action.trim().toLowerCase() === 'note');
@@ -171,13 +198,20 @@ async function upsertBookingNotes({
       meetingMode: 'Online',
       history: updatedHistory,
     });
-    await createLeadTask({
-      leadId: existingLead.id,
-      type: 'MEETING',
-      dueDate: meetingAt,
-      dueTime: toTimeOnly(meetingAt),
-      notes: 'Consultation booked from the website',
-    });
+    // The Graph event already exists by this point, so a failed task must not
+    // fail the booking: the customer has the invitation either way. Log loudly
+    // and let the lead keep the meetingDate that was just written.
+    try {
+      await createLeadTask({
+        leadId: existingLead.id,
+        type: 'MEETING',
+        dueDate: meetingAt,
+        dueTime: toTimeOnly(meetingAt),
+        notes: 'Consultation booked from the website',
+      });
+    } catch (taskError) {
+      console.error('Booking saved but the meeting task was not created', taskError);
+    }
     return;
   }
 
@@ -214,13 +248,17 @@ async function upsertBookingNotes({
   // the lead would be invisible there. createLead returns a conflict object
   // rather than a lead when the email already exists, hence the id check.
   if (created && typeof created === 'object' && 'id' in created) {
-    await createLeadTask({
-      leadId: Number(created.id),
-      type: 'MEETING',
-      dueDate: meetingAt,
-      dueTime: toTimeOnly(meetingAt),
-      notes: 'Consultation booked from the website',
-    });
+    try {
+      await createLeadTask({
+        leadId: Number(created.id),
+        type: 'MEETING',
+        dueDate: meetingAt,
+        dueTime: toTimeOnly(meetingAt),
+        notes: 'Consultation booked from the website',
+      });
+    } catch (taskError) {
+      console.error('Lead created but the meeting task was not', taskError);
+    }
   }
 }
 
