@@ -902,7 +902,7 @@ export async function exportTradies() {
  *
  * @throws Throws an error if the tradie update operation fails.
  */
-export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 'email' | 'additionalEmails' | 'phone' | 'location' | 'note'>>): Promise<TradieDetails> {
+export async function updateTradie(tradieId: string, data: Partial<Pick<Tradie, 'email' | 'abn' | 'additionalEmails' | 'phone' | 'location' | 'note'>>): Promise<TradieDetails> {
     try {
         const updatedTradie = await prisma.tradie.update({
             where: { id: tradieId },

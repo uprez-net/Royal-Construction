@@ -100,7 +100,7 @@ export const addTradie = createAsyncThunk<TradieRow, CreateTradieInput>(
     },
 );
 
-export const updateTradieThunk = createAsyncThunk<TradieDetails, { tradieId: string; data: Partial<Pick<Tradie, 'email' | 'additionalEmails' | 'phone' | 'location' | 'note'>> }>(
+export const updateTradieThunk = createAsyncThunk<TradieDetails, { tradieId: string; data: Partial<Pick<Tradie, 'email' | 'abn' | 'additionalEmails' | 'phone' | 'location' | 'note'>> }>(
     "tradieManagement/updateTradie",
     async ({ tradieId, data }, thunkAPI) => {
         try {
