@@ -56,8 +56,7 @@ export function JobSetupPanel({
     job.porchSqm +
     job.grannyFlatSqm +
     job.balconySqm +
-    job.voidSqm +
-    job.kitchenSqm;
+    job.voidSqm;
 
   const owners = job.owners ?? [];
   // owners[] is the source of truth; emit the derived flat client* projection in
