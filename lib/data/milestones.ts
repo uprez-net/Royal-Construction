@@ -433,20 +433,32 @@ export async function createMilestonesFromTemplateForProject(
 ) {
   try {
     const prismaClient = tx ?? prisma;
+    // Build a record of recurring cost lines for each milestone based on the template so that their sum can be equally distributed to the milestones that reference them.
+    const costLineMap = milestoneTemplates.reduce((map, template) => {
+      template.relatedCostLines?.forEach((costLineName) => {
+        map.set(costLineName, (map.get(costLineName) ?? 0) + 1);
+      });
+
+      return map;
+    }, new Map<string, number>());
     const milestoneRecords = milestoneTemplates.map((template) => {
       const id = randomUUID();
 
-      const calculateMilestoneBudget = (relatedCostLines: readonly string[] | undefined): number => {
-        if (!relatedCostLines || relatedCostLines.length === 0 || !costLines) {
+      const calculateMilestoneBudget = (
+        relatedCostLines: readonly string[] | undefined,
+      ): number => {
+        if (!relatedCostLines?.length || !costLines) {
           return 0;
         }
-        // Find all cost lines that match the related cost lines for this milestone
-        const matchingCostLines = costLines.filter((costLine) =>
-          relatedCostLines.includes(costLine.itemName)
-        );
-        // Sum the budgets of the matching cost lines
-        return matchingCostLines.reduce((total, costLine) => total + (costLine.costExGst), 0);
-      }
+
+        return costLines
+          .filter((costLine) => relatedCostLines.includes(costLine.itemName))
+          .reduce((total, costLine) => {
+            const referenceCount = costLineMap.get(costLine.itemName) ?? 1;
+
+            return total + costLine.costExGst / referenceCount;
+          }, 0);
+      };
 
       return {
         ...template,
@@ -459,6 +471,16 @@ export async function createMilestonesFromTemplateForProject(
     const milestoneIdByOrder = new Map(
       milestoneRecords.map((m) => [m.order, m.id])
     );
+
+    // Do another pass to calculate the parent milestone budgets based on the sum of their children's budgets
+    milestoneRecords.forEach((milestone) => {
+      if (milestone.parentId) {
+        const parentMilestone = milestoneRecords.find((m) => m.id === milestoneIdByOrder.get(milestone.parentId!));
+        if (parentMilestone) {
+          parentMilestone.totalBudget += milestone.totalBudget;
+        }
+      }
+    });
 
     const newMilestones = await prismaClient.milestone.createMany({
       data: milestoneRecords.map((milestone) => ({
