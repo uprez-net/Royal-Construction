@@ -261,7 +261,7 @@ export default function InsuranceClaimDatesModal({
                   Insurance claim start date
                   <RequiredMark />
                 </Label>
-                <Popover>
+                <Popover modal>
                   <PopoverTrigger asChild>
                     <Button
                       id="insuranceClaimStartDate"
@@ -322,7 +322,7 @@ export default function InsuranceClaimDatesModal({
                   Insurance claim end date
                   <RequiredMark />
                 </Label>
-                <Popover>
+                <Popover modal>
                   <PopoverTrigger asChild>
                     <Button
                       id="insuranceClaimEndDate"
