@@ -1,6 +1,6 @@
 import { fetchJson } from "@/utils/fetch";
 
-import type { LeadTaskRow } from "@/lib/data/lead-tasks";
+import type { LeadTaskRow } from "@/lib/leads/task-types";
 import type { CreateLeadTaskBody } from "@/utils/validators/lead-task";
 
 export type { LeadTaskRow };

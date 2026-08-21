@@ -80,3 +80,37 @@ SELECT
     CURRENT_TIMESTAMP
 FROM "Lead" l
 WHERE l."meetingDate" IS NOT NULL;
+
+-- And the work that was described but never dated.
+--
+-- The two inserts above key off a date, which leaves out every lead whose
+-- follow-up note says what to do and never got scheduled. On staging that is 18
+-- leads: "Send an Email/Text" x4, "Waiting for information" x3, "Follow-up in 7
+-- days" x3, "Organise a Meeting" x2. Skipping them would carry the original
+-- defect straight across the migration, because those leads were invisible in
+-- the old tab for exactly the same reason and the whole point of the change is
+-- that undated work is still work.
+--
+-- The task is created with a NULL dueDate on purpose. It lands in the pending
+-- bucket as "No date", which is a list someone can triage rather than a silence.
+INSERT INTO "LeadTask" ("leadId", "type", "status", "notes", "assignedId", "updatedAt")
+SELECT
+    l."id",
+    CASE
+        WHEN l."followupNotes" ILIKE '%meeting%' THEN 'MEETING'::"LeadTaskType"
+        WHEN l."followupNotes" ILIKE '%email%' OR l."followupNotes" ILIKE '%text%' THEN 'EMAIL'::"LeadTaskType"
+        WHEN l."followupNotes" ILIKE '%waiting%' THEN 'WAITING'::"LeadTaskType"
+        ELSE 'CALL'::"LeadTaskType"
+    END,
+    'NEW'::"LeadTaskStatus",
+    btrim(l."followupNotes"),
+    l."assignedId",
+    CURRENT_TIMESTAMP
+FROM "Lead" l
+WHERE l."followupDate" IS NULL
+  AND l."meetingDate" IS NULL
+  AND btrim(COALESCE(l."followupNotes", '')) <> ''
+  AND l."isArchived" = FALSE
+  -- Closed leads keep their notes as history; they are not outstanding work.
+  AND l."stage" NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
+  AND NOT EXISTS (SELECT 1 FROM "LeadTask" t WHERE t."leadId" = l."id");

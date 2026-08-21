@@ -1,30 +1,10 @@
-import "server-only";
-
-import type { LeadTaskStatus, LeadTaskType, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import type { LeadTaskType } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
+import type { LeadTaskRow } from "@/lib/leads/task-types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
-
-/** One task, plus the bit of its lead the list needs to render a row. */
-export interface LeadTaskRow {
-  id: number;
-  leadId: number;
-  type: LeadTaskType;
-  status: LeadTaskStatus;
-  dueDate: string | null;
-  dueTime: string | null;
-  notes: string | null;
-  completedAt: string | null;
-  lead: {
-    id: number;
-    name: string;
-    stage: string;
-    phone: string | null;
-    email: string | null;
-    assignedName: string | null;
-  };
-}
 
 const ROW_SELECT = {
   id: true,
@@ -164,3 +144,5 @@ export async function completeLeadTask(taskId: number): Promise<LeadTaskRow | nu
   const row = await prisma.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
   return row ? toRow(row) : null;
 }
+
+export type { LeadTaskRow };
