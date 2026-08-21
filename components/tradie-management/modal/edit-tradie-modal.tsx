@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Briefcase,
   Loader2,
   Mail,
   Mails,
@@ -38,6 +39,7 @@ interface EditTradieModalProps {
 }
 
 interface TradieUpdateInput {
+  abn?: string;
   email?: string;
   phone?: string;
   location?: string;
@@ -85,6 +87,7 @@ export default function EditTradieModal({
     AddressSuggestion[]
   >([]);
   const [formData, setFormData] = useState<TradieUpdateInput>({
+    abn: tradie.abn,
     email: tradie.email,
     phone: tradie.phone,
     location: tradie.location ?? "",
@@ -204,6 +207,13 @@ export default function EditTradieModal({
   };
 
   const fields = [
+    {
+      key: "abn",
+      label: "ABN",
+      icon: Briefcase,
+      placeholder: "12 345 678 901",
+      mono: true,
+    },
     {
       key: "email",
       label: "Email address",
