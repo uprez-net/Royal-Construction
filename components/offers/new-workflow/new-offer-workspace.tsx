@@ -582,8 +582,6 @@ export function NewOfferWorkspace({
     })();
   }
 
-
-
   function updateTenderGate(patch: Partial<TenderGateState>) {
     setTenderGate((current) => ({ ...current, ...patch }));
   }
@@ -801,7 +799,18 @@ export function NewOfferWorkspace({
 
   const hydrateSnapshot = useCallback((s: OfferWorkspaceSnapshot) => {
     setJob(s.job);
-    setLines(s.lines);
+    setLines(
+      s.lines.map((line) => {
+        const matchingCostLine = adminPrefill?.costLines.find(
+          (costLine) => costLine.itemName === line.itemName,
+        );
+
+        return {
+          ...line,
+          formula: matchingCostLine?.formula,
+        };
+      }),
+    );
     setAllowances(s.allowances);
     setExclusions(s.exclusions);
     setDraft(s.draft);
