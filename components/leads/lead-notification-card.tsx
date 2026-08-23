@@ -1,6 +1,8 @@
 'use client';
-import { useLeadsData } from "@/hooks/use-leads-data";
-import { isTerminalStage } from "@/lib/leads/lead-helpers";
+import {
+  fetchOpenTasks,
+  type LeadTaskRow,
+} from "@/lib/leads/task-service";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import {
@@ -18,8 +20,6 @@ import {
   addDays,
   differenceInCalendarDays,
   format,
-  isBefore,
-  isEqual,
   isSameDay,
   parseISO,
 } from "date-fns";
@@ -70,52 +70,70 @@ const getDateStatus = (date: string | null) => {
   };
 };
 
+/** A Sydney calendar date, as YYYY-MM-DD. Sorts and compares as a string. */
+function sydneyDateOnly(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Australia/Sydney",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 export function LeadNotificationCard() {
   const dispatch = useAppDispatch();
-  const { leads, loadingLeads, refreshLeadsData } = useLeadsData();
   const [updatesCollapsed, setUpdatesCollapsed] = useState(false);
 
-  const relevantLeads = useMemo(
+  // Tasks, like the tab below it. This panel read Lead.followupDate while the
+  // Follow-ups tab read LeadTask, so the two sat on one screen describing
+  // different things, which is the disagreement #193 set out to remove.
+  const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenTasks(controller.signal)
+      .then(setTasks)
+      .catch((err: unknown) => {
+        // An abort on unmount is expected. Anything else must be visible: an
+        // empty panel reads as "nothing due", and telling someone they are
+        // clear when the request failed is the exact lie this work removes.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("Could not load overdue tasks", err);
+        setLoadFailed(true);
+      })
+      // Not in the abort path: an unmounted component has no state to set.
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  // Compared as Sydney calendar dates, not as instants against a local
+  // midnight. A task due at Sydney midnight is stored as 14:00Z the previous
+  // afternoon, so comparing the raw instant to a Date built from the local
+  // day puts it in the wrong bucket for most of the day. The crons had the
+  // same defect and it stopped reminders firing at all.
+  const todayKey = sydneyDateOnly(getAustralianDate());
+
+  // Undated tasks are excluded here, unlike in the tab. This panel answers
+  // "what is due", and work with no date is not due; it belongs in the list
+  // below, where someone can schedule it.
+  const due = useMemo(
     () =>
-      loadingLeads
-        ? []
-        : leads.filter(
-            (lead) =>
-              !isTerminalStage(lead.stage) &&
-              Boolean(lead.followupDate || lead.meetingDate),
-          ),
-    [leads, loadingLeads],
+      tasks.filter((t) => t.dueDate !== null && sydneyDateOnly(new Date(t.dueDate)) <= todayKey),
+    [tasks, todayKey],
   );
 
-  const today = getAustralianDate();
-
-  const pendingFollowups = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        !lead.followupCompletedAt &&
-        lead.followupDate &&
-        (isBefore(parseISO(lead.followupDate), today) ||
-          isEqual(parseISO(lead.followupDate), today)),
-    );
-  }, [relevantLeads, today]);
-
-  const pendingMeetings = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        !lead.meetingCompletedAt &&
-        lead.meetingDate &&
-        (isBefore(parseISO(lead.meetingDate), today) ||
-          isEqual(parseISO(lead.meetingDate), today)),
-    );
-  }, [relevantLeads, today]);
+  const pendingFollowups = useMemo(() => due.filter((t) => t.type !== "MEETING"), [due]);
+  const pendingMeetings = useMemo(() => due.filter((t) => t.type === "MEETING"), [due]);
 
   const notificationItems = [
-    ...pendingFollowups.map((lead) => {
-      const { scheduledDate, status } = getDateStatus(lead.followupDate);
+    ...pendingFollowups.map((task) => {
+      const { scheduledDate, status } = getDateStatus(task.dueDate);
 
       return {
-        key: `followup-${lead.id}`,
-        label: lead.name,
+        key: `followup-${task.id}`,
+        label: task.lead.name,
         kind: "Follow-up",
         scheduledDate,
         status,
@@ -123,18 +141,18 @@ export function LeadNotificationCard() {
           dispatch(
             openModal({
               type: "followUpPrompt",
-              payload: { leadId: lead.id },
+              payload: { leadId: task.leadId },
             }),
           ),
       };
     }),
 
-    ...pendingMeetings.map((lead) => {
-      const { scheduledDate, status } = getDateStatus(lead.meetingDate!);
+    ...pendingMeetings.map((task) => {
+      const { scheduledDate, status } = getDateStatus(task.dueDate);
 
       return {
-        key: `meeting-${lead.id}`,
-        label: lead.name,
+        key: `meeting-${task.id}`,
+        label: task.lead.name,
         kind: "Meeting",
         scheduledDate,
         status,
@@ -142,16 +160,12 @@ export function LeadNotificationCard() {
           dispatch(
             openModal({
               type: "meetingReview",
-              payload: { leadId: lead.id },
+              payload: { leadId: task.leadId },
             }),
           ),
       };
     }),
   ];
-
-  useEffect(() => {
-    refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
-  }, [refreshLeadsData]);
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -182,7 +196,14 @@ export function LeadNotificationCard() {
         <CardContent className="pt-3">
           {notificationItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-              No pending follow up or meeting updates.
+              {/* Three states, not two. An empty panel means "nothing due",
+                  and saying that while still loading, or after a failed
+                  request, is the same wrong reassurance in a new place. */}
+              {loading
+                ? "Loading..."
+                : loadFailed
+                  ? "Could not load tasks. This panel is empty because the request failed, not because there is nothing due."
+                  : "No pending follow up or meeting updates."}
             </div>
           ) : (
             <div
