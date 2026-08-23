@@ -3,6 +3,7 @@ import { ClientSecretCredential } from '@azure/identity';
 import { fromZonedTime } from 'date-fns-tz';
 import { getGraphConfig } from '@/lib/graph/config';
 import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
+import { createLeadTask } from '@/lib/data/lead-tasks';
 import type { HistoryItem } from '@/lib/leads/types';
 import BookConsultantScheduleMeeting from '@/lib/graph/Email/book-consultant-ScheduleMeeting';
 import { render } from '@react-email/components';
@@ -117,8 +118,35 @@ async function findConflictingEvent(
   return null;
 }
 
-const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
-const toTimeOnly = (date: Date) => date.toTimeString().slice(0, 5);
+/**
+ * Sydney, not the machine.
+ *
+ * These fed history entries only, where being an hour out was invisible. They
+ * now carry the actual consultation time, and every server process runs UTC:
+ * toTimeString() on Vercel turns a 1pm Sydney appointment into "03:00", and
+ * toISOString() rolls the date backwards for anything after 10am.
+ */
+const SYDNEY_TZ = 'Australia/Sydney';
+const sydneyParts = (date: Date) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: SYDNEY_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== 'literal') acc[p.type] = p.value;
+      return acc;
+    }, {});
+
+const toDateOnly = (date: Date) => {
+  const p = sydneyParts(date);
+  return `${p.year}-${p.month}-${p.day}`;
+};
+const toTimeOnly = (date: Date) => {
+  const p = sydneyParts(date);
+  return `${p.hour}:${p.minute}`;
+};
 
 function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
   const noteIndex = existing.findIndex(entry => entry.action.trim().toLowerCase() === 'note');
@@ -135,12 +163,15 @@ async function upsertBookingNotes({
   email,
   notes,
   noteDetail,
+  /** When the consultation actually is. */
+  meetingAt,
 }: {
   id: number;
   name: string;
   email: string;
   notes: string;
   noteDetail: string;
+  meetingAt: Date;
 }) {
   const now = new Date();
   const noteEntry: HistoryItem = {
@@ -157,16 +188,34 @@ async function upsertBookingNotes({
     const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
     await updateLead(existingLead.id, {
       notes: updatedNotes,
-      stage: 'Meeting Scheduled',
-      meetingDate: now.toISOString(),
-      meetingTime: toTimeOnly(now),
+      // Not 'Meeting Scheduled'. That stage was retired: it described a booked
+      // task rather than progress, and completing it wrote CONTACTED. The lead
+      // is in Discovery, and the booking is a task.
+      // No stage at all here in fact: updateLead advances a lead into Discovery
+      // when work is scheduled and leaves anything further on alone.
+      meetingDate: meetingAt.toISOString(),
+      meetingTime: toTimeOnly(meetingAt),
       meetingMode: 'Online',
       history: updatedHistory,
     });
+    // The Graph event already exists by this point, so a failed task must not
+    // fail the booking: the customer has the invitation either way. Log loudly
+    // and let the lead keep the meetingDate that was just written.
+    try {
+      await createLeadTask({
+        leadId: existingLead.id,
+        type: 'MEETING',
+        dueDate: meetingAt,
+        dueTime: toTimeOnly(meetingAt),
+        notes: 'Consultation booked from the website',
+      });
+    } catch (taskError) {
+      console.error('Booking saved but the meeting task was not created', taskError);
+    }
     return;
   }
 
-  await createLead(
+  const created = await createLead(
     {
       name: name.trim() || 'Client',
       phone: '',
@@ -174,12 +223,12 @@ async function upsertBookingNotes({
       location: '',
       source: 'Website',
       sourceDetail: NOTE_SOURCE_DETAIL,
-      stage: 'Meeting Scheduled',
+      stage: 'Discovery',
       budget: 'Not Discussed',
       type: ['Not Specified'],
       notes,
-      meetingDate: now.toISOString(),
-      meetingTime: toTimeOnly(now),
+      meetingDate: meetingAt.toISOString(),
+      meetingTime: toTimeOnly(meetingAt),
       meetingMode: 'Online',
       followupNotes: '',
       urgent: false,
@@ -194,6 +243,23 @@ async function upsertBookingNotes({
     },
     { skipWelcomeEmail: true }
   );
+
+  // The Follow-ups tab reads tasks, so a booking that only set meetingDate on
+  // the lead would be invisible there. createLead returns a conflict object
+  // rather than a lead when the email already exists, hence the id check.
+  if (created && typeof created === 'object' && 'id' in created) {
+    try {
+      await createLeadTask({
+        leadId: Number(created.id),
+        type: 'MEETING',
+        dueDate: meetingAt,
+        dueTime: toTimeOnly(meetingAt),
+        notes: 'Consultation booked from the website',
+      });
+    } catch (taskError) {
+      console.error('Lead created but the meeting task was not', taskError);
+    }
+  }
 }
 
 
@@ -356,6 +422,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         email,
         notes: trimmedNotes,
         noteDetail,
+        meetingAt: start,
       });
     } catch (leadError) {
       console.error('Failed to save booking notes to lead', leadError);

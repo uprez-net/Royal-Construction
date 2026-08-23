@@ -55,7 +55,6 @@ export default function Leads() {
   const {
     leads,
     stats,
-    followupStats,
     analyticsData,
     pageInfo,
     loading,
@@ -511,7 +510,6 @@ export default function Leads() {
                 <FollowupsView
                   loading={loadingLeads}
                   leads={leads}
-                  followupStats={followupStats}
                   onLeadUpdate={updateLeadInList}
                   onLeadDelete={removeLeadFromList}
                   showToast={showToast}
