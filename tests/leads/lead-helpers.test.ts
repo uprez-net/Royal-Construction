@@ -261,3 +261,16 @@ test("every stage the picker offers is classified by every predicate", () => {
     assert.equal(buckets, 1, `${stage} is in ${buckets} buckets`);
   }
 });
+
+test("every class the lead-page task row uses is actually defined", async () => {
+  // All four were referenced and none defined, so the row rendered as bare
+  // spans and the date ran into the note: "Tue, 25 AugSite visit to scope".
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync("app/globals.css", "utf8");
+  const tsx = readFileSync("components/leads/detail/lead-overview-tab.tsx", "utf8");
+  const used = [...tsx.matchAll(/className="(task-open-[a-z-]+)"/g)].map((m) => m[1]);
+  assert.ok(used.length >= 4, `expected the task row classes, found ${used.length}`);
+  for (const cls of new Set(used)) {
+    assert.ok(css.includes(`.${cls}`), `.${cls} is used but never defined`);
+  }
+});
