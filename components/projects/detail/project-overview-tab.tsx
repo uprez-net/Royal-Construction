@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { useParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -126,7 +127,7 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
   legalAdministration: [
     { key: "siteAddress", label: "Site address", type: "textarea", span: 2 },
     { key: "commencementTrigger", label: "Commencement trigger", type: "text" },
-    { key: "signedDate", label: "Signed date", type: "text" },
+    { key: "signedDate", label: "Signed (contract executed)", type: "text" },
     { key: "pcaInspector", label: "PCA inspector", type: "text" },
     // Captured when the first Slab-stage milestone starts, and editable here
     // afterwards through the same PATCH that the kickoff prompt uses.
@@ -1137,8 +1138,10 @@ export function ProjectOverviewTab({
   project: ProjectDetail;
   isAdmin: boolean;
 }) {
+  const params = useParams();
   const { startDate, estimatedEndDate } = project;
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
+  const [openSection, setOpenSection] = useState<string>();
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
   const [stateStartDate, setStateStartDate] = useState<string | null>(
     toDateInputValue(startDate),
@@ -1301,6 +1304,12 @@ export function ProjectOverviewTab({
     | { names?: string[]; emails?: string[]; phones?: string[] }
     | undefined;
 
+  useEffect(() => {
+    setTimeout(() => {
+      setOpenSection(window.location.hash.slice(1) || undefined);
+    }, 0);
+  }, [params]);
+
   return (
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
@@ -1366,7 +1375,7 @@ export function ProjectOverviewTab({
               }
             />
             <DateField
-              label="Start date"
+              label="Start date (on-site)"
               value={stateStartDate}
               onChange={(v) => {
                 setStateStartDate(v);
@@ -1456,7 +1465,13 @@ export function ProjectOverviewTab({
           ) : null}
 
           {/* Sections */}
-          <Accordion type="single" collapsible className="space-y-2">
+          <Accordion
+            type="single"
+            collapsible
+            value={openSection}
+            onValueChange={setOpenSection}
+            className="space-y-2"
+          >
             {sectionKeys.map((key) => {
               const meta = SECTION_META[key];
               const Icon = meta.icon;
@@ -1476,6 +1491,7 @@ export function ProjectOverviewTab({
               return (
                 <AccordionItem
                   key={key}
+                  id={key}
                   value={key}
                   className="rounded-xl border border-border bg-card px-4"
                 >

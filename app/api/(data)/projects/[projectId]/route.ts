@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { getCachedProjectById, getProjectById } from "@/lib/data/projects";
 import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
+import { collectProjectDateBlockers, partitionBlockers } from "@/lib/data/projectReadiness";
+import { normalizeDateString } from "@/utils/date";
 import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
 import { revalidateTag } from "next/cache";
@@ -96,6 +98,9 @@ export async function PATCH(
         id: true,
         customerId: true,
         siteManagerId: true,
+        status: true,
+        startDate: true,
+        requirements: true,
         Lead: {
           select: {
             assignedId: true,
@@ -116,6 +121,62 @@ export async function PATCH(
 
     if (!canEditProject) {
       return forbiddenResponse("You do not have access to update this project.");
+    }
+
+    // ── Phase 2: date reconciliation on PATCH ──
+    // A partial PATCH may send only `requirements` (the Overview tab does
+    // this) or only `startDate`. Merge with the persisted values so the
+    // blocker check compares the effective post-update state, not just the
+    // patch fragment.
+    const persistedRequirements = (existingProject.requirements ?? {}) as {
+      legalAdministration?: {
+        signedDate?: string | null;
+        pcaInspector?: string | null;
+      };
+    };
+    const incomingRequirements = body.data.requirements as
+      | z.infer<typeof projectRequirementsPayloadSchema>
+      | undefined;
+    const mergedRequirements = incomingRequirements
+      ? { ...persistedRequirements, ...incomingRequirements }
+      : persistedRequirements;
+
+    // Normalize the signed date from the merged requirements so the
+    // comparison uses the canonical value.
+    const mergedSignedDate =
+      mergedRequirements.legalAdministration?.signedDate ?? null;
+    const normalizedSignedDate = mergedSignedDate
+      ? normalizeDateString(mergedSignedDate)
+      : null;
+    const effectiveSignedDate = normalizedSignedDate ?? mergedSignedDate;
+
+    const effectiveStartDate = body.data.startDate
+      ? body.data.startDate
+      : existingProject.startDate instanceof Date
+        ? existingProject.startDate.toISOString()
+        : String(existingProject.startDate);
+
+    const dateBlockers = collectProjectDateBlockers({
+      signedDate: effectiveSignedDate,
+      startDate: effectiveStartDate,
+      pcaInspector: mergedRequirements.legalAdministration?.pcaInspector ?? null,
+      status: existingProject.status,
+    });
+    const { blocks } = partitionBlockers(dateBlockers);
+
+    if (blocks.length > 0) {
+      return errorResponse("Project date validation failed", {
+        status: 422,
+        code: "DATE_BLOCKER",
+        issues: {
+          blockers: blocks.map((b) => ({
+            id: b.id,
+            label: b.label,
+            fieldPath: b.fieldPath,
+            severity: b.severity,
+          })),
+        },
+      });
     }
 
     const project = await prisma.project.update({

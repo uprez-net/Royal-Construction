@@ -7,6 +7,7 @@ import {
   MapPin,
   Phone,
   Printer,
+  Plus,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
@@ -16,8 +17,9 @@ import {
   projectStatusConfig,
 } from "@/components/projects/project-status";
 import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-badge";
+import { StatusPill } from "@/components/common/status-pill";
 import type { ProjectDetail } from "@/types/project";
-import { dateFormat } from "@/utils/formatters";
+import { formatDisplayDate, normalizeDateString } from "@/utils/date";
 
 type ProjectRequirementsHeader = {
   legalAdministration?: {
@@ -29,32 +31,36 @@ type ProjectRequirementsHeader = {
   };
 };
 
-/**
- * `signedDate` is a free-text field on the extraction payload, so it may or may
- * not be a parseable date. Format it when it is; fall through to the raw string
- * when it isn't, rather than rendering "Invalid Date".
- *
- * Returns `null` when there is no value, so the caller can render the "Not set"
- * placeholder as prose. Previously this returned the string "Not set" and the
- * caller wrapped the result in `font-mono tabular-nums` unconditionally, so the
- * placeholder rendered in monospace and read like recorded data.
- */
-function formatSignedDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : dateFormat.format(parsed);
-}
-
 /** Mono is for facts. A missing value is prose, not a fact. */
 const NOT_SET = "Not set";
+
+/**
+ * The legalAdministration accordion section id on the Overview tab, used as
+ * the scroll target for the "click to add" affordances on missing PCA /
+ * unverified signed date.
+ */
+const LEGAL_SECTION_ID = "legalAdministration";
 
 export function ProjectHeader({ project }: { project: ProjectDetail }) {
   const requirements = (project.requirements ??
     {}) as ProjectRequirementsHeader;
-  const signedDate = formatSignedDate(
-    requirements.legalAdministration?.signedDate,
-  );
+  const legal = requirements.legalAdministration ?? {};
+
+  const rawSignedDate = legal.signedDate;
+  const normalizedSignedDate = rawSignedDate
+    ? normalizeDateString(rawSignedDate)
+    : null;
+  const displaySignedDate = formatDisplayDate(rawSignedDate);
+  const signedDateIsUnverified = Boolean(rawSignedDate) && !normalizedSignedDate;
+
+  const pcaInspector = legal.pcaInspector;
+  const pcaMissing = !pcaInspector || pcaInspector.trim() === "";
+
   const statusTone = projectStatusConfig(project.status);
+  const showPcaWarning =
+    pcaMissing && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+
+  const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
 
   return (
     <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
@@ -87,23 +93,58 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
           <div className="flex flex-wrap items-center gap-3 pt-1 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3.5" aria-hidden="true" />
-              {requirements.legalAdministration?.siteAddress ||
-                project.location}
+              {legal.siteAddress || project.location}
             </span>
             <span aria-hidden="true">|</span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="size-3.5" aria-hidden="true" />
-              Signed{" "}
-              {signedDate ? (
-                <span className="font-mono tabular-nums">{signedDate}</span>
+              Signed (contract executed){" "}
+              {displaySignedDate ? (
+                signedDateIsUnverified ? (
+                  <StatusPill tone="warning">
+                    {displaySignedDate} — unverified
+                  </StatusPill>
+                ) : (
+                  <span className="font-mono tabular-nums">
+                    {displaySignedDate}
+                  </span>
+                )
               ) : (
-                NOT_SET
+                <Link
+                  href={legalSectionAnchor}
+                  className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  {NOT_SET}
+                </Link>
               )}
             </span>
             <span aria-hidden="true">|</span>
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="size-3.5" aria-hidden="true" />
-              PCA {requirements.legalAdministration?.pcaInspector || NOT_SET}
+              PCA{" "}
+              {pcaMissing ? (
+                showPcaWarning ? (
+                  <Link
+                    href={legalSectionAnchor}
+                    aria-label="PCA inspector not set — click to add"
+                    className="inline-flex items-center gap-1 rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <StatusPill tone="warning">
+                      <Plus className="size-3" aria-hidden="true" />
+                      Not set
+                    </StatusPill>
+                  </Link>
+                ) : (
+                  <Link
+                    href={legalSectionAnchor}
+                    className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {NOT_SET}
+                  </Link>
+                )
+              ) : (
+                <span className="font-mono tabular-nums">{pcaInspector}</span>
+              )}
             </span>
           </div>
           <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
