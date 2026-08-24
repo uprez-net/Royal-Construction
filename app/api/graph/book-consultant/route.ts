@@ -4,6 +4,7 @@ import { fromZonedTime } from 'date-fns-tz';
 import { getGraphConfig } from '@/lib/graph/config';
 import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
 import { createLeadTask } from '@/lib/data/lead-tasks';
+import { sydneyDateOnly, sydneyTimeOnly } from '@/lib/dates/sydney';
 import type { HistoryItem } from '@/lib/leads/types';
 import BookConsultantScheduleMeeting from '@/lib/graph/Email/book-consultant-ScheduleMeeting';
 import { render } from '@react-email/components';
@@ -118,35 +119,10 @@ async function findConflictingEvent(
   return null;
 }
 
-/**
- * Sydney, not the machine.
- *
- * These fed history entries only, where being an hour out was invisible. They
- * now carry the actual consultation time, and every server process runs UTC:
- * toTimeString() on Vercel turns a 1pm Sydney appointment into "03:00", and
- * toISOString() rolls the date backwards for anything after 10am.
- */
-const SYDNEY_TZ = 'Australia/Sydney';
-const sydneyParts = (date: Date) =>
-  new Intl.DateTimeFormat('en-CA', {
-    timeZone: SYDNEY_TZ,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  })
-    .formatToParts(date)
-    .reduce<Record<string, string>>((acc, p) => {
-      if (p.type !== 'literal') acc[p.type] = p.value;
-      return acc;
-    }, {});
-
-const toDateOnly = (date: Date) => {
-  const p = sydneyParts(date);
-  return `${p.year}-${p.month}-${p.day}`;
-};
-const toTimeOnly = (date: Date) => {
-  const p = sydneyParts(date);
-  return `${p.hour}:${p.minute}`;
-};
+// Sydney, not the machine. These carry the actual consultation time, and every
+// server process runs UTC.
+const toDateOnly = sydneyDateOnly;
+const toTimeOnly = sydneyTimeOnly;
 
 function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
   const noteIndex = existing.findIndex(entry => entry.action.trim().toLowerCase() === 'note');

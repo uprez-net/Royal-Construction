@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { sydneyDateOnly, sydneyEndOfDay, sydneyToday } from "@/lib/dates/sydney";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import { successResponse, errorResponse } from "@/utils/validators";
@@ -7,38 +8,6 @@ import { render } from "@react-email/components";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 
-/**
- * A Sydney calendar date, as YYYY-MM-DD.
- *
- * The old filter compared toDateOnly(), which is toISOString(), against this
- * string. Those are different calendars for most of the day: a task due at
- * Sydney midnight is stored as 14:00Z the previous afternoon, so the UTC slice
- * reads one day earlier and the comparison never matches. Both sides of the
- * comparison now come from the same function.
- */
-function sydneyDateOnly(date: Date): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Sydney',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(date);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
-}
-
-// Helper to get today's date in Australia/Sydney timezone
-function getSydneyTodayDateString(): string {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Australia/Sydney',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-  const parts = formatter.formatToParts(new Date());
-  const year = parts.find(p => p.type === 'year')?.value;
-  const month = parts.find(p => p.type === 'month')?.value;
-  const day = parts.find(p => p.type === 'day')?.value;
-  return `${year}-${month}-${day}`;
-}
 
 export async function GET(request: Request) {
   // 1. Authorization check for Vercel Cron
@@ -64,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const todaySydneyStr = getSydneyTodayDateString();
+    const todaySydneyStr = sydneyToday();
     console.log(`[CRON] Starting followup-lead-reminder cron. Sydney Today: ${todaySydneyStr}`);
 
     // 2. Fetch open tasks that are due, and the lead each belongs to.
@@ -80,7 +49,7 @@ export async function GET(request: Request) {
         completedAt: null,
         reminderSentAt: null,
         type: { not: "MEETING" },
-        dueDate: { not: null, lte: new Date(`${todaySydneyStr}T23:59:59.999Z`) },
+        dueDate: { not: null, lte: sydneyEndOfDay(todaySydneyStr) },
         lead: {
           // Closed leads get no reminders.
           stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },

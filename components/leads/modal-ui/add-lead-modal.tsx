@@ -22,6 +22,8 @@ import {
 } from "@/lib/leads/lead-helpers";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createTask } from "@/lib/leads/task-service";
+import { sydneyStartOfDay } from "@/lib/dates/sydney";
 
 /* ── Types ── */
 
@@ -209,6 +211,8 @@ export function AddLeadModal({
         expectedCloseDate: form.expectedCloseDate || null,
         type: form.type.length > 0 ? form.type : ["Not Specified"],
         notes: form.notes,
+        // The date is still stored on the lead for now, and the task below is
+        // what anything actually reads. Both go until the columns are dropped.
         followupDate: form.followupDate || null,
         followupTime: form.followupTime || null,
         followupNotes: "",
@@ -221,7 +225,30 @@ export function AddLeadModal({
         return;
       }
 
-      onSuccess(createdLead);
+      // A new lead booked with a follow-up needs a task, or the work is
+      // invisible: the Follow-ups tab and both reminder crons read LeadTask.
+      // Failing here must not fail the lead, which already exists by now.
+      let saved = createdLead;
+      if (form.followupDate) {
+        try {
+          const task = await createTask({
+            leadId: createdLead.id,
+            type: "CALL",
+            dueDate: sydneyStartOfDay(form.followupDate).toISOString(),
+            dueTime: form.followupTime || null,
+          });
+          // The task carries the lead's stage after any advance, so the row
+          // the list renders is not one revision behind.
+          if (task.lead.stage !== createdLead.stage) {
+            saved = { ...createdLead, stage: task.lead.stage as typeof createdLead.stage };
+          }
+        } catch (taskError) {
+          console.error("Lead created but its first task was not", taskError);
+          showToast("Lead saved, but the follow-up task could not be created.", "info");
+        }
+      }
+
+      onSuccess(saved);
       showToast(`Lead added: ${form.name}`, "success");
 
       // if (!calendarCreated) {

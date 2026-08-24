@@ -100,6 +100,17 @@ export async function createLeadTask(input: CreateLeadTaskInput): Promise<LeadTa
     });
     if (!lead) throw new Error(`Lead ${input.leadId} not found`);
 
+    // Stage first, task second. The task row selects its lead, so creating it
+    // first would return the stage as it was and every caller would render a
+    // lead that had just moved. Callers read task.lead.stage to stay in step.
+    const nextStage = resolveLeadStage({ currentStage: lead.stage, taskScheduled: true });
+    if (nextStage !== undefined && nextStage !== lead.stage) {
+      await tx.lead.update({
+        where: { id: input.leadId },
+        data: { stage: nextStage, ...closeDatePatch(lead.stage, nextStage, new Date()) },
+      });
+    }
+
     const created = await tx.leadTask.create({
       data: {
         leadId: input.leadId,
@@ -111,14 +122,6 @@ export async function createLeadTask(input: CreateLeadTaskInput): Promise<LeadTa
       },
       select: ROW_SELECT,
     });
-
-    const nextStage = resolveLeadStage({ currentStage: lead.stage, taskScheduled: true });
-    if (nextStage !== undefined && nextStage !== lead.stage) {
-      await tx.lead.update({
-        where: { id: input.leadId },
-        data: { stage: nextStage, ...closeDatePatch(lead.stage, nextStage, new Date()) },
-      });
-    }
 
     return toRow(created);
   });
