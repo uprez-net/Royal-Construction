@@ -22,11 +22,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TaskForm } from "@/components/leads/task-form";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
 import {
   completeTask,
   fetchOpenTasks,
   type LeadTaskRow,
+  deleteTask,
 } from "@/lib/leads/task-service";
 import { Label } from "@/components/ui/label";
 import {
@@ -48,6 +51,7 @@ import {
   isLostStage,
   leadToFormData,
   type LeadDetailFormData,
+  isTerminalStage,
 } from "@/lib/leads/lead-helpers";
 import { updateLead } from "@/lib/leads/leads-service";
 import { formatFyQuarter, fyQuarterOf } from "@/lib/leads/fy-quarter";
@@ -273,6 +277,7 @@ export function LeadOverviewTab({
   availableUsers: { id: string; name: string }[];
   onLeadUpdate: (lead: Lead) => void;
 }) {
+  const dispatch = useAppDispatch();
   const formId = useId();
   const fieldId = (name: string) => `${formId}-${name}`;
 
@@ -705,6 +710,16 @@ export function LeadOverviewTab({
                 and created no task. Since #193 the Follow-ups tab and both
                 reminder crons read LeadTask, so a follow-up booked from this
                 page appeared nowhere and emailed nobody. One writer now. */}
+            {/* No composer on a lead nothing will ever show work for. The
+                server refuses these too — this only saves the round trip and
+                says why, rather than letting someone fill the form in first. */}
+            {isTerminalStage(lead.stage) || lead.isArchived ? (
+              <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                {lead.isArchived
+                  ? "This lead is archived. Restore it before booking any work."
+                  : `This lead is closed as ${lead.stage}. Reopen it before booking any work.`}
+              </p>
+            ) : (
             <TaskForm
               leadId={lead.id}
               leadName={lead.name}
@@ -722,6 +737,7 @@ export function LeadOverviewTab({
                 toast.success("Task added.");
               }}
             />
+            )}
             {openTasks.length > 0 ? (
               <ul className="task-open-list">
                 {openTasks.map((task) => (
@@ -749,12 +765,35 @@ export function LeadOverviewTab({
                         try {
                           await completeTask(task.id);
                           setOpenTasks((prev) => prev.filter((t) => t.id !== task.id));
+                          // Keep the Tasks tab and the "Open tasks" card in
+                          // step: closing here used to leave both stale.
+                          dispatch(bumpLeadTasks());
                         } catch {
                           toast.error("Could not close the task.");
                         }
                       }}
                     >
                       Done
+                    </button>
+                    {/* Removing is not the same as closing. "Done" says the
+                        call happened; this is for work that should never have
+                        been booked, which previously had no exit at all. */}
+                    <button
+                      type="button"
+                      className="task-btn"
+                      aria-label={`Remove task for ${lead.name}`}
+                      onClick={async () => {
+                        try {
+                          await deleteTask(task.id);
+                          setOpenTasks((prev) => prev.filter((t) => t.id !== task.id));
+                          dispatch(bumpLeadTasks());
+                          toast.success("Task removed.");
+                        } catch {
+                          toast.error("Could not remove the task.");
+                        }
+                      }}
+                    >
+                      Remove
                     </button>
                   </li>
                 ))}

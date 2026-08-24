@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
+import { useAppSelector } from "@/lib/store/hooks";
 import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
 import {
@@ -82,16 +83,48 @@ export function useLeadsData() {
   const [error, setError] = useState<string | null>(null);
 
   /* ── Stats ── */
+  // Guards against an older in-flight refresh landing after a newer one and
+  // putting stale counts back on the cards. Task changes can arrive in quick
+  // succession — closing several rows in a row — and the requests do not
+  // necessarily resolve in the order they were issued.
+  const statsRun = useRef(0);
   const refreshStats = useCallback(async () => {
+    const run = ++statsRun.current;
     // No follow-up stats here any more. The Follow-ups tab derives its counts
     // from the task list it renders, so a second source could not agree with it.
     const [statsData, analytics] = await Promise.all([
       fetchLeadsStats(),
       fetchLeadAnalyticsData(),
     ]);
+    // A newer refresh started while this one was in flight; that one wins.
+    if (run !== statsRun.current) return;
     setStats(statsData);
     setAnalyticsData(analytics);
   }, []);
+
+  /**
+   * Keep the six cards in step with the Tasks tab.
+   *
+   * "Open tasks" is the one card built from tasks rather than leads, and until
+   * now only adding, editing or deleting a LEAD recalculated it. Closing five
+   * tasks emptied five rows and left the card showing the old number until the
+   * page was reloaded, which is precisely the sort of disagreement that makes
+   * people stop trusting the numbers.
+   */
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
+  const seenTasksVersion = useRef(tasksVersion);
+  useEffect(() => {
+    // The first render already has fresh stats; only react to later changes.
+    if (seenTasksVersion.current === tasksVersion) return;
+    seenTasksVersion.current = tasksVersion;
+    // Rejections here were unhandled. The cards simply keep their previous
+    // values, which is the right outcome — a task list that reloaded fine
+    // should not blank the page — but it must not surface as an unhandled
+    // promise either.
+    refreshStats().catch((err: unknown) => {
+      console.error("Failed to refresh lead stats after a task change", err);
+    });
+  }, [tasksVersion, refreshStats]);
 
   /* ── Paginated leads ── */
   const refreshLeadsData = useCallback(
@@ -134,7 +167,9 @@ export function useLeadsData() {
 
   /* ── Full load (initial / hard refresh) ── */
   const loadData = useCallback(
-    async (params: { query?: string; status?: string } = {}) => {
+    async (
+      params: { query?: string; status?: string; hasOpenTask?: boolean } = {},
+    ) => {
       try {
         setLoading(true);
         const [leadsData, statsData, analytics] = await Promise.all([
@@ -143,6 +178,11 @@ export function useLeadsData() {
             limit: 10,
             q: params.query?.trim() || undefined,
             status: resolveStatusFilter(params.status),
+            // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
+            // an empty array — so without this the initial load for a
+            // bookmarked ?status=pendingFollowup fetched every lead and raced
+            // the filtered request the metric effect fires straight after.
+            hasOpenTask: params.hasOpenTask,
           }),
           fetchLeadsStats(),
           fetchLeadAnalyticsData(),

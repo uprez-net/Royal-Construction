@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   Phone,
@@ -10,6 +10,10 @@ import {
   AlertCircle,
   Check,
   Eye,
+  ChevronDown,
+  ChevronRight,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { Lead } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
@@ -17,11 +21,16 @@ import { dialablePhone } from "@/lib/leads/lead-helpers";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
 import {
   completeTask,
+  deleteTask,
+  fetchCompletedTasks,
   fetchOpenTasks,
+  reopenTask,
   type LeadTaskRow,
 } from "@/lib/leads/task-service";
-import { useAppDispatch } from "@/lib/store/hooks";
-import { openModal } from "@/lib/store/slices/uiSlice";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { bumpLeadTasks, openModal } from "@/lib/store/slices/uiSlice";
 import {
   addDays,
   format,
@@ -32,6 +41,74 @@ import {
   isSameDay,
 } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
+
+/**
+ * A finished task.
+ *
+ * Deliberately quieter than FollowupItem: completed work is a reference list,
+ * not a worklist, so it carries one action instead of four and drops the
+ * due-date urgency styling entirely. Until this existed there was no way to
+ * see a task again once it was closed, and no way to undo a mis-click.
+ */
+function CompletedItem({
+  task,
+  onReopen,
+  onDelete,
+}: {
+  task: LeadTaskRow;
+  onReopen: (taskId: number) => void;
+  onDelete: (taskId: number) => void;
+}) {
+  const typeLabel =
+    LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-4 py-2.5 last:border-b-0">
+      <Check
+        className="size-3.5 shrink-0 text-[var(--success-ink)]"
+        aria-hidden="true"
+      />
+      <span className="text-sm font-medium text-foreground">{task.lead.name}</span>
+      <Badge variant="outline">{typeLabel}</Badge>
+      {task.completedAt && (
+        <span className="text-xs text-muted-foreground">
+          Completed {format(parseISO(task.completedAt), "d MMM")}
+        </span>
+      )}
+      {task.notes && (
+        <span
+          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+          title={task.notes}
+        >
+          {task.notes}
+        </span>
+      )}
+      <div className="ml-auto flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onReopen(task.id)}
+        >
+          <RotateCcw className="size-3.5" aria-hidden="true" />
+          Reopen
+        </Button>
+        {/* For work that should never have been booked. Closing a task says
+            it happened; this removes the record entirely. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={`Remove task for ${task.lead.name}`}
+          onClick={() => onDelete(task.id)}
+        >
+          <Trash2 className="size-3.5" aria-hidden="true" />
+          Remove
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 interface FollowupsViewProps {
   loading: boolean;
@@ -178,16 +255,22 @@ function FollowupItem({
         <div className="fu-item-top">
           <div className="fu-item-name-row">
             <span className="fu-item-name">{task.lead.name}</span>
-            <span
-              className="fu-stage-pill"
+            {/* shadcn Badge, not a bespoke span. The stage colour is data —
+                one per pipeline stage — so it arrives as a style override on
+                the secondary variant rather than as another hand-rolled pill.
+                --warning-ink, not --warning: globals.css states the base
+                status colours are fill-only and fail contrast as text. */}
+            <Badge
+              variant="secondary"
+              className="border-transparent"
               style={{
-                background: isToday ? "var(--warning-light)" : stageConfig.bg,
-                color: isToday ? "var(--warning)" : stageConfig.color,
+                backgroundColor: isToday ? "var(--warning-light)" : stageConfig.bg,
+                color: isToday ? "var(--warning-ink)" : stageConfig.color,
               }}
             >
               {task.lead.stage}
-            </span>
-            <span className="fu-type-pill">{typeLabel}</span>
+            </Badge>
+            <Badge variant="outline">{typeLabel}</Badge>
           </div>
           <div className="fu-item-meta">
             <span className="fu-meta-chip">
@@ -301,26 +384,50 @@ function FollowupsView({
   // Tasks, not leads with dates. The old buckets read followupDate and
   // meetingDate off the Lead, which allowed one follow-up and one meeting per
   // lead ever and overwrote the previous one on every save.
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
   const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
+  const [doneTasks, setDoneTasks] = useState<LeadTaskRow[]>([]);
+  const [showDone, setShowDone] = useState(false);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [tasksError, setTasksError] = useState(false);
   const busy = loading || tasksLoading;
 
+  // showToast is rebuilt on every render of the component that owns the hook,
+  // so it cannot sit in a dependency array without refetching the whole tab on
+  // every render. Held in a ref so the effect can key on the version alone.
+  const toastRef = useRef(showToast);
+  useEffect(() => {
+    toastRef.current = showToast;
+  }, [showToast]);
+
   useEffect(() => {
     const controller = new AbortController();
-    fetchOpenTasks(controller.signal)
-      .then(setTasks)
+    Promise.all([
+      fetchOpenTasks(controller.signal),
+      fetchCompletedTasks(controller.signal),
+    ])
+      .then(([open, done]) => {
+        setTasks(open);
+        setDoneTasks(done);
+        // Cleared on success, not just set on failure. Once a load failed the
+        // tab kept rendering "Could not load tasks" over a list that had since
+        // reloaded perfectly well.
+        setTasksError(false);
+      })
       .catch((err: unknown) => {
         // An abort on unmount is expected and silent. A real failure must not
         // be: an empty list renders "All caught up", which is exactly the lie
         // this whole change exists to stop telling.
         if (err instanceof DOMException && err.name === "AbortError") return;
         setTasksError(true);
-        showToast("Could not load tasks. Refresh to try again.", "error");
+        toastRef.current("Could not load tasks. Refresh to try again.", "error");
       })
       .finally(() => setTasksLoading(false));
     return () => controller.abort();
-  }, [showToast]);
+    // Keyed on the version so anything that closes, reopens or books a task —
+    // including both review dialogs, which are rendered by the modal manager
+    // and cannot reach this state — brings both lists back in step.
+  }, [tasksVersion]);
 
   /**
    * Review opens the outcome dialog: completed, not required, or rescheduled
@@ -340,10 +447,46 @@ function FollowupsView({
     [dispatch],
   );
 
-  /** Drop a closed task from the list without refetching the whole tab. */
-  const handleTaskDone = useCallback((taskId: number) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
-  }, []);
+  /**
+   * Drop the row immediately, then refetch so the Completed section and the
+   * bucket counts follow. The optimistic removal keeps the click feeling
+   * instant; the refetch is what keeps the two lists honest.
+   */
+  const handleTaskDone = useCallback(
+    (taskId: number) => {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      dispatch(bumpLeadTasks());
+    },
+    [dispatch],
+  );
+
+  /** Remove a task outright. Not the same as closing it. */
+  const handleDelete = useCallback(
+    async (taskId: number) => {
+      try {
+        await deleteTask(taskId);
+        dispatch(bumpLeadTasks());
+        showToast("Task removed.", "success");
+      } catch {
+        showToast("Could not remove the task.", "error");
+      }
+    },
+    [dispatch, showToast],
+  );
+
+  /** Put a completed task back on the open list, dates and note intact. */
+  const handleReopen = useCallback(
+    async (taskId: number) => {
+      try {
+        await reopenTask(taskId);
+        dispatch(bumpLeadTasks());
+        showToast("Task reopened.", "success");
+      } catch {
+        showToast("Could not reopen the task.", "error");
+      }
+    },
+    [dispatch, showToast],
+  );
 
   /** The full Lead, for the email modal. Missing is fine; the button disables. */
   const leadsById = useMemo(() => {
@@ -489,6 +632,37 @@ function FollowupsView({
                   showToast={showToast}
                 />
               ))}
+            </>
+          )}
+
+          {/* Outside the open/empty branch on purpose: when every task is
+              closed the list above is empty, and that is exactly the moment
+              somebody wants to see what was finished. */}
+          {doneTasks.length > 0 && (
+            <>
+              <button
+                type="button"
+                aria-expanded={showDone}
+                onClick={() => setShowDone((open) => !open)}
+                className="flex w-full items-center gap-2 border-t border-border/60 px-4 py-2 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
+              >
+                {showDone ? (
+                  <ChevronDown className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                )}
+                Completed
+                <span className="ml-auto tabular-nums">{doneTasks.length}</span>
+              </button>
+              {showDone &&
+                doneTasks.map((task) => (
+                  <CompletedItem
+                    key={task.id}
+                    task={task}
+                    onReopen={handleReopen}
+                    onDelete={handleDelete}
+                  />
+                ))}
             </>
           )}
         </div>
