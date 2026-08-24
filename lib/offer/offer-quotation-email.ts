@@ -116,10 +116,9 @@ export function buildOfferQuotationEmailProps(input: {
     items: resolveItems(input.template),
     totalAmount: money(input.template.customerPrice.selectedContractValueIncGst),
     validityPeriod: resolveValidityPeriod(job.validUntil),
-    // The full quotation travels as the attached PDF, so there is no hosted page
-    // to link to. Empty rather than the template's default marketing URL, which
-    // would send the client somewhere that does not hold their offer.
-    quotationUrl: "",
+    // No quotationUrl / CTA: the full quotation travels as the attached PDF, so
+    // the template has no call-to-action button to point anywhere.
+    //
     // leadContext is the internal lead summary (source, stage, budget, assignee)
     // — never shown to a customer.
   };

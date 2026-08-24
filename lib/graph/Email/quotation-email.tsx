@@ -11,7 +11,6 @@ import {
 } from '@react-email/components';
 import {
   FONTS,
-  RC_URLS,
   RC_COLORS,
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
@@ -19,38 +18,129 @@ import {
 } from './email-theme';
 import { EmailFooter } from './email-footer';
 import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
 import { EmailSectionLight } from './email-section-light';
 import { EmailSectionWhite } from './email-section-white';
 import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+
+// ─── Style scale ────────────────────────────────────────────────────────────
+//
+// Every block below takes its type from TYPE and its panel chrome from CARD
+// instead of re-declaring a near-identical inline style each time. That is what
+// holds the email together: two section headings can't drift to different sizes,
+// and a paragraph can't quietly end up at a different weight from the one beside
+// it — which is how this template had ended up with 22px and 28px headings and
+// four different paragraph treatments.
+
+/** The light-theme hairline shared across the RC email templates. */
+const BORDER_ON_LIGHT = '#E2E8F0';
+
+const TYPE = {
+  /** Hero headline. One per email. */
+  display: {
+    fontFamily: FONTS.condensed,
+    fontWeight: 500,
+    fontSize: 48,
+    lineHeight: 1,
+    letterSpacing: '-1.2px',
+    color: RC_COLORS.textOnLight,
+  },
+  /** Every section heading. */
+  sectionTitle: {
+    fontFamily: FONTS.condensed,
+    fontWeight: 500,
+    fontSize: 24,
+    lineHeight: 1.1,
+    letterSpacing: '0.3px',
+    color: RC_COLORS.textOnLight,
+  },
+  /** Heading of a row inside a list. */
+  itemTitle: {
+    fontFamily: FONTS.condensed,
+    fontWeight: 500,
+    fontSize: 15,
+    lineHeight: 1.3,
+    color: RC_COLORS.textOnLight,
+  },
+  /** Small uppercase eyebrow above a value. */
+  label: {
+    fontFamily: FONTS.body,
+    fontWeight: 500,
+    fontSize: 10,
+    letterSpacing: '0.8px',
+    color: RC_COLORS.textMutedOnLight,
+  },
+  /** The value under a label. */
+  value: {
+    fontFamily: FONTS.condensed,
+    fontWeight: 500,
+    fontSize: 16,
+    lineHeight: 1.3,
+    color: RC_COLORS.textOnLight,
+  },
+  /** Standard paragraph. */
+  body: {
+    fontFamily: FONTS.body,
+    fontWeight: 350,
+    fontSize: 14,
+    lineHeight: 1.65,
+    color: RC_COLORS.textMutedOnLight,
+  },
+  /** Secondary paragraph — notices, list descriptions. */
+  bodySmall: {
+    fontFamily: FONTS.body,
+    fontWeight: 350,
+    fontSize: 13,
+    lineHeight: 1.6,
+    color: RC_COLORS.textMutedOnLight,
+  },
+  /** Footnotes and disclaimers. */
+  fine: {
+    fontFamily: FONTS.body,
+    fontWeight: 350,
+    fontSize: 12,
+    lineHeight: 1.5,
+    color: RC_COLORS.textMutedOnLight,
+  },
+} as const;
+
+// A panel is always the OPPOSITE tint of the band it sits on, and always carries
+// the same hairline and radius — so a card reads as a card wherever it appears.
+const CARD = {
+  borderRadius: 6,
+  border: `1px solid ${BORDER_ON_LIGHT}`,
+} as const;
+
+// Vertical rhythm. A band that changes colour opens with its own top padding; a
+// band continuing the colour above it opens flush, so the two read as one.
+const BAND = {
+  full: '2.5rem 1.5rem',
+  continues: '0 1.5rem 2.5rem',
+} as const;
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
 
 function QuoteItem({
   label,
   amount,
-  isBold = false,
   isTotal = false,
 }: {
   label: string;
   amount: string;
-  isBold?: boolean;
   isTotal?: boolean;
 }) {
   return (
     <Row
       style={{
-        padding: '12px 0',
-        borderBottom: isTotal ? 'none' : '1px solid #E2E8F0',
+        padding: '0.75rem 0',
+        borderBottom: isTotal ? 'none' : `1px solid ${BORDER_ON_LIGHT}`,
       }}
     >
       <Column
-        style={{
-          fontFamily: FONTS.body,
-          fontWeight: isBold ? 600 : 350,
-          fontSize: isTotal ? 16 : 14,
-          color: isTotal ? RC_COLORS.textOnLight : RC_COLORS.textMutedOnLight,
-        }}
+        style={
+          isTotal
+            ? { ...TYPE.body, fontWeight: 600, fontSize: 16, color: RC_COLORS.textOnLight }
+            : TYPE.body
+        }
       >
         {label}
       </Column>
@@ -58,7 +148,7 @@ function QuoteItem({
         align="right"
         style={{
           fontFamily: FONTS.condensed,
-          fontWeight: isBold ? 600 : 500,
+          fontWeight: isTotal ? 600 : 500,
           fontSize: isTotal ? 18 : 15,
           color: isTotal ? RC_COLORS.gold : RC_COLORS.textOnLight,
           letterSpacing: isTotal ? '-0.3px' : undefined,
@@ -83,38 +173,45 @@ function InclusionItem({
     <Section
       style={{
         padding: '1.25rem 0',
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        borderBottom: showBorder ? `1px solid ${BORDER_ON_LIGHT}` : undefined,
       }}
     >
       <Row>
         <Column>
-          <Text
-            className="m-0 mb-1"
-            style={{
-              fontFamily: FONTS.condensed,
-              fontWeight: 500,
-              fontSize: 15,
-              lineHeight: 1.3,
-              color: RC_COLORS.textOnLight,
-            }}
-          >
+          <Text className="m-0 mb-1" style={TYPE.itemTitle}>
             {title}
           </Text>
-          <Text
-            className="m-0"
-            style={{
-              fontFamily: FONTS.body,
-              fontWeight: 350,
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: RC_COLORS.textMutedOnLight,
-            }}
-          >
+          <Text className="m-0" style={TYPE.bodySmall}>
             {description}
           </Text>
         </Column>
       </Row>
     </Section>
+  );
+}
+
+/** One label/value pair in the project overview card. */
+function OverviewField({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
+  return (
+    <>
+      <Text className="m-0 mb-1 uppercase" style={TYPE.label}>
+        {label}
+      </Text>
+      <Text
+        className="m-0"
+        style={valueColor ? { ...TYPE.value, color: valueColor } : TYPE.value}
+      >
+        {value}
+      </Text>
+    </>
   );
 }
 
@@ -128,7 +225,6 @@ export interface QuotationEmailProps {
   items?: { label: string; amount: string }[];
   totalAmount?: string;
   validityPeriod?: string;
-  quotationUrl?: string;
   leadContext?: LeadEmailContext;
 }
 
@@ -145,8 +241,7 @@ export default function QuotationEmail({
     { label: 'Provisional Sum for Council Fees', amount: '$12,000' },
   ],
   totalAmount = '$480,500',
-  validityPeriod = "30",
-  quotationUrl = RC_URLS.quotation,
+  validityPeriod = '30 days',
   leadContext,
 }: QuotationEmailProps) {
   return (
@@ -170,7 +265,7 @@ export default function QuotationEmail({
           }}
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Your project quotation from Royal Constructions is ready for review.
+            Your project quotation from Royal Constructions is attached.
             <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
           </div>
 
@@ -180,126 +275,43 @@ export default function QuotationEmail({
           >
             <EmailHeader showGoldBar />
 
-            {/* Hero */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
-              <Text
-                className="mobile_font-40 m-0 uppercase"
-                style={{
-                  fontFamily: FONTS.condensed,
-                  fontWeight: 500,
-                  fontSize: 48,
-                  lineHeight: 1,
-                  letterSpacing: '-1.2px',
-                  color: RC_COLORS.textOnLight,
-                }}
-              >
+            {/* Hero — cream band */}
+            <EmailSectionLight style={{ padding: BAND.full }}>
+              <Text className="mobile_font-40 m-0 uppercase" style={TYPE.display}>
                 Your Project
                 <br />
                 Quotation
               </Text>
               <Text
                 className="m-0 mt-6"
-                style={{
-                  fontFamily: FONTS.body,
-                  fontWeight: 350,
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  letterSpacing: '0.3px',
-                  color: RC_COLORS.textMutedOnLight,
-                  maxWidth: 490,
-                }}
+                style={{ ...TYPE.body, letterSpacing: '0.3px', maxWidth: 490 }}
               >
-                Dear {clientName}, please find below the quotation for your new home project. We are excited about the possibility of building with you.
+                Dear {clientName}, your quotation is summarised below, with the full proposal
+                attached to this email as a PDF. We are excited about the possibility of building
+                with you.
               </Text>
             </EmailSectionLight>
 
-            {/* Project Overview Card */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
-              <Section
-                style={{
-                  backgroundColor: RC_COLORS.light,
-                  borderRadius: 6,
-                  border: `1px solid #E2E8F0`,
-                  padding: '1.5rem',
-                }}
-              >
+            {/* Project overview — white band, cream card */}
+            <EmailSectionWhite style={{ padding: BAND.full }}>
+              <Section style={{ ...CARD, backgroundColor: RC_COLORS.light, padding: '1.5rem' }}>
                 <Row>
                   <Column style={{ width: '50%', verticalAlign: 'top', paddingRight: '1rem' }}>
-                    <Text
-                      className="m-0 mb-1 uppercase"
-                      style={{
-                        fontFamily: FONTS.body,
-                        fontWeight: 500,
-                        fontSize: 10,
-                        letterSpacing: '0.8px',
-                        color: RC_COLORS.textMutedOnLight,
-                      }}
-                    >
-                      Project
-                    </Text>
-                    <Text
-                      className="m-0"
-                      style={{
-                        fontFamily: FONTS.condensed,
-                        fontWeight: 500,
-                        fontSize: 16,
-                        color: RC_COLORS.textOnLight,
-                      }}
-                    >
-                      {projectName}
-                    </Text>
+                    <OverviewField label="Project" value={projectName} />
                   </Column>
                   <Column style={{ width: '50%', verticalAlign: 'top' }}>
-                    <Text
-                      className="m-0 mb-1 uppercase"
-                      style={{
-                        fontFamily: FONTS.body,
-                        fontWeight: 500,
-                        fontSize: 10,
-                        letterSpacing: '0.8px',
-                        color: RC_COLORS.textMutedOnLight,
-                      }}
-                    >
-                      Location
-                    </Text>
-                    <Text
-                      className="m-0"
-                      style={{
-                        fontFamily: FONTS.condensed,
-                        fontWeight: 500,
-                        fontSize: 16,
-                        color: RC_COLORS.textOnLight,
-                      }}
-                    >
-                      {location}
-                    </Text>
+                    <OverviewField label="Location" value={location} />
                   </Column>
                 </Row>
-                <Row style={{ marginTop: '1rem' }}>
-                  <Column>
-                    <Text
-                      className="m-0 uppercase"
-                      style={{
-                        fontFamily: FONTS.body,
-                        fontWeight: 500,
-                        fontSize: 10,
-                        letterSpacing: '0.8px',
-                        color: RC_COLORS.textMutedOnLight,
-                      }}
-                    >
-                      Quotation No.
-                    </Text>
-                    <Text
-                      className="m-0"
-                      style={{
-                        fontFamily: FONTS.condensed,
-                        fontWeight: 500,
-                        fontSize: 16,
-                        color: RC_COLORS.gold,
-                      }}
-                    >
-                      {quoteNumber}
-                    </Text>
+                <Row>
+                  {/* Padding on the cell, not a margin on the row — Outlook drops
+                      margins on a <tr>. */}
+                  <Column style={{ paddingTop: '1rem' }}>
+                    <OverviewField
+                      label="Quotation No."
+                      value={quoteNumber}
+                      valueColor={RC_COLORS.gold}
+                    />
                   </Column>
                 </Row>
               </Section>
@@ -307,74 +319,43 @@ export default function QuotationEmail({
 
             <EmailLeadContextSummary context={leadContext} />
 
-            {/* Price Breakdown */}
-            <EmailSectionLight style={{ padding: '2rem 1.5rem' }}>
+            {/* Price breakdown — cream band, white card */}
+            <EmailSectionLight style={{ padding: BAND.full }}>
               <Section
-                style={{
-                  backgroundColor: RC_COLORS.white,
-                  borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '1.5rem 2rem',
-                }}
+                style={{ ...CARD, backgroundColor: RC_COLORS.white, padding: '1.5rem 2rem' }}
               >
                 <Row>
                   <Column>
-                    <Text
-                      className="m-0 mb-4 uppercase"
-                      style={{
-                        fontFamily: FONTS.condensed,
-                        fontWeight: 500,
-                        fontSize: 22,
-                        lineHeight: 1,
-                        color: RC_COLORS.textOnLight,
-                        letterSpacing: '0.3px',
-                      }}
-                    >
+                    <Text className="m-0 mb-4 uppercase" style={TYPE.sectionTitle}>
                       Price Breakdown
                     </Text>
 
                     {items.map((item) => (
-                      <QuoteItem
-                        key={item.label}
-                        label={item.label}
-                        amount={item.amount}
-                      />
+                      <QuoteItem key={item.label} label={item.label} amount={item.amount} />
                     ))}
 
-                    {/* Total Separator */}
-                    <Section style={{ borderTop: `2px solid ${RC_COLORS.gold}`, marginTop: '1rem', paddingTop: '1rem' }}>
-                      <QuoteItem label="Total Estimate" amount={totalAmount} isBold isTotal />
-                    </Section>
-                    
-                    <Text
-                      className="m-0 mt-4"
+                    <Section
                       style={{
-                        fontFamily: FONTS.body,
-                        fontWeight: 350,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        color: RC_COLORS.textMutedOnLight,
+                        borderTop: `2px solid ${RC_COLORS.gold}`,
+                        marginTop: '1rem',
+                        paddingTop: '1rem',
                       }}
                     >
-                      * All prices are in AUD and include GST unless otherwise noted. Provisional sums are estimates only and will be adjusted to actual costs.
+                      <QuoteItem label="Total Estimate" amount={totalAmount} isTotal />
+                    </Section>
+
+                    <Text className="m-0 mt-4" style={TYPE.fine}>
+                      * All prices are in AUD and include GST unless otherwise noted. Provisional
+                      sums are estimates only and will be adjusted to actual costs.
                     </Text>
                   </Column>
                 </Row>
               </Section>
             </EmailSectionLight>
 
-            {/* What's Included */}
-            <EmailSectionWhite style={{ padding: '2.5rem 1.5rem 1rem' }}>
-              <Text
-                className="m-0 mb-6 uppercase"
-                style={{
-                  fontFamily: FONTS.condensed,
-                  fontWeight: 500,
-                  fontSize: 28,
-                  lineHeight: 1,
-                  color: RC_COLORS.textOnLight,
-                }}
-              >
+            {/* What is included — white band, plain list */}
+            <EmailSectionWhite style={{ padding: BAND.full }}>
+              <Text className="m-0 mb-6 uppercase" style={TYPE.sectionTitle}>
                 What is included
               </Text>
               <InclusionItem
@@ -394,10 +375,11 @@ export default function QuotationEmail({
               />
             </EmailSectionWhite>
 
-            {/* Quotation Validity Notice */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            {/* Validity notice — cream band, white card with a gold rule */}
+            <EmailSectionLight style={{ padding: BAND.full }}>
               <Section
                 style={{
+                  ...CARD,
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
                   padding: '1rem 1.25rem',
@@ -405,79 +387,40 @@ export default function QuotationEmail({
               >
                 <Row>
                   <Column>
-                    <Text
-                      className="m-0"
-                      style={{
-                        fontFamily: FONTS.body,
-                        fontWeight: 400,
-                        fontSize: 13,
-                        lineHeight: 1.65,
-                        color: RC_COLORS.textMutedOnLight,
-                      }}
-                    >
-                      This quotation is valid for <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>{validityPeriod}</span> from the date of issue. Pricing for materials and labour may be subject to change after this period.
+                    <Text className="m-0" style={TYPE.bodySmall}>
+                      This quotation is valid for{' '}
+                      <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>
+                        {validityPeriod}
+                      </span>{' '}
+                      from the date of issue. Pricing for materials and labour may be subject to
+                      change after this period.
                     </Text>
                   </Column>
                 </Row>
               </Section>
             </EmailSectionLight>
 
-            {/* CTA */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ textAlign: 'center' }}>
-                <Text
-                  className="m-0 mb-5"
-                  style={{
-                    fontFamily: FONTS.body,
-                    fontWeight: 350,
-                    fontSize: 14,
-                    lineHeight: 1.65,
-                    color: RC_COLORS.textMutedOnLight,
-                  }}
-                >
-                  Ready to move forward? Review the full details and let us know if you have any questions.
-                </Text>
-                <EmailCtaButton href={quotationUrl} label="View Full Quotation" align="center" />
-              </Section>
-            </EmailSectionWhite>
-
-            {/* Sign-off */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+            {/* Sign-off — continues the cream band above */}
+            <EmailSectionLight style={{ padding: BAND.continues }}>
+              <Section
+                style={{ borderTop: `1px solid ${BORDER_ON_LIGHT}`, paddingTop: '1.5rem' }}
+              >
                 <Row>
                   <Column>
-                    <Text
-                      className="m-0 mb-5"
-                      style={{
-                        fontFamily: FONTS.body,
-                        fontWeight: 350,
-                        fontSize: 14,
-                        lineHeight: 1.65,
-                        color: RC_COLORS.textMutedOnLight,
-                      }}
-                    >
-                      We look forward to turning your vision into reality.
+                    <Text className="m-0 mb-5" style={TYPE.body}>
+                      Please review the attached quotation and simply reply to this email with any
+                      questions or changes — we look forward to turning your vision into reality.
                     </Text>
                     <Text
                       className="m-0 mb-1"
-                      style={{ fontSize: 14, color: RC_COLORS.textOnLight }}
+                      style={{ ...TYPE.body, color: RC_COLORS.textOnLight }}
                     >
                       Warm regards,
                     </Text>
-                    <Text
-                      className="m-0"
-                      style={{
-                        fontFamily: FONTS.condensed,
-                        fontSize: 16,
-                        color: RC_COLORS.gold,
-                      }}
-                    >
+                    <Text className="m-0" style={{ ...TYPE.value, color: RC_COLORS.gold }}>
                       Gurpinder Uppal
                     </Text>
-                    <Text
-                      className="m-0"
-                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
-                    >
+                    <Text className="m-0" style={TYPE.bodySmall}>
                       Royal Constructions Pty Ltd
                     </Text>
                   </Column>
