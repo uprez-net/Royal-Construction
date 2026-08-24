@@ -51,6 +51,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
       hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
+      version: created.version,
     };
   }
 
@@ -60,6 +61,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
     hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
+    version: row.version,
   };
 }
 /**
@@ -94,6 +96,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
       hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
+      version: created.version,
     };
   }
 
@@ -103,6 +106,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
     hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
+    version: row.version,
   };
 }
 
@@ -141,6 +145,13 @@ function coerceHBFCClaim(value: unknown): HBFCClaimData {
  * Resolve the singleton row id, creating the row on first use. Each `update*`
  * helper below calls this then upserts only its own column, so a save on one
  * tab never clobbers another tab's stored data.
+ *
+ * Every `update*` also increments `version`. That single counter is what lets an
+ * OPEN, still-editable offer notice that admin content changed under it and
+ * re-apply the current defaults (see reapplyAdminContentIfStale in
+ * lib/data/offer-workspace.ts); agreed/sent offers keep their frozen snapshot.
+ * The callers in lib/actions/admin-offer-content.ts still revalidate
+ * ADMIN_OFFER_CONTENT_TAG so the cached read picks the new version up.
  */
 async function resolveSingletonId(): Promise<string> {
   const existing = await prisma.adminOfferContent.findFirst({
@@ -168,7 +179,7 @@ export async function updateBuildScope(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { buildScope },
+    data: { buildScope, version: { increment: 1 } },
   });
 }
 
@@ -178,7 +189,10 @@ export async function updateCostSchedule(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { costSchedule: data as unknown as Prisma.InputJsonValue },
+    data: {
+      costSchedule: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }
 
@@ -188,7 +202,10 @@ export async function updateOfferScope(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { offerScope: data as unknown as Prisma.InputJsonValue },
+    data: {
+      offerScope: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }
 
@@ -198,7 +215,10 @@ export async function updateOfferContent(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { offerContent: data as unknown as Prisma.InputJsonValue },
+    data: {
+      offerContent: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }
 
@@ -208,6 +228,9 @@ export async function updateHBFCClaim(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { hbfcClaim: data as unknown as Prisma.InputJsonValue },
+    data: {
+      hbfcClaim: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }

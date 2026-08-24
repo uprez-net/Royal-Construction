@@ -132,10 +132,19 @@ export type OfferWorkspaceJob = {
   readonly lotAreaSqm: number;
   readonly dpNumber: string;
   readonly zoning: string;
+  // Room counts for the MAJOR HOUSE. A dual-occupancy build adds a granny home
+  // with its own counts below; these three always describe the main dwelling.
   readonly bedrooms: number;
   readonly bathrooms: number;
   readonly linenCount: number;
   readonly garageSpaces: number;
+  // Granny home (secondary dwelling). hasGrannyHome gates both the workspace
+  // spec card and the "Granny Home Specifications" sections in the Offer and
+  // Tender documents; the counts stay at 0 when there is no granny home.
+  readonly hasGrannyHome: boolean;
+  readonly grannyBedrooms: number;
+  readonly grannyBathrooms: number;
+  readonly grannyGarageSpaces: number;
   readonly buildScope: readonly string[];
 };
 
@@ -874,6 +883,10 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   bathrooms: 0,
   garageSpaces: 0,
   linenCount: 0,
+  hasGrannyHome: false,
+  grannyBedrooms: 0,
+  grannyBathrooms: 0,
+  grannyGarageSpaces: 0,
   // Seeded per-offer at runtime via defaultOfferValidUntil(); empty here so a
   // stale constant can't ship an already-expired date.
   validUntil: "",

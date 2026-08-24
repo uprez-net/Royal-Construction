@@ -64,6 +64,8 @@ export const EMAIL_FOOTER_HTML = `
                 <a href="https://www.facebook.com/royalconstructionsau/" target="_blank" style="color:#c6923a;text-decoration:none;font-weight:500;">Facebook</a>
                 <span style="color:#64748b;margin:0 10px;">·</span>
                 <a href="https://www.instagram.com/royalconstructionsau/" target="_blank" style="color:#c6923a;text-decoration:none;font-weight:500;">Instagram</a>
+                <span style="color:#64748b;margin:0 10px;">·</span>
+                <a href="https://royalconstructions.com.au/" target="_blank" style="color:#c6923a;text-decoration:none;font-weight:500;">Website</a>
               </p>
               <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0 0 16px;">
                 <strong style="color:#0f172a;">Office</strong><br>

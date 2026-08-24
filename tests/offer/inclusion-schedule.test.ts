@@ -225,6 +225,7 @@ function snapshotWithSchedule(
     rateCardTier: "MID",
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
+    adminContentVersion: 0,
     selectedPriceInput: "",
     standardPriceInput: "",
     overrideReason: "",

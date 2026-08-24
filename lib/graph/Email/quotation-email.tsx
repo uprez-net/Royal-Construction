@@ -120,7 +120,7 @@ function InclusionItem({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-interface QuotationEmailProps {
+export interface QuotationEmailProps {
   clientName?: string;
   projectName?: string;
   location?: string;

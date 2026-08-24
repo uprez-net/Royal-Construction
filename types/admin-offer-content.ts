@@ -94,6 +94,10 @@ export interface AdminOfferContent {
   offerScope: OfferScopeData;
   offerContent: OfferContentData;
   hbfcClaim: HBFCClaimData;
+  // Monotonic content version, incremented by every per-section save. Offers
+  // stamp the version they were built from so a still-editable offer can pick up
+  // later admin changes on open (see buildAdminOfferPrefill).
+  version: number;
 }
 
 export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
@@ -112,5 +116,6 @@ export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
     claimAmount: 0,
     loadingChargePercent: 0,
     totalPremiumToBePaid: 0,
-  }
+  },
+  version: 1,
 };

@@ -34,6 +34,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   rateCardProduct: "DOUBLE_STOREY",
   rateCardTier: "MID",
   tenderGate: INITIAL_TENDER_GATE,
+  adminContentVersion: 0,
   overrideReason: "",
   selectedPriceInput: "",
   standardPriceInput: "",

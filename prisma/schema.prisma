@@ -1020,6 +1020,11 @@ model AdminOfferContent {
   offerScope   Json
   offerContent Json
   hbfcClaim    Json     @default("{\"claimAmount\": 800000}")
+  // Bumped by every per-section save. Each Offer stamps the version it was
+  // built from into Offer.workspaceState, so opening a still-editable offer can
+  // detect that admin content moved on and re-apply the current defaults, while
+  // an agreed/sent offer keeps its frozen snapshot.
+  version      Int      @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

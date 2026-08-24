@@ -44,6 +44,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     priceAdjustmentLabel: "",
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
+    adminContentVersion: 0,
   };
 }
 

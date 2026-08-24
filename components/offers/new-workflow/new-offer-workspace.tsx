@@ -249,6 +249,16 @@ export function NewOfferWorkspace({
   const [images, setImages] = useState<OfferImageMap>(EMPTY_OFFER_IMAGES);
   const [tenderGate, setTenderGate] =
     useState<TenderGateState>(INITIAL_TENDER_GATE);
+  // The AdminOfferContent version this workspace's admin-derived content came
+  // from, persisted in the snapshot. A brand-new offer is seeded from the live
+  // prefill the page passed in; a saved offer takes whatever the loader hands
+  // back (which the server already refreshed if the offer was editable).
+  const [adminContentVersion, setAdminContentVersion] = useState(
+    adminPrefill?.adminVersion ?? 0,
+  );
+  // Admin content changed after this offer was frozen (agreed/sent), so the
+  // server left the snapshot alone. Surfaced as an advisory send blocker.
+  const [adminContentStale, setAdminContentStale] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -423,8 +433,15 @@ export function NewOfferWorkspace({
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
+        adminContentStale,
       }),
-    [leadId, customerPrice.needsOverrideReason, offerExpiry, ownerIssues],
+    [
+      adminContentStale,
+      leadId,
+      customerPrice.needsOverrideReason,
+      offerExpiry,
+      ownerIssues,
+    ],
   );
 
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
@@ -700,8 +717,10 @@ export function NewOfferWorkspace({
       priceAdjustmentLabel,
       images,
       tenderGate,
+      adminContentVersion,
     }),
     [
+      adminContentVersion,
       job,
       lines,
       allowances,
@@ -825,6 +844,7 @@ export function NewOfferWorkspace({
     setPriceAdjustmentLabel(s.priceAdjustmentLabel);
     setImages(s.images);
     setTenderGate(s.tenderGate);
+    setAdminContentVersion(s.adminContentVersion);
   }, [adminPrefill?.costLines]);
 
   // Single-flight workspace autosave (fixes the overlapping-save clobber).
@@ -944,6 +964,11 @@ export function NewOfferWorkspace({
       offerIdRef.current = loaded.offerId;
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      // The loader already re-applied the current admin defaults if this offer
+      // was still editable (hydrateSnapshot below picks them up). It only flags
+      // `adminContentStale` when the offer is frozen and was deliberately left
+      // untouched — that is the case worth telling the operator about.
+      setAdminContentStale(loaded.adminContentStale === true);
       setSignerStatuses(loaded.signerStatuses ?? []);
       // The customer declined the last envelope — tell the operator why (the
       // reason comes straight from DocuSign) and point them at a new revision.

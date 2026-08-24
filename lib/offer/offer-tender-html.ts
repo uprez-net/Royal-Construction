@@ -1,6 +1,8 @@
 import {
   buildOfferPrintTemplateData,
   formatArea,
+  formatDwellingSpec,
+  grannyDwellingSpec,
   COMPANY_LINE,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
@@ -356,6 +358,7 @@ function coverPage(
   const owners = job.owners ?? [];
   const ownerLabel = owners.length > 1 ? "Owners" : "Owner";
   const ownerWho = ownerPartyNamesHtml(job);
+  const grannySpec = grannyDwellingSpec(job);
   return `<div class="page">
     ${masthead()}
     <h1 class="doc">Fixed Price Building Tender</h1>
@@ -394,6 +397,18 @@ function coverPage(
         ${particular("Build type", job.buildType)}
         ${job.facade ? particular("Façade", job.facade) : ""}
         ${particular("Total build area", formatArea(totalArea))}
+        ${/* Room counts per dwelling. Kept to one row each — the cover page
+             already carries the parties, contract sum and build scope, so a
+             sub-table per dwelling would push it onto a second sheet. */ ""}
+        ${particular(
+          "Major House Specifications",
+          formatDwellingSpec({
+            bathrooms: job.bathrooms,
+            bedrooms: job.bedrooms,
+            garageSpaces: job.garageSpaces,
+          }),
+        )}
+        ${grannySpec ? particular("Granny Home Specifications", formatDwellingSpec(grannySpec)) : ""}
         ${particular("Prepared by", job.preparedBy)}
       </tbody>
     </table>

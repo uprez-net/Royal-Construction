@@ -59,7 +59,8 @@ function snapshot(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     standardPriceInput: "",
     priceAdjustmentLabel: "",
     images: EMPTY_OFFER_IMAGES,
-    tenderGate: INITIAL_TENDER_GATE
+    tenderGate: INITIAL_TENDER_GATE,
+    adminContentVersion: 0,
   };
 }
 

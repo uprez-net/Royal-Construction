@@ -26,7 +26,8 @@ import {
   type OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { ClipboardList, Info, Plus, Sparkles, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ClipboardList, Home, Info, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState, type PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
@@ -65,243 +66,366 @@ export function JobSetupPanel({
     onJobChange({ owners: next, ...deriveOwnerProjection(next) });
 
   return (
-    <Card className="border-border/70 bg-white/95 shadow-sm">
-      <CardHeader className="border-b border-border/70">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <OfferCardHeading
-            description="Capture the client, site, validity and build-size facts used across the Offer document and Tender draft."
-            icon={<ClipboardList className="size-4" aria-hidden="true" />}
-            title="Job setup"
-          />
-          {canPrefill && onPrefillFromLead ? (
-            <Button
-              className="shrink-0"
-              disabled={prefilling}
-              size="sm"
-              type="button"
-              variant="outline"
-              onClick={onPrefillFromLead}
-            >
-              <Sparkles className="size-4" aria-hidden="true" />
-              {prefilling ? "Reading the lead…" : "Pre-fill from lead"}
-            </Button>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
-        <PrefillBanner result={prefillResult} />
-        <OwnersSection owners={owners} onOwnersChange={emitOwners} />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Build type">
-            <Input
-              value={job.buildType}
-              onChange={(event) =>
-                onJobChange({ buildType: event.target.value })
-              }
+    <div className="grid gap-4">
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <CardHeader className="border-b border-border/70">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <OfferCardHeading
+              description="Capture the client, site, validity and build-size facts used across the Offer document and Tender draft."
+              icon={<ClipboardList className="size-4" aria-hidden="true" />}
+              title="Job setup"
             />
-          </Field>
-          <Field label="Façade">
-            <Select
-              value={job.facade || "__none__"}
-              onValueChange={(value) =>
-                onJobChange({ facade: value === "__none__" ? "" : value })
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a façade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Not selected</SelectItem>
-                {FACADE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field className="md:col-span-2" label="Site Location">
-            <AddressAutocomplete
-              placeholder="Construction site address"
-              value={job.siteAddress}
-              onChange={(siteAddress) =>
-                // A free-text edit invalidates the council/state/postcode from a
-                // previously-picked suggestion — clear them so a hand-corrected
-                // address can't ship a stale council to Project.council (codex
-                // #6). onPick re-sets them when a suggestion is chosen.
-                onJobChange({
-                  siteAddress,
-                  siteCouncil: "",
-                  siteState: "",
-                  sitePostcode: "",
-                })
-              }
-              onPick={(pick) =>
-                onJobChange({
-                  siteAddress: pick.address,
-                  siteCouncil: pick.council ?? "",
-                  siteState: pick.state ?? "",
-                  sitePostcode: pick.postcode ?? "",
-                })
-              }
-            />
-          </Field>
-          <Field label="Number of bedrooms">
-            <Input
-              placeholder="Auto-filled from lead requirements"
-              value={job.bedrooms}
-              onChange={(event) =>
-                onJobChange({ bedrooms: parseInt(event.target.value) || 0 })
-              }
-            />
-          </Field>
-          <Field label="Number of bathrooms">
-            <Input
-              type="number"
-              step="0.1"
-              min="0"
-              placeholder="Auto-filled from lead requirements"
-              value={job.bathrooms}
-              onChange={(event) =>
-                onJobChange({ bathrooms: parseFloat(event.target.value) || 0 })
-              }
-            />
-          </Field>
-          <Field label="Garage spaces">
-            <Input
-              placeholder="Auto-filled from lead requirements"
-              value={job.garageSpaces}
-              onChange={(event) =>
-                onJobChange({ garageSpaces: parseInt(event.target.value) || 0 })
-              }
-            />
-          </Field>
-          <Field label="Total Linens">
-            <Input
-              placeholder="Auto-filled from lead requirements"
-              value={job.linenCount}
-              onChange={(event) =>
-                onJobChange({ linenCount: parseInt(event.target.value) || 0 })
-              }
-            />
-          </Field>
-          <Field label="Council">
-            <Input
-              placeholder="Auto-filled from Site Location"
-              value={job.siteCouncil}
-              onChange={(event) =>
-                onJobChange({ siteCouncil: event.target.value })
-              }
-            />
-          </Field>
-          {/* Site particulars. These print on the proposal snapshot and the
-              tender's Project Particulars table; without inputs they stayed at
-              the model defaults and every document shipped "Lot Area: 0 m²". */}
-          <AreaField
-            label="Lot area sqm"
-            value={job.lotAreaSqm}
-            onChange={(lotAreaSqm) => onJobChange({ lotAreaSqm })}
-          />
-          <Field label="DP / title reference">
-            <Input
-              placeholder="e.g. Lot 12 DP 1234567"
-              value={job.dpNumber}
-              onChange={(event) =>
-                onJobChange({ dpNumber: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Zoning">
-            <Input
-              placeholder="e.g. R2 Low Density Residential"
-              value={job.zoning}
-              onChange={(event) => onJobChange({ zoning: event.target.value })}
-            />
-          </Field>
-          <Field label="Valid until">
-            <Input
-              type="date"
-              value={job.validUntil}
-              onChange={(event) =>
-                onJobChange({ validUntil: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Prepared by">
-            <Input
-              value={job.preparedBy}
-              onChange={(event) =>
-                onJobChange({ preparedBy: event.target.value })
-              }
-            />
-          </Field>
-          <Field
-            className="md:col-span-2 xl:col-span-4"
-            label="Build scope (one feature per line — shown on the proposal snapshot)"
-          >
-            <Textarea
-              className="min-h-19"
-              value={job.buildScope.join("\n")}
-              placeholder="4 Bedrooms + Study&#10;Double Garage&#10;Alfresco"
-              onChange={(event) =>
-                onJobChange({ buildScope: event.target.value.split("\n") })
-              }
-            />
-          </Field>
-          <AreaField
-            label="Ground floor sqm"
-            value={job.groundFloorSqm}
-            onChange={(groundFloorSqm) => onJobChange({ groundFloorSqm })}
-          />
-          <AreaField
-            label="Void sqm"
-            value={job.voidSqm}
-            onChange={(voidSqm) => onJobChange({ voidSqm })}
-          />
-          <AreaField
-            label="First floor sqm"
-            value={job.firstFloorSqm}
-            onChange={(firstFloorSqm) => onJobChange({ firstFloorSqm })}
-          />
-          <AreaField
-            label="Garage sqm"
-            value={job.garageSqm}
-            onChange={(garageSqm) => onJobChange({ garageSqm })}
-          />
-          <AreaField
-            label="Alfresco sqm"
-            value={job.alfrescoPorchSqm}
-            onChange={(alfrescoPorchSqm) => onJobChange({ alfrescoPorchSqm })}
-          />
-          <AreaField
-            label="Porch sqm"
-            value={job.porchSqm}
-            onChange={(porchSqm) => onJobChange({ porchSqm })}
-          />
-          <AreaField
-            label="Granny flat sqm"
-            value={job.grannyFlatSqm}
-            onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
-          />
-          <AreaField
-            label="Balcony sqm"
-            value={job.balconySqm}
-            onChange={(balconySqm) => onJobChange({ balconySqm })}
-          />
-          <AreaField
-            label="Kitchen sqm"
-            value={job.kitchenSqm}
-            onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
-          />
-          <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Total building area
-            </p>
-            <p className="font-mono text-lg font-semibold">{totalArea} sqm</p>
+            {canPrefill && onPrefillFromLead ? (
+              <Button
+                className="shrink-0"
+                disabled={prefilling}
+                size="sm"
+                type="button"
+                variant="outline"
+                onClick={onPrefillFromLead}
+              >
+                <Sparkles className="size-4" aria-hidden="true" />
+                {prefilling ? "Reading the lead…" : "Pre-fill from lead"}
+              </Button>
+            ) : null}
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <PrefillBanner result={prefillResult} />
+          <OwnersSection owners={owners} onOwnersChange={emitOwners} />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Field label="Build type">
+              <Input
+                value={job.buildType}
+                onChange={(event) =>
+                  onJobChange({ buildType: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Façade">
+              <Select
+                value={job.facade || "__none__"}
+                onValueChange={(value) =>
+                  onJobChange({ facade: value === "__none__" ? "" : value })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a façade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Not selected</SelectItem>
+                  {FACADE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field className="md:col-span-2" label="Site Location">
+              <AddressAutocomplete
+                placeholder="Construction site address"
+                value={job.siteAddress}
+                onChange={(siteAddress) =>
+                  // A free-text edit invalidates the council/state/postcode from a
+                  // previously-picked suggestion — clear them so a hand-corrected
+                  // address can't ship a stale council to Project.council (codex
+                  // #6). onPick re-sets them when a suggestion is chosen.
+                  onJobChange({
+                    siteAddress,
+                    siteCouncil: "",
+                    siteState: "",
+                    sitePostcode: "",
+                  })
+                }
+                onPick={(pick) =>
+                  onJobChange({
+                    siteAddress: pick.address,
+                    siteCouncil: pick.council ?? "",
+                    siteState: pick.state ?? "",
+                    sitePostcode: pick.postcode ?? "",
+                  })
+                }
+              />
+            </Field>
+            <Field label="Total Linens">
+              <Input
+                placeholder="Auto-filled from lead requirements"
+                value={job.linenCount}
+                onChange={(event) =>
+                  onJobChange({ linenCount: parseInt(event.target.value) || 0 })
+                }
+              />
+            </Field>
+            <Field label="Council">
+              <Input
+                placeholder="Auto-filled from Site Location"
+                value={job.siteCouncil}
+                onChange={(event) =>
+                  onJobChange({ siteCouncil: event.target.value })
+                }
+              />
+            </Field>
+            {/* Site particulars. These print on the proposal snapshot and the
+                tender's Project Particulars table; without inputs they stayed at
+                the model defaults and every document shipped "Lot Area: 0 m²". */}
+            <AreaField
+              label="Lot area sqm"
+              value={job.lotAreaSqm}
+              onChange={(lotAreaSqm) => onJobChange({ lotAreaSqm })}
+            />
+            <Field label="DP / title reference">
+              <Input
+                placeholder="e.g. Lot 12 DP 1234567"
+                value={job.dpNumber}
+                onChange={(event) =>
+                  onJobChange({ dpNumber: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Zoning">
+              <Input
+                placeholder="e.g. R2 Low Density Residential"
+                value={job.zoning}
+                onChange={(event) => onJobChange({ zoning: event.target.value })}
+              />
+            </Field>
+            <Field label="Valid until">
+              <Input
+                type="date"
+                value={job.validUntil}
+                onChange={(event) =>
+                  onJobChange({ validUntil: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Prepared by">
+              <Input
+                value={job.preparedBy}
+                onChange={(event) =>
+                  onJobChange({ preparedBy: event.target.value })
+                }
+              />
+            </Field>
+            <Field
+              className="md:col-span-2 xl:col-span-4"
+              label="Build scope (one feature per line — shown on the proposal snapshot)"
+            >
+              <Textarea
+                className="min-h-19"
+                value={job.buildScope.join("\n")}
+                placeholder="4 Bedrooms + Study&#10;Double Garage&#10;Alfresco"
+                onChange={(event) =>
+                  onJobChange({ buildScope: event.target.value.split("\n") })
+                }
+              />
+            </Field>
+            <AreaField
+              label="Ground floor sqm"
+              value={job.groundFloorSqm}
+              onChange={(groundFloorSqm) => onJobChange({ groundFloorSqm })}
+            />
+            <AreaField
+              label="Void sqm"
+              value={job.voidSqm}
+              onChange={(voidSqm) => onJobChange({ voidSqm })}
+            />
+            <AreaField
+              label="First floor sqm"
+              value={job.firstFloorSqm}
+              onChange={(firstFloorSqm) => onJobChange({ firstFloorSqm })}
+            />
+            <AreaField
+              label="Garage sqm"
+              value={job.garageSqm}
+              onChange={(garageSqm) => onJobChange({ garageSqm })}
+            />
+            <AreaField
+              label="Alfresco sqm"
+              value={job.alfrescoPorchSqm}
+              onChange={(alfrescoPorchSqm) => onJobChange({ alfrescoPorchSqm })}
+            />
+            <AreaField
+              label="Porch sqm"
+              value={job.porchSqm}
+              onChange={(porchSqm) => onJobChange({ porchSqm })}
+            />
+            <AreaField
+              label="Granny flat sqm"
+              value={job.grannyFlatSqm}
+              onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
+            />
+            <AreaField
+              label="Balcony sqm"
+              value={job.balconySqm}
+              onChange={(balconySqm) => onJobChange({ balconySqm })}
+            />
+            <AreaField
+              label="Kitchen sqm"
+              value={job.kitchenSqm}
+              onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
+            />
+            <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Total building area
+              </p>
+              <p className="font-mono text-lg font-semibold">{totalArea} sqm</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Room counts get a card per dwelling: a build with a granny home carries
+          a second set of bed/bath/garage counts, and holding both sets in one
+          grid left no way to tell which dwelling a number described. */}
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <CardHeader className="border-b border-border/70">
+          <OfferCardHeading
+            description="Room counts for the main dwelling. These print on the Offer snapshot and the Tender's Project Particulars."
+            icon={<Home className="size-4" aria-hidden="true" />}
+            title="Major House Specifications"
+          />
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <SpecFields
+            bathrooms={job.bathrooms}
+            bedrooms={job.bedrooms}
+            garageSpaces={job.garageSpaces}
+            onBathroomsChange={(bathrooms) => onJobChange({ bathrooms })}
+            onBedroomsChange={(bedrooms) => onJobChange({ bedrooms })}
+            onGarageSpacesChange={(garageSpaces) =>
+              onJobChange({ garageSpaces })
+            }
+          />
+          <YesNoQuestion
+            label="Includes a granny home"
+            value={job.hasGrannyHome}
+            onChange={(hasGrannyHome) => onJobChange({ hasGrannyHome })}
+          />
+        </CardContent>
+      </Card>
+
+      {job.hasGrannyHome ? (
+        <Card className="border-border/70 bg-white/95 shadow-sm">
+          <CardHeader className="border-b border-border/70">
+            <OfferCardHeading
+              description="Room counts for the granny home (secondary dwelling), listed separately on the Offer and Tender documents."
+              icon={<Home className="size-4" aria-hidden="true" />}
+              title="Granny Home Specifications"
+            />
+          </CardHeader>
+          <CardContent className="grid gap-4 pt-4">
+            <SpecFields
+              bathrooms={job.grannyBathrooms}
+              bedrooms={job.grannyBedrooms}
+              garageSpaces={job.grannyGarageSpaces}
+              onBathroomsChange={(grannyBathrooms) =>
+                onJobChange({ grannyBathrooms })
+              }
+              onBedroomsChange={(grannyBedrooms) =>
+                onJobChange({ grannyBedrooms })
+              }
+              onGarageSpacesChange={(grannyGarageSpaces) =>
+                onJobChange({ grannyGarageSpaces })
+              }
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+// The bed/bath/garage trio, shared by the Major House and Granny Home cards so
+// both dwellings are captured through an identical field layout.
+function SpecFields({
+  bathrooms,
+  bedrooms,
+  garageSpaces,
+  onBathroomsChange,
+  onBedroomsChange,
+  onGarageSpacesChange,
+}: {
+  readonly bathrooms: number;
+  readonly bedrooms: number;
+  readonly garageSpaces: number;
+  readonly onBathroomsChange: (value: number) => void;
+  readonly onBedroomsChange: (value: number) => void;
+  readonly onGarageSpacesChange: (value: number) => void;
+}) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <Field label="Number of bedrooms">
+        <Input
+          placeholder="Auto-filled from lead requirements"
+          value={bedrooms}
+          onChange={(event) =>
+            onBedroomsChange(parseInt(event.target.value) || 0)
+          }
+        />
+      </Field>
+      <Field label="Number of bathrooms">
+        <Input
+          type="number"
+          step="0.1"
+          min="0"
+          placeholder="Auto-filled from lead requirements"
+          value={bathrooms}
+          onChange={(event) =>
+            onBathroomsChange(parseFloat(event.target.value) || 0)
+          }
+        />
+      </Field>
+      <Field label="Garage spaces">
+        <Input
+          placeholder="Auto-filled from lead requirements"
+          value={garageSpaces}
+          onChange={(event) =>
+            onGarageSpacesChange(parseInt(event.target.value) || 0)
+          }
+        />
+      </Field>
+    </div>
+  );
+}
+
+// Two-button Yes/No selector, matching the tender gate's YesNoQuestion
+// (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome is a
+// plain boolean rather than tri-state, so "No" is the initial selection.
+function YesNoQuestion({
+  label,
+  onChange,
+  value,
+}: {
+  readonly label: string;
+  readonly onChange: (value: boolean) => void;
+  readonly value: boolean;
+}) {
+  const selected = "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark";
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm font-medium text-foreground">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          type="button"
+          variant={value ? "default" : "outline"}
+          className={cn(value ? selected : "")}
+          onClick={() => onChange(true)}
+        >
+          Yes
+        </Button>
+        <Button
+          size="sm"
+          type="button"
+          variant={value ? "outline" : "default"}
+          className={cn(value ? "" : selected)}
+          onClick={() => onChange(false)}
+        >
+          No
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -71,6 +71,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     exclusions: INITIAL_EXCLUSIONS,
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
+    adminContentVersion: 0,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,

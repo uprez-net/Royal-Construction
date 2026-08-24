@@ -79,6 +79,19 @@ export function EmailFooter() {
                 >
                   Instagram
                 </Link>
+                <span style={{ color: RC_COLORS.textMutedOnLight, margin: '0 10px' }}>·</span>
+                <Link
+                  href={RC_URLS.website}
+                  target="_blank"
+                  style={{
+                    color: RC_COLORS.gold,
+                    textDecoration: 'none',
+                    fontFamily: FONTS.body,
+                    fontWeight: 500,
+                  }}
+                >
+                  Website
+                </Link>
               </Text>
 
               <Text

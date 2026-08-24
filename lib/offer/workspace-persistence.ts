@@ -45,6 +45,13 @@ export type OfferWorkspaceSnapshot = {
   // status). Persisted in the snapshot so a refresh resumes mid-gate without
   // re-asking answered questions or re-unlocking a blocked state.
   readonly tenderGate: TenderGateState;
+  // The AdminOfferContent.version whose defaults produced this offer's
+  // admin-derived fields (cost lines, allowances, exclusions, draft copy).
+  // Compared against the live admin version when the offer is OPENED: a
+  // still-editable offer re-applies the current defaults and re-stamps this;
+  // an agreed/sent offer keeps its frozen snapshot. 0 means "built before
+  // versioning existed", which reads as stale against any real version.
+  readonly adminContentVersion: number;
 };
 
 // Architectural-plan file reference captured at the Tender access gate. Only
@@ -261,6 +268,12 @@ const jobSchema = z.object({
   bathrooms: z.number().default(0),
   garageSpaces: z.number().default(0),
   linenCount: z.number().default(0),
+  // Granny home spec. Defaulted so offers persisted before the dual-spec cards
+  // shipped still parse — they come back as "no granny home".
+  hasGrannyHome: z.boolean().default(false),
+  grannyBedrooms: z.number().default(0),
+  grannyBathrooms: z.number().default(0),
+  grannyGarageSpaces: z.number().default(0),
 });
 
 const costLineSchema = z.object({
@@ -392,6 +405,10 @@ const workspaceStateV1Schema = z.object({
     ),
   ),
   tenderGate: tenderGateSchema,
+  // Defaulted so every offer persisted before admin-content versioning still
+  // parses; 0 sorts below any live admin version, so such an offer is treated
+  // as built from unknown content and refreshed on its next editable open.
+  adminContentVersion: z.number().int().nonnegative().default(0),
 });
 
 // Coerce persisted image values to the {url, source} shape. Older offers stored
@@ -705,6 +722,7 @@ export function serializeWorkspace(
     ),
     images: { ...snapshot.images },
     tenderGate: { ...snapshot.tenderGate },
+    adminContentVersion: snapshot.adminContentVersion,
   };
 }
 
@@ -769,6 +787,7 @@ export function deserializeWorkspace(
     priceAdjustmentLabel: persisted.priceAdjustmentLabel,
     images: persisted.images as OfferImageMap,
     tenderGate: persisted.tenderGate,
+    adminContentVersion: persisted.adminContentVersion,
   };
 }
 

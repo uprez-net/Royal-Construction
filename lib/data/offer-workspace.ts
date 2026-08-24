@@ -18,6 +18,11 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import {
+  applyAdminPrefillToSnapshot,
+  buildAdminOfferPrefill,
+} from "@/lib/offer/admin-offer-prefill";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
 import {
@@ -30,7 +35,10 @@ import type {
   OfferSignerStatus,
   OfferSignerStatusValue,
 } from "@/lib/offer/signing-status";
-import { collectOwnerIssues } from "@/lib/offer/workspace-model";
+import {
+  collectOwnerIssues,
+  type OfferWorkspaceStatus,
+} from "@/lib/offer/workspace-model";
 
 // Allowed lifecycle transitions for the offer WORKSPACE (the legacy
 // OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
@@ -87,6 +95,13 @@ type LoadedOfferWorkspace = {
   // "Awaiting signature" even after they had signed. Empty until an envelope is
   // sent.
   signerStatuses?: readonly OfferSignerStatus[];
+  // Admin content moved on since this offer was built, and the offer is FROZEN
+  // (agreed/sent onward) so its snapshot was deliberately left alone. Drives an
+  // advisory warn blocker; never blocks.
+  adminContentStale?: boolean;
+  // The offer was still editable, so the current admin defaults were re-applied
+  // and the returned snapshot + stateVersion are the refreshed ones.
+  adminContentRefreshed?: boolean;
 };
 
 type OfferRow = {
@@ -210,6 +225,79 @@ async function loadDeclineReason(
   return event?.note ?? null;
 }
 
+// Admin content versioning (see AdminOfferContent.version). Each offer stamps
+// the admin version its cost lines / allowances / exclusions / draft copy came
+// from. When the offer is OPENED and that stamp is behind the live admin
+// version, one of two things happens:
+//
+//   - the offer is still editable (`pending`): the current admin defaults are
+//     re-applied and persisted, so an admin correction reaches every offer that
+//     has not gone out yet without anyone reopening each one by hand;
+//   - the offer is agreed or sent: nothing is written. That snapshot is what the
+//     client was quoted and what the legal documents render from — rewriting it
+//     under them would change an issued price. The change is reported instead,
+//     as a warn blocker.
+//
+// Editability is asked of the `cost-schedule` step rather than hard-coded, so
+// this can never disagree with the freeze rule in offer-editability.ts.
+async function reapplyAdminContentIfStale(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  const snapshot = loaded.snapshot;
+  // A brand-new offer has nothing saved yet — the workspace seeds it from the
+  // live prefill the page already passed in, which is current by construction.
+  if (!snapshot) {
+    return loaded;
+  }
+
+  let prefill: Awaited<ReturnType<typeof buildAdminOfferPrefill>>;
+  try {
+    prefill = await buildAdminOfferPrefill();
+  } catch (error) {
+    // Opening the workspace must not fail because the admin row could not be
+    // read; the offer's own saved content is still perfectly usable.
+    console.error("[offer] admin content check on open failed:", error);
+    return loaded;
+  }
+  if (prefill.adminVersion === snapshot.adminContentVersion) {
+    return loaded;
+  }
+
+  const status = loaded.status.toLowerCase() as OfferWorkspaceStatus;
+  if (!isOfferBuildStepEditable("cost-schedule", status)) {
+    return { ...loaded, adminContentStale: true };
+  }
+
+  const refreshed = applyAdminPrefillToSnapshot(snapshot, prefill);
+  // Same optimistic-concurrency predicate the autosave uses (ADR 0002), so this
+  // can never land on a row another writer has moved on, nor on a revision that
+  // was archived between the read and this write.
+  const result = await prisma.offer.updateMany({
+    where: {
+      id: loaded.offerId,
+      isActive: true,
+      stateVersion: loaded.stateVersion,
+    },
+    data: {
+      workspaceState: serializeWorkspace(
+        refreshed,
+      ) as unknown as Prisma.InputJsonValue,
+      stateVersion: { increment: 1 },
+    },
+  });
+  if (result.count === 0) {
+    // Another writer got there first. Leave the stored state alone and hand back
+    // what we read; the next open re-checks and re-applies.
+    return { ...loaded, adminContentStale: true };
+  }
+  return {
+    ...loaded,
+    snapshot: refreshed,
+    stateVersion: loaded.stateVersion + 1,
+    adminContentRefreshed: true,
+  };
+}
+
 async function attachSignerStatus(
   loaded: LoadedOfferWorkspace,
 ): Promise<LoadedOfferWorkspace> {
@@ -282,11 +370,19 @@ export async function loadActiveOfferWorkspace(
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
       return attachSignerStatus(
-        await attachContractParticulars(await attachDeclineReason(toLoaded(healed))),
+        await attachContractParticulars(
+          await attachDeclineReason(
+            await reapplyAdminContentIfStale(toLoaded(healed)),
+          ),
+        ),
       );
     }
     return attachSignerStatus(
-      await attachContractParticulars(await attachDeclineReason(toLoaded(existing))),
+      await attachContractParticulars(
+        await attachDeclineReason(
+          await reapplyAdminContentIfStale(toLoaded(existing)),
+        ),
+      ),
     );
   }
 

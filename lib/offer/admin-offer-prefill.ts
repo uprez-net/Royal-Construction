@@ -25,6 +25,7 @@ import type {
   AreaMeasurementKey,
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
+import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
@@ -34,6 +35,10 @@ import {
 import { DEFAULT_RATE_CONSTANTS } from "@/lib/offer/formula-variables";
 
 export type AdminOfferPrefill = {
+  // The AdminOfferContent.version these defaults were built from. Stamped into
+  // the offer's snapshot so opening a still-editable offer can tell whether the
+  // admin content has moved on since (see reapplyAdminContentIfStale).
+  adminVersion: number;
   buildScope: readonly string[];
   costLines: readonly OfferWorkspaceCostLine[];
   allowances: readonly OfferWorkspaceScopeItem[];
@@ -297,6 +302,45 @@ export function reevaluateFormulaCostLines(
   );
 }
 
+// Re-seed an EXISTING offer's admin-derived fields from the current admin
+// defaults, leaving everything project-specific (job, areas, pricing, payment
+// schedule, images, tender gate) exactly as the estimator left it. Called when a
+// still-editable offer is opened and its stamped admin version is behind the
+// live one; an agreed/sent offer never reaches here (see
+// reapplyAdminContentIfStale in lib/data/offer-workspace.ts).
+//
+// Allowances, exclusions and the draft copy are pure admin content, so they are
+// replaced outright. Cost lines are a MERGE: the admin set decides which tasks
+// exist and carries the admin's own prices, but a line the admin does not price
+// (priceMode "none", or a formula whose cost is deferred — both arrive as 0)
+// keeps the offer's existing figure and include flag. That number is the
+// estimator's project measurement, not a stale default, and replacing it with 0
+// would silently zero work already done.
+export function applyAdminPrefillToSnapshot(
+  snapshot: OfferWorkspaceSnapshot,
+  prefill: AdminOfferPrefill,
+): OfferWorkspaceSnapshot {
+  const existingById = new Map(snapshot.lines.map((line) => [line.id, line]));
+  return {
+    ...snapshot,
+    lines: prefill.costLines.map((line) => {
+      const existing = existingById.get(line.id);
+      if (!existing || line.costExGst !== 0) {
+        return line;
+      }
+      return {
+        ...line,
+        costExGst: existing.costExGst,
+        includedInContract: existing.includedInContract,
+      };
+    }),
+    allowances: prefill.allowances,
+    exclusions: prefill.exclusions,
+    draft: prefill.draft,
+    adminContentVersion: prefill.adminVersion,
+  };
+}
+
 // The entry point. Fetches AdminOfferContent from the DB, joins it against
 // the static sequence mappings, and returns the runtime initial state for a
 // new offer. Called server-side from the offer page.
@@ -305,6 +349,7 @@ export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
   const mappingByKey = indexMappingsByKey();
 
   return {
+    adminVersion: adminContent.version,
     buildScope: adminContent.buildScope,
     costLines: resolveCostLines(adminContent, mappingByKey),
     allowances: resolveAllowances(adminContent),

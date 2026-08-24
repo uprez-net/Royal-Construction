@@ -57,7 +57,8 @@ const snapshot: OfferWorkspaceSnapshot = {
   standardPriceInput: "",
   priceAdjustmentLabel: "",
   images: EMPTY_OFFER_IMAGES,
-  tenderGate: INITIAL_TENDER_GATE
+  tenderGate: INITIAL_TENDER_GATE,
+  adminContentVersion: 0,
 };
 
 const blankRoundTrip = deserializeWorkspace(serializeWorkspace(snapshot));
