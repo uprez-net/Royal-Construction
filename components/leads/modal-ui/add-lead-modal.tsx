@@ -240,7 +240,7 @@ export function AddLeadModal({
           // The task carries the lead's stage after any advance, so the row
           // the list renders is not one revision behind.
           if (task.lead.stage !== createdLead.stage) {
-            saved = { ...createdLead, stage: task.lead.stage as typeof createdLead.stage };
+            saved = { ...createdLead, stage: task.lead.stage };
           }
         } catch (taskError) {
           console.error("Lead created but its first task was not", taskError);

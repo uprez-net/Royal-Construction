@@ -104,8 +104,8 @@ const SECTION_META: Record<
     icon: BadgeDollarSign,
   },
   followUp: {
-    label: "Follow-up date and time",
-    description: "When this lead is next contacted",
+    label: "Scheduled work",
+    description: "Calls, emails and meetings booked against this lead",
     icon: CalendarClock,
   },
   lostReason: {
@@ -715,9 +715,9 @@ export function LeadOverviewTab({
                 // that move, so push it up rather than leaving the header and
                 // the stage picker showing the old value until a refresh.
                 if (task.lead.stage !== lead.stage) {
-                  const moved = { ...lead, stage: task.lead.stage as Lead["stage"] };
+                  const moved = { ...lead, stage: task.lead.stage };
                   onLeadUpdate(moved);
-                  patch({ stage: task.lead.stage as Lead["stage"] });
+                  patch({ stage: task.lead.stage });
                 }
                 toast.success("Task added.");
               }}
