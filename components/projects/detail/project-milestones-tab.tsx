@@ -106,7 +106,7 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
   return {
     totalStages,
     completedStages,
-    inProgressStages: inProgressStages,
+    inProgressStages: inProgressStages > 0 ? inProgressStages : completedStages < totalStages ? 1 : 0,
   };
 };
 
@@ -188,7 +188,7 @@ export function ProjectMilestonesTab({
         status: "Upcoming",
         count:
           projectStagesCount - completedStagesCount - inProgressStagesCount,
-        color: "var(--muted)",
+        color: "var(--chart-5)",
       }
     ];
     return graphData;
@@ -308,7 +308,7 @@ export function ProjectMilestonesTab({
               </li>
               <li className="flex items-center">
                 <span
-                  className="mr-1.5 inline-block size-2 rounded-full bg-muted-foreground"
+                  className="mr-1.5 inline-block size-2 rounded-full bg-chart-5"
                   aria-hidden="true"
                 />
                 Upcoming
@@ -585,7 +585,7 @@ export function ProjectMilestonesTab({
           colorByLabel={{
             Completed: "var(--chart-2)",
             "In Progress": "var(--chart-3)",
-            Upcoming: "var(--muted)",
+            Upcoming: "var(--chart-5)",
           }}
         />
       </div>
