@@ -405,7 +405,12 @@ export function ModalManager() {
     case "followUpPrompt": {
       const leadId = Number(modal.payload?.leadId ?? 0);
       if (!leadId) return null;
-      return <FollowupPromptModal leadId={leadId} onClose={handleClose} />;
+      // taskId is optional: opened from a task row it scopes the dialog to that
+      // one task, opened from a notification it still means "this lead".
+      const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
+      return (
+        <FollowupPromptModal leadId={leadId} taskId={taskId} onClose={handleClose} />
+      );
     }
     case "meetingReview": {
       const leadId = Number(modal.payload?.leadId ?? 0);

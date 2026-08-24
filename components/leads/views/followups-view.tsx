@@ -5,17 +5,13 @@ import {
   Calendar,
   Phone,
   Mail,
-  Bell,
   Clock,
   User,
   AlertCircle,
-  RefreshCw,
-  CalendarDays,
-  CalendarRange,
-  TimerReset,
   Check,
+  Eye,
 } from "lucide-react";
-import { Lead, LeadStage } from "@/lib/leads/types";
+import { Lead } from "@/lib/leads/types";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
 import { dialablePhone } from "@/lib/leads/lead-helpers";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
@@ -24,7 +20,6 @@ import {
   fetchOpenTasks,
   type LeadTaskRow,
 } from "@/lib/leads/task-service";
-import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -133,6 +128,7 @@ interface FollowupItemProps {
   index: number;
   onLeadUpdate: (lead: Lead) => void;
   onDone: (taskId: number) => void;
+  onReview: (task: LeadTaskRow) => void;
   showToast: (message: string, type?: "success" | "info" | "error") => void;
 }
 
@@ -142,6 +138,7 @@ function FollowupItem({
   index,
   onLeadUpdate,
   onDone,
+  onReview,
   showToast,
 }: FollowupItemProps) {
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -274,6 +271,19 @@ function FollowupItem({
             <Check size={14} />
             <span>Done</span>
           </button>
+          <button
+            type="button"
+            className="fu-action-btn"
+            title={`Record the outcome for ${task.lead.name}`}
+            aria-label={`Review ${task.lead.name}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onReview(task);
+            }}
+          >
+            <Eye size={14} />
+            <span>Review</span>
+          </button>
         </div>
       </div>
     </div>
@@ -311,6 +321,24 @@ function FollowupsView({
       .finally(() => setTasksLoading(false));
     return () => controller.abort();
   }, [showToast]);
+
+  /**
+   * Review opens the outcome dialog: completed, not required, or rescheduled
+   * with a date. Scoped to the clicked task by id. The old panel closed EVERY
+   * non-meeting task on the lead, which is defensible from a lead-level panel
+   * and surprising from a row: click Review on one and two disappear.
+   */
+  const handleReview = useCallback(
+    (task: LeadTaskRow) => {
+      dispatch(
+        openModal({
+          type: task.type === "MEETING" ? "meetingReview" : "followUpPrompt",
+          payload: { leadId: task.leadId, taskId: task.id },
+        }),
+      );
+    },
+    [dispatch],
+  );
 
   /** Drop a closed task from the list without refetching the whole tab. */
   const handleTaskDone = useCallback((taskId: number) => {
@@ -365,6 +393,11 @@ function FollowupsView({
   // Derived from the same list the rows come from, so the counts and the list
   // can no longer disagree. Production showed three different numbers for this
   // on one screen: the card said 10 pending, the tab said 0, the panel said 4.
+  const undatedCount = useMemo(
+    () => tasks.filter((t) => t.dueDate === null).length,
+    [tasks],
+  );
+
   const liveStats = useMemo(
     () => ({
       totalFollowUps: nonMeetings.length,
@@ -385,238 +418,79 @@ function FollowupsView({
 
   return (
     <div className="followups-view">
-      <div className="followups-grid">
-        <div className="followups-main">
-          <div className="fu-card">
-            <div className="fu-card-header">
-              <div className="fu-card-header-left">
-                <Calendar size={16} className="fu-card-header-icon" />
-                <h3 className="fu-card-title">Follow-up Schedule</h3>
-              </div>
-              <span className="fu-pending-badge">
-                <span className="fu-pending-pulse" />
-                {/* The count of the list it labels, so every type in it.
-                    stats.pendingFollowUps deliberately excludes meetings for
-                    the Quick Stats breakdown, and reading it here put "24
-                    pending" above 32 visible rows. */}
-                {pendingFollowups.length} pending
-              </span>
+      {/* One list, full width.
+          There used to be three places showing the same work: an "Overdue and
+          due today" panel above the tabs, this list, and an "Upcoming
+          Reminders" sidebar. The panel held 14 rows and every one of them was
+          already in this list, with more context and three actions instead of
+          one. It has gone, the reminders are folded in as a section, and the
+          six stat cards are a single line. */}
+      <div className="tasks-summary">
+        <span><strong>{pendingFollowups.length}</strong> due now</span>
+        <span><strong>{stats.pendingFollowUps}</strong> calls, emails, waiting</span>
+        <span><strong>{stats.pendingMeetings}</strong> meetings</span>
+        <span><strong>{upcomingFollowups.length}</strong> due later</span>
+        <span><strong>{undatedCount}</strong> unscheduled</span>
+      </div>
+
+      <div className="fu-card">
+        <div className="fu-list">
+          {busy ? (
+            <div className="fu-empty">
+              <p className="fu-empty-title">Loading...</p>
             </div>
-            <div className="fu-list">
-              {pendingFollowups.length === 0 ? (
-                <div className="fu-empty">
-                  <div className="fu-empty-icon">
-                    {tasksError ? <AlertCircle size={28} /> : <Calendar size={28} />}
-                  </div>
-                  {/* A failed request must never render as "All caught up".
-                      That sentence is what let 5 production leads sit parked
-                      with nothing scheduled and nobody the wiser. */}
-                  <p className="fu-empty-title">
-                    {tasksError ? "Could not load tasks" : "All caught up!"}
-                  </p>
-                  <p className="fu-empty-desc">
-                    {tasksError
-                      ? "This list is empty because the request failed, not because there is no work. Refresh to try again."
-                      : "No pending follow-ups at the moment."}
-                  </p>
+          ) : pendingFollowups.length === 0 && upcomingFollowups.length === 0 ? (
+            <div className="fu-empty">
+              <div className="fu-empty-icon">
+                {tasksError ? <AlertCircle size={28} /> : <Calendar size={28} />}
+              </div>
+              {/* A failed request must never render as "nothing due". That
+                  sentence is what let 5 production leads sit parked with
+                  nothing scheduled and nobody the wiser. */}
+              <p className="fu-empty-title">
+                {tasksError ? "Could not load tasks" : "Nothing due"}
+              </p>
+              <p className="fu-empty-desc">
+                {tasksError
+                  ? "This list is empty because the request failed, not because there is no work. Refresh to try again."
+                  : "No open tasks on any live lead."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {pendingFollowups.map((task, index) => (
+                <FollowupItem
+                  key={task.id}
+                  task={task}
+                  lead={leadsById.get(task.leadId)}
+                  index={index}
+                  onLeadUpdate={onLeadUpdate}
+                  onDone={handleTaskDone}
+                  onReview={handleReview}
+                  showToast={showToast}
+                />
+              ))}
+
+              {upcomingFollowups.length > 0 && (
+                <div className="fu-divider">
+                  Due later
+                  <span>{upcomingFollowups.length}</span>
                 </div>
-              ) : (
-                pendingFollowups.map((task, index) => (
-                  <FollowupItem
-                    key={task.id}
-                    task={task}
-                    lead={leadsById.get(task.leadId)}
-                    index={index}
-                    onLeadUpdate={onLeadUpdate}
-                    onDone={handleTaskDone}
-                    showToast={showToast}
-                  />
-                ))
               )}
-            </div>
-          </div>
-        </div>
-
-        <div className="followups-sidebar">
-          <div className="fu-card">
-            <div className="fu-card-header">
-              <div className="fu-card-header-left">
-                <Bell size={16} className="fu-card-header-icon" />
-                <h3 className="fu-card-title">Upcoming Reminders</h3>
-              </div>
-            </div>
-            {!busy ? (
-              <div className="fu-reminders">
-                {upcomingFollowups.slice(0, 5).map((task) => {
-                  const sc = getStageConfig(task.lead.stage);
-                  return (
-                    <div
-                      key={task.id}
-                      className="fu-reminder-item"
-                      style={
-                        { "--reminder-accent": sc.dot } as React.CSSProperties
-                      }
-                    >
-                      <div className="fu-reminder-date-col">
-                        <span className="fu-reminder-day-label">
-                          {task.dueDate ? formatDate(task.dueDate) : "No date"}
-                        </span>
-                      </div>
-                      <div className="fu-reminder-info">
-                        <span className="fu-reminder-name">{task.lead.name}</span>
-                        <span className="fu-reminder-time">
-                          {task.dueTime ?? ""}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-                {upcomingFollowups.length === 0 && (
-                  <div className="fu-empty-mini">
-                    <Clock size={18} />
-                    <span>No upcoming reminders</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-3">
-                <div className="flex size-12 items-center justify-center">
-                  <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    Loading leads...
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Your leads will appear here.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="fu-card">
-            <div className="fu-card-header">
-              <div className="fu-card-header-left">
-                <AlertCircle size={16} className="fu-card-header-icon" />
-                <h3 className="fu-card-title">Quick Stats</h3>
-              </div>
-            </div>
-            <div className="grid gap-3 p-4 grid-cols-1">
-              <LeadMetricCard
-                label="Total Follow-ups"
-                value={String(stats.totalFollowUps)}
-                note="All follow-up leads"
-                tone="primary"
-                icon={CalendarDays}
-                onClick={() =>
-                  dispatch(
-                    openModal({
-                      type: "leadStatsDrilldown",
-                      payload: {
-                        title: "Total Follow-ups",
-                        stage: [] as LeadStage[],
-                      },
-                    }),
-                  )
-                }
-              />
-              <LeadMetricCard
-                label="Pending Follow-ups"
-                value={String(stats.pendingFollowUps)}
-                note="Follow-ups due today or earlier"
-                tone="danger"
-                icon={Clock}
-                onClick={() =>
-                  dispatch(
-                    openModal({
-                      type: "leadStatsDrilldown",
-                      payload: {
-                        title: "Pending Follow-ups",
-                        stage: [] as LeadStage[],
-                        pendingFollowUps: true,
-                      },
-                    }),
-                  )
-                }
-              />
-              <LeadMetricCard
-                label="Upcoming Follow-ups"
-                value={String(stats.upcomingFollowUps)}
-                note="Scheduled after today"
-                tone="warning"
-                icon={CalendarRange}
-                onClick={() =>
-                  dispatch(
-                    openModal({
-                      type: "leadStatsDrilldown",
-                      payload: {
-                        title: "Upcoming Follow-ups",
-                        stage: [] as LeadStage[],
-                        upcomingFollowUps: true,
-                      },
-                    }),
-                  )
-                }
-              />
-              <LeadMetricCard
-                label="Total Meetings"
-                value={String(stats.totalMeetings)}
-                note="Meetings booked as tasks"
-                tone="info"
-                icon={Bell}
-                onClick={() =>
-                  dispatch(
-                    openModal({
-                      type: "leadStatsDrilldown",
-                      payload: {
-                        title: "Total Meetings",
-                        stage: [] as LeadStage[],
-                      },
-                    }),
-                  )
-                }
-              />
-              <LeadMetricCard
-                label="Pending Meetings"
-                value={String(stats.pendingMeetings)}
-                note="Meetings that have passed"
-                tone="danger"
-                icon={TimerReset}
-                onClick={() =>
-                  dispatch(
-                    openModal({
-                      type: "leadStatsDrilldown",
-                      payload: {
-                        title: "Pending Meetings",
-                        stage: [] as LeadStage[],
-                        pendingMeetings: true,
-                      },
-                    }),
-                  )
-                }
-              />
-              <LeadMetricCard
-                label="Upcoming Meetings"
-                value={String(stats.upcomingMeetings)}
-                note="Meetings still ahead"
-                tone="success"
-                icon={CalendarDays}
-                onClick={() =>
-                  dispatch(
-                    openModal({
-                      type: "leadStatsDrilldown",
-                      payload: {
-                        title: "Upcoming Meetings",
-                        stage: [] as LeadStage[],
-                        upcomingMeetings: true,
-                      },
-                    }),
-                  )
-                }
-              />
-            </div>
-          </div>
+              {upcomingFollowups.map((task, index) => (
+                <FollowupItem
+                  key={task.id}
+                  task={task}
+                  lead={leadsById.get(task.leadId)}
+                  index={pendingFollowups.length + index}
+                  onLeadUpdate={onLeadUpdate}
+                  onDone={handleTaskDone}
+                  onReview={handleReview}
+                  showToast={showToast}
+                />
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
