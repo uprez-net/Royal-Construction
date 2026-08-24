@@ -109,7 +109,13 @@ export function useLeadsData() {
     // The first render already has fresh stats; only react to later changes.
     if (seenTasksVersion.current === tasksVersion) return;
     seenTasksVersion.current = tasksVersion;
-    void refreshStats();
+    // Rejections here were unhandled. The cards simply keep their previous
+    // values, which is the right outcome — a task list that reloaded fine
+    // should not blank the page — but it must not surface as an unhandled
+    // promise either.
+    refreshStats().catch((err: unknown) => {
+      console.error("Failed to refresh lead stats after a task change", err);
+    });
   }, [tasksVersion, refreshStats]);
 
   /* ── Paginated leads ── */
@@ -153,7 +159,9 @@ export function useLeadsData() {
 
   /* ── Full load (initial / hard refresh) ── */
   const loadData = useCallback(
-    async (params: { query?: string; status?: string } = {}) => {
+    async (
+      params: { query?: string; status?: string; hasOpenTask?: boolean } = {},
+    ) => {
       try {
         setLoading(true);
         const [leadsData, statsData, analytics] = await Promise.all([
@@ -162,6 +170,11 @@ export function useLeadsData() {
             limit: 10,
             q: params.query?.trim() || undefined,
             status: resolveStatusFilter(params.status),
+            // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
+            // an empty array — so without this the initial load for a
+            // bookmarked ?status=pendingFollowup fetched every lead and raced
+            // the filtered request the metric effect fires straight after.
+            hasOpenTask: params.hasOpenTask,
           }),
           fetchLeadsStats(),
           fetchLeadAnalyticsData(),

@@ -98,15 +98,21 @@ export function MeetingReviewModal({
       // meeting is finished with, and the history entry says what happened so
       // a replacement can be booked deliberately rather than by leaving an
       // overdue row lying around.
-      const meetings = (await fetchOpenTasks()).filter(
-        (t) =>
-          t.leadId === lead.id &&
-          t.type === "MEETING" &&
-          // Scoped to the clicked row when there is one. Opened from a
-          // notification there is no task id, and it means this lead's meetings.
-          (taskId === undefined || t.id === taskId),
+      const openMeetings = (await fetchOpenTasks()).filter(
+        (t) => t.leadId === lead.id && t.type === "MEETING",
       );
-      for (const meeting of meetings) {
+      // Exactly one meeting is closed, never a set.
+      //
+      // With a task id this is the row that was clicked. Without one — opened
+      // from a notification, which names only the lead — it is the earliest
+      // due, which is the meeting the reminder was about. Closing every open
+      // meeting on the lead would cancel bookings this dialog never mentioned;
+      // fetchOpenTasks already returns them soonest-first.
+      const meeting =
+        taskId === undefined
+          ? openMeetings[0]
+          : openMeetings.find((t) => t.id === taskId);
+      if (meeting) {
         await completeTask(meeting.id);
       }
 

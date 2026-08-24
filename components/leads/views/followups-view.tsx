@@ -409,6 +409,10 @@ function FollowupsView({
       .then(([open, done]) => {
         setTasks(open);
         setDoneTasks(done);
+        // Cleared on success, not just set on failure. Once a load failed the
+        // tab kept rendering "Could not load tasks" over a list that had since
+        // reloaded perfectly well.
+        setTasksError(false);
       })
       .catch((err: unknown) => {
         // An abort on unmount is expected and silent. A real failure must not

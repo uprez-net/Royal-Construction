@@ -164,10 +164,19 @@ export default function Leads() {
       }
 
       Promise.resolve().then(() => {
-        const params: { status?: string; query?: string } = {};
+        const params: {
+          status?: string;
+          query?: string;
+          hasOpenTask?: boolean;
+        } = {};
         if (validatedStatus) {
           setActiveMetric(validatedStatus);
           params.status = validatedStatus;
+          // Same rule as every other request: "pendingFollowup" is not a stage
+          // and needs the open-task filter travelling with it. Without this a
+          // bookmarked ?status=pendingFollowup loaded every lead first and
+          // raced the filtered request the metric effect fires next.
+          if (validatedStatus === "pendingFollowup") params.hasOpenTask = true;
         }
         if (decodedQuery && decodedQuery.trim().length > 0) {
           const query = decodedQuery.trim();

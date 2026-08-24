@@ -21,7 +21,13 @@ import {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Anything other than the two known values is a caller mistake. Silently
+    // treating ?state=complete (or a typo) as "open" would hand back the wrong
+    // list and look like data loss.
     const state = request.nextUrl.searchParams.get("state");
+    if (state !== null && state !== "open" && state !== "completed") {
+      return badRequestResponse('state must be "open" or "completed"');
+    }
     return successResponse(
       state === "completed" ? await listCompletedTasks() : await listOpenTasks(),
     );

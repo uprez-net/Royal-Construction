@@ -23,9 +23,26 @@ export async function PATCH(
     const parsed = leadTaskParamSchema.safeParse(await context.params);
     if (!parsed.success) return badRequestResponse(parsed.error.message);
 
-    // An empty body is not an error here, so a failed parse means "no body".
-    const body = await request.json().catch(() => null);
-    const action = body && typeof body === "object" ? (body as { action?: unknown }).action : undefined;
+    // Read as text so "no body" and "broken body" stay distinguishable.
+    //
+    // `request.json().catch(() => null)` collapsed the two, and the fallback
+    // for a missing body is "complete" — so a malformed reopen request would
+    // have silently CLOSED the task instead of failing. An empty body is the
+    // legacy contract and still means complete; anything present must parse.
+    const raw = await request.text();
+    let action: unknown;
+    if (raw.trim()) {
+      let body: unknown;
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        return badRequestResponse("Request body must be valid JSON");
+      }
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        return badRequestResponse("Request body must be a JSON object");
+      }
+      action = (body as { action?: unknown }).action;
+    }
     if (action !== undefined && action !== "complete" && action !== "reopen") {
       return badRequestResponse('action must be "complete" or "reopen"');
     }
