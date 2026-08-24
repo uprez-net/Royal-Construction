@@ -83,13 +83,21 @@ export function useLeadsData() {
   const [error, setError] = useState<string | null>(null);
 
   /* ── Stats ── */
+  // Guards against an older in-flight refresh landing after a newer one and
+  // putting stale counts back on the cards. Task changes can arrive in quick
+  // succession — closing several rows in a row — and the requests do not
+  // necessarily resolve in the order they were issued.
+  const statsRun = useRef(0);
   const refreshStats = useCallback(async () => {
+    const run = ++statsRun.current;
     // No follow-up stats here any more. The Follow-ups tab derives its counts
     // from the task list it renders, so a second source could not agree with it.
     const [statsData, analytics] = await Promise.all([
       fetchLeadsStats(),
       fetchLeadAnalyticsData(),
     ]);
+    // A newer refresh started while this one was in flight; that one wins.
+    if (run !== statsRun.current) return;
     setStats(statsData);
     setAnalyticsData(analytics);
   }, []);

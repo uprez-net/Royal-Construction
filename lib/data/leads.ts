@@ -1157,7 +1157,25 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);
-  const updated = await prisma.lead.update({
+  // Hand the lead's outstanding work over IN THE SAME TRANSACTION as the lead
+  // write. Split across two round trips, a failure on the second left the lead
+  // showing a new owner while its open tasks still pointed at the old one and
+  // still emailed them — which is the exact bug this reassignment exists to
+  // fix, reintroduced in a narrower window.
+  //
+  // Only open tasks move: a completed task records who actually did the work.
+  const reassignOpenTasks =
+    input.assignedId !== undefined
+      ? [
+          prisma.leadTask.updateMany({
+            where: { leadId: id, completedAt: null },
+            data: { assignedId: input.assignedId?.trim() || null },
+          }),
+        ]
+      : [];
+
+  const [updated] = await prisma.$transaction([
+    prisma.lead.update({
     where: { id },
     data: updateData,
     include: {
@@ -1168,26 +1186,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       emails: { orderBy: { createdAt: "desc" } },
       files: true
     },
-  });
-
-  // Hand the lead's outstanding work over with it.
-  //
-  // createLeadTask stamps the lead's assignee onto each task at creation, and
-  // nothing updated it afterwards. Reassigning a lead therefore left its open
-  // calls and meetings pointing at the previous owner, and both reminder crons
-  // prefer the task's own assignee (`task.assignedTo ?? lead.assignedUser`) —
-  // so the reminder email went to the old owner while the Tasks tab showed the
-  // new one. One name on screen, a different name in the inbox.
-  //
-  // Only open tasks move: a completed task is a record of who actually did the
-  // work and must keep saying so.
-  if (input.assignedId !== undefined) {
-    const nextAssignedId = input.assignedId?.trim() || null;
-    await prisma.leadTask.updateMany({
-      where: { leadId: id, completedAt: null },
-      data: { assignedId: nextAssignedId },
-    });
-  }
+    }),
+    ...reassignOpenTasks,
+  ]);
 
   for (const annotation of annotationInputs) {
     try {
