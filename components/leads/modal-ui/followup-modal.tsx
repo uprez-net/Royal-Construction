@@ -63,7 +63,7 @@ export function FollowupModal({
       }
       onLeadUpdate(
         task.lead.stage !== updated.stage
-          ? { ...updated, stage: task.lead.stage as typeof updated.stage }
+          ? { ...updated, stage: task.lead.stage }
           : updated,
       );
       showToast(`Updated follow-up for ${updated.name}`, "success");

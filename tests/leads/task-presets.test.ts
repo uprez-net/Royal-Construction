@@ -8,6 +8,8 @@ import {
   taskTypeFromNote,
 } from "../../lib/leads/task-presets";
 import { createLeadTaskSchema } from "../../utils/validators/lead-task";
+import { stageMap } from "../../types/lead";
+import { STAGE_STYLES } from "../../lib/leads/lead-helpers";
 
 test("every note recorded on production classifies", () => {
   // The real strings, verbatim from the production followupNotes column.
@@ -99,4 +101,18 @@ test("the due time schema rejects what max(10) used to accept", () => {
     assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(t).success, false, t);
   }
   assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(null).success, true);
+});
+
+test("a task row must carry the UI stage label, not the Prisma enum", () => {
+  // The E2E crash. LeadTaskRow.lead.stage was typed as string and passed the
+  // Prisma value through. Three callers assign it straight onto a Lead, so
+  // "DISCOVERY" reached stageDef(), which threw, and the lead page rendered
+  // "This lead could not be loaded" the moment anyone added a task.
+  for (const [prisma, label] of Object.entries(stageMap)) {
+    assert.equal(typeof label, "string", prisma);
+    // Every mapped label must be one the UI can actually resolve.
+    assert.ok(STAGE_STYLES[label], `${prisma} -> ${label} has no badge style`);
+  }
+  assert.equal(stageMap.DISCOVERY, "Discovery");
+  assert.notEqual(stageMap.DISCOVERY, "DISCOVERY");
 });

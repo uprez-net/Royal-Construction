@@ -510,9 +510,16 @@ export function isQuotingStage(stage: LeadStage): boolean {
   // isWonStage, not a bare "Won". This list named Won and missed Converted,
   // and Converted is the label operators actually pick, so in practice no won
   // lead ever showed Check Offer. Exactly the defect isTerminalStage had.
+  //
+  // And it happened again with the ladder change: the list still named the two
+  // retired stages and never gained Discovery, which replaced them. That hid
+  // Check with Offer from 33 of the 59 leads on staging, every one of them in
+  // the stage where scoping a build actually happens.
   return (
     isWonStage(stage) ||
-    ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage)
+    ["Discovery", "Qualified", "Quoted", "Negotiating"].includes(stage) ||
+    // Retired, kept until no row holds them.
+    ["In Follow-up", "Meeting Scheduled"].includes(stage)
   );
 }
 

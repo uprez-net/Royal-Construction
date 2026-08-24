@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { LeadTaskType } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
+import { stageMap } from "@/types/lead";
 import type { LeadTaskRow } from "@/lib/leads/task-types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
@@ -42,7 +43,8 @@ function toRow(t: RawRow): LeadTaskRow {
     lead: {
       id: t.lead.id,
       name: t.lead.name,
-      stage: t.lead.stage,
+      // Mapped, not passed through: the client wants "Discovery", not "DISCOVERY".
+      stage: stageMap[t.lead.stage],
       phone: t.lead.phone,
       email: t.lead.email,
       assignedName: t.lead.assignedUser?.name ?? null,
