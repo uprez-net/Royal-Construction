@@ -49,6 +49,8 @@ import {
   HardHat,
   Check,
 } from "lucide-react";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -946,7 +948,7 @@ function SourceDocumentCard({
   onChange: (field: "fileName" | "url", value: string) => void;
 }) {
   const fileNameId = useId();
-  const urlId = useId();
+  const dispatch = useAppDispatch();
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
@@ -961,31 +963,32 @@ function SourceDocumentCard({
           </span>
         </div>
         {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
+          <Button
+            type="button"
+            onClick={() =>
+              dispatch(
+                openModal({
+                  type: "previewFile",
+                  payload: { fileUrl: url },
+                }),
+              )
+            }
             aria-label={`Open the ${kind.toLowerCase()} document in a new tab`}
-            className="flex items-center gap-1 rounded-md text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            variant="ghost"
+            size="sm"
+            className="h-auto gap-1 px-0 text-xs font-medium text-primary hover:underline"
           >
             Open <ExternalLink aria-hidden="true" className="h-3 w-3" />
-          </a>
+          </Button>
         ) : null}
       </div>
       <FieldShell label="File name" htmlFor={fileNameId}>
         <Input
           id={fileNameId}
-          value={fileName}
+          value={`${fileName.slice(0, fileName.lastIndexOf(".")).trim()}.${fileName
+            .slice(fileName.lastIndexOf(".") + 1)
+            .trim()}`}
           onChange={(e) => onChange("fileName", e.target.value)}
-          className={FIELD_CONTROL_CLASS}
-        />
-      </FieldShell>
-      <FieldShell label="File URL" htmlFor={urlId}>
-        <Input
-          id={urlId}
-          type="url"
-          value={url}
-          onChange={(e) => onChange("url", e.target.value)}
           className={FIELD_CONTROL_CLASS}
         />
       </FieldShell>

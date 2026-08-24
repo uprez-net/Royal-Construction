@@ -57,6 +57,7 @@ import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejectio
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
+import FilePreviewCanvas from "../shared/file-preview-canvas";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -104,7 +105,10 @@ export function ModalManager() {
     const loading = toast.loading("Updating status...");
     handleClose();
     try {
-      await updateScheduleStatuses([row.id], TradieScheduleStatus.AWAITING_ADMIN_APPROVAL);
+      await updateScheduleStatuses(
+        [row.id],
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+      );
     } catch (error) {
       toast.error("Failed to update status. Please try again.");
       console.error("Error updating tradie schedule status:", error);
@@ -518,6 +522,16 @@ export function ModalManager() {
         tradie: TradieDetails;
       };
       return <EditTradieModal open onClose={handleClose} tradie={tradie} />;
+    }
+    case "previewFile": {
+      const { fileUrl } = modal.payload as { fileUrl: string };
+      return (
+        <FilePreviewCanvas
+          key={fileUrl} // extra safety net — forces a clean remount
+          url={fileUrl}
+          onClose={handleClose} // swap in your actual close action
+        />
+      );
     }
     default:
       return null;

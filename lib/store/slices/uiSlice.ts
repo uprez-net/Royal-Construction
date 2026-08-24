@@ -31,6 +31,7 @@ export type ModalType =
   | "adminApproval"
   | "approvalDetails"
   | "rejectTradieApprovals"
+  | "previewFile"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;
