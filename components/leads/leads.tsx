@@ -41,7 +41,6 @@ import TableView from "./views/table-view";
 import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
-import { LeadNotificationCard } from "./lead-notification-card";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -393,9 +392,9 @@ export default function Leads() {
               active={activeMetric === "converted"}
             />
             <LeadMetricCard
-              label="Pending Follow-up"
+              label="Open tasks"
               value={String(stats.pendingFollowup)}
-              note="Leads awaiting next action"
+              note="Calls, emails and meetings still open"
               tone="warning"
               icon={Clock}
               onClick={() => handleMetricClick("pendingFollowup")}
@@ -412,7 +411,6 @@ export default function Leads() {
             />
           </div>
 
-          <LeadNotificationCard />
         </>
       )}
 
@@ -422,7 +420,7 @@ export default function Leads() {
           {(
             [
               { key: "table" as TabType, label: "Table View", Icon: Table2 },
-              { key: "followups" as TabType, label: "Follow-ups", Icon: Clock },
+              { key: "followups" as TabType, label: "Tasks", Icon: Clock },
               {
                 key: "analytics" as TabType,
                 label: "Analytics",

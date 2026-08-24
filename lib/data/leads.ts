@@ -1239,13 +1239,23 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      -- Scheduled work, not a stage. This counted two stages that no longer
-      -- exist in the picker, and missed every lead further down the pipeline
-      -- that had a follow-up booked.
-      COUNT(*) FILTER (
-        WHERE stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
-          AND (("followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL)
-            OR ("meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL))
+      -- Open tasks, counted from LeadTask.
+      --
+      -- This read Lead.followupDate and Lead.meetingDate, the columns the task
+      -- table replaced. Nothing writes them any more, so the card was frozen at
+      -- whatever the backfill left while the Tasks tab grew: 15 against 34 on
+      -- staging, on the same screen. Every task created from here would have
+      -- widened the gap.
+      --
+      -- Counted as TASKS, not leads. They coincide today because no lead holds
+      -- two, but four task types exist precisely so a lead can have a call and
+      -- a meeting at once.
+      (
+        SELECT COUNT(*) FROM "LeadTask" t
+        JOIN "Lead" tl ON tl.id = t."leadId"
+        WHERE t."completedAt" IS NULL
+          AND tl."isArchived" = false
+          AND tl.stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
       ) AS "pendingFollowup"
     FROM "Lead"
     WHERE "isArchived" = false

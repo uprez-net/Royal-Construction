@@ -26,11 +26,14 @@ import {
 
 interface FollowupPromptModalProps {
   leadId: number;
+  /** Scope the outcome to one task. Omitted means every open follow-up. */
+  taskId?: number;
   onClose: () => void;
 }
 
 export function FollowupPromptModal({
   leadId,
+  taskId,
   onClose,
 }: FollowupPromptModalProps) {
   const [lead, setLead] = useState<Lead | null>(null);
@@ -90,10 +93,15 @@ export function FollowupPromptModal({
       // LeadTask, so a rescheduled follow-up disappeared.
       //
       // Answering closes the task and opens nothing.
-      // Only the follow-up. Closing every open task would also close a booked
-      // meeting, which nobody asked about and which this dialog never mentions.
+      // Scoped to the clicked task when one was named. Without taskId this
+      // came from a notification and means "this lead's open follow-ups".
+      // Meetings are excluded either way: closing them would cancel a booked
+      // meeting this dialog never mentions.
       const open = (await fetchOpenTasks()).filter(
-        (t) => t.leadId === lead.id && t.type !== "MEETING",
+        (t) =>
+          t.leadId === lead.id &&
+          t.type !== "MEETING" &&
+          (taskId === undefined || t.id === taskId),
       );
       for (const task of open) {
         await completeTask(task.id);
