@@ -2,6 +2,7 @@ import { ReceiptText } from "lucide-react";
 
 import { ProjectWithStats } from "@/types/project";
 import { compactCurrency, currency } from "@/utils/formatters";
+import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { DataTable } from "../common/data-table";
 
 interface FinancialTabProps {
@@ -48,7 +49,9 @@ export function FinancialTab({ project }: FinancialTabProps) {
   const budget = Number(project.totalBudget);
   const variation = Number(project.approvedVariationSpend);
   const remaining = budget - spent;
-  const isOverBudget = remaining < 0;
+  const status = getBudgetStatus(budget, spent);
+  const isOverBudget = status === "OVER_BUDGET";
+  const isNotStarted = status === "NOT_STARTED";
 
   // Guard both operands: a project with no budget recorded, or an unparseable
   // spend, must not render NaN% or an NaN-width bar.
@@ -58,6 +61,20 @@ export function FinancialTab({ project }: FinancialTabProps) {
       : null;
   const barWidth = Math.min(100, Math.max(0, utilisation ?? 0));
 
+  // Drive the fourth MoneyTile from the shared classifier so this tab agrees
+  // with the stat cards, overview tab and project card.
+  const summaryTileLabel = isOverBudget
+    ? "Over budget"
+    : isNotStarted
+      ? "No spend recorded"
+      : "Budget remaining";
+  const summaryTileTone: "neutral" | "success" | "destructive" = isOverBudget
+    ? "destructive"
+    : isNotStarted
+      ? "neutral"
+      : "success";
+  const summaryTileValue = isNotStarted ? 0 : Math.abs(remaining);
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -65,9 +82,9 @@ export function FinancialTab({ project }: FinancialTabProps) {
         <MoneyTile label="Actual spend" value={spent} />
         <MoneyTile label="Approved variations" value={variation} />
         <MoneyTile
-          label={isOverBudget ? "Over budget" : "Budget remaining"}
-          value={Math.abs(remaining)}
-          tone={isOverBudget ? "destructive" : "success"}
+          label={summaryTileLabel}
+          value={summaryTileValue}
+          tone={summaryTileTone}
         />
       </div>
 
@@ -98,7 +115,11 @@ export function FinancialTab({ project }: FinancialTabProps) {
         >
           <div
             className={`h-full transition-[width] duration-200 ease-out motion-reduce:transition-none ${
-              isOverBudget ? "bg-destructive" : "bg-primary"
+              isOverBudget
+                ? "bg-destructive"
+                : isNotStarted
+                  ? "bg-muted"
+                  : "bg-primary"
             }`}
             style={{ width: `${barWidth}%` }}
           />

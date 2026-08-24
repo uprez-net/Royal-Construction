@@ -155,7 +155,9 @@ function detectFileKind(url: string): FileKind {
 function getFileName(url: string): string {
   try {
     const path = url.split("?")[0].split("#")[0];
-    return decodeURIComponent(path.split("/").filter(Boolean).pop() || "Untitled");
+    return decodeURIComponent(
+      path.split("/").filter(Boolean).pop() || "Untitled",
+    );
   } catch {
     return "Untitled";
   }
@@ -171,11 +173,30 @@ function columnLetter(index: number): string {
   return label;
 }
 
-const FILE_META: Record<FileKind, { label: string; accent: string; Icon: React.ElementType }> = {
-  pdf: { label: "PDF", accent: "text-red-600 dark:text-red-400", Icon: FileText },
-  docx: { label: "DOCX", accent: "text-blue-600 dark:text-blue-400", Icon: FileText },
-  xlsx: { label: "XLSX", accent: "text-emerald-600 dark:text-emerald-400", Icon: FileSpreadsheet },
-  unsupported: { label: "FILE", accent: "text-muted-foreground", Icon: FileWarning },
+const FILE_META: Record<
+  FileKind,
+  { label: string; accent: string; Icon: React.ElementType }
+> = {
+  pdf: {
+    label: "PDF",
+    accent: "text-red-600 dark:text-red-400",
+    Icon: FileText,
+  },
+  docx: {
+    label: "DOCX",
+    accent: "text-blue-600 dark:text-blue-400",
+    Icon: FileText,
+  },
+  xlsx: {
+    label: "XLSX",
+    accent: "text-emerald-600 dark:text-emerald-400",
+    Icon: FileSpreadsheet,
+  },
+  unsupported: {
+    label: "FILE",
+    accent: "text-muted-foreground",
+    Icon: FileWarning,
+  },
 };
 
 const ZOOM_MIN = 0.5;
@@ -231,7 +252,9 @@ function CenteredMessage({
       {icon}
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="text-sm text-muted-foreground">{description}</p>
+        )}
       </div>
       {action}
     </div>
@@ -287,7 +310,10 @@ function DocxViewer({
         });
         if (!cancelled) onReadyRef.current();
       } catch {
-        if (!cancelled) onErrorRef.current("This Word document couldn't be loaded. It may be corrupted or blocked by CORS.");
+        if (!cancelled)
+          onErrorRef.current(
+            "This Word document couldn't be loaded. It may be corrupted or blocked by CORS.",
+          );
       }
     })();
 
@@ -327,10 +353,13 @@ function buildMergeLookup(merges: XLSX.Range[]) {
 }
 
 function XlsxViewer({ sheet, zoom }: { sheet: SheetData; zoom: number }) {
-  const { skip, anchors } = React.useMemo(() => buildMergeLookup(sheet.merges), [sheet.merges]);
+  const { skip, anchors } = React.useMemo(
+    () => buildMergeLookup(sheet.merges),
+    [sheet.merges],
+  );
   const colCount = React.useMemo(
     () => sheet.rows.reduce((max, row) => Math.max(max, row.length), 1),
-    [sheet.rows]
+    [sheet.rows],
   );
 
   return (
@@ -381,7 +410,10 @@ function XlsxViewer({ sheet, zoom }: { sheet: SheetData; zoom: number }) {
 
 // ── Main component ────────────────────────────────────────────────────
 
-export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasProps) {
+export default function FilePreviewCanvas({
+  url,
+  onClose,
+}: FilePreviewCanvasProps) {
   const kind = React.useMemo(() => detectFileKind(url), [url]);
   const fileName = React.useMemo(() => getFileName(url), [url]);
   const meta = FILE_META[kind];
@@ -392,7 +424,7 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
       setOpen(next);
       if (!next) onClose?.();
     },
-    [onClose]
+    [onClose],
   );
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [zoom, setZoom] = React.useState(1);
@@ -410,15 +442,17 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
 
   // Reset all per-file state whenever the URL changes.
   React.useEffect(() => {
-    setOpen(true);
-    setZoom(1);
-    setRotation(0);
-    setPage(1);
-    setNumPages(0);
-    setSheets([]);
-    setActiveSheet(0);
-    setError(null);
-    setLoading(kind !== "unsupported");
+    setTimeout(() => {
+      setOpen(true);
+      setZoom(1);
+      setRotation(0);
+      setPage(1);
+      setNumPages(0);
+      setSheets([]);
+      setActiveSheet(0);
+      setError(null);
+      setLoading(kind !== "unsupported");
+    }, 0);
   }, [url, kind]);
 
   // Load XLSX workbooks up front (PDF/DOCX load themselves).
@@ -446,7 +480,9 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
         }
       } catch {
         if (!cancelled) {
-          setError("This spreadsheet couldn't be loaded. It may be corrupted or blocked by CORS.");
+          setError(
+            "This spreadsheet couldn't be loaded. It may be corrupted or blocked by CORS.",
+          );
           setLoading(false);
         }
       }
@@ -469,8 +505,14 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, kind, numPages]);
 
-  const zoomIn = React.useCallback(() => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2))), []);
-  const zoomOut = React.useCallback(() => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2))), []);
+  const zoomIn = React.useCallback(
+    () => setZoom((z) => Math.min(ZOOM_MAX, +(z + ZOOM_STEP).toFixed(2))),
+    [],
+  );
+  const zoomOut = React.useCallback(
+    () => setZoom((z) => Math.max(ZOOM_MIN, +(z - ZOOM_STEP).toFixed(2))),
+    [],
+  );
   const resetZoom = React.useCallback(() => setZoom(1), []);
 
   const handleDownload = React.useCallback(async () => {
@@ -520,35 +562,54 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
               "fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden border border-border bg-card shadow-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
               isFullscreen
                 ? "h-screen w-screen max-w-none rounded-none"
-                : "h-[88vh] w-[92vw] max-w-5xl rounded-xl"
+                : "h-[88vh] w-[92vw] max-w-5xl rounded-xl",
             )}
           >
-            <DialogPrimitive.Title className="sr-only">{fileName} preview</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="sr-only">
+              {fileName} preview
+            </DialogPrimitive.Title>
 
             {/* Header / toolbar */}
             <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card/95 px-3 py-2">
               <meta.Icon className={cn("h-4 w-4 shrink-0", meta.accent)} />
-              <span className="truncate text-sm font-medium text-foreground" title={fileName}>
+              <span
+                className="truncate text-sm font-medium text-foreground"
+                title={fileName}
+              >
                 {fileName}
               </span>
-              <Badge variant="secondary" className="shrink-0 text-[10px] font-semibold tracking-wide">
+              <Badge
+                variant="secondary"
+                className="shrink-0 text-[10px] font-semibold tracking-wide"
+              >
                 {meta.label}
               </Badge>
 
               <div className="ml-auto flex items-center gap-1">
                 {kind === "pdf" && numPages > 0 && (
                   <>
-                    <ToolbarButton label="Previous page" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                    <ToolbarButton
+                      label="Previous page"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                    >
                       <ChevronLeft className="h-4 w-4" />
                     </ToolbarButton>
                     <span className="min-w-16 text-center text-xs text-muted-foreground tabular-nums">
                       {page} / {numPages}
                     </span>
-                    <ToolbarButton label="Next page" onClick={() => setPage((p) => Math.min(numPages, p + 1))} disabled={page >= numPages}>
+                    <ToolbarButton
+                      label="Next page"
+                      onClick={() => setPage((p) => Math.min(numPages, p + 1))}
+                      disabled={page >= numPages}
+                    >
                       <ChevronRight className="h-4 w-4" />
                     </ToolbarButton>
                     <Separator orientation="vertical" className="mx-1 h-5" />
-                    <ToolbarButton label="Rotate" onClick={() => setRotation((r) => (r + 90) % 360)}>
+                    <ToolbarButton
+                      label="Rotate"
+                      onClick={() => setRotation((r) => (r + 90) % 360)}
+                    >
                       <RotateCw className="h-4 w-4" />
                     </ToolbarButton>
                   </>
@@ -556,7 +617,11 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
 
                 {(kind === "pdf" || kind === "docx" || kind === "xlsx") && (
                   <>
-                    <ToolbarButton label="Zoom out" onClick={zoomOut} disabled={zoom <= ZOOM_MIN}>
+                    <ToolbarButton
+                      label="Zoom out"
+                      onClick={zoomOut}
+                      disabled={zoom <= ZOOM_MIN}
+                    >
                       <ZoomOut className="h-4 w-4" />
                     </ToolbarButton>
                     <Tooltip>
@@ -570,7 +635,11 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
                       </TooltipTrigger>
                       <TooltipContent side="bottom">Reset zoom</TooltipContent>
                     </Tooltip>
-                    <ToolbarButton label="Zoom in" onClick={zoomIn} disabled={zoom >= ZOOM_MAX}>
+                    <ToolbarButton
+                      label="Zoom in"
+                      onClick={zoomIn}
+                      disabled={zoom >= ZOOM_MAX}
+                    >
                       <ZoomIn className="h-4 w-4" />
                     </ToolbarButton>
                     <Separator orientation="vertical" className="mx-1 h-5" />
@@ -589,11 +658,21 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
                   label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
                   onClick={() => setIsFullscreen((f) => !f)}
                 >
-                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  {isFullscreen ? (
+                    <Minimize2 className="h-4 w-4" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4" />
+                  )}
                 </ToolbarButton>
                 <Separator orientation="vertical" className="mx-1 h-5" />
                 <DialogPrimitive.Close asChild>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Close">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Close"
+                  >
                     <X className="h-4 w-4" />
                   </Button>
                 </DialogPrimitive.Close>
@@ -611,7 +690,7 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
                       "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                       i === activeSheet
                         ? "bg-background text-foreground shadow-sm ring-1 ring-border"
-                        : "text-muted-foreground hover:bg-background/60"
+                        : "text-muted-foreground hover:bg-background/60",
                     )}
                   >
                     {s.name}
@@ -626,19 +705,29 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/20">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Loading preview…</span>
+                    <span className="text-xs text-muted-foreground">
+                      Loading preview…
+                    </span>
                   </div>
                 </div>
               )}
 
               {error && (
                 <CenteredMessage
-                  icon={<FileWarning className="h-8 w-8 text-muted-foreground" />}
+                  icon={
+                    <FileWarning className="h-8 w-8 text-muted-foreground" />
+                  }
                   title="Couldn't preview this file"
                   description={error}
                   action={
                     <div className="mt-1 flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          window.open(url, "_blank", "noopener,noreferrer")
+                        }
+                      >
                         Open original
                       </Button>
                       <Button size="sm" onClick={handleDownload}>
@@ -651,7 +740,9 @@ export default function FilePreviewCanvas({ url, onClose }: FilePreviewCanvasPro
 
               {!error && kind === "unsupported" && (
                 <CenteredMessage
-                  icon={<FileWarning className="h-8 w-8 text-muted-foreground" />}
+                  icon={
+                    <FileWarning className="h-8 w-8 text-muted-foreground" />
+                  }
                   title="Unsupported file type"
                   description="This preview supports PDF, DOCX and XLSX files."
                   action={

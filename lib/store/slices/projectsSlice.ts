@@ -14,7 +14,9 @@ import {
   type ProjectUploadRecord,
   type ProjectWithStats,
   type SafeMilestone,
+  type BudgetSummary,
 } from "@/types/project";
+import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import type { File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
@@ -692,7 +694,7 @@ export const selectProjectDetailUiState = (projectId: string) =>
 export const selectProjectUploadQueue = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => projectsState.uploadsByProjectId[projectId] ?? {});
 
-export const selectActiveProjectBudgetSummary = createSelector(selectProjectsState, (projectsState) => {
+export const selectActiveProjectBudgetSummary = createSelector(selectProjectsState, (projectsState): BudgetSummary | null => {
   const project = projectsState.activeProject;
 
   if (!project) {
@@ -709,6 +711,7 @@ export const selectActiveProjectBudgetSummary = createSelector(selectProjectsSta
   const variance = totalBudget - spent;
   const remaining = Math.max(variance, 0);
   const spentPercent = totalBudget > 0 ? Math.round((spent / totalBudget) * 100) : 0;
+  const status = getBudgetStatus(totalBudget, spent);
 
   return {
     totalBudget,
@@ -716,6 +719,7 @@ export const selectActiveProjectBudgetSummary = createSelector(selectProjectsSta
     remaining,
     variance,
     spentPercent,
+    status,
   };
 });
 

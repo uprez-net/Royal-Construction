@@ -11,6 +11,7 @@ import {
 import { useAppSelector } from "@/lib/store/hooks";
 import { selectActiveProjectBudgetSummary } from "@/lib/store/slices/projectsSlice";
 import { METRIC_TONES } from "@/components/common/metric-card";
+import { budgetStatusConfig } from "@/components/projects/project-budget-status";
 import { currency } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
 import { Role } from "@prisma/client";
@@ -32,6 +33,15 @@ const ICON_CONTAINER =
   "flex size-11 items-center justify-center rounded-2xl text-white";
 const BADGE =
   "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
+
+// Mirrors the three tones `StatusPill` exposes (neutral/success/danger) so the
+// Contract Value badge stays on-token without coupling this bespoke card to
+// the pill component.
+const TONE_BADGE_CLASS: Record<"neutral" | "success" | "danger", string> = {
+  neutral: "bg-muted text-muted-foreground",
+  success: "bg-success-light text-success-ink",
+  danger: "bg-destructive-light text-destructive-ink",
+};
 
 export function ProjectStatCards({ role }: { role: Role }) {
   const isAdmin = role === "ADMIN";
@@ -73,9 +83,13 @@ export function ProjectStatCards({ role }: { role: Role }) {
     );
   }
 
-  // `variance` is signed, so it — not the clamped `remaining` — is what tells
-  // us whether spend has passed the contract value and by how much.
-  const isOverBudget = budgetSummary.variance < 0;
+  // The shared classifier is the single source of truth for budget health —
+  // the badge, the Spent card framing and the Remaining card framing all
+  // branch on it rather than each re-deriving their own `isOverBudget`.
+  const status = budgetSummary.status;
+  const statusConfig = budgetStatusConfig(status);
+  const isOverBudget = status === "OVER_BUDGET";
+  const isNotStarted = status === "NOT_STARTED";
   const overrun = isOverBudget ? Math.abs(budgetSummary.variance) : 0;
   const remainingPercent = Math.max(100 - budgetSummary.spentPercent, 0);
   const overrunPercent = Math.max(budgetSummary.spentPercent - 100, 0);
@@ -84,26 +98,21 @@ export function ProjectStatCards({ role }: { role: Role }) {
     <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {isAdmin && (
         <>
-          {/* Contract Value */}
+          {/* Contract Value — badge is driven by the shared classifier. */}
           <div className={CARD_SURFACE}>
             <div className="mb-2 flex items-start justify-between">
               <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
                 <Wallet2 className="size-5" aria-hidden="true" />
               </div>
               <span
-                className={cn(
-                  BADGE,
-                  isOverBudget
-                    ? "bg-destructive-light text-destructive-ink"
-                    : "bg-success-light text-success-ink",
-                )}
+                className={cn(BADGE, TONE_BADGE_CLASS[statusConfig.tone])}
               >
                 {isOverBudget ? (
                   <TriangleAlert className="size-3" aria-hidden="true" />
-                ) : (
+                ) : statusConfig.tone === "success" ? (
                   <ArrowUpRight className="size-3" aria-hidden="true" />
-                )}
-                {isOverBudget ? "Over budget" : "On budget"}
+                ) : null}
+                {statusConfig.label}
               </span>
             </div>
             <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
@@ -112,7 +121,8 @@ export function ProjectStatCards({ role }: { role: Role }) {
             <div className={CARD_LABEL}>Total contract value</div>
           </div>
 
-          {/* Spent */}
+          {/* Spent — in the NOT_STARTED state there are no actuals yet, so the
+          copy says so rather than implying spend is tracking against budget. */}
           <div className={CARD_SURFACE}>
             <div className="mb-2 flex items-start justify-between">
               <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
@@ -135,18 +145,26 @@ export function ProjectStatCards({ role }: { role: Role }) {
             <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
               {currency.format(budgetSummary.spent)}
             </div>
-            <div className={CARD_LABEL}>Spent to date</div>
+            <div className={CARD_LABEL}>
+              {isNotStarted ? "No spend recorded yet" : "Spent to date"}
+            </div>
           </div>
 
           {/* Remaining — or, once spend passes the contract value, the overrun.
           Showing a clamped "$0 remaining" on an over-budget project hides the
-          one number the site manager needs. */}
+          one number the site manager needs. NOT_STARTED is rendered neutral
+          rather than as a healthy green "Remaining budget" so the card does
+          not imply spend is tracking. */}
           <div className={CARD_SURFACE}>
             <div className="mb-2 flex items-start justify-between">
               <div
                 className={cn(
                   ICON_CONTAINER,
-                  isOverBudget ? METRIC_TONES.danger : METRIC_TONES.success,
+                  isOverBudget
+                    ? METRIC_TONES.danger
+                    : isNotStarted
+                      ? METRIC_TONES.neutral
+                      : METRIC_TONES.success,
                 )}
               >
                 {isOverBudget ? (
@@ -187,7 +205,11 @@ export function ProjectStatCards({ role }: { role: Role }) {
               )}
             </div>
             <div className={CARD_LABEL}>
-              {isOverBudget ? "Over budget by" : "Remaining budget"}
+              {isOverBudget
+                ? "Over budget by"
+                : isNotStarted
+                  ? "No spend recorded"
+                  : "Remaining budget"}
             </div>
           </div>
         </>

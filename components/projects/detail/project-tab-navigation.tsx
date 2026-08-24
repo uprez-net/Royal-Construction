@@ -88,7 +88,6 @@ const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
   neutral: "bg-muted text-muted-foreground",
 };
 
-const OPEN_MILESTONE_STATUSES = new Set(["PENDING", "ACTIVE"]);
 const BLOCKED_TRADIE_STATUSES = new Set(["NO_RESPONSE", "DECLINED"]);
 const AWAITING_TRADIE_STATUSES = new Set([
   "PENDING",

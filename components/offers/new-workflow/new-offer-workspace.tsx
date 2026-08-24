@@ -825,7 +825,7 @@ export function NewOfferWorkspace({
     setPriceAdjustmentLabel(s.priceAdjustmentLabel);
     setImages(s.images);
     setTenderGate(s.tenderGate);
-  }, []);
+  }, [adminPrefill?.costLines]);
 
   // Single-flight workspace autosave (fixes the overlapping-save clobber).
   //
