@@ -10,6 +10,7 @@ import {
 } from "@/lib/leads/types";
 // import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 
 /* ── Constants ────────────────────────────────────────── */
 
@@ -423,8 +424,8 @@ export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
     action: "Follow-up confirmed",
     detail: "The follow-up was completed and acknowledged.",
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -444,8 +445,8 @@ export function buildFollowupNotRequiredHistoryEntry(note?: string): HistoryItem
     action: "Follow-up not required",
     detail: `No additional follow-up is required for this lead.${note ? ` \nNOTE: (${note})` : ""}`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -455,8 +456,8 @@ export function buildFollowupCompletedHistoryEntry(note?: string): HistoryItem {
     action: "Follow-up completed",
     detail: `The follow-up was completed and acknowledged.${note ? ` \nNOTE: (${note})` : ""}`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -466,8 +467,8 @@ export function buildMeetingDidNotTakePlaceHistoryEntry(reason?: string): Histor
     action: "Meeting did not take place",
     detail: `The scheduled meeting did not occur and needs rescheduling.${reason ? ` \nREASON: (${reason})` : ""}`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -481,8 +482,8 @@ export function buildMeetingReviewedHistoryEntry(input: {
     action: "Meeting reviewed",
     detail: `Mode: ${input.meetingMode}. Discussion: ${input.discussionNotes || "No discussion notes"}. Scope: ${input.buildScope || "No build scope"}.`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -509,9 +510,16 @@ export function isQuotingStage(stage: LeadStage): boolean {
   // isWonStage, not a bare "Won". This list named Won and missed Converted,
   // and Converted is the label operators actually pick, so in practice no won
   // lead ever showed Check Offer. Exactly the defect isTerminalStage had.
+  //
+  // And it happened again with the ladder change: the list still named the two
+  // retired stages and never gained Discovery, which replaced them. That hid
+  // Check with Offer from 33 of the 59 leads on staging, every one of them in
+  // the stage where scoping a build actually happens.
   return (
     isWonStage(stage) ||
-    ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"].includes(stage)
+    ["Discovery", "Qualified", "Quoted", "Negotiating"].includes(stage) ||
+    // Retired, kept until no row holds them.
+    ["In Follow-up", "Meeting Scheduled"].includes(stage)
   );
 }
 

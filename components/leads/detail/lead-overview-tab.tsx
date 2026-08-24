@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   BadgeDollarSign,
@@ -21,6 +21,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { TaskForm } from "@/components/leads/task-form";
+import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
+import {
+  completeTask,
+  fetchOpenTasks,
+  type LeadTaskRow,
+} from "@/lib/leads/task-service";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -38,16 +45,14 @@ import {
   stageGroupsFor,
   closureReasonCopy,
   parseLikelihood,
-  buildFollowupHistoryEntry,
   isLostStage,
   leadToFormData,
-  shouldSetFollowupStage,
   type LeadDetailFormData,
 } from "@/lib/leads/lead-helpers";
 import { updateLead } from "@/lib/leads/leads-service";
 import { formatFyQuarter, fyQuarterOf } from "@/lib/leads/fy-quarter";
 import { stageDef } from "@/lib/leads/pipeline-stages";
-import type { HistoryItem, Lead, LeadSource, LeadStage } from "@/lib/leads/types";
+import type { Lead, LeadSource, LeadStage } from "@/lib/leads/types";
 import { stageToPrismaMap } from "@/types/lead";
 import { currency } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
@@ -99,8 +104,8 @@ const SECTION_META: Record<
     icon: BadgeDollarSign,
   },
   followUp: {
-    label: "Follow-up date and time",
-    description: "When this lead is next contacted",
+    label: "Scheduled work",
+    description: "Calls, emails and meetings booked against this lead",
     icon: CalendarClock,
   },
   lostReason: {
@@ -138,7 +143,8 @@ const SECTION_FIELDS: Record<
     "probabilityOverride",
     "expectedCloseDate",
   ],
-  followUp: ["followupDate", "followupTime"],
+  // Owns no form fields: tasks save themselves on creation.
+  followUp: [],
   lostReason: ["lostReason"],
 };
 
@@ -159,7 +165,6 @@ type SectionPayload = Parameters<typeof updateLead>[1];
 function buildSectionPayload(
   key: LeadSectionKey,
   form: LeadDetailFormData,
-  lead: Lead,
 ): SectionPayload {
   switch (key) {
     case "contact":
@@ -199,25 +204,11 @@ function buildSectionPayload(
         expectedCloseDate: form.expectedCloseDate || null,
       };
 
-    case "followUp": {
-      const payload: SectionPayload = {
-        followupDate: form.followupDate,
-        followupTime: form.followupTime,
-      };
-
-      // Booking or moving a follow-up promotes the lead's stage and records a
-      // history entry — the same rule the modal applied on its single save.
-      if (shouldSetFollowupStage(lead, form)) {
-        const history: HistoryItem[] = [
-          buildFollowupHistoryEntry(form.followupDate, form.followupTime),
-        ];
-        // The date is already on the payload. updateLead advances the lead to
-        // Discovery if it is earlier than that, and otherwise writes no stage.
-        payload.history = history;
-      }
-
-      return payload;
-    }
+    // Nothing to save. Tasks are written through their own endpoint the
+    // moment you add one, so there is nothing to batch into a section save.
+    // The case stays so the switch remains exhaustive over LeadSectionKey.
+    case "followUp":
+      return {};
 
     case "lostReason":
       return { lostReason: form.lostReason };
@@ -294,6 +285,21 @@ export function LeadOverviewTab({
   // single-open, because a lead's stage and its lost reason are read together.
   const [openSections, setOpenSections] = useState<string[]>(["contact"]);
 
+  // This lead's open tasks. Fetched rather than passed in, because the lead
+  // object comes from the list query and carries no tasks.
+  const [openTasks, setOpenTasks] = useState<LeadTaskRow[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenTasks(controller.signal)
+      .then((all) => setOpenTasks(all.filter((t) => t.leadId === lead.id)))
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("Could not load tasks for this lead", err);
+      });
+    return () => controller.abort();
+  }, [lead.id]);
+
   const patch = (updates: Partial<LeadDetailFormData>) =>
     setForm((prev) => ({ ...prev, ...updates }));
 
@@ -314,7 +320,7 @@ export function LeadOverviewTab({
 
     setSavingSection(key);
     try {
-      const updated = await updateLead(lead.id, buildSectionPayload(key, form, lead));
+      const updated = await updateLead(lead.id, buildSectionPayload(key, form));
       if (!updated) return;
 
       // Re-seed only what this save actually wrote, so a normalised value stops
@@ -694,31 +700,74 @@ export function LeadOverviewTab({
 
       case "followUp":
         return (
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Follow-up Date" htmlFor={fieldId("followup-date")}>
-              <Input
-                id={fieldId("followup-date")}
-                type="date"
-                className={FIELD_CONTROL_CLASS}
-                min={new Date().toLocaleDateString("en-CA", {
-                  timeZone: "Australia/Sydney",
-                })}
-                value={form.followupDate}
-                onChange={(e) => patch({ followupDate: e.target.value })}
-              />
-            </Field>
-            <Field label="Follow-up Time" htmlFor={fieldId("followup-time")}>
-              <Input
-                id={fieldId("followup-time")}
-                type="time"
-                className={FIELD_CONTROL_CLASS}
-                value={form.followupTime}
-                onChange={(e) => patch({ followupTime: e.target.value })}
-              />
-            </Field>
-            <p className="text-xs text-muted-foreground md:col-span-2">
-              Setting or moving a follow-up also moves this lead to the
-              In Follow-up stage and records it in the history.
+          <div className="grid gap-3">
+            {/* The date inputs that used to live here wrote Lead.followupDate
+                and created no task. Since #193 the Follow-ups tab and both
+                reminder crons read LeadTask, so a follow-up booked from this
+                page appeared nowhere and emailed nobody. One writer now. */}
+            <TaskForm
+              leadId={lead.id}
+              leadName={lead.name}
+              onCreated={(task) => {
+                setOpenTasks((prev) => [...prev, task]);
+                // Adding a task can advance a New or Contacted lead into
+                // Discovery. The task carries the lead's stage as it is AFTER
+                // that move, so push it up rather than leaving the header and
+                // the stage picker showing the old value until a refresh.
+                if (task.lead.stage !== lead.stage) {
+                  const moved = { ...lead, stage: task.lead.stage };
+                  onLeadUpdate(moved);
+                  patch({ stage: task.lead.stage });
+                }
+                toast.success("Task added.");
+              }}
+            />
+            {openTasks.length > 0 ? (
+              <ul className="task-open-list">
+                {openTasks.map((task) => (
+                  <li key={task.id} className="task-open-row">
+                    <span className="fu-type-pill">
+                      {LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type}
+                    </span>
+                    <span className="task-open-due">
+                      {task.dueDate
+                        ? new Date(task.dueDate).toLocaleDateString("en-AU", {
+                            timeZone: "Australia/Sydney",
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          })
+                        : "No date"}
+                    </span>
+                    <span className="task-open-note" title={task.notes ?? undefined}>
+                      {task.notes}
+                    </span>
+                    <button
+                      type="button"
+                      className="task-btn"
+                      onClick={async () => {
+                        try {
+                          await completeTask(task.id);
+                          setOpenTasks((prev) => prev.filter((t) => t.id !== task.id));
+                        } catch {
+                          toast.error("Could not close the task.");
+                        }
+                      }}
+                    >
+                      Done
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No scheduled work on this lead.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Adding a task moves a New or Contacted lead into Discovery. It
+              never moves one that is already further along, and completing a
+              task never moves a lead at all.
             </p>
           </div>
         );

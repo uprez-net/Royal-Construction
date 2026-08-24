@@ -2,12 +2,10 @@ import { useState, useCallback } from "react";
 import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
 import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
-import type { FollowupStats } from "@/lib/data/leads";
 import {
   fetchLeads,
   fetchLeadsStats,
   fetchLeadAnalyticsData,
-  fetchFollowupStats,
 } from "@/lib/leads/leads-service";
 import type { LeadEmails } from "@prisma/client";
 
@@ -40,7 +38,6 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
 export function useLeadsData() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
-  const [followupStats, setFollowupStats] = useState<FollowupStats | null>(null);
   const [analyticsData, setAnalyticsData] = useState<LeadAnalyticsData>({
     sourceData: [],
     conversionData: [],
@@ -86,14 +83,14 @@ export function useLeadsData() {
 
   /* ── Stats ── */
   const refreshStats = useCallback(async () => {
-    const [statsData, analytics, followup] = await Promise.all([
+    // No follow-up stats here any more. The Follow-ups tab derives its counts
+    // from the task list it renders, so a second source could not agree with it.
+    const [statsData, analytics] = await Promise.all([
       fetchLeadsStats(),
       fetchLeadAnalyticsData(),
-      fetchFollowupStats(),
     ]);
     setStats(statsData);
     setAnalyticsData(analytics);
-    setFollowupStats(followup);
   }, []);
 
   /* ── Paginated leads ── */
@@ -140,7 +137,7 @@ export function useLeadsData() {
     async (params: { query?: string; status?: string } = {}) => {
       try {
         setLoading(true);
-        const [leadsData, statsData, analytics, followup] = await Promise.all([
+        const [leadsData, statsData, analytics] = await Promise.all([
           fetchLeads({
             page: 1,
             limit: 10,
@@ -149,7 +146,6 @@ export function useLeadsData() {
           }),
           fetchLeadsStats(),
           fetchLeadAnalyticsData(),
-          fetchFollowupStats(),
         ]);
         setLeads(leadsData.items);
         setPageInfo({
@@ -160,7 +156,6 @@ export function useLeadsData() {
         });
         setStats(statsData);
         setAnalyticsData(analytics);
-        setFollowupStats(followup);
         setError(null);
       } catch (err) {
         setError("Failed to load leads data");
@@ -224,7 +219,6 @@ export function useLeadsData() {
   return {
     leads,
     stats,
-    followupStats,
     analyticsData,
     pageInfo,
     loading,

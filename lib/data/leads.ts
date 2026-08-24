@@ -1,5 +1,6 @@
 "use server";
 import prisma from "@/lib/prisma";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
@@ -428,15 +429,14 @@ export async function getLeads(
       // above already carries an OR for the search terms, and a second OR at
       // this level overwrites it in the object literal, so searching while the
       // Follow-ups tab was open would have silently ignored the search text.
+      // Now keyed off the LeadTask table rather than the two date columns on
+      // Lead, so this stays in step with what the Follow-ups tab lists. The
+      // columns are still written for now and are dropped once nothing reads
+      // them; the tasks are the source of truth from here.
       ...(hasOpenTask && {
         AND: [
           { stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] as LeadStage[] } },
-          {
-            OR: [
-              { followupDate: { not: null }, followupCompletedAt: null },
-              { meetingDate: { not: null }, meetingCompletedAt: null },
-            ],
-          },
+          { tasks: { some: { completedAt: null } } },
         ],
       }),
       ...(isMeetingScheduledFilterActive && {
@@ -1095,7 +1095,13 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         ? [buildFollowupNotRequiredHistoryEntry()]
         : input.followupResponseOutcome === "reschedule"
           ? [buildFollowupRescheduledHistoryEntry(
-            (updateData.followupDate as Date | null | undefined)?.toISOString().slice(0, 10) ?? existingLead?.followupDate?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+            // Sydney, so the history line agrees with the date the operator
+            // picked rather than reading a day earlier all afternoon.
+            sydneyDateOnly(
+              (updateData.followupDate as Date | null | undefined) ??
+                existingLead?.followupDate ??
+                new Date(),
+            ),
             String(updateData.followupTime ?? existingLead?.followupTime ?? ""),
           )]
           : [];
@@ -1116,8 +1122,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         action: "Lead note mention added",
         detail: annotation.comment || `Selected text: ${annotation.selectedText}`,
         type: "system" as const,
-        date: now.toISOString().slice(0, 10),
-        time: now.toTimeString().slice(0, 5),
+        date: sydneyDateOnly(now),
+        time: sydneyTimeOnly(now),
       };
     });
 

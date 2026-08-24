@@ -6,6 +6,7 @@ import {
   LEAD_STAGE_OPTIONS,
   closureReasonCopy,
   isKpiCohortMetric,
+  isLostStage,
   isQuotingStage,
   isTerminalStage,
   isWonStage,
@@ -235,5 +236,28 @@ test("a lead on a retired stage still gets a rendered option", () => {
 test("a lead on a live stage does not get a Retired group", () => {
   for (const live of ["Discovery", "Qualified", "Converted", "Lost"] as const) {
     assert.deepEqual(stageGroupsFor(live), LEAD_STAGE_GROUPS, live);
+  }
+});
+
+test("every live open stage can reach the offer", () => {
+  // isQuotingStage gates "Check with Offer". It named the two retired stages
+  // and never gained Discovery when they were replaced, which hid the button
+  // from 33 of the 59 leads on staging: the whole stage where scoping happens.
+  for (const s of ["Discovery", "Qualified", "Quoted", "Negotiating"] as const) {
+    assert.ok(isQuotingStage(s), s);
+  }
+  // Too early to price, and closed-lost is not a quote.
+  for (const s of ["New", "Contacted", "Lost", "Disqualified", "No Response"] as const) {
+    assert.ok(!isQuotingStage(s), s);
+  }
+});
+
+test("every stage the picker offers is classified by every predicate", () => {
+  // The recurring defect in one assertion: a hand-written list forgets a stage
+  // the ladder gained. Each option must be exactly one of open, won or lost.
+  for (const stage of LEAD_STAGE_OPTIONS) {
+    const buckets =
+      Number(isWonStage(stage)) + Number(isLostStage(stage)) + Number(!isTerminalStage(stage));
+    assert.equal(buckets, 1, `${stage} is in ${buckets} buckets`);
   }
 });

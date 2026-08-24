@@ -9,6 +9,7 @@ export * from "./tradies";
 export * from "./lookups";
 export * from "./files";
 export * from "./external";
+export * from "./lead-task";
 export * from "./response";
 export * from "./lead";
 export * from "./material";

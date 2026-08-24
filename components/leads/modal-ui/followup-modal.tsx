@@ -3,6 +3,8 @@ import { ModalShell } from "@/components/common/modal-shell";
 import { Lead } from "@/lib/leads/types";
 import { updateLead } from "@/lib/leads/leads-service";
 import { buildFollowupHistoryEntry } from "@/lib/leads/lead-helpers";
+import { createTask } from "@/lib/leads/task-service";
+import { sydneyStartOfDay } from "@/lib/dates/sydney";
 
 interface FollowupModalProps {
   lead: Lead;
@@ -36,20 +38,34 @@ export function FollowupModal({
       //   return;
       // }
 
+      // History first, task second. They are two calls and cannot be made
+      // atomic from here; ordering them this way means a failure between them
+      // leaves a history line with no task, which the next save corrects,
+      // rather than a task that a retry would duplicate.
       const updated = await updateLead(lead.id, {
-        followupDate: date,
-        followupTime: time,
         history: [buildFollowupHistoryEntry(date, time)],
-        // No stage. Scheduling a task is not a stage change; updateLead
-        // advances the lead to Discovery only if it has not got there yet, and
-        // leaves a lead at Qualified or beyond exactly where it is.
+      });
+
+      // A task, not a followupDate. Writing the column produced work the
+      // Follow-ups tab and both reminder crons could not see, because all
+      // three read LeadTask. createTask still advances a New or Contacted lead
+      // into Discovery and leaves anything further along alone.
+      const task = await createTask({
+        leadId: lead.id,
+        type: "CALL",
+        dueDate: sydneyStartOfDay(date).toISOString(),
+        dueTime: time || null,
       });
 
       if (!updated) {
         showToast("Failed to update the follow-up. Please try again.", "error");
         return;
       }
-      onLeadUpdate(updated);
+      onLeadUpdate(
+        task.lead.stage !== updated.stage
+          ? { ...updated, stage: task.lead.stage }
+          : updated,
+      );
       showToast(`Updated follow-up for ${updated.name}`, "success");
       onClose();
     } catch (error) {

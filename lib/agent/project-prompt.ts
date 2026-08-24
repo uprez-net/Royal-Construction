@@ -1,4 +1,5 @@
 import type { Lead } from "@prisma/client";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
 
 export const LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT = `
 You are an experienced residential construction estimator and project planner working for a construction company.
@@ -106,7 +107,7 @@ Follow Up
 ---------
 Date: ${
     lead.followupDate
-      ? lead.followupDate.toISOString().split("T")[0]
+      ? sydneyDateOnly(lead.followupDate)
       : "Not scheduled"
 }
 

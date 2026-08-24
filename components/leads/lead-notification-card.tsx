@@ -1,6 +1,8 @@
 'use client';
-import { useLeadsData } from "@/hooks/use-leads-data";
-import { isTerminalStage } from "@/lib/leads/lead-helpers";
+import {
+  fetchOpenTasks,
+  type LeadTaskRow,
+} from "@/lib/leads/task-service";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import {
@@ -13,13 +15,12 @@ import {
 import { useAppDispatch } from "@/lib/store/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
 import { toZonedTime } from "date-fns-tz";
 import {
   addDays,
   differenceInCalendarDays,
   format,
-  isBefore,
-  isEqual,
   isSameDay,
   parseISO,
 } from "date-fns";
@@ -72,91 +73,97 @@ const getDateStatus = (date: string | null) => {
 
 export function LeadNotificationCard() {
   const dispatch = useAppDispatch();
-  const { leads, loadingLeads, refreshLeadsData } = useLeadsData();
   const [updatesCollapsed, setUpdatesCollapsed] = useState(false);
 
-  const relevantLeads = useMemo(
+  // Tasks, like the tab below it. This panel read Lead.followupDate while the
+  // Follow-ups tab read LeadTask, so the two sat on one screen describing
+  // different things, which is the disagreement #193 set out to remove.
+  const [tasks, setTasks] = useState<LeadTaskRow[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenTasks(controller.signal)
+      .then(setTasks)
+      .catch((err: unknown) => {
+        // An abort on unmount is expected. Anything else must be visible: an
+        // empty panel reads as "nothing due", and telling someone they are
+        // clear when the request failed is the exact lie this work removes.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("Could not load overdue tasks", err);
+        setLoadFailed(true);
+      })
+      // Not in the abort path: an unmounted component has no state to set.
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  // Compared as Sydney calendar dates, not as instants against a local
+  // midnight. A task due at Sydney midnight is stored as 14:00Z the previous
+  // afternoon, so comparing the raw instant to a Date built from the local
+  // day puts it in the wrong bucket for most of the day. The crons had the
+  // same defect and it stopped reminders firing at all.
+  const todayKey = sydneyDateOnly(getAustralianDate());
+
+  // Undated tasks are excluded here, unlike in the tab. This panel answers
+  // "what is due", and work with no date is not due; it belongs in the list
+  // below, where someone can schedule it.
+  const due = useMemo(
     () =>
-      loadingLeads
-        ? []
-        : leads.filter(
-            (lead) =>
-              !isTerminalStage(lead.stage) &&
-              Boolean(lead.followupDate || lead.meetingDate),
-          ),
-    [leads, loadingLeads],
+      tasks.filter((t) => t.dueDate !== null && sydneyDateOnly(new Date(t.dueDate)) <= todayKey),
+    [tasks, todayKey],
   );
 
-  const today = getAustralianDate();
-
-  const pendingFollowups = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        !lead.followupCompletedAt &&
-        lead.followupDate &&
-        (isBefore(parseISO(lead.followupDate), today) ||
-          isEqual(parseISO(lead.followupDate), today)),
-    );
-  }, [relevantLeads, today]);
-
-  const pendingMeetings = useMemo(() => {
-    return relevantLeads.filter(
-      (lead) =>
-        !lead.meetingCompletedAt &&
-        lead.meetingDate &&
-        (isBefore(parseISO(lead.meetingDate), today) ||
-          isEqual(parseISO(lead.meetingDate), today)),
-    );
-  }, [relevantLeads, today]);
+  const pendingFollowups = useMemo(() => due.filter((t) => t.type !== "MEETING"), [due]);
+  const pendingMeetings = useMemo(() => due.filter((t) => t.type === "MEETING"), [due]);
 
   const notificationItems = [
-    ...pendingFollowups.map((lead) => {
-      const { scheduledDate, status } = getDateStatus(lead.followupDate);
+    ...pendingFollowups.map((task) => {
+      const { scheduledDate, status } = getDateStatus(task.dueDate);
 
       return {
-        key: `followup-${lead.id}`,
-        label: `Follow-up due for ${lead.name} — was it completed?`,
+        key: `followup-${task.id}`,
+        label: task.lead.name,
+        kind: "Follow-up",
         scheduledDate,
         status,
         action: () =>
           dispatch(
             openModal({
               type: "followUpPrompt",
-              payload: { leadId: lead.id },
+              payload: { leadId: task.leadId },
             }),
           ),
       };
     }),
 
-    ...pendingMeetings.map((lead) => {
-      const { scheduledDate, status } = getDateStatus(lead.meetingDate!);
+    ...pendingMeetings.map((task) => {
+      const { scheduledDate, status } = getDateStatus(task.dueDate);
 
       return {
-        key: `meeting-${lead.id}`,
-        label: `Meeting review needed for ${lead.name}`,
+        key: `meeting-${task.id}`,
+        label: task.lead.name,
+        kind: "Meeting",
         scheduledDate,
         status,
         action: () =>
           dispatch(
             openModal({
               type: "meetingReview",
-              payload: { leadId: lead.id },
+              payload: { leadId: task.leadId },
             }),
           ),
       };
     }),
   ];
 
-  useEffect(() => {
-    refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
-  }, [refreshLeadsData]);
-
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70 pb-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base font-semibold">
-            Follow Up and Meeting Scheduled Updates
+            Overdue and due today
           </CardTitle>
           <Button
             variant="ghost"
@@ -177,42 +184,47 @@ export function LeadNotificationCard() {
       </CardHeader>
 
       {!updatesCollapsed && (
-        <CardContent className="pt-4">
+        <CardContent className="pt-3">
           {notificationItems.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-              No pending follow up or meeting updates.
+            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+              {/* Three states, not two. An empty panel means "nothing due",
+                  and saying that while still loading, or after a failed
+                  request, is the same wrong reassurance in a new place. */}
+              {loading
+                ? "Loading..."
+                : loadFailed
+                  ? "Could not load tasks. This panel is empty because the request failed, not because there is nothing due."
+                  : "No pending follow up or meeting updates."}
             </div>
           ) : (
             <div
               className={cn(
-                "space-y-2",
-                notificationItems.length > 2 &&
-                  "max-h-42.5 overflow-y-auto pr-2 no-scrollbar",
+                "space-y-1",
+                notificationItems.length > 6 &&
+                  "max-h-60 overflow-y-auto pr-2 no-scrollbar",
               )}
             >
               {notificationItems.map((item) => (
                 <div
                   key={item.key}
-                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3"
+                  className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm"
                 >
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">{item.label}</p>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <CalendarDays className="h-4 w-4" />
-                        <span>Scheduled At: {item.scheduledDate}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 font-medium text-amber-700">
-                        <Clock3 className="h-4 w-4" />
-                        <span>{item.status}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Button size="sm" variant="outline" onClick={item.action}>
-                    <Eye className="mr-1 h-4 w-4" />
+                  <span className="w-16 shrink-0 text-xs font-medium text-amber-700">
+                    {item.kind}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-semibold text-slate-900">
+                    {item.label}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-slate-600">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {item.scheduledDate}
+                  </span>
+                  <span className="flex w-32 shrink-0 items-center gap-1 justify-end font-medium text-amber-700">
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {item.status}
+                  </span>
+                  <Button size="sm" variant="outline" className="h-7 shrink-0 px-2" onClick={item.action}>
+                    <Eye className="mr-1 h-3.5 w-3.5" />
                     Review
                   </Button>
                 </div>
