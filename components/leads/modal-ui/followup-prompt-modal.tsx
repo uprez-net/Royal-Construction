@@ -13,6 +13,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Lead } from "@/lib/leads/types";
 import { fetchLead, updateLead } from "@/lib/leads/leads-service";
 import {
+  completeTask,
+  createTask,
+  fetchOpenTasks,
+} from "@/lib/leads/task-service";
+import { sydneyStartOfDay } from "@/lib/dates/sydney";
+import {
   buildFollowupCompletedHistoryEntry,
   buildFollowupNotRequiredHistoryEntry,
   buildFollowupRescheduledHistoryEntry,
@@ -78,12 +84,31 @@ export function FollowupPromptModal({
     setSaving(true);
 
     try {
+      // Rescheduling closes the current task and opens the next one, which is
+      // what "reschedule" has always meant. It used to move Lead.followupDate,
+      // and nothing reads that any more: the tab and both reminder crons are on
+      // LeadTask, so a rescheduled follow-up disappeared.
+      //
+      // Answering closes the task and opens nothing.
+      // Only the follow-up. Closing every open task would also close a booked
+      // meeting, which nobody asked about and which this dialog never mentions.
+      const open = (await fetchOpenTasks()).filter(
+        (t) => t.leadId === lead.id && t.type !== "MEETING",
+      );
+      for (const task of open) {
+        await completeTask(task.id);
+      }
+      if (choice === "reschedule") {
+        await createTask({
+          leadId: lead.id,
+          type: "CALL",
+          dueDate: sydneyStartOfDay(date).toISOString(),
+          dueTime: time || null,
+          notes: note || null,
+        });
+      }
+
       const updated = await updateLead(lead.id, {
-        // Rescheduling moves the date. Answering leaves it alone so the tab can
-        // still show what was scheduled; updateLead stamps followupCompletedAt
-        // from the outcome below, which is what closes the task now.
-        followupDate: choice === "reschedule" ? date : undefined,
-        followupTime: choice === "reschedule" ? time : undefined,
         // No stage. Answering a follow-up used to write CONTACTED through this
         // path, which is how a lead in negotiation lost its progress to a
         // calendar action.

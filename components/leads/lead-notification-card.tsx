@@ -15,6 +15,7 @@ import {
 import { useAppDispatch } from "@/lib/store/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { sydneyDateOnly } from "@/lib/dates/sydney";
 import { toZonedTime } from "date-fns-tz";
 import {
   addDays,
@@ -69,16 +70,6 @@ const getDateStatus = (date: string | null) => {
     status,
   };
 };
-
-/** A Sydney calendar date, as YYYY-MM-DD. Sorts and compares as a string. */
-function sydneyDateOnly(date: Date): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Australia/Sydney",
-    year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(date);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value;
-  return `${get("year")}-${get("month")}-${get("day")}`;
-}
 
 export function LeadNotificationCard() {
   const dispatch = useAppDispatch();

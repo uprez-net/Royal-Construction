@@ -1,5 +1,6 @@
 "use server";
 import prisma from "@/lib/prisma";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
@@ -1094,7 +1095,13 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         ? [buildFollowupNotRequiredHistoryEntry()]
         : input.followupResponseOutcome === "reschedule"
           ? [buildFollowupRescheduledHistoryEntry(
-            (updateData.followupDate as Date | null | undefined)?.toISOString().slice(0, 10) ?? existingLead?.followupDate?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+            // Sydney, so the history line agrees with the date the operator
+            // picked rather than reading a day earlier all afternoon.
+            sydneyDateOnly(
+              (updateData.followupDate as Date | null | undefined) ??
+                existingLead?.followupDate ??
+                new Date(),
+            ),
             String(updateData.followupTime ?? existingLead?.followupTime ?? ""),
           )]
           : [];
@@ -1115,8 +1122,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         action: "Lead note mention added",
         detail: annotation.comment || `Selected text: ${annotation.selectedText}`,
         type: "system" as const,
-        date: now.toISOString().slice(0, 10),
-        time: now.toTimeString().slice(0, 5),
+        date: sydneyDateOnly(now),
+        time: sydneyTimeOnly(now),
       };
     });
 

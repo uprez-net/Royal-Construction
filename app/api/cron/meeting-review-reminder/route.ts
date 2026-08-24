@@ -1,33 +1,9 @@
-import { fromZonedTime } from "date-fns-tz";
-
 import prisma from "@/lib/prisma";
+import { sydneyDateOnly, sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 
-function getSydneyTodayDateString(): string {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Australia/Sydney",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-  return `${year}-${month}-${day}`;
-}
-
-/** A Sydney calendar date, as YYYY-MM-DD. */
-function sydneyDateOnly(date: Date): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Australia/Sydney",
-    year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(date);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value;
-  return `${get("year")}-${get("month")}-${get("day")}`;
-}
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -48,13 +24,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const todaySydneyStr = getSydneyTodayDateString();
+    const todaySydneyStr = sydneyToday();
     // Sydney midnight as an instant, not a UTC string wearing a Sydney date.
     // `new Date(`${todaySydneyStr}T00:00:00.000Z`)` parsed the Sydney calendar
     // date as UTC, which is ten or eleven hours adrift depending on daylight
     // saving. Meetings held during that window were either reminded a day early
     // or missed entirely.
-    const todayStart = fromZonedTime(`${todaySydneyStr}T00:00:00`, "Australia/Sydney");
+    const todayStart = sydneyStartOfDay(todaySydneyStr);
 
     // Reads LeadTask, not Lead.meetingDate. #193 moved the Follow-ups tab to
     // tasks and left this behind, so a meeting booked through the new form was
