@@ -1,3 +1,5 @@
+import { fromZonedTime } from "date-fns-tz";
+
 import prisma from "@/lib/prisma";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { createNotification } from "@/types/notification";
@@ -15,6 +17,16 @@ function getSydneyTodayDateString(): string {
   const month = parts.find((part) => part.type === "month")?.value;
   const day = parts.find((part) => part.type === "day")?.value;
   return `${year}-${month}-${day}`;
+}
+
+/** A Sydney calendar date, as YYYY-MM-DD. */
+function sydneyDateOnly(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Australia/Sydney",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 export async function GET(request: Request) {
@@ -37,54 +49,77 @@ export async function GET(request: Request) {
 
   try {
     const todaySydneyStr = getSydneyTodayDateString();
-    const todayStart = new Date(`${todaySydneyStr}T00:00:00.000Z`);
+    // Sydney midnight as an instant, not a UTC string wearing a Sydney date.
+    // `new Date(`${todaySydneyStr}T00:00:00.000Z`)` parsed the Sydney calendar
+    // date as UTC, which is ten or eleven hours adrift depending on daylight
+    // saving. Meetings held during that window were either reminded a day early
+    // or missed entirely.
+    const todayStart = fromZonedTime(`${todaySydneyStr}T00:00:00`, "Australia/Sydney");
 
-    const leads = await prisma.lead.findMany({
+    // Reads LeadTask, not Lead.meetingDate. #193 moved the Follow-ups tab to
+    // tasks and left this behind, so a meeting booked through the new form was
+    // invisible here.
+    const pastMeetings = await prisma.leadTask.findMany({
       where: {
-        // Closed leads get no reminders. This used to be implied by the stage
-        // filter; scheduled work is a task now, so it has to be said.
-        stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },
-        meetingDate: {
-          not: null,
-          lt: todayStart,
+        type: "MEETING",
+        completedAt: null,
+        reminderSentAt: null,
+        dueDate: { not: null, lt: todayStart },
+        lead: {
+          stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },
         },
-        meetingCompletedAt: null,
-        assignedId: { not: null },
-        meetingReminderSentAt: null,
       },
       include: {
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+        assignedTo: { select: { id: true, name: true, email: true } },
+        lead: {
+          include: { assignedUser: { select: { id: true, name: true, email: true } } },
         },
       },
     });
 
-    for (const lead of leads) {
-      if (!lead.assignedUser?.id) continue;
+    let sent = 0;
+    let failed = 0;
+
+    for (const task of pastMeetings) {
+      const lead = task.lead;
+      const assignee = task.assignedTo ?? lead.assignedUser;
+      if (!assignee?.id) continue;
 
       const notificationPayload = createNotification("leadMeetingReview", {
         leadId: lead.id.toString(),
         customerName: lead.name,
-        meetingDate: lead.meetingDate ? lead.meetingDate.toISOString().slice(0, 10) : undefined,
-        meetingTime: lead.meetingTime ?? undefined,
+        meetingDate: task.dueDate ? sydneyDateOnly(task.dueDate) : undefined,
+        meetingTime: task.dueTime ?? undefined,
         meetingMode: lead.meetingMode ?? undefined,
       });
 
-      await triggerNotification([lead.assignedUser.id], notificationPayload);
+      try {
+        await triggerNotification([assignee.id], notificationPayload);
+      } catch (err) {
+        // Do not stamp, and do not abort the run. The follow-up cron already
+        // handles each item independently; this loop used to throw out of the
+        // whole handler, so one bad notification silenced every meeting behind
+        // it and the ones it had already stamped never fired again.
+        console.error(`[CRON] Notification failed for task ${task.id}:`, err);
+        failed += 1;
+        continue;
+      }
 
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { meetingReminderSentAt: new Date() },
+      // Stamped only after delivery, and on the task rather than the lead: a
+      // lead can hold several meetings, and marking the lead would silence
+      // the rest of them.
+      await prisma.leadTask.update({
+        where: { id: task.id },
+        data: { reminderSentAt: new Date() },
       });
+      sent += 1;
     }
 
     return successResponse({
       message: "Meeting review reminders processed.",
-      processed: leads.length,
+      processed: pastMeetings.length,
+      sent,
+      failed,
     });
   } catch (error) {
     console.error("[CRON_ERROR] Failed during meeting-review-reminder cron execution:", error);
