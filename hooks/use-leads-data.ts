@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Lead, LeadStage, LeadsStats } from "@/lib/leads/types";
+import { useAppSelector } from "@/lib/store/hooks";
 import { LeadAnalyticsData } from "@/types/lead";
 import { WIN_RATE_WINDOW_DAYS } from "@/lib/leads/pipeline-stages";
 import {
@@ -92,6 +93,24 @@ export function useLeadsData() {
     setStats(statsData);
     setAnalyticsData(analytics);
   }, []);
+
+  /**
+   * Keep the six cards in step with the Tasks tab.
+   *
+   * "Open tasks" is the one card built from tasks rather than leads, and until
+   * now only adding, editing or deleting a LEAD recalculated it. Closing five
+   * tasks emptied five rows and left the card showing the old number until the
+   * page was reloaded, which is precisely the sort of disagreement that makes
+   * people stop trusting the numbers.
+   */
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
+  const seenTasksVersion = useRef(tasksVersion);
+  useEffect(() => {
+    // The first render already has fresh stats; only react to later changes.
+    if (seenTasksVersion.current === tasksVersion) return;
+    seenTasksVersion.current = tasksVersion;
+    void refreshStats();
+  }, [tasksVersion, refreshStats]);
 
   /* ── Paginated leads ── */
   const refreshLeadsData = useCallback(

@@ -18,6 +18,8 @@ import {
   fetchOpenTasks,
 } from "@/lib/leads/task-service";
 import { sydneyStartOfDay } from "@/lib/dates/sydney";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import {
   buildFollowupCompletedHistoryEntry,
   buildFollowupNotRequiredHistoryEntry,
@@ -36,6 +38,7 @@ export function FollowupPromptModal({
   taskId,
   onClose,
 }: FollowupPromptModalProps) {
+  const dispatch = useAppDispatch();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,6 +132,10 @@ export function FollowupPromptModal({
       });
 
       if (updated) {
+        // The tab's list is client state; router.refresh() cannot touch it.
+        // Without this the row stayed on screen until a manual reload, even
+        // though the task really had been closed.
+        dispatch(bumpLeadTasks());
         router.refresh();
         onClose();
       }

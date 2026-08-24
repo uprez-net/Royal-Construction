@@ -90,6 +90,20 @@ export default function Leads() {
   const statusParam =
     activeMetric === "total" ? "total" : (activeMetric ?? undefined);
 
+  /**
+   * The "Open tasks" card is not a stage filter.
+   *
+   * It means "leads carrying at least one open task", which no stage list can
+   * express — resolveStatusFilter maps "pendingFollowup" to an empty array,
+   * i.e. no filter at all. It was passed only by the click that set it, so the
+   * search/filter effect immediately fired a second, unfiltered request for
+   * the same click and normally landed last: the card said 14 and the table
+   * showed every lead in the business. Paging then dropped it for good.
+   * Derived from the active metric so it travels with every request.
+   */
+  const hasOpenTaskParam =
+    activeMetric === "pendingFollowup" ? true : undefined;
+
   /* ── Search + filter effect ── */
   useEffect(() => {
     const q = debouncedSearch.trim();
@@ -107,9 +121,16 @@ export default function Leads() {
                 .join(",") || undefined,
         filterTiming: activeFilterTiming,
         isArchived: statusParam?.includes("Archived") ? true : undefined,
+        hasOpenTask: hasOpenTaskParam,
       });
     }
-  }, [debouncedSearch, refreshLeadsData, statusParam, activeFilterTiming]);
+  }, [
+    debouncedSearch,
+    refreshLeadsData,
+    statusParam,
+    activeFilterTiming,
+    hasOpenTaskParam,
+  ]);
 
   /* ── URL params on mount ── */
   useEffect(() => {
@@ -202,6 +223,7 @@ export default function Leads() {
       status: statusParam,
       filterTiming,
       query: debouncedSearch.trim() || undefined,
+      hasOpenTask: hasOpenTaskParam,
     });
   };
 
@@ -213,6 +235,7 @@ export default function Leads() {
         query: searchTerm,
         status: statusParam,
         filterTiming: activeFilterTiming,
+        hasOpenTask: hasOpenTaskParam,
       });
     },
     [
@@ -221,6 +244,7 @@ export default function Leads() {
       pageInfo.limit,
       searchTerm,
       activeFilterTiming,
+      hasOpenTaskParam,
     ],
   );
 

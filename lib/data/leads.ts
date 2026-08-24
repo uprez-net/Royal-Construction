@@ -275,7 +275,16 @@ export async function getAllLeads(): Promise<UiLead[]> {
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
-        files: true
+        files: true,
+        // Just the next open task, for the table's Follow-up cell. Ordered the
+        // same way the Tasks tab orders its list so the two agree on which one
+        // is "next": soonest due date first, undated last.
+        tasks: {
+          where: { completedAt: null },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          take: 1,
+          select: { dueDate: true, dueTime: true },
+        },
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -465,7 +474,16 @@ export async function getLeads(
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
-        files: true
+        files: true,
+        // Just the next open task, for the table's Follow-up cell. Ordered the
+        // same way the Tasks tab orders its list so the two agree on which one
+        // is "next": soonest due date first, undated last.
+        tasks: {
+          where: { completedAt: null },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          take: 1,
+          select: { dueDate: true, dueTime: true },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -1151,6 +1169,25 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       files: true
     },
   });
+
+  // Hand the lead's outstanding work over with it.
+  //
+  // createLeadTask stamps the lead's assignee onto each task at creation, and
+  // nothing updated it afterwards. Reassigning a lead therefore left its open
+  // calls and meetings pointing at the previous owner, and both reminder crons
+  // prefer the task's own assignee (`task.assignedTo ?? lead.assignedUser`) —
+  // so the reminder email went to the old owner while the Tasks tab showed the
+  // new one. One name on screen, a different name in the inbox.
+  //
+  // Only open tasks move: a completed task is a record of who actually did the
+  // work and must keep saying so.
+  if (input.assignedId !== undefined) {
+    const nextAssignedId = input.assignedId?.trim() || null;
+    await prisma.leadTask.updateMany({
+      where: { leadId: id, completedAt: null },
+      data: { assignedId: nextAssignedId },
+    });
+  }
 
   for (const annotation of annotationInputs) {
     try {

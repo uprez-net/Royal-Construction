@@ -11,7 +11,10 @@ import {
 import { createTask } from "@/lib/leads/task-service";
 import type { LeadTaskRow } from "@/lib/leads/task-service";
 import type { LeadTaskType } from "@prisma/client";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 interface TaskFormProps {
   leadId: number;
@@ -60,59 +63,64 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
     }
   }
 
+  // "" is the ToggleGroup value for "No date": the primitive uses the empty
+  // string for deselected, and null cannot round-trip through it.
+  const dueValue = presetDays === null ? "" : String(presetDays);
+
   return (
-    <div className="task-form">
-      <p className="task-form-title">Next task for {leadName}</p>
+    <div className="rounded-lg border border-border bg-card p-4">
+      <p className="mb-4 text-sm font-semibold text-foreground">
+        Next task for {leadName}
+      </p>
 
-      <div className="task-form-row">
-        <span className="task-form-label">Type</span>
-        <div className="task-chip-group" role="group" aria-label="Task type">
+      <div className="grid gap-4 sm:grid-cols-[5rem_minmax(0,1fr)] sm:items-center">
+        <Label className="text-xs text-muted-foreground">Type</Label>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={type}
+          // A toggle group can deselect; a task must always have a type, so an
+          // empty value is ignored rather than written.
+          onValueChange={(value) => value && setType(value as LeadTaskType)}
+          aria-label="Task type"
+          className="flex-wrap"
+        >
           {LEAD_TASK_TYPES.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              className={cn("task-chip", type === t.value && "task-chip-on")}
-              aria-pressed={type === t.value}
-              onClick={() => setType(t.value)}
-            >
+            <ToggleGroupItem key={t.value} value={t.value}>
               {t.label}
-            </button>
+            </ToggleGroupItem>
           ))}
-        </div>
-      </div>
+        </ToggleGroup>
 
-      <div className="task-form-row">
-        <span className="task-form-label">Due</span>
-        <div className="task-chip-group" role="group" aria-label="Due date">
+        <Label className="text-xs text-muted-foreground">Due</Label>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={dueValue}
+          onValueChange={(value) =>
+            setPresetDays(value === "" ? null : Number(value))
+          }
+          aria-label="Due date"
+          className="flex-wrap"
+        >
           {LEAD_TASK_DUE_PRESETS.map((p) => (
-            <button
-              key={p.days}
-              type="button"
-              className={cn("task-chip", presetDays === p.days && "task-chip-on")}
-              aria-pressed={presetDays === p.days}
-              onClick={() => setPresetDays(p.days)}
-            >
+            <ToggleGroupItem key={p.days} value={String(p.days)}>
               {p.label}
-            </button>
+            </ToggleGroupItem>
           ))}
-          <button
-            type="button"
-            className={cn("task-chip", presetDays === null && "task-chip-on")}
-            aria-pressed={presetDays === null}
-            onClick={() => setPresetDays(null)}
-          >
-            No date
-          </button>
-        </div>
-      </div>
+          <ToggleGroupItem value="">No date</ToggleGroupItem>
+        </ToggleGroup>
 
-      <div className="task-form-row">
-        <label className="task-form-label" htmlFor={`task-note-${leadId}`}>
+        <Label
+          className="text-xs text-muted-foreground"
+          htmlFor={`task-note-${leadId}`}
+        >
           Note
-        </label>
-        <input
+        </Label>
+        <Input
           id={`task-note-${leadId}`}
-          className="task-form-input"
           value={notes}
           placeholder="Optional"
           onChange={(e) => setNotes(e.target.value)}
@@ -120,21 +128,25 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
       </div>
 
       {error && (
-        <p className="task-form-error" role="alert">
+        <p className="mt-3 text-xs text-destructive" role="alert">
           {error}
         </p>
       )}
 
-      <div className="task-form-actions">
+      <div className="mt-4 flex justify-end gap-2">
         {onCancel && (
-          <button type="button" className="task-btn" onClick={onCancel} disabled={saving}>
+          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button type="button" className="task-btn task-btn-primary" onClick={submit} disabled={saving}>
-          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+        <Button type="button" size="sm" onClick={submit} disabled={saving}>
+          {saving ? (
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Check className="size-3.5" aria-hidden="true" />
+          )}
           Add task
-        </button>
+        </Button>
       </div>
     </div>
   );

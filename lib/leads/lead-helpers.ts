@@ -58,7 +58,15 @@ export const LEAD_SOURCE_OPTIONS: LeadSource[] = [
 export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
   { label: "Active", stages: ["New", "Contacted", "Discovery", "Qualified", "Quoted", "Negotiating"] },
   { label: "Won", stages: ["Converted"] },
-  { label: "Closed", stages: ["No Response", "Disqualified", "Lost"] },
+  // No Response has its own group because it does not behave like the two
+  // below it. Its outcome is STALLED, not LOST: it counts in nothing, and
+  // — unlike Disqualified and Lost — its tasks stay live and its reminders
+  // keep firing, which is deliberate. A lead that stopped answering is
+  // exactly the one carrying "call again in three months". Grouping it under
+  // "Closed" made two neighbouring options behave differently with nothing
+  // on screen to say so.
+  { label: "Stalled", stages: ["No Response"] },
+  { label: "Closed", stages: ["Disqualified", "Lost"] },
 ];
 
 /** Flat order, for the filter chips and anything that wants one list. */

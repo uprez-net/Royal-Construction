@@ -19,6 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { Lead } from "@/lib/leads/types";
 import { fetchLead, updateLead } from "@/lib/leads/leads-service";
+import { completeTask, fetchOpenTasks } from "@/lib/leads/task-service";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import {
   buildMeetingDidNotTakePlaceHistoryEntry,
   buildMeetingReviewedHistoryEntry,
@@ -26,13 +29,20 @@ import {
 
 interface MeetingReviewModalProps {
   leadId: number;
+  /**
+   * The meeting being reviewed. Optional because the dialog is also reachable
+   * from a notification, which names a lead and not a task.
+   */
+  taskId?: number;
   onClose: () => void;
 }
 
 export function MeetingReviewModal({
   leadId,
+  taskId,
   onClose,
 }: MeetingReviewModalProps) {
+  const dispatch = useAppDispatch();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -79,6 +89,27 @@ export function MeetingReviewModal({
     setSaving(true);
 
     try {
+      // Close the meeting itself. This dialog recorded the outcome on the lead
+      // and left the task open, so every meeting ever reviewed stayed on the
+      // Tasks tab and in the "Open tasks" count for ever — a reload did not
+      // clear it, because nothing had actually closed it.
+      //
+      // Closed either way. "Didn't happen" is still an outcome: the booked
+      // meeting is finished with, and the history entry says what happened so
+      // a replacement can be booked deliberately rather than by leaving an
+      // overdue row lying around.
+      const meetings = (await fetchOpenTasks()).filter(
+        (t) =>
+          t.leadId === lead.id &&
+          t.type === "MEETING" &&
+          // Scoped to the clicked row when there is one. Opened from a
+          // notification there is no task id, and it means this lead's meetings.
+          (taskId === undefined || t.id === taskId),
+      );
+      for (const meeting of meetings) {
+        await completeTask(meeting.id);
+      }
+
       const updated = await updateLead(
         lead.id,
         tookPlace
@@ -98,6 +129,9 @@ export function MeetingReviewModal({
       );
 
       if (updated) {
+        // router.refresh() only re-renders server components; the Tasks tab
+        // holds its rows in client state, so it needs telling directly.
+        dispatch(bumpLeadTasks());
         router.refresh();
         onClose();
       }

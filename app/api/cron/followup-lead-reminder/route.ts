@@ -109,7 +109,16 @@ export async function GET(request: Request) {
         followupTime: task.dueTime ?? undefined,
       });
 
-      await triggerNotification([assignee.id], notificationPayload);
+      // triggerNotification reports failure by returning, never by throwing, so
+      // an undelivered in-app message would otherwise be invisible. The email
+      // below is the channel that gates reminderSentAt, so a failure here does
+      // not cost the reminder — but it should not be silent either.
+      const notified = await triggerNotification([assignee.id], notificationPayload);
+      if (!notified.success) {
+        console.error(
+          `[CRON] In-app notification not delivered for task ${task.id}: ${notified.error ?? "unknown reason"}`,
+        );
+      }
 
       const emailSubject = `[Follow-up Reminder] Today's Follow-up for ${lead.name}`;
       const crmUrl = `${baseUrl}/leads`;
