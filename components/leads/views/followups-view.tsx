@@ -395,7 +395,11 @@ function FollowupsView({
               </div>
               <span className="fu-pending-badge">
                 <span className="fu-pending-pulse" />
-                {stats.pendingFollowUps} pending
+                {/* The count of the list it labels, so every type in it.
+                    stats.pendingFollowUps deliberately excludes meetings for
+                    the Quick Stats breakdown, and reading it here put "24
+                    pending" above 32 visible rows. */}
+                {pendingFollowups.length} pending
               </span>
             </div>
             <div className="fu-list">
@@ -558,7 +562,7 @@ function FollowupsView({
               <LeadMetricCard
                 label="Total Meetings"
                 value={String(stats.totalMeetings)}
-                note="Meeting scheduled leads"
+                note="Meetings booked as tasks"
                 tone="info"
                 icon={Bell}
                 onClick={() =>

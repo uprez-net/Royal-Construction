@@ -3026,3 +3026,54 @@
     transition: none;
   }
 }
+
+/* ── A lead's open tasks, on the lead page ─────────────────────────────
+   These four classes were referenced by lead-overview-tab and never
+   defined, so the row rendered as bare inline spans: the due date and
+   the note ran together as "Tue, 25 AugSite visit to scope the build". */
+.task-open-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-open-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-body);
+  font-size: 12px;
+}
+
+.task-open-due {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Truncated rather than wrapped, so one long note cannot push the Done
+   button out of reach. The full text is on the title attribute. */
+.task-open-note {
+  color: var(--text-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 34rem) {
+  .task-open-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 4px;
+  }
+  .task-open-note {
+    grid-column: 1 / -1;
+  }
+}

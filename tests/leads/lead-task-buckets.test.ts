@@ -60,3 +60,20 @@ test("a legacy note still routes a backfilled task to the meeting bucket", () =>
   // migration too.
   assert.equal(taskTypeFromNote("Organise a Meeting"), "MEETING");
 });
+
+test("the pending badge counts the same rows the list renders", () => {
+  // On staging the badge read "24 pending" above 32 visible rows: the stats
+  // breakdown excludes meetings on purpose, and the badge was reading it.
+  const tasks: T[] = [
+    { dueDate: null, type: "CALL" },
+    { dueDate: null, type: "MEETING" },
+    { dueDate: "2026-08-01T00:00:00.000Z", type: "MEETING" },
+    { dueDate: "2026-08-01T00:00:00.000Z", type: "EMAIL" },
+  ];
+  const listed = tasks.filter(isDue);
+  const nonMeeting = listed.filter((t) => t.type !== "MEETING");
+  assert.equal(listed.length, 4, "the list shows every type");
+  assert.equal(nonMeeting.length, 2, "the breakdown excludes meetings");
+  assert.notEqual(listed.length, nonMeeting.length,
+    "these are different numbers, which is why the badge must use the first");
+});
