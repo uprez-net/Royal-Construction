@@ -481,6 +481,10 @@ function buildExtractionPayload(
       commencementTrigger: "Executed contract + council/CDC approval",
       signedDate: new Date().toISOString().slice(0, 10),
       pcaInspector: null,
+      // Uploaded from the project's Overview tab after handoff, so there is
+      // nothing to carry across here.
+      hbcfInsuranceNumber: null,
+      hbcfInsuranceDocument: null,
     },
     commercialsAndClaims: {
       totalContractSum: contractValue,

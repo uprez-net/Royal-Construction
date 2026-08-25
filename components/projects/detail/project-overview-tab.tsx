@@ -2,10 +2,12 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
+import type { File as DBFile } from "@prisma/client";
 import type {
   ProjectRequirementsPayload,
   ProjectFlowSectionKey,
   ProjectPaymentStage,
+  ProjectSourceDocumentReference,
   ProjectValidationResult,
   ProjectConflictResult,
 } from "@/types/project-flow";
@@ -48,7 +50,9 @@ import {
   Droplets,
   HardHat,
   Check,
+  Loader2,
 } from "lucide-react";
+import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
@@ -822,6 +826,105 @@ function OwnerContactsBlock({
   );
 }
 
+/**
+ * HBCF (Home Building Compensation Fund) certificate number and the certificate
+ * it was read from.
+ *
+ * The number is the thing site staff quote back to iCare and to the owner, so
+ * it stays editable by hand: OCR on a photographed certificate is not reliable
+ * enough to be the only way in. The alert is driven by the number rather than
+ * by the presence of a document, so uploading an unreadable certificate leaves
+ * the prompt up instead of silently marking the job compliant.
+ */
+function HbcfInsuranceBlock({
+  projectId,
+  insuranceNumber,
+  document,
+  extracting,
+  onNumberChange,
+  onUpload,
+}: {
+  projectId: string;
+  insuranceNumber: string | null;
+  document: ProjectSourceDocumentReference | null;
+  extracting: boolean;
+  onNumberChange: (value: string | null) => void;
+  onUpload: (files: DBFile[]) => void;
+}) {
+  const id = useId();
+  const hasNumber = (insuranceNumber ?? "").trim().length > 0;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h4 className="text-sm font-semibold text-foreground">
+          HBCF insurance
+        </h4>
+        <p className="text-xs text-muted-foreground">
+          Upload the certificate to read the number automatically, or type it in
+          if the scan is unreadable.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <FieldShell label="HBCF insurance no." htmlFor={id}>
+          <Input
+            id={id}
+            value={displayValue(insuranceNumber)}
+            onChange={(e) => onNumberChange(emptyToNull(e.target.value))}
+            placeholder="Not recorded yet"
+            disabled={extracting}
+            className={FIELD_CONTROL_CLASS}
+          />
+        </FieldShell>
+
+        <div className="flex flex-col justify-end gap-1.5">
+          <UploadButton
+            projectId={projectId}
+            maxFiles={1}
+            accept="application/pdf,.pdf"
+            onUpload={onUpload}
+          />
+          {extracting ? (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+              Reading the certificate&hellip;
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {hasNumber ? null : (
+        <div
+          role="alert"
+          className={cn(
+            "flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm",
+            "border-destructive/25 bg-destructive-light text-destructive-ink",
+          )}
+        >
+          <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Upload the insurance document to update the no.</p>
+        </div>
+      )}
+
+      {document?.url ? (
+        <a
+          href={document.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          <FileText aria-hidden="true" className="h-3.5 w-3.5" />
+          <span className="wrap-break-word">
+            {document.fileName || "HBCF insurance certificate"}
+          </span>
+          <ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0" />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function PaymentStagesTable({
   stages,
   onChange,
@@ -1137,6 +1240,10 @@ export function ProjectOverviewTab({
     string | null
   >(toDateInputValue(estimatedEndDate));
   const [saving, setSaving] = useState(false);
+  // OCR + model round-trip on the uploaded HBCF certificate. Separate from
+  // `saving` so the certificate field can be locked while it runs without
+  // disabling the rest of the form.
+  const [hbcfExtracting, setHbcfExtracting] = useState(false);
   // Validations and conflicts are produced upstream from the tender/contract
   // extraction and stored on the requirements payload — nothing in the app
   // derives them (`buildProjectRequirementsPayload` takes them as an argument),
@@ -1235,7 +1342,14 @@ export function ProjectOverviewTab({
   //   }));
   // };
 
-  const handleSave = async () => {
+  /**
+   * @param override - Requirements to persist instead of the current `draft`.
+   *   State updates are async, so a flow that edits the draft and saves in the
+   *   same tick (the HBCF upload) has to hand the new payload in directly or it
+   *   would PATCH the pre-edit draft.
+   */
+  const handleSave = async (override?: RequirementsData) => {
+    const payload = override ?? draft;
     setSaving(true);
     try {
       const response = await fetchJson<ProjectDetail>(
@@ -1244,8 +1358,8 @@ export function ProjectOverviewTab({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            requirements: draft,
-            name: draft.projectName,
+            requirements: payload,
+            name: payload.projectName,
             startDate: stateStartDate,
             estimatedEndDate: stateEstimatedEndDate,
           }),
@@ -1253,7 +1367,7 @@ export function ProjectOverviewTab({
         "Unable to update project",
       );
       toast.success("Project sections updated");
-      setDraft((response.data.requirements ?? draft) as RequirementsData);
+      setDraft((response.data.requirements ?? payload) as RequirementsData);
       setStateStartDate(toDateInputValue(response.data.startDate));
       setStateEstimatedEndDate(
         toDateInputValue(response.data.estimatedEndDate),
@@ -1266,6 +1380,85 @@ export function ProjectOverviewTab({
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * Links an uploaded HBCF certificate to the project and fills in the number
+   * read off it.
+   *
+   * Extraction failure is not upload failure: the document reference is saved
+   * either way, so the certificate stays one click away and the red alert keeps
+   * asking for a number instead of the upload being lost.
+   * @param files - Result of the single-file HBCF upload.
+   */
+  const handleHbcfUpload = async (files: DBFile[]) => {
+    const file = files[0];
+    if (!file) return;
+
+    const hbcfInsuranceDocument: ProjectSourceDocumentReference = {
+      fileId: file.id,
+      fileName: file.filename,
+      url: file.url,
+      kind: "hbcfInsurance",
+    };
+
+    const toastId = toast.loading("Reading the HBCF certificate…");
+    setHbcfExtracting(true);
+    let extractedNumber = "";
+
+    try {
+      const response = await fetchJson<{
+        hbcfInsuranceNumber: string;
+        ok: boolean;
+        message: string;
+      }>(
+        `/api/projects/${project.id}/hbcf-extract`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: file.url,
+            fileId: file.id,
+            fileName: file.filename,
+          }),
+        },
+        "Unable to read the HBCF insurance document",
+      );
+
+      extractedNumber = (response.data.hbcfInsuranceNumber ?? "").trim();
+
+      if (extractedNumber) {
+        toast.success("HBCF insurance number read from the certificate", {
+          id: toastId,
+        });
+      } else {
+        toast.warning(
+          "No HBCF insurance number was found on the certificate. Enter it manually.",
+          { id: toastId },
+        );
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to read the HBCF insurance document",
+        { id: toastId },
+      );
+    } finally {
+      setHbcfExtracting(false);
+    }
+
+    const nextDraft: RequirementsData = {
+      ...draft,
+      legalAdministration: {
+        ...(draft.legalAdministration as object),
+        hbcfInsuranceNumber: extractedNumber || null,
+        hbcfInsuranceDocument,
+      } as never,
+    };
+
+    editDraft(() => nextDraft);
+    await handleSave(nextDraft);
   };
 
   const tender = (draft.sourceDocuments?.tender ?? {
@@ -1285,11 +1478,20 @@ export function ProjectOverviewTab({
   //   rainDelayCalculations: false,
   //   noticeCountdowns: false,
   // };
-  const ownerContacts = (
-    draft.legalAdministration as Record<string, unknown> | undefined
-  )?.ownerContacts as
+  const legalAdministration = draft.legalAdministration as
+    | Record<string, unknown>
+    | undefined;
+  const ownerContacts = legalAdministration?.ownerContacts as
     | { names?: string[]; emails?: string[]; phones?: string[] }
     | undefined;
+  const hbcfInsuranceNumber =
+    (legalAdministration?.hbcfInsuranceNumber as string | null | undefined) ??
+    null;
+  const hbcfInsuranceDocument =
+    (legalAdministration?.hbcfInsuranceDocument as
+      | ProjectSourceDocumentReference
+      | null
+      | undefined) ?? null;
 
   useEffect(() => {
     setTimeout(() => {
@@ -1338,7 +1540,11 @@ export function ProjectOverviewTab({
                 ) : null}
               </div>
             ) : null}
-            <Button onClick={handleSave} disabled={saving} aria-busy={saving}>
+            <Button
+              onClick={() => handleSave()}
+              disabled={saving}
+              aria-busy={saving}
+            >
               {saving ? "Saving…" : "Save changes"}
             </Button>
           </div>
@@ -1534,6 +1740,23 @@ export function ProjectOverviewTab({
                         names={ownerContacts?.names ?? []}
                         emails={ownerContacts?.emails ?? []}
                         phones={ownerContacts?.phones ?? []}
+                      />
+                    ) : null}
+
+                    {key === "legalAdministration" ? (
+                      <HbcfInsuranceBlock
+                        projectId={project.id}
+                        insuranceNumber={hbcfInsuranceNumber}
+                        document={hbcfInsuranceDocument}
+                        extracting={hbcfExtracting}
+                        onNumberChange={(value) =>
+                          updateSectionField(
+                            "legalAdministration",
+                            "hbcfInsuranceNumber",
+                            value,
+                          )
+                        }
+                        onUpload={handleHbcfUpload}
                       />
                     ) : null}
 

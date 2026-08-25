@@ -190,6 +190,10 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
         commencementTrigger: extraction.legalAdministrationCommencementTrigger,
         signedDate: extraction.legalAdministrationSignedDate,
         pcaInspector: extraction.legalAdministrationPcaInspector,
+        // The HBCF certificate is uploaded from the project's Overview tab
+        // after handover; tender/contract extraction never carries it.
+        hbcfInsuranceNumber: null,
+        hbcfInsuranceDocument: null,
       },
       commercialsAndClaims: {
         totalContractSum: extraction.commercialsAndClaimsTotalContractSum,
@@ -382,6 +386,8 @@ export async function createProjectWithLead({
             commencementTrigger: "",
             signedDate: "",
             pcaInspector: "",
+            hbcfInsuranceNumber: null,
+            hbcfInsuranceDocument: null,
           },
           commercialsAndClaims: {
             totalContractSum: inferredSpecs?.projectBudget ?? 0,

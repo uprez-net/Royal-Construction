@@ -36,7 +36,10 @@ const sourceDocumentSchema = z.object({
   fileId: z.string().min(1),
   fileName: z.string().min(1),
   url: z.string().url(),
-  kind: z.enum(["tender", "contract"]),
+  // `hbcfInsurance` covers the certificate referenced from
+  // `legalAdministration.hbcfInsuranceDocument`; the tender/contract bundle
+  // below only ever carries the first two.
+  kind: z.enum(["tender", "contract", "hbcfInsurance"]),
 });
 
 const projectValidationSchema = z.object({

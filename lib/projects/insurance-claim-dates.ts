@@ -96,6 +96,8 @@ const EMPTY_REQUIREMENTS: ProjectRequirementsDraft = {
     commencementTrigger: null,
     signedDate: null,
     pcaInspector: null,
+    hbcfInsuranceNumber: null,
+    hbcfInsuranceDocument: null,
   },
   commercialsAndClaims: {
     totalContractSum: null,
