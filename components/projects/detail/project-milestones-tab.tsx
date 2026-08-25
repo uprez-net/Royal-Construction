@@ -7,8 +7,6 @@ import {
   Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DonutChartCard } from "@/components/charts/donut-chart-card";
-import type { ProjectMilestoneMix } from "@/types/ui";
 import {
   PROJECT_STAGE_LABELS,
   PROJECT_STAGE_PERCENTAGE,
@@ -22,7 +20,7 @@ import {
   formatPaymentStageLabel,
   matchPaymentStagesToProjectStages,
 } from "@/lib/projects/payment-stages";
-import { currency, dateFormat } from "@/utils/formatters";
+import { currency } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -175,33 +173,6 @@ export function ProjectMilestonesTab({
       return acc;
     }, {});
   }, [tradieAlerts]);
-
-  const milestoneChartData: ProjectMilestoneMix[] = useMemo(() => {
-    const {
-      totalStages: projectStagesCount,
-      completedStages: completedStagesCount,
-      inProgressStages: inProgressStagesCount,
-    } = calcMilestoneOverviewData(project.milestones);
-    const graphData: ProjectMilestoneMix[] = [
-      {
-        status: "Completed",
-        count: completedStagesCount,
-        color: "var(--chart-2)",
-      },
-      {
-        status: "In Progress",
-        count: inProgressStagesCount,
-        color: "var(--chart-3)",
-      },
-      {
-        status: "Upcoming",
-        count:
-          projectStagesCount - completedStagesCount - inProgressStagesCount,
-        color: "var(--chart-5)",
-      }
-    ];
-    return graphData;
-  }, [project.milestones]);
 
   const handleOpenAddUpdateModal = (id: string) => {
     dispatch(
@@ -494,21 +465,6 @@ export function ProjectMilestonesTab({
           )}
         </CardContent>
       </Card>
-
-      <div className="space-y-4">
-        <DonutChartCard
-          title="Milestone summary"
-          subtitle="Progress distribution across phases"
-          data={milestoneChartData}
-          labelKey="status"
-          valueKey="count"
-          colorByLabel={{
-            Completed: "var(--chart-2)",
-            "In Progress": "var(--chart-3)",
-            Upcoming: "var(--chart-5)",
-          }}
-        />
-      </div>
     </section>
   );
 }
