@@ -1,3 +1,4 @@
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import type { SafeForecast, SafePipelineMetrics } from "@/lib/data/leads";
 import type {
   ChatSession,
@@ -60,16 +61,29 @@ export const historyTypeToPrisma: Record<HistoryItem["type"], PrismaHistoryType>
   referral: "REFERRAL",
 };
 
+/**
+ * The calendar date in Sydney, not in UTC.
+ *
+ * These read `toISOString()` and `toTimeString()`, which are UTC and
+ * server-local respectively. Every date the office looks at is a Sydney date,
+ * and Sydney is 10-11 hours ahead, so anything stored between midnight and
+ * ~10am Sydney printed as the PREVIOUS day: a task due Wed 26 Aug showed as
+ * 25 Aug, and a lead entered at 9am showed as "Created" yesterday. On Vercel
+ * the server clock is UTC, so toTimeString() was wrong by the same margin.
+ *
+ * lib/dates/sydney.ts already existed for exactly this; these two predate it
+ * and were never migrated.
+ */
 export function toDateOnly(date: Date | null): string | null {
   if (!date) return null;
 
-  return date.toISOString().slice(0, 10);
+  return sydneyDateOnly(date);
 }
 
 export function toTimeOnly(date: Date | null): string | null {
   if (!date) return null;
 
-  return date.toTimeString().slice(0, 5);
+  return sydneyTimeOnly(date);
 }
 
 export function mapHistory(history: PrismaLeadHistory & { author: User | null }): HistoryItem {
