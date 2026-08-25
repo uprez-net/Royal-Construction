@@ -260,11 +260,6 @@ export function JobSetupPanel({
               value={job.balconySqm}
               onChange={(balconySqm) => onJobChange({ balconySqm })}
             />
-            <AreaField
-              label="Kitchen sqm"
-              value={job.kitchenSqm}
-              onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
-            />
             <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Total building area
