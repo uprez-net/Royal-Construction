@@ -20,7 +20,7 @@ export default function OfferPageSkeleton() {
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
-            className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm"
+            className="grid min-h-18 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm"
           >
             <Skeleton className="size-9 rounded-lg" />
             <div className="space-y-2">
