@@ -71,10 +71,16 @@ export default function TableView({
   const [commLead, setCommLead] = React.useState<string | null>(null);
   const [openTasks, setOpenTasks] = React.useState<LeadTaskRow[]>([]);
   const [tasksLoaded, setTasksLoaded] = React.useState(false);
+  // Failed is not the same as empty. Without this the catch marked the fetch
+  // loaded with an empty list, so a dropped request rendered the dashed "Add
+  // task" pill on every row — the whole table reading as though nobody had a
+  // single call booked. The Tasks tab already draws this distinction.
+  const [tasksError, setTasksError] = React.useState(false);
   const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
 
   useEffect(() => {
     const controller = new AbortController();
+    setTasksError(false);
     fetchOpenTasks(controller.signal)
       .then((rows) => {
         setOpenTasks(rows);
@@ -82,10 +88,16 @@ export default function TableView({
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
+        // Drop the stale list too: rows from a previous load would otherwise
+        // sit next to leads whose tasks this attempt never fetched.
+        setOpenTasks([]);
+        setTasksError(true);
         setTasksLoaded(true);
       });
     return () => controller.abort();
   }, [tasksVersion]);
+
+  const tasksReady = tasksLoaded && !tasksError;
 
   const tasksByLeadId = useMemo(() => {
     const grouped = new Map<number, LeadTaskRow[]>();
@@ -242,13 +254,21 @@ export default function TableView({
                           </span>
                         </td>
                         <td className="col-followup">
-                          {tasksLoaded ? (
+                          {tasksReady ? (
                             <LeadTaskCell
                               next={tasksByLeadId.get(lead.id)?.[0]}
+                              disabled={lead.isArchived}
                               onOpen={() => setTasksLead(lead)}
                             />
                           ) : (
-                            <span className="text-xs text-muted-foreground">
+                            <span
+                              className="text-xs text-muted-foreground"
+                              title={
+                                tasksError
+                                  ? "Could not load tasks. Refresh to try again."
+                                  : "Loading tasks"
+                              }
+                            >
                               —
                             </span>
                           )}
@@ -448,9 +468,10 @@ export default function TableView({
                     <div>
                       <dt>Task</dt>
                       <dd>
-                        {tasksLoaded ? (
+                        {tasksReady ? (
                           <LeadTaskCell
                             next={tasksByLeadId.get(lead.id)?.[0]}
+                            disabled={lead.isArchived}
                             onOpen={() => setTasksLead(lead)}
                           />
                         ) : (
