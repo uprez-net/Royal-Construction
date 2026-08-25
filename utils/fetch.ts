@@ -1,11 +1,18 @@
 
 export class FetchError extends Error {
   status: number;
+  /**
+   * The parsed response body, when the server sent one. A non-ok status often
+   * carries the detail worth showing the user, and throwing away the body left
+   * callers with nothing but a generic fallback message.
+   */
+  body: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body?: unknown) {
     super(message);
     this.name = "FetchError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -46,7 +53,7 @@ export async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit, 
   const response = await fetch(input, { ...init, signal });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new FetchError(fetchErrorMessage(body, fallback), response.status);
+    throw new FetchError(fetchErrorMessage(body, fallback), response.status, body);
   }
 
   return body as FetchJsonResponse<T>;

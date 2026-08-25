@@ -984,49 +984,49 @@ function SourceDocumentCard({
   );
 }
 
-function AutomationToggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "flex w-full items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-        checked ? "border-primary/40 bg-primary/5" : "border-border bg-card",
-      )}
-    >
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-primary" : "bg-border",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-transform motion-reduce:transition-none",
-            checked ? "translate-x-4" : "translate-x-0.5",
-          )}
-        />
-      </span>
-    </button>
-  );
-}
+// function AutomationToggle({
+//   label,
+//   description,
+//   checked,
+//   onChange,
+// }: {
+//   label: string;
+//   description: string;
+//   checked: boolean;
+//   onChange: (v: boolean) => void;
+// }) {
+//   return (
+//     <button
+//       type="button"
+//       role="switch"
+//       aria-checked={checked}
+//       onClick={() => onChange(!checked)}
+//       className={cn(
+//         "flex w-full items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+//         checked ? "border-primary/40 bg-primary/5" : "border-border bg-card",
+//       )}
+//     >
+//       <div>
+//         <p className="text-sm font-medium text-foreground">{label}</p>
+//         <p className="text-xs text-muted-foreground">{description}</p>
+//       </div>
+//       <span
+//         aria-hidden="true"
+//         className={cn(
+//           "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
+//           checked ? "bg-primary" : "bg-border",
+//         )}
+//       >
+//         <span
+//           className={cn(
+//             "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-transform motion-reduce:transition-none",
+//             checked ? "translate-x-4" : "translate-x-0.5",
+//           )}
+//         />
+//       </span>
+//     </button>
+//   );
+// }
 
 function ValidationRow({
   validation,
@@ -1222,18 +1222,18 @@ export function ProjectOverviewTab({
     });
   };
 
-  const updateAutomationTrigger = (
-    field: "orderReminders" | "rainDelayCalculations" | "noticeCountdowns",
-    value: boolean,
-  ) => {
-    editDraft((current) => ({
-      ...current,
-      automationTriggers: {
-        ...(current.automationTriggers ?? {}),
-        [field]: value,
-      } as never,
-    }));
-  };
+  // const updateAutomationTrigger = (
+  //   field: "orderReminders" | "rainDelayCalculations" | "noticeCountdowns",
+  //   value: boolean,
+  // ) => {
+  //   editDraft((current) => ({
+  //     ...current,
+  //     automationTriggers: {
+  //       ...(current.automationTriggers ?? {}),
+  //       [field]: value,
+  //     } as never,
+  //   }));
+  // };
 
   const handleSave = async () => {
     setSaving(true);
@@ -1280,11 +1280,11 @@ export function ProjectOverviewTab({
     kind: "contract",
     fileId: "",
   }) as Record<string, string>;
-  const automation = draft.automationTriggers ?? {
-    orderReminders: false,
-    rainDelayCalculations: false,
-    noticeCountdowns: false,
-  };
+  // const automation = draft.automationTriggers ?? {
+  //   orderReminders: false,
+  //   rainDelayCalculations: false,
+  //   noticeCountdowns: false,
+  // };
   const ownerContacts = (
     draft.legalAdministration as Record<string, unknown> | undefined
   )?.ownerContacts as

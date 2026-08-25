@@ -875,7 +875,7 @@ export function NewOfferWorkspace({
       setTenderGate(s.tenderGate);
       setAdminContentVersion(s.adminContentVersion);
     },
-    [adminPrefill?.costLines],
+    [adminPrefill?.costLines, adminPrefill?.loadingChargePercentage],
   );
 
   // Single-flight workspace autosave (fixes the overlapping-save clobber).

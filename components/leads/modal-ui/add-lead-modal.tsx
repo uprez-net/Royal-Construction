@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Check, Bell, X } from "lucide-react";
+import { Plus, Check, Bell, X, AlertTriangle } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import {
   Lead,
@@ -11,7 +11,11 @@ import {
   ProjectType,
   HistoryItem,
 } from "@/lib/leads/types";
-import { createLead } from "@/lib/leads/leads-service";
+import {
+  createLead,
+  isDuplicateLeadResult,
+  type DuplicateLeadResult,
+} from "@/lib/leads/leads-service";
 import { FetchError } from "@/utils/fetch";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
@@ -102,14 +106,22 @@ export function AddLeadModal({
 
   const [saving, setSaving] = useState(false);
   const [savingWithReminder, setSavingWithReminder] = useState(false);
+  // A toast is gone before the user has finished reading which lead they just
+  // re-entered, so the duplicate the server named stays on screen until the
+  // email or phone that collided is changed.
+  const [duplicate, setDuplicate] = useState<DuplicateLeadResult | null>(null);
   const formId = React.useId();
   const fieldId = (name: string) => `${formId}-${name}`;
   const requiredFieldsId = fieldId("required-fields");
 
   /* ── Helpers ── */
 
-  const updateField = (field: keyof AddLeadFormData, value: string) =>
+  const updateField = (field: keyof AddLeadFormData, value: string) => {
+    // Email and phone are the two fields the duplicate check matches on, so
+    // touching either means the warning may no longer hold.
+    if (field === "email" || field === "phone") setDuplicate(null);
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const toggleProjectType = (value: ProjectType) =>
     setForm((prev) => {
@@ -165,6 +177,7 @@ export function AddLeadModal({
 
     const setLoading = setReminder ? setSavingWithReminder : setSaving;
     setLoading(true);
+    setDuplicate(null);
 
     try {
       // Booking work at creation means Discovery has started. It used to write
@@ -220,8 +233,14 @@ export function AddLeadModal({
         history: historyEntries,
       });
 
-      if ('message' in createdLead) {
-        showToast(createdLead.message, "info");
+      // The server answers a duplicate with the lead it collided with. Naming
+      // that lead is the difference between "try again" and "here it is".
+      if (isDuplicateLeadResult(createdLead)) {
+        setDuplicate(createdLead);
+        showToast(
+          `${createdLead.message} Already in the pipeline as ${createdLead.existingLead.name}.`,
+          "error",
+        );
         return;
       }
 
@@ -265,6 +284,8 @@ export function AddLeadModal({
       console.error(error);
       if (error instanceof FetchError) {
         console.error("error Status:", error.status, "error Message:", error.message);
+        // Reached only when the 409 body could not be read; the normal path
+        // returns the duplicate above, along with the lead it matched.
         if (error.status === 409) {
           showToast("A lead with the same email or phone number already exists. Check in Leads Table", "error");
           return;
@@ -688,6 +709,38 @@ export function AddLeadModal({
             </div>
           )}
         </div>
+
+        {/* Duplicate warning — the lead the server matched on email or phone */}
+        {duplicate && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-semibold text-destructive">
+                {duplicate.message}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Already in the pipeline as{" "}
+                <span className="font-semibold text-foreground">
+                  {duplicate.existingLead.name}
+                </span>{" "}
+                — {duplicate.existingLead.stage}
+                {duplicate.existingLead.assignedUser
+                  ? `, assigned to ${duplicate.existingLead.assignedUser.name}`
+                  : ", unassigned"}
+                .
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {duplicate.existingLead.email} · {duplicate.existingLead.phone}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Change the email or phone to save this as a separate lead.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
