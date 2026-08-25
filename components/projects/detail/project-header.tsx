@@ -171,6 +171,7 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 <span className="font-mono tabular-nums">{pcaInspector}</span>
               )}
             </span>
+            <span aria-hidden="true">|</span>
             <span className="inline-flex items-center gap-1">
               <ShieldCheck className="size-3.5" aria-hidden="true" />
               HBCF Number{" "}
