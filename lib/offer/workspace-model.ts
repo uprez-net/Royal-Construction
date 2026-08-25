@@ -294,6 +294,8 @@ export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings =
   hbcfRate: 0.00966,
   homeWarrantyHbcfFixed: 0,
   impactFeeFixed: 0,
+  // Loading charge percentage applied to whole premium
+  loadingChargePercentage: 0,
 };
 
 // Façade options the client picks in Job setup. `imageHint` is the visual

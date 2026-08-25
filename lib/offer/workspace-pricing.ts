@@ -47,6 +47,8 @@ export type OfferWorkspacePricingSettings = {
   readonly hbcfRate: number;
   readonly homeWarrantyHbcfFixed: number;
   readonly impactFeeFixed: number;
+  // Loading charge percentage applied to whole premium
+  readonly loadingChargePercentage: number;
 };
 
 // Derive the HBCF / home-warranty premium the way the official icare calculator

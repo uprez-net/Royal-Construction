@@ -92,7 +92,6 @@ type OfferWorkspaceScreenProps = {
   readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
   readonly directTotal: number;
-  readonly loadingChargePercentage: number;
   readonly draft: OfferDocumentDraft;
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly images: OfferImageMap;
@@ -239,7 +238,6 @@ export function OfferWorkspaceScreen({
   saveState,
   sendBlockers,
   tenderGate,
-  loadingChargePercentage,
   onTenderGateChange,
   onAddLine,
   onAllowanceChange,
@@ -513,7 +511,6 @@ export function OfferWorkspaceScreen({
               settings={workspacePricingSettings}
               pricing={pricing}
               totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
-              loadingChargePercentage={loadingChargePercentage}
               onSettingsChange={onWorkspacePricingSettingsChange}
             />
             <PricingDecisionPanel

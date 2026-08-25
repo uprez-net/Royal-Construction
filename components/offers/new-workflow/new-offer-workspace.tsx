@@ -237,7 +237,10 @@ export function NewOfferWorkspace({
     adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
   );
   const [workspacePricingSettings, setWorkspacePricingSettings] =
-    useState<OfferWorkspacePricingSettings>(DEFAULT_WORKSPACE_PRICING_SETTINGS);
+    useState<OfferWorkspacePricingSettings>({
+      ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
+      loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? 0,
+    });
   const [importResult, setImportResult] =
     useState<OfferWorkbookImportResult | null>(null);
   const [rateCardProduct, setRateCardProduct] =
@@ -1611,7 +1614,6 @@ export function NewOfferWorkspace({
   return (
     <>
       <OfferWorkspaceScreen
-        loadingChargePercentage={adminPrefill?.loadingChargePercentage ?? 0}
         allowances={allowances}
         areaCalculator={areaCalculator}
         rateConstants={resolvedRateConstants}
