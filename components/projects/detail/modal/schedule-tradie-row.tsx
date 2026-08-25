@@ -400,7 +400,7 @@ export function TradieScheduleRow({
         {/* Milestone */}
         <div className="space-y-2">
           <Label htmlFor={fieldId("milestone")}>
-            Milestone
+            Activity
             <RequiredMark />
           </Label>
 
