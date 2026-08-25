@@ -761,6 +761,43 @@ export function NewOfferWorkspace({
   );
 
   const offerIdRef = useRef<string | null>(null);
+
+  /**
+   * Point the workspace at an offer, dropping messages that belonged to the
+   * last one.
+   *
+   * Guarded on the id actually changing, which is what makes this safe to use
+   * at every swap site. Three of them reload the offer in order to REPORT on
+   * it — a failed status transition, a partial send, a send that threw — and
+   * each sets its error immediately before reloading. Clearing unconditionally
+   * there would wipe the message the reload exists to explain. Same offer, no
+   * clear.
+   *
+   * Where the id does change, every one of these describes a revision that is
+   * no longer on screen while the panel rendering it still is. A revision
+   * created after a failed acceptance send left "the offer can only be sent for
+   * signature once it has been sent to the client (current status: OFFER_SENT)"
+   * sitting under the button of a fresh revision that was at SENT and perfectly
+   * sendable — telling the estimator the thing they were about to do was
+   * blocked when it was not. The reload replaced the offer's every other
+   * field; these were missed.
+   *
+   * `sentInfo` is here for the same reason the errors are: "Sent
+   * RC-Q-2026-023-R1 to ..." is a claim about a document this revision never
+   * sent.
+   */
+  const adoptOffer = useCallback((nextOfferId: string) => {
+    if (offerIdRef.current !== nextOfferId) {
+      setSendError(null);
+      setSentInfo(null);
+      setOfferSignError(null);
+      setTransitionError(null);
+      setTenderSendError(null);
+      setContractSendError(null);
+      setCopyError(null);
+    }
+    offerIdRef.current = nextOfferId;
+  }, []);
   const stateVersionRef = useRef(0);
   const lastSavedRef = useRef<string | null>(null);
   // Tracks the last-persisted particulars JSON so the contract-draft save effect
@@ -938,7 +975,7 @@ export function NewOfferWorkspace({
               // reload lands us on the live one. See ADR 0002 (no field merge).
               try {
                 const loaded = await loadActiveOfferWorkspace(leadId);
-                offerIdRef.current = loaded.offerId;
+                adoptOffer(loaded.offerId);
                 stateVersionRef.current = loaded.stateVersion;
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
                 setSignerStatuses(loaded.signerStatuses ?? []);
@@ -969,7 +1006,7 @@ export function NewOfferWorkspace({
       workspaceSaveChainRef.current = run;
       return run;
     },
-    [leadId, hydrateSnapshot],
+    [leadId, hydrateSnapshot, adoptOffer],
   );
 
   // Load the active offer for the lead on mount.
@@ -995,7 +1032,7 @@ export function NewOfferWorkspace({
       if (cancelled) {
         return;
       }
-      offerIdRef.current = loaded.offerId;
+      adoptOffer(loaded.offerId);
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
       // The loader already re-applied the current admin defaults if this offer
@@ -1082,7 +1119,7 @@ export function NewOfferWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [leadId, hydrateSnapshot]);
+  }, [leadId, hydrateSnapshot, adoptOffer]);
 
   // Live signing updates. While an envelope is out for signature, the DocuSign
   // Connect webhook updates the database in the background, but an already-open
@@ -1278,7 +1315,7 @@ export function NewOfferWorkspace({
           // optimistic target.
           try {
             const loaded = await loadActiveOfferWorkspace(leadId);
-            offerIdRef.current = loaded.offerId;
+            adoptOffer(loaded.offerId);
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
@@ -1296,6 +1333,7 @@ export function NewOfferWorkspace({
       })();
     },
     [
+      adoptOffer,
       contractParticularDefaults,
       contractParticularOverrides,
       leadId,
@@ -1337,7 +1375,7 @@ export function NewOfferWorkspace({
           return;
         }
         const loaded = await loadActiveOfferWorkspace(leadId);
-        offerIdRef.current = loaded.offerId;
+        adoptOffer(loaded.offerId);
         stateVersionRef.current = loaded.stateVersion;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
         setSignerStatuses(loaded.signerStatuses ?? []);
@@ -1378,7 +1416,7 @@ export function NewOfferWorkspace({
         setRevising(false);
       }
     })();
-  }, [leadId, hydrateSnapshot, flushWorkspace]);
+  }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer]);
 
   // Email the proposal PDF to the client. Flushes the latest edits first so the
   // generated PDF matches the workspace, then routes through sendOfferDocument.
@@ -1428,7 +1466,7 @@ export function NewOfferWorkspace({
             // previously only the throw path below resynced.
             try {
               const loaded = await loadActiveOfferWorkspace(leadId);
-              offerIdRef.current = loaded.offerId;
+              adoptOffer(loaded.offerId);
               stateVersionRef.current = loaded.stateVersion;
               setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
               setSignerStatuses(loaded.signerStatuses ?? []);
@@ -1446,7 +1484,7 @@ export function NewOfferWorkspace({
           setSendError(`Failed to send the offer: ${(error as Error).message}`);
           try {
             const loaded = await loadActiveOfferWorkspace(leadId);
-            offerIdRef.current = loaded.offerId;
+            adoptOffer(loaded.offerId);
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
@@ -1458,7 +1496,7 @@ export function NewOfferWorkspace({
         }
       })();
     },
-    [leadId, flushWorkspace],
+    [leadId, flushWorkspace, adoptOffer],
   );
 
   // Send the Offer document for the customer's DocuSign acceptance signature
