@@ -215,7 +215,7 @@ export function ProjectStatCards({ role }: { role: Role }) {
         </>
       )}
       {/* Workers on site — no attendance source is wired up yet. */}
-      <div className={CARD_SURFACE}>
+      {/* <div className={CARD_SURFACE}>
         <div className="mb-2 flex items-start justify-between">
           <div className={cn(ICON_CONTAINER, METRIC_TONES.neutral)}>
             <Users className="size-5" aria-hidden="true" />
@@ -234,7 +234,7 @@ export function ProjectStatCards({ role }: { role: Role }) {
           Site attendance tracking is not enabled for this project, so there is
           no live worker count.
         </div>
-      </div>
+      </div> */}
     </section>
   );
 }

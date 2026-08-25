@@ -174,7 +174,7 @@ export function ScheduleDeletionApprovalForm({ approval, onSuccess }: Props) {
 
             <InfoRow
               icon={CalendarDays}
-              label="Milestone"
+              label="Activity"
               value={approvalData?.milestoneName ?? "General Task"}
             />
 
