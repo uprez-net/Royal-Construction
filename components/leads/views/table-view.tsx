@@ -78,12 +78,23 @@ export default function TableView({
   const [tasksError, setTasksError] = React.useState(false);
   const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
 
+  // Ask for the tasks of the leads on screen, not of the whole business. The
+  // unscoped list is capped at the 200 soonest-due, so a lead whose only task
+  // sorted past that showed the dashed "Add task" pill over real work.
+  //
+  // Joined into a string for the dependency array: `leads` is a fresh array on
+  // every render of the parent, so depending on it refetches continuously,
+  // and depending on `leads.length` misses a filter change that happens to
+  // return the same number of rows.
+  const leadIdsKey = useMemo(() => leads.map((l) => l.id).join(","), [leads]);
+
   useEffect(() => {
     const controller = new AbortController();
+    const leadIds = leadIdsKey === "" ? [] : leadIdsKey.split(",").map(Number);
     // Cleared on success rather than up front: a synchronous setState in an
     // effect body cascades a render, and resetting here would flash the
     // loading placeholder over an error that is about to be resolved anyway.
-    fetchOpenTasks(controller.signal)
+    fetchOpenTasks({ leadIds, signal: controller.signal })
       .then((rows) => {
         setOpenTasks(rows);
         setTasksError(false);
@@ -98,7 +109,7 @@ export default function TableView({
         setTasksLoaded(true);
       });
     return () => controller.abort();
-  }, [tasksVersion]);
+  }, [tasksVersion, leadIdsKey]);
 
   const tasksReady = tasksLoaded && !tasksError;
 

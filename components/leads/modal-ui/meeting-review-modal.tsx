@@ -127,8 +127,11 @@ export function MeetingReviewModal({
         // meeting is finished with, and the history entry says what happened,
         // so a replacement gets booked deliberately rather than by leaving an
         // overdue row lying around.
-        const openMeetings = (await fetchOpenTasks()).filter(
-          (t) => t.leadId === lead.id && t.type === "MEETING",
+        // Scoped, for the same reason the follow-up dialog is: filtering the
+        // capped org-wide list could find no meeting on a lead that has one,
+        // and "Done" would then close nothing while saying it had.
+        const openMeetings = (await fetchOpenTasks({ leadIds: [lead.id] })).filter(
+          (t) => t.type === "MEETING",
         );
         // Exactly one meeting is closed, never a set.
         //

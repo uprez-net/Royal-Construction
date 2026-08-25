@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import {
   Calendar,
@@ -268,12 +269,17 @@ function FollowupItem({
         }
       >
         <TableCell className="max-w-56">
-          <a
+          {/* Link, not a bare anchor. A worklist is somewhere you open a lead,
+              deal with it and come back, and a plain href tears the app down
+              and rebuilds it every time — losing the filter chip you had
+              selected and refetching every task to land where a client
+              navigation would have gone straight there. */}
+          <Link
             href={`/leads/${task.leadId}?activeTab=scheduledWork`}
             className="block truncate font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             {task.lead.name}
-          </a>
+          </Link>
           <Badge
             variant="secondary"
             className="mt-1 border-transparent"
@@ -433,7 +439,7 @@ function FollowupsView({
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      fetchOpenTasks(controller.signal),
+      fetchOpenTasks({ signal: controller.signal }),
       fetchCompletedTasks(controller.signal),
     ])
       .then(([open, done]) => {
