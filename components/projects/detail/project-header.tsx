@@ -20,6 +20,9 @@ import { HbcfCapacityBadge } from "@/components/projects/detail/hbcf-capacity-ba
 import { StatusPill } from "@/components/common/status-pill";
 import type { ProjectDetail } from "@/types/project";
 import { formatDisplayDate, normalizeDateString } from "@/utils/date";
+import { UploadButton } from "@/components/common/upload-button";
+import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
+import { useAppDispatch } from "@/lib/store/hooks";
 
 type ProjectRequirementsHeader = {
   legalAdministration?: {
@@ -42,6 +45,7 @@ const NOT_SET = "Not set";
 const LEGAL_SECTION_ID = "legalAdministration";
 
 export function ProjectHeader({ project }: { project: ProjectDetail }) {
+  const dispatch = useAppDispatch();
   const requirements = (project.requirements ??
     {}) as ProjectRequirementsHeader;
   const legal = requirements.legalAdministration ?? {};
@@ -51,16 +55,31 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
     ? normalizeDateString(rawSignedDate)
     : null;
   const displaySignedDate = formatDisplayDate(rawSignedDate);
-  const signedDateIsUnverified = Boolean(rawSignedDate) && !normalizedSignedDate;
+  const signedDateIsUnverified =
+    Boolean(rawSignedDate) && !normalizedSignedDate;
 
   const pcaInspector = legal.pcaInspector;
   const pcaMissing = !pcaInspector || pcaInspector.trim() === "";
 
   const statusTone = projectStatusConfig(project.status);
   const showPcaWarning =
-    pcaMissing && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+    pcaMissing &&
+    (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
+  const ownerContacts = (
+    requirements.legalAdministration as Record<string, unknown> | undefined
+  )?.ownerContacts as
+    | { names?: string[]; emails?: string[]; phones?: string[] }
+    | undefined;
+  const owners: { name: string; email?: string; phone?: string }[] =
+    ownerContacts
+      ? (ownerContacts.names ?? []).map((name, index) => ({
+          name,
+          email: ownerContacts.emails?.[index],
+          phone: ownerContacts.phones?.[index],
+        }))
+      : [];
 
   return (
     <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
@@ -147,31 +166,86 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
               )}
             </span>
           </div>
-          <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <UserRound className="size-3.5" aria-hidden="true" />
-              {project.customer.name}
-            </span>
-            <span aria-hidden="true">|</span>
-            <span className="inline-flex items-center gap-1">
-              <Phone className="size-3.5" aria-hidden="true" />
+          {owners.length > 0 ? (
+            <div className="flex flex-col gap-1 pt-1">
+              {owners.map((owner, index) => (
+                <p
+                  className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground"
+                  key={`owner-${index}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <UserRound className="size-3.5" aria-hidden="true" />
+                    {owner.name}
+                  </span>
+                  {owner.phone && (
+                    <>
+                      <span aria-hidden="true">|</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Phone className="size-3.5" aria-hidden="true" />
+                        <a
+                          href={`tel:${owner.phone?.replace(/\s+/g, "")}`}
+                          className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          {owner.phone}
+                        </a>
+                      </span>
+                    </>
+                  )}
+                  {owner.email && (
+                    <>
+                      <span aria-hidden="true">|</span>
+                      <a
+                        href={`mailto:${owner.email}`}
+                        className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        {owner.email}
+                      </a>
+                    </>
+                  )}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <UserRound className="size-3.5" aria-hidden="true" />
+                {project.customer.name}
+              </span>
+              <span aria-hidden="true">|</span>
+              <span className="inline-flex items-center gap-1">
+                <Phone className="size-3.5" aria-hidden="true" />
+                <a
+                  href={`tel:${project.customer.phone.replace(/\s+/g, "")}`}
+                  className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  {project.customer.phone}
+                </a>
+              </span>
+              <span aria-hidden="true">|</span>
               <a
-                href={`tel:${project.customer.phone.replace(/\s+/g, "")}`}
-                className="rounded-md font-mono tabular-nums text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                href={`mailto:${project.customer.email}`}
+                className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                {project.customer.phone}
+                {project.customer.email}
               </a>
-            </span>
-            <span aria-hidden="true">|</span>
-            <a
-              href={`mailto:${project.customer.email}`}
-              className="rounded-md text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              {project.customer.email}
-            </a>
-          </p>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2 pt-1">
+          <UploadButton
+            projectId={project.id}
+            maxFiles={5}
+            onUpload={(uploadedFiles) => {
+              uploadedFiles.forEach((file) => {
+                dispatch(
+                  appendFileToProject({
+                    projectId: project.id,
+                    file: file,
+                  }),
+                );
+              });
+            }}
+          />
           <Button
             type="button"
             variant="outline"
