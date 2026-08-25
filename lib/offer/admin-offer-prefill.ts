@@ -46,6 +46,7 @@ export type AdminOfferPrefill = {
   draft: OfferDocumentDraft;
   areaCalculator: OfferAreaCalculator;
   rateConstants: Partial<Record<RateConstantKey, number>>;
+  loadingChargePercentage: number;
 };
 
 // The lookup keyed by taskKey — built once per prefill, used to join admin
@@ -356,6 +357,7 @@ export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
     exclusions: resolveExclusions(adminContent),
     draft: resolveDraft(adminContent),
     areaCalculator: resolveAreaCalculator(),
+    loadingChargePercentage: adminContent.hbfcClaim.loadingChargePercent,
     rateConstants: { ...DEFAULT_RATE_CONSTANTS, ...adminContent.costSchedule.rateConstants },
   };
 }

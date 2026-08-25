@@ -816,36 +816,39 @@ export function NewOfferWorkspace({
     snapshotRef.current = snapshot;
   }, [snapshot]);
 
-  const hydrateSnapshot = useCallback((s: OfferWorkspaceSnapshot) => {
-    setJob(s.job);
-    setLines(
-      s.lines.map((line) => {
-        const matchingCostLine = adminPrefill?.costLines.find(
-          (costLine) => costLine.itemName === line.itemName,
-        );
+  const hydrateSnapshot = useCallback(
+    (s: OfferWorkspaceSnapshot) => {
+      setJob(s.job);
+      setLines(
+        s.lines.map((line) => {
+          const matchingCostLine = adminPrefill?.costLines.find(
+            (costLine) => costLine.itemName === line.itemName,
+          );
 
-        return {
-          ...line,
-          formula: matchingCostLine?.formula,
-        };
-      }),
-    );
-    setAllowances(s.allowances);
-    setExclusions(s.exclusions);
-    setDraft(s.draft);
-    setAreaCalculator(s.areaCalculator);
-    setWorkspacePricingSettings(s.workspacePricingSettings);
-    setPaymentSchedule(s.paymentSchedule);
-    setRateCardProduct(s.rateCardProduct);
-    setRateCardTier(s.rateCardTier);
-    setOverrideReason(s.overrideReason);
-    setSelectedPriceInput(s.selectedPriceInput);
-    setStandardPriceInput(s.standardPriceInput);
-    setPriceAdjustmentLabel(s.priceAdjustmentLabel);
-    setImages(s.images);
-    setTenderGate(s.tenderGate);
-    setAdminContentVersion(s.adminContentVersion);
-  }, [adminPrefill?.costLines]);
+          return {
+            ...line,
+            formula: matchingCostLine?.formula,
+          };
+        }),
+      );
+      setAllowances(s.allowances);
+      setExclusions(s.exclusions);
+      setDraft(s.draft);
+      setAreaCalculator(s.areaCalculator);
+      setWorkspacePricingSettings(s.workspacePricingSettings);
+      setPaymentSchedule(s.paymentSchedule);
+      setRateCardProduct(s.rateCardProduct);
+      setRateCardTier(s.rateCardTier);
+      setOverrideReason(s.overrideReason);
+      setSelectedPriceInput(s.selectedPriceInput);
+      setStandardPriceInput(s.standardPriceInput);
+      setPriceAdjustmentLabel(s.priceAdjustmentLabel);
+      setImages(s.images);
+      setTenderGate(s.tenderGate);
+      setAdminContentVersion(s.adminContentVersion);
+    },
+    [adminPrefill?.costLines],
+  );
 
   // Single-flight workspace autosave (fixes the overlapping-save clobber).
   //
@@ -1608,6 +1611,7 @@ export function NewOfferWorkspace({
   return (
     <>
       <OfferWorkspaceScreen
+        loadingChargePercentage={adminPrefill?.loadingChargePercentage ?? 0}
         allowances={allowances}
         areaCalculator={areaCalculator}
         rateConstants={resolvedRateConstants}

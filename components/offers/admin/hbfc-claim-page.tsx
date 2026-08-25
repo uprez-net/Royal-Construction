@@ -90,9 +90,6 @@ export function HBFCClaimPage() {
   const loadingChargePercent = useAppSelector(
     (s) => s.adminOfferContent.data.hbfcClaim.loadingChargePercent,
   );
-  const totalPremiumToBePaid = useAppSelector(
-    (s) => s.adminOfferContent.data.hbfcClaim.totalPremiumToBePaid,
-  );
   const dirty = useAppSelector((s) => s.adminOfferContent.dirty.hbfcClaim);
   const saving = useAppSelector((s) => s.adminOfferContent.saving.hbfcClaim);
   const error = useAppSelector((s) => s.adminOfferContent.error.hbfcClaim);
@@ -103,12 +100,12 @@ export function HBFCClaimPage() {
         <OfferCardHeading
           description="Edit the system wide HBCF claim amount."
           icon={<FilePenLine className="size-4" aria-hidden="true" />}
-          title="HBCF Claim Amount"
+          title="HBCF Claim Amount & Loading Charge Percent (For HBCF Premium)"
         />
       </CardHeader>
       <CardContent className="grid gap-6 pt-4">
         <label>
-          <FieldLabel>Claim Amount</FieldLabel>
+          <FieldLabel>HBCF Claim Amount</FieldLabel>
           <NumberField
             value={claimAmount}
             onChange={(claimAmount) =>
@@ -118,25 +115,13 @@ export function HBFCClaimPage() {
           />
         </label>
         <label>
-          <FieldLabel>Loading Charge Percent</FieldLabel>
+          <FieldLabel>Loading Charge Percent (For HBCF Premium)</FieldLabel>
           <PercentInput
             value={loadingChargePercent}
             onChange={(loadingChargePercent) =>
               dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF loading charge percentage"
-          />
-        </label>
-        <label>
-          <FieldLabel>Total Premium</FieldLabel>
-          <Input
-            value={
-              Number.isFinite(totalPremiumToBePaid) ? totalPremiumToBePaid : ""
-            }
-            disabled
-            readOnly
-            placeholder="Auto-calculated from claim amount + loading charge"
-            className="bg-muted/50 cursor-not-allowed"
           />
         </label>
       </CardContent>

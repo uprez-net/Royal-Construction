@@ -16,6 +16,7 @@ type PriceBuildupPanelProps = {
   readonly settings: OfferWorkspacePricingSettings;
   readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
+  readonly loadingChargePercentage: number;
   readonly onSettingsChange: (
     patch: Partial<OfferWorkspacePricingSettings>,
   ) => void;
@@ -27,12 +28,13 @@ type PriceBuildupPanelProps = {
 export function PriceBuildupPanel({
   settings,
   pricing,
+  loadingChargePercentage,
   onSettingsChange,
 }: PriceBuildupPanelProps) {
   const hbcfRatePercent = Math.round(settings.hbcfRate * 100000) / 1000;
-  // Effective all-in rate after GST + stamp (matches icare calculator display).
+  // Effective all-in rate after GST + stamp + loading charge (matches icare calculator display).
   const hbcfEffectivePercent =
-    Math.round(settings.hbcfRate * 1.199 * 100000) / 1000;
+    Math.round(settings.hbcfRate * 1.199 * 100000 * (1 + loadingChargePercentage / 100)) / 1000;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -81,7 +83,7 @@ export function PriceBuildupPanel({
               </p>
               <p className="text-xs text-muted-foreground">
                 Auto-calculated from Total Contract Value (H01 metro{" "}
-                {hbcfRatePercent}% + GST + stamp ≈ {hbcfEffectivePercent}%)
+                {hbcfRatePercent}% + GST + stamp + loading charge ({loadingChargePercentage}%) ≈ {hbcfEffectivePercent}%)
               </p>
             </div>
             <p className="font-mono text-sm font-semibold tabular-nums">

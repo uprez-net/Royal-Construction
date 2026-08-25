@@ -138,7 +138,7 @@ export async function getHbcfTimelineForLead(
         budget: lead.budget,
       }),
       today,
-      totalSumAssured: adminContent.hbfcClaim.totalPremiumToBePaid,
+      totalSumAssured: adminContent.hbfcClaim.claimAmount,
     }),
     generatedAt: format(today, "yyyy-MM-dd"),
   };
