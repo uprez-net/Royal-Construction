@@ -660,12 +660,15 @@ export function NewOfferWorkspace({
     setWorkspacePricingSettings((current) => {
       const imported = {
         ...result.workspacePricingSettings,
-        loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? current.loadingChargePercentage,
+        loadingChargePercentage:
+          adminPrefill?.loadingChargePercentage ??
+          current.loadingChargePercentage,
       };
       // Only re-derive when a loading charge actually applies — with none, the
       // workbook's own dollar premium is kept rather than re-grossed from the
       // reverse-filled TCV, which lands a cent off it.
-      return adminPrefill?.loadingChargePercentage ?? current.loadingChargePercentage > 0
+      return (adminPrefill?.loadingChargePercentage ??
+        current.loadingChargePercentage > 0)
         ? withDerivedHbcfPremium(imported)
         : imported;
     });
@@ -834,7 +837,7 @@ export function NewOfferWorkspace({
   }, [snapshot]);
 
   const hydrateSnapshot = useCallback(
-    (s: OfferWorkspaceSnapshot) => {
+    (s: OfferWorkspaceSnapshot, status: OfferWorkspaceStatus) => {
       setJob(s.job);
       setLines(
         s.lines.map((line) => {
@@ -844,7 +847,8 @@ export function NewOfferWorkspace({
 
           return {
             ...line,
-            formula: matchingCostLine?.formula,
+            formula:
+              status === "pending" ? matchingCostLine?.formula : line.formula,
           };
         }),
       );
@@ -854,7 +858,11 @@ export function NewOfferWorkspace({
       setAreaCalculator(s.areaCalculator);
       setWorkspacePricingSettings({
         ...s.workspacePricingSettings,
-        loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? s.workspacePricingSettings.loadingChargePercentage,
+        loadingChargePercentage:
+          status === "pending"
+            ? (adminPrefill?.loadingChargePercentage ??
+              s.workspacePricingSettings.loadingChargePercentage)
+            : s.workspacePricingSettings.loadingChargePercentage,
       });
       setPaymentSchedule(s.paymentSchedule);
       setRateCardProduct(s.rateCardProduct);
@@ -935,7 +943,10 @@ export function NewOfferWorkspace({
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
                 setSignerStatuses(loaded.signerStatuses ?? []);
                 if (loaded.snapshot) {
-                  hydrateSnapshot(loaded.snapshot);
+                  hydrateSnapshot(
+                    loaded.snapshot,
+                    loaded.status.toLowerCase() as OfferWorkspaceStatus,
+                  );
                   lastSavedRef.current = JSON.stringify(loaded.snapshot);
                 }
               } catch (error) {
@@ -1026,7 +1037,10 @@ export function NewOfferWorkspace({
       const baseReference = loaded.reference.replace(/-R\d+$/, "");
       const revisionLabel = `R${loaded.revisionNumber}`;
       if (loaded.snapshot) {
-        hydrateSnapshot(loaded.snapshot);
+        hydrateSnapshot(
+          loaded.snapshot,
+          loaded.status.toLowerCase() as OfferWorkspaceStatus,
+        );
         setJob((current) => ({
           ...current,
           reference: baseReference,
@@ -1269,7 +1283,10 @@ export function NewOfferWorkspace({
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
             if (loaded.snapshot) {
-              hydrateSnapshot(loaded.snapshot);
+              hydrateSnapshot(
+                loaded.snapshot,
+                loaded.status.toLowerCase() as OfferWorkspaceStatus,
+              );
               lastSavedRef.current = JSON.stringify(loaded.snapshot);
             }
           } catch {
@@ -1337,7 +1354,10 @@ export function NewOfferWorkspace({
           manualOverrides: revisionParticularOverrides,
         });
         if (loaded.snapshot) {
-          hydrateSnapshot(loaded.snapshot);
+          hydrateSnapshot(
+            loaded.snapshot,
+            loaded.status.toLowerCase() as OfferWorkspaceStatus,
+          );
           lastSavedRef.current = JSON.stringify(loaded.snapshot);
         } else {
           lastSavedRef.current = JSON.stringify(snapshotRef.current);

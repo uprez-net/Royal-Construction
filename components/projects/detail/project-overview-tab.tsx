@@ -1411,7 +1411,7 @@ export function ProjectOverviewTab({
           )}
 
           {/* Automation triggers */}
-          <div className="grid gap-3 md:grid-cols-3">
+          {/* <div className="grid gap-3 md:grid-cols-3">
             <AutomationToggle
               label="Order reminders"
               description="Notify when material orders are due"
@@ -1432,7 +1432,7 @@ export function ProjectOverviewTab({
                 updateAutomationTrigger("rainDelayCalculations", v)
               }
             />
-          </div>
+          </div> */}
 
           {/* Conflicts */}
           {conflicts.length > 0 ? (

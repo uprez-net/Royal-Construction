@@ -20,6 +20,10 @@ import {
   type TradieScheduleWithTradieAndMilestone,
   type UIMilestone,
 } from "@/types/project";
+import {
+  formatPaymentStageLabel,
+  matchPaymentStagesToProjectStages,
+} from "@/lib/projects/payment-stages";
 import { currency, dateFormat } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -118,6 +122,13 @@ export function ProjectMilestonesTab({
   isAdmin: boolean;
 }) {
   const dispatch = useAppDispatch();
+  const projectStageData = project.requirements?.commercialsAndClaims?.paymentStages;
+  // The contract's own claim schedule wins over the static stage table: the
+  // percentages there are what the owner actually agreed to pay per stage.
+  const contractStages = useMemo(
+    () => matchPaymentStagesToProjectStages(projectStageData),
+    [projectStageData],
+  );
   const visualMilestones = useMemo(
     () => convertToVisualMilestone(project.milestones),
     [project.milestones],
@@ -345,11 +356,23 @@ export function ProjectMilestonesTab({
               })?.[0];
 
               const isActiveStage = stage === firstActiveStage;
-              const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
+              const contractStage = contractStages[stage];
+              const stageLabel = contractStage
+                ? formatPaymentStageLabel(contractStage)
+                : (PROJECT_STAGE_LABELS[stage] ?? stage);
+              const stagePercentage =
+                contractStage?.percentage != null
+                  ? contractStage.percentage / 100
+                  : (PROJECT_STAGE_PERCENTAGE[stage] ?? 0);
               const projectBudget = Number(project.totalBudget);
-              const stageBudget = Number.isFinite(projectBudget)
-                ? stagePercentage * projectBudget
-                : null;
+              // The contract sum the claim amounts were derived from can differ
+              // from the project budget, so prefer the amount the schedule
+              // actually states and only compute one when it has none.
+              const stageBudget =
+                contractStage?.amount ??
+                (Number.isFinite(projectBudget)
+                  ? stagePercentage * projectBudget
+                  : null);
 
               // Sort milestone by status Completed > Active > Pending
               const sortedMilestones = [...milestones].sort((a, b) => {
@@ -397,7 +420,7 @@ export function ProjectMilestonesTab({
                               : "text-foreground",
                         )}
                       >
-                        {PROJECT_STAGE_LABELS[stage] ?? stage}
+                        {stageLabel}
                       </h3>
 
                       {isAdmin && (

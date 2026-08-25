@@ -5,6 +5,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
+  hasExplicitStagePercentage,
+  paymentStagesFromLabels,
+  withStagePercentage,
+} from "@/lib/projects/payment-stages";
+import { currency } from "@/utils/formatters";
+import {
   createEmptyProjectExtractionData,
   projectExtractionSchema,
   projectExtractionSections,
@@ -81,6 +87,10 @@ const ARRAY_FIELDS = new Set([
   "inclusionsAndExclusionsInclusions",
   "inclusionsAndExclusionsExclusions",
 ]);
+
+// Rendered by its own composite control (below the field grid), not by the
+// generic array/text primitives — a claim schedule needs label + % + $ per row.
+const PAYMENT_STAGES_FIELD = "commercialsAndClaimsPaymentStages";
 
 const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsTotalContractSum",
@@ -669,6 +679,259 @@ function TagListControl({
     </FieldShell>
   );
 }
+/* ------------------------- PaymentStagesControl -------------------------- */
+/*                                                                            *
+ * The claim schedule is stored as one label per stage (e.g. "Slab 15%"), so  *
+ * the label is the only editable source of truth: the percent input writes   *
+ * its value back into the label, and the amount is derived from the contract *
+ * sum exactly the way `projectsWrite` derives it on save. That keeps this    *
+ * table a true preview of the stages the project will be created with.       *
+ *                                                                            *
+ * Editing follows the TagRow idiom above — a local draft committed on        *
+ * Enter/blur, clearing the label removes the row — because the extraction    *
+ * schema trims and drops blank entries on every parse, so a half-typed row   *
+ * held in the parent state would vanish mid-keystroke.                       *
+ *                                                                            */
+
+const STAGE_GRID = "grid grid-cols-[1fr_84px_112px_28px] items-center gap-2";
+
+function PaymentStageRow({
+  label,
+  percentage,
+  amount,
+  index,
+  onCommitLabel,
+  onChangePercentage,
+  onRemove,
+}: {
+  label: string;
+  percentage: number | null;
+  amount: number | null;
+  index: number;
+  onCommitLabel: (value: string) => void;
+  onChangePercentage: (value: number | null) => void;
+  onRemove: () => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<string>(label);
+  const [syncedLabel, setSyncedLabel] = useState<string>(label);
+
+  // Keep the draft in step when the label changes underneath us — a percent
+  // edit rewrites it — without clobbering what is being typed right now.
+  if (label !== syncedLabel) {
+    setSyncedLabel(label);
+    setDraft(label);
+  }
+
+  const commit = (): void => {
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      onRemove();
+    } else if (trimmed !== label) {
+      onCommitLabel(trimmed);
+    }
+  };
+
+  const isEstimated = percentage !== null && !hasExplicitStagePercentage(label);
+
+  return (
+    <div className={cn(STAGE_GRID, "px-3 py-2")}>
+      <Input
+        aria-label={`Stage ${index + 1} label`}
+        value={draft}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setDraft(e.target.value)
+        }
+        onBlur={commit}
+        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+          if (e.key === "Escape") {
+            setDraft(label);
+          }
+        }}
+        className="h-8 rounded-md border-slate-200 bg-white text-sm"
+      />
+
+      <div className="relative">
+        <Input
+          aria-label={`Stage ${index + 1} percent of contract`}
+          type="number"
+          inputMode="decimal"
+          value={displayValue(percentage)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            onChangePercentage(parseNumber(e.target.value))
+          }
+          title={
+            isEstimated
+              ? "Estimated from the stage name. Type a value to set it explicitly."
+              : undefined
+          }
+          className={cn(
+            "h-8 rounded-md border-slate-200 bg-white pr-5 text-sm tabular-nums",
+            isEstimated && "text-slate-400",
+          )}
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400"
+        >
+          %
+        </span>
+      </div>
+
+      <p className="truncate text-right text-sm tabular-nums text-slate-500">
+        {amount === null ? "—" : currency.format(amount)}
+      </p>
+
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+        aria-label={`Remove stage ${index + 1}`}
+      >
+        <X aria-hidden="true" className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function PaymentStagesControl({
+  labels,
+  totalContractSum,
+  onChange,
+}: {
+  labels: readonly string[];
+  totalContractSum: number | null;
+  onChange: (labels: string[]) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<string>("");
+
+  const stages = paymentStagesFromLabels(labels, totalContractSum);
+  const percentTotal = stages.reduce(
+    (sum, stage) => sum + (stage.percentage ?? 0),
+    0,
+  );
+  const hasPercentages = stages.some((stage) => stage.percentage !== null);
+  const sumsToWhole = Math.round(percentTotal * 100) === 100 * 100;
+
+  const replaceAt = (index: number, label: string): void =>
+    onChange(labels.map((current, i) => (i === index ? label : current)));
+
+  const removeAt = (index: number): void =>
+    onChange(labels.filter((_, i) => i !== index));
+
+  const commitDraft = (): void => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    onChange([...labels, trimmed]);
+    setDraft("");
+  };
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Payment Stages
+          </p>
+          <p className="text-xs text-slate-400">
+            The claim schedule in document order. Amounts are calculated from
+            the total contract sum.
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="shrink-0 rounded-full border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          {stages.length} stage{stages.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+
+      {stages.length > 0 ? (
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div
+            className={cn(
+              STAGE_GRID,
+              "bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500",
+            )}
+          >
+            <span>Stage</span>
+            <span>Percent</span>
+            <span className="text-right">Amount</span>
+            <span className="sr-only">Actions</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {stages.map((stage, index) => (
+              <PaymentStageRow
+                key={index}
+                index={index}
+                label={stage.label}
+                percentage={stage.percentage}
+                amount={stage.amount}
+                onCommitLabel={(value: string) => replaceAt(index, value)}
+                onChangePercentage={(value: number | null) =>
+                  replaceAt(index, withStagePercentage(stage.label, value))
+                }
+                onRemove={() => removeAt(index)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-sm text-slate-400">
+          No payment stages were extracted. Add the claim schedule below.
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-white px-2.5 py-1.5">
+        <Plus className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+        <Input
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft(e.target.value)
+          }
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitDraft();
+            }
+            if (e.key === "Backspace" && draft === "" && labels.length > 0) {
+              onChange(labels.slice(0, -1));
+            }
+          }}
+          onBlur={commitDraft}
+          placeholder={
+            stages.length === 0
+              ? "e.g. Deposit 5% — press Enter"
+              : "Add another stage…"
+          }
+          className="h-6 flex-1 border-none bg-transparent p-0 text-xs text-slate-700 shadow-none outline-none placeholder:text-slate-400 focus-visible:ring-0"
+        />
+      </div>
+
+      {hasPercentages ? (
+        <p
+          className={cn(
+            "text-right text-xs tabular-nums text-slate-500",
+            !sumsToWhole && "text-red-500",
+          )}
+        >
+          Schedule totals {Number(percentTotal.toFixed(2))}%
+          {sumsToWhole ? null : " — a complete schedule should sum to 100%."}
+        </p>
+      ) : null}
+
+      {totalContractSum === null ? (
+        <p className="text-right text-xs text-slate-400">
+          Set the total contract sum to see stage amounts.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Single field renderer
 // ---------------------------------------------------------------------------
@@ -817,11 +1080,10 @@ export function ExtractionSectionCard({
     activeGroups.flatMap((group) => group.fields),
   );
   const standaloneFields = fields.filter(
-    (field) => !groupedFieldsInSection.has(field),
+    (field) =>
+      !groupedFieldsInSection.has(field) && field !== PAYMENT_STAGES_FIELD,
   );
-
-  console.log("Standalone fields:", standaloneFields);
-  console.log("Active groups:", activeGroups);
+  const hasPaymentStages = fields.includes(PAYMENT_STAGES_FIELD);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -861,13 +1123,24 @@ export function ExtractionSectionCard({
             }
           >
             <ExtractionField
-              field={removeTitleFromFieldName(title, field)}
+              title={title}
+              field={field}
               value={values[field as keyof ProjectExtractionData]}
               onChange={onChange}
             />
           </div>
         ))}
       </div>
+
+      {hasPaymentStages ? (
+        <div className="mt-4">
+          <PaymentStagesControl
+            labels={values.commercialsAndClaimsPaymentStages ?? []}
+            totalContractSum={values.commercialsAndClaimsTotalContractSum}
+            onChange={(labels) => onChange(PAYMENT_STAGES_FIELD, labels)}
+          />
+        </div>
+      ) : null}
 
       {activeGroups.length > 0 ? (
         <div className="mt-4 space-y-3">
