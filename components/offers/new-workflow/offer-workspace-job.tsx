@@ -27,7 +27,14 @@ import {
 } from "@/lib/offer/workspace-model";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { cn } from "@/lib/utils";
-import { ClipboardList, Home, Info, Plus, Sparkles, Trash2 } from "lucide-react";
+import {
+  ClipboardList,
+  Home,
+  Info,
+  Plus,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useState, type PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
@@ -148,15 +155,6 @@ export function JobSetupPanel({
                 }
               />
             </Field>
-            <Field label="Total Linens">
-              <Input
-                placeholder="Auto-filled from lead requirements"
-                value={job.linenCount}
-                onChange={(event) =>
-                  onJobChange({ linenCount: parseInt(event.target.value) || 0 })
-                }
-              />
-            </Field>
             <Field label="Council">
               <Input
                 placeholder="Auto-filled from Site Location"
@@ -187,7 +185,9 @@ export function JobSetupPanel({
               <Input
                 placeholder="e.g. R2 Low Density Residential"
                 value={job.zoning}
-                onChange={(event) => onJobChange({ zoning: event.target.value })}
+                onChange={(event) =>
+                  onJobChange({ zoning: event.target.value })
+                }
               />
             </Field>
             <Field label="Valid until">
@@ -357,10 +357,13 @@ function SpecFields({
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <Field label="Number of bedrooms">
         <Input
+          type="number"
+          step="0.1"
+          min="0"
           placeholder="Auto-filled from lead requirements"
           value={bedrooms}
           onChange={(event) =>
-            onBedroomsChange(parseInt(event.target.value) || 0)
+            onBedroomsChange(parseFloat(event.target.value) || 0)
           }
         />
       </Field>
@@ -378,10 +381,13 @@ function SpecFields({
       </Field>
       <Field label="Garage spaces">
         <Input
+          type="number"
+          step="0.1"
+          min="0"
           placeholder="Auto-filled from lead requirements"
           value={garageSpaces}
           onChange={(event) =>
-            onGarageSpacesChange(parseInt(event.target.value) || 0)
+            onGarageSpacesChange(parseFloat(event.target.value) || 0)
           }
         />
       </Field>
@@ -401,7 +407,8 @@ function YesNoQuestion({
   readonly onChange: (value: boolean) => void;
   readonly value: boolean;
 }) {
-  const selected = "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark";
+  const selected =
+    "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark";
   return (
     <div className="grid gap-2">
       <p className="text-sm font-medium text-foreground">{label}</p>

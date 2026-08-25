@@ -16,19 +16,66 @@ import { Info, Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
+import { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 
 type AreaCalculatorPanelProps = {
+  readonly job: OfferWorkspaceJob;
   readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
+  readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
 };
 
+function Field({
+  children,
+  className,
+  label,
+}: PropsWithChildren<{ readonly className?: string; readonly label: string }>) {
+  return (
+    <label className={className}>
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function AreaField({
+  label,
+  onChange,
+  value,
+}: {
+  readonly label: string;
+  readonly onChange: (value: number) => void;
+  readonly value: number;
+}) {
+  return (
+    <Field label={label}>
+      <Input
+        min="0"
+        placeholder="0"
+        type="number"
+        value={numberInputValue(value)}
+        onChange={(event) => {
+          const parsedValue = parseNonNegativeNumberInput(event.target.value);
+          if (parsedValue !== null) {
+            onChange(parsedValue);
+          }
+        }}
+      />
+    </Field>
+  );
+}
+
 export function AreaCalculatorPanel({
+  job,
   basis,
   area,
   rateConstants,
   onAreaChange,
+  onJobChange,
 }: AreaCalculatorPanelProps) {
   const calc = calculateOfferArea(basis, area, rateConstants);
 
@@ -69,6 +116,27 @@ export function AreaCalculatorPanel({
             <BasisRow label="Balcony" value={basis.balconySqm} />
             <BasisRow label="Kitchen" value={basis.kitchenSqm} />
           </dl>
+        </section>
+        <section className="grid grid-cols-2 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-2">
+            Kitchen & linens
+          </h3>
+          <AreaField
+            label="Kitchen sqm"
+            value={job.kitchenSqm}
+            onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
+          />
+          <Field label="Total Linens">
+            <Input
+              min="0"
+              type="number"
+              placeholder="Auto-filled from lead requirements"
+              value={job.linenCount}
+              onChange={(event) =>
+                onJobChange({ linenCount: parseFloat(event.target.value) || 0 })
+              }
+            />
+          </Field>
         </section>
         <div className="grid gap-4 xl:grid-cols-4">
           <HelperSection title="Slab">
@@ -231,7 +299,10 @@ export function AreaCalculatorPanel({
             </div>
             <ResultRows
               rows={[
-                ["Additional Tiles for Waste (10%)", String(Math.round(calc.tilesWasted))],
+                [
+                  "Additional Tiles for Waste (10%)",
+                  String(Math.round(calc.tilesWasted)),
+                ],
                 [
                   "Total tiles required",
                   String(Math.round(calc.totalTilesRequired)),
