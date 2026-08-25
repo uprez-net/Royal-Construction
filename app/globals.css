@@ -3042,7 +3042,9 @@
 
 .task-open-row {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  /* Five children: type, due, note, Done, Remove. This was four columns, so
+     Remove wrapped onto its own line under the task. */
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 5px 9px;

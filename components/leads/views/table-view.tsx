@@ -208,7 +208,12 @@ export default function TableView({
                           </span>
                         </td>
                         <td className="col-followup">
-                          {!lead.followupDate || !lead.followupTime ? (
+                          {/* A date alone is enough to have something booked.
+                              This required a TIME as well, and every preset in
+                              the task composer books all-day work with no time
+                              — so a lead with four calls booked still read
+                              "Set date" and looked untouched. */}
+                          {!lead.followupDate ? (
                             <button
                               type="button"
                               className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
@@ -223,8 +228,16 @@ export default function TableView({
                               <span>Set date</span>
                             </button>
                           ) : (
-                            <span
-                              className={`followup-date-text cursor-pointer transition-colors hover:text-royal-gold ${lead.urgent ? "followup-urgent text-destructive font-semibold hover:text-destructive" : ""}`}
+                            /* A button, not a clickable span. It opens the
+                               follow-up editor, so it has to be reachable by
+                               keyboard — and this branch now renders for every
+                               lead with work booked, not just the handful that
+                               happened to carry a time. The mobile card below
+                               was already a button. */
+                            <button
+                              type="button"
+                              title="Edit follow-up"
+                              className={`followup-date-text cursor-pointer border-0 bg-transparent p-0 text-left transition-colors hover:text-royal-gold ${lead.urgent ? "followup-urgent text-destructive font-semibold hover:text-destructive" : ""}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setFollowupLead(lead);
@@ -234,7 +247,7 @@ export default function TableView({
                                 lead.followupDate,
                                 lead.followupTime,
                               )}
-                            </span>
+                            </button>
                           )}
                         </td>
                         <td className="col-assigned">
@@ -432,7 +445,10 @@ export default function TableView({
                     <div>
                       <dt>Follow-up</dt>
                       <dd>
-                        {!lead.followupDate || !lead.followupTime ? (
+                        {/* Same rule as the desktop table above: a date alone
+                            means work is booked. Requiring a time hid every
+                            all-day task on mobile too. */}
+                        {!lead.followupDate ? (
                           <button
                             type="button"
                             className="mobile-inline-action"

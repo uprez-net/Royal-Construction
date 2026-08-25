@@ -9,6 +9,7 @@ import {
   dueDateFromPreset,
 } from "@/lib/leads/task-presets";
 import { createTask } from "@/lib/leads/task-service";
+import { sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
 import type { LeadTaskRow } from "@/lib/leads/task-service";
 import type { LeadTaskType } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -33,26 +34,63 @@ interface TaskFormProps {
  */
 export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProps) {
   const [type, setType] = useState<LeadTaskType>("CALL");
-  const [presetDays, setPresetDays] = useState<number | null>(7);
+  /**
+   * Three ways to answer "when", not two.
+   *
+   * The presets cover the intervals people already wrote in prose, but they
+   * cannot say "next Tuesday" or "the 14th", which is how a site meeting is
+   * actually booked. `custom` adds a real date; `none` is still a deliberate
+   * choice for work nobody has scheduled yet.
+   */
+  const [dueMode, setDueMode] = useState<"preset" | "custom" | "none">("preset");
+  const [presetDays, setPresetDays] = useState(7);
+  const [customDate, setCustomDate] = useState("");
+  /** Optional on any dated task. "Call them tomorrow at 9" needs the 9. */
+  const [dueTime, setDueTime] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function resolveDueDate(): string | null {
+    // Null is a real choice, not a missing value. A task with no date is work
+    // someone has not scheduled yet, and it needs to stay visible.
+    if (dueMode === "none") return null;
+    if (dueMode === "custom") {
+      // Sydney midnight, the same anchor the presets use, so a task booked for
+      // the 14th sorts against them correctly instead of landing a day out.
+      return sydneyStartOfDay(customDate).toISOString();
+    }
+    return dueDateFromPreset(presetDays, new Date()).toISOString();
+  }
+
   async function submit() {
+    if (dueMode === "custom") {
+      if (!customDate) {
+        setError("Pick a date, or choose No date.");
+        return;
+      }
+      // The input's `min` is a browser hint only — it does not stop a typed or
+      // pasted value, and nothing downstream rejects one. Work due before
+      // today would sort above everything and read as permanently overdue.
+      if (customDate < sydneyToday()) {
+        setError("That date has already passed. Pick today or later.");
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
       const task = await createTask({
         leadId,
         type,
-        // Null is a real choice, not a missing value. A task with no date is
-        // work someone has not scheduled yet, and it needs to be visible.
-        dueDate:
-          presetDays === null ? null : dueDateFromPreset(presetDays, new Date()).toISOString(),
+        dueDate: resolveDueDate(),
+        dueTime: dueMode === "none" ? null : dueTime || null,
         notes: notes.trim() || null,
       });
       onCreated(task);
       setNotes("");
+      setCustomDate("");
+      setDueTime("");
     } catch (err) {
       // fetchJson throws a FetchError carrying the server's message. Showing it
       // beats a generic sentence when the server had something specific to say.
@@ -65,7 +103,8 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
 
   // "" is the ToggleGroup value for "No date": the primitive uses the empty
   // string for deselected, and null cannot round-trip through it.
-  const dueValue = presetDays === null ? "" : String(presetDays);
+  const dueValue =
+    dueMode === "none" ? "" : dueMode === "custom" ? "custom" : String(presetDays);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -99,9 +138,14 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
           variant="outline"
           size="sm"
           value={dueValue}
-          onValueChange={(value) =>
-            setPresetDays(value === "" ? null : Number(value))
-          }
+          onValueChange={(value) => {
+            if (value === "") setDueMode("none");
+            else if (value === "custom") setDueMode("custom");
+            else {
+              setDueMode("preset");
+              setPresetDays(Number(value));
+            }
+          }}
           aria-label="Due date"
           className="flex-wrap"
         >
@@ -110,8 +154,43 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
               {p.label}
             </ToggleGroupItem>
           ))}
+          <ToggleGroupItem value="custom">Pick a date</ToggleGroupItem>
           <ToggleGroupItem value="">No date</ToggleGroupItem>
         </ToggleGroup>
+
+        {/* Only the two fields that are relevant to the choice above. A time on
+            a task with no date would never be shown or reminded on. */}
+        {dueMode !== "none" && (
+          <>
+            <Label className="text-xs text-muted-foreground">
+              {dueMode === "custom" ? "Date & time" : "Time"}
+            </Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {dueMode === "custom" && (
+                <Input
+                  type="date"
+                  aria-label="Due date"
+                  className="w-auto"
+                  // Sydney's today, not the browser's: a laptop set to another
+                  // timezone would otherwise reject a date that is valid here.
+                  min={sydneyToday()}
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                />
+              )}
+              <Input
+                type="time"
+                aria-label="Due time (optional)"
+                className="w-auto"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
+              />
+              <span className="text-xs text-muted-foreground">
+                {dueTime ? "Sydney time" : "Optional — all day if left blank"}
+              </span>
+            </div>
+          </>
+        )}
 
         <Label
           className="text-xs text-muted-foreground"

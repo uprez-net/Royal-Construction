@@ -5,9 +5,11 @@ import { toast } from "sonner";
 import {
   BadgeDollarSign,
   CalendarClock,
+  Check,
   CircleAlert,
   Loader2,
   Signpost,
+  Trash2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -22,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TaskForm } from "@/components/leads/task-form";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
 import {
@@ -294,6 +296,12 @@ export function LeadOverviewTab({
   // object comes from the list query and carries no tasks.
   const [openTasks, setOpenTasks] = useState<LeadTaskRow[]>([]);
 
+  // Keyed on the shared version as well as the lead, so this list refetches
+  // whenever a task is booked, closed, reopened or removed — from here or from
+  // anywhere else. Appending to local state alone was not enough: booking two
+  // tasks in quick succession showed only the first until the page was
+  // reloaded, which is the very complaint this panel exists to answer.
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
   useEffect(() => {
     const controller = new AbortController();
     fetchOpenTasks(controller.signal)
@@ -303,7 +311,7 @@ export function LeadOverviewTab({
         console.error("Could not load tasks for this lead", err);
       });
     return () => controller.abort();
-  }, [lead.id]);
+  }, [lead.id, tasksVersion]);
 
   const patch = (updates: Partial<LeadDetailFormData>) =>
     setForm((prev) => ({ ...prev, ...updates }));
@@ -725,6 +733,9 @@ export function LeadOverviewTab({
               leadName={lead.name}
               onCreated={(task) => {
                 setOpenTasks((prev) => [...prev, task]);
+                // Optimistic above, authoritative here: the bump refetches this
+                // list and moves the Tasks tab and the "Open tasks" card too.
+                dispatch(bumpLeadTasks());
                 // Adding a task can advance a New or Contacted lead into
                 // Discovery. The task carries the lead's stage as it is AFTER
                 // that move, so push it up rather than leaving the header and
@@ -754,13 +765,21 @@ export function LeadOverviewTab({
                             month: "short",
                           })
                         : "No date"}
+                      {/* The composer can book a time now, so show it. Without
+                          this a 9am site meeting reads the same as an all-day
+                          one and the person turns up whenever. */}
+                      {task.dueTime ? ` · ${task.dueTime}` : ""}
                     </span>
                     <span className="task-open-note" title={task.notes ?? undefined}>
                       {task.notes}
                     </span>
-                    <button
+                    {/* Real buttons, not near-invisible text. These were
+                        11.5px in muted grey and people could not find them. */}
+                    <Button
                       type="button"
-                      className="task-btn"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2.5 text-xs"
                       onClick={async () => {
                         try {
                           await completeTask(task.id);
@@ -773,14 +792,17 @@ export function LeadOverviewTab({
                         }
                       }}
                     >
+                      <Check className="size-3.5" aria-hidden="true" />
                       Done
-                    </button>
+                    </Button>
                     {/* Removing is not the same as closing. "Done" says the
                         call happened; this is for work that should never have
                         been booked, which previously had no exit at all. */}
-                    <button
+                    <Button
                       type="button"
-                      className="task-btn"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2.5 text-xs text-[var(--destructive-ink)] hover:bg-[var(--destructive-light)] hover:text-[var(--destructive-ink)]"
                       aria-label={`Remove task for ${lead.name}`}
                       onClick={async () => {
                         try {
@@ -793,8 +815,9 @@ export function LeadOverviewTab({
                         }
                       }}
                     >
+                      <Trash2 className="size-3.5" aria-hidden="true" />
                       Remove
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
