@@ -15,6 +15,7 @@ import {
   type ProjectWithStats,
   type SafeMilestone,
   type BudgetSummary,
+  TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import type { File as ProjectFiles } from "@prisma/client"
@@ -390,6 +391,17 @@ const projectsSlice = createSlice({
         chartRange: action.payload.range,
       };
     },
+    updateProjectTradieSchedule(state, action: PayloadAction<{ projectId: string; scheduleId: string; update: Partial<TradieScheduleWithTradieAndMilestone> }>) {
+      if (state.activeProject?.id === action.payload.projectId) {
+        const scheduleIndex = state.activeProject.tradieSchedules.findIndex((s) => s.id === action.payload.scheduleId);
+        if (scheduleIndex !== -1) {
+          state.activeProject.tradieSchedules[scheduleIndex] = {
+            ...state.activeProject.tradieSchedules[scheduleIndex],
+            ...action.payload.update,
+          };
+        }
+      }
+    },
     resetProjectDetailUiState(state, action: PayloadAction<string>) {
       if (action.payload === state.activeProject?.id) {
         state.activeProject = null;
@@ -682,6 +694,7 @@ export const {
   resetProjectDetailUiState,
   resetProjects,
   appendFileToProject,
+  updateProjectTradieSchedule,
 } = projectsSlice.actions;
 
 export const selectProjectsState = (state: RootState) => state.projects;

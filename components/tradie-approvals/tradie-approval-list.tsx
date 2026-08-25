@@ -174,11 +174,10 @@ export function TradieApprovalList() {
     }
     dispatch(
       openModal({
-        type: "approvalDetails",
+        type: "adminApproval",
         payload: {
-          approval,
-          onApprove: async () => await handleApprove(approval.id),
-          onReject: () => handleReject(approval.id),
+          approvalId: approval.id,
+          approvalType: approval.actionType,
         },
       }),
     );

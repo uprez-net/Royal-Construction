@@ -24,6 +24,7 @@ import {
 
 import type { TradieScheduleListItem } from "@/types/project";
 import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import { updateProjectTradieSchedule } from "@/lib/store/slices/projectsSlice";
 
 type ScheduleStatus =
   | "PENDING"
@@ -186,6 +187,13 @@ export function ConfirmStatusModal({
         .then(() => {
           setActiveLoading(null);
           setStatus(nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus);
+          dispatch(updateProjectTradieSchedule({
+            scheduleId: schedule.id,
+            projectId: schedule.projectId,
+            update: {
+              status: nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus as TradieScheduleStatus,
+            }
+          }))
           onOpenChange(false);
           onSuccess();
         })
