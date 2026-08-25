@@ -34,7 +34,11 @@ const BLOCKED: Record<OfferStatus, string | null> = {
   OFFER_SENT:
     "This offer is already out for signature with the customer. Create a revision to replace it — that recalls the document first.",
   OFFER_SIGNED:
-    "The customer has already signed this offer. Mark it agreed to generate the tender.",
+    // Two steps, not one: OFFER_SIGNED → AGREED, and the tender is drafted
+    // from AGREED. "Mark it agreed to generate the tender" read as though
+    // agreeing produced the document, so an estimator would go looking for a
+    // tender that isn't drafted yet.
+    "The customer has already signed this offer. Mark it agreed — the tender is drafted from there.",
   OFFER_DECLINED:
     "The customer declined this offer. Create a revision to send a new one.",
 

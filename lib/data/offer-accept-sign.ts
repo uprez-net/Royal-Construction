@@ -199,14 +199,28 @@ export async function sendOfferForSignature(input: {
     data: { offerStatus: OfferStatus.OFFER_SENT },
   });
   if (claim.count === 0) {
-    // Lost the race, or the status moved between the read above and here. Same
-    // wall as the guard, so give the same answer rather than a second wording
-    // of it that sends the estimator looking for a different problem.
+    // The row was not at SENT at that instant. A concurrent send is only one
+    // reason: another tab may have forked a revision (SUPERSEDED), marked the
+    // offer agreed, or taken it further down the lifecycle.
+    //
+    // So re-read rather than assume. Naming OFFER_SENT here would tell an
+    // estimator whose revision had just been superseded to "create a revision
+    // to replace it", which is both wrong and the exact fault this change set
+    // out to fix — a message reporting a status the offer is not in.
+    const current = await prisma.offer.findUnique({
+      where: { id: offer.id },
+      select: { offerStatus: true },
+    });
+    if (!current) {
+      return { ok: false, error: "This offer no longer exists." };
+    }
     return {
       ok: false,
       error:
-        describeAcceptanceSendBlock(OfferStatus.OFFER_SENT) ??
-        "The offer is already being sent for signature.",
+        describeAcceptanceSendBlock(current.offerStatus) ??
+        // Back at SENT already: the other send failed and released its claim
+        // between our attempt and this read.
+        "Someone else was sending this offer for signature just now. Try again.",
     };
   }
 
