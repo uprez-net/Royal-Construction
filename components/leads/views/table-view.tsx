@@ -80,10 +80,13 @@ export default function TableView({
 
   useEffect(() => {
     const controller = new AbortController();
-    setTasksError(false);
+    // Cleared on success rather than up front: a synchronous setState in an
+    // effect body cascades a render, and resetting here would flash the
+    // loading placeholder over an error that is about to be resolved anyway.
     fetchOpenTasks(controller.signal)
       .then((rows) => {
         setOpenTasks(rows);
+        setTasksError(false);
         setTasksLoaded(true);
       })
       .catch((err: unknown) => {
