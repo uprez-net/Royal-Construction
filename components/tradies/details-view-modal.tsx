@@ -4,10 +4,12 @@ import {
   CalendarDays,
   Check,
   Clock3,
+  Loader2,
   Mail,
   Pencil,
   Phone,
   Star,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
@@ -25,6 +27,9 @@ import { rateCurrency, dataTimeFormat, dateFormat } from "@/utils/formatters";
 import { daysUntil } from "@/utils/parser";
 import { RatingStars } from "../common/rating-stars";
 import { formatQuotedPrice } from "@/utils/calculations";
+import { useTransition } from "react";
+import { toast } from "sonner";
+import { fetchJson } from "@/utils/fetch";
 
 interface ViewDetailsModalProps {
   schedule: TradieUrgentReminderItem;
@@ -125,6 +130,7 @@ export function TradieScheduleDetailsModal({
   onCall,
   onUpdateStatus,
 }: ViewDetailsModalProps) {
+  const [isPending, startTransition] = useTransition();
   const item = {
     id: schedule.id,
     tradieId: "tradieId",
@@ -151,6 +157,29 @@ export function TradieScheduleDetailsModal({
 
   const daysLeft = daysUntil(new Date(schedule.scheduledDate));
   const daysBadge = getDaysBadge(daysLeft);
+
+  const handleDeleteSchedule = async () => {
+    try {
+      const response = await fetchJson<{ success: boolean; message: string }>(
+        `/api/tradie-schedules/${schedule.id}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+        },
+        "Failed to delete schedule",
+      );
+
+      if (response.success) {
+        toast.success("Schedule deleted successfully.");
+        onOpenChange(false);
+      } else {
+        throw new Error(response.data.message || "Failed to delete schedule");
+      }
+    } catch (error) {
+      console.error("Error deleting schedule:", error);
+      toast.error("Failed to delete schedule. Please try again.");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -405,20 +434,50 @@ export function TradieScheduleDetailsModal({
               {schedule.status !== "CONFIRMED" &&
                 schedule.status !== "COMPLETED" &&
                 schedule.status !== "DECLINED" && (
-                  <Button
-                    onClick={() => onMarkAsDone(item)}
-                    className={cn(
-                      "h-auto rounded-[7px]",
-                      "bg-primary px-3.5 py-1.75",
-                      "text-[12.5px] font-semibold text-primary-foreground",
-                      "transition-all duration-200",
-                      "hover:-translate-y-px",
-                      "hover:bg-primary/90",
-                    )}
-                  >
-                    <Check className="mr-1.5 h-3.5 w-3.5" />
-                    Mark Confirmed
-                  </Button>
+                  <>
+                    <Button
+                      disabled={isPending}
+                      onClick={() => onMarkAsDone(item)}
+                      className={cn(
+                        "h-auto rounded-[7px]",
+                        "bg-primary px-3.5 py-1.75",
+                        "text-[12.5px] font-semibold text-primary-foreground",
+                        "transition-all duration-200",
+                        "hover:-translate-y-px",
+                        "hover:bg-primary/90",
+                      )}
+                    >
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      Mark Confirmed
+                    </Button>
+
+                    <Button
+                      disabled={isPending}
+                      onClick={() =>
+                        startTransition(() => handleDeleteSchedule())
+                      }
+                      className={cn(
+                        "h-auto rounded-[7px]",
+                        "bg-red-500 px-3.5 py-1.75",
+                        "text-[12.5px] font-semibold text-primary-foreground",
+                        "transition-all duration-200",
+                        "hover:-translate-y-px",
+                        "hover:bg-red-600/90",
+                      )}
+                    >
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                          Delete Schedule
+                        </>
+                      )}
+                    </Button>
+                  </>
                 )}
 
               {(schedule.status === "NO_RESPONSE" ||
@@ -426,6 +485,7 @@ export function TradieScheduleDetailsModal({
                 schedule.status === "AWAITING_QUOTE" ||
                 schedule.status === "PENDING_RESPONSE") && (
                 <Button
+                  disabled={isPending}
                   onClick={() => onCall(item)}
                   className={cn(
                     "h-auto rounded-[7px]",
@@ -443,6 +503,7 @@ export function TradieScheduleDetailsModal({
 
               <Button
                 variant="outline"
+                disabled={isPending}
                 onClick={() => onSendReminder(item)}
                 className={cn(
                   "h-auto rounded-[7px]",
@@ -461,6 +522,7 @@ export function TradieScheduleDetailsModal({
               {onUpdateStatus && (
                 <Button
                   variant="outline"
+                  disabled={isPending}
                   onClick={() => onUpdateStatus(item)}
                   className={cn(
                     "h-auto rounded-[7px]",

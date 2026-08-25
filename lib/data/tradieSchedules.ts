@@ -526,3 +526,29 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
   }
 
 }
+
+export async function deleteTradieSchedule(scheduleId: string) {
+  try {
+    const existingSchedule = await prisma.tradieSchedule.findUnique({
+      where: { id: scheduleId },
+    });
+    if (!existingSchedule) {
+      throw new Error("Schedule not found");
+    }
+    await userHasAccessToSchedule(existingSchedule.projectId);
+    const deletedSchedule = await prisma.tradieSchedule.delete({
+      where: { id: scheduleId },
+    });
+
+    after(async () => {
+      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+      revalidateTag(`project-${deletedSchedule.projectId}`, CACHE_PROFILES.MEDIUM);
+    });
+
+    return { success: true, message: "Schedule deleted successfully." };
+  } catch (error) {
+    console.error("Error deleting tradie schedule:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to delete tradie schedule." };
+  }
+}

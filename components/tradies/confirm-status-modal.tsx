@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 
 import type { TradieScheduleListItem } from "@/types/project";
+import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 
 type ScheduleStatus =
   | "PENDING"
@@ -44,7 +45,7 @@ const statusOptions: {
   border: string;
 }[] = [
   {
-    value: "CONFIRMED",
+    value: "AWAITING_ADMIN_APPROVAL",
     label: "Confirmed",
     description: "Tradie confirmed and will attend",
     icon: <CheckCircle2 className="h-5 w-5" />,
@@ -250,6 +251,8 @@ export function ConfirmStatusModal({
               const isLoading =
                 activeLoading === option.value ||
                 (pendingFromStore && isPending);
+
+              if(!TRADIE_SCHEDULE_STATE_MACHINE[schedule.status].includes(option.value as TradieScheduleStatus)) return null;
 
               return (
                 <button
