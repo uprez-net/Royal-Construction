@@ -4,24 +4,24 @@ export const RC_SITE = 'https://royalconstructions.com.au';
 export const RC_MAIN_APP = 'https://royal-construction-chi.vercel.app';
 
 export const RC_COLORS = {
-  dark: '#070E1A',
-  container: '#0C1829',
-  card: '#0F1E33',
-  border: '#1A2A42',
-  footer: '#091320',
+  dark: '#F1EDE3',
+  container: '#F7F5EF',
+  card: '#FCFBF7',
+  border: '#DED9CE',
+  footer: '#EEEAE1',
   gold: '#C6923A',
   goldLight: '#D4A034',
   white: '#FFFFFF',
-  text: '#B8C4D6',
-  muted: '#8A9BB5',
-  dimmed: '#3A4E68',
+  text: '#334155',
+  muted: '#667085',
+  dimmed: '#98A2B3',
   light: '#F7F6F2',
-  label: '#6B7F9E',
-  highlight: '#D0DAE8',
-  ctaText: '#0C1829',
-  accreditedLabel: '#1A2A42',
-  textOnLight: '#0C1829',
-  textMutedOnLight: '#475569',
+  label: '#5B6573',
+  highlight: '#E8E4DA',
+  ctaText: '#2F3742',
+  accreditedLabel: '#5B6573',
+  textOnLight: '#2F3742',
+  textMutedOnLight: '#667085',
 } as const;
 
 export const RC_URLS = {

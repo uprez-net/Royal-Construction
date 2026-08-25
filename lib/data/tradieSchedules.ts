@@ -552,3 +552,26 @@ export async function deleteTradieSchedule(scheduleId: string) {
     return { success: false, message: error instanceof Error ? error.message : "Failed to delete tradie schedule." };
   }
 }
+
+/**
+ * Sends a reminder email to a tradie regarding their scheduled task.
+ * @param to - The email address of the tradie.
+ * @param subject - The subject of the reminder email.
+ * @param body - The body content of the reminder email.
+ * @returns An object indicating the success or failure of the email sending operation.
+ * @throws {Error} If the email sending operation fails.
+ */
+export async function sendTradieScheduleReminder({ to, subject, body }: { to: string; subject: string; body: string }) {
+  try {
+    await sendEmail({
+      to,
+      subject,
+      body,
+    });
+
+    return { success: true, message: "Reminder sent successfully." };
+  } catch (error) {
+    console.error("Error sending tradie schedule reminder:", error);
+    throw new Error("Failed to send tradie schedule reminder.");
+  }
+}
