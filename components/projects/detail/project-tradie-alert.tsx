@@ -46,15 +46,13 @@ export function ProjectTradieAlert({ project }: { project: ProjectDetail }) {
           className="flex items-center gap-2 text-base font-semibold text-foreground"
         >
           <Bell className="size-4 text-warning-ink" aria-hidden="true" />
-          Upcoming tradie alerts
+          Upcoming alerts
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-5">
         {tradieAlerts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {project.tradieSchedules.length === 0
-              ? "No tradies are scheduled on this project yet."
-              : "No tradie schedules need attention in the next week."}
+            No upcoming alerts for this project.
           </p>
         ) : (
           tradieAlerts.slice(0, 4).map((schedule) => (
