@@ -852,6 +852,7 @@ function HbcfInsuranceBlock({
   onUpload: (files: DBFile[]) => void;
 }) {
   const id = useId();
+  const dispatch = useAppDispatch();
   const hasNumber = (insuranceNumber ?? "").trim().length > 0;
 
   return (
@@ -902,16 +903,28 @@ function HbcfInsuranceBlock({
             "border-destructive/25 bg-destructive-light text-destructive-ink",
           )}
         >
-          <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 h-4 w-4 shrink-0"
+          />
           <p>Upload the insurance document to update the no.</p>
         </div>
       )}
 
       {document?.url ? (
-        <a
-          href={document.url}
-          target="_blank"
-          rel="noreferrer"
+        <Button
+          type="button"
+          onClick={() =>
+            dispatch(
+              openModal({
+                type: "previewFile",
+                payload: { fileUrl: document.url },
+              }),
+            )
+          }
+          aria-label={`Open the hbcf insurance document in a new tab`}
+          variant="ghost"
+          size="sm"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
         >
           <FileText aria-hidden="true" className="h-3.5 w-3.5" />
@@ -919,7 +932,7 @@ function HbcfInsuranceBlock({
             {document.fileName || "HBCF insurance certificate"}
           </span>
           <ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0" />
-        </a>
+        </Button>
       ) : null}
     </div>
   );

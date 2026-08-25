@@ -172,7 +172,7 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
               )}
             </span>
             <span aria-hidden="true">|</span>
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1" key={hbcfInsuranceNumber}>
               <ShieldCheck className="size-3.5" aria-hidden="true" />
               HBCF Number{" "}
               {hbcfInsuranceMissing ? (
