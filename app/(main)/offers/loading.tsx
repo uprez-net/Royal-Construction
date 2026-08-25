@@ -53,8 +53,8 @@ export default function OfferPageSkeleton() {
         <div className="px-6 pb-6">
           <div className="overflow-hidden rounded-lg border">
             {/* Header */}
-            <div className="grid grid-cols-9 gap-4 border-b bg-muted/40 px-4 py-4">
-              {Array.from({ length: 9 }).map((_, index) => (
+            <div className="grid grid-cols-11 gap-4 border-b bg-muted/40 px-4 py-4">
+              {Array.from({ length: 11 }).map((_, index) => (
                 <Skeleton key={index} className="h-4 w-full max-w-20" />
               ))}
             </div>
@@ -63,15 +63,17 @@ export default function OfferPageSkeleton() {
             {Array.from({ length: 5 }).map((_, row) => (
               <div
                 key={row}
-                className="grid grid-cols-9 gap-4 border-b px-4 py-5 last:border-0"
+                className="grid grid-cols-11 gap-4 border-b px-4 py-5 last:border-0"
               >
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-10" />
+                <Skeleton className="size-4 rounded-md" />
                 <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-5 w-20 rounded-full" />
                 <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-12" />
                 <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-20" />
                 <Skeleton className="h-4 w-20" />
                 <Skeleton className="h-6 w-20 rounded-full" />
               </div>

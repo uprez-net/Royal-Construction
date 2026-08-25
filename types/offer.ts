@@ -55,12 +55,48 @@ export type PaginatedOfferResult = {
     totalPages: number;
 }
 
-interface KPIResult {
+/**
+ * One lead's whole revision family, collapsed into a single table row.
+ *
+ * An offer is unique per lead: every re-price creates another `Offer` row in the
+ * same revision family (ADR 0002), so a flat `Offer` listing repeats the same
+ * client once per revision. The offers table paginates over these groups, not
+ * over `Offer` rows.
+ */
+export interface OfferGroup {
+    leadId: number;
+    lead: Lead;
+    /** `baseReference` of the representative offer, or a `OF-<leadId>` fallback. */
+    reference: string;
+    /**
+     * The revision the group speaks for: the active one, else the highest
+     * revision number. Its status/amounts drive the collapsed row.
+     */
+    latest: OfferWithLead;
+    /** Every revision in the family, newest first. Always includes `latest`. */
+    revisions: OfferWithLead[];
+    versionCount: number;
+}
+
+export type PaginatedOfferGroupResult = {
+    items: OfferGroup[];
+    page: number;
+    limit: number;
+    /** Leads with at least one offer — what the page count is derived from. */
+    totalCount: number;
+    /** Individual revisions across those leads. Only shown as a caption. */
+    totalOfferCount: number;
+    totalPages: number;
+}
+
+export interface KPIResult {
     total: number;
     trendDelta: number;
 }
 
 export interface OfferKPIs {
+    /** Offer revisions across every lead — the KPI totals count leads, not revisions. */
+    totalVersions: number;
     allOffers: KPIResult;
     pendingOffers: KPIResult;
     approvedOffers: KPIResult;

@@ -6,6 +6,7 @@ import { Input } from "../ui/input";
 import { useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchOffers } from "@/lib/store/slices/offerSlice";
+import type { OfferStatus } from "@prisma/client";
 
 type TabId = "all" | "pending" | "approved" | "rejected" | "sent";
 
@@ -29,12 +30,17 @@ export function OfferFilter({
         totalCount: initialTotalCount,
       };
     }
+    // Counted off each group's representative revision so a client with four
+    // revisions contributes one, matching what the table now renders.
+    const statusOf = (status: OfferStatus) =>
+      offers.items.filter((group) => group.latest.offerStatus === status).length;
+
     const counts: Record<TabId, number> = {
       all: offers.totalCount,
-      pending: offers.items.filter((o) => o.offerStatus === "PENDING").length,
-      approved: offers.items.filter((o) => o.offerStatus === "ACCEPTED").length,
-      rejected: offers.items.filter((o) => o.offerStatus === "REJECTED").length,
-      sent: offers.items.filter((o) => o.offerStatus === "SENT").length,
+      pending: statusOf("PENDING"),
+      approved: statusOf("ACCEPTED"),
+      rejected: statusOf("REJECTED"),
+      sent: statusOf("SENT"),
     };
     return {
       tabCounts: counts,

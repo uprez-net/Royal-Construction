@@ -1,11 +1,10 @@
-import { getOffers, updateOfferStatus } from "@/lib/data/offers";
-import { PaginatedOfferResult } from "@/types/offer";
+import { getOfferGroups, updateOfferStatus } from "@/lib/data/offers";
+import { PaginatedOfferGroupResult } from "@/types/offer";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { OfferWithLead } from "@/types/offer";
 import { OfferStatus } from "@prisma/client";
 
 interface OffersState {
-    offers: PaginatedOfferResult;
+    offers: PaginatedOfferGroupResult;
     loading: boolean;
     error: string | null;
 }
@@ -16,6 +15,7 @@ const initialState: OffersState = {
         page: 1,
         limit: 10,
         totalCount: 0,
+        totalOfferCount: 0,
         totalPages: 1,
     },
     loading: false,
@@ -26,7 +26,7 @@ export const fetchOffers = createAsyncThunk(
     "offers/fetchOffers",
     async (params: { page?: number; limit?: number; q?: string }, thunkAPI) => {
         try {
-            const res = await getOffers(params.page, params.limit, params.q);
+            const res = await getOfferGroups(params.page, params.limit, params.q);
 
             return res;
         } catch (error) {
@@ -51,14 +51,9 @@ const offersSlice = createSlice({
     name: "offers",
     initialState,
     reducers: {
-        setOffers(state, action: PayloadAction<PaginatedOfferResult>) {
+        setOffers(state, action: PayloadAction<PaginatedOfferGroupResult>) {
             state.offers = action.payload;
         },
-        addOffer(state, action: PayloadAction<OfferWithLead>) {
-            state.offers.items.unshift(action.payload);
-            state.offers.totalCount += 1;
-            state.offers.totalPages = Math.max(1, Math.ceil(state.offers.totalCount / state.offers.limit));
-        }   
     },
     extraReducers: (builder) => {
         builder
@@ -79,9 +74,24 @@ const offersSlice = createSlice({
             })
             .addCase(updateOffer.fulfilled, (state, action) => {
                 const updatedOffer = action.payload;
-                const index = state.offers.items.findIndex((offer) => offer.id === updatedOffer.id);
-                if (index !== -1) {
-                    state.offers.items[index].offerStatus = updatedOffer.offerStatus;
+
+                // The status can be changed from the collapsed row (which acts on
+                // the representative revision) or from any row of the expanded
+                // version history, so the revision has to be located inside its
+                // group rather than by a top-level index. `latest` is the same
+                // object identity as its entry in `revisions` only before Immer
+                // drafts them, so both are patched explicitly.
+                for (const group of state.offers.items) {
+                    if (group.leadId !== updatedOffer.leadId) continue;
+
+                    const revision = group.revisions.find((item) => item.id === updatedOffer.id);
+                    if (revision) revision.offerStatus = updatedOffer.offerStatus;
+
+                    if (group.latest.id === updatedOffer.id) {
+                        group.latest.offerStatus = updatedOffer.offerStatus;
+                    }
+
+                    break;
                 }
             })
             .addCase(updateOffer.rejected, (state, action) => {
@@ -90,5 +100,5 @@ const offersSlice = createSlice({
     }
 });
 
-export const { setOffers, addOffer } = offersSlice.actions;
+export const { setOffers } = offersSlice.actions;
 export default offersSlice.reducer;

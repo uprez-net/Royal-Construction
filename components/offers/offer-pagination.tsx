@@ -8,11 +8,15 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { PaginatedOfferResult } from "@/types/offer";
-import { useMemo, useState } from "react";
+import { PaginatedOfferGroupResult } from "@/types/offer";
+import { useMemo } from "react";
 
-export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOfferResult; onPageChange: (page: number) => void }) {
-  const [currentPage, setCurrentPage] = useState(offers.page);
+export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOfferGroupResult; onPageChange: (page: number) => void }) {
+  // Read the page off the fetched result rather than holding a second copy in
+  // state: a local `useState(offers.page)` initialiser never re-syncs, so the
+  // window of page numbers and the highlighted page drifted apart after a
+  // search reset the result to page 1.
+  const currentPage = offers.page;
   const paginationItems = useMemo(() => {
     const totalPages = offers.totalPages;
 
@@ -38,6 +42,9 @@ export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOff
         <div className="space-y-3 pt-2">
           <div className="text-center text-xs text-muted-foreground">
             Showing {offers.items.length} of {offers.totalCount} offers
+            {offers.totalOfferCount > offers.totalCount
+              ? ` (${offers.totalOfferCount} versions in total)`
+              : null}
           </div>
           <Pagination>
             <PaginationContent>
@@ -47,10 +54,9 @@ export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOff
                   onClick={(event) => {
                     event.preventDefault();
                     const page = Math.max(1, currentPage - 1);
-                    setCurrentPage(page);
-                    onPageChange(page);
+                    if (page !== currentPage) onPageChange(page);
                   }}
-                  aria-disabled={offers.page === 1}
+                  aria-disabled={currentPage === 1}
                 />
               </PaginationItem>
               {paginationItems.map((item, index) =>
@@ -62,11 +68,10 @@ export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOff
                   <PaginationItem key={item}>
                     <PaginationLink
                       href="#"
-                      isActive={item === offers.page}
+                      isActive={item === currentPage}
                       onClick={(event) => {
                         event.preventDefault();
-                        setCurrentPage(item);
-                        onPageChange(item);
+                        if (item !== currentPage) onPageChange(item);
                       }}
                     >
                       {item}
@@ -80,10 +85,9 @@ export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOff
                   onClick={(event) => {
                     event.preventDefault();
                     const page = Math.min(offers.totalPages, currentPage + 1);
-                    setCurrentPage(page);
-                    onPageChange(page);
+                    if (page !== currentPage) onPageChange(page);
                   }}
-                  aria-disabled={offers.page >= offers.totalPages}
+                  aria-disabled={currentPage >= offers.totalPages}
                 />
               </PaginationItem>
             </PaginationContent>
