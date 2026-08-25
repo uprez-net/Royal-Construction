@@ -484,6 +484,7 @@ export async function createProjectWithLead({
     const dateBlockers = collectProjectDateBlockers({
       signedDate: requirementsWithSignedDate.legalAdministration?.signedDate ?? null,
       startDate,
+      hbcfInsuranceNumber: requirementsWithSignedDate.legalAdministration?.hbcfInsuranceNumber ?? null,
       pcaInspector: requirementsWithSignedDate.legalAdministration?.pcaInspector ?? null,
       status: "ACTIVE",
     });

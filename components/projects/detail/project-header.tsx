@@ -31,6 +31,7 @@ type ProjectRequirementsHeader = {
     pcaInspector?: string | null;
     insuranceClaimStartDate?: string | null;
     insuranceClaimEndDate?: string | null;
+    hbcfInsuranceNumber?: string | null;
   };
 };
 
@@ -59,11 +60,16 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
     Boolean(rawSignedDate) && !normalizedSignedDate;
 
   const pcaInspector = legal.pcaInspector;
+  const hbcfInsuranceNumber = legal.hbcfInsuranceNumber;
+  const hbcfInsuranceMissing = !hbcfInsuranceNumber || hbcfInsuranceNumber.trim() === "";
   const pcaMissing = !pcaInspector || pcaInspector.trim() === "";
 
   const statusTone = projectStatusConfig(project.status);
   const showPcaWarning =
     pcaMissing &&
+    (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+  const showHbcfWarning =
+    hbcfInsuranceMissing &&
     (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
@@ -163,6 +169,33 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                 )
               ) : (
                 <span className="font-mono tabular-nums">{pcaInspector}</span>
+              )}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <ShieldCheck className="size-3.5" aria-hidden="true" />
+              HBCF Number{" "}
+              {hbcfInsuranceMissing ? (
+                showHbcfWarning ? (
+                  <Link
+                    href={legalSectionAnchor}
+                    aria-label="HBCF number not set — click to add"
+                    className="inline-flex items-center gap-1 rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <StatusPill tone="warning">
+                      <Plus className="size-3" aria-hidden="true" />
+                      Not set
+                    </StatusPill>
+                  </Link>
+                ) : (
+                  <Link
+                    href={legalSectionAnchor}
+                    className="rounded-md text-warning-ink transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {NOT_SET}
+                  </Link>
+                )
+              ) : (
+                <span className="font-mono tabular-nums">{hbcfInsuranceNumber}</span>
               )}
             </span>
           </div>

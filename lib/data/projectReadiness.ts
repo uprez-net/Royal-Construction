@@ -25,6 +25,7 @@ export type CollectProjectDateBlockersInput = {
   readonly signedDate: string | null | undefined;
   readonly startDate: string | null | undefined;
   readonly pcaInspector: string | null | undefined;
+  readonly hbcfInsuranceNumber: string | null | undefined;
   readonly status: ProjectStatus | string;
 };
 
@@ -52,6 +53,7 @@ export function collectProjectDateBlockers({
   signedDate,
   startDate,
   pcaInspector,
+  hbcfInsuranceNumber,
   status,
 }: CollectProjectDateBlockersInput): readonly ProjectDateBlocker[] {
   const blockers: ProjectDateBlocker[] = [];
@@ -87,12 +89,24 @@ export function collectProjectDateBlockers({
 
   const pcaMissing =
     !pcaInspector || (typeof pcaInspector === "string" && pcaInspector.trim() === "");
+  const hbcfInsuranceMissing =
+    !hbcfInsuranceNumber || (typeof hbcfInsuranceNumber === "string" && hbcfInsuranceNumber.trim() === "");
   if (pcaMissing && status === "ACTIVE") {
     blockers.push({
       id: "pca_missing",
       label:
         "No PCA inspector is assigned. Add one before the build goes on site so the principal certifier is on record.",
       fieldPath: "requirements.legalAdministration.pcaInspector",
+      severity: "warn",
+    });
+  }
+
+  if (hbcfInsuranceMissing && status === "ACTIVE") {
+    blockers.push({
+      id: "hbcf_missing",
+      label:
+        "No HBCF insurance number is assigned. Add one before the build goes on site so the insurance is on record.",
+      fieldPath: "requirements.legalAdministration.hbcfInsuranceNumber",
       severity: "warn",
     });
   }
