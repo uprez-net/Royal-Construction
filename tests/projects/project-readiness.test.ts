@@ -16,6 +16,7 @@ test("block: start date before signed date", () => {
     signedDate: "2026-06-12",
     startDate: "2026-05-01",
     pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -30,6 +31,7 @@ test("block: signed date more than a year before start date", () => {
     signedDate: "2026-01-01",
     startDate: "2027-06-01",
     pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -43,6 +45,7 @@ test("no blockers when dates are valid and start is after signed", () => {
     signedDate: "2026-06-12",
     startDate: "2026-07-01",
     pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -58,6 +61,7 @@ test("warn: PCA missing on an ACTIVE project", () => {
     signedDate: "2026-06-12",
     startDate: "2026-07-01",
     pcaInspector: null,
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -72,6 +76,7 @@ test("warn: PCA missing on a NEEDS_ATTENTION project is also flagged", () => {
     signedDate: "2026-06-12",
     startDate: "2026-07-01",
     pcaInspector: "",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "NEEDS_ATTENTION",
   });
 
@@ -86,6 +91,7 @@ test("warn: unparseable signed date", () => {
     signedDate: "not-a-date",
     startDate: "2026-07-01",
     pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -100,6 +106,7 @@ test("no warn for empty signed date (it is just not set)", () => {
     signedDate: null,
     startDate: "2026-07-01",
     pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -115,6 +122,7 @@ test("PCA missing does not warn when status is not ACTIVE", () => {
     signedDate: "2026-06-12",
     startDate: "2026-07-01",
     pcaInspector: null,
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "COMPLETED",
   });
 
@@ -133,6 +141,7 @@ test("start_before_signed and pca_missing can both fire", () => {
     signedDate: "2026-06-12",
     startDate: "2026-05-01",
     pcaInspector: null,
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -153,6 +162,7 @@ test("partitionBlockers splits blocks and warns", () => {
     signedDate: "2026-06-12",
     startDate: "2026-05-01",
     pcaInspector: null,
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
 
@@ -178,6 +188,7 @@ test("ProjectDateBlockerError carries the blocker list and a message", () => {
     signedDate: "2026-06-12",
     startDate: "2026-05-01",
     pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: 'HBCF-123456',
     status: "ACTIVE",
   });
   const { blocks } = partitionBlockers(blockers);
@@ -185,4 +196,33 @@ test("ProjectDateBlockerError carries the blocker list and a message", () => {
   assert.equal(err.name, "ProjectDateBlockerError");
   assert.equal(err.blockers.length, 1);
   assert.ok(err.message.includes("start date"), `message should mention the start date: ${err.message}`);
+});
+
+// Add more test for `hbcfInsuranceNumber` 
+test("warn: HBCF insurance number missing on an ACTIVE project", () => {
+  const blockers = collectProjectDateBlockers({
+    signedDate: "2026-06-12",
+    startDate: "2026-07-01",
+    pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: null,
+    status: "ACTIVE",
+  });
+
+  const warn = blockers.find((b) => b.id === "hbcf_missing");
+  assert.ok(warn, "expected a hbcf_insurance_missing blocker");
+  assert.equal(warn!.severity, "warn");
+  assert.equal(warn!.fieldPath, "requirements.legalAdministration.hbcfInsuranceNumber");
+});
+
+test("no warn for HBCF insurance number missing when status is not ACTIVE", () => {
+  const blockers = collectProjectDateBlockers({
+    signedDate: "2026-06-12",
+    startDate: "2026-07-01",
+    pcaInspector: "Inspector Lee",
+    hbcfInsuranceNumber: null,
+    status: "COMPLETED",
+  });
+  
+  const warn = blockers.find((b) => b.id === "hbcf_missing");
+  assert.equal(warn, undefined, "expected no hbcf_insurance_missing blocker");
 });
