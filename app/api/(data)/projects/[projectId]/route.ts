@@ -135,6 +135,7 @@ export async function PATCH(
       legalAdministration?: {
         signedDate?: string | null;
         pcaInspector?: string | null;
+        hbcfInsuranceNumber?: string | null;
       };
     };
     const incomingRequirements = body.data.requirements as
@@ -162,6 +163,7 @@ export async function PATCH(
     const dateBlockers = collectProjectDateBlockers({
       signedDate: effectiveSignedDate,
       startDate: effectiveStartDate,
+      hbcfInsuranceNumber: mergedRequirements.legalAdministration?.hbcfInsuranceNumber ?? null,
       pcaInspector: mergedRequirements.legalAdministration?.pcaInspector ?? null,
       status: existingProject.status,
     });
