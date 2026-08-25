@@ -155,6 +155,37 @@ export const notificationSchemas = {
         trade: z.string(),
     }),
 
+    tradieScheduleDeletionRequest: z.object({
+        approvalId: z.string(),
+        scheduleId: z.string(),
+        projectId: z.string(),
+        projectName: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string().optional(),
+        scheduledDate: z.string(),
+        durationDays: z.number(),
+        cost: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        reason: z.string(),
+        requestedBy: z.string(),
+    }),
+
+    tradieScheduleDeletionResolved: z.object({
+        approvalId: z.string(),
+        scheduleId: z.string(),
+        projectId: z.string(),
+        projectName: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string().optional(),
+        scheduledDate: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        approved: z.boolean(),
+    }),
+
     tradieScheduleApproved: z.object({
         approvalId: z.string(),
         scheduleId: z.string(),

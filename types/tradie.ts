@@ -87,6 +87,11 @@ export interface DeleteInput {
     reason: string;
 }
 
+export interface DeleteScheduleInput {
+    scheduleId: string;
+    reason: string;
+}
+
 export interface TradieTableQuery {
     search?: string;
     category?: string;
@@ -123,6 +128,24 @@ export interface ScheduleApprovalJsonPayload {
     cost: string;
 }
 
+/**
+ * Recorded on a SCHEDULE_DELETION approval so the admin queue can describe the
+ * booking being removed without holding a reference to a row that is about to
+ * disappear, and so the resolver knows which schedule to delete.
+ */
+export interface ScheduleDeletionJsonPayload {
+    scheduleId: string;
+    projectId: string;
+    projectName: string;
+    milestoneId?: string;
+    milestoneName: string;
+    scheduledDate: string;
+    durationDays: number;
+    cost: string;
+    /** The status the schedule sat in when removal was requested. */
+    currentStatus: TradieScheduleStatus;
+}
+
 export interface PriceUpdateJsonPayload {
     newHourlyRate: number;
     newPriceUnit?: TradiePriceUnit;
@@ -135,7 +158,7 @@ export interface IncidentReportJsonPayload {
     incidentDescription: string;
 }
 
-export type TradieApprovalPayload = ScheduleApprovalJsonPayload | PriceUpdateJsonPayload | IncidentReportJsonPayload | undefined;
+export type TradieApprovalPayload = ScheduleApprovalJsonPayload | ScheduleDeletionJsonPayload | PriceUpdateJsonPayload | IncidentReportJsonPayload | undefined;
 
 export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy" | "updationData"> {
     tradie: SafeTradie;

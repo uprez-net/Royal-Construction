@@ -123,6 +123,23 @@ export const updateTradieScheduleSchema = z.object({
 export type UpdateTradieScheduleInput = z.infer<typeof updateTradieScheduleSchema>;
 
 /**
+ * Request removal of a tradie schedule.
+ *
+ * Deleting a booking is not immediate — the request goes to an admin, and the
+ * reason is the whole of what they have to decide on, so it is required rather
+ * than optional.
+ */
+export const deleteTradieScheduleSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(1, "A reason for the deletion is required")
+    .max(500, "Reason must be 500 characters or fewer"),
+});
+
+export type DeleteTradieScheduleInput = z.infer<typeof deleteTradieScheduleSchema>;
+
+/**
  * Tradie schedule route params
  */
 export const scheduleParamSchema = z.object({

@@ -19,6 +19,7 @@ import type {
 import { CreateProjectModal } from "../projects/create-project-modal";
 import { ReminderModal } from "../tradies/reminder-send-modal";
 import { TradieScheduleDetailsModal } from "../tradies/details-view-modal";
+import { DeleteScheduleModal } from "../tradies/delete-schedule-modal";
 import {
   clearSelectedSchedules,
   fetchTradieCoordinationDashboard,
@@ -115,6 +116,14 @@ export function ModalManager() {
     } finally {
       toast.dismiss(loading);
     }
+  };
+
+  // Removing a booking is an approval request, not a delete — the reason
+  // prompt collects what the admin will read.
+  const handleRequestScheduleDeletion = (row: TradieScheduleListItem) => {
+    dispatch(
+      openModal({ type: "deleteTradieSchedule", payload: { schedule: row } }),
+    );
   };
 
   const handleUpdateRowStatus = (row: TradieScheduleListItem) => {
@@ -281,8 +290,35 @@ export function ModalManager() {
           onSendReminder={handleRowReminder}
           onCall={handleRowCallLogged}
           onUpdateStatus={handleUpdateRowStatus}
+          onRequestDelete={handleRequestScheduleDeletion}
         />
       );
+    case "deleteTradieSchedule": {
+      const scheduleToRemove = modal.payload?.schedule as
+        | TradieScheduleListItem
+        | undefined;
+
+      if (!scheduleToRemove) {
+        return null;
+      }
+
+      return (
+        <DeleteScheduleModal
+          open
+          schedule={{
+            id: scheduleToRemove.id,
+            tradieName: scheduleToRemove.tradieName,
+            tradeType: scheduleToRemove.tradeType,
+            projectName: scheduleToRemove.projectName,
+            scheduledDate: scheduleToRemove.scheduledDate,
+          }}
+          onClose={handleClose}
+          onSuccess={() => {
+            dispatch(fetchTradieCoordinationDashboard({ force: true }));
+          }}
+        />
+      );
+    }
     case "projectDetail": {
       const { project: statProject, isAdmin } = modal.payload as {
         project: ProjectWithStats;

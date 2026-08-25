@@ -31,6 +31,7 @@ const initialState: TradieApprovalState = {
         incidentReportCount: 0,
         deletionCount: 0,
         scheduleCount: 0,
+        scheduleDeletionCount: 0,
         resolvedCount: {
             accepted: 0,
             rejected: 0,
@@ -143,6 +144,9 @@ const tradieApprovalSlice = createSlice({
                                 break;
                             case "SCHEDULE_APPROVAL":
                                 state.kpiData.scheduleCount -= 1;
+                                break;
+                            case "SCHEDULE_DELETION":
+                                state.kpiData.scheduleDeletionCount -= 1;
                                 break;
                         }
                     }

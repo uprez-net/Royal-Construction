@@ -10,6 +10,7 @@ export type ModalType =
   | "createProject"
   | "tradieReminder"
   | "tradieScheduleDetails"
+  | "deleteTradieSchedule"
   | "projectDetail"
   | "addMaterial"
   | "viewPicture"

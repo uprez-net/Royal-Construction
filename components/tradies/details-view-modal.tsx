@@ -4,7 +4,6 @@ import {
   CalendarDays,
   Check,
   Clock3,
-  Loader2,
   Mail,
   Pencil,
   Phone,
@@ -27,9 +26,6 @@ import { rateCurrency, dataTimeFormat, dateFormat } from "@/utils/formatters";
 import { daysUntil } from "@/utils/parser";
 import { RatingStars } from "../common/rating-stars";
 import { formatQuotedPrice } from "@/utils/calculations";
-import { useTransition } from "react";
-import { toast } from "sonner";
-import { fetchJson } from "@/utils/fetch";
 
 interface ViewDetailsModalProps {
   schedule: TradieUrgentReminderItem;
@@ -39,6 +35,8 @@ interface ViewDetailsModalProps {
   onSendReminder: (item: TradieScheduleListItem) => void;
   onCall: (item: TradieScheduleListItem) => void;
   onUpdateStatus?: (item: TradieScheduleListItem) => void;
+  /** Opens the reason prompt that sends the removal for admin approval. */
+  onRequestDelete: (item: TradieScheduleListItem) => void;
 }
 
 function getStatusStyles(status: string) {
@@ -129,8 +127,8 @@ export function TradieScheduleDetailsModal({
   onSendReminder,
   onCall,
   onUpdateStatus,
+  onRequestDelete,
 }: ViewDetailsModalProps) {
-  const [isPending, startTransition] = useTransition();
   const item = {
     id: schedule.id,
     tradieId: "tradieId",
@@ -157,29 +155,6 @@ export function TradieScheduleDetailsModal({
 
   const daysLeft = daysUntil(new Date(schedule.scheduledDate));
   const daysBadge = getDaysBadge(daysLeft);
-
-  const handleDeleteSchedule = async () => {
-    try {
-      const response = await fetchJson<{ success: boolean; message: string }>(
-        `/api/tradie-schedules/${schedule.id}`,
-        {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-        },
-        "Failed to delete schedule",
-      );
-
-      if (response.success) {
-        toast.success("Schedule deleted successfully.");
-        onOpenChange(false);
-      } else {
-        throw new Error(response.data.message || "Failed to delete schedule");
-      }
-    } catch (error) {
-      console.error("Error deleting schedule:", error);
-      toast.error("Failed to delete schedule. Please try again.");
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -436,7 +411,6 @@ export function TradieScheduleDetailsModal({
                 schedule.status !== "DECLINED" && (
                   <>
                     <Button
-                      disabled={isPending}
                       onClick={() => onMarkAsDone(item)}
                       className={cn(
                         "h-auto rounded-[7px]",
@@ -452,10 +426,7 @@ export function TradieScheduleDetailsModal({
                     </Button>
 
                     <Button
-                      disabled={isPending}
-                      onClick={() =>
-                        startTransition(() => handleDeleteSchedule())
-                      }
+                      onClick={() => onRequestDelete(item)}
                       className={cn(
                         "h-auto rounded-[7px]",
                         "bg-red-500 px-3.5 py-1.75",
@@ -465,17 +436,8 @@ export function TradieScheduleDetailsModal({
                         "hover:bg-red-600/90",
                       )}
                     >
-                      {isPending ? (
-                        <>
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                          Delete Schedule
-                        </>
-                      )}
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Request Deletion
                     </Button>
                   </>
                 )}
@@ -485,7 +447,6 @@ export function TradieScheduleDetailsModal({
                 schedule.status === "AWAITING_QUOTE" ||
                 schedule.status === "PENDING_RESPONSE") && (
                 <Button
-                  disabled={isPending}
                   onClick={() => onCall(item)}
                   className={cn(
                     "h-auto rounded-[7px]",
@@ -503,7 +464,6 @@ export function TradieScheduleDetailsModal({
 
               <Button
                 variant="outline"
-                disabled={isPending}
                 onClick={() => onSendReminder(item)}
                 className={cn(
                   "h-auto rounded-[7px]",
@@ -522,7 +482,6 @@ export function TradieScheduleDetailsModal({
               {onUpdateStatus && (
                 <Button
                   variant="outline"
-                  disabled={isPending}
                   onClick={() => onUpdateStatus(item)}
                   className={cn(
                     "h-auto rounded-[7px]",

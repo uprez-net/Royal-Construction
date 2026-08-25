@@ -65,6 +65,31 @@ export const activityLogSchemas = {
         milestoneName: z.string(),
     }),
 
+    tradieScheduleDeletionRequested: z.object({
+        projectId: z.string(),
+        scheduleId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        scheduleDate: z.string(),
+        durationDays: z.number(),
+        cost: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string(),
+        reason: z.string(),
+    }),
+
+    tradieScheduleDeleted: z.object({
+        projectId: z.string(),
+        scheduleId: z.string(),
+        tradieId: z.string(),
+        tradieName: z.string(),
+        trade: z.string(),
+        scheduleDate: z.string(),
+        milestoneId: z.string().optional(),
+        milestoneName: z.string(),
+    }),
+
     variationCreated: z.object({
         projectId: z.string(),
         projectName: z.string(),

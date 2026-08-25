@@ -134,6 +134,26 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         milestoneId: data.milestoneId,
     }),
 
+    tradieScheduleDeletionRequested: (data) => ({
+        id: uuidv4(),
+        type: "tradieScheduleDeletionRequested",
+        message: `Removal of ${data.tradieName}'s booking on ${data.scheduleDate} sent for admin approval: ${data.reason}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+        milestoneId: data.milestoneId,
+    }),
+
+    tradieScheduleDeleted: (data) => ({
+        id: uuidv4(),
+        type: "tradieScheduleDeleted",
+        message: `${data.tradieName}'s booking on ${data.scheduleDate} was removed after admin approval`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+        milestoneId: data.milestoneId,
+    }),
+
     variationCreated: (data) => ({
         id: uuidv4(),
         type: "variationCreated",

@@ -1,6 +1,6 @@
 'use server';
 import prisma from "@/lib/prisma";
-import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone, TradieApprovalActionType } from "@prisma/client";
+import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone, TradieApprovalActionType, TradieApprovalStatus } from "@prisma/client";
 import type { CreateTradieScheduleInput, UpdateTradieScheduleInput } from "@/utils/validators";
 import { TradiePriceUnit } from "@prisma/client";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -14,7 +14,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
-import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import { DeleteScheduleInput, ScheduleApprovalJsonPayload, ScheduleDeletionJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { normalizeQuoteBasis, parseQuotedAmount, scheduleTotalCost } from "@/utils/calculations";
@@ -550,29 +550,140 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
 
 }
 
-export async function deleteTradieSchedule(scheduleId: string) {
+/**
+ * Raises an admin approval request to remove a booked tradie schedule.
+ *
+ * Removal is never immediate. A booking that has been sent to a tradie — and
+ * in most cases confirmed by them — represents a commitment the site manager
+ * cannot quietly withdraw, so the request is recorded as a
+ * `SCHEDULE_DELETION` approval and every admin is notified. The schedule row
+ * is only deleted once an admin approves, in {@link handleAdminApproval}.
+ *
+ * @param input - The schedule to remove and the reason an admin will judge.
+ * @returns Whether the request was raised, with a message for the caller and
+ * the id of the approval when one was created.
+ */
+export async function requestTradieScheduleDeletion(input: DeleteScheduleInput) {
   try {
-    const existingSchedule = await prisma.tradieSchedule.findUnique({
-      where: { id: scheduleId },
+    const schedule = await prisma.tradieSchedule.findUnique({
+      where: { id: input.scheduleId },
+      include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
     });
-    if (!existingSchedule) {
+    if (!schedule) {
       throw new Error("Schedule not found");
     }
-    await userHasAccessToSchedule(existingSchedule.projectId);
-    const deletedSchedule = await prisma.tradieSchedule.delete({
-      where: { id: scheduleId },
+    const userId = await userHasAccessToSchedule(schedule.projectId);
+
+    // Without this an impatient click sends the same booking to the admin
+    // queue twice, and the second approval then fails on a row the first one
+    // already deleted.
+    const pendingRequest = await prisma.tradieApproval.findFirst({
+      where: {
+        tradieId: schedule.tradieId,
+        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+        status: TradieApprovalStatus.PENDING,
+        updationData: { path: ["scheduleId"], equals: schedule.id },
+      },
+      select: { id: true },
+    });
+    if (pendingRequest) {
+      return {
+        success: false,
+        message: "A deletion request for this schedule is already awaiting admin approval.",
+      };
+    }
+
+    const totalCost = scheduleTotalCost(
+      parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
+      schedule.durationDays,
+      schedule.tradie.lastQuotedPriceUnit,
+    );
+    const cost = currency.format(schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost);
+    const scheduledDate = dateFormat.format(schedule.scheduledDate);
+    const milestoneName = schedule.milestone ? schedule.milestone.name : "General Task";
+
+    const approval = await prisma.tradieApproval.create({
+      data: {
+        tradieId: schedule.tradieId,
+        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+        requestedBy: userId,
+        reason: input.reason,
+        // The booking is described here rather than looked up later on
+        // purpose: once the approval is granted the schedule row is gone, and
+        // the resolved request still has to read as a record of what was
+        // removed.
+        updationData: {
+          scheduleId: schedule.id,
+          projectId: schedule.projectId,
+          projectName: schedule.project.name,
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName,
+          scheduledDate,
+          durationDays: schedule.durationDays,
+          cost,
+          currentStatus: schedule.status,
+        } satisfies ScheduleDeletionJsonPayload,
+      },
+      select: { id: true },
     });
 
     after(async () => {
-      revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
-      revalidateTag("projects", CACHE_PROFILES.MEDIUM);
-      revalidateTag(`project-${deletedSchedule.projectId}`, CACHE_PROFILES.MEDIUM);
+      revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+      revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
+      const requester = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+      const notificationPayload = createNotification("tradieScheduleDeletionRequest", {
+        approvalId: approval.id,
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+        projectName: schedule.project.name,
+        milestoneId: schedule.milestoneId ?? undefined,
+        milestoneName,
+        scheduledDate,
+        durationDays: schedule.durationDays,
+        cost,
+        tradieId: schedule.tradieId,
+        tradieName: schedule.tradie.name,
+        trade: schedule.tradie.trade,
+        reason: input.reason,
+        requestedBy: requester?.name ?? "A site manager",
+      });
+      const activityLogEntry = createActivityLogEntry("tradieScheduleDeletionRequested", {
+        projectId: schedule.projectId,
+        scheduleId: schedule.id,
+        tradieId: schedule.tradieId,
+        tradieName: schedule.tradie.name,
+        trade: schedule.tradie.trade,
+        scheduleDate: scheduledDate,
+        durationDays: schedule.durationDays,
+        cost,
+        milestoneId: schedule.milestoneId ?? undefined,
+        milestoneName,
+        reason: input.reason,
+      });
+      await logAction(activityLogEntry);
+      // Guarded because triggerNotification reads an empty recipient list as
+      // "broadcast to every user" — a request meant for admins must not reach
+      // the whole company if none are configured.
+      const adminIds = await getAllAdminUsersIds();
+      if (adminIds.length > 0) {
+        await triggerNotification(adminIds, notificationPayload);
+      }
     });
 
-    return { success: true, message: "Schedule deleted successfully." };
+    return {
+      success: true,
+      message: "Deletion request submitted for admin approval.",
+      approvalId: approval.id,
+    };
   } catch (error) {
-    console.error("Error deleting tradie schedule:", error);
-    return { success: false, message: error instanceof Error ? error.message : "Failed to delete tradie schedule." };
+    console.error("Error requesting tradie schedule deletion:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to request schedule deletion.",
+    };
   }
 }
 

@@ -6,12 +6,16 @@ import { getUserByClerkIdCached } from "./user";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server"
-import { ApprovalInput, IncidentReportApprovalPayload, SafeTradieApproval, ScheduleApprovalJsonPayload, TradieApprovalPayload } from "@/types/tradie";
+import { ApprovalInput, IncidentReportApprovalPayload, SafeTradieApproval, ScheduleApprovalJsonPayload, ScheduleDeletionJsonPayload, TradieApprovalPayload } from "@/types/tradie";
 import { TradieApprovalActionType, TradieScheduleStatus } from "@prisma/client";
 import { ApprovalKPI, PaginatedTradieApprovals, TradieApprovalQuery } from "@/types/tradie-approvals";
 import { Prisma } from "@prisma/client";
 import pLimit from "p-limit";
 import { updateTradieSchedule } from "./tradieSchedules";
+import { createNotification } from "@/types/notification";
+import { triggerNotification } from "../notification/novu";
+import { createActivityLogEntry } from "@/types/activityLog";
+import { logAction } from "./actionLog";
 
 /**
  * Ensures the currently authenticated user is authorized to perform
@@ -85,6 +89,8 @@ export async function fetchTradieApprovalById(approvalId: string): Promise<SafeT
  * - PRICE_CHANGE: Updates a tradie's hourly rate when approved.
  * - TRADIE_REMOVAL: Permanently removes a tradie when approved.
  * - INCIDENT_RESOLUTION: Updates an incident's resolution details and status.
+ * - SCHEDULE_APPROVAL: Confirms or declines a tradie's booking.
+ * - SCHEDULE_DELETION: Removes a booked schedule when approved.
  *
  * Requires an authenticated user and a valid approval request.
  *
@@ -243,6 +249,98 @@ export async function handleAdminApproval(input: ApprovalInput) {
                     };
                 }
 
+                case TradieApprovalActionType.SCHEDULE_DELETION: {
+                    const isApproved = input.resolution === "approved";
+                    const scheduleData = approval.updationData as unknown as
+                        | ScheduleDeletionJsonPayload
+                        | null;
+
+                    // Approving means deleting a specific row, so a request
+                    // that never recorded which one cannot be granted.
+                    // Rejecting it is still allowed — that just clears the
+                    // queue and changes nothing.
+                    if (isApproved && !scheduleData?.scheduleId) {
+                        throw new Error(
+                            "This removal request has no recorded schedule and cannot be approved.",
+                        );
+                    }
+
+                    // deleteMany rather than delete: the booking may already be
+                    // gone by the time an admin gets to the queue, and a
+                    // P2025 there would roll back the resolution and leave the
+                    // request pending for ever.
+                    const deletedCount = isApproved
+                        ? (await tx.tradieSchedule.deleteMany({
+                            where: { id: scheduleData!.scheduleId },
+                        })).count
+                        : 0;
+
+                    // The schedule's own relations are gone by now, so the
+                    // site manager is read from the project recorded on the
+                    // request.
+                    const project = scheduleData?.projectId
+                        ? await tx.project.findUnique({
+                            where: { id: scheduleData.projectId },
+                            select: { siteManagerId: true },
+                        })
+                        : null;
+
+                    after(async () => {
+                        revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
+                        revalidateTag("projects", CACHE_PROFILES.MEDIUM);
+                        if (scheduleData?.projectId) {
+                            revalidateTag(`project-${scheduleData.projectId}`, CACHE_PROFILES.MEDIUM);
+                        }
+
+                        if (isApproved && deletedCount > 0) {
+                            await logAction(createActivityLogEntry("tradieScheduleDeleted", {
+                                projectId: scheduleData!.projectId,
+                                scheduleId: scheduleData!.scheduleId,
+                                tradieId: approval.tradieId,
+                                tradieName: approval.tradie.name,
+                                trade: approval.tradie.trade,
+                                scheduleDate: scheduleData!.scheduledDate,
+                                milestoneId: scheduleData!.milestoneId,
+                                milestoneName: scheduleData!.milestoneName,
+                            }));
+                        }
+
+                        // Guarded rather than passing an empty array:
+                        // triggerNotification treats [] as "broadcast to every
+                        // user", so a project with no site manager would tell
+                        // the whole company about one deleted booking.
+                        if (project?.siteManagerId) {
+                            const notificationPayload = createNotification("tradieScheduleDeletionResolved", {
+                                approvalId: approval.id,
+                                scheduleId: scheduleData!.scheduleId,
+                                projectId: scheduleData!.projectId,
+                                projectName: scheduleData!.projectName,
+                                milestoneId: scheduleData!.milestoneId,
+                                milestoneName: scheduleData!.milestoneName,
+                                scheduledDate: scheduleData!.scheduledDate,
+                                tradieId: approval.tradieId,
+                                tradieName: approval.tradie.name,
+                                trade: approval.tradie.trade,
+                                approved: isApproved,
+                            });
+                            await triggerNotification(
+                                [project.siteManagerId],
+                                notificationPayload,
+                            );
+                        }
+                    });
+
+                    return {
+                        approvalId: approval.id,
+                        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+                        tradieId: approval.tradieId,
+                        scheduleId: scheduleData?.scheduleId,
+                        deleted: isApproved && deletedCount > 0,
+                        resolution: input.resolution,
+                        rejectReason: input.rejectReason ?? null,
+                    };
+                }
+
                 default:
                     throw new Error("Unknown approval action type");
             }
@@ -375,6 +473,7 @@ interface KPIResult {
     incidentReportCount: bigint;
     deletionCount: bigint;
     scheduleCount: bigint;
+    scheduleDeletionCount: bigint;
     acceptedCount: bigint;
     rejectedCount: bigint;
 }
@@ -388,6 +487,7 @@ interface KPIResult {
  * - Pending incident resolution requests.
  * - Pending tradie removal requests.
  * - Pending schedule approval requests.
+ * - Pending schedule deletion requests.
  * - Counts of approved and rejected approvals.
  *
  * All metrics are queried concurrently for improved performance.
@@ -425,6 +525,11 @@ export async function fetchApprovalKPI(): Promise<ApprovalKPI> {
                 ) AS "scheduleCount",
 
                 COUNT(*) FILTER (
+                    WHERE status = 'PENDING'
+                    AND "actionType" = 'SCHEDULE_DELETION'
+                ) AS "scheduleDeletionCount",
+
+                COUNT(*) FILTER (
                     WHERE status = 'APPROVED'
                 ) AS "acceptedCount",
 
@@ -440,6 +545,7 @@ export async function fetchApprovalKPI(): Promise<ApprovalKPI> {
             incidentReportCount: Number(result.incidentReportCount),
             deletionCount: Number(result.deletionCount),
             scheduleCount: Number(result.scheduleCount),
+            scheduleDeletionCount: Number(result.scheduleDeletionCount),
             resolvedCount: {
                 accepted: Number(result.acceptedCount),
                 rejected: Number(result.rejectedCount),

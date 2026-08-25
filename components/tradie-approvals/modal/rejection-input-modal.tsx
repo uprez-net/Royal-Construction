@@ -6,6 +6,7 @@ import {
   PriceUpdateJsonPayload,
   SafeTradieApproval,
   ScheduleApprovalJsonPayload,
+  ScheduleDeletionJsonPayload,
 } from "@/types/tradie";
 import {
   Dialog,
@@ -87,10 +88,26 @@ function ApprovalDetails({ approval }: { approval: SafeTradieApproval }) {
           <p>Project: {data?.projectName}</p>
           <p>Milestone: {data?.milestoneName}</p>
           <p>Duration: {data?.durationDays} days</p>
-          <p>Cost: ${data?.cost}</p>
+          <p>Cost: {data?.cost}</p>
         </div>
       );
     }
+    case "SCHEDULE_DELETION": {
+      const data = approval.updationData as ScheduleDeletionJsonPayload;
+      return (
+        <div className="space-y-1 text-sm">
+          <p>Project: {data?.projectName}</p>
+          <p>Milestone: {data?.milestoneName}</p>
+          <p>Booked for: {data?.scheduledDate}</p>
+          <p>Duration: {data?.durationDays} days</p>
+          <p>Cost: {data?.cost}</p>
+          <p className="text-muted-foreground">
+            Rejecting leaves this booking in place.
+          </p>
+        </div>
+      );
+    }
+
     case "INCIDENT_RESOLUTION": {
       const data = approval.updationData as IncidentReportJsonPayload;
       return (
