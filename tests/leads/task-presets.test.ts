@@ -7,7 +7,12 @@ import {
   dueDateFromPreset,
   taskTypeFromNote,
 } from "../../lib/leads/task-presets";
-import { createLeadTaskSchema } from "../../utils/validators/lead-task";
+import {
+  MAX_TASK_LEAD_IDS,
+  createLeadTaskSchema,
+  parseLeadIdsParam,
+} from "../../utils/validators/lead-task";
+import { openTasksRequest } from "../../lib/leads/task-service";
 import { stageMap } from "../../types/lead";
 import { STAGE_STYLES } from "../../lib/leads/lead-helpers";
 
@@ -134,4 +139,68 @@ test("a task row must carry the UI stage label, not the Prisma enum", () => {
   }
   assert.equal(stageMap.DISCOVERY, "Discovery");
   assert.notEqual(stageMap.DISCOVERY, "DISCOVERY");
+});
+
+test("leadIds absent means every live lead, and empty is a caller mistake", () => {
+  // Absent is the default every existing caller relies on.
+  assert.deepEqual(parseLeadIdsParam(null), { ok: true, leadIds: undefined });
+
+  // Present-but-empty must NOT collapse to "everything". A UI that builds the
+  // list from a page of leads and gets it wrong would otherwise silently ask
+  // for the whole business and render it.
+  assert.equal(parseLeadIdsParam("").ok, false);
+  assert.equal(parseLeadIdsParam(",").ok, false);
+  assert.equal(parseLeadIdsParam("1,,2").ok, false);
+});
+
+test("leadIds rejects anything that is not a positive id", () => {
+  for (const raw of ["abc", "1,abc", "-1", "0", "1.5", "1e3", " ", "9999999999999999999999"]) {
+    assert.equal(parseLeadIdsParam(raw).ok, false, `accepted ${raw}`);
+  }
+});
+
+test("leadIds parses, trims and de-duplicates", () => {
+  assert.deepEqual(parseLeadIdsParam("3"), { ok: true, leadIds: [3] });
+  assert.deepEqual(parseLeadIdsParam(" 3 , 1 ,3 "), { ok: true, leadIds: [3, 1] });
+});
+
+test("leadIds rejects rather than trims past the cap", () => {
+  // Trimming would hand a caller that named 300 leads the tasks of 200, with
+  // no way to tell the rest were missing rather than idle.
+  const atCap = Array.from({ length: MAX_TASK_LEAD_IDS }, (_, i) => i + 1);
+  assert.equal(parseLeadIdsParam(atCap.join(",")).ok, true);
+  assert.equal(parseLeadIdsParam([...atCap, MAX_TASK_LEAD_IDS + 1].join(",")).ok, false);
+
+  // Duplicates are collapsed before the length check, so repetition cannot
+  // push a legitimate request over the limit.
+  assert.equal(parseLeadIdsParam([...atCap, ...atCap].join(",")).ok, true);
+});
+
+test("scoped-to-no-leads is not the same request as unscoped", () => {
+  // The trap this exists for. `leadIds?.length` reads [] and undefined
+  // identically, so the leads table asking for nothing would have been served
+  // every open task in the business.
+  assert.deepEqual(openTasksRequest([]), { skip: true });
+
+  assert.deepEqual(openTasksRequest(undefined), {
+    skip: false,
+    url: "/api/leads/tasks",
+  });
+  assert.deepEqual(openTasksRequest([7]), {
+    skip: false,
+    url: "/api/leads/tasks?leadIds=7",
+  });
+  assert.deepEqual(openTasksRequest([7, 2]), {
+    skip: false,
+    url: "/api/leads/tasks?leadIds=7,2",
+  });
+});
+
+test("what the client sends, the route accepts", () => {
+  // The two halves are written in different files and only meet at runtime.
+  const request = openTasksRequest([3, 1]);
+  assert.equal(request.skip, false);
+  const raw = new URL(`https://x.test${(request as { url: string }).url}`)
+    .searchParams.get("leadIds");
+  assert.deepEqual(parseLeadIdsParam(raw), { ok: true, leadIds: [3, 1] });
 });

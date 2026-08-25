@@ -100,11 +100,11 @@ export function FollowupPromptModal({
       // came from a notification and means "this lead's open follow-ups".
       // Meetings are excluded either way: closing them would cancel a booked
       // meeting this dialog never mentions.
-      const open = (await fetchOpenTasks()).filter(
-        (t) =>
-          t.leadId === lead.id &&
-          t.type !== "MEETING" &&
-          (taskId === undefined || t.id === taskId),
+      // Asked for by lead. This read the org-wide list and filtered it, and
+      // that list is capped — so on a lead whose follow-up sorted past the cap
+      // the loop below closed nothing and the dialog still reported success.
+      const open = (await fetchOpenTasks({ leadIds: [lead.id] })).filter(
+        (t) => t.type !== "MEETING" && (taskId === undefined || t.id === taskId),
       );
       for (const task of open) {
         await completeTask(task.id);

@@ -60,8 +60,11 @@ export function LeadDetailTabs({
   const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
   useEffect(() => {
     const controller = new AbortController();
-    fetchOpenTasks(controller.signal)
-      .then((all) => setOpenTasks(all.filter((t) => t.leadId === lead.id)))
+    // Scoped to this lead, not filtered from the org-wide list. That filter
+    // ran against the 200 soonest-due tasks in the business, so a lead whose
+    // work sorted past the cap showed an empty Tasks tab over real bookings.
+    fetchOpenTasks({ leadIds: [lead.id], signal: controller.signal })
+      .then(setOpenTasks)
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Could not load tasks for this lead", err);

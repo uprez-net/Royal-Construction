@@ -84,14 +84,44 @@ export class LeadTaskRejectedError extends Error {
   }
 }
 
-/** Open work across every stage. The stage is shown, never used to filter. */
-export async function listOpenTasks(limit = 200): Promise<LeadTaskRow[]> {
+export interface ListOpenTasksOptions {
+  /** Restrict to these leads. Omit for open work on every live lead. */
+  leadIds?: number[];
+  /** Only applied to the unscoped list. See below. */
+  limit?: number;
+}
+
+/**
+ * Open work across every stage. The stage is shown, never used to filter.
+ *
+ * `leadIds` is not an optimisation. Every caller that wants one lead's work
+ * used to read this whole list and filter it client-side, against a query that
+ * returns the 200 soonest-due tasks in the business — so a lead whose task
+ * sorted past the cap was simply absent. The lead page showed "Add task" over
+ * real bookings, and worse, the two review dialogs act on what comes back:
+ * "Yes, I followed up" closed nothing and the meeting dialog closed no
+ * meeting, both reporting success. Naming the leads makes the answer complete.
+ *
+ * Which is why the cap is dropped when scoped. `limit` bounds an unbounded
+ * question — "all open work everywhere" — and a scoped call is already bounded
+ * by the leads the caller named. Re-capping it would reintroduce the same
+ * silent truncation one level down, on a list a dialog is about to act on.
+ */
+export async function listOpenTasks({
+  leadIds,
+  limit = 200,
+}: ListOpenTasksOptions = {}): Promise<LeadTaskRow[]> {
+  const scoped = leadIds !== undefined;
   const rows = await prisma.leadTask.findMany({
-    where: { completedAt: null, lead: LIVE_LEAD },
+    where: {
+      completedAt: null,
+      lead: LIVE_LEAD,
+      ...(scoped ? { leadId: { in: leadIds } } : {}),
+    },
     select: ROW_SELECT,
     // Undated tasks last: they are real work with no date yet, not overdue.
     orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
-    take: limit,
+    ...(scoped ? {} : { take: limit }),
   });
   return rows.map(toRow);
 }
