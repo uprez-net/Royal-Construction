@@ -939,16 +939,13 @@ function PaymentStagesTable({
 
 function SourceDocumentCard({
   kind,
-  fileName,
   url,
-  onChange,
 }: {
   kind: "Tender" | "Contract";
   fileName: string;
   url: string;
   onChange: (field: "fileName" | "url", value: string) => void;
 }) {
-  const fileNameId = useId();
   const dispatch = useAppDispatch();
 
   return (
@@ -983,16 +980,6 @@ function SourceDocumentCard({
           </Button>
         ) : null}
       </div>
-      <FieldShell label="File name" htmlFor={fileNameId}>
-        <Input
-          id={fileNameId}
-          value={`${fileName.slice(0, fileName.lastIndexOf(".")).trim()}.${fileName
-            .slice(fileName.lastIndexOf(".") + 1)
-            .trim()}`}
-          onChange={(e) => onChange("fileName", e.target.value)}
-          className={FIELD_CONTROL_CLASS}
-        />
-      </FieldShell>
     </div>
   );
 }
