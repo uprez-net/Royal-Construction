@@ -26,15 +26,15 @@ const ROOTS = ["app", "lib", "components", "hooks"];
 // (`stage: LeadStage.WON`). Reading one — isWonStage, an outcome, a filter
 // list, the stage map — is untouched, which is the point: those all have to
 // keep naming the retired stages so existing rows still render.
+// The key may be bare or quoted (`stage:` or `"stage":`, the latter from
+// anything JSON-shaped), and an enum value may carry any number of
+// qualifiers (`LeadStage.WON`, `Prisma.LeadStage.WON`).
+const KEY = `["'\`]?stage["'\`]?\\s*[:=]\\s*`;
 const WRITE_SHAPES = [
-  ...[...RETIRED_ENUM, ...RETIRED_LABEL].flatMap((s) => [
-    new RegExp(`stage:\\s*["'\`]${s}["'\`]`),
-    new RegExp(`stage\\s*=\\s*["'\`]${s}["'\`]`),
-  ]),
-  ...RETIRED_ENUM.flatMap((s) => [
-    new RegExp(`stage:\\s*\\w+\\.${s}\\b`),
-    new RegExp(`stage\\s*=\\s*\\w+\\.${s}\\b`),
-  ]),
+  ...[...RETIRED_ENUM, ...RETIRED_LABEL].map(
+    (s) => new RegExp(`${KEY}["'\`]${s}["'\`]`),
+  ),
+  ...RETIRED_ENUM.map((s) => new RegExp(`${KEY}(?:\\w+\\.)+${s}\\b`)),
 ];
 
 /**
