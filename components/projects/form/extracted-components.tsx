@@ -108,6 +108,7 @@ const PERCENT_FIELDS = new Set([
 ]);
 
 const NUMBER_UNITS: Record<string, string> = {
+  lotSize: "m²",
   subStructureAndGroundConcreteStrengthMpa: "MPa",
 };
 
@@ -1122,6 +1123,9 @@ export function ExtractionSectionCard({
                 : undefined
             }
           >
+            {/* `field` must stay the schema key: it is what onChange emits and
+                what resolveFieldType classifies. The section prefix is only
+                stripped for the label, inside ExtractionField via `title`. */}
             <ExtractionField
               title={title}
               field={field}

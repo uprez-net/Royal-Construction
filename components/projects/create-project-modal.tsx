@@ -499,6 +499,15 @@ export function CreateProjectModal({
       return;
     }
 
+    // The review schema coerces lot size on every keystroke and deliberately
+    // does not throw on a negative number (that crash is what took the page
+    // down). This path calls the server action directly, not the validated
+    // API route, so the sign check has to happen here.
+    if (extraction.lotSize !== null && extraction.lotSize < 0) {
+      toast.error("Lot size cannot be negative.");
+      return;
+    }
+
     // ── Phase 3: date mismatch gate ──
     // Compare the signed date against the start date before dispatching. If
     // the pair is impossible (start before signed) or suspect (signed more
