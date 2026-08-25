@@ -36,11 +36,41 @@ export function createTask(body: CreateLeadTaskBody): Promise<LeadTaskRow> {
   );
 }
 
+export function fetchCompletedTasks(signal?: AbortSignal): Promise<LeadTaskRow[]> {
+  return unwrap<LeadTaskRow[]>(
+    "/api/leads/tasks?state=completed",
+    { method: "GET", cache: "no-store", signal },
+    "Failed to fetch completed tasks",
+  );
+}
+
 /** Closes the task. Never moves the lead: that is the whole point of tasks. */
 export function completeTask(taskId: number): Promise<LeadTaskRow> {
   return unwrap<LeadTaskRow>(
     `/api/leads/tasks/${taskId}`,
     { method: "PATCH" },
     "Failed to update the task",
+  );
+}
+
+/** Puts a closed task back on the open list, dates and note intact. */
+export function reopenTask(taskId: number): Promise<LeadTaskRow> {
+  return unwrap<LeadTaskRow>(
+    `/api/leads/tasks/${taskId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reopen" }),
+    },
+    "Failed to reopen the task",
+  );
+}
+
+/** Removes the task entirely. Not the same as closing it — see deleteLeadTask. */
+export function deleteTask(taskId: number): Promise<{ deleted: boolean }> {
+  return unwrap<{ deleted: boolean }>(
+    `/api/leads/tasks/${taskId}`,
+    { method: "DELETE" },
+    "Failed to delete the task",
   );
 }

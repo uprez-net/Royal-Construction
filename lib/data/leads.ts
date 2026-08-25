@@ -275,7 +275,16 @@ export async function getAllLeads(): Promise<UiLead[]> {
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
-        files: true
+        files: true,
+        // Just the next open task, for the table's Follow-up cell. Ordered the
+        // same way the Tasks tab orders its list so the two agree on which one
+        // is "next": soonest due date first, undated last.
+        tasks: {
+          where: { completedAt: null },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          take: 1,
+          select: { dueDate: true, dueTime: true },
+        },
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -465,7 +474,16 @@ export async function getLeads(
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
-        files: true
+        files: true,
+        // Just the next open task, for the table's Follow-up cell. Ordered the
+        // same way the Tasks tab orders its list so the two agree on which one
+        // is "next": soonest due date first, undated last.
+        tasks: {
+          where: { completedAt: null },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          take: 1,
+          select: { dueDate: true, dueTime: true },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -1139,7 +1157,25 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);
-  const updated = await prisma.lead.update({
+  // Hand the lead's outstanding work over IN THE SAME TRANSACTION as the lead
+  // write. Split across two round trips, a failure on the second left the lead
+  // showing a new owner while its open tasks still pointed at the old one and
+  // still emailed them — which is the exact bug this reassignment exists to
+  // fix, reintroduced in a narrower window.
+  //
+  // Only open tasks move: a completed task records who actually did the work.
+  const reassignOpenTasks =
+    input.assignedId !== undefined
+      ? [
+          prisma.leadTask.updateMany({
+            where: { leadId: id, completedAt: null },
+            data: { assignedId: input.assignedId?.trim() || null },
+          }),
+        ]
+      : [];
+
+  const [updated] = await prisma.$transaction([
+    prisma.lead.update({
     where: { id },
     data: updateData,
     include: {
@@ -1150,7 +1186,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       emails: { orderBy: { createdAt: "desc" } },
       files: true
     },
-  });
+    }),
+    ...reassignOpenTasks,
+  ]);
 
   for (const annotation of annotationInputs) {
     try {
@@ -1239,13 +1277,23 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      -- Scheduled work, not a stage. This counted two stages that no longer
-      -- exist in the picker, and missed every lead further down the pipeline
-      -- that had a follow-up booked.
-      COUNT(*) FILTER (
-        WHERE stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
-          AND (("followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL)
-            OR ("meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL))
+      -- Open tasks, counted from LeadTask.
+      --
+      -- This read Lead.followupDate and Lead.meetingDate, the columns the task
+      -- table replaced. Nothing writes them any more, so the card was frozen at
+      -- whatever the backfill left while the Tasks tab grew: 15 against 34 on
+      -- staging, on the same screen. Every task created from here would have
+      -- widened the gap.
+      --
+      -- Counted as TASKS, not leads. They coincide today because no lead holds
+      -- two, but four task types exist precisely so a lead can have a call and
+      -- a meeting at once.
+      (
+        SELECT COUNT(*) FROM "LeadTask" t
+        JOIN "Lead" tl ON tl.id = t."leadId"
+        WHERE t."completedAt" IS NULL
+          AND tl."isArchived" = false
+          AND tl.stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
       ) AS "pendingFollowup"
     FROM "Lead"
     WHERE "isArchived" = false

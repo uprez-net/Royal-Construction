@@ -3077,3 +3077,54 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ── Tasks tab: one summary line, one list ─────────────────────────────
+   Replaces six stacked stat cards and a sidebar. The cards restated
+   numbers that were already on screen: "24 Pending" duplicated the list
+   badge and "1 Upcoming" duplicated a panel that listed the item. */
+.tasks-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-body);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tasks-summary strong {
+  color: var(--text-primary);
+  font-weight: 650;
+  font-size: 13px;
+}
+
+/* Sorted overdue, then today, then later, then unscheduled. The divider
+   names the boundary so the order is legible rather than implied. */
+.fu-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.fu-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-light, var(--border-color));
+}
+
+.fu-divider span {
+  order: 2;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}

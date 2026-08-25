@@ -94,6 +94,13 @@ export function mapLead(
     history: (PrismaLeadHistory & { author: User | null })[];
     chatSessions: ChatSession[];
     assignedUser?: { id: string; name: string; email: string } | null;
+    /**
+     * The lead's next open task, when the caller asked for it.
+     *
+     * Optional so every existing caller keeps compiling; when it is absent the
+     * mapping falls back to the retired columns below.
+     */
+    tasks?: { dueDate: Date | null; dueTime: string | null }[];
     noteAnnotations?: Array<{
       id: string;
       selectedText: string;
@@ -146,8 +153,28 @@ export function mapLead(
     meetingDate: toDateOnly(lead.meetingDate),
     meetingTime: lead.meetingTime ?? null,
     meetingMode: lead.meetingMode ?? null,
-    followupDate: toDateOnly(lead.followupDate),
-    followupTime: lead.followupTime ?? null,
+    // The next open task first, the retired column only as a fallback.
+    //
+    // Lead.followupDate is no longer written by the thing that books work: the
+    // Set date dialog creates a LeadTask and sends updateLead nothing but a
+    // history entry. The table's Follow-up cell reads these two fields, so it
+    // stayed blank however many times someone booked a call — which read as
+    // "that did not save", so they booked it again, and each attempt added
+    // another task to the count. Only Add Lead still writes the column, which
+    // is why it is populated for some leads and never for others.
+    //
+    // The fallback keeps legacy rows that carry a date but no task rendering.
+    // Presence of a task decides, not the date on it. An open task with no due
+    // date is real work deliberately left unscheduled; `?? lead.followupDate`
+    // would have skipped past its null and shown a stale legacy date instead,
+    // which is worse than showing nothing.
+    followupDate: toDateOnly(
+      lead.tasks && lead.tasks.length > 0 ? lead.tasks[0].dueDate : lead.followupDate,
+    ),
+    followupTime:
+      lead.tasks && lead.tasks.length > 0
+        ? lead.tasks[0].dueTime
+        : (lead.followupTime ?? null),
     followupNotes: lead.followupNotes ?? "",
     followupReminderSentAt: lead.followupReminderSentAt?.toISOString() ?? null,
     meetingReminderSentAt: lead.meetingReminderSentAt?.toISOString() ?? null,

@@ -18,6 +18,8 @@ import {
   fetchOpenTasks,
 } from "@/lib/leads/task-service";
 import { sydneyStartOfDay } from "@/lib/dates/sydney";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import {
   buildFollowupCompletedHistoryEntry,
   buildFollowupNotRequiredHistoryEntry,
@@ -26,13 +28,17 @@ import {
 
 interface FollowupPromptModalProps {
   leadId: number;
+  /** Scope the outcome to one task. Omitted means every open follow-up. */
+  taskId?: number;
   onClose: () => void;
 }
 
 export function FollowupPromptModal({
   leadId,
+  taskId,
   onClose,
 }: FollowupPromptModalProps) {
+  const dispatch = useAppDispatch();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -90,10 +96,15 @@ export function FollowupPromptModal({
       // LeadTask, so a rescheduled follow-up disappeared.
       //
       // Answering closes the task and opens nothing.
-      // Only the follow-up. Closing every open task would also close a booked
-      // meeting, which nobody asked about and which this dialog never mentions.
+      // Scoped to the clicked task when one was named. Without taskId this
+      // came from a notification and means "this lead's open follow-ups".
+      // Meetings are excluded either way: closing them would cancel a booked
+      // meeting this dialog never mentions.
       const open = (await fetchOpenTasks()).filter(
-        (t) => t.leadId === lead.id && t.type !== "MEETING",
+        (t) =>
+          t.leadId === lead.id &&
+          t.type !== "MEETING" &&
+          (taskId === undefined || t.id === taskId),
       );
       for (const task of open) {
         await completeTask(task.id);
@@ -121,6 +132,10 @@ export function FollowupPromptModal({
       });
 
       if (updated) {
+        // The tab's list is client state; router.refresh() cannot touch it.
+        // Without this the row stayed on screen until a manual reload, even
+        // though the task really had been closed.
+        dispatch(bumpLeadTasks());
         router.refresh();
         onClose();
       }

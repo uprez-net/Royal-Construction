@@ -405,12 +405,22 @@ export function ModalManager() {
     case "followUpPrompt": {
       const leadId = Number(modal.payload?.leadId ?? 0);
       if (!leadId) return null;
-      return <FollowupPromptModal leadId={leadId} onClose={handleClose} />;
+      // taskId is optional: opened from a task row it scopes the dialog to that
+      // one task, opened from a notification it still means "this lead".
+      const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
+      return (
+        <FollowupPromptModal leadId={leadId} taskId={taskId} onClose={handleClose} />
+      );
     }
     case "meetingReview": {
       const leadId = Number(modal.payload?.leadId ?? 0);
       if (!leadId) return null;
-      return <MeetingReviewModal leadId={leadId} onClose={handleClose} />;
+      // Same contract as followUpPrompt: opened from a task row it scopes the
+      // dialog to that task and closes it on save. This used to be dropped, so
+      // reviewing a meeting recorded the outcome and left the task open for
+      // ever — it never left the Tasks tab, not even after a reload.
+      const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
+      return <MeetingReviewModal leadId={leadId} taskId={taskId} onClose={handleClose} />;
     }
     case "leadStatsDrilldown": {
       const title = String(modal.payload?.title ?? "Lead details");

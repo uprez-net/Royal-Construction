@@ -69,15 +69,29 @@ export async function GET(request: Request) {
         meetingMode: lead.meetingMode ?? undefined,
       });
 
+      // triggerNotification reports failure by RETURNING { success: false } —
+      // it catches everything internally and never throws, including the case
+      // where the assignee has no Clerk id and there is nobody to notify. The
+      // catch below therefore never ran: `failed` was always 0 and every task
+      // got stamped whether or not anything was delivered. Since the query
+      // filters on reminderSentAt: null, a silent failure removed that meeting
+      // from the reminder set permanently. Check the result, not just throws.
+      let result: Awaited<ReturnType<typeof triggerNotification>>;
       try {
-        await triggerNotification([assignee.id], notificationPayload);
+        result = await triggerNotification([assignee.id], notificationPayload);
       } catch (err) {
-        // Do not stamp, and do not abort the run. The follow-up cron already
-        // handles each item independently; this loop used to throw out of the
-        // whole handler, so one bad notification silenced every meeting behind
-        // it and the ones it had already stamped never fired again.
-        console.error(`[CRON] Notification failed for task ${task.id}:`, err);
+        // Kept for genuinely unexpected throws. Do not stamp, and do not abort
+        // the run: one bad notification must not silence every meeting behind it.
+        console.error(`[CRON] Notification threw for task ${task.id}:`, err);
         failed += 1;
+        continue;
+      }
+      if (!result.success) {
+        console.error(
+          `[CRON] Notification not delivered for task ${task.id}: ${result.error ?? "unknown reason"}`,
+        );
+        failed += 1;
+        // Left unstamped on purpose so the next run picks it up again.
         continue;
       }
 

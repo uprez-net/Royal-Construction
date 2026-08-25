@@ -4,6 +4,8 @@ import { Lead } from "@/lib/leads/types";
 import { updateLead } from "@/lib/leads/leads-service";
 import { buildFollowupHistoryEntry } from "@/lib/leads/lead-helpers";
 import { createTask } from "@/lib/leads/task-service";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import { sydneyStartOfDay } from "@/lib/dates/sydney";
 
 interface FollowupModalProps {
@@ -19,6 +21,7 @@ export function FollowupModal({
   onLeadUpdate,
   showToast,
 }: FollowupModalProps) {
+  const dispatch = useAppDispatch();
   const [date, setDate] = useState(lead.followupDate || "");
   const [time, setTime] = useState(lead.followupTime || "");
   const [saving, setSaving] = useState(false);
@@ -61,11 +64,18 @@ export function FollowupModal({
         showToast("Failed to update the follow-up. Please try again.", "error");
         return;
       }
-      onLeadUpdate(
-        task.lead.stage !== updated.stage
+      onLeadUpdate({
+        ...(task.lead.stage !== updated.stage
           ? { ...updated, stage: task.lead.stage }
-          : updated,
-      );
+          : updated),
+        // updateLead ran before the task existed, so the lead it returned still
+        // carries the pre-booking follow-up date. Carry the date just booked so
+        // the table's Follow-up cell fills in straight away — leaving it blank
+        // is what made people press Set date again and book the call twice.
+        followupDate: date,
+        followupTime: time || null,
+      });
+      dispatch(bumpLeadTasks());
       showToast(`Updated follow-up for ${updated.name}`, "success");
       onClose();
     } catch (error) {

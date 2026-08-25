@@ -215,7 +215,22 @@ test("the closed group is not named after one of its members", () => {
   // guessing whether a filter meant the group or the stage.
   const closed = LEAD_STAGE_GROUPS.find((g) => g.stages.includes("Disqualified"));
   assert.equal(closed?.label, "Closed");
-  assert.deepEqual(closed?.stages, ["No Response", "Disqualified", "Lost"]);
+  assert.deepEqual(closed?.stages, ["Disqualified", "Lost"]);
+});
+
+test("No Response is grouped apart from the closed stages", () => {
+  // It does not behave like the two it used to sit beside. Its outcome is
+  // STALLED, not LOST: it counts in nothing, and its tasks stay live and its
+  // reminders keep firing, because a lead that went quiet is exactly the one
+  // carrying "call again in three months". Grouping it under "Closed" put two
+  // neighbouring options with different behaviour under one heading.
+  const group = LEAD_STAGE_GROUPS.find((g) => g.stages.includes("No Response"));
+  assert.equal(group?.label, "Stalled");
+  assert.deepEqual(group?.stages, ["No Response"]);
+  assert.ok(
+    !group?.stages.includes("Lost"),
+    "No Response must not share a group with a genuinely closed stage",
+  );
 });
 
 test("groups and the flat list never drift", () => {
