@@ -103,6 +103,25 @@ test("the due time schema rejects what max(10) used to accept", () => {
   assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(null).success, true);
 });
 
+test("a new task must have a due date", () => {
+  assert.equal(createLeadTaskSchema.shape.dueDate.safeParse(null).success, false);
+  assert.equal(
+    createLeadTaskSchema.shape.dueDate.safeParse("2026-08-26T00:00:00.000Z").success,
+    true,
+  );
+
+  // The whole payload too, not only the field. A client that leaves dueDate
+  // out entirely is the case the route actually sees, and the field-level
+  // assertion above says nothing about whether the object requires it.
+  const task = { leadId: 1, type: "CALL" as const, dueTime: null, notes: null };
+  assert.equal(createLeadTaskSchema.safeParse(task).success, false);
+  assert.equal(
+    createLeadTaskSchema.safeParse({ ...task, dueDate: "2026-08-26T00:00:00.000Z" })
+      .success,
+    true,
+  );
+});
+
 test("a task row must carry the UI stage label, not the Prisma enum", () => {
   // The E2E crash. LeadTaskRow.lead.stage was typed as string and passed the
   // Prisma value through. Three callers assign it straight onto a Lead, so

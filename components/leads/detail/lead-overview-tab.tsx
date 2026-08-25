@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   BadgeDollarSign,
-  CalendarClock,
-  Check,
   CircleAlert,
   Loader2,
   Signpost,
-  Trash2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -23,16 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { TaskForm } from "@/components/leads/task-form";
-import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
-import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
-import {
-  completeTask,
-  fetchOpenTasks,
-  type LeadTaskRow,
-  deleteTask,
-} from "@/lib/leads/task-service";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -53,7 +40,6 @@ import {
   isLostStage,
   leadToFormData,
   type LeadDetailFormData,
-  isTerminalStage,
 } from "@/lib/leads/lead-helpers";
 import { updateLead } from "@/lib/leads/leads-service";
 import { formatFyQuarter, fyQuarterOf } from "@/lib/leads/fy-quarter";
@@ -73,7 +59,6 @@ type LeadSectionKey =
   | "sourceStage"
   | "assignedBudget"
   | "dealEconomics"
-  | "followUp"
   | "lostReason";
 
 const SECTION_ORDER: LeadSectionKey[] = [
@@ -81,7 +66,6 @@ const SECTION_ORDER: LeadSectionKey[] = [
   "sourceStage",
   "assignedBudget",
   "dealEconomics",
-  "followUp",
   "lostReason",
 ];
 
@@ -108,11 +92,6 @@ const SECTION_META: Record<
     label: "Deal economics",
     description: "Deal value, likelihood and expected close",
     icon: BadgeDollarSign,
-  },
-  followUp: {
-    label: "Scheduled work",
-    description: "Calls, emails and meetings booked against this lead",
-    icon: CalendarClock,
   },
   lostReason: {
     // Static because SECTION_META is module-scope; the field's own label is
@@ -149,8 +128,6 @@ const SECTION_FIELDS: Record<
     "probabilityOverride",
     "expectedCloseDate",
   ],
-  // Owns no form fields: tasks save themselves on creation.
-  followUp: [],
   lostReason: ["lostReason"],
 };
 
@@ -209,12 +186,6 @@ function buildSectionPayload(
         probabilityOverride: parseLikelihood(form.probabilityOverride),
         expectedCloseDate: form.expectedCloseDate || null,
       };
-
-    // Nothing to save. Tasks are written through their own endpoint the
-    // moment you add one, so there is nothing to batch into a section save.
-    // The case stays so the switch remains exhaustive over LeadSectionKey.
-    case "followUp":
-      return {};
 
     case "lostReason":
       return { lostReason: form.lostReason };
@@ -279,7 +250,6 @@ export function LeadOverviewTab({
   availableUsers: { id: string; name: string }[];
   onLeadUpdate: (lead: Lead) => void;
 }) {
-  const dispatch = useAppDispatch();
   const formId = useId();
   const fieldId = (name: string) => `${formId}-${name}`;
 
@@ -291,27 +261,6 @@ export function LeadOverviewTab({
   // Sections stay independently open — unlike the project accordion, which is
   // single-open, because a lead's stage and its lost reason are read together.
   const [openSections, setOpenSections] = useState<string[]>(["contact"]);
-
-  // This lead's open tasks. Fetched rather than passed in, because the lead
-  // object comes from the list query and carries no tasks.
-  const [openTasks, setOpenTasks] = useState<LeadTaskRow[]>([]);
-
-  // Keyed on the shared version as well as the lead, so this list refetches
-  // whenever a task is booked, closed, reopened or removed — from here or from
-  // anywhere else. Appending to local state alone was not enough: booking two
-  // tasks in quick succession showed only the first until the page was
-  // reloaded, which is the very complaint this panel exists to answer.
-  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchOpenTasks(controller.signal)
-      .then((all) => setOpenTasks(all.filter((t) => t.leadId === lead.id)))
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        console.error("Could not load tasks for this lead", err);
-      });
-    return () => controller.abort();
-  }, [lead.id, tasksVersion]);
 
   const patch = (updates: Partial<LeadDetailFormData>) =>
     setForm((prev) => ({ ...prev, ...updates }));
@@ -326,11 +275,6 @@ export function LeadOverviewTab({
       return;
     }
 
-    // Read before the await: the follow-up rule can move the stage server-side,
-    // and re-seeding it afterwards must not overwrite a stage the operator has
-    // already changed but not yet saved in the section that owns it.
-    const stageWasDirty = !Object.is(form.stage, baseline.stage);
-
     setSavingSection(key);
     try {
       const updated = await updateLead(lead.id, buildSectionPayload(key, form));
@@ -344,7 +288,6 @@ export function LeadOverviewTab({
         // Sent by the stage-adjacent rules in buildSectionPayload rather than
         // by the section's own inputs.
         ...(key === "sourceStage" ? (["lostReason"] as const) : []),
-        ...(key === "followUp" && !stageWasDirty ? (["stage"] as const) : []),
       ];
 
       setForm((prev) => {
@@ -624,7 +567,7 @@ export function LeadOverviewTab({
                   />
                   {form.estimatedValueSource === "OFFER" ? (
                     <span
-                      className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap"
+                      className="rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap"
                       style={{
                         background: "var(--info-light)",
                         color: "var(--info-ink)",
@@ -638,7 +581,7 @@ export function LeadOverviewTab({
               {form.estimatedValueSource === "MANUAL" ? (
                 <button
                   type="button"
-                  className="mt-1 text-[11px] underline"
+                  className="mt-1 text-xs underline"
                   onClick={() =>
                     // Clear only the ownership flag, never the figure. Nulling
                     // the value would drop this lead out of pipeline totals
@@ -649,7 +592,7 @@ export function LeadOverviewTab({
                   Follow the offer price again
                 </button>
               ) : (
-                <span className="mt-1 block text-[11px] text-muted-foreground">
+                <span className="mt-1 block text-xs text-muted-foreground">
                   Follows the quoted contract price once an offer exists.
                 </span>
               )}
@@ -673,7 +616,7 @@ export function LeadOverviewTab({
                   }
                 />
               </Field>
-              <span className="mt-1 block text-[11px] text-muted-foreground">
+              <span className="mt-1 block text-xs text-muted-foreground">
                 {form.stage} default is {stageProbability}%
               </span>
             </div>
@@ -689,17 +632,17 @@ export function LeadOverviewTab({
                 />
               </Field>
               {expectedCloseQuarter ? (
-                <span className="mt-1 block text-[11px] text-muted-foreground">
+                <span className="mt-1 block text-xs text-muted-foreground">
                   Lands in {expectedCloseQuarter}
                 </span>
               ) : null}
             </div>
 
             {weightedPreview ? (
-              <div className="flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-2.5 text-[12.5px] md:col-span-2">
+              <div className="flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-2.5 text-xs md:col-span-2">
                 <span>
                   Counts toward the forecast as{" "}
-                  <span className="font-mono text-[11px] text-muted-foreground">
+                  <span className="font-mono text-xs text-muted-foreground">
                     {weightedPreview.equation}
                   </span>
                 </span>
@@ -711,132 +654,9 @@ export function LeadOverviewTab({
           </div>
         );
 
-      case "followUp":
-        return (
-          <div className="grid gap-3">
-            {/* The date inputs that used to live here wrote Lead.followupDate
-                and created no task. Since #193 the Follow-ups tab and both
-                reminder crons read LeadTask, so a follow-up booked from this
-                page appeared nowhere and emailed nobody. One writer now. */}
-            {/* No composer on a lead nothing will ever show work for. The
-                server refuses these too — this only saves the round trip and
-                says why, rather than letting someone fill the form in first. */}
-            {isTerminalStage(lead.stage) || lead.isArchived ? (
-              <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                {lead.isArchived
-                  ? "This lead is archived. Restore it before booking any work."
-                  : `This lead is closed as ${lead.stage}. Reopen it before booking any work.`}
-              </p>
-            ) : (
-            <TaskForm
-              leadId={lead.id}
-              leadName={lead.name}
-              onCreated={(task) => {
-                setOpenTasks((prev) => [...prev, task]);
-                // Optimistic above, authoritative here: the bump refetches this
-                // list and moves the Tasks tab and the "Open tasks" card too.
-                dispatch(bumpLeadTasks());
-                // Adding a task can advance a New or Contacted lead into
-                // Discovery. The task carries the lead's stage as it is AFTER
-                // that move, so push it up rather than leaving the header and
-                // the stage picker showing the old value until a refresh.
-                if (task.lead.stage !== lead.stage) {
-                  const moved = { ...lead, stage: task.lead.stage };
-                  onLeadUpdate(moved);
-                  patch({ stage: task.lead.stage });
-                }
-                toast.success("Task added.");
-              }}
-            />
-            )}
-            {openTasks.length > 0 ? (
-              <ul className="task-open-list">
-                {openTasks.map((task) => (
-                  <li key={task.id} className="task-open-row">
-                    <span className="fu-type-pill">
-                      {LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type}
-                    </span>
-                    <span className="task-open-due">
-                      {task.dueDate
-                        ? new Date(task.dueDate).toLocaleDateString("en-AU", {
-                            timeZone: "Australia/Sydney",
-                            weekday: "short",
-                            day: "numeric",
-                            month: "short",
-                          })
-                        : "No date"}
-                      {/* The composer can book a time now, so show it. Without
-                          this a 9am site meeting reads the same as an all-day
-                          one and the person turns up whenever. */}
-                      {task.dueTime ? ` · ${task.dueTime}` : ""}
-                    </span>
-                    <span className="task-open-note" title={task.notes ?? undefined}>
-                      {task.notes}
-                    </span>
-                    {/* Real buttons, not near-invisible text. These were
-                        11.5px in muted grey and people could not find them. */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1 px-2.5 text-xs"
-                      onClick={async () => {
-                        try {
-                          await completeTask(task.id);
-                          setOpenTasks((prev) => prev.filter((t) => t.id !== task.id));
-                          // Keep the Tasks tab and the "Open tasks" card in
-                          // step: closing here used to leave both stale.
-                          dispatch(bumpLeadTasks());
-                        } catch {
-                          toast.error("Could not close the task.");
-                        }
-                      }}
-                    >
-                      <Check className="size-3.5" aria-hidden="true" />
-                      Done
-                    </Button>
-                    {/* Removing is not the same as closing. "Done" says the
-                        call happened; this is for work that should never have
-                        been booked, which previously had no exit at all. */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1 px-2.5 text-xs text-[var(--destructive-ink)] hover:bg-[var(--destructive-light)] hover:text-[var(--destructive-ink)]"
-                      aria-label={`Remove task for ${lead.name}`}
-                      onClick={async () => {
-                        try {
-                          await deleteTask(task.id);
-                          setOpenTasks((prev) => prev.filter((t) => t.id !== task.id));
-                          dispatch(bumpLeadTasks());
-                          toast.success("Task removed.");
-                        } catch {
-                          toast.error("Could not remove the task.");
-                        }
-                      }}
-                    >
-                      <Trash2 className="size-3.5" aria-hidden="true" />
-                      Remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No scheduled work on this lead.
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Adding a task moves a New or Contacted lead into Discovery. It
-              never moves one that is already further along, and completing a
-              task never moves a lead at all.
-            </p>
-          </div>
-        );
-
       case "lostReason":
         // The modal only rendered this block for a lost stage. The section
-        // itself always exists here so the six sections are stable, but the
+        // itself always exists here so the sections are stable, but the
         // input stays behind the same condition.
         return lostReasonRequired ? (
           <div className="rounded-[8px] border border-(--destructive)/30 bg-destructive-light p-4">

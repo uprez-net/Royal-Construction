@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { Lead } from "@/lib/leads/types";
+import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
+import { useAppSelector } from "@/lib/store/hooks";
 
 import { LeadDocumentsTab } from "./lead-documents-tab";
 import { LeadNotesTab } from "./lead-notes-tab";
 import { LeadOverviewTab } from "./lead-overview-tab";
+import { LeadScheduledWorkTab } from "./lead-scheduled-work-tab";
 import {
   LeadTabNavigation,
   isLeadDetailTab,
@@ -51,6 +54,21 @@ export function LeadDetailTabs({
     if (urlTab && isLeadDetailTab(urlTab)) setActiveTab(urlTab);
   }
 
+  // Open tasks live here so the tab badge and the Scheduled work panel share
+  // one list. The lead payload from the list query carries none.
+  const [openTasks, setOpenTasks] = useState<LeadTaskRow[]>([]);
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenTasks(controller.signal)
+      .then((all) => setOpenTasks(all.filter((t) => t.leadId === lead.id)))
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("Could not load tasks for this lead", err);
+      });
+    return () => controller.abort();
+  }, [lead.id, tasksVersion]);
+
   // State → URL, so a tab can be deep-linked, shared and reached with the
   // browser's back button.
   const handleTabChange = useCallback(
@@ -70,6 +88,13 @@ export function LeadDetailTabs({
         activeTab={activeTab}
         onTabChange={handleTabChange}
         badges={{
+          scheduledWork:
+            openTasks.length > 0
+              ? {
+                  count: String(openTasks.length),
+                  description: `${openTasks.length} open ${openTasks.length === 1 ? "task" : "tasks"}`,
+                }
+              : undefined,
           documents:
             lead.uploadedFiles.length > 0
               ? {
@@ -98,6 +123,14 @@ export function LeadDetailTabs({
           <LeadOverviewTab
             lead={lead}
             availableUsers={availableUsers}
+            onLeadUpdate={onLeadUpdate}
+          />
+        ) : null}
+        {activeTab === "scheduledWork" ? (
+          <LeadScheduledWorkTab
+            lead={lead}
+            openTasks={openTasks}
+            onTasksChange={setOpenTasks}
             onLeadUpdate={onLeadUpdate}
           />
         ) : null}

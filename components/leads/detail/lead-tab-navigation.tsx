@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { FileText, LayoutGrid, StickyNote } from "lucide-react";
+import { CalendarClock, FileText, LayoutGrid, StickyNote } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-export const LEAD_DETAIL_TABS = ["overview", "documents", "notes"] as const;
+export const LEAD_DETAIL_TABS = [
+  "overview",
+  "scheduledWork",
+  "documents",
+  "notes",
+] as const;
 
 export type LeadDetailTabKey = (typeof LEAD_DETAIL_TABS)[number];
 
@@ -18,12 +23,14 @@ export const leadTabPanelId = (key: LeadDetailTabKey) => `lead-tabpanel-${key}`;
 
 const TAB_ICONS: Record<LeadDetailTabKey, React.ElementType> = {
   overview: LayoutGrid,
+  scheduledWork: CalendarClock,
   documents: FileText,
   notes: StickyNote,
 };
 
 const TAB_LABELS: Record<LeadDetailTabKey, string> = {
   overview: "Overview",
+  scheduledWork: "Tasks",
   documents: "Uploaded Documents",
   notes: "Notes",
 };

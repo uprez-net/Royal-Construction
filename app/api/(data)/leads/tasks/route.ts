@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const task = await createLeadTask({
       leadId,
       type,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      dueDate: new Date(dueDate),
       dueTime,
       notes,
     });
