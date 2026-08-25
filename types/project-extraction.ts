@@ -32,6 +32,11 @@ function toNullableNumber(value: unknown) {
   }
 
   if (typeof value === "string") {
+    // Number("") is 0, which would turn a blank input into a real zero.
+    if (value.trim() === "") {
+      return null;
+    }
+
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -162,7 +167,11 @@ export const projectExtractionSchema = z.object({
   projectType: blankStringField.describe(
     "Build type (e.g. new build, knockdown-rebuild, renovation) if explicitly stated on the cover page or header.",
   ),
-  lotSize: z.number().nonnegative().nullable().default(null).describe(
+  // Coerced like every other numeric field: the review step re-parses this
+  // schema on every keystroke, so it has to accept the string an <input> hands
+  // back. Non-negativity is checked on submit instead (handleSubmit in
+  // create-project-modal.tsx; nonNegativeSchema on the POST /api/projects route).
+  lotSize: nullableNumberField.describe(
     "Lot size in square metres, only if explicitly stated. Used to confirm the build is within the correct lot boundaries.",
   ),
   summary: blankStringField.describe(
