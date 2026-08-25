@@ -120,7 +120,7 @@ export async function listCompletedTasks(limit = 100): Promise<LeadTaskRow[]> {
 export interface CreateLeadTaskInput {
   leadId: number;
   type: LeadTaskType;
-  dueDate: Date | null;
+  dueDate: Date;
   dueTime?: string | null;
   notes?: string | null;
   assignedId?: string | null;

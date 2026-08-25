@@ -1,8 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   Phone,
   Mail,
-  Calendar,
   UserPlus,
   Search,
   RefreshCw,
@@ -14,20 +13,25 @@ import { useRouter } from "next/navigation";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
-  formatFollowup,
   dialablePhone,
   STAGE_STYLES,
   LEAD_STAGE_OPTIONS,
   isKpiCohortMetric,
+  sortLeadOpenTasks,
 } from "@/lib/leads/lead-helpers";
 import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
-import { FollowupModal } from "@/components/leads/modal-ui/followup-modal";
+import {
+  LeadTaskCell,
+  LeadTasksModal,
+} from "@/components/leads/modal-ui/lead-tasks-modal";
 import { AssignedModal } from "@/components/leads/modal-ui/assigned-modal";
 import { ToastContainer, useToast } from "@/components/common/use-toast";
 import type { LeadEmails } from "@prisma/client";
 import LeadCommModal from "../modal-ui/lead-comm-modal";
+import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
+import { useAppSelector } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
 
 interface TableViewProps {
@@ -62,9 +66,39 @@ export default function TableView({
   /* ── Modal pointers (only which lead — each modal manages its own state) ── */
   const [leadToDelete, setLeadToDelete] = React.useState<Lead | null>(null);
   const [emailLead, setEmailLead] = React.useState<Lead | null>(null);
-  const [followupLead, setFollowupLead] = React.useState<Lead | null>(null);
+  const [tasksLead, setTasksLead] = React.useState<Lead | null>(null);
   const [assignedLead, setAssignedLead] = React.useState<Lead | null>(null);
   const [commLead, setCommLead] = React.useState<string | null>(null);
+  const [openTasks, setOpenTasks] = React.useState<LeadTaskRow[]>([]);
+  const [tasksLoaded, setTasksLoaded] = React.useState(false);
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOpenTasks(controller.signal)
+      .then((rows) => {
+        setOpenTasks(rows);
+        setTasksLoaded(true);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setTasksLoaded(true);
+      });
+    return () => controller.abort();
+  }, [tasksVersion]);
+
+  const tasksByLeadId = useMemo(() => {
+    const grouped = new Map<number, LeadTaskRow[]>();
+    for (const task of openTasks) {
+      const list = grouped.get(task.leadId);
+      if (list) list.push(task);
+      else grouped.set(task.leadId, [task]);
+    }
+    for (const [leadId, list] of grouped) {
+      grouped.set(leadId, sortLeadOpenTasks(list));
+    }
+    return grouped;
+  }, [openTasks]);
 
   /* ── Filter logic ── */
   const activeFilters = useMemo(() => {
@@ -159,7 +193,7 @@ export default function TableView({
                     <th className="col-location">Location</th>
                     <th className="col-source">Source Detail</th>
                     <th className="col-stage">Stage</th>
-                    <th className="col-followup">Follow-up</th>
+                    <th className="col-followup">Task</th>
                     <th className="col-assigned">Assigned</th>
                     <th className="col-actions">Actions</th>
                   </tr>
@@ -208,53 +242,22 @@ export default function TableView({
                           </span>
                         </td>
                         <td className="col-followup">
-                          {/* A date alone is enough to have something booked.
-                              This required a TIME as well, and every preset in
-                              the task composer books all-day work with no time
-                              — so a lead with four calls booked still read
-                              "Set date" and looked untouched. */}
-                          {!lead.followupDate ? (
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setFollowupLead(lead);
-                              }}
-                              disabled={lead.isArchived}
-                              title="Set Follow-up"
-                            >
-                              <Calendar size={12} />
-                              <span>Set date</span>
-                            </button>
+                          {tasksLoaded ? (
+                            <LeadTaskCell
+                              next={tasksByLeadId.get(lead.id)?.[0]}
+                              onOpen={() => setTasksLead(lead)}
+                            />
                           ) : (
-                            /* A button, not a clickable span. It opens the
-                               follow-up editor, so it has to be reachable by
-                               keyboard — and this branch now renders for every
-                               lead with work booked, not just the handful that
-                               happened to carry a time. The mobile card below
-                               was already a button. */
-                            <button
-                              type="button"
-                              title="Edit follow-up"
-                              className={`followup-date-text cursor-pointer border-0 bg-transparent p-0 text-left transition-colors hover:text-royal-gold ${lead.urgent ? "followup-urgent text-destructive font-semibold hover:text-destructive" : ""}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setFollowupLead(lead);
-                              }}
-                            >
-                              {formatFollowup(
-                                lead.followupDate,
-                                lead.followupTime,
-                              )}
-                            </button>
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
                           )}
                         </td>
                         <td className="col-assigned">
                           {!lead.assignedId ? (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAssignedLead(lead);
@@ -443,30 +446,17 @@ export default function TableView({
 
                   <dl className="mobile-lead-meta">
                     <div>
-                      <dt>Follow-up</dt>
+                      <dt>Task</dt>
                       <dd>
-                        {/* Same rule as the desktop table above: a date alone
-                            means work is booked. Requiring a time hid every
-                            all-day task on mobile too. */}
-                        {!lead.followupDate ? (
-                          <button
-                            type="button"
-                            className="mobile-inline-action"
-                            onClick={() => setFollowupLead(lead)}
-                          >
-                            Set date
-                          </button>
+                        {tasksLoaded ? (
+                          <LeadTaskCell
+                            next={tasksByLeadId.get(lead.id)?.[0]}
+                            onOpen={() => setTasksLead(lead)}
+                          />
                         ) : (
-                          <button
-                            type="button"
-                            className="mobile-link-action"
-                            onClick={() => setFollowupLead(lead)}
-                          >
-                            {formatFollowup(
-                              lead.followupDate,
-                              lead.followupTime,
-                            )}
-                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            —
+                          </span>
                         )}
                       </dd>
                     </div>
@@ -596,12 +586,13 @@ export default function TableView({
         />
       )}
 
-      {followupLead && (
-        <FollowupModal
-          lead={followupLead}
-          onClose={() => setFollowupLead(null)}
+      {tasksLead && (
+        <LeadTasksModal
+          key={tasksLead.id}
+          lead={leads.find((l) => l.id === tasksLead.id) ?? tasksLead}
+          tasks={tasksByLeadId.get(tasksLead.id) ?? []}
+          onClose={() => setTasksLead(null)}
           onLeadUpdate={onLeadUpdate}
-          showToast={showToast}
         />
       )}
 

@@ -452,7 +452,7 @@ export default function Leads() {
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
           {(
             [
-              { key: "table" as TabType, label: "Table View", Icon: Table2 },
+              { key: "table" as TabType, label: "Leads", Icon: Table2 },
               { key: "followups" as TabType, label: "Tasks", Icon: Clock },
               {
                 key: "analytics" as TabType,
@@ -479,7 +479,7 @@ export default function Leads() {
             </button>
           ))}
 
-          {!loading && (
+          {!loading && activeTab === "table" && (
             <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
               <Select
                 value={activeFilterTiming}
@@ -549,7 +549,7 @@ export default function Leads() {
               {activeTab === "analytics" && (
                 <AnalyticsView analytics={analyticsData} />
               )}
-              {activeTab !== "analytics" && (
+              {activeTab === "table" && (
                 <LeadPagination
                   leads={{
                     items: leads,

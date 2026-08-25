@@ -224,6 +224,32 @@ export function formatFollowup(date: string | null, time?: string | null): strin
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}${time ? " " + time : ""}`;
 }
 
+export function formatLeadTaskDue(
+  dueDate: string | null,
+  dueTime?: string | null,
+): string {
+  if (!dueDate) return "No date";
+  const label = new Date(dueDate).toLocaleDateString("en-AU", {
+    timeZone: "Australia/Sydney",
+    day: "numeric",
+    month: "short",
+  });
+  return dueTime ? `${label} · ${dueTime}` : label;
+}
+
+export function sortLeadOpenTasks<T extends { id: number; dueDate: string | null; dueTime: string | null }>(
+  tasks: T[],
+): T[] {
+  return [...tasks].sort((a, b) => {
+    if (a.dueDate === b.dueDate) {
+      return (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.id - b.id;
+    }
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
+}
+
 export function formatShortDate(date: Date): string {
   if (Number.isNaN(date.getTime())) return "";
   return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
