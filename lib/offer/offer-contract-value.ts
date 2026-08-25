@@ -3,6 +3,11 @@ import {
   deserializeWorkspace,
   parseWorkspaceState,
 } from "./workspace-persistence";
+import { DEFAULT_WORKSPACE_PRICING_SETTINGS } from "./workspace-model";
+import {
+  splitContractValueByGst,
+  type ContractValueGstSplit,
+} from "./workspace-pricing";
 
 // Resolve the inc-GST price of record for one offer revision.
 //
@@ -43,4 +48,44 @@ export function resolveOfferContractValue(
     // the whole Versions timeline down — this is a display-only derivation.
     return null;
   }
+}
+
+// The ex-GST / GST / total triple for one offer revision, resolved the same way
+// resolveOfferContractValue resolves the price it splits — including the same
+// repair-on-read of rows written before the columns were populated at all.
+//
+// The GST rate comes from the revision's OWN saved settings, not a constant:
+// the split has to reconcile with the price that revision quoted, and the rate
+// is part of the snapshot the estimator priced against.
+//
+// Returns null when there is nothing to price against, so callers can leave the
+// stored columns alone rather than stamping a confident $0 over them.
+export function resolveOfferPriceSplit(
+  storedValue: number | null,
+  workspaceState: unknown,
+): ContractValueGstSplit | null {
+  const contractValueIncGst = resolveOfferContractValue(
+    storedValue,
+    workspaceState,
+  );
+  if (contractValueIncGst === null) {
+    return null;
+  }
+
+  let gstRate: number | null = null;
+  try {
+    if (workspaceState !== null && workspaceState !== undefined) {
+      gstRate = deserializeWorkspace(parseWorkspaceState(workspaceState))
+        .workspacePricingSettings.gstRate;
+    }
+  } catch {
+    // Same display-only tolerance as resolveOfferContractValue: a retired or
+    // corrupted schema falls back to the default rate rather than throwing.
+    gstRate = null;
+  }
+
+  return splitContractValueByGst({
+    contractValueIncGst,
+    gstRate: gstRate ?? DEFAULT_WORKSPACE_PRICING_SETTINGS.gstRate,
+  });
 }

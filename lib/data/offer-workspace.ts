@@ -24,7 +24,11 @@ import {
 } from "@/lib/offer/admin-offer-prefill";
 import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
-import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
+import {
+  resolveOfferContractValue,
+  resolveOfferPriceSplit,
+} from "@/lib/offer/offer-contract-value";
+import { splitContractValueByGst } from "@/lib/offer/workspace-pricing";
 import {
   parseContractParticularOverrides,
   parseContractParticulars,
@@ -487,9 +491,18 @@ export async function saveOfferWorkspace(input: {
   // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
   // blank override serialises to 0 cents — so reading it here stamped $0 on every
   // offer priced the normal way, which is what the Versions timeline displayed.
-  const contractValue = new Prisma.Decimal(
-    buildProposalInput(input.snapshot).customerPrice.selectedContractValueIncGst,
-  );
+  const selectedContractValueIncGst =
+    buildProposalInput(input.snapshot).customerPrice.selectedContractValueIncGst;
+  const contractValue = new Prisma.Decimal(selectedContractValueIncGst);
+  // The three money columns the Offers list prints (amount / GST / total) were
+  // never written after the row was minted at zero, so every offer read $0.00
+  // regardless of what the client was actually quoted. Derive them from the SAME
+  // number the proposal document prints, so the list and the PDF can never
+  // disagree — see splitContractValueByGst for why GST is a back-solve.
+  const priceSplit = splitContractValueByGst({
+    contractValueIncGst: selectedContractValueIncGst,
+    gstRate: input.snapshot.workspacePricingSettings.gstRate,
+  });
 
   // isActive is part of the predicate, not just the check above: forking a
   // revision deactivates this row without touching its stateVersion, so a save
@@ -503,6 +516,9 @@ export async function saveOfferWorkspace(input: {
     },
     data: {
       workspaceState: persisted as unknown as Prisma.InputJsonValue,
+      amount: new Prisma.Decimal(priceSplit.amountExGst),
+      gstAmount: new Prisma.Decimal(priceSplit.gstAmount),
+      totalAmount: new Prisma.Decimal(priceSplit.totalIncGst),
       contractValueIncGst: contractValue,
       stateVersion: { increment: 1 },
     },
@@ -984,6 +1000,13 @@ export async function createOfferRevision(input: {
       data: { isActive: false, offerStatus: OfferStatus.SUPERSEDED },
     });
 
+    const forkedPriceSplit = resolveOfferPriceSplit(
+      currentRow.contractValueIncGst === null
+        ? null
+        : Number(currentRow.contractValueIncGst),
+      currentRow.workspaceState,
+    );
+
     const next = await tx.offer.create({
       data: {
         leadId: currentRow.leadId,
@@ -992,19 +1015,17 @@ export async function createOfferRevision(input: {
         isActive: true,
         createdById: input.actorId,
         offerStatus: OfferStatus.PENDING,
-        amount: currentRow.amount,
-        gstAmount: currentRow.gstAmount,
-        totalAmount: currentRow.totalAmount,
-        // Derive rather than copy: the parent's column may predate the fix that
-        // wrote the resolved price, and inheriting it would carry that $0 into
-        // every future revision even after the parent's own row is repaired.
+        // Derive rather than copy: the parent's columns may predate the fix
+        // that wrote the resolved price, and inheriting them would carry that
+        // $0 into every future revision even after the parent's own row is
+        // repaired. The fork starts as an unedited copy of the parent's
+        // snapshot, so it is priced identically until someone edits it — and a
+        // revision sent without an edit must not quote $0.
+        amount: forkedPriceSplit?.amountExGst ?? currentRow.amount,
+        gstAmount: forkedPriceSplit?.gstAmount ?? currentRow.gstAmount,
+        totalAmount: forkedPriceSplit?.totalIncGst ?? currentRow.totalAmount,
         contractValueIncGst:
-          resolveOfferContractValue(
-            currentRow.contractValueIncGst === null
-              ? null
-              : Number(currentRow.contractValueIncGst),
-            currentRow.workspaceState,
-          ) ?? currentRow.contractValueIncGst,
+          forkedPriceSplit?.totalIncGst ?? currentRow.contractValueIncGst,
         workspaceState:
           currentRow.workspaceState === null
             ? Prisma.JsonNull

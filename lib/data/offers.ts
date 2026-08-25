@@ -10,6 +10,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
 
 /**
  * Offer listing, grouped into one row per lead.
@@ -68,15 +69,39 @@ export async function getOfferGroups(page?: number, limit?: number, q?: string):
         const items = leads.flatMap<OfferGroup>((leadRow) => {
             const { offers, ...lead } = leadRow;
 
-            const revisions: OfferWithLead[] = offers.map(({ offerFiles, ...offer }) => ({
-                ...offer,
-                amount: offer.amount.toString(),
-                gstAmount: offer.gstAmount.toString(),
-                totalAmount: offer.totalAmount.toString(),
-                contractValueIncGst: offer.contractValueIncGst?.toString() ?? null,
-                version: offerFiles[0]?.version ?? 1,
-                lead,
-            }));
+            const revisions: OfferWithLead[] = offers.map(({ offerFiles, ...offer }) => {
+                // Repair-on-read, mirroring resolveOfferContractValue's rationale.
+                // These three columns were minted at zero and never written by the
+                // workspace autosave, so every row saved before that fix carries a
+                // $0 that never matched the document the client received, and no
+                // migration can recompute it outside the workspace schema. A
+                // positive stored total stays authoritative — it is what the save
+                // recorded — so only unpriced rows are derived from their own
+                // saved workspaceState.
+                const storedTotal = Number(offer.totalAmount);
+                const derived =
+                    storedTotal > 0
+                        ? null
+                        : resolveOfferPriceSplit(
+                            offer.contractValueIncGst === null
+                                ? null
+                                : Number(offer.contractValueIncGst),
+                            offer.workspaceState,
+                        );
+
+                return {
+                    ...offer,
+                    amount: (derived?.amountExGst ?? offer.amount).toString(),
+                    gstAmount: (derived?.gstAmount ?? offer.gstAmount).toString(),
+                    totalAmount: (derived?.totalIncGst ?? offer.totalAmount).toString(),
+                    contractValueIncGst:
+                        derived?.totalIncGst.toString() ??
+                        offer.contractValueIncGst?.toString() ??
+                        null,
+                    version: offerFiles[0]?.version ?? 1,
+                    lead,
+                };
+            });
 
             // `some: {}` guarantees at least one, but a lead with none must not
             // become a row with an undefined `latest`.

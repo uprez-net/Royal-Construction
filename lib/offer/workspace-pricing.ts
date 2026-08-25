@@ -431,3 +431,46 @@ export function calculateOfferCustomerPrice({
       hasManualOverride && overrideReason.trim().length === 0,
   };
 }
+
+export type ContractValueGstSplit = {
+  readonly amountExGst: number;
+  readonly gstAmount: number;
+  readonly totalIncGst: number;
+};
+
+// Split the inc-GST price of record into the ex-GST / GST / total triple stored
+// on Offer.amount, Offer.gstAmount and Offer.totalAmount.
+//
+// It has to be a back-solve from the selected price rather than a read of
+// calculateOfferWorkspacePricing's gstAmount: the estimator may override the
+// contract value, and the cost build-up cannot see that override — so its GST
+// line belongs to the COMPUTED price, not the one on the document the client
+// receives. The printed proposal quotes a single inc-GST figure, so the ex-GST
+// and GST components are only ever derivable this way.
+//
+// gstAmount is the remainder rather than an independent rounding of
+// total × rate, so amount + gstAmount === totalIncGst exactly. The Offers list
+// prints all three side by side, and a half-cent of independent rounding would
+// show as a column that visibly fails to add up.
+export function splitContractValueByGst({
+  contractValueIncGst,
+  gstRate,
+}: {
+  readonly contractValueIncGst: number;
+  readonly gstRate: number;
+}): ContractValueGstSplit {
+  const totalIncGst = roundCurrency(contractValueIncGst);
+  // A non-positive rate (or a nonsense one) would divide the price away; treat
+  // it as "no GST component" so the total still reconciles.
+  const divisor = 1 + gstRate;
+  const amountExGst =
+    Number.isFinite(divisor) && divisor > 0
+      ? roundCurrency(totalIncGst / divisor)
+      : totalIncGst;
+
+  return {
+    amountExGst,
+    gstAmount: roundCurrency(totalIncGst - amountExGst),
+    totalIncGst,
+  };
+}
