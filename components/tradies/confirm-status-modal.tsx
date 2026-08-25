@@ -25,6 +25,7 @@ import {
 import type { TradieScheduleListItem } from "@/types/project";
 import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { updateProjectTradieSchedule } from "@/lib/store/slices/projectsSlice";
+import { useRouter } from "next/navigation";
 
 type ScheduleStatus =
   | "PENDING"
@@ -142,6 +143,7 @@ export function ConfirmStatusModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const router = useRouter();
   const [status, setStatus] = useState<ScheduleStatus>(
     schedule.status as ScheduleStatus,
   );
@@ -196,6 +198,7 @@ export function ConfirmStatusModal({
           }))
           onOpenChange(false);
           onSuccess();
+          router.refresh();
         })
         .catch((err: unknown) => {
           setActiveLoading(null);

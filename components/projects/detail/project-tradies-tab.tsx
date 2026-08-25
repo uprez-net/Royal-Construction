@@ -301,6 +301,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         }
       >
         <DataTable
+          key={`${tradies.length}-${tradies.map((t) => t.status).join("-")}`}
           caption="Tradies scheduled on this project, with reminder status, confirmation status and cost."
           align={[
             "start",
@@ -400,6 +401,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     size="icon"
                     aria-label={`Send a reminder to ${tradie.tradie.name}`}
                     className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                    disabled={["AWAITING_ADMIN_APPROVAL", "DECLINED", "CONFIRMED"].includes(tradie.status)}
                     onClick={(event) => {
                       // The row itself is a control; without this the row's
                       // own handler fires too and two modals race.
@@ -425,6 +427,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   size="icon"
                   aria-label={`Log a call with ${tradie.tradie.name}`}
                   className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+                  disabled={["AWAITING_ADMIN_APPROVAL", "DECLINED", "CONFIRMED"].includes(tradie.status)}
                   onClick={(event) => {
                     event.stopPropagation();
                     dispatch(

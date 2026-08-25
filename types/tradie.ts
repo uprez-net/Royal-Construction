@@ -188,7 +188,11 @@ export const TRADIE_SCHEDULE_STATE_MACHINE: Record<TradieScheduleStatus, TradieS
         TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
         TradieScheduleStatus.DECLINED,
     ],
-    [TradieScheduleStatus.DECLINED]: [],
+    [TradieScheduleStatus.DECLINED]: [
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        TradieScheduleStatus.PENDING_RESPONSE,
+        TradieScheduleStatus.NO_RESPONSE,
+    ],
     [TradieScheduleStatus.COMPLETED]: [],
     [TradieScheduleStatus.AWAITING_QUOTE]: [
         TradieScheduleStatus.QUOTE_RECEIVED,

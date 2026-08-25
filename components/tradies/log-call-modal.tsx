@@ -24,6 +24,7 @@ import type { TradieScheduleListItem } from "@/types/project";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { updateTradieScheduleStatus } from "@/lib/store/slices/tradiesSlice";
 import type { TradieScheduleStatus } from "@prisma/client";
+import { useRouter } from "next/navigation";
 
 type CallStatus = "CONFIRMED" | "PENDING" | "NO_RESPONSE" | "DECLINED";
 
@@ -91,6 +92,7 @@ export function LogCallModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const router = useRouter();
   const [notes, setNotes] = useState("");
   const [activeLoading, setActiveLoading] = useState<CallStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +108,7 @@ export function LogCallModal({
       dispatch(
         updateTradieScheduleStatus({
           scheduleId: schedule.id,
-          status: status as TradieScheduleStatus,
+          status: status === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : status as TradieScheduleStatus,
           notes,
         }),
       )
@@ -115,6 +117,7 @@ export function LogCallModal({
           setActiveLoading(null);
           onOpenChange(false);
           onSuccess();
+          router.refresh();
         })
         .catch((err: unknown) => {
           setActiveLoading(null);
