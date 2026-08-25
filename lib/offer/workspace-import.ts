@@ -472,6 +472,10 @@ function parseWorkspacePricingSettings(
       : DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate,
     homeWarrantyHbcfFixed: hbcfLooksLikeRate ? 0 : hbcfCell,
     impactFeeFixed: DEFAULT_WORKSPACE_PRICING_SETTINGS.impactFeeFixed,
+    // No loading-charge cell in the workbook — the admin default applies once
+    // the imported offer is opened in the workspace.
+    loadingChargePercentage:
+      DEFAULT_WORKSPACE_PRICING_SETTINGS.loadingChargePercentage,
   };
 }
 

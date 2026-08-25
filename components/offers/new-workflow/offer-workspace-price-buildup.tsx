@@ -6,7 +6,11 @@ import type {
   OfferWorkspacePricing,
   OfferWorkspacePricingSettings,
 } from "@/lib/offer/workspace-pricing";
-import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
+import {
+  describeHbcfPremium,
+  parseNonNegativeNumberInput,
+  HBCF_PREMIUM_GROSS_UP,
+} from "@/lib/offer/workspace-pricing";
 import { Calculator } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
@@ -30,9 +34,14 @@ export function PriceBuildupPanel({
   onSettingsChange,
 }: PriceBuildupPanelProps) {
   const hbcfRatePercent = Math.round(settings.hbcfRate * 100000) / 1000;
-  // Effective all-in rate after GST + stamp + loading charge (matches icare calculator display).
+  // Effective all-in rate after GST + stamp (matches icare calculator display).
+  // The loading charge sits outside it — it is a flat % of that whole premium.
   const hbcfEffectivePercent =
-    Math.round(settings.hbcfRate * 1.199 * 100000) / 1000;
+    Math.round(settings.hbcfRate * HBCF_PREMIUM_GROSS_UP * 100000) / 1000;
+  // Split out so the estimator sees the icare figure and the loading charge
+  // riding on top of it; the build-up carries only their sum (HBCF premium).
+  const hbcf = describeHbcfPremium(settings);
+  const hasLoadingCharge = hbcf.loadingCharge > 0;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -73,7 +82,7 @@ export function PriceBuildupPanel({
             onChange={(impactFeeFixed) => onSettingsChange({ impactFeeFixed })}
           />
         </div>
-        <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+        <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -82,12 +91,27 @@ export function PriceBuildupPanel({
               <p className="text-xs text-muted-foreground">
                 Auto-calculated from Total Contract Value (H01 metro{" "}
                 {hbcfRatePercent}% + GST + stamp ≈ {hbcfEffectivePercent}%)
+                {hasLoadingCharge
+                  ? `, plus a ${settings.loadingChargePercentage}% loading charge`
+                  : ""}
               </p>
             </div>
             <p className="font-mono text-sm font-semibold tabular-nums">
               {formatCurrency(settings.homeWarrantyHbcfFixed)}
             </p>
           </div>
+          {hasLoadingCharge ? (
+            <div className="grid gap-1 border-t border-border/60 pt-2 text-xs">
+              <SummaryRow
+                label="Premium (inc GST & stamp)"
+                value={formatCurrency(hbcf.premiumBeforeLoading)}
+              />
+              <SummaryRow
+                label={`Loading charge (${settings.loadingChargePercentage}%)`}
+                value={formatCurrency(hbcf.loadingCharge)}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
           <div className="grid gap-2 text-sm">

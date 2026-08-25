@@ -654,7 +654,21 @@ export function NewOfferWorkspace({
     setImportResult(result);
     setLines(result.costLines);
     setAreaCalculator(result.areaCalculator);
-    setWorkspacePricingSettings(result.workspacePricingSettings);
+    // The workbook has no loading-charge cell, so the import parser can only
+    // report the default. Keep the admin-configured percentage (and re-derive
+    // the premium with it) instead of silently zeroing it on import.
+    setWorkspacePricingSettings((current) => {
+      const imported = {
+        ...result.workspacePricingSettings,
+        loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? current.loadingChargePercentage,
+      };
+      // Only re-derive when a loading charge actually applies — with none, the
+      // workbook's own dollar premium is kept rather than re-grossed from the
+      // reverse-filled TCV, which lands a cent off it.
+      return adminPrefill?.loadingChargePercentage ?? current.loadingChargePercentage > 0
+        ? withDerivedHbcfPremium(imported)
+        : imported;
+    });
     // Imported floor areas land on the job — the single source of truth.
     setJob((current) => ({
       ...current,
@@ -838,7 +852,10 @@ export function NewOfferWorkspace({
       setExclusions(s.exclusions);
       setDraft(s.draft);
       setAreaCalculator(s.areaCalculator);
-      setWorkspacePricingSettings(s.workspacePricingSettings);
+      setWorkspacePricingSettings({
+        ...s.workspacePricingSettings,
+        loadingChargePercentage: adminPrefill?.loadingChargePercentage ?? s.workspacePricingSettings.loadingChargePercentage,
+      });
       setPaymentSchedule(s.paymentSchedule);
       setRateCardProduct(s.rateCardProduct);
       setRateCardTier(s.rateCardTier);

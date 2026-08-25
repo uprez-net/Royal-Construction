@@ -102,6 +102,7 @@ assert.deepEqual(result.workspacePricingSettings, {
   hbcfRate: 0.00966,
   homeWarrantyHbcfFixed: 8500,
   impactFeeFixed: 0,
+  loadingChargePercentage: 0,
 });
 assert.equal(result.areaBasis.groundFloorSqm, 110);
 assert.equal(result.areaBasis.firstFloorSqm, 90);
@@ -211,6 +212,7 @@ assert.deepEqual(v2Result.workspacePricingSettings, {
   hbcfRate: 0.014,
   homeWarrantyHbcfFixed: 0,
   impactFeeFixed: 0,
+  loadingChargePercentage: 0,
 });
 assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);
 assert.equal(v2Result.areaBasis.firstFloorSqm, 170.35);

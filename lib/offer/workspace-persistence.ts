@@ -177,6 +177,15 @@ function hydratePricingSettings(
     pick(num(pricing.homeWarrantyHbcfFixed), num(l.hbcfInsuranceFixed)) ??
     d.homeWarrantyHbcfFixed;
 
+  // Whole-number percent (5 = 5%). Absent on offers saved before the loading
+  // charge shipped → 0, so their premium stays exactly what was quoted. Out of
+  // 0–100 is corrupt data; fall back to the default rather than propagate it.
+  const loadingChargePercentage = (() => {
+    const raw = num(pricing.loadingChargePercentage);
+    if (raw === undefined) return 0;
+    return raw >= 0 && raw <= 100 ? raw : d.loadingChargePercentage;
+  })();
+
   const base = {
     royalConstructionOverheadPct,
     royalConstructionFeePct,
@@ -184,6 +193,7 @@ function hydratePricingSettings(
     hbcfRate,
     homeWarrantyHbcfFixed,
     impactFeeFixed: pick(num(pricing.impactFeeFixed)) ?? d.impactFeeFixed,
+    loadingChargePercentage,
   };
 
   // Explicit TCV (post-#116) → derive the premium from it. Legacy offers that
@@ -202,6 +212,7 @@ function hydratePricingSettings(
     hbcfTotalContractValue: reverseHbcfTotalContractValue(
       homeWarrantyHbcfFixed,
       hbcfRate,
+      loadingChargePercentage,
     ),
   };
 }

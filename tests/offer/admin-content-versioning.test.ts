@@ -85,6 +85,7 @@ const BASE_SNAPSHOT: OfferWorkspaceSnapshot = {
 
 const PREFILL: AdminOfferPrefill = {
   adminVersion: 7,
+  loadingChargePercentage: 0,
   buildScope: ["Admin scope line"],
   costLines: [
     // Admin prices this one, so the admin figure wins.
