@@ -199,35 +199,37 @@ export function ScheduleApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t border-border/70 pt-5">
-          <Button
-            variant="outline"
-            disabled={mutation.isPending}
-            onClick={() => submit("rejected")}
-          >
-            Reject request
-          </Button>
+        {approval.status === "PENDING" && (
+          <div className="flex justify-end gap-2 border-t border-border/70 pt-5">
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => submit("rejected")}
+            >
+              Reject request
+            </Button>
 
-          <Button
-            disabled={mutation.isPending}
-            onClick={() => submit("approved")}
-          >
-            {mutation.isPending ? (
-              <>
-                <Loader2
-                  className="mr-2 size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Submitting…
-              </>
-            ) : (
-              <>
-                <CalendarPlus className="mr-2 size-4" aria-hidden="true" />
-                Approve schedule
-              </>
-            )}
-          </Button>
-        </div>
+            <Button
+              disabled={mutation.isPending}
+              onClick={() => submit("approved")}
+            >
+              {mutation.isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <CalendarPlus className="mr-2 size-4" aria-hidden="true" />
+                  Approve schedule
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );

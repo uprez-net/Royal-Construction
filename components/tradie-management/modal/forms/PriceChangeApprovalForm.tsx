@@ -44,10 +44,7 @@ function parseRate(value: number | string | null | undefined): number | null {
 // Every rate render site goes through this, so a missing figure reads as a
 // placeholder instead of "$0.00" or "$NaN".
 const RATE_PLACEHOLDER = "Not recorded";
-const formatRate = (
-  value: number | null,
-  unit: "HOURLY" | "FIXED",
-) =>
+const formatRate = (value: number | null, unit: "HOURLY" | "FIXED") =>
   value === null
     ? RATE_PLACEHOLDER
     : formatQuotedPrice(value, unit, rateCurrency.format);
@@ -66,7 +63,9 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
   // An absent rate stays `null` rather than being coerced: `Number(null)` is 0,
   // which would present a missing rate as a real $0.00/hr, and `Number(undefined)`
   // is NaN, which would poison the difference and the impact sentence.
-  const currentRate = parseRate(data.currentHourlyRate ?? approval.tradie.lastQuotedPrice);
+  const currentRate = parseRate(
+    data.currentHourlyRate ?? approval.tradie.lastQuotedPrice,
+  );
   const newRate = parseRate(data.newHourlyRate);
   const hasRates = currentRate !== null && newRate !== null;
 
@@ -194,7 +193,11 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 label="Current stored rate"
                 value={
                   storedRate !== null
-                    ? formatQuotedPrice(storedRate, approval.tradie.lastQuotedPriceUnit, rateCurrency.format)
+                    ? formatQuotedPrice(
+                        storedRate,
+                        approval.tradie.lastQuotedPriceUnit,
+                        rateCurrency.format,
+                      )
                     : "Not set"
                 }
                 // Mono is reserved for actual figures; the "Not set" placeholder
@@ -270,7 +273,11 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
                 ) : (
                   <span className="font-mono tabular-nums">
                     {isIncrease ? "+" : ""}
-                    {formatQuotedPrice(difference, approval.tradie.lastQuotedPriceUnit, rateCurrency.format)}
+                    {formatQuotedPrice(
+                      difference,
+                      approval.tradie.lastQuotedPriceUnit,
+                      rateCurrency.format,
+                    )}
                     {percentageChange
                       ? ` (${isIncrease ? "+" : ""}${percentageChange}%)`
                       : ""}
@@ -346,32 +353,34 @@ export function PriceChangeApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
-          <Button
-            variant="outline"
-            onClick={() => submit("rejected")}
-            disabled={mutation.isPending}
-          >
-            Reject
-          </Button>
+        {approval.status === "PENDING" && (
+          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => submit("rejected")}
+              disabled={mutation.isPending}
+            >
+              Reject
+            </Button>
 
-          <Button
-            onClick={() => submit("approved")}
-            disabled={mutation.isPending || newRate === null || newRate <= 0}
-          >
-            {mutation.isPending ? (
-              <>
-                <Loader2
-                  className="mr-2 size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Submitting…
-              </>
-            ) : (
-              "Approve price change"
-            )}
-          </Button>
-        </div>
+            <Button
+              onClick={() => submit("approved")}
+              disabled={mutation.isPending || newRate === null || newRate <= 0}
+            >
+              {mutation.isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Submitting…
+                </>
+              ) : (
+                "Approve price change"
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );

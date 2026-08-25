@@ -219,36 +219,38 @@ export function ScheduleDeletionApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t border-border/70 pt-5">
-          <Button
-            variant="outline"
-            disabled={mutation.isPending}
-            onClick={() => submit("rejected")}
-          >
-            Keep booking
-          </Button>
+        {approval.status === "PENDING" && (
+          <div className="flex justify-end gap-2 border-t border-border/70 pt-5">
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => submit("rejected")}
+            >
+              Keep booking
+            </Button>
 
-          <Button
-            variant="destructive"
-            disabled={mutation.isPending}
-            onClick={() => submit("approved")}
-          >
-            {mutation.isPending ? (
-              <>
-                <Loader2
-                  className="mr-2 size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Submitting…
-              </>
-            ) : (
-              <>
-                <CalendarX className="mr-2 size-4" aria-hidden="true" />
-                Approve removal
-              </>
-            )}
-          </Button>
-        </div>
+            <Button
+              variant="destructive"
+              disabled={mutation.isPending}
+              onClick={() => submit("approved")}
+            >
+              {mutation.isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Submitting…
+                </>
+              ) : (
+                <>
+                  <CalendarX className="mr-2 size-4" aria-hidden="true" />
+                  Approve removal
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );
