@@ -26,6 +26,7 @@ import {
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { createOfferAcceptanceEnvelope } from "@/lib/docusign/offer-envelope";
+import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -72,11 +73,14 @@ export async function sendOfferForSignature(input: {
   // The acceptance is sent once negotiation has settled, so gate on SENT (the
   // offer has been issued to the client). Recalling an out-for-signature offer
   // returns it to SENT, from which it can be re-sent.
-  if (offer.offerStatus !== OfferStatus.SENT) {
-    return {
-      ok: false,
-      error: `The offer can only be sent for signature once it has been sent to the client (current status: ${offer.offerStatus}).`,
-    };
+  //
+  // The reason comes from a per-status map rather than printing the enum: the
+  // old message reported "current status: OFFER_SENT" while claiming the offer
+  // had to be sent to the client first, which reads as its own contradiction
+  // and names no way forward.
+  const blocked = describeAcceptanceSendBlock(offer.offerStatus);
+  if (blocked !== null) {
+    return { ok: false, error: blocked };
   }
 
   let snapshot: ReturnType<typeof deserializeWorkspace>;
@@ -195,9 +199,14 @@ export async function sendOfferForSignature(input: {
     data: { offerStatus: OfferStatus.OFFER_SENT },
   });
   if (claim.count === 0) {
+    // Lost the race, or the status moved between the read above and here. Same
+    // wall as the guard, so give the same answer rather than a second wording
+    // of it that sends the estimator looking for a different problem.
     return {
       ok: false,
-      error: "The offer is already being sent for signature or has been sent.",
+      error:
+        describeAcceptanceSendBlock(OfferStatus.OFFER_SENT) ??
+        "The offer is already being sent for signature.",
     };
   }
 
