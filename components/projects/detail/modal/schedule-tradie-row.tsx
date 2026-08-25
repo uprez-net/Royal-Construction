@@ -35,11 +35,13 @@ import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { format } from "date-fns";
 import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { ProjectStage } from "@prisma/client";
+import { PROJECT_STAGE_LABELS } from "@/types/project";
 
 interface TradieScheduleRowProps {
   row: TradieScheduleInputRow;
   errors: TradieScheduleRowErrors;
-  milestones: { id: string; name: string }[];
+  milestones: { id: string; name: string; projectStage: ProjectStage }[];
   /** 1-based position, used for the row's accessible group name. */
   position: number;
   onChange: (
@@ -96,6 +98,9 @@ export function TradieScheduleRow({
   );
   const [tradieSearchQuery, setTradieSearchQuery] = useState("");
   const [sendEmailCheck, setSendEmailCheck] = useState(false);
+  const [selectedProjectStage, setSelectedProjectStage] = useState<
+    ProjectStage | undefined
+  >(undefined);
 
   const fieldId = (name: string) => `tradie-schedule-${row.id}-${name}`;
   const errorId = (name: string) => `${fieldId(name)}-error`;
@@ -130,6 +135,21 @@ export function TradieScheduleRow({
     () => selectedCategoryTradies.find((tradie) => tradie.id === row.tradieId),
     [selectedCategoryTradies, row.tradieId],
   );
+
+  const stageToMilestoneMap = useMemo(() => {
+    const map: Record<ProjectStage, { id: string; name: string }[]> =
+      {} as Record<ProjectStage, { id: string; name: string }[]>;
+    milestones.forEach((milestone) => {
+      if (!map[milestone.projectStage]) {
+        map[milestone.projectStage] = [];
+      }
+      map[milestone.projectStage]?.push({
+        id: milestone.id,
+        name: milestone.name,
+      });
+    });
+    return map;
+  }, [milestones]);
 
   useEffect(() => {
     const generatedEmail = generateTradieOutreachEmail({
@@ -166,11 +186,13 @@ export function TradieScheduleRow({
       },
     });
     onChange(index, {
-      emailContent: sendEmailCheck ?{
-        subject: generatedEmail.subject,
-        body: generatedEmail.html,
-        attachments: [],
-      }: undefined,
+      emailContent: sendEmailCheck
+        ? {
+            subject: generatedEmail.subject,
+            body: generatedEmail.html,
+            attachments: [],
+          }
+        : undefined,
     });
   }, [
     onChange,
@@ -400,6 +422,43 @@ export function TradieScheduleRow({
         {/* Milestone */}
         <div className="space-y-2">
           <Label htmlFor={fieldId("milestone")}>
+            Milestone
+            <RequiredMark />
+          </Label>
+
+          <Select
+            value={selectedProjectStage}
+            onValueChange={(value) =>
+              setSelectedProjectStage(value as ProjectStage)
+            }
+          >
+            <SelectTrigger
+              id={fieldId("project-stage")}
+              aria-invalid={Boolean(errors.milestoneId)}
+              aria-describedby={describedBy(
+                "project-stage",
+                errors.milestoneId,
+              )}
+              className="w-auto min-w-full"
+            >
+              <SelectValue placeholder="Select milestone" />
+            </SelectTrigger>
+
+            <SelectContent className="w-auto min-w-full">
+              {Object.entries(stageToMilestoneMap).map(([stage]) => (
+                <SelectItem key={stage} value={stage}>
+                  {PROJECT_STAGE_LABELS[stage as ProjectStage]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <FieldError id={errorId("milestone")} message={errors.milestoneId} />
+        </div>
+
+        {/* Milestone */}
+        <div className="space-y-2">
+          <Label htmlFor={fieldId("milestone")}>
             Activity
             <RequiredMark />
           </Label>
@@ -422,11 +481,12 @@ export function TradieScheduleRow({
             </SelectTrigger>
 
             <SelectContent className="w-auto min-w-full">
-              {milestones.map((milestone) => (
-                <SelectItem key={milestone.id} value={milestone.id}>
-                  {milestone.name}
-                </SelectItem>
-              ))}
+              {selectedProjectStage &&
+                stageToMilestoneMap[selectedProjectStage].map((milestone) => (
+                  <SelectItem key={milestone.id} value={milestone.id}>
+                    {milestone.name}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 

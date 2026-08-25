@@ -176,10 +176,15 @@ export function ModalManager() {
         : undefined;
       const milestones = projectPayload
         ? projectPayload.milestones
-            .filter((m) => m.status !== MilestoneStatus.DONE)
+            .filter(
+              (m) =>
+                m.status !== MilestoneStatus.DONE &&
+                m.status !== MilestoneStatus.NOT_REQUIRED,
+            )
             .map((m) => ({
               id: m.id,
               name: m.name,
+              projectStage: m.projectStage,
             }))
         : undefined;
 
@@ -409,7 +414,11 @@ export function ModalManager() {
       // one task, opened from a notification it still means "this lead".
       const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
       return (
-        <FollowupPromptModal leadId={leadId} taskId={taskId} onClose={handleClose} />
+        <FollowupPromptModal
+          leadId={leadId}
+          taskId={taskId}
+          onClose={handleClose}
+        />
       );
     }
     case "meetingReview": {
@@ -420,7 +429,13 @@ export function ModalManager() {
       // reviewing a meeting recorded the outcome and left the task open for
       // ever — it never left the Tasks tab, not even after a reload.
       const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
-      return <MeetingReviewModal leadId={leadId} taskId={taskId} onClose={handleClose} />;
+      return (
+        <MeetingReviewModal
+          leadId={leadId}
+          taskId={taskId}
+          onClose={handleClose}
+        />
+      );
     }
     case "leadStatsDrilldown": {
       const title = String(modal.payload?.title ?? "Lead details");
