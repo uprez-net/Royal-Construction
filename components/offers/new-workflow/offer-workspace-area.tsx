@@ -117,9 +117,9 @@ export function AreaCalculatorPanel({
             <BasisRow label="Kitchen" value={basis.kitchenSqm} />
           </dl>
         </section>
-        <section className="grid grid-cols-2 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-2">
-            Kitchen & linens
+        <section className="grid grid-cols-3 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-3">
+            Kitchen & linens & Showers
           </h3>
           <AreaField
             label="Kitchen sqm"
@@ -134,6 +134,17 @@ export function AreaCalculatorPanel({
               value={job.linenCount}
               onChange={(event) =>
                 onJobChange({ linenCount: parseFloat(event.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Total Number of Showers">
+            <Input
+              min="0"
+              type="number"
+              placeholder="Auto-filled from lead requirements"
+              value={job.showerCount}
+              onChange={(event) =>
+                onJobChange({ showerCount: parseFloat(event.target.value) || 0 })
               }
             />
           </Field>

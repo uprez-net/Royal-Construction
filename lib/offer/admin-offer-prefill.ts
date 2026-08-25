@@ -258,6 +258,10 @@ export function reevaluateFormulaCostLines(
     | "bedrooms"
     | "bathrooms"
     | "linenCount"
+    | "showerCount"
+    | "grannyBedrooms"
+    | "grannyBathrooms"
+    | "grannyGarageSpaces"
   >,
   area: OfferAreaCalculator,
 ): readonly OfferWorkspaceCostLine[] {
@@ -290,8 +294,8 @@ export function reevaluateFormulaCostLines(
       basis.grannyFlatSqm +
       basis.balconySqm +
       basis.voidSqm,
-    TOTAL_SHOWERS: job.bathrooms,
-    TOTAL_BEDROOMS: job.bedrooms,
+    TOTAL_SHOWERS: job.showerCount,
+    TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,
     TOTAL_LINENS: job.linenCount,
   };
 

@@ -136,6 +136,7 @@ export type OfferWorkspaceJob = {
   // with its own counts below; these three always describe the main dwelling.
   readonly bedrooms: number;
   readonly bathrooms: number;
+  readonly showerCount: number;
   readonly linenCount: number;
   readonly garageSpaces: number;
   // Granny home (secondary dwelling). hasGrannyHome gates both the workspace
@@ -884,6 +885,7 @@ export const INITIAL_OFFER_JOB: OfferWorkspaceJob = {
   bedrooms: 0,
   bathrooms: 0,
   garageSpaces: 0,
+  showerCount: 0,
   linenCount: 0,
   hasGrannyHome: false,
   grannyBedrooms: 0,
