@@ -10,6 +10,7 @@ import {
   badRequestResponse,
   createLeadTaskSchema,
   errorResponse,
+  parseLeadIdsParam,
   successResponse,
 } from "@/utils/validators";
 
@@ -18,6 +19,10 @@ import {
  *
  * Defaulting to open keeps every existing caller working unchanged — the
  * Tasks tab and both review dialogs call this with no query string.
+ *
+ * `?leadIds=1,2,3` narrows open work to those leads. Everything that wanted
+ * one lead's tasks used to fetch the unscoped list and filter it here, which
+ * quietly depended on that lead's work landing inside the 200-row cap.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -28,9 +33,22 @@ export async function GET(request: NextRequest) {
     if (state !== null && state !== "open" && state !== "completed") {
       return badRequestResponse('state must be "open" or "completed"');
     }
-    return successResponse(
-      state === "completed" ? await listCompletedTasks() : await listOpenTasks(),
+
+    const parsedLeadIds = parseLeadIdsParam(
+      request.nextUrl.searchParams.get("leadIds"),
     );
+    if (!parsedLeadIds.ok) return badRequestResponse(parsedLeadIds.error);
+
+    // The completed list has no scoped caller yet, so rather than accept the
+    // parameter and ignore it — which reads as working — say it is not there.
+    if (state === "completed") {
+      if (parsedLeadIds.leadIds !== undefined) {
+        return badRequestResponse("leadIds is not supported with state=completed");
+      }
+      return successResponse(await listCompletedTasks());
+    }
+
+    return successResponse(await listOpenTasks({ leadIds: parsedLeadIds.leadIds }));
   } catch (error) {
     console.error("/api/leads/tasks GET error", error);
     return errorResponse("Failed to fetch tasks", {
@@ -49,7 +67,7 @@ export async function POST(request: NextRequest) {
     const task = await createLeadTask({
       leadId,
       type,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      dueDate: new Date(dueDate),
       dueTime,
       notes,
     });

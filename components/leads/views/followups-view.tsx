@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { createPortal } from "react-dom";
 import {
   Calendar,
   Phone,
   Mail,
-  Clock,
-  User,
   AlertCircle,
   Check,
   Eye,
@@ -29,6 +29,14 @@ import {
 } from "@/lib/leads/task-service";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { bumpLeadTasks, openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -202,7 +210,6 @@ interface FollowupItemProps {
   task: LeadTaskRow;
   /** Only needed to open the email modal, which wants a whole Lead. */
   lead: Lead | undefined;
-  index: number;
   onLeadUpdate: (lead: Lead) => void;
   onDone: (taskId: number) => void;
   onReview: (task: LeadTaskRow) => void;
@@ -212,7 +219,6 @@ interface FollowupItemProps {
 function FollowupItem({
   task,
   lead,
-  index,
   onLeadUpdate,
   onDone,
   onReview,
@@ -229,147 +235,174 @@ function FollowupItem({
     LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ?? task.type;
   const stageConfig = getStageConfig(task.lead.stage);
   const todayStr = getAustralianDate(0);
-  const isToday = task.dueDate ? isSameDay(parseISO(task.dueDate), todayStr) : false;
+  const isToday = task.dueDate
+    ? isSameDay(parseISO(task.dueDate), todayStr)
+    : false;
+  const isOverdue =
+    task.dueDate !== null &&
+    isBefore(parseISO(task.dueDate), todayStr) &&
+    !isToday;
+  const dueLabel = task.dueDate
+    ? `${formatDate(task.dueDate)}${task.dueTime ? ` · ${task.dueTime}` : ""}`
+    : "No date";
 
   return (
-    <div className={`fu-item ${isToday ? "fu-item-today" : ""}`}>
-      {showEmailModal && lead && (
-        <EmailFlowModal
-          lead={lead}
-          onClose={() => setShowEmailModal(false)}
-          onLeadUpdate={onLeadUpdate}
-          showToast={showToast}
-        />
-      )}
-
-      <div className="fu-timeline-track">
-        <div
-          className="fu-timeline-dot"
-          style={{ background: isToday ? "var(--warning)" : stageConfig.dot }}
+    <>
+      {showEmailModal && lead
+        ? createPortal(
+            <EmailFlowModal
+              lead={lead}
+              onClose={() => setShowEmailModal(false)}
+              onLeadUpdate={onLeadUpdate}
+              showToast={showToast}
+            />,
+            document.body,
+          )
+        : null}
+      <TableRow
+        className={
+          isOverdue
+            ? "bg-[var(--destructive-light)]/40"
+            : isToday
+              ? "bg-[var(--warning-light)]/70"
+              : undefined
+        }
+      >
+        <TableCell className="max-w-56">
+          {/* Link, not a bare anchor. A worklist is somewhere you open a lead,
+              deal with it and come back, and a plain href tears the app down
+              and rebuilds it every time — losing the filter chip you had
+              selected and refetching every task to land where a client
+              navigation would have gone straight there. */}
+          <Link
+            href={`/leads/${task.leadId}?activeTab=scheduledWork`}
+            className="block truncate font-medium text-foreground hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {task.lead.name}
+          </Link>
+          <Badge
+            variant="secondary"
+            className="mt-1 border-transparent"
+            style={{
+              backgroundColor: stageConfig.bg,
+              color: stageConfig.color,
+            }}
+          >
+            {task.lead.stage}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <Badge variant="outline">{typeLabel}</Badge>
+        </TableCell>
+        <TableCell
+          className={
+            isOverdue
+              ? "font-medium tabular-nums text-[var(--destructive-ink)]"
+              : "tabular-nums text-muted-foreground"
+          }
         >
-          {index + 1}
-        </div>
-      </div>
-
-      <div className="fu-item-body">
-        <div className="fu-item-top">
-          <div className="fu-item-name-row">
-            <span className="fu-item-name">{task.lead.name}</span>
-            {/* shadcn Badge, not a bespoke span. The stage colour is data —
-                one per pipeline stage — so it arrives as a style override on
-                the secondary variant rather than as another hand-rolled pill.
-                --warning-ink, not --warning: globals.css states the base
-                status colours are fill-only and fail contrast as text. */}
-            <Badge
-              variant="secondary"
-              className="border-transparent"
-              style={{
-                backgroundColor: isToday ? "var(--warning-light)" : stageConfig.bg,
-                color: isToday ? "var(--warning-ink)" : stageConfig.color,
-              }}
-            >
-              {task.lead.stage}
-            </Badge>
-            <Badge variant="outline">{typeLabel}</Badge>
-          </div>
-          <div className="fu-item-meta">
-            <span className="fu-meta-chip">
-              <Calendar size={12} />
-              {task.dueDate ? formatDate(task.dueDate) : "No date"}
-            </span>
-            <span className="fu-meta-chip">
-              <Clock size={12} />
-              {task.dueTime ?? ""}
-            </span>
-            <span className="fu-meta-chip">
-              <User size={12} />
-              {task.lead.assignedName || "Unassigned"}
-            </span>
-          </div>
-        </div>
-
-        {/* Always rendered, even when empty. The row is a grid and the body
-            uses display:contents, so a missing cell would shunt the actions
-            into the notes column on any lead without a note. */}
-        <div
-          className={`fu-notes-block${task.notes ? "" : " fu-notes-empty"}`}
+          {dueLabel}
+        </TableCell>
+        <TableCell
+          className="max-w-36 truncate text-muted-foreground"
+          title={task.lead.assignedName || "Unassigned"}
+        >
+          {task.lead.assignedName || "Unassigned"}
+        </TableCell>
+        <TableCell
+          className="max-w-64 min-w-40 whitespace-normal text-muted-foreground"
           title={task.notes || undefined}
         >
-          {task.notes}
-        </div>
-
-        <div className="fu-item-actions">
-          <button
-            type="button"
-            className="fu-action-btn fu-action-call"
-            title={`Call ${task.lead.name}`}
-            aria-label={`Call ${task.lead.name}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleCall();
-            }}
-          >
-            <Phone size={14} />
-            <span>Call</span>
-          </button>
-          <button
-            type="button"
-            className="fu-action-btn fu-action-email"
-            title={
-              lead
-                ? `Send follow-up email to ${task.lead.name}`
-                : "Open the lead to email from here"
-            }
-            aria-label={`Send follow-up email to ${task.lead.name}`}
-            // The modal wants a whole Lead. Tasks are fetched independently of
-            // the lead page, so one can arrive without its lead loaded.
-            disabled={!lead}
-            onClick={(event) => {
-              event.stopPropagation();
-              setShowEmailModal(true);
-            }}
-          >
-            <Mail size={14} />
-            <span>Email</span>
-          </button>
-          <button
-            type="button"
-            className="fu-action-btn"
-            title={`Mark this ${typeLabel.toLowerCase()} done`}
-            aria-label={`Mark ${task.lead.name} ${typeLabel.toLowerCase()} done`}
-            disabled={closing}
-            onClick={async (event) => {
-              event.stopPropagation();
-              setClosing(true);
-              try {
-                await completeTask(task.id);
-                onDone(task.id);
-              } catch {
-                showToast("Could not close the task. Please try again.", "error");
-              } finally {
-                setClosing(false);
+          <span className="line-clamp-2">{task.notes || "—"}</span>
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="flex justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="cursor-pointer"
+              title={`Call ${task.lead.name}`}
+              aria-label={`Call ${task.lead.name}`}
+              onClick={handleCall}
+            >
+              <Phone aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="cursor-pointer"
+              title={
+                lead
+                  ? `Send follow-up email to ${task.lead.name}`
+                  : "Open the lead to email from here"
               }
-            }}
-          >
-            <Check size={14} />
-            <span>Done</span>
-          </button>
-          <button
-            type="button"
-            className="fu-action-btn"
-            title={`Record the outcome for ${task.lead.name}`}
-            aria-label={`Review ${task.lead.name}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onReview(task);
-            }}
-          >
-            <Eye size={14} />
-            <span>Review</span>
-          </button>
-        </div>
-      </div>
-    </div>
+              aria-label={`Send follow-up email to ${task.lead.name}`}
+              disabled={!lead}
+              onClick={() => setShowEmailModal(true)}
+            >
+              <Mail aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="cursor-pointer"
+              title={`Mark this ${typeLabel.toLowerCase()} done`}
+              aria-label={`Mark ${task.lead.name} ${typeLabel.toLowerCase()} done`}
+              disabled={closing}
+              onClick={async () => {
+                setClosing(true);
+                try {
+                  await completeTask(task.id);
+                  onDone(task.id);
+                } catch {
+                  showToast("Could not close the task. Please try again.", "error");
+                } finally {
+                  setClosing(false);
+                }
+              }}
+            >
+              <Check aria-hidden="true" />
+              Done
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="cursor-pointer"
+              title={`Record the outcome for ${task.lead.name}`}
+              aria-label={`Review ${task.lead.name}`}
+              onClick={() => onReview(task)}
+            >
+              <Eye aria-hidden="true" />
+              Review
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    </>
+  );
+}
+
+function TaskTable({ children }: { children: React.ReactNode }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Lead</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>Due</TableHead>
+          <TableHead>Assigned</TableHead>
+          <TableHead>Note</TableHead>
+          <TableHead className="text-right">
+            <span className="sr-only">Actions</span>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>{children}</TableBody>
+    </Table>
   );
 }
 
@@ -390,6 +423,9 @@ function FollowupsView({
   const [showDone, setShowDone] = useState(false);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [tasksError, setTasksError] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<
+    "all" | "dueNow" | "dueLater" | "unscheduled" | "nonMeeting" | "meeting"
+  >("all");
   const busy = loading || tasksLoading;
 
   // showToast is rebuilt on every render of the component that owns the hook,
@@ -403,7 +439,7 @@ function FollowupsView({
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      fetchOpenTasks(controller.signal),
+      fetchOpenTasks({ signal: controller.signal }),
       fetchCompletedTasks(controller.signal),
     ])
       .then(([open, done]) => {
@@ -510,70 +546,129 @@ function FollowupsView({
   // Every open task, whatever its type. Splitting meetings out of the list left
   // them counted in Quick Stats and rendered nowhere, so a meeting had no Done
   // button and no row. The type pill on each row tells them apart.
-  const pendingFollowups = useMemo(
+  const dueNowTasks = useMemo(
     () => tasks.filter((t) => t.dueDate === null || isDue(t, today)),
     [tasks, today],
   );
 
-  const upcomingFollowups = useMemo(
+  const dueLaterTasks = useMemo(
     () =>
       tasks
         .filter((t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today))
-        .sort((a, b) => parseISO(a.dueDate!).getTime() - parseISO(b.dueDate!).getTime()),
+        .sort(
+          (a, b) =>
+            parseISO(a.dueDate!).getTime() - parseISO(b.dueDate!).getTime(),
+        ),
     [tasks, today],
   );
 
-  const pendingMeetings = useMemo(
-    () => meetings.filter((t) => t.dueDate === null || isDue(t, today)),
-    [meetings, today],
-  );
-
-  const upcomingMeetings = useMemo(
-    () => meetings.filter((t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today)),
-    [meetings, today],
-  );
-
-  // Derived from the same list the rows come from, so the counts and the list
-  // can no longer disagree. Production showed three different numbers for this
-  // on one screen: the card said 10 pending, the tab said 0, the panel said 4.
-  const undatedCount = useMemo(
-    () => tasks.filter((t) => t.dueDate === null).length,
+  const undatedTasks = useMemo(
+    () => tasks.filter((t) => t.dueDate === null),
     [tasks],
   );
 
-  const liveStats = useMemo(
-    () => ({
-      totalFollowUps: nonMeetings.length,
-      pendingFollowUps: pendingFollowups.filter((t) => t.type !== "MEETING").length,
-      upcomingFollowUps: upcomingFollowups.filter((t) => t.type !== "MEETING").length,
-      totalMeetings: meetings.length,
-      pendingMeetings: pendingMeetings.length,
-      upcomingMeetings: upcomingMeetings.length,
-    }),
-    [nonMeetings, pendingFollowups, upcomingFollowups, meetings, pendingMeetings, upcomingMeetings],
+  type TaskFilter =
+    | "all"
+    | "dueNow"
+    | "dueLater"
+    | "unscheduled"
+    | "nonMeeting"
+    | "meeting";
+
+  /** Due-now first, then due-later, then undated — for type-only filters. */
+  const sortOpenWork = useCallback(
+    (list: LeadTaskRow[]) =>
+      [...list].sort((a, b) => {
+        const rank = (t: LeadTaskRow) => {
+          if (t.dueDate === null) return 2;
+          if (isDue(t, today)) return 0;
+          return 1;
+        };
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        if (a.dueDate && b.dueDate) {
+          return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime();
+        }
+        return 0;
+      }),
+    [today],
   );
 
-  // No server fallback any more. The counts and the rows are derived from one
-  // list, so they cannot disagree. Production showed three different numbers
-  // for this on a single screen: the card said 10 pending, the tab said 0,
-  // and the panel said 4, because each counted a different thing.
-  const stats = liveStats;
+  const filteredSingleList = useMemo(() => {
+    switch (taskFilter) {
+      case "dueNow":
+        return dueNowTasks;
+      case "dueLater":
+        return dueLaterTasks;
+      case "unscheduled":
+        return undatedTasks;
+      case "nonMeeting":
+        return sortOpenWork(nonMeetings);
+      case "meeting":
+        return sortOpenWork(meetings);
+      default:
+        return null;
+    }
+  }, [
+    taskFilter,
+    dueNowTasks,
+    dueLaterTasks,
+    undatedTasks,
+    nonMeetings,
+    meetings,
+    sortOpenWork,
+  ]);
+
+  const filterChips: {
+    key: TaskFilter;
+    count: number;
+    label: string;
+  }[] = [
+    { key: "all", count: tasks.length, label: "all open" },
+    { key: "dueNow", count: dueNowTasks.length, label: "due now" },
+    {
+      key: "nonMeeting",
+      count: nonMeetings.length,
+      label: "calls, emails, waiting",
+    },
+    { key: "meeting", count: meetings.length, label: "meetings" },
+    { key: "dueLater", count: dueLaterTasks.length, label: "due later" },
+    { key: "unscheduled", count: undatedTasks.length, label: "unscheduled" },
+  ];
+
+  const listIsEmpty =
+    taskFilter === "all"
+      ? dueNowTasks.length === 0 && dueLaterTasks.length === 0
+      : (filteredSingleList?.length ?? 0) === 0;
 
   return (
     <div className="followups-view">
-      {/* One list, full width.
-          There used to be three places showing the same work: an "Overdue and
-          due today" panel above the tabs, this list, and an "Upcoming
-          Reminders" sidebar. The panel held 14 rows and every one of them was
-          already in this list, with more context and three actions instead of
-          one. It has gone, the reminders are folded in as a section, and the
-          six stat cards are a single line. */}
-      <div className="tasks-summary">
-        <span><strong>{pendingFollowups.length}</strong> due now</span>
-        <span><strong>{stats.pendingFollowUps}</strong> calls, emails, waiting</span>
-        <span><strong>{stats.pendingMeetings}</strong> meetings</span>
-        <span><strong>{upcomingFollowups.length}</strong> due later</span>
-        <span><strong>{undatedCount}</strong> unscheduled</span>
+      {/* One list, full width. Summary chips are real filters — each count
+          matches what the list shows when that chip is pressed. */}
+      <div
+        className="mb-2 flex flex-wrap gap-1.5"
+        role="toolbar"
+        aria-label="Filter tasks"
+      >
+        {filterChips.map(({ key, count, label }) => {
+          const pressed = taskFilter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={pressed}
+              className={
+                pressed
+                  ? "inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary"
+                  : "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              }
+              onClick={() => setTaskFilter(key)}
+            >
+              <strong className="tabular-nums">{count}</strong> {label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="fu-card">
@@ -582,7 +677,7 @@ function FollowupsView({
             <div className="fu-empty">
               <p className="fu-empty-title">Loading...</p>
             </div>
-          ) : pendingFollowups.length === 0 && upcomingFollowups.length === 0 ? (
+          ) : listIsEmpty ? (
             <div className="fu-empty">
               <div className="fu-empty-icon">
                 {tasksError ? <AlertCircle size={28} /> : <Calendar size={28} />}
@@ -591,22 +686,27 @@ function FollowupsView({
                   sentence is what let 5 production leads sit parked with
                   nothing scheduled and nobody the wiser. */}
               <p className="fu-empty-title">
-                {tasksError ? "Could not load tasks" : "Nothing due"}
+                {tasksError
+                  ? "Could not load tasks"
+                  : taskFilter === "all"
+                    ? "Nothing due"
+                    : "Nothing in this filter"}
               </p>
               <p className="fu-empty-desc">
                 {tasksError
                   ? "This list is empty because the request failed, not because there is no work. Refresh to try again."
-                  : "No open tasks on any live lead."}
+                  : taskFilter === "all"
+                    ? "No open tasks on any live lead."
+                    : "Try another filter, or clear back to all open."}
               </p>
             </div>
-          ) : (
-            <>
-              {pendingFollowups.map((task, index) => (
+          ) : taskFilter === "all" ? (
+            <TaskTable>
+              {dueNowTasks.map((task) => (
                 <FollowupItem
                   key={task.id}
                   task={task}
                   lead={leadsById.get(task.leadId)}
-                  index={index}
                   onLeadUpdate={onLeadUpdate}
                   onDone={handleTaskDone}
                   onReview={handleReview}
@@ -614,25 +714,47 @@ function FollowupsView({
                 />
               ))}
 
-              {upcomingFollowups.length > 0 && (
-                <div className="fu-divider">
-                  Due later
-                  <span>{upcomingFollowups.length}</span>
-                </div>
+              {dueLaterTasks.length > 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={6}
+                    className="bg-muted/40 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                  >
+                    <span className="flex items-center justify-between">
+                      Due later
+                      <span className="tabular-nums font-medium">
+                        {dueLaterTasks.length}
+                      </span>
+                    </span>
+                  </TableCell>
+                </TableRow>
               )}
-              {upcomingFollowups.map((task, index) => (
+              {dueLaterTasks.map((task) => (
                 <FollowupItem
                   key={task.id}
                   task={task}
                   lead={leadsById.get(task.leadId)}
-                  index={pendingFollowups.length + index}
                   onLeadUpdate={onLeadUpdate}
                   onDone={handleTaskDone}
                   onReview={handleReview}
                   showToast={showToast}
                 />
               ))}
-            </>
+            </TaskTable>
+          ) : (
+            <TaskTable>
+              {filteredSingleList!.map((task) => (
+                <FollowupItem
+                  key={task.id}
+                  task={task}
+                  lead={leadsById.get(task.leadId)}
+                  onLeadUpdate={onLeadUpdate}
+                  onDone={handleTaskDone}
+                  onReview={handleReview}
+                  showToast={showToast}
+                />
+              ))}
+            </TaskTable>
           )}
 
           {/* Outside the open/empty branch on purpose: when every task is
@@ -644,7 +766,7 @@ function FollowupsView({
                 type="button"
                 aria-expanded={showDone}
                 onClick={() => setShowDone((open) => !open)}
-                className="flex w-full items-center gap-2 border-t border-border/60 px-4 py-2 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
+                className="flex w-full items-center gap-2 border-t border-border/60 px-4 py-2 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground"
               >
                 {showDone ? (
                   <ChevronDown className="size-3.5" aria-hidden="true" />

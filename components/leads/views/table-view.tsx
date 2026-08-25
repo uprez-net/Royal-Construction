@@ -1,8 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   Phone,
   Mail,
-  Calendar,
   UserPlus,
   Search,
   RefreshCw,
@@ -14,20 +13,25 @@ import { useRouter } from "next/navigation";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
-  formatFollowup,
   dialablePhone,
   STAGE_STYLES,
   LEAD_STAGE_OPTIONS,
   isKpiCohortMetric,
+  sortLeadOpenTasks,
 } from "@/lib/leads/lead-helpers";
 import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
-import { FollowupModal } from "@/components/leads/modal-ui/followup-modal";
+import {
+  LeadTaskCell,
+  LeadTasksModal,
+} from "@/components/leads/modal-ui/lead-tasks-modal";
 import { AssignedModal } from "@/components/leads/modal-ui/assigned-modal";
 import { ToastContainer, useToast } from "@/components/common/use-toast";
 import type { LeadEmails } from "@prisma/client";
 import LeadCommModal from "../modal-ui/lead-comm-modal";
+import { fetchOpenTasks, type LeadTaskRow } from "@/lib/leads/task-service";
+import { useAppSelector } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
 
 interface TableViewProps {
@@ -62,9 +66,65 @@ export default function TableView({
   /* ── Modal pointers (only which lead — each modal manages its own state) ── */
   const [leadToDelete, setLeadToDelete] = React.useState<Lead | null>(null);
   const [emailLead, setEmailLead] = React.useState<Lead | null>(null);
-  const [followupLead, setFollowupLead] = React.useState<Lead | null>(null);
+  const [tasksLead, setTasksLead] = React.useState<Lead | null>(null);
   const [assignedLead, setAssignedLead] = React.useState<Lead | null>(null);
   const [commLead, setCommLead] = React.useState<string | null>(null);
+  const [openTasks, setOpenTasks] = React.useState<LeadTaskRow[]>([]);
+  const [tasksLoaded, setTasksLoaded] = React.useState(false);
+  // Failed is not the same as empty. Without this the catch marked the fetch
+  // loaded with an empty list, so a dropped request rendered the dashed "Add
+  // task" pill on every row — the whole table reading as though nobody had a
+  // single call booked. The Tasks tab already draws this distinction.
+  const [tasksError, setTasksError] = React.useState(false);
+  const tasksVersion = useAppSelector((state) => state.ui.leadTasksVersion);
+
+  // Ask for the tasks of the leads on screen, not of the whole business. The
+  // unscoped list is capped at the 200 soonest-due, so a lead whose only task
+  // sorted past that showed the dashed "Add task" pill over real work.
+  //
+  // Joined into a string for the dependency array: `leads` is a fresh array on
+  // every render of the parent, so depending on it refetches continuously,
+  // and depending on `leads.length` misses a filter change that happens to
+  // return the same number of rows.
+  const leadIdsKey = useMemo(() => leads.map((l) => l.id).join(","), [leads]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const leadIds = leadIdsKey === "" ? [] : leadIdsKey.split(",").map(Number);
+    // Cleared on success rather than up front: a synchronous setState in an
+    // effect body cascades a render, and resetting here would flash the
+    // loading placeholder over an error that is about to be resolved anyway.
+    fetchOpenTasks({ leadIds, signal: controller.signal })
+      .then((rows) => {
+        setOpenTasks(rows);
+        setTasksError(false);
+        setTasksLoaded(true);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        // Drop the stale list too: rows from a previous load would otherwise
+        // sit next to leads whose tasks this attempt never fetched.
+        setOpenTasks([]);
+        setTasksError(true);
+        setTasksLoaded(true);
+      });
+    return () => controller.abort();
+  }, [tasksVersion, leadIdsKey]);
+
+  const tasksReady = tasksLoaded && !tasksError;
+
+  const tasksByLeadId = useMemo(() => {
+    const grouped = new Map<number, LeadTaskRow[]>();
+    for (const task of openTasks) {
+      const list = grouped.get(task.leadId);
+      if (list) list.push(task);
+      else grouped.set(task.leadId, [task]);
+    }
+    for (const [leadId, list] of grouped) {
+      grouped.set(leadId, sortLeadOpenTasks(list));
+    }
+    return grouped;
+  }, [openTasks]);
 
   /* ── Filter logic ── */
   const activeFilters = useMemo(() => {
@@ -159,7 +219,7 @@ export default function TableView({
                     <th className="col-location">Location</th>
                     <th className="col-source">Source Detail</th>
                     <th className="col-stage">Stage</th>
-                    <th className="col-followup">Follow-up</th>
+                    <th className="col-followup">Task</th>
                     <th className="col-assigned">Assigned</th>
                     <th className="col-actions">Actions</th>
                   </tr>
@@ -208,53 +268,30 @@ export default function TableView({
                           </span>
                         </td>
                         <td className="col-followup">
-                          {/* A date alone is enough to have something booked.
-                              This required a TIME as well, and every preset in
-                              the task composer books all-day work with no time
-                              — so a lead with four calls booked still read
-                              "Set date" and looked untouched. */}
-                          {!lead.followupDate ? (
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setFollowupLead(lead);
-                              }}
+                          {tasksReady ? (
+                            <LeadTaskCell
+                              next={tasksByLeadId.get(lead.id)?.[0]}
                               disabled={lead.isArchived}
-                              title="Set Follow-up"
-                            >
-                              <Calendar size={12} />
-                              <span>Set date</span>
-                            </button>
+                              onOpen={() => setTasksLead(lead)}
+                            />
                           ) : (
-                            /* A button, not a clickable span. It opens the
-                               follow-up editor, so it has to be reachable by
-                               keyboard — and this branch now renders for every
-                               lead with work booked, not just the handful that
-                               happened to carry a time. The mobile card below
-                               was already a button. */
-                            <button
-                              type="button"
-                              title="Edit follow-up"
-                              className={`followup-date-text cursor-pointer border-0 bg-transparent p-0 text-left transition-colors hover:text-royal-gold ${lead.urgent ? "followup-urgent text-destructive font-semibold hover:text-destructive" : ""}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setFollowupLead(lead);
-                              }}
+                            <span
+                              className="text-xs text-muted-foreground"
+                              title={
+                                tasksError
+                                  ? "Could not load tasks. Refresh to try again."
+                                  : "Loading tasks"
+                              }
                             >
-                              {formatFollowup(
-                                lead.followupDate,
-                                lead.followupTime,
-                              )}
-                            </button>
+                              —
+                            </span>
                           )}
                         </td>
                         <td className="col-assigned">
                           {!lead.assignedId ? (
                             <button
                               type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAssignedLead(lead);
@@ -443,30 +480,18 @@ export default function TableView({
 
                   <dl className="mobile-lead-meta">
                     <div>
-                      <dt>Follow-up</dt>
+                      <dt>Task</dt>
                       <dd>
-                        {/* Same rule as the desktop table above: a date alone
-                            means work is booked. Requiring a time hid every
-                            all-day task on mobile too. */}
-                        {!lead.followupDate ? (
-                          <button
-                            type="button"
-                            className="mobile-inline-action"
-                            onClick={() => setFollowupLead(lead)}
-                          >
-                            Set date
-                          </button>
+                        {tasksReady ? (
+                          <LeadTaskCell
+                            next={tasksByLeadId.get(lead.id)?.[0]}
+                            disabled={lead.isArchived}
+                            onOpen={() => setTasksLead(lead)}
+                          />
                         ) : (
-                          <button
-                            type="button"
-                            className="mobile-link-action"
-                            onClick={() => setFollowupLead(lead)}
-                          >
-                            {formatFollowup(
-                              lead.followupDate,
-                              lead.followupTime,
-                            )}
-                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            —
+                          </span>
                         )}
                       </dd>
                     </div>
@@ -596,12 +621,13 @@ export default function TableView({
         />
       )}
 
-      {followupLead && (
-        <FollowupModal
-          lead={followupLead}
-          onClose={() => setFollowupLead(null)}
+      {tasksLead && (
+        <LeadTasksModal
+          key={tasksLead.id}
+          lead={leads.find((l) => l.id === tasksLead.id) ?? tasksLead}
+          tasks={tasksByLeadId.get(tasksLead.id) ?? []}
+          onClose={() => setTasksLead(null)}
           onLeadUpdate={onLeadUpdate}
-          showToast={showToast}
         />
       )}
 
