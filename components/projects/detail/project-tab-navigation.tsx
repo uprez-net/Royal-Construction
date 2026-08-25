@@ -151,7 +151,7 @@ const generateProjectDetailTabs = (
           }
         : {}),
     },
-    { key: "payments", label: "Payments", isAdminOnly: true },
+    // { key: "payments", label: "Payments", isAdminOnly: true },
     {
       key: "tradies",
       label: "Tradies",

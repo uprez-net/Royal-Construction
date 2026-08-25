@@ -257,7 +257,7 @@ export function ProjectMilestonesTab({
     );
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[9fr_1fr]">
+    <section className="grid gap-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
