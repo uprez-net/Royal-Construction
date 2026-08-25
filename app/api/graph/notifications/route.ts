@@ -318,6 +318,11 @@ export async function POST(request: Request): Promise<Response> {
               await updateTradieSchedule(schedule.id, {
                 status,
                 quote: tradieInfo.scheduleQuote ?? undefined,
+                // Without the basis the amount is unreadable: "$950" is a day
+                // rate as often as it is a small job, and the schedule total
+                // and the tradie's last quoted price both hang off which one
+                // it is. FIXED when the tradie named a price and no basis.
+                quoteUnit: tradieInfo.scheduleQuoteBasis ?? undefined,
               });
               continue;
             }

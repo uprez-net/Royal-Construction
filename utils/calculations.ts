@@ -68,3 +68,34 @@ export function parseQuotedAmount(raw: string | null | undefined): number | null
   const parsed = Number(matches[0].replace(/[$,\s]/g, ""));
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
+
+/**
+ * How a tradie expressed a quote before it is stored.
+ *
+ * Wider than {@link TradiePriceUnit} on purpose: tradies quote by the day
+ * ("$950 a day") at least as often as by the hour, but the column only knows
+ * HOURLY and FIXED. DAILY exists so the daily case survives extraction instead
+ * of being guessed at the point of writing.
+ */
+export type QuoteBasis = "FIXED" | "HOURLY" | "DAILY";
+
+/**
+ * Collapse a quote onto the two units the database stores.
+ *
+ * A daily rate becomes an hourly one at {@link NORMAL_WORKING_HOURS} a day —
+ * the same standard site day {@link scheduleTotalCost} already costs against,
+ * so a $950/day quote and the schedule total agree instead of drifting.
+ *
+ * The returned amount is deliberately unrounded: rounding belongs at the
+ * Decimal(8,2) column, and rounding here would push the error into the job
+ * total that is computed from it.
+ */
+export function normalizeQuoteBasis(
+  amount: number,
+  basis: QuoteBasis,
+): { amount: number; unit: "HOURLY" | "FIXED" } {
+  if (basis === "DAILY") {
+    return { amount: amount / NORMAL_WORKING_HOURS, unit: "HOURLY" };
+  }
+  return { amount, unit: basis };
+}

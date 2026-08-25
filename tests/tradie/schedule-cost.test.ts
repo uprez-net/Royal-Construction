@@ -68,7 +68,11 @@ test("no component renders a tradie price without its unit", async () => {
   const offenders: string[] = [];
   for (const file of walk("components")) {
     const source = readFileSync(file, "utf8");
-    for (const [i, raw] of source.split("\n").entries()) {
+    // Split on either ending: on a CRLF checkout the trailing \r left every
+    // line unstrippable by the comment regex below (`.` does not cross \r,
+    // so `//.*$` never anchored) and the guard reported comments as
+    // offenders.
+    for (const [i, raw] of source.split(/\r?\n/).entries()) {
       const line = raw.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
       // A raw currency format of a price, not routed through the formatter.
       if (/rateCurrency\.format\(/.test(line) && !/formatQuotedPrice|rateCurrency\.format,/.test(line)) {
@@ -130,4 +134,41 @@ test("a single amount is still read from a sentence", () => {
 test("a genuine zero quote is preserved", () => {
   assert.equal(parseQuotedAmount("$0.00"), 0);
   assert.notEqual(parseQuotedAmount("$0.00"), null);
+});
+
+/* ── quote basis ───────────────────────────────────────────────────── */
+
+import { normalizeQuoteBasis } from "../../utils/calculations";
+
+test("a day rate is standardised to an hourly one at 8 hours a day", () => {
+  // The column only stores HOURLY and FIXED, but tradies quote day rates
+  // constantly. Storing "$950" as FIXED would price a 5-day job at $950.
+  const quoted = normalizeQuoteBasis(950, "DAILY");
+  assert.equal(quoted.unit, "HOURLY");
+  assert.equal(quoted.amount, 950 / NORMAL_WORKING_HOURS);
+  assert.equal(scheduleTotalCost(quoted.amount, 5, quoted.unit), 950 * 5);
+});
+
+test("hourly and fixed quotes pass through untouched", () => {
+  assert.deepEqual(normalizeQuoteBasis(120, "HOURLY"), { amount: 120, unit: "HOURLY" });
+  assert.deepEqual(normalizeQuoteBasis(4800, "FIXED"), { amount: 4800, unit: "FIXED" });
+});
+
+test("a normalised day rate is not rounded before it is costed", () => {
+  // 1001/8 is 125.125. Rounding to the column's 2dp here and then multiplying
+  // back out loses cents on every job; rounding belongs at the write.
+  const quoted = normalizeQuoteBasis(1001, "DAILY");
+  assert.equal(scheduleTotalCost(quoted.amount, 3, quoted.unit), 1001 * 3);
+});
+
+test("the same number means three different job totals", () => {
+  // What the basis is actually for: $950 over a 4-day booking.
+  const days = 4;
+  const total = (basis: "FIXED" | "HOURLY" | "DAILY") => {
+    const q = normalizeQuoteBasis(950, basis);
+    return scheduleTotalCost(q.amount, days, q.unit);
+  };
+  assert.equal(total("FIXED"), 950);
+  assert.equal(total("DAILY"), 3800);
+  assert.equal(total("HOURLY"), 30400);
 });

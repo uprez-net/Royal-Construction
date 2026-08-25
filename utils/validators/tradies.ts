@@ -110,6 +110,14 @@ export const updateTradieScheduleSchema = z.object({
     }),
   }),
   quote: z.string().optional(),
+  /**
+   * How to read `quote`. Tradies quote by the hour and by the day as often as
+   * they quote a lump sum, so the amount alone is ambiguous - $950 is a
+   * plausible day rate AND a plausible small job. Defaults to FIXED at the
+   * point of use: a caller that names a price for one scheduled job and says
+   * nothing else means the job.
+   */
+  quoteUnit: z.enum(["FIXED", "HOURLY", "DAILY"]).optional(),
 });
 
 export type UpdateTradieScheduleInput = z.infer<typeof updateTradieScheduleSchema>;

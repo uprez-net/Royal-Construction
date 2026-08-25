@@ -17,7 +17,7 @@ import { sendEmail } from "../azureClient";
 import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
-import { parseQuotedAmount, scheduleTotalCost } from "@/utils/calculations";
+import { normalizeQuoteBasis, parseQuotedAmount, scheduleTotalCost } from "@/utils/calculations";
 import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
@@ -320,29 +320,52 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     // with quotedPrice null. Admins approved against an hourly estimate rather
     // than the price the tradie actually quoted.
     const quotedAmount = parseQuotedAmount(updates.quote);
+    // The amount alone does not say what it buys. A tradie replying "$950 a
+    // day" and one replying "$950 for the job" send the same number, and
+    // storing either as the job price makes one of them wrong by the length of
+    // the job. Normalise the basis first, then cost it.
+    const quoted =
+      quotedAmount !== null
+        ? normalizeQuoteBasis(quotedAmount, updates.quoteUnit ?? "FIXED")
+        : null;
 
     const schedule = await prisma.tradieSchedule.update({
       where: { id: scheduleId },
       data: {
         status: updates.status,
-        ...(quotedAmount !== null
-          ? { quotedPrice: quotedAmount.toFixed(2), requiresQuote: true }
+        // `quotedPrice` is the whole job, which is what every downstream
+        // display and approval treats it as - so a rate has to be costed
+        // across the booked duration before it lands here.
+        ...(quoted !== null
+          ? {
+            quotedPrice: scheduleTotalCost(
+              quoted.amount,
+              existingSchedule.durationDays,
+              quoted.unit,
+            ).toFixed(2),
+            requiresQuote: true,
+          }
           : {}),
       },
       include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
     });
 
-    // A quote arrives for a job, not an hour — the extractor asks for it only
-    // "when standard rates weren't applicable". Recording it as the tradie's
-    // last quoted price is what makes that field mean what it says, and FIXED
-    // is the only honest unit for it.
-    if (quotedAmount !== null) {
+    // Recording the quote against the tradie is what makes `lastQuotedPrice`
+    // mean what it says. It carries the RATE the tradie named, not the job
+    // total - the total belongs to this one schedule and its duration, while
+    // the rate is what they will charge on the next one. FIXED used to be
+    // hardcoded here, which restated every hourly and daily quote as a lump
+    // sum the moment it arrived by email.
+    if (quoted !== null) {
       await prisma.tradie
         .update({
           where: { id: schedule.tradieId },
           data: {
-            lastQuotedPrice: quotedAmount.toFixed(2),
-            lastQuotedPriceUnit: TradiePriceUnit.FIXED,
+            lastQuotedPrice: quoted.amount.toFixed(2),
+            lastQuotedPriceUnit:
+              quoted.unit === "HOURLY"
+                ? TradiePriceUnit.HOURLY
+                : TradiePriceUnit.FIXED,
           },
         })
         .catch((error) =>
