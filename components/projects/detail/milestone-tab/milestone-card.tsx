@@ -12,7 +12,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Bell,
-  Calendar,
   CheckCircle2,
   Users,
   Wrench,
@@ -176,15 +175,6 @@ export function MilestoneCard({
               isCompact && "gap-x-3",
             )}
           >
-            {!hasChildren && (
-              <MilestoneMetaLine icon={<Calendar className="h-3.5 w-3.5" />}>
-                Target{" "}
-                <span className="font-mono tabular-nums">
-                  {dateFormat.format(new Date(milestone.targetDate))}
-                </span>
-              </MilestoneMetaLine>
-            )}
-
             {milestone.actualDate ? (
               <MilestoneMetaLine
                 icon={<CheckCircle2 className="h-3.5 w-3.5 text-success-ink" />}
