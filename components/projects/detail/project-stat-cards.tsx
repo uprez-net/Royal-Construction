@@ -5,7 +5,6 @@ import {
   PiggyBank,
   ReceiptText,
   TriangleAlert,
-  Users,
   Wallet2,
 } from "lucide-react";
 import { useAppSelector } from "@/lib/store/hooks";

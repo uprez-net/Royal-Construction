@@ -79,37 +79,6 @@ const convertToVisualMilestone = (
   return rootMilestones;
 };
 
-const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
-  const stageMilestoneMap = new Map<
-    string,
-    { completed: number; total: number }
-  >();
-  for (const milestone of milestones) {
-    const stage = milestone.projectStage;
-    if (!stageMilestoneMap.has(stage)) {
-      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
-    }
-    const stageData = stageMilestoneMap.get(stage)!;
-    stageData.total++;
-    if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
-      stageData.completed++;
-    }
-  }
-  const totalStages = stageMilestoneMap.size;
-  const completedStages = Array.from(stageMilestoneMap.values()).filter(
-    (stageData) => stageData.completed === stageData.total,
-  ).length;
-  const inProgressStages = Array.from(stageMilestoneMap.values()).filter(
-    (stageData) =>
-      stageData.completed > 0 && stageData.completed < stageData.total,
-  ).length;
-  return {
-    totalStages,
-    completedStages,
-    inProgressStages: inProgressStages > 0 ? inProgressStages : completedStages < totalStages ? 1 : 0,
-  };
-};
-
 export function ProjectMilestonesTab({
   project,
   isAdmin,
