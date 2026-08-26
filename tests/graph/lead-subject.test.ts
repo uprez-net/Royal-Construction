@@ -158,3 +158,59 @@ test("no pattern lost a word boundary to template-literal escaping", () => {
     );
   }
 });
+
+test("project administration on a live job is not a new lead", () => {
+  // `BUILD_WORK` holds bare nouns and `ENQUIRY` holds the bare word "request",
+  // so before the PROJECT_ADMIN veto every one of these matched: a certifier,
+  // a council officer and a supplier each got a Lead row AND the automated
+  // "Welcome to Royal Constructions" email. The earlier negative test could not
+  // catch this class — each of its cases is missing one vocabulary entirely,
+  // whereas these carry both and are still plainly not a new customer.
+  for (const s of [
+    "Variation request - extension at 12 Smith St",
+    "Inspection request - duplex at 4 Jones Ave",
+    "Council: request for further information, extension DA-2024-119",
+    "Payment request - renovation stage 3",
+    "Purchase order 8891 - townhouse tiling quote",
+    "Supplier quote - duplex windows",
+    "Estimate revision for the extension - internal",
+    "Progress claim 4 - duplex at 4 Jones Ave, quote attached",
+    "Remittance advice - renovation final account",
+    "Defect list for the townhouse handover",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("the veto does not swallow a genuine first approach", () => {
+  // The counterpart to the test above: widening PROJECT_ADMIN must not start
+  // rejecting the customer phrasings the patterns exist to catch.
+  for (const s of [
+    "Custom Build Quote",
+    "Quote for a new home",
+    "Granny flat estimate",
+    "Renovation costing",
+    "Enquiry about building a duplex",
+    "Looking to build",
+    "Extension request",
+    "I'm interested in a knockdown rebuild",
+  ]) {
+    assert.equal(isLeadSubject(s), true, s);
+  }
+});
+
+test("an oversized subject is refused instead of scanned", () => {
+  // The composed patterns pair two vocabularies across a gap. Against a long
+  // subject carrying many BUILD_WORK words but no second vocabulary, every
+  // start position drove the gap to the end and backtracked: 64KB cost ~3.2s
+  // of blocking CPU inside the Graph notification handler, which is an
+  // unauthenticated path — anyone can email the public business address.
+  const hostile = "new house build ".repeat(4096); // 64KB, no second vocabulary
+  const started = process.hrtime.bigint();
+  assert.equal(isLeadSubject(hostile), false);
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.ok(elapsedMs < 50, `scan took ${elapsedMs.toFixed(0)}ms, expected < 50ms`);
+
+  // The cap must not be doing the work a real subject depends on.
+  assert.equal(isLeadSubject("Quote for a new home"), true);
+});

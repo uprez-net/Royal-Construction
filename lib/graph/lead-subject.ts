@@ -90,6 +90,44 @@ const ENQUIRY = [
 ].join("|");
 
 /**
+ * Correspondence about a project that already exists, rather than a stranger
+ * approaching the builder for the first time.
+ *
+ * The two vocabularies above are deliberately broad — `BUILD_WORK` holds bare
+ * nouns ("extension", "duplex") and `ENQUIRY` holds the bare word "request" —
+ * so any subject carrying one of each matched, and a builder's routine mail
+ * carries one of each constantly. "Variation request - extension at 12 Smith
+ * St" read as a brand new customer, which created a junk lead AND auto-sent
+ * the welcome email to a certifier, a council officer or a supplier.
+ *
+ * A customer who has never spoken to the builder does not write any of these
+ * words. Widen the list rather than loosening a pattern when a new class of
+ * project mail leaks through.
+ */
+const PROJECT_ADMIN = [
+  "variation",
+  "inspection",
+  "payment",
+  "invoice",
+  "remittance",
+  "purchase order",
+  "progress claim",
+  "defect",
+  "further information",
+  "site instruction",
+  "practical completion",
+  "handover",
+  "warranty",
+  "final account",
+  "supplier",
+  "subcontractor",
+  "internal",
+].join("|");
+
+/** Vetoes a pattern match. Checked after the exact allowlist, never before it. */
+const PROJECT_ADMIN_PATTERN = new RegExp(String.raw`\b(?:${PROJECT_ADMIN})\b`);
+
+/**
  * Subjects a customer writes themselves, tested against the normalized
  * subject — so patterns are written lower case, quote-free and single-spaced,
  * and need no `i` flag.
@@ -104,12 +142,12 @@ export const LEAD_SUBJECT_PATTERNS: readonly RegExp[] = [
   /\bcustom[ -]build quote\b/,
 
   // "quote for a new home", "granny flat estimate", "renovation costing".
-  new RegExp(String.raw`\b(?:${BUILD_WORK})\b.*\b(?:${PRICE_ASK})\b`),
-  new RegExp(String.raw`\b(?:${PRICE_ASK})\b.*\b(?:${BUILD_WORK})\b`),
+  new RegExp(String.raw`\b(?:${BUILD_WORK})\b.{0,60}\b(?:${PRICE_ASK})\b`),
+  new RegExp(String.raw`\b(?:${PRICE_ASK})\b.{0,60}\b(?:${BUILD_WORK})\b`),
 
   // "enquiry about building a duplex", "looking to build", "extension request".
-  new RegExp(String.raw`\b(?:${BUILD_WORK})\b.*\b(?:${ENQUIRY})\b`),
-  new RegExp(String.raw`\b(?:${ENQUIRY})\b.*\b(?:${BUILD_WORK})\b`),
+  new RegExp(String.raw`\b(?:${BUILD_WORK})\b.{0,60}\b(?:${ENQUIRY})\b`),
+  new RegExp(String.raw`\b(?:${ENQUIRY})\b.{0,60}\b(?:${BUILD_WORK})\b`),
 
   // Generic first-contact subjects the site and the directories send.
   /\b(?:website|web|online) (?:enquiry|inquiry)\b/,
@@ -144,10 +182,26 @@ for (const pattern of LEAD_SUBJECT_PATTERNS) {
  */
 const REPLY_PREFIX = /^(?:(?:re|fw|fwd|aw|tr|sv|vs)\s*(?:\[\d+\])?\s*:\s*)+/;
 
+/**
+ * Longest subject the patterns will be run against.
+ *
+ * The patterns scan an attacker-controlled string synchronously inside the
+ * Graph notification handler, and Exchange accepts subject headers far larger
+ * than any human writes. A real enquiry subject is a few dozen characters, so
+ * refusing to scan past this costs nothing and keeps the handler's time bounded
+ * no matter what arrives. The exact allowlist above is unaffected: its entries
+ * are all far shorter than the cap.
+ */
+const MAX_MATCHABLE_SUBJECT = 256;
+
 /** Does this inbound subject identify a website enquiry? */
 export function isLeadSubject(subject: string | null | undefined): boolean {
   const normalized = normalizeSubject(subject);
   if (LEAD_SUBJECT_LINES.has(normalized)) return true;
   if (REPLY_PREFIX.test(normalized)) return false;
+  if (normalized.length > MAX_MATCHABLE_SUBJECT) return false;
+  // Project administration outranks the patterns: the vocabularies are broad
+  // enough that routine mail about a live job hits them by coincidence.
+  if (PROJECT_ADMIN_PATTERN.test(normalized)) return false;
   return LEAD_SUBJECT_PATTERNS.some((pattern) => pattern.test(normalized));
 }
