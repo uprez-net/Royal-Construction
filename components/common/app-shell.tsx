@@ -50,8 +50,6 @@ export function AppShell({
     ? "Loading..."
     : (pathName.split("/").pop() ?? "dashboard");
   const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(activeSlug);
-  const isOfferDetailPage = /^\/offers\/[^/]+$/.test(pathName);
-
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -234,7 +232,7 @@ export function AppShell({
 
           {/* ── Top Header ── */}
           <header className="shrink-0 z-30 border-b border-[#E2E8F0] bg-white text-slate-900 shadow-sm backdrop-blur">
-            <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
                 <Button
                   variant="ghost"
@@ -317,8 +315,7 @@ export function AppShell({
 
           <main
             className={cn(
-              "mx-auto flex min-h-0 w-full flex-1 flex-col gap-6",
-              isOfferDetailPage ? "max-w-none" : "max-w-screen-2xl",
+              "flex min-h-0 w-full flex-1 flex-col gap-6",
               "overflow-y-auto",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
