@@ -1,9 +1,8 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 export default function ProjectsLoading() {
   return (
-    <div className="grid gap-6" role="status" aria-busy="true">
-      <span className="sr-only">Loading projects</span>
+    <PageSkeleton label="Loading projects" className="grid gap-6">
 
       {/* KPI Skeleton Grid */}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -93,6 +92,6 @@ export default function ProjectsLoading() {
           </div>
         </div>
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

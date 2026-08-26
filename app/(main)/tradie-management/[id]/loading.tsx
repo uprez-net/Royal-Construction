@@ -1,9 +1,8 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 export default function TradieDetailsSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Loading tradie details</span>
+    <PageSkeleton label="Loading tradie details" className="space-y-4">
 
       {/* Back link */}
       <Skeleton className="h-8 w-36 rounded-lg" />
@@ -89,6 +88,6 @@ export default function TradieDetailsSkeleton() {
           ))}
         </div>
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

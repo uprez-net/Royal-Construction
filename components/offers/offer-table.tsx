@@ -2,7 +2,8 @@
 import { CardContent } from "../ui/card";
 import { currency, dateFormat } from "@/utils/formatters";
 import { DataTable } from "../common/data-table";
-import { ReceiptText, RefreshCw } from "lucide-react";
+import { ReceiptText } from "lucide-react";
+import { skeletonTableRows } from "@/components/ui/skeleton";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -76,45 +77,39 @@ export function OfferTable({
           "Approved At",
           "Status",
         ]}
-        rows={offers.items.map((row, index) => [
-          `OF-${index + 1}`,
-          row.lead?.name || "N/A",
-          row.lead.type.length > 0 ? row.lead.type.join(", ") : "-",
-          row.version,
-          currency.format(parseFloat(row.amount)),
-          currency.format(parseFloat(row.gstAmount)),
-          currency.format(parseFloat(row.totalAmount)),
-          row.sentAt ? dateFormat.format(row.sentAt) : "-",
-          row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
-          <OfferStatusBadge
-            key={row.id}
-            status={row.offerStatus}
-            onStatusChange={(newStatus) =>
-              handleStatusChange(row.id, newStatus)
-            }
-          />,
-        ])}
-        onRowClick={(rowIndex) => {
-          const offer = offers.items[rowIndex];
-          router.push(`/offers/${offer.leadId}`);
-        }}
+        rows={
+          loading && offers.items.length === 0
+            ? skeletonTableRows(10)
+            : offers.items.map((row, index) => [
+                `OF-${index + 1}`,
+                row.lead?.name || "N/A",
+                row.lead.type.length > 0 ? row.lead.type.join(", ") : "-",
+                row.version,
+                currency.format(parseFloat(row.amount)),
+                currency.format(parseFloat(row.gstAmount)),
+                currency.format(parseFloat(row.totalAmount)),
+                row.sentAt ? dateFormat.format(row.sentAt) : "-",
+                row.acceptedAt ? dateFormat.format(row.acceptedAt) : "-",
+                <OfferStatusBadge
+                  key={row.id}
+                  status={row.offerStatus}
+                  onStatusChange={(newStatus) =>
+                    handleStatusChange(row.id, newStatus)
+                  }
+                />,
+              ])
+        }
+        onRowClick={
+          loading && offers.items.length === 0
+            ? undefined
+            : (rowIndex) => {
+                const offer = offers.items[rowIndex];
+                router.push(`/offers/${offer.leadId}`);
+              }
+        }
         emptyState={
           loading ? (
-            <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex size-12 items-center justify-center">
-                <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  Loading offers...
-                </p>
-
-                <p className="text-xs text-muted-foreground">
-                  Your offers will appear here.
-                </p>
-              </div>
-            </div>
+            <span className="sr-only">Loading offers</span>
           ) : (
             <div className="flex flex-col items-center justify-center gap-3">
               <div className="flex size-12 items-center justify-center">

@@ -8,8 +8,9 @@ import {
 } from "@/lib/store/slices/tradieApprovalSlice";
 import { toast } from "sonner";
 import { useState } from "react";
-import { RefreshCw, UserCheck } from "lucide-react";
+import { UserCheck } from "lucide-react";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 const createApprovalTitle = (approval: SafeTradieApproval) => {
   switch (approval.actionType) {
@@ -155,21 +156,28 @@ export function TradieApprovalList() {
   };
 
   if (loading) {
-    <div className="flex flex-col items-center justify-center gap-3 h-60 bg-white rounded-sm">
-      <div className="flex size-12 items-center justify-center">
-        <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-      </div>
-
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground">
-          Loading approvals...
-        </p>
-
-        <p className="text-xs text-muted-foreground">
-          Your approvals will appear here.
-        </p>
-      </div>
-    </div>;
+    return (
+      <PageSkeleton label="Loading approvals" className="space-y-4">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div
+            key={index}
+            className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-4"
+          >
+            <div className="flex min-w-0 items-center gap-4">
+              <Skeleton className="size-12 shrink-0 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-48 max-w-full" />
+                <Skeleton className="h-4 w-72 max-w-full" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-20 rounded-md" />
+              <Skeleton className="h-8 w-20 rounded-md" />
+            </div>
+          </div>
+        ))}
+      </PageSkeleton>
+    );
   }
 
   if (error) {

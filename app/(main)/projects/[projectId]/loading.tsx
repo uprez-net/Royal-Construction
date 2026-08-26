@@ -1,14 +1,8 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 export default function ProjectDetailLoading() {
   return (
-    <div
-      className="space-y-4 pb-4"
-      role="status"
-      aria-busy="true"
-      aria-live="polite"
-    >
-      <span className="sr-only">Loading project details</span>
+    <PageSkeleton label="Loading project details" className="space-y-4 pb-4">
 
       {/* Header Skeleton — mirrors the flat light header in project-header.tsx */}
       <section className="rounded-xl border border-border/70 bg-card p-6 px-7 shadow-sm">
@@ -113,6 +107,6 @@ export default function ProjectDetailLoading() {
           </div>
         </section>
       </section>
-    </div>
+    </PageSkeleton>
   );
 }

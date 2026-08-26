@@ -11,7 +11,7 @@ import { Role } from "@prisma/client";
 import { useMemo, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Mail, RefreshCw, Users, X } from "lucide-react";
+import { Mail, Users, X } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -33,6 +33,7 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination";
 import { dateFormat, RoleLabelRecord } from "@/utils/formatters";
+import { skeletonTableRows } from "@/components/ui/skeleton";
 
 export default function TeamManagementPage() {
   const [emailAddress, setEmailAddress] = useState("");
@@ -264,56 +265,44 @@ function UserList({
       {/* Data Table  */}
       <DataTable
         headers={["Name", "Email", "Role", "Actions"]}
-        rows={items.map((user) => [
-          `${user.firstName} ${user.lastName}`,
-          user.emailAddresses[0]?.emailAddress || "No email",
-          user.publicMetadata?.role
-            ? RoleLabelRecord[user.publicMetadata?.role as Role]
-            : "No role",
-          <div className="flex space-x-2" key={`actions-${user.id}`}>
-            <SelectRole
-              fieldName={"role"}
-              onValueChange={(newRole) =>
-                newRole && handleAction({ userId: user.id, newRole })
-              }
-              selectedRole={(user.publicMetadata?.role as Role) || undefined}
-            />
-          </div>,
-        ])}
+        rows={
+          isLoaded
+            ? items.map((user) => [
+                `${user.firstName} ${user.lastName}`,
+                user.emailAddresses[0]?.emailAddress || "No email",
+                user.publicMetadata?.role
+                  ? RoleLabelRecord[user.publicMetadata?.role as Role]
+                  : "No role",
+                <div className="flex space-x-2" key={`actions-${user.id}`}>
+                  <SelectRole
+                    fieldName={"role"}
+                    onValueChange={(newRole) =>
+                      newRole && handleAction({ userId: user.id, newRole })
+                    }
+                    selectedRole={
+                      (user.publicMetadata?.role as Role) || undefined
+                    }
+                  />
+                </div>,
+              ])
+            : skeletonTableRows(4)
+        }
         emptyState={
-          isLoaded ? (
-            <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex size-12 items-center justify-center">
-                <Users className="size-5 text-muted-foreground" />
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  No members found
-                </p>
-
-                <p className="text-xs text-muted-foreground">
-                  Your team members will appear here.
-                </p>
-              </div>
+          <div className="flex flex-col items-center justify-center gap-3">
+            <div className="flex size-12 items-center justify-center">
+              <Users className="size-5 text-muted-foreground" />
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex size-12 items-center justify-center">
-                <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-              </div>
 
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  Loading members...
-                </p>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                No members found
+              </p>
 
-                <p className="text-xs text-muted-foreground">
-                  Your team members will appear here.
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Your team members will appear here.
+              </p>
             </div>
-          )
+          </div>
         }
       />
       {/* Pagination Controls (implement as needed) */}
@@ -414,61 +403,47 @@ function InviteList({
       {/* Data Table  */}
       <DataTable
         headers={["Email", "Role", "Sent At", "Status", "Actions"]}
-        rows={items.map((invite) => [
-          invite.emailAddress,
-          invite.publicMetadata?.role
-            ? RoleLabelRecord[invite.publicMetadata?.role as Role]
-            : "No role",
-          dateFormat.format(new Date(invite.createdAt)),
-          invite.status.charAt(0).toUpperCase() +
-            invite.status.slice(1).toLowerCase(),
-          <div className="flex space-x-2" key={`actions-${invite.id}`}>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white disabled:border-red-300 disabled:text-red-300 disabled:hover:bg-transparent"
-              onClick={() => handleAction({ invitationId: invite.id })}
-              disabled={invite.status !== "pending"}
-            >
-              <X className="mr-1 h-4 w-4" />
-              Revoke
-            </Button>
-          </div>,
-        ])}
+        rows={
+          isLoaded
+            ? items.map((invite) => [
+                invite.emailAddress,
+                invite.publicMetadata?.role
+                  ? RoleLabelRecord[invite.publicMetadata?.role as Role]
+                  : "No role",
+                dateFormat.format(new Date(invite.createdAt)),
+                invite.status.charAt(0).toUpperCase() +
+                  invite.status.slice(1).toLowerCase(),
+                <div className="flex space-x-2" key={`actions-${invite.id}`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-600 hover:bg-red-600 hover:text-white disabled:border-red-300 disabled:text-red-300 disabled:hover:bg-transparent"
+                    onClick={() => handleAction({ invitationId: invite.id })}
+                    disabled={invite.status !== "pending"}
+                  >
+                    <X className="mr-1 h-4 w-4" />
+                    Revoke
+                  </Button>
+                </div>,
+              ])
+            : skeletonTableRows(5)
+        }
         emptyState={
-          isLoaded ? (
-            <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex size-12 items-center justify-center">
-                <Users className="size-5 text-muted-foreground" />
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  No invitations found
-                </p>
-
-                <p className="text-xs text-muted-foreground">
-                  Your invitations will appear here.
-                </p>
-              </div>
+          <div className="flex flex-col items-center justify-center gap-3">
+            <div className="flex size-12 items-center justify-center">
+              <Users className="size-5 text-muted-foreground" />
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex size-12 items-center justify-center">
-                <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-              </div>
 
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  Loading invitations...
-                </p>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                No invitations found
+              </p>
 
-                <p className="text-xs text-muted-foreground">
-                  Your invitations will appear here.
-                </p>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Your invitations will appear here.
+              </p>
             </div>
-          )
+          </div>
         }
       />
       {/* Pagination Controls (implement as needed) */}

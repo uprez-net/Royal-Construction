@@ -28,6 +28,10 @@ import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { LeadPagination } from "./lead-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  LeadsContentSkeleton,
+  LeadsPageSkeleton,
+} from "@/components/leads/leads-page-skeleton";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -309,12 +313,8 @@ export default function Leads() {
     );
   }
 
-  if (isLoaded && !leads) {
-    return (
-      <div className="leads-loading-container">
-        <div className="leads-loading-message">Loading leads...</div>
-      </div>
-    );
+  if (!isLoaded) {
+    return <LeadsPageSkeleton />;
   }
 
   /* ── Render ── */
@@ -350,6 +350,8 @@ export default function Leads() {
           </div>
         </CardContent>
       </Card>
+
+      {loading ? <LeadsContentSkeleton /> : null}
 
       {/* Metric cards */}
       {stats && !loading && (
@@ -416,7 +418,8 @@ export default function Leads() {
       )}
 
       {/* Main card */}
-      <Card className="border-border/70 bg-white/95 shadow-sm">
+      {loading ? null : (
+        <Card className="border-border/70 bg-white/95 shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
           {(
             [
@@ -483,57 +486,49 @@ export default function Leads() {
         </div>
 
         <CardContent className="pt-5">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-16 text-muted-foreground">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-border border-t-teal-600" />
-              <p className="text-sm">Loading leads...</p>
-            </div>
-          ) : (
-            <>
-              {activeTab === "table" && (
-                <TableView
-                  loading={loadingLeads}
-                  leads={leads}
-                  onLeadUpdate={updateLeadInList}
-                  onLeadDelete={removeLeadFromList}
-                  activeMetric={activeMetric}
-                  onActiveMetricChange={handleMetricClick}
-                  user={{
-                    clerkUserId: user?.id ?? null,
-                    fullName: user?.fullName ?? null,
-                  }}
-                  appendEmailToLead={appendEmailToLead}
-                />
-              )}
-              {activeTab === "followups" && (
-                <FollowupsView
-                  loading={loadingLeads}
-                  leads={leads}
-                  followupStats={followupStats}
-                  onLeadUpdate={updateLeadInList}
-                  onLeadDelete={removeLeadFromList}
-                  showToast={showToast}
-                />
-              )}
-              {activeTab === "analytics" && (
-                <AnalyticsView analytics={analyticsData} />
-              )}
-              {activeTab !== "analytics" && (
-                <LeadPagination
-                  leads={{
-                    items: leads,
-                    page: pageInfo.page,
-                    limit: pageInfo.limit,
-                    totalCount: pageInfo.total,
-                    totalPages: pageInfo.totalPages,
-                  }}
-                  onPageChange={handlePageChange}
-                />
-              )}
-            </>
+          {activeTab === "table" && (
+            <TableView
+              loading={loadingLeads}
+              leads={leads}
+              onLeadUpdate={updateLeadInList}
+              onLeadDelete={removeLeadFromList}
+              activeMetric={activeMetric}
+              onActiveMetricChange={handleMetricClick}
+              user={{
+                clerkUserId: user?.id ?? null,
+                fullName: user?.fullName ?? null,
+              }}
+              appendEmailToLead={appendEmailToLead}
+            />
+          )}
+          {activeTab === "followups" && (
+            <FollowupsView
+              loading={loadingLeads}
+              leads={leads}
+              followupStats={followupStats}
+              onLeadUpdate={updateLeadInList}
+              onLeadDelete={removeLeadFromList}
+              showToast={showToast}
+            />
+          )}
+          {activeTab === "analytics" && (
+            <AnalyticsView analytics={analyticsData} />
+          )}
+          {activeTab !== "analytics" && (
+            <LeadPagination
+              leads={{
+                items: leads,
+                page: pageInfo.page,
+                limit: pageInfo.limit,
+                totalCount: pageInfo.total,
+                totalPages: pageInfo.totalPages,
+              }}
+              onPageChange={handlePageChange}
+            />
           )}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Modals */}
       {showAddLead && (
