@@ -25,8 +25,12 @@ import { Role } from "@prisma/client";
  */
 
 const CARD_SURFACE = "rounded-xl border border-border/70 bg-card p-5 shadow-sm";
+// DESIGN.md §5 puts metric values in the display face, which is also what
+// `MetricCard` does. These three were overriding it back to `font-mono`, so the
+// one editorial moment on the page read like terminal output. `tabular-nums`
+// stays for even digit widths.
 const CARD_VALUE =
-  "mt-2 font-heading text-3xl font-semibold leading-tight tracking-tight text-foreground";
+  "mt-2 font-heading text-3xl font-semibold leading-tight tracking-tight tabular-nums text-foreground";
 const CARD_LABEL = "mt-1 text-xs text-muted-foreground";
 const ICON_CONTAINER =
   "flex size-11 items-center justify-center rounded-2xl text-white";
@@ -45,6 +49,13 @@ const TONE_BADGE_CLASS: Record<"neutral" | "success" | "danger", string> = {
 export function ProjectStatCards({ role }: { role: Role }) {
   const isAdmin = role === "ADMIN";
   const budgetSummary = useAppSelector(selectActiveProjectBudgetSummary);
+
+  // Every card here is admin-only. The role check used to sit inside the grid,
+  // so a non-admin got a loading panel that resolved into an empty <section> —
+  // invisible, but still taking a gap from the page's `space-y-4`.
+  if (!isAdmin) {
+    return null;
+  }
 
   // `selectActiveProjectBudgetSummary` returns null for exactly one reason:
   // `activeProject` is not in the store yet. It never returns null for a missing
@@ -94,146 +105,112 @@ export function ProjectStatCards({ role }: { role: Role }) {
   const overrunPercent = Math.max(budgetSummary.spentPercent - 100, 0);
 
   return (
-    <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {isAdmin && (
-        <>
-          {/* Contract Value — badge is driven by the shared classifier. */}
-          <div className={CARD_SURFACE}>
-            <div className="mb-2 flex items-start justify-between">
-              <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
-                <Wallet2 className="size-5" aria-hidden="true" />
-              </div>
-              <span
-                className={cn(BADGE, TONE_BADGE_CLASS[statusConfig.tone])}
-              >
-                {isOverBudget ? (
-                  <TriangleAlert className="size-3" aria-hidden="true" />
-                ) : statusConfig.tone === "success" ? (
-                  <ArrowUpRight className="size-3" aria-hidden="true" />
-                ) : null}
-                {statusConfig.label}
-              </span>
-            </div>
-            <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
-              {currency.format(budgetSummary.totalBudget)}
-            </div>
-            <div className={CARD_LABEL}>Total contract value</div>
+    // Three columns for three cards. It was four, leaving a column of dead
+    // space beside Remaining on every desktop viewport. A future Workers-on-site
+    // card (no attendance source is wired up yet) would take this back to four.
+    //
+    // One column straight to three: a two-column step would strand the third
+    // card on a half-empty row at tablet widths, which is the same gap in a
+    // different place.
+    <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {/* Contract Value — badge is driven by the shared classifier. */}
+      <div className={CARD_SURFACE}>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className={cn(ICON_CONTAINER, METRIC_TONES.primary)}>
+            <Wallet2 className="size-5" aria-hidden="true" />
           </div>
+          <span className={cn(BADGE, TONE_BADGE_CLASS[statusConfig.tone])}>
+            {isOverBudget ? (
+              <TriangleAlert className="size-3" aria-hidden="true" />
+            ) : statusConfig.tone === "success" ? (
+              <ArrowUpRight className="size-3" aria-hidden="true" />
+            ) : null}
+            {statusConfig.label}
+          </span>
+        </div>
+        <div className={CARD_VALUE}>
+          {currency.format(budgetSummary.totalBudget)}
+        </div>
+        <div className={CARD_LABEL}>Total contract value</div>
+      </div>
 
-          {/* Spent — in the NOT_STARTED state there are no actuals yet, so the
-          copy says so rather than implying spend is tracking against budget. */}
-          <div className={CARD_SURFACE}>
-            <div className="mb-2 flex items-start justify-between">
-              <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
-                <ReceiptText className="size-5" aria-hidden="true" />
-              </div>
-              <span
-                className={cn(
-                  BADGE,
-                  isOverBudget
-                    ? "bg-destructive-light text-destructive-ink"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                <span className="font-mono tabular-nums">
-                  {budgetSummary.spentPercent}%
-                </span>
-                <span className="sr-only">of contract value spent</span>
-              </span>
-            </div>
-            <div className={cn(CARD_VALUE, "font-mono tabular-nums")}>
-              {currency.format(budgetSummary.spent)}
-            </div>
-            <div className={CARD_LABEL}>
-              {isNotStarted ? "No spend recorded yet" : "Spent to date"}
-            </div>
+      {/* Spent. The label names the measure in every state: a $0 value and a 0%
+      badge already say there are no actuals yet, and replacing the label with
+      that same sentence left the figure unidentified while repeating what the
+      two cards either side of it were also saying. */}
+      <div className={CARD_SURFACE}>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className={cn(ICON_CONTAINER, METRIC_TONES.warning)}>
+            <ReceiptText className="size-5" aria-hidden="true" />
           </div>
+          {/* The badge says what its percentage measures. A bare "0%" beside a
+              bare "100%" on the next card left the reader to work out which way
+              round they ran, with the answer only in screen-reader text. */}
+          <span
+            className={cn(
+              BADGE,
+              isOverBudget
+                ? "bg-destructive-light text-destructive-ink"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            <span className="tabular-nums">{budgetSummary.spentPercent}%</span>
+            used
+          </span>
+        </div>
+        <div className={CARD_VALUE}>
+          {currency.format(budgetSummary.spent)}
+        </div>
+        <div className={CARD_LABEL}>Spent to date</div>
+      </div>
 
-          {/* Remaining — or, once spend passes the contract value, the overrun.
-          Showing a clamped "$0 remaining" on an over-budget project hides the
-          one number the site manager needs. NOT_STARTED is rendered neutral
-          rather than as a healthy green "Remaining budget" so the card does
-          not imply spend is tracking. */}
-          <div className={CARD_SURFACE}>
-            <div className="mb-2 flex items-start justify-between">
-              <div
-                className={cn(
-                  ICON_CONTAINER,
-                  isOverBudget
-                    ? METRIC_TONES.danger
-                    : isNotStarted
-                      ? METRIC_TONES.neutral
-                      : METRIC_TONES.success,
-                )}
-              >
-                {isOverBudget ? (
-                  <TriangleAlert className="size-5" aria-hidden="true" />
-                ) : (
-                  <PiggyBank className="size-5" aria-hidden="true" />
-                )}
-              </div>
-              <span
-                className={cn(
-                  BADGE,
-                  isOverBudget
-                    ? "bg-destructive-light text-destructive-ink"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                <span className="font-mono tabular-nums">
-                  {isOverBudget
-                    ? `+${overrunPercent}%`
-                    : `${remainingPercent}%`}
-                </span>
-                <span className="sr-only">
-                  {isOverBudget
-                    ? "over the contract value"
-                    : "of contract value remaining"}
-                </span>
-              </span>
-            </div>
-            <div
-              className={cn(
-                CARD_VALUE,
-                "font-mono tabular-nums",
-                isOverBudget && "text-destructive-ink",
-              )}
-            >
-              {currency.format(
-                isOverBudget ? overrun : budgetSummary.remaining,
-              )}
-            </div>
-            <div className={CARD_LABEL}>
-              {isOverBudget
-                ? "Over budget by"
+      {/* Remaining — or, once spend passes the contract value, the overrun.
+      Showing a clamped "$0 remaining" on an over-budget project hides the one
+      number the site manager needs. NOT_STARTED keeps the label (the whole
+      contract value is genuinely still remaining) but is toned neutral rather
+      than a healthy green, so the card states the figure without implying
+      spend is tracking. */}
+      <div className={CARD_SURFACE}>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div
+            className={cn(
+              ICON_CONTAINER,
+              isOverBudget
+                ? METRIC_TONES.danger
                 : isNotStarted
-                  ? "No spend recorded"
-                  : "Remaining budget"}
-            </div>
+                  ? METRIC_TONES.neutral
+                  : METRIC_TONES.success,
+            )}
+          >
+            {isOverBudget ? (
+              <TriangleAlert className="size-5" aria-hidden="true" />
+            ) : (
+              <PiggyBank className="size-5" aria-hidden="true" />
+            )}
           </div>
-        </>
-      )}
-      {/* Workers on site — no attendance source is wired up yet. */}
-      {/* <div className={CARD_SURFACE}>
-        <div className="mb-2 flex items-start justify-between">
-          <div className={cn(ICON_CONTAINER, METRIC_TONES.neutral)}>
-            <Users className="size-5" aria-hidden="true" />
-          </div>
-          <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-            Not enabled
+          <span
+            className={cn(
+              BADGE,
+              isOverBudget
+                ? "bg-destructive-light text-destructive-ink"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            <span className="tabular-nums">
+              {isOverBudget ? `+${overrunPercent}%` : `${remainingPercent}%`}
+            </span>
+            {isOverBudget ? "over" : "left"}
           </span>
         </div>
         <div
-          className={cn(CARD_VALUE, "text-muted-foreground")}
-          aria-hidden="true"
+          className={cn(CARD_VALUE, isOverBudget && "text-destructive-ink")}
         >
-          —
+          {currency.format(isOverBudget ? overrun : budgetSummary.remaining)}
         </div>
         <div className={CARD_LABEL}>
-          Site attendance tracking is not enabled for this project, so there is
-          no live worker count.
+          {isOverBudget ? "Over budget by" : "Remaining budget"}
         </div>
-      </div> */}
+      </div>
     </section>
   );
 }

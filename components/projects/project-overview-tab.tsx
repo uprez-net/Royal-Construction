@@ -48,6 +48,10 @@ export function OverviewTab({
     budget !== null && spent !== null ? getBudgetStatus(budget, spent) : null;
   const isOverBudget = status === "OVER_BUDGET";
   const isNotStarted = status === "NOT_STARTED";
+  // With a budget recorded, "no spend yet" means all of it is still remaining.
+  // The tile used to show "—" there, hiding a figure it could state exactly.
+  // Null only when there is no budget to draw down from.
+  const remainingToShow = budget !== null && budget > 0 ? remaining : null;
 
   const progressPercent = Math.min(
     100,
@@ -93,9 +97,11 @@ export function OverviewTab({
             <p className="text-xs font-medium text-muted-foreground">
               {isOverBudget
                 ? "Over budget"
-                : isNotStarted
-                  ? "No spend recorded"
-                  : "Remaining"}
+                : remainingToShow !== null
+                  ? "Remaining"
+                  : budget !== null && budget > 0
+                    ? "No spend recorded"
+                    : "No budget recorded"}
             </p>
             <p
               className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
@@ -106,11 +112,9 @@ export function OverviewTab({
                     : "text-success-ink"
               }`}
             >
-              {isNotStarted
-                ? "—"
-                : remaining !== null
-                  ? compactCurrency.format(Math.abs(remaining))
-                  : "—"}
+              {remainingToShow !== null
+                ? compactCurrency.format(Math.abs(remainingToShow))
+                : "—"}
             </p>
           </div>
         </div>

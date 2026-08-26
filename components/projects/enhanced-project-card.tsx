@@ -55,9 +55,7 @@ export function EnhancedProjectCard({
   // A project can legitimately have no budget set yet; the `hasBudget` guard
   // keeps the "—" display for the budget stat when no contract value is set.
   const hasBudget = Number.isFinite(budget) && budget > 0;
-  const budgetStatus = getBudgetStatus(budget, spent);
-  const isOverBudget = budgetStatus === "OVER_BUDGET";
-  const isNotStarted = budgetStatus === "NOT_STARTED";
+  const isOverBudget = getBudgetStatus(budget, spent) === "OVER_BUDGET";
   const progress = Math.round(project.progressPercent);
   const progressLabelId = `project-progress-${project.id}`;
   const { totalStages, completedStages } = calcMilestoneOverviewData(
@@ -162,12 +160,11 @@ export function EnhancedProjectCard({
               </p>
             </div>
             <div className="text-center">
+              {/* Always "Spent": the figure below is the spend either way, and
+                  swapping the label for "No spend recorded" left a $0 with
+                  nothing naming it. */}
               <p className="font-medium text-muted-foreground">
-                {isOverBudget
-                  ? "Over budget"
-                  : isNotStarted
-                    ? "No spend recorded"
-                    : "Spent"}
+                {isOverBudget ? "Over budget" : "Spent"}
               </p>
               <p
                 className={`font-mono text-sm font-semibold tabular-nums ${

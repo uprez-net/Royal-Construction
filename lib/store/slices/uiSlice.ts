@@ -75,7 +75,7 @@ const initialState: UIState = {
   leadTasksVersion: 0,
   projectFilters: {
     status: null,
-    view: "grid",
+    view: "list",
     searchQuery: "",
     sortBy: "name",
     sortOrder: "asc",

@@ -164,6 +164,10 @@ export async function generateOfferPrefillFromLead(input: {
     job.bedrooms = d.numberOfBedrooms;
     job.bathrooms = d.numberOfBathrooms;
     job.garageSpaces = d.numberOfGarageSpaces;
+    // Priced by its own cost line through TOTAL_SHOWERS, which used to be fed
+    // the bathroom count. Now that showers are counted separately, a shower the
+    // client mentioned has to reach the field or the line prices at zero.
+    job.showerCount = d.numberOfShowers;
   } else {
     notes = `AI drafting was skipped (${ai.message}). Filled contact details only.`;
   }

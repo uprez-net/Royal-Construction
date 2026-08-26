@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
+import { setActiveProject } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useParams } from "next/navigation";
 
@@ -1242,6 +1243,7 @@ export function ProjectOverviewTab({
   isAdmin: boolean;
 }) {
   const params = useParams();
+  const dispatch = useAppDispatch();
   const { startDate, estimatedEndDate } = project;
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
   const [openSection, setOpenSection] = useState<string>();
@@ -1380,6 +1382,11 @@ export function ProjectOverviewTab({
         "Unable to update project",
       );
       toast.success("Project sections updated");
+      // The header is a sibling reading `projects.activeProject`, not this
+      // tab's draft, so a saved HBCF number or PCA inspector kept showing
+      // "Not set" until a full reload. The PATCH returns the whole project,
+      // so hand it to the store the header actually reads.
+      dispatch(setActiveProject(response.data));
       setDraft((response.data.requirements ?? payload) as RequirementsData);
       setStateStartDate(toDateInputValue(response.data.startDate));
       setStateEstimatedEndDate(
@@ -1506,16 +1513,46 @@ export function ProjectOverviewTab({
       | null
       | undefined) ?? null;
 
+  // Header chips and the compliance banner deep-link here via
+  // `#legalAdministration`. Re-apply on hashchange too — a click while
+  // already on Overview used to leave the accordion closed because `params`
+  // (the only prior dependency) does not change for a same-route hash nav.
   useEffect(() => {
-    setTimeout(() => {
-      setOpenSection(window.location.hash.slice(1) || undefined);
-    }, 0);
+    const applyHash = () => {
+      const section = window.location.hash.slice(1);
+      if (!section) return;
+      setOpenSection(section);
+      // Wait a tick for the accordion to expand before scrolling, otherwise
+      // the browser lands on a collapsed header and the fields stay off-screen.
+      window.setTimeout(() => {
+        document.getElementById(section)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 50);
+    };
+
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
   }, [params]);
+
+  // Warn before discarding unsaved overview edits via refresh / close. In-app
+  // tab switches are a separate gap — this covers the browser-level loss path.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
   return (
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/70 pb-4">
+        <CardHeader className="sticky top-0 z-20 flex flex-row items-center justify-between gap-3 border-b border-border/70 bg-card pb-4 shadow-sm">
           <div>
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is
@@ -1553,9 +1590,14 @@ export function ProjectOverviewTab({
                 ) : null}
               </div>
             ) : null}
+            {dirty ? (
+              <Badge className="rounded-full bg-warning-light px-3 py-1 text-xs font-medium text-warning-ink">
+                Unsaved
+              </Badge>
+            ) : null}
             <Button
               onClick={() => handleSave()}
-              disabled={saving}
+              disabled={!dirty || saving}
               aria-busy={saving}
             >
               {saving ? "Saving…" : "Save changes"}
@@ -1585,6 +1627,7 @@ export function ProjectOverviewTab({
               value={stateStartDate}
               onChange={(v) => {
                 setStateStartDate(v);
+                setDirty(true);
               }}
             />
             <DateField
@@ -1592,6 +1635,7 @@ export function ProjectOverviewTab({
               value={stateEstimatedEndDate}
               onChange={(v) => {
                 setStateEstimatedEndDate(v);
+                setDirty(true);
               }}
             />
             <FieldShell label="Version">
@@ -1628,30 +1672,6 @@ export function ProjectOverviewTab({
               />
             </div>
           )}
-
-          {/* Automation triggers */}
-          {/* <div className="grid gap-3 md:grid-cols-3">
-            <AutomationToggle
-              label="Order reminders"
-              description="Notify when material orders are due"
-              checked={Boolean(automation.orderReminders)}
-              onChange={(v) => updateAutomationTrigger("orderReminders", v)}
-            />
-            <AutomationToggle
-              label="Notice countdowns"
-              description="Track contractual notice periods"
-              checked={Boolean(automation.noticeCountdowns)}
-              onChange={(v) => updateAutomationTrigger("noticeCountdowns", v)}
-            />
-            <AutomationToggle
-              label="Rain delay calculations"
-              description="Auto-extend dates for weather delays"
-              checked={Boolean(automation.rainDelayCalculations)}
-              onChange={(v) =>
-                updateAutomationTrigger("rainDelayCalculations", v)
-              }
-            />
-          </div> */}
 
           {/* Conflicts */}
           {conflicts.length > 0 ? (
@@ -1727,7 +1747,7 @@ export function ProjectOverviewTab({
                       ) : null}
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-4 pb-4 pt-1 overflow-y-auto max-h-[75vh] no-scrollbar">
+                  <AccordionContent className="max-h-[75vh] space-y-4 overflow-y-auto pb-4 pt-1 no-scrollbar">
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {SECTION_FIELDS[key].map((config) => (
                         <div
@@ -1787,7 +1807,7 @@ export function ProjectOverviewTab({
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
                         <TagListControl
                           label={
-                            <h5 className="text-sm font-medium text-foreground flex items-center">
+                            <h5 className="flex items-center text-sm font-medium text-foreground">
                               <Check
                                 aria-hidden="true"
                                 className="mr-1 h-3 w-3 shrink-0 text-success-ink"
@@ -1808,7 +1828,7 @@ export function ProjectOverviewTab({
                         />
                         <TagListControl
                           label={
-                            <h5 className="text-sm font-medium text-foreground flex items-center">
+                            <h5 className="flex items-center text-sm font-medium text-foreground">
                               <AlertTriangle
                                 aria-hidden="true"
                                 className="mr-1 h-3 w-3 shrink-0 text-warning-ink"
