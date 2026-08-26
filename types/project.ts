@@ -1,3 +1,4 @@
+import type { TradiePriceUnit } from "@prisma/client";
 import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 
@@ -8,6 +9,29 @@ export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lo
   requirements?: ProjectRequirementsPayload;
 }
 
+/**
+ * Shared budget health classification. Derived purely from
+ * `getBudgetStatus` (see `lib/utils/project-budget-status.ts`) so every
+ * surface that shows a budget badge — stat cards, overview/financial tabs,
+ * project card — agrees on whether spend is "not started", "on budget" or
+ * "over budget".
+ */
+export type BudgetStatus = "NOT_STARTED" | "ON_BUDGET" | "OVER_BUDGET";
+
+/**
+ * Full budget summary surfaced by `selectActiveProjectBudgetSummary`. The
+ * numeric fields are the derived figures other logic already depends on;
+ * `status` is the shared classification so consumers stop re-deriving it.
+ */
+export type BudgetSummary = {
+  totalBudget: number;
+  spent: number;
+  remaining: number;
+  variance: number;
+  spentPercent: number;
+  status: BudgetStatus;
+};
+
 export interface SafeMaterial extends Omit<Material, "unitCost" | "totalCost"> {
   unitCost: string;
   totalCost: string;
@@ -15,6 +39,7 @@ export interface SafeMaterial extends Omit<Material, "unitCost" | "totalCost"> {
 
 export interface SafeTradie extends Omit<Tradie, "lastQuotedPrice" | "rating"> {
   lastQuotedPrice?: string;
+  lastQuotedPriceUnit: TradiePriceUnit;
   rating?: string;
 }
 
@@ -149,6 +174,7 @@ export type TradieScheduleListItem = {
   reminderSentAt?: string;
   updatedAt: string;
   lastQuotedPrice?: string;
+  lastQuotedPriceUnit: TradiePriceUnit;
   rating?: string;
   requiresQuote: boolean;
   quotedPrice?: string;
@@ -225,6 +251,7 @@ export type TradieUrgentReminderItem = {
     additionalEmails: string[];
   };
   lastQuotedPrice?: string;
+  lastQuotedPriceUnit: TradiePriceUnit;
   rating?: string;
   siteManager: {
     name: string;
@@ -322,12 +349,12 @@ export interface UIMilestone extends MilestoneWithFilesTradiesUpdates {
 }
 
 export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
-  Deposit: "Deposit (5%)",
-  Slab: "Slab (15%)",
-  Frame: "Frame (25%)",
-  Lockup: "Lock Up (25%)",
-  Interior_Fit_Out: "Interior Fit-Out (20%)",
-  Final: "Final (10%)",
+  Deposit: "Deposit",
+  Slab: "Slab",
+  Frame: "Frame",
+  Lockup: "Lock Up",
+  Interior_Fit_Out: "Interior Fit-Out",
+  Final: "Final",
 }
 
 export const PROJECT_STAGE_PERCENTAGE: Record<ProjectStage, number> = {

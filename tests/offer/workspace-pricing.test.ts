@@ -4,13 +4,16 @@ import {
   calculateRateCardComparison,
   calculateDirectTotal,
   calculateEffectiveMargin,
+  calculateHbcfLoadingCharge,
   calculateHbcfPremium,
+  calculateHbcfPremiumBreakdown,
   calculateStageSubtotals,
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
   getMarginStatus,
   parseNonNegativeNumberInput,
   resolveTargetMarkupPct,
+  reverseHbcfTotalContractValue,
   withDerivedHbcfPremium,
   type OfferWorkspacePricingSettings,
 } from "../../lib/offer/workspace-pricing";
@@ -25,6 +28,7 @@ const SETTINGS: OfferWorkspacePricingSettings = {
   hbcfRate: 0.00966,
   homeWarrantyHbcfFixed: 0,
   impactFeeFixed: 0,
+  loadingChargePercentage: 0,
 };
 
 const pricing = calculateOfferWorkspacePricing({
@@ -351,4 +355,64 @@ assert.deepEqual(
     hbcfTotalContractValue: 0,
     homeWarrantyHbcfFixed: 0,
   },
+);
+
+// The loading charge is a flat percentage of the WHOLE grossed-up premium (base
+// + GST + stamp), added on top — not another markup on the cost base.
+assert.equal(calculateHbcfLoadingCharge(7528.52, 5), 376.43);
+assert.equal(calculateHbcfLoadingCharge(7528.52, 0), 0);
+// A blank/zero premium can't be loaded, so no NaN or phantom charge.
+assert.equal(calculateHbcfLoadingCharge(0, 5), 0);
+
+assert.deepEqual(calculateHbcfPremiumBreakdown(650000, 0.00966, 5), {
+  basePremium: 6279,
+  gstAmount: 627.9,
+  stampDuty: 621.62,
+  premiumBeforeLoading: 7528.52,
+  loadingCharge: 376.43,
+  totalPremium: 7904.95,
+});
+// Zero loading leaves the icare figure untouched (every legacy caller's path).
+assert.equal(calculateHbcfPremiumBreakdown(650000, 0.00966, 0).totalPremium, 7528.52);
+assert.equal(calculateHbcfPremium(650000, 0.00966, 5), 7904.95);
+assert.equal(calculateHbcfPremium(0, 0.00966, 5), 0);
+
+// withDerivedHbcfPremium carries the loaded total onto homeWarrantyHbcfFixed,
+// so the loading charge flows through additions into the customer price.
+assert.deepEqual(
+  withDerivedHbcfPremium({
+    ...SETTINGS,
+    hbcfTotalContractValue: 650000,
+    hbcfRate: 0.00966,
+    loadingChargePercentage: 5,
+    homeWarrantyHbcfFixed: 0,
+  }),
+  {
+    ...SETTINGS,
+    hbcfTotalContractValue: 650000,
+    hbcfRate: 0.00966,
+    loadingChargePercentage: 5,
+    homeWarrantyHbcfFixed: 7904.95,
+  },
+);
+
+// The loaded premium is a fixed addition: it lands in additionsTotal (alongside
+// the impact fee) rather than changing either markup lever.
+const loadedAdditions = calculateAdditionsTotal({
+  ...SETTINGS,
+  homeWarrantyHbcfFixed: 7904.95,
+  impactFeeFixed: 1500,
+  loadingChargePercentage: 5,
+});
+assert.equal(loadedAdditions, 9404.95);
+
+// Reversing a loaded premium must divide the loading back out, or hydrating a
+// legacy offer and then touching any pricing field would load it a second time.
+const reversedTcv = reverseHbcfTotalContractValue(7904.95, 0.00966, 5);
+assert.equal(Math.round(reversedTcv), 650000);
+// Cent-rounding in the forward gross-up means the reverse lands a cent shy of
+// the original TCV — the same tolerance the un-loaded path has always had.
+assert.equal(
+  Math.round(reverseHbcfTotalContractValue(7528.52, 0.00966)),
+  650000,
 );

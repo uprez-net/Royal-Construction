@@ -482,10 +482,12 @@ export function OfferWorkspaceScreen({
             status={stepStatusById.get("offer-step-cost-schedule") ?? null}
           >
             <AreaCalculatorPanel
+              job={job}
               basis={areaBasis}
               area={areaCalculator}
               rateConstants={rateConstants}
               onAreaChange={onAreaChange}
+              onJobChange={onJobChange}
             />
             <CostSchedulePanel
               importResult={importResult}

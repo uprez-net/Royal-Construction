@@ -10,6 +10,7 @@ import {
 } from "@/lib/leads/types";
 // import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 
 /* ── Constants ────────────────────────────────────────── */
 
@@ -39,21 +40,37 @@ export const LEAD_SOURCE_OPTIONS: LeadSource[] = [
   "Business",
 ];
 
-export const LEAD_STAGE_OPTIONS: LeadStage[] = [
-  "New",
-  "Contacted",
-  "Qualified",
-  "Quoted",
-  "Negotiating",
-  //"Won",
-  "Lost",
-  "Meeting Scheduled",
-  "In Follow-up",
-  "No Response",
-  "Converted",
-  //"Cancelled",
-  "Disqualified",
+/**
+ * The picker, in groups.
+ *
+ * "Closed" rather than "Disqualified" for the third group: Disqualified is one
+ * of the three stages inside it, so reusing the word would leave people
+ * guessing whether a filter meant the group or the stage.
+ *
+ * Meeting Scheduled and In Follow-up are gone. Both described a scheduled task
+ * rather than progress, and completing one wrote CONTACTED, which is why 6 of
+ * the 11 Contacted leads on production got there by having the work done
+ * properly. They are tasks now, carried by followupDate and meetingDate.
+ *
+ * Won and Cancelled are gone too: nothing in any calculation could tell either
+ * apart from Converted and Lost.
+ */
+export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
+  { label: "Active", stages: ["New", "Contacted", "Discovery", "Qualified", "Quoted", "Negotiating"] },
+  { label: "Won", stages: ["Converted"] },
+  // No Response has its own group because it does not behave like the two
+  // below it. Its outcome is STALLED, not LOST: it counts in nothing, and
+  // — unlike Disqualified and Lost — its tasks stay live and its reminders
+  // keep firing, which is deliberate. A lead that stopped answering is
+  // exactly the one carrying "call again in three months". Grouping it under
+  // "Closed" made two neighbouring options behave differently with nothing
+  // on screen to say so.
+  { label: "Stalled", stages: ["No Response"] },
+  { label: "Closed", stages: ["Disqualified", "Lost"] },
 ];
+
+/** Flat order, for the filter chips and anything that wants one list. */
+export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap((g) => g.stages);
 
 export const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
   "system",
@@ -70,9 +87,84 @@ export const BUDGET_OPTIONS = [
   "$700K+",
 ];
 
+export interface BudgetBracket {
+  /** Lower bound, in dollars. */
+  min: number;
+  /**
+   * Upper bound, in dollars. On the open-ended top bracket this is a display
+   * cap chosen so a bar has something to fill against — it is NOT a real
+   * ceiling, and `isOpenEnded` is what callers must branch on before labelling
+   * it as one.
+   */
+  max: number;
+  isOpenEnded: boolean;
+}
+
+/**
+ * `Lead.budget` is a rough free-text note, not structured money — the column
+ * holds a label such as "$350K - $500K" and the type permits arbitrary strings.
+ * This is the only place that reads numbers out of those labels, and it is
+ * deliberately a lookup rather than a regex: only the five options an operator
+ * can actually pick are meaningful, and anything else (including
+ * "Not Discussed", hand-typed text, and legacy values) has no defensible
+ * numeric reading and returns null so the caller can hide the affordance
+ * instead of inventing a range.
+ *
+ * `estimatedValue` remains the source of truth for money — see Lead in
+ * lib/leads/types.ts. Treat a bracket as a fallback for display only.
+ */
+const BUDGET_BRACKETS: Record<string, BudgetBracket> = {
+  "$200K - $350K": { min: 200_000, max: 350_000, isOpenEnded: false },
+  "$350K - $500K": { min: 350_000, max: 500_000, isOpenEnded: false },
+  "$500K - $700K": { min: 500_000, max: 700_000, isOpenEnded: false },
+  "$700K+": { min: 700_000, max: 1_000_000, isOpenEnded: true },
+};
+
+export function budgetBracket(
+  budget: string | null | undefined,
+): BudgetBracket | null {
+  if (!budget) return null;
+  return BUDGET_BRACKETS[budget.trim()] ?? null;
+}
+
+/**
+ * The stage list to render in a picker for a lead currently on `current`.
+ *
+ * LEAD_STAGE_OPTIONS hides Won and Cancelled, but a lead can still BE on one:
+ * the header badge picker builds its own list from STAGE_STYLES and offers all
+ * thirteen. Radix Select fills the trigger by portalling text out of the
+ * MATCHING item, and its placeholder only covers "" and undefined — so a value
+ * with no item renders the trigger completely blank, not even "Select a stage".
+ *
+ * Appending the current stage keeps that lead readable without making a hidden
+ * stage newly selectable for anyone else.
+ */
+/**
+ * The grouped picker for a lead currently on `current`.
+ *
+ * Same contract as stageOptionsFor: a lead sitting on a stage the groups do not
+ * carry still gets an entry, so it renders and can keep what it has. Rows hold
+ * the four retired stages until the data migration has run everywhere, and
+ * Radix fills the trigger by portalling text out of the MATCHING item, so a
+ * value with no item renders the trigger completely blank.
+ */
+export function stageGroupsFor(
+  current: LeadStage,
+): { label: string; stages: LeadStage[] }[] {
+  if (LEAD_STAGE_OPTIONS.includes(current)) return LEAD_STAGE_GROUPS;
+  return [...LEAD_STAGE_GROUPS, { label: "Retired", stages: [current] }];
+}
+
+export function stageOptionsFor(current: LeadStage): LeadStage[] {
+  return LEAD_STAGE_OPTIONS.includes(current)
+    ? LEAD_STAGE_OPTIONS
+    : [...LEAD_STAGE_OPTIONS, current];
+}
+
 export const STAGE_STYLES: Record<LeadStage, string> = {
   New: "stage-badge-info",
   Contacted: "stage-badge-warning",
+  Discovery: "stage-badge-info",
   Qualified: "stage-badge-purple",
   Quoted: "stage-badge-accent",
   Negotiating: "stage-badge-pink",
@@ -100,7 +192,14 @@ export interface LeadDetailFormData {
   stage: LeadStage;
   assignedId?: string | null;
   assignedUser?: { id: string; name: string; email: string } | null;
+  /** Free-text note only — `estimatedValue` is the source of truth for KPIs. */
   budget: string;
+  /** Empty string means "not recorded"; the input is numeric text. */
+  estimatedValue: string;
+  estimatedValueSource: "OFFER" | "MANUAL" | null;
+  /** Empty string means "inherit the stage default". */
+  probabilityOverride: string;
+  expectedCloseDate: string;
   type: ProjectType[];
   notes: string;
   notesDoc: LeadRichTextDocument;
@@ -123,6 +222,32 @@ export function formatFollowup(date: string | null, time?: string | null): strin
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}${time ? " " + time : ""}`;
+}
+
+export function formatLeadTaskDue(
+  dueDate: string | null,
+  dueTime?: string | null,
+): string {
+  if (!dueDate) return "No date";
+  const label = new Date(dueDate).toLocaleDateString("en-AU", {
+    timeZone: "Australia/Sydney",
+    day: "numeric",
+    month: "short",
+  });
+  return dueTime ? `${label} · ${dueTime}` : label;
+}
+
+export function sortLeadOpenTasks<T extends { id: number; dueDate: string | null; dueTime: string | null }>(
+  tasks: T[],
+): T[] {
+  return [...tasks].sort((a, b) => {
+    if (a.dueDate === b.dueDate) {
+      return (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.id - b.id;
+    }
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
 }
 
 export function formatShortDate(date: Date): string {
@@ -239,6 +364,16 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     assignedId: lead.assignedId || null,
     assignedUser: lead.assignedUser || null,
     budget: lead.budget || "",
+    estimatedValue: lead.estimatedValue ?? "",
+    estimatedValueSource: lead.estimatedValueSource ?? null,
+    probabilityOverride:
+      lead.probabilityOverride === null || lead.probabilityOverride === undefined
+        ? ""
+        : String(lead.probabilityOverride),
+    // <input type="date"> wants YYYY-MM-DD, not a full ISO timestamp.
+    expectedCloseDate: lead.expectedCloseDate
+      ? lead.expectedCloseDate.slice(0, 10)
+      : "",
     type: normalizeTypes(lead.type),
     notes: lead.notes || "",
     notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes || ""),
@@ -323,8 +458,8 @@ export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
     action: "Follow-up confirmed",
     detail: "The follow-up was completed and acknowledged.",
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -344,8 +479,8 @@ export function buildFollowupNotRequiredHistoryEntry(note?: string): HistoryItem
     action: "Follow-up not required",
     detail: `No additional follow-up is required for this lead.${note ? ` \nNOTE: (${note})` : ""}`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -355,8 +490,8 @@ export function buildFollowupCompletedHistoryEntry(note?: string): HistoryItem {
     action: "Follow-up completed",
     detail: `The follow-up was completed and acknowledged.${note ? ` \nNOTE: (${note})` : ""}`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -366,8 +501,8 @@ export function buildMeetingDidNotTakePlaceHistoryEntry(reason?: string): Histor
     action: "Meeting did not take place",
     detail: `The scheduled meeting did not occur and needs rescheduling.${reason ? ` \nREASON: (${reason})` : ""}`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -381,8 +516,8 @@ export function buildMeetingReviewedHistoryEntry(input: {
     action: "Meeting reviewed",
     detail: `Mode: ${input.meetingMode}. Discussion: ${input.discussionNotes || "No discussion notes"}. Scope: ${input.buildScope || "No build scope"}.`,
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
@@ -392,6 +527,91 @@ export function isLostStage(stage: LeadStage): boolean {
   return stage === "Lost" || stage === "Cancelled" || stage === "Disqualified";
 }
 
+/** A deal that closed successfully. "Converted" is Royal Constructions' word
+ *  for it; Won is the same thing and is currently hidden from the picker. */
+export function isWonStage(stage: LeadStage): boolean {
+  return stage === "Won" || stage === "Converted";
+}
+
 export function isTerminalStage(stage: LeadStage): boolean {
-  return ["Won", "Lost", "Cancelled", "Disqualified"].includes(stage);
+  // Converted belongs here. Leaving it out is why a won deal still showed a
+  // Call button and no Archive button — the row actions treated the one label
+  // operators can actually pick as though the lead were still open.
+  return isWonStage(stage) || isLostStage(stage);
+}
+
+export function isQuotingStage(stage: LeadStage): boolean {
+  // isWonStage, not a bare "Won". This list named Won and missed Converted,
+  // and Converted is the label operators actually pick, so in practice no won
+  // lead ever showed Check Offer. Exactly the defect isTerminalStage had.
+  //
+  // And it happened again with the ladder change: the list still named the two
+  // retired stages and never gained Discovery, which replaced them. That hid
+  // Check with Offer from 33 of the 59 leads on staging, every one of them in
+  // the stage where scoping a build actually happens.
+  return (
+    isWonStage(stage) ||
+    ["Discovery", "Qualified", "Quoted", "Negotiating"].includes(stage) ||
+    // Retired, kept until no row holds them.
+    ["In Follow-up", "Meeting Scheduled"].includes(stage)
+  );
+}
+
+/**
+ * Metrics whose cohort cannot be drawn as chips.
+ *
+ * The KPI cards select groups that span hidden stages: "converted" means Won
+ * plus Converted and Won has no chip, "lost" includes Cancelled which has none
+ * either. Editing one of those cohorts chip by chip left the invisible half
+ * selected on its own, so clicking the Converted chip to clear it filtered the
+ * table to Won with no chip highlighted to explain why.
+ */
+const KPI_COHORT_METRICS = ["total", "converted", "pendingFollowup", "lost"];
+
+export function isKpiCohortMetric(activeMetric: string | null | undefined): boolean {
+  if (!activeMetric) return false;
+  return KPI_COHORT_METRICS.some((metric) => activeMetric.includes(metric));
+}
+/**
+ * Wording for the mandatory reason on a closed-unsuccessful lead.
+ *
+ * `isLostStage` groups Cancelled with Lost, so making Cancelled selectable
+ * turns on a required field labelled "Lost reason" for a lead that was not
+ * lost. The reason is stored in the same `lostReason` column either way —
+ * only the wording changes.
+ */
+export function closureReasonCopy(stage: LeadStage): {
+  label: string;
+  noun: string;
+  placeholder: string;
+} {
+  if (stage === "Cancelled") {
+    return {
+      label: "Cancellation reason",
+      noun: "cancellation reason",
+      placeholder: "e.g. Client postponed the build, finance fell through",
+    };
+  }
+  return {
+    label: "Lost reason",
+    noun: "lost reason",
+    placeholder: "e.g. Went with another builder, budget too low",
+  };
+}
+
+/**
+ * Parse the free-typed likelihood field into a per-lead probability override.
+ *
+ * Blank means "no override" and so does anything unparseable. Rounding a typo
+ * down to 0 would be worse than ignoring it: 0% is a legitimate forecast value
+ * that removes the deal's weighted contribution entirely, so a stray keystroke
+ * would silently shrink the pipeline. Valid input is clamped to 0-100 and
+ * rounded, because Zod enforces an int in that range and rejecting the payload
+ * would take every unrelated edit in the modal down with it.
+ */
+export function parseLikelihood(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
 }

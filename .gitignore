@@ -56,3 +56,10 @@ backups/
 .impeccable/
 package-lock.json
 *.png
+# Local agent tooling. Never commit: .gstack browse logs carry session
+# JWTs and .omo artefacts carry customer names, addresses and prices.
+.omo/
+.gstack/
+.claude/
+.mcp.json
+.docs-build/

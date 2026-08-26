@@ -88,7 +88,6 @@ const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
   neutral: "bg-muted text-muted-foreground",
 };
 
-const OPEN_MILESTONE_STATUSES = new Set(["PENDING", "ACTIVE"]);
 const BLOCKED_TRADIE_STATUSES = new Set(["NO_RESPONSE", "DECLINED"]);
 const AWAITING_TRADIE_STATUSES = new Set([
   "PENDING",
@@ -125,20 +124,10 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
 const generateProjectDetailTabs = (
   project: ProjectDetail,
 ): ProjectDetailTab[] => {
-  const now = Date.now();
   const {
     totalStages: projectStagesCount,
     completedStages: completedStagesCount,
   } = calcMilestoneOverviewData(project.milestones);
-  const openMilestones = project.milestones.filter((m) =>
-    OPEN_MILESTONE_STATUSES.has(m.status),
-  );
-  // Urgency comes from actual lateness, not from a milestone merely being
-  // incomplete — eight upcoming milestones on a new project is normal.
-  const overdueMilestones = openMilestones.filter(
-    (m) => new Date(m.targetDate).getTime() < now,
-  ).length;
-
   const blockedTradies = project.tradieSchedules.filter((schedule) =>
     BLOCKED_TRADIE_STATUSES.has(schedule.status),
   ).length;
@@ -152,21 +141,17 @@ const generateProjectDetailTabs = (
     {
       key: "milestones",
       label: "Milestones",
-      ...(openMilestones.length > 0
+      ...(projectStagesCount - completedStagesCount > 0
         ? {
             badge: {
               count: (projectStagesCount - completedStagesCount).toString(),
-              // Only a real problem — a missed target date — earns a red badge.
-              tone: overdueMilestones > 0 ? "danger" : "neutral",
-              description:
-                overdueMilestones > 0
-                  ? `${openMilestones.length} milestones remaining, ${overdueMilestones} past their target date`
-                  : `${openMilestones.length} milestones remaining`,
+              tone: "primary",
+              description: `${projectStagesCount - completedStagesCount} milestones remaining`,
             } satisfies TabBadge,
           }
         : {}),
     },
-    { key: "payments", label: "Payments", isAdminOnly: true },
+    // { key: "payments", label: "Payments", isAdminOnly: true },
     {
       key: "tradies",
       label: "Tradies",

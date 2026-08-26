@@ -25,6 +25,7 @@ import { useApprovalMutation } from "@/hooks/use-approval-mutation";
 import { RatingStars } from "@/components/common/rating-stars";
 import { rateCurrency, dataTimeFormat, formatStatus } from "@/utils/formatters";
 import { cn } from "@/lib/utils";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface Props {
   approval: SafeTradieApproval;
@@ -131,10 +132,14 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
 
               <DetailRow
                 icon={<DollarSign className="size-4" />}
-                label="Hourly rate"
+                label="Last quoted price"
                 value={
                   approval.tradie.lastQuotedPrice
-                    ? `${rateCurrency.format(Number(approval.tradie.lastQuotedPrice))}`
+                    ? formatQuotedPrice(
+                        Number(approval.tradie.lastQuotedPrice),
+                        approval.tradie.lastQuotedPriceUnit,
+                        rateCurrency.format,
+                      )
                     : "Not set"
                 }
                 // Mono is reserved for actual figures; the "Not set" placeholder
@@ -211,36 +216,38 @@ export function TradieRemovalApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
-          <Button
-            variant="outline"
-            disabled={mutation.isPending}
-            onClick={() => submit("rejected")}
-          >
-            Reject request
-          </Button>
+        {approval.status === "PENDING" && (
+          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => submit("rejected")}
+            >
+              Reject request
+            </Button>
 
-          <Button
-            variant="destructive"
-            disabled={mutation.isPending || !confirmed}
-            onClick={() => submit("approved")}
-          >
-            {mutation.isPending ? (
-              <>
-                <Loader2
-                  className="mr-2 size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Removing…
-              </>
-            ) : (
-              <>
-                <Trash2 className="mr-2 size-4" aria-hidden="true" />
-                Remove tradie
-              </>
-            )}
-          </Button>
-        </div>
+            <Button
+              variant="destructive"
+              disabled={mutation.isPending || !confirmed}
+              onClick={() => submit("approved")}
+            >
+              {mutation.isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Removing…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 size-4" aria-hidden="true" />
+                  Remove tradie
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );

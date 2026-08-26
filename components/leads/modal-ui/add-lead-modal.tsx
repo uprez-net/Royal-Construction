@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Check, Bell, X } from "lucide-react";
+import { Plus, Check, Bell, X, AlertTriangle } from "lucide-react";
 import { ModalShell } from "@/components/common/modal-shell";
 import {
   Lead,
@@ -11,7 +11,11 @@ import {
   ProjectType,
   HistoryItem,
 } from "@/lib/leads/types";
-import { createLead } from "@/lib/leads/leads-service";
+import {
+  createLead,
+  isDuplicateLeadResult,
+  type DuplicateLeadResult,
+} from "@/lib/leads/leads-service";
 import { FetchError } from "@/utils/fetch";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
@@ -22,6 +26,8 @@ import {
 } from "@/lib/leads/lead-helpers";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createTask } from "@/lib/leads/task-service";
+import { sydneyStartOfDay } from "@/lib/dates/sydney";
 
 /* ── Types ── */
 
@@ -44,6 +50,8 @@ interface AddLeadFormData {
   stage: LeadStage;
   assignedId: string;
   budget: string;
+  estimatedValue: string;
+  expectedCloseDate: string;
   type: ProjectType[];
   notes: string;
   followupDate: string;
@@ -79,6 +87,8 @@ export function AddLeadModal({
     stage: "New",
     assignedId: "",
     budget: "Not Discussed",
+    estimatedValue: "",
+    expectedCloseDate: "",
     type: ["Not Specified"],
     notes: "",
     followupDate: "",
@@ -96,14 +106,22 @@ export function AddLeadModal({
 
   const [saving, setSaving] = useState(false);
   const [savingWithReminder, setSavingWithReminder] = useState(false);
+  // A toast is gone before the user has finished reading which lead they just
+  // re-entered, so the duplicate the server named stays on screen until the
+  // email or phone that collided is changed.
+  const [duplicate, setDuplicate] = useState<DuplicateLeadResult | null>(null);
   const formId = React.useId();
   const fieldId = (name: string) => `${formId}-${name}`;
   const requiredFieldsId = fieldId("required-fields");
 
   /* ── Helpers ── */
 
-  const updateField = (field: keyof AddLeadFormData, value: string) =>
+  const updateField = (field: keyof AddLeadFormData, value: string) => {
+    // Email and phone are the two fields the duplicate check matches on, so
+    // touching either means the warning may no longer hold.
+    if (field === "email" || field === "phone") setDuplicate(null);
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const toggleProjectType = (value: ProjectType) =>
     setForm((prev) => {
@@ -159,10 +177,14 @@ export function AddLeadModal({
 
     const setLoading = setReminder ? setSavingWithReminder : setSaving;
     setLoading(true);
+    setDuplicate(null);
 
     try {
+      // Booking work at creation means Discovery has started. It used to write
+      // "In Follow-up", which was a task masquerading as a stage: the lead then
+      // dropped to Contacted the moment somebody answered the call.
       const stage: LeadStage =
-        form.followupDate && form.followupTime ? "In Follow-up" : "Contacted";
+        form.followupDate && form.followupTime ? "Discovery" : "Contacted";
 
       // let calendarCreated = true;
       // if (stage === "In Follow-up") {
@@ -198,8 +220,12 @@ export function AddLeadModal({
         stage,
         assignedId: form.assignedId || null,
         budget: form.budget as BudgetRange,
+        estimatedValue: form.estimatedValue === "" ? null : form.estimatedValue,
+        expectedCloseDate: form.expectedCloseDate || null,
         type: form.type.length > 0 ? form.type : ["Not Specified"],
         notes: form.notes,
+        // The date is still stored on the lead for now, and the task below is
+        // what anything actually reads. Both go until the columns are dropped.
         followupDate: form.followupDate || null,
         followupTime: form.followupTime || null,
         followupNotes: "",
@@ -207,12 +233,41 @@ export function AddLeadModal({
         history: historyEntries,
       });
 
-      if ('message' in createdLead) {
-        showToast(createdLead.message, "info");
+      // The server answers a duplicate with the lead it collided with. Naming
+      // that lead is the difference between "try again" and "here it is".
+      if (isDuplicateLeadResult(createdLead)) {
+        setDuplicate(createdLead);
+        showToast(
+          `${createdLead.message} Already in the pipeline as ${createdLead.existingLead.name}.`,
+          "error",
+        );
         return;
       }
 
-      onSuccess(createdLead);
+      // A new lead booked with a follow-up needs a task, or the work is
+      // invisible: the Follow-ups tab and both reminder crons read LeadTask.
+      // Failing here must not fail the lead, which already exists by now.
+      let saved = createdLead;
+      if (form.followupDate) {
+        try {
+          const task = await createTask({
+            leadId: createdLead.id,
+            type: "CALL",
+            dueDate: sydneyStartOfDay(form.followupDate).toISOString(),
+            dueTime: form.followupTime || null,
+          });
+          // The task carries the lead's stage after any advance, so the row
+          // the list renders is not one revision behind.
+          if (task.lead.stage !== createdLead.stage) {
+            saved = { ...createdLead, stage: task.lead.stage };
+          }
+        } catch (taskError) {
+          console.error("Lead created but its first task was not", taskError);
+          showToast("Lead saved, but the follow-up task could not be created.", "info");
+        }
+      }
+
+      onSuccess(saved);
       showToast(`Lead added: ${form.name}`, "success");
 
       // if (!calendarCreated) {
@@ -229,6 +284,8 @@ export function AddLeadModal({
       console.error(error);
       if (error instanceof FetchError) {
         console.error("error Status:", error.status, "error Message:", error.message);
+        // Reached only when the 409 body could not be read; the normal path
+        // returns the duplicate above, along with the lead it matched.
         if (error.status === 409) {
           showToast("A lead with the same email or phone number already exists. Check in Leads Table", "error");
           return;
@@ -409,6 +466,41 @@ export function AddLeadModal({
                 <option key={o} value={o}>{o}</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        {/* Deal value + expected close. No likelihood field here — a new lead
+            follows its stage default, and the value is usually unknown until
+            an offer is priced, at which point it auto-fills. */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label htmlFor={fieldId("estimated-value")} className={itemLbl}>
+              Deal value (optional)
+            </label>
+            <input
+              id={fieldId("estimated-value")}
+              type="number"
+              min={0}
+              step={1000}
+              className={fieldCls}
+              value={form.estimatedValue}
+              onChange={(e) => updateField("estimatedValue", e.target.value)}
+            />
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              Fills in automatically once an offer is priced.
+            </span>
+          </div>
+          <div>
+            <label htmlFor={fieldId("expected-close")} className={itemLbl}>
+              Expected close (optional)
+            </label>
+            <input
+              id={fieldId("expected-close")}
+              type="date"
+              className={fieldCls}
+              value={form.expectedCloseDate}
+              onChange={(e) => updateField("expectedCloseDate", e.target.value)}
+            />
           </div>
         </div>
 
@@ -617,6 +709,38 @@ export function AddLeadModal({
             </div>
           )}
         </div>
+
+        {/* Duplicate warning — the lead the server matched on email or phone */}
+        {duplicate && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-semibold text-destructive">
+                {duplicate.message}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Already in the pipeline as{" "}
+                <span className="font-semibold text-foreground">
+                  {duplicate.existingLead.name}
+                </span>{" "}
+                — {duplicate.existingLead.stage}
+                {duplicate.existingLead.assignedUser
+                  ? `, assigned to ${duplicate.existingLead.assignedUser.name}`
+                  : ", unassigned"}
+                .
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {duplicate.existingLead.email} · {duplicate.existingLead.phone}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Change the email or phone to save this as a separate lead.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">

@@ -46,6 +46,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   priceAdjustmentLabel: "",
   images: EMPTY_OFFER_IMAGES,
   tenderGate: INITIAL_TENDER_GATE,
+  adminContentVersion: 0,
 };
 
 const proposalInput = buildProposalInput(SNAPSHOT);

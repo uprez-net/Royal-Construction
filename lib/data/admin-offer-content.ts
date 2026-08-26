@@ -10,12 +10,14 @@ import {
   type OfferScopeData,
   ADMIN_OFFER_CONTENT_TAG,
   EMPTY_ADMIN_OFFER_CONTENT,
+  HBFCClaimData,
 } from "@/types/admin-offer-content";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   costScheduleDataSchema,
   offerScopeDataSchema,
   offerContentDataSchema,
+  hbfcClaimDataSchema,
 } from "@/lib/validations/admin-offer-content";
 import { INITIAL_OFFER_DRAFT } from "../offer/workspace-model";
 
@@ -40,6 +42,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
         costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
         offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
         offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+        hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -47,6 +50,8 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
       costSchedule: coerceCostSchedule(created.costSchedule),
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
+      hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
+      version: created.version,
     };
   }
 
@@ -55,6 +60,8 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
     costSchedule: coerceCostSchedule(row.costSchedule),
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
+    hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
+    version: row.version,
   };
 }
 /**
@@ -80,6 +87,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
         costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
         offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
         offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+        hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -87,6 +95,8 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
       costSchedule: coerceCostSchedule(created.costSchedule),
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
+      hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
+      version: created.version,
     };
   }
 
@@ -95,6 +105,8 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
     costSchedule: coerceCostSchedule(row.costSchedule),
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
+    hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
+    version: row.version,
   };
 }
 
@@ -123,10 +135,23 @@ function coerceOfferContent(value: unknown): OfferContentData {
   };
 }
 
+function coerceHBFCClaim(value: unknown): HBFCClaimData {
+  const parsed = hbfcClaimDataSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  return { claimAmount: 0, loadingChargePercent: 0, totalPremiumToBePaid: 0 };
+}
+
 /**
  * Resolve the singleton row id, creating the row on first use. Each `update*`
  * helper below calls this then upserts only its own column, so a save on one
  * tab never clobbers another tab's stored data.
+ *
+ * Every `update*` also increments `version`. That single counter is what lets an
+ * OPEN, still-editable offer notice that admin content changed under it and
+ * re-apply the current defaults (see reapplyAdminContentIfStale in
+ * lib/data/offer-workspace.ts); agreed/sent offers keep their frozen snapshot.
+ * The callers in lib/actions/admin-offer-content.ts still revalidate
+ * ADMIN_OFFER_CONTENT_TAG so the cached read picks the new version up.
  */
 async function resolveSingletonId(): Promise<string> {
   const existing = await prisma.adminOfferContent.findFirst({
@@ -141,6 +166,7 @@ async function resolveSingletonId(): Promise<string> {
       costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
       offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
       offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+      hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -153,7 +179,7 @@ export async function updateBuildScope(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { buildScope },
+    data: { buildScope, version: { increment: 1 } },
   });
 }
 
@@ -163,7 +189,10 @@ export async function updateCostSchedule(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { costSchedule: data as unknown as Prisma.InputJsonValue },
+    data: {
+      costSchedule: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }
 
@@ -173,7 +202,10 @@ export async function updateOfferScope(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { offerScope: data as unknown as Prisma.InputJsonValue },
+    data: {
+      offerScope: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }
 
@@ -183,7 +215,22 @@ export async function updateOfferContent(
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
-    data: { offerContent: data as unknown as Prisma.InputJsonValue },
+    data: {
+      offerContent: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
   });
 }
 
+export async function updateHBFCClaim(
+  data: HBFCClaimData,
+): Promise<void> {
+  const id = await resolveSingletonId();
+  await prisma.adminOfferContent.update({
+    where: { id },
+    data: {
+      hbfcClaim: data as unknown as Prisma.InputJsonValue,
+      version: { increment: 1 },
+    },
+  });
+}

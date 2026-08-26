@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/dialog";
 
 import type { TradieScheduleListItem } from "@/types/project";
+import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import { updateProjectTradieSchedule } from "@/lib/store/slices/projectsSlice";
+import { useRouter } from "next/navigation";
 
 type ScheduleStatus =
   | "PENDING"
@@ -44,7 +47,7 @@ const statusOptions: {
   border: string;
 }[] = [
   {
-    value: "CONFIRMED",
+    value: "AWAITING_ADMIN_APPROVAL",
     label: "Confirmed",
     description: "Tradie confirmed and will attend",
     icon: <CheckCircle2 className="h-5 w-5" />,
@@ -140,6 +143,7 @@ export function ConfirmStatusModal({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const router = useRouter();
   const [status, setStatus] = useState<ScheduleStatus>(
     schedule.status as ScheduleStatus,
   );
@@ -185,8 +189,16 @@ export function ConfirmStatusModal({
         .then(() => {
           setActiveLoading(null);
           setStatus(nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus);
+          dispatch(updateProjectTradieSchedule({
+            scheduleId: schedule.id,
+            projectId: schedule.projectId,
+            update: {
+              status: nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus as TradieScheduleStatus,
+            }
+          }))
           onOpenChange(false);
           onSuccess();
+          router.refresh();
         })
         .catch((err: unknown) => {
           setActiveLoading(null);
@@ -250,6 +262,8 @@ export function ConfirmStatusModal({
               const isLoading =
                 activeLoading === option.value ||
                 (pendingFromStore && isPending);
+
+              if(!TRADIE_SCHEDULE_STATE_MACHINE[schedule.status].includes(option.value as TradieScheduleStatus)) return null;
 
               return (
                 <button

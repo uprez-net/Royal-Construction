@@ -133,7 +133,9 @@ export function OfferWorkspaceHeader({
               {formatOfferReference(job.reference, job.revision)}
             </Badge>
             <Badge variant="secondary">{OFFER_STATUS_LABEL[status]}</Badge>
-            <Badge variant="secondary">Working draft</Badge>
+            {status === "pending" && (
+              <Badge variant="secondary">Working draft</Badge>
+            )}
             <ExpiryChip expiry={offerExpiry} />
           </div>
           <h1

@@ -16,6 +16,7 @@ import { TradieRow } from "@/types/tradie";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { rateCurrency } from "@/utils/formatters";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface PriceChangeTradieModalProps {
   open: boolean;
@@ -37,12 +38,15 @@ export default function PriceChangeTradieModal({
 
   const [formData, setFormData] = useState({
     newHourlyRate: currentRate,
+    newPriceUnit: tradie.lastQuotedPriceUnit,
     reason: "",
   });
 
   const isRateValid =
     Number.isFinite(formData.newHourlyRate) && formData.newHourlyRate > 0;
-  const isRateChanged = formData.newHourlyRate !== currentRate;
+  const isRateChanged =
+    formData.newHourlyRate !== currentRate ||
+    formData.newPriceUnit !== tradie.lastQuotedPriceUnit;
   const canSubmit =
     !isPending &&
     isRateValid &&
@@ -54,6 +58,7 @@ export default function PriceChangeTradieModal({
       onClose();
       setFormData({
         newHourlyRate: currentRate,
+        newPriceUnit: tradie.lastQuotedPriceUnit,
         reason: "",
       });
     }
@@ -66,7 +71,7 @@ export default function PriceChangeTradieModal({
     }
 
     if (!isRateChanged) {
-      toast.error("The proposed rate matches the current rate.");
+      toast.error("The proposed price matches the current one.");
       return;
     }
 
@@ -80,6 +85,7 @@ export default function PriceChangeTradieModal({
         updateTradiePriceThunk({
           tradieId: tradie.id,
           newHourlyRate: formData.newHourlyRate,
+          newPriceUnit: formData.newPriceUnit,
           reason: formData.reason,
         }),
       ).unwrap();
@@ -105,7 +111,10 @@ export default function PriceChangeTradieModal({
           </DialogTitle>
 
           <DialogDescription>
-            {tradie.name} &middot; {tradie.trade}
+            {tradie.name} &middot; {tradie.trade} &middot;{" "}
+            {tradie.lastQuotedPriceUnit === "FIXED"
+              ? "priced fixed for the job"
+              : "priced per hour"}
           </DialogDescription>
         </DialogHeader>
 
@@ -125,10 +134,11 @@ export default function PriceChangeTradieModal({
                   : "mt-1 text-3xl font-semibold text-muted-foreground"
               }
             >
-              {hasCurrentRate ? rateCurrency.format(currentRate) : "Not set"}
+              {hasCurrentRate
+                ? formatQuotedPrice(currentRate, tradie.lastQuotedPriceUnit, rateCurrency.format)
+                : "Not set"}
               {hasCurrentRate && (
                 <span className="ml-1 font-sans text-sm font-medium text-muted-foreground">
-                  /hr
                 </span>
               )}
             </div>
@@ -162,11 +172,40 @@ export default function PriceChangeTradieModal({
               }
             />
 
+            <fieldset className="pt-1">
+              <legend className="sr-only">What this price covers</legend>
+              <div className="flex flex-wrap items-center gap-4">
+                {(
+                  [
+                    ["HOURLY", "per hour"],
+                    ["FIXED", "fixed for the job"],
+                  ] as const
+                ).map(([unit, label]) => (
+                  <label
+                    key={unit}
+                    className="flex cursor-pointer items-center gap-2 text-sm"
+                  >
+                    <input
+                      type="radio"
+                      name="new-price-unit"
+                      value={unit}
+                      checked={formData.newPriceUnit === unit}
+                      onChange={() =>
+                        setFormData((prev) => ({ ...prev, newPriceUnit: unit }))
+                      }
+                      className="accent-(--primary)"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <p id="new-rate-hint" className="text-xs text-muted-foreground">
               {!isRateValid
-                ? "Enter a rate greater than zero."
+                ? "Enter a price greater than zero."
                 : !isRateChanged
-                  ? "The proposed rate matches the current rate."
+                  ? "The proposed price and basis match the current ones."
                   : "Ready to submit for approval."}
             </p>
           </div>

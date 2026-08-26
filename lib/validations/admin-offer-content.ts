@@ -71,6 +71,12 @@ export const offerScopeDataSchema = z.object({
   exclusions: z.array(offerExclusionSchema),
 });
 
+export const hbfcClaimDataSchema = z.object({
+  claimAmount: z.number(),
+  loadingChargePercent: z.number(),
+  totalPremiumToBePaid: z.number(),
+});
+
 export const inclusionScheduleRowSchema = z.object({
   spec: z.string(),
   category: z.string().optional(),

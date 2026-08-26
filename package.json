@@ -12,6 +12,7 @@
     "test:offer": "tsx --test tests/offer/*.test.ts",
     "test:graph": "tsx --test tests/graph/*.test.ts",
     "test": "tsx --test tests/*/*.test.ts",
+    "test:unit": "tsx --test $(ls tests/*/*.test.ts | grep -v offer-document-print-pages)",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "prisma:seed": "prisma db seed",
@@ -19,7 +20,10 @@
     "prisma:migrate-deploy": "prisma migrate deploy",
     "seed:projects": "tsx prisma/seed-projects.ts",
     "seed:tradies": "tsx prisma/seed-tradie.ts",
-    "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts"
+    "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts",
+    "backfill:lead-close-dates": "tsx scripts/backfill-lead-close-dates.ts",
+    "backfill:converted-to-won": "tsx scripts/backfill-converted-to-won.ts",
+    "backfill:lead-stage-from-offers": "tsx scripts/backfill-lead-stage-from-offers.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.73",
@@ -62,6 +66,7 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "docusign-esign": "^9.0.0",
+    "docx-preview": "^0.4.0",
     "dompurify": "^3.4.9",
     "dotenv": "^17.4.2",
     "embla-carousel-react": "^8.6.0",
@@ -85,6 +90,7 @@
     "react-day-picker": "^10.0.0",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.75.0",
+    "react-pdf": "^10.5.0",
     "react-phone-number-input": "^3.4.16",
     "react-redux": "^9.2.0",
     "react-resizable-panels": "^4.11.0",
@@ -117,5 +123,10 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.22.0",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "overrides": {
+      "pdfjs-dist": "5.4.394"
+    }
   }
 }

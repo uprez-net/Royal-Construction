@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { RatingStars } from "@/components/common/rating-stars";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { TradieRow } from "@/types/tradie";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 type DetailItem = {
   label: string;
@@ -157,7 +158,11 @@ export function TradiePriorityCard() {
   const lastQuotedPriceLabel =
     lastQuotedPriceValue == null || Number.isNaN(lastQuotedPriceValue)
       ? null
-      : `${rateCurrency.format(lastQuotedPriceValue)}/hr`;
+      : formatQuotedPrice(
+          lastQuotedPriceValue,
+          tradieDetails.lastQuotedPriceUnit,
+          rateCurrency.format,
+        );
 
   const handleRatingChange = () => {
     const tradieRow = {
@@ -166,6 +171,7 @@ export function TradiePriorityCard() {
       trade: tradieDetails.trade,
       isFavourite: tradieDetails.isFavourite,
       lastQuotedPrice: tradieDetails.lastQuotedPrice ?? null,
+      lastQuotedPriceUnit: tradieDetails.lastQuotedPriceUnit,
       rating: tradieDetails.rating ?? null,
       jobsCompleted: tradieDetails.jobsCompleted,
       incidentCount: {

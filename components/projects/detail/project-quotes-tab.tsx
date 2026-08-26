@@ -7,9 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/common/data-table";
-import { UploadButton } from "@/components/common/upload-button";
-import { useAppDispatch } from "@/lib/store/hooks";
-import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 import {
   dataTimeFormat,
   formatFileSize,
@@ -33,7 +30,6 @@ function formatUploadedAt(value: Date | string) {
 }
 
 export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
-  const dispatch = useAppDispatch();
   const files = project.files.filter((file) => {
     const isAdminOnlyFileType = file.filename.toLowerCase().includes("tender") || file.filename.toLowerCase().includes("contract");
     if (isAdmin && isAdminOnlyFileType) {
@@ -104,20 +100,6 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
                 aria-label="Search documents"
               />
             </div>
-            <UploadButton
-              projectId={project.id}
-              maxFiles={5}
-              onUpload={(uploadedFiles) => {
-                uploadedFiles.forEach((file) => {
-                  dispatch(
-                    appendFileToProject({
-                      projectId: project.id,
-                      file: file,
-                    }),
-                  );
-                });
-              }}
-            />
           </div>
         </div>
       </CardHeader>

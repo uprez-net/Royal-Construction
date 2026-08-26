@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import {
   EnvelopeDocType,
@@ -25,6 +26,7 @@ import {
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { createOfferAcceptanceEnvelope } from "@/lib/docusign/offer-envelope";
+import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -71,11 +73,14 @@ export async function sendOfferForSignature(input: {
   // The acceptance is sent once negotiation has settled, so gate on SENT (the
   // offer has been issued to the client). Recalling an out-for-signature offer
   // returns it to SENT, from which it can be re-sent.
-  if (offer.offerStatus !== OfferStatus.SENT) {
-    return {
-      ok: false,
-      error: `The offer can only be sent for signature once it has been sent to the client (current status: ${offer.offerStatus}).`,
-    };
+  //
+  // The reason comes from a per-status map rather than printing the enum: the
+  // old message reported "current status: OFFER_SENT" while claiming the offer
+  // had to be sent to the client first, which reads as its own contradiction
+  // and names no way forward.
+  const blocked = describeAcceptanceSendBlock(offer.offerStatus);
+  if (blocked !== null) {
+    return { ok: false, error: blocked };
   }
 
   let snapshot: ReturnType<typeof deserializeWorkspace>;
@@ -194,9 +199,28 @@ export async function sendOfferForSignature(input: {
     data: { offerStatus: OfferStatus.OFFER_SENT },
   });
   if (claim.count === 0) {
+    // The row was not at SENT at that instant. A concurrent send is only one
+    // reason: another tab may have forked a revision (SUPERSEDED), marked the
+    // offer agreed, or taken it further down the lifecycle.
+    //
+    // So re-read rather than assume. Naming OFFER_SENT here would tell an
+    // estimator whose revision had just been superseded to "create a revision
+    // to replace it", which is both wrong and the exact fault this change set
+    // out to fix — a message reporting a status the offer is not in.
+    const current = await prisma.offer.findUnique({
+      where: { id: offer.id },
+      select: { offerStatus: true },
+    });
+    if (!current) {
+      return { ok: false, error: "This offer no longer exists." };
+    }
     return {
       ok: false,
-      error: "The offer is already being sent for signature or has been sent.",
+      error:
+        describeAcceptanceSendBlock(current.offerStatus) ??
+        // Back at SENT already: the other send failed and released its claim
+        // between our attempt and this read.
+        "Someone else was sending this offer for signature just now. Try again.",
     };
   }
 
@@ -281,6 +305,9 @@ export async function sendOfferForSignature(input: {
     });
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  // The status moved to *_SENT above; bring the lead with it. Best effort
+  // and outside any transaction — see syncLeadStageForOffer.
+  await syncLeadStageForOffer(offer.id);
   return { ok: true, reference, envelopeId: envelope.envelopeId };
 }
 

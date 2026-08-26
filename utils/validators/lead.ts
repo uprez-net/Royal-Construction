@@ -6,6 +6,7 @@ import { paginationSchema } from "./common";
 export const leadStages = [
   "New",
   "Contacted",
+  "Discovery",
   "Qualified",
   "Quoted",
   "Negotiating",
@@ -176,6 +177,54 @@ export const historySchema = z.object({
   actionDate: z.iso.datetime().nullable().describe("Action date").optional(),
 });
 
+/**
+ * Deal-economics fields, spread into BOTH lead schemas below.
+ *
+ * createLeadSchema and updateLeadSchema are independent object literals —
+ * update is NOT derived via .partial() — and PATCH parses against
+ * updateLeadSchema. Zod strips unknown keys silently, so a field added to only
+ * one schema vanishes on the other path with no error. Sharing the definition
+ * makes that class of mistake impossible.
+ */
+const dealEconomicsFields = {
+  // Must actually validate: `new Prisma.Decimal("1,200")` throws, and an
+  // unvalidated string arm would turn a typo into a 500 that discards every
+  // other field in the same request. MAX matches the Decimal(14,2) column.
+  estimatedValue: z
+    .union([z.number(), z.string()])
+    .nullable()
+    .optional()
+    .refine(
+      (value) => {
+        if (value === null || value === undefined || value === "") return true;
+        const numeric = typeof value === "number" ? value : Number(String(value).trim());
+        return Number.isFinite(numeric) && numeric >= 0 && numeric < 1e12;
+      },
+      { message: "Deal value must be a non-negative number below 1,000,000,000,000" },
+    )
+    .describe("Numeric deal value"),
+  // Must be persistable: without it, a user's typed-over value would be
+  // silently overwritten by the next offer save.
+  estimatedValueSource: z
+    .enum(["OFFER", "MANUAL"])
+    .nullable()
+    .optional()
+    .describe("Whether the deal value follows the offer or was typed"),
+  probabilityOverride: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .nullable()
+    .optional()
+    .describe("Likelihood override 0-100; null inherits the stage default"),
+  // nullableDateInput, not z.iso.datetime() — the latter rejects the
+  // date-only strings a <input type="date"> emits.
+  expectedCloseDate: nullableDateInput
+    .describe("Expected close date")
+    .optional(),
+} as const;
+
 export const updateLeadSchema = z.object({
   name: z.string().trim().min(1).optional(),
 
@@ -225,6 +274,8 @@ export const updateLeadSchema = z.object({
   type: typeSchema.optional(),
 
   history: z.array(historyItemSchema).optional(),
+
+  ...dealEconomicsFields,
 });
 
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
@@ -270,25 +321,15 @@ export const createLeadSchema = z.object({
 
   urgent: z.boolean().optional().default(false),
 
-  stage: z
-    .enum([
-      "New",
-      "Contacted",
-      "Qualified",
-      "Quoted",
-      "Negotiating",
-      "Won",
-      "Lost",
-      "Meeting Scheduled",
-      "In Follow-up",
-      "No Response",
-      "Converted",
-      "Cancelled",
-      "Disqualified",
-    ])
-    .optional(),
+  // Was a hand-duplicated copy of `leadStages`, with no `satisfies` guard, so
+  // it drifted silently: removing a stage from the shared list left this one
+  // still accepting it and POST /api/leads kept writing rows the UI could not
+  // render. updateLeadSchema already used the shared list; now both do.
+  stage: z.enum(leadStages).optional(),
 
   history: z.array(historySchema).optional(),
+
+  ...dealEconomicsFields,
 });
 
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
@@ -306,6 +347,7 @@ export const leadLookupParamSchema = z.object({
   filterTiming: z.string().optional(),
   filterLeadsWithoutProject: z.string().optional(),
   isArchived: z.string().optional(),
+  hasOpenTask: z.string().optional(),
   pendingFollowUps: z.string().optional(),
   upcomingFollowUps: z.string().optional(),
   pendingMeetings: z.string().optional(),

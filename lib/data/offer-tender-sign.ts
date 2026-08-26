@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import {
   EnvelopeDocType,
@@ -291,6 +292,9 @@ export async function sendTenderForSignature(input: {
     });
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+  // The status moved to *_SENT above; bring the lead with it. Best effort
+  // and outside any transaction — see syncLeadStageForOffer.
+  await syncLeadStageForOffer(offer.id);
   return { ok: true, reference, envelopeId: envelope.envelopeId };
 }
 

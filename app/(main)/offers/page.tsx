@@ -3,7 +3,7 @@ import { OfferHeader } from "@/components/offers/offer-header";
 import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
-import { getOfferKPIsCached, getOffersCached } from "@/lib/data/offers";
+import { getOfferGroupsCached, getOfferKPIsCached } from "@/lib/data/offers";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
@@ -19,29 +19,18 @@ async function OfferPageClient() {
   await connection();
   const [offerKPIs, offers] = await Promise.all([
     getOfferKPIsCached(),
-    getOffersCached(1, 10),
+    getOfferGroupsCached(1, 10),
   ]);
 
   return (
     <div className="space-y-6">
       <OfferHeader />
       <OfferKPI
-        activeOffers={{
-          total: offerKPIs.allOffers.total,
-          trendDelta: offerKPIs.allOffers.trendDelta,
-        }}
-        approvedOffers={{
-          total: offerKPIs.approvedOffers.total,
-          trendDelta: offerKPIs.approvedOffers.trendDelta,
-        }}
-        pendingOffers={{
-          total: offerKPIs.pendingOffers.total,
-          trendDelta: offerKPIs.pendingOffers.trendDelta,
-        }}
-        sentOffers={{
-          total: offerKPIs.sentOffers.total,
-          trendDelta: offerKPIs.sentOffers.trendDelta,
-        }}
+        activeOffers={offerKPIs.allOffers}
+        approvedOffers={offerKPIs.approvedOffers}
+        pendingOffers={offerKPIs.pendingOffers}
+        sentOffers={offerKPIs.sentOffers}
+        totalVersions={offerKPIs.totalVersions}
       />
       <Card className="border-border/70 bg-white/95 shadow-sm">
         <OfferFilter
@@ -54,7 +43,7 @@ async function OfferPageClient() {
           }}
           initialTotalCount={offerKPIs.allOffers.total}
         />
-        <OfferTable serverQuotes={offers} />
+        <OfferTable serverOffers={offers} />
       </Card>
     </div>
   );

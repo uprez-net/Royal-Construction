@@ -1,6 +1,11 @@
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { ApprovalCard } from "./tradie-approval-card";
-import { ApprovalInput, SafeTradieApproval } from "@/types/tradie";
+import {
+  ApprovalInput,
+  SafeTradieApproval,
+  ScheduleApprovalJsonPayload,
+  ScheduleDeletionJsonPayload,
+} from "@/types/tradie";
 import { dateFormat } from "@/utils/formatters";
 import {
   approveRequests,
@@ -21,6 +26,8 @@ const createApprovalTitle = (approval: SafeTradieApproval) => {
       return `Deletion Request for ${approval.tradie.name}`;
     case "SCHEDULE_APPROVAL":
       return `Schedule Approval for ${approval.tradie.name}`;
+    case "SCHEDULE_DELETION":
+      return `Schedule Removal for ${approval.tradie.name}`;
   }
 };
 
@@ -34,6 +41,10 @@ const createApprovalDescription = (approval: SafeTradieApproval) => {
       return `A deletion request has been submitted for ${approval.tradie.name}. ${approval.reason}`;
     case "SCHEDULE_APPROVAL":
       return `A schedule approval request has been submitted for ${approval.tradie.name}. ${approval.reason}`;
+    case "SCHEDULE_DELETION": {
+      const data = approval.updationData as ScheduleDeletionJsonPayload;
+      return `Removal of ${approval.tradie.name}'s booking on ${data?.scheduledDate ?? "an unrecorded date"} has been requested. ${approval.reason}`;
+    }
   }
 };
 
@@ -47,6 +58,25 @@ const calculateSeverity = (approval: SafeTradieApproval) => {
       return "MEDIUM";
     case "SCHEDULE_APPROVAL":
       return "HIGH";
+    // Approving this deletes a booking a tradie has already been told about.
+    case "SCHEDULE_DELETION":
+      return "HIGH";
+  }
+};
+
+/** Only the schedule-shaped requests carry a project; the card footer stays
+ *  empty for the rest, as it did before. */
+const approvalProjectName = (approval: SafeTradieApproval) => {
+  switch (approval.actionType) {
+    case "SCHEDULE_APPROVAL":
+    case "SCHEDULE_DELETION":
+      return (
+        approval.updationData as
+          | ScheduleApprovalJsonPayload
+          | ScheduleDeletionJsonPayload
+      )?.projectName;
+    default:
+      return undefined;
   }
 };
 
@@ -144,11 +174,10 @@ export function TradieApprovalList() {
     }
     dispatch(
       openModal({
-        type: "approvalDetails",
+        type: "adminApproval",
         payload: {
-          approval,
-          onApprove: async () => await handleApprove(approval.id),
-          onReject: () => handleReject(approval.id),
+          approvalId: approval.id,
+          approvalType: approval.actionType,
         },
       }),
     );
@@ -214,6 +243,7 @@ export function TradieApprovalList() {
                   ? "Medium"
                   : "Low"
             }
+            projectName={approvalProjectName(approval)}
             requestedBy={approval.requestBy}
             createdAt={dateFormat.format(approval.createdAt)}
             selected={selectedApprovalIds.includes(approval.id)}

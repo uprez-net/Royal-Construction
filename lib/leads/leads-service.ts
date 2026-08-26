@@ -1,6 +1,6 @@
 "use client";
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
-import { fetchJson } from '@/utils/fetch';
+import { FetchError, fetchJson } from '@/utils/fetch';
 import { findLeadById, getAllLeads, getAnalyticsData, getFollowupStats, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 import { sendCampaignEmail } from '../data/email-ad-hock';
 
@@ -43,6 +43,7 @@ export async function fetchLeads(params:
     status?: LeadStage[];
     filterTiming?: string;
     isArchived?: boolean;
+    hasOpenTask?: boolean;
     pendingFollowUps?: boolean;
     upcomingFollowUps?: boolean;
     pendingMeetings?: boolean;
@@ -55,6 +56,7 @@ export async function fetchLeads(params:
   if (params.status) query.append('status', params.status.join(','));
   if (params.filterTiming) query.append('filterTiming', params.filterTiming);
   if (params.isArchived !== undefined) query.append('isArchived', params.isArchived.toString());
+  if (params.hasOpenTask) query.append('hasOpenTask', 'true');
   if (params.pendingFollowUps !== undefined) query.append('pendingFollowUps', params.pendingFollowUps.toString());
   if (params.upcomingFollowUps !== undefined) query.append('upcomingFollowUps', params.upcomingFollowUps.toString());
   if (params.pendingMeetings !== undefined) query.append('pendingMeetings', params.pendingMeetings.toString());
@@ -89,22 +91,55 @@ export async function fetchFollowupStats() {
 //   return handleCalendarFollowup({ name: leadName, email: leadEmail } as Lead, followupDate, followupTime);
 // }
 
-export async function createLead(leadData: LeadCreatePayload): Promise<Lead | { message: string; existingLead: Lead }> {
-  const response = await fetchJson<Lead | { message: string; existingLead: Lead }>(
-    '/api/leads',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+export type DuplicateLeadResult = { message: string; existingLead: Lead };
+
+export function isDuplicateLeadResult(
+  result: Lead | DuplicateLeadResult,
+): result is DuplicateLeadResult {
+  return 'message' in result;
+}
+
+/**
+ * Read the duplicate payload out of a rejected create. The route answers a
+ * duplicate with 409 + `{ message, existingLead }`, which fetchJson treats as a
+ * failure — so the useful half of that answer only survives if it is unpacked
+ * from the error body here.
+ */
+function duplicateFromError(error: unknown): DuplicateLeadResult | null {
+  if (!(error instanceof FetchError) || error.status !== 409) return null;
+
+  const body = error.body;
+  if (!body || typeof body !== 'object') return null;
+
+  const data = (body as { data?: unknown }).data;
+  if (!data || typeof data !== 'object') return null;
+
+  const { message, existingLead } = data as Partial<DuplicateLeadResult>;
+  if (typeof message !== 'string' || !message.trim() || !existingLead) return null;
+
+  return { message, existingLead };
+}
+
+export async function createLead(leadData: LeadCreatePayload): Promise<Lead | DuplicateLeadResult> {
+  try {
+    const response = await fetchJson<Lead | DuplicateLeadResult>(
+      '/api/leads',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(leadData),
       },
-      body: JSON.stringify(leadData),
-    },
-    'Failed to create lead'
-  );
+      'Failed to create lead'
+    );
 
-  const payload = response.data;
-
-  return payload;
+    return response.data;
+  } catch (error) {
+    const duplicate = duplicateFromError(error);
+    if (duplicate) return duplicate;
+    throw error;
+  }
 }
 
 type LeadUpdatePayload = Partial<Omit<Lead, "runId" | "emails">> & {

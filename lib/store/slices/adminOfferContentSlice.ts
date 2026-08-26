@@ -10,6 +10,7 @@ import {
   type OfferAllowance,
   type OfferExclusion,
   EMPTY_ADMIN_OFFER_CONTENT,
+  HBFCClaimData,
   InclusionScheduleRow,
 } from "@/types/admin-offer-content";
 import {
@@ -18,9 +19,10 @@ import {
   saveOfferScopeAction,
   saveOfferContentAction,
   type ActionResult,
+  saveHBFCClaimAction,
 } from "@/lib/actions/admin-offer-content";
 
-type Section = "buildScope" | "costSchedule" | "offerScope" | "offerContent";
+type Section = "buildScope" | "costSchedule" | "offerScope" | "offerContent" | "hbfcClaim";
 
 interface AdminOfferContentState {
   data: AdminOfferContent;
@@ -30,8 +32,8 @@ interface AdminOfferContentState {
   error: Record<Section, string | null>;
 }
 
-const allClean = { buildScope: false, costSchedule: false, offerScope: false, offerContent: false };
-const noError = { buildScope: null, costSchedule: null, offerScope: null, offerContent: null };
+const allClean = { buildScope: false, costSchedule: false, offerScope: false, offerContent: false, hbfcClaim: false };
+const noError = { buildScope: null, costSchedule: null, offerScope: null, offerContent: null, hbfcClaim: null };
 
 const initialState: AdminOfferContentState = {
   data: structuredClone(EMPTY_ADMIN_OFFER_CONTENT),
@@ -71,6 +73,24 @@ function unwrap(result: ActionResult): void {
   if (!result.success) {
     throw new Error(result.error);
   }
+}
+
+// Only claimAmount and loadingChargePercent are user-editable now;
+// totalPremiumToBePaid is always derived.
+type HBFCClaimInput = Pick<
+  HBFCClaimData,
+  "claimAmount" | "loadingChargePercent"
+>;
+
+function calcTotalPremium(
+  claimAmount: number,
+  loadingChargePercent: number,
+): number {
+  if (!Number.isFinite(claimAmount) || !Number.isFinite(loadingChargePercent)) {
+    return NaN;
+  }
+  const total = claimAmount + (claimAmount * loadingChargePercent) / 100;
+  return Math.round(total * 100) / 100; // avoid float cruft on currency
 }
 
 export const saveBuildScope = createAsyncThunk(
@@ -136,6 +156,24 @@ export const saveOfferContent = createAsyncThunk(
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save offer content.",
+      );
+    }
+  },
+);
+
+export const saveHBFCClaim = createAsyncThunk(
+  "adminOfferContent/saveHBFCClaim",
+  async (arg: void, thunkAPI) => {
+    try {
+      const state = (thunkAPI.getState() as { adminOfferContent: AdminOfferContentState })
+        .adminOfferContent;
+      const result = await saveHBFCClaimAction(state.data.hbfcClaim);
+      unwrap(result);
+      return undefined;
+    }
+    catch (error) {
+      return thunkAPI.rejectWithValue(
+        error instanceof Error ? error.message : "Failed to save HBCF claim.",
       );
     }
   },
@@ -243,6 +281,16 @@ const slice = createSlice({
       state.dirty.offerContent = true;
       state.error.offerContent = null;
     },
+    hbfcClaimChanged(state, action: PayloadAction<HBFCClaimInput>) {
+      const { claimAmount, loadingChargePercent } = action.payload;
+      state.data.hbfcClaim = {
+        claimAmount,
+        loadingChargePercent,
+        totalPremiumToBePaid: calcTotalPremium(claimAmount, loadingChargePercent),
+      };
+      state.dirty.hbfcClaim = true;
+      state.error.hbfcClaim = null;
+    },
     resetSectionError(state, action: PayloadAction<Section>) {
       state.error[action.payload] = null;
     },
@@ -268,6 +316,7 @@ const slice = createSlice({
     const cs = makeSaveHandlers("costSchedule");
     const os = makeSaveHandlers("offerScope");
     const oc = makeSaveHandlers("offerContent");
+    const hbfc = makeSaveHandlers("hbfcClaim");
 
     builder
       .addCase(saveBuildScope.pending, bs.pending)
@@ -281,7 +330,10 @@ const slice = createSlice({
       .addCase(saveOfferScope.rejected, os.rejected)
       .addCase(saveOfferContent.pending, oc.pending)
       .addCase(saveOfferContent.fulfilled, oc.fulfilled)
-      .addCase(saveOfferContent.rejected, oc.rejected);
+      .addCase(saveOfferContent.rejected, oc.rejected)
+      .addCase(saveHBFCClaim.pending, hbfc.pending)
+      .addCase(saveHBFCClaim.fulfilled, hbfc.fulfilled)
+      .addCase(saveHBFCClaim.rejected, hbfc.rejected);
   },
 });
 
@@ -301,6 +353,7 @@ export const {
   headlineChanged,
   introTextChanged,
   termsAndConditionsChanged,
+  hbfcClaimChanged,
   resetSectionError,
 } = slice.actions;
 

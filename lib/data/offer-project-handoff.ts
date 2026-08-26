@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -121,6 +122,12 @@ export async function createProjectFromOffer(input: {
   if (claim.count !== 1) {
     return { ok: false, error: "This offer is already being handed off to a project." };
   }
+
+  // Normally a no-op — the deal is already WON from CONTRACT_SIGNED — but this
+  // is the backstop for an offer that reached PROJECT without the webhook ever
+  // firing, which is exactly how leads ended up frozen at "Meeting Scheduled"
+  // while their project was already running.
+  await syncLeadStageForOffer(offer.id);
   const revertClaim = () =>
     prisma.offer.updateMany({
       where: { id: offer.id, offerStatus: OfferStatus.PROJECT },
@@ -248,6 +255,12 @@ export async function createProjectFromOffer(input: {
 
     const extraction = buildExtractionPayload(snapshot, contractValue, reference, sourceDocuments);
 
+    // The start date defaults to +14 days from today; the signed date written
+    // by buildExtractionPayload is today's date. The start is therefore always
+    // after the signed date, so the date-pair reconciliation inside
+    // createProjectWithLead passes for this path. pcaInspector stays null —
+    // the resulting `warn` entry surfaces the project as NEEDS_ATTENTION
+    // rather than creating a silent gap on an Active project.
     const start = new Date();
     start.setDate(start.getDate() + 14);
     const end = new Date(start);
@@ -468,6 +481,10 @@ function buildExtractionPayload(
       commencementTrigger: "Executed contract + council/CDC approval",
       signedDate: new Date().toISOString().slice(0, 10),
       pcaInspector: null,
+      // Uploaded from the project's Overview tab after handoff, so there is
+      // nothing to carry across here.
+      hbcfInsuranceNumber: null,
+      hbcfInsuranceDocument: null,
     },
     commercialsAndClaims: {
       totalContractSum: contractValue,

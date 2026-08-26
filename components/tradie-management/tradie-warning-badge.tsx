@@ -17,11 +17,11 @@ export function UnresolvedIncidentsCard() {
   }, [tradies]);
 
   // The callout is an action, not a link: it filters the surface to the tradies
-  // carrying open incidents and shows them in the table view, where the incident
+  // carrying open incidents and shows them in the List view, where the incident
   // counts are visible. The label says exactly that, so there is no chevron
   // implying navigation to another page.
   const handleAction = () => {
-    dispatch(setActiveTab("table"));
+    dispatch(setActiveTab("list"));
     dispatch(setQuery({ tab: "flagged" }));
   };
 

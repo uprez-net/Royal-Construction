@@ -1,3 +1,5 @@
+import type { TradiePriceUnit } from "@prisma/client";
+
 import type { SafeTradie } from "./project";
 import type { TradieRating, TradieIncident, IncidentSeverity, TradieApprovalActionType, TradieApproval } from "@prisma/client";
 import { TradieScheduleStatus } from "@prisma/client";
@@ -8,6 +10,7 @@ export interface TradieRow {
     trade: string;
     isFavourite: boolean;
     lastQuotedPrice: string | null;
+    lastQuotedPriceUnit: TradiePriceUnit;
     rating: string | null;
     jobsCompleted: number;
     incidentCount: {
@@ -46,6 +49,7 @@ export interface CreateTradieInput {
     // receives a variable rather than an object literal, TypeScript performs
     // no excess-property check and the build stays green.
     lastQuotedPrice: number;
+    lastQuotedPriceUnit: TradiePriceUnit;
     abn: string;
     phone: string;
     email: string;
@@ -57,6 +61,10 @@ export interface CreateTradieInput {
 export interface UpdatePriceInput {
     tradieId: string;
     newHourlyRate: number;
+    /** The basis the new amount is quoted on. Optional so an older pending
+     *  approval, raised before the basis was captured, still applies against
+     *  whatever the tradie is currently set to. */
+    newPriceUnit?: TradiePriceUnit;
     reason: string;
 }
 
@@ -79,6 +87,11 @@ export interface DeleteInput {
     reason: string;
 }
 
+export interface DeleteScheduleInput {
+    scheduleId: string;
+    reason: string;
+}
+
 export interface TradieTableQuery {
     search?: string;
     category?: string;
@@ -87,8 +100,18 @@ export interface TradieTableQuery {
     tab: "all" | "flagged";
 }
 
+/**
+ * The two ways the tradie directory can be shown: trade-category tiles, or the
+ * flat list of every tradie. "list" is the tabular view — it was labelled
+ * "Table" beside a second, card-based "List" view that showed the same tradies
+ * with fewer columns, so the pair read as two names for one thing. The cards
+ * went and the table kept the name the team uses.
+ */
+export type TradieViewTab = "category" | "list";
+
 export interface UpdatePriceApprovalPayload {
     newHourlyRate: number;
+    newPriceUnit?: TradiePriceUnit;
 }
 
 export interface IncidentReportApprovalPayload {
@@ -114,8 +137,27 @@ export interface ScheduleApprovalJsonPayload {
     cost: string;
 }
 
+/**
+ * Recorded on a SCHEDULE_DELETION approval so the admin queue can describe the
+ * booking being removed without holding a reference to a row that is about to
+ * disappear, and so the resolver knows which schedule to delete.
+ */
+export interface ScheduleDeletionJsonPayload {
+    scheduleId: string;
+    projectId: string;
+    projectName: string;
+    milestoneId?: string;
+    milestoneName: string;
+    scheduledDate: string;
+    durationDays: number;
+    cost: string;
+    /** The status the schedule sat in when removal was requested. */
+    currentStatus: TradieScheduleStatus;
+}
+
 export interface PriceUpdateJsonPayload {
     newHourlyRate: number;
+    newPriceUnit?: TradiePriceUnit;
 }
 
 export interface IncidentReportJsonPayload {
@@ -125,7 +167,7 @@ export interface IncidentReportJsonPayload {
     incidentDescription: string;
 }
 
-export type TradieApprovalPayload = ScheduleApprovalJsonPayload | PriceUpdateJsonPayload | IncidentReportJsonPayload | undefined;
+export type TradieApprovalPayload = ScheduleApprovalJsonPayload | ScheduleDeletionJsonPayload | PriceUpdateJsonPayload | IncidentReportJsonPayload | undefined;
 
 export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy" | "updationData"> {
     tradie: SafeTradie;
@@ -155,7 +197,11 @@ export const TRADIE_SCHEDULE_STATE_MACHINE: Record<TradieScheduleStatus, TradieS
         TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
         TradieScheduleStatus.DECLINED,
     ],
-    [TradieScheduleStatus.DECLINED]: [],
+    [TradieScheduleStatus.DECLINED]: [
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        TradieScheduleStatus.PENDING_RESPONSE,
+        TradieScheduleStatus.NO_RESPONSE,
+    ],
     [TradieScheduleStatus.COMPLETED]: [],
     [TradieScheduleStatus.AWAITING_QUOTE]: [
         TradieScheduleStatus.QUOTE_RECEIVED,

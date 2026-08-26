@@ -1,6 +1,9 @@
 import {
   buildOfferPrintTemplateData,
   formatArea,
+  formatRoomCount,
+  grannyDwellingSpec,
+  type OfferDwellingSpec,
   formatSiteParticulars,
   getPrintFooterText,
   PROPOSAL_TAGLINE,
@@ -261,6 +264,12 @@ export function buildProposalHtml(
   .areatable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
   .areatable > div:last-child .cap { color: #cfd6e6; }
   .areatable .num { font-family: monospace; font-weight: 700; margin-top: 6px; }
+  .spechead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; margin-top: 22px; }
+  .spectable { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid ${BORDER}; margin-top: 8px; text-align: center; }
+  .spectable > div { padding: 12px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
+  .spectable > div:last-child { border-right: none; }
+  .spectable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
+  .spectable .num { font-family: monospace; font-weight: 700; margin-top: 6px; }
   .pricebox { border: 1px solid ${BORDER}; background: ${GOLD_LIGHT}; padding: 24px; text-align: center; margin-top: 26px; }
   .pricebox .save { font-size: 13px; font-weight: 700; color: ${GOLD_DARK}; }
   .pricebox .big { font-size: 46px; font-weight: 700; color: ${NAVY}; margin-top: 4px; }
@@ -411,6 +420,16 @@ function snapshotPage(
   const cell = (cap: string, num: string) =>
     `<div><div class="cap">${esc(cap)}</div><div class="num">${esc(num)}</div></div>`;
   const particulars = formatSiteParticulars(job);
+  // Room counts print per dwelling: the major house always, the granny home only
+  // when the build includes one.
+  const specSection = (title: string, spec: OfferDwellingSpec) =>
+    `<div class="spechead">${esc(title)}</div>
+    <div class="spectable">
+      ${cell("Bedrooms", formatRoomCount(spec.bedrooms))}
+      ${cell("Bathrooms", formatRoomCount(spec.bathrooms))}
+      ${cell("Garage Spaces", formatRoomCount(spec.garageSpaces))}
+    </div>`;
+  const granny = grannyDwellingSpec(job);
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Project snapshot</div>
@@ -427,6 +446,12 @@ function snapshotPage(
       ${cell("Total Area", formatArea(total))}
     </div>
     <p class="muted" style="margin-top:22px;font-size:12px;">Total build area ${esc(data.areaLabel)}.</p>
+    ${specSection("Major House Specifications", {
+      bathrooms: job.bathrooms,
+      bedrooms: job.bedrooms,
+      garageSpaces: job.garageSpaces,
+    })}
+    ${granny ? specSection("Granny Home Specifications", granny) : ""}
     ${foot}
   </div>`;
 }

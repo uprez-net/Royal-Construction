@@ -47,53 +47,142 @@ export type OfferWorkspacePricingSettings = {
   readonly hbcfRate: number;
   readonly homeWarrantyHbcfFixed: number;
   readonly impactFeeFixed: number;
+  // Loading charge as a WHOLE-NUMBER percent (5 = 5%), matching the admin HBCF
+  // claim screen it is prefilled from. Applied to the whole grossed-up premium.
+  readonly loadingChargePercentage: number;
+};
+
+// The loading charge icare adds for a builder's risk profile: a flat percentage
+// of the WHOLE premium (base + GST + stamp), not another markup on the cost
+// base. Percent is whole-number (5 = 5%) to match the admin screen's units.
+export function calculateHbcfLoadingCharge(
+  premiumBeforeLoading: number,
+  loadingChargePercentage: number,
+): number {
+  if (!(premiumBeforeLoading > 0) || !(loadingChargePercentage > 0)) {
+    return 0;
+  }
+  return roundCurrency(premiumBeforeLoading * (loadingChargePercentage / 100));
+}
+
+export type HbcfPremiumBreakdown = {
+  // TCV × rate, ex GST and stamp duty.
+  readonly basePremium: number;
+  readonly gstAmount: number;
+  readonly stampDuty: number;
+  // base + GST + stamp — the icare calculator's headline figure.
+  readonly premiumBeforeLoading: number;
+  readonly loadingCharge: number;
+  // What the build-up actually carries as homeWarrantyHbcfFixed.
+  readonly totalPremium: number;
+};
+
+const EMPTY_HBCF_BREAKDOWN: HbcfPremiumBreakdown = {
+  basePremium: 0,
+  gstAmount: 0,
+  stampDuty: 0,
+  premiumBeforeLoading: 0,
+  loadingCharge: 0,
+  totalPremium: 0,
 };
 
 // Derive the HBCF / home-warranty premium the way the official icare calculator
-// does: base = TCV × rate, then + GST 10%, then + stamp duty 9% on (base+GST).
-// Returns 0 when the contract value is absent or non-positive so the build-up
-// can treat a blank TCV as "no HBCF yet" without NaN pollution.
-export function calculateHbcfPremium(
+// does: base = TCV × rate, then + GST 10%, then + stamp duty 9% on (base+GST),
+// then + the loading charge on that whole figure. Returns zeroes when the
+// contract value is absent or non-positive so the build-up can treat a blank
+// TCV as "no HBCF yet" without NaN pollution.
+export function calculateHbcfPremiumBreakdown(
   totalContractValue: number,
   rate: number = DEFAULT_HBCF_RATE,
-): number {
+  loadingChargePercentage = 0,
+): HbcfPremiumBreakdown {
   if (!(totalContractValue > 0) || !(rate >= 0)) {
-    return 0;
+    return EMPTY_HBCF_BREAKDOWN;
   }
   const basePremium = roundCurrency(totalContractValue * rate);
   const gstAmount = roundCurrency(basePremium * HBCF_GST_RATE);
   const stampDuty = roundCurrency(
     (basePremium + gstAmount) * HBCF_STAMP_DUTY_RATE,
   );
-  return roundCurrency(basePremium + gstAmount + stampDuty);
+  const premiumBeforeLoading = roundCurrency(
+    basePremium + gstAmount + stampDuty,
+  );
+  const loadingCharge = calculateHbcfLoadingCharge(
+    premiumBeforeLoading,
+    loadingChargePercentage,
+  );
+
+  return {
+    basePremium,
+    gstAmount,
+    stampDuty,
+    premiumBeforeLoading,
+    loadingCharge,
+    totalPremium: roundCurrency(premiumBeforeLoading + loadingCharge),
+  };
+}
+
+// The premium the build-up carries — grossed up AND loaded. The loading default
+// of 0 keeps every legacy caller (and every offer saved before the loading
+// charge shipped) on the exact icare figure.
+export function calculateHbcfPremium(
+  totalContractValue: number,
+  rate: number = DEFAULT_HBCF_RATE,
+  loadingChargePercentage = 0,
+): number {
+  return calculateHbcfPremiumBreakdown(
+    totalContractValue,
+    rate,
+    loadingChargePercentage,
+  ).totalPremium;
 }
 
 // Reverse of calculateHbcfPremium for import/legacy hydrate: given a known
-// dollar premium, recover the Total Contract Value that produced it.
+// dollar premium, recover the Total Contract Value that produced it. The
+// loading charge must be divided out here too, or re-deriving from the
+// recovered TCV would apply it a second time.
 export function reverseHbcfTotalContractValue(
   premium: number,
   rate: number = DEFAULT_HBCF_RATE,
+  loadingChargePercentage = 0,
 ): number {
   if (!(premium > 0) || !(rate > 0)) {
     return 0;
   }
-  return roundCurrency(premium / (rate * HBCF_PREMIUM_GROSS_UP));
+  const loadingMultiplier =
+    loadingChargePercentage > 0 ? 1 + loadingChargePercentage / 100 : 1;
+  return roundCurrency(
+    premium / (rate * HBCF_PREMIUM_GROSS_UP * loadingMultiplier),
+  );
 }
 
-// Keep homeWarrantyHbcfFixed in sync with the TCV × rate inputs. Total Contract
-// Value is the source of truth (#116): a blank/zero TCV yields a $0 premium so
-// clearing the field clears the addition. Imported dollar premiums reverse-fill
-// TCV on load so they survive the same path.
+// Keep homeWarrantyHbcfFixed in sync with the TCV × rate × loading inputs. Total
+// Contract Value is the source of truth (#116): a blank/zero TCV yields a $0
+// premium so clearing the field clears the addition. Imported dollar premiums
+// reverse-fill TCV on load so they survive the same path.
 export function withDerivedHbcfPremium(
   settings: OfferWorkspacePricingSettings,
 ): OfferWorkspacePricingSettings {
   const homeWarrantyHbcfFixed = calculateHbcfPremium(
     settings.hbcfTotalContractValue,
     settings.hbcfRate,
+    settings.loadingChargePercentage,
   );
   return homeWarrantyHbcfFixed === settings.homeWarrantyHbcfFixed
     ? settings
     : { ...settings, homeWarrantyHbcfFixed };
+}
+
+// The breakdown behind the settings' stored premium — for the build-up panel,
+// which shows the icare figure and the loading charge as separate lines.
+export function describeHbcfPremium(
+  settings: OfferWorkspacePricingSettings,
+): HbcfPremiumBreakdown {
+  return calculateHbcfPremiumBreakdown(
+    settings.hbcfTotalContractValue,
+    settings.hbcfRate,
+    settings.loadingChargePercentage,
+  );
 }
 
 export type OfferWorkspacePricingInput = {
@@ -340,5 +429,48 @@ export function calculateOfferCustomerPrice({
     hasManualOverride,
     needsOverrideReason:
       hasManualOverride && overrideReason.trim().length === 0,
+  };
+}
+
+export type ContractValueGstSplit = {
+  readonly amountExGst: number;
+  readonly gstAmount: number;
+  readonly totalIncGst: number;
+};
+
+// Split the inc-GST price of record into the ex-GST / GST / total triple stored
+// on Offer.amount, Offer.gstAmount and Offer.totalAmount.
+//
+// It has to be a back-solve from the selected price rather than a read of
+// calculateOfferWorkspacePricing's gstAmount: the estimator may override the
+// contract value, and the cost build-up cannot see that override — so its GST
+// line belongs to the COMPUTED price, not the one on the document the client
+// receives. The printed proposal quotes a single inc-GST figure, so the ex-GST
+// and GST components are only ever derivable this way.
+//
+// gstAmount is the remainder rather than an independent rounding of
+// total × rate, so amount + gstAmount === totalIncGst exactly. The Offers list
+// prints all three side by side, and a half-cent of independent rounding would
+// show as a column that visibly fails to add up.
+export function splitContractValueByGst({
+  contractValueIncGst,
+  gstRate,
+}: {
+  readonly contractValueIncGst: number;
+  readonly gstRate: number;
+}): ContractValueGstSplit {
+  const totalIncGst = roundCurrency(contractValueIncGst);
+  // A non-positive rate (or a nonsense one) would divide the price away; treat
+  // it as "no GST component" so the total still reconciles.
+  const divisor = 1 + gstRate;
+  const amountExGst =
+    Number.isFinite(divisor) && divisor > 0
+      ? roundCurrency(totalIncGst / divisor)
+      : totalIncGst;
+
+  return {
+    amountExGst,
+    gstAmount: roundCurrency(totalIncGst - amountExGst),
+    totalIncGst,
   };
 }

@@ -2,6 +2,30 @@ import { z } from "zod";
 
 const nullableNumberSchema = z.number().nullable();
 
+/**
+ * A string field that tolerates whatever the extraction agent hands back: a
+ * blank string when the value is not printed on the document, `null` when it
+ * was never captured, and a number/boolean when the model ignores the type.
+ */
+const blankTolerantStringSchema = z.preprocess((value) => {
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return value;
+}, z.string().nullable());
+
+/**
+ * Reference to a document a section was populated from. `hbcfInsurance` is the
+ * certificate uploaded from the Legal & Administration section; the tender and
+ * contract references live on the payload's `sourceDocuments` bundle instead.
+ */
+const sourceDocumentReferenceSchema = z.object({
+  fileId: z.string().default(""),
+  fileName: z.string().default(""),
+  url: z.string().default(""),
+  kind: z.enum(["tender", "contract", "hbcfInsurance"]),
+});
+
 const conflictSchema = z.object({
   fieldPath: z.string().min(1),
   tenderValue: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
@@ -31,6 +55,15 @@ const projectExtractionDraftSchema = z.object({
     commencementTrigger: z.string().nullable(),
     signedDate: z.string().nullable(),
     pcaInspector: z.string().nullable(),
+    // Captured by the Slab-stage kickoff prompt rather than by extraction, so
+    // it is optional: no payload written before that feature carries it.
+    insuranceClaimStartDate: z.string().nullable().optional(),
+    insuranceClaimEndDate: z.string().nullable().optional(),
+    // Captured by the HBCF certificate upload in the Overview tab rather than
+    // by tender/contract extraction, so both are optional: no payload written
+    // before that feature carries them.
+    hbcfInsuranceNumber: blankTolerantStringSchema.optional(),
+    hbcfInsuranceDocument: sourceDocumentReferenceSchema.nullable().optional(),
   }),
   commercialsAndClaims: z.object({
     totalContractSum: nullableNumberSchema,
@@ -61,7 +94,7 @@ const projectExtractionDraftSchema = z.object({
     selectedBrickPrice: nullableNumberSchema,
     windowProvider: z.string().nullable(),
     floorAreaM2: nullableNumberSchema,
-  }),
+  }).optional(),
   mechanicalDetails: z.object({
     acSystemZones: z.string().nullable(),
     acRequiredCapacityKw: nullableNumberSchema,
@@ -71,7 +104,7 @@ const projectExtractionDraftSchema = z.object({
     powerPointCount: nullableNumberSchema,
     externalPower: z.string().nullable(),
     jointSealants: z.string().nullable(),
-  }),
+  }).optional(),
   internalFitOutAndFinishes: z.object({
     internalDoorHeight: z.string().nullable(),
     skirtingSize: z.string().nullable(),
@@ -82,7 +115,7 @@ const projectExtractionDraftSchema = z.object({
     tileAllowance: nullableNumberSchema,
     selectedTilePrice: nullableNumberSchema,
     wetAreaSizeM2: nullableNumberSchema,
-  }),
+  }).optional(),
   exclusionsAndRisks: z.object({
     retainingWalls: z.string().nullable(),
     fencing: z.string().nullable(),
@@ -91,7 +124,7 @@ const projectExtractionDraftSchema = z.object({
     rockExcavation: z.string().nullable(),
     ownerResponsibility: z.array(z.string()).default([]),
     variationRequired: z.array(z.string()).default([]),
-  }),
+  }).optional(),
   inclusionsAndExclusions: z.object({
     inclusions: z.array(z.string()).default([]),
     exclusions: z.array(z.string()).default([]),

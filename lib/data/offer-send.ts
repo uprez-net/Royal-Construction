@@ -1,12 +1,17 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { randomBytes } from "node:crypto";
 import { resolveMx } from "node:dns/promises";
 import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
+import { createElement } from "react";
+import { render } from "@react-email/components";
+import QuotationEmail from "@/lib/graph/Email/quotation-email";
+import { buildOfferQuotationEmailProps } from "@/lib/offer/offer-quotation-email";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
 import {
@@ -188,8 +193,12 @@ export async function sendOfferDocument(input: {
   }
 
   let pdfBase64: string;
+  // Retained past the PDF block: the branded email body is rendered from the
+  // same job + customer-price data, so it can never quote a different figure
+  // than the attachment.
+  let proposalInput: ReturnType<typeof buildProposalInput>;
   try {
-    const proposalInput = buildProposalInput(snapshot);
+    proposalInput = buildProposalInput(snapshot);
     // A manual price override without a stated reason must not be emailed —
     // mirror the client-side "Send offer"/"Mark sent" guard server-side.
     if (proposalInput.customerPrice.needsOverrideReason) {
@@ -237,10 +246,24 @@ export async function sendOfferDocument(input: {
     // the moment its email is ACCEPTED (never before, never batched), so a mid-loop
     // failure records exactly who received it and leaves no phantom rows.
     for (const send of sends) {
+      // The branded React Email template, rendered per recipient so the
+      // greeting names that signatory. The tracking token stays in the SUBJECT
+      // (where the inbound reply tracker reads it from), so the template needs
+      // no slot for it.
+      const body = await render(
+        createElement(
+          QuotationEmail,
+          buildOfferQuotationEmailProps({
+            template: proposalInput,
+            reference,
+            recipientEmail: send.recipientEmail,
+          }),
+        ),
+      );
       await client.sendMail({
         to: send.recipientEmail,
         subject: `Your Building Proposal — ${reference} [${send.token}]`,
-        body: buildEmailBody(reference, send.token),
+        body,
         attachments: [
           {
             name: `Building-Proposal-${reference}.pdf`,
@@ -294,6 +317,7 @@ export async function sendOfferDocument(input: {
         .catch((error) =>
           console.error("[offer] status event after send failed:", error),
         );
+      await syncLeadStageForOffer(offer.id);
     }
   }
 
@@ -315,15 +339,4 @@ export async function sendOfferDocument(input: {
     reference,
     recipients: deliveredEmails,
   };
-}
-
-function buildEmailBody(reference: string, token: string): string {
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.55;">
-    <p>Hi,</p>
-    <p>Please find attached your Building Proposal (<strong>${reference}</strong>) from Royal Constructions Pty Ltd.</p>
-    <p>Everything is fixed into the price shown in the proposal. If you have any questions or changes, simply <strong>reply to this email</strong> and we'll take care of the rest.</p>
-    <p>Kind regards,<br/>Royal Constructions Pty Ltd<br/>Lic. 383992C | MBA Accredited</p>
-    <hr style="border:none;border-top:1px solid #ddd;margin:16px 0;" />
-    <p style="font-size:11px;color:#999;">Proposal reference: ${token}. Please keep this reference in the subject line when replying so we can track your response.</p>
-  </div>`;
 }

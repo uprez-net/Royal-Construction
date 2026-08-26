@@ -2,10 +2,12 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
+import type { File as DBFile } from "@prisma/client";
 import type {
   ProjectRequirementsPayload,
   ProjectFlowSectionKey,
   ProjectPaymentStage,
+  ProjectSourceDocumentReference,
   ProjectValidationResult,
   ProjectConflictResult,
 } from "@/types/project-flow";
@@ -48,7 +50,13 @@ import {
   Droplets,
   HardHat,
   Check,
+  Loader2,
 } from "lucide-react";
+import { UploadButton } from "@/components/common/upload-button";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { setActiveProject } from "@/lib/store/slices/projectsSlice";
+import { openModal } from "@/lib/store/slices/uiSlice";
+import { useParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
 // Types & config
@@ -62,7 +70,8 @@ type FieldType =
   | "number"
   | "currency"
   | "percent"
-  | "boolean";
+  | "boolean"
+  | "date";
 
 interface FieldConfig {
   key: string;
@@ -123,8 +132,20 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
   legalAdministration: [
     { key: "siteAddress", label: "Site address", type: "textarea", span: 2 },
     { key: "commencementTrigger", label: "Commencement trigger", type: "text" },
-    { key: "signedDate", label: "Signed date", type: "text" },
+    { key: "signedDate", label: "Signed (contract executed)", type: "text" },
     { key: "pcaInspector", label: "PCA inspector", type: "text" },
+    // Captured when the first Slab-stage milestone starts, and editable here
+    // afterwards through the same PATCH that the kickoff prompt uses.
+    {
+      key: "insuranceClaimStartDate",
+      label: "Insurance Claim Start Date",
+      type: "date",
+    },
+    {
+      key: "insuranceClaimEndDate",
+      label: "Insurance Claim End Date",
+      type: "date",
+    },
   ],
   commercialsAndClaims: [
     { key: "totalContractSum", label: "Total contract sum", type: "currency" },
@@ -213,6 +234,28 @@ function parseNumber(raw: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * `<input type="date">` only accepts `yyyy-MM-dd`. Requirements dates are
+ * written in that shape, but older payloads may carry a full ISO timestamp, so
+ * anything longer is trimmed back to the date part rather than shown blank.
+ */
+function toDateInputValue(value: unknown) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  if (typeof value !== "string" || value.trim() === "") return "";
+
+  const [datePart] = value.split("T");
+  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : "";
+}
+
 function displayValue(value: unknown) {
   if (value === null || value === undefined) return "";
   return String(value);
@@ -288,6 +331,29 @@ function TextField({
           className={FIELD_CONTROL_CLASS}
         />
       )}
+    </FieldShell>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: unknown;
+  onChange: (v: string | null) => void;
+}) {
+  const id = useId();
+  return (
+    <FieldShell label={label} htmlFor={id}>
+      <Input
+        id={id}
+        type="date"
+        value={toDateInputValue(value)}
+        onChange={(e) => onChange(emptyToNull(e.target.value))}
+        className={cn(FIELD_CONTROL_CLASS, "font-mono tabular-nums")}
+      />
     </FieldShell>
   );
 }
@@ -443,6 +509,10 @@ function renderField(
     case "boolean":
       return (
         <BooleanField label={config.label} value={value} onChange={onChange} />
+      );
+    case "date":
+      return (
+        <DateField label={config.label} value={value} onChange={onChange} />
       );
     case "textarea":
       return (
@@ -757,6 +827,118 @@ function OwnerContactsBlock({
   );
 }
 
+/**
+ * HBCF (Home Building Compensation Fund) certificate number and the certificate
+ * it was read from.
+ *
+ * The number is the thing site staff quote back to iCare and to the owner, so
+ * it stays editable by hand: OCR on a photographed certificate is not reliable
+ * enough to be the only way in. The alert is driven by the number rather than
+ * by the presence of a document, so uploading an unreadable certificate leaves
+ * the prompt up instead of silently marking the job compliant.
+ */
+function HbcfInsuranceBlock({
+  projectId,
+  insuranceNumber,
+  document,
+  extracting,
+  onNumberChange,
+  onUpload,
+}: {
+  projectId: string;
+  insuranceNumber: string | null;
+  document: ProjectSourceDocumentReference | null;
+  extracting: boolean;
+  onNumberChange: (value: string | null) => void;
+  onUpload: (files: DBFile[]) => void;
+}) {
+  const id = useId();
+  const dispatch = useAppDispatch();
+  const hasNumber = (insuranceNumber ?? "").trim().length > 0;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h4 className="text-sm font-semibold text-foreground">
+          HBCF insurance
+        </h4>
+        <p className="text-xs text-muted-foreground">
+          Upload the certificate to read the number automatically, or type it in
+          if the scan is unreadable.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <FieldShell label="HBCF insurance no." htmlFor={id}>
+          <Input
+            id={id}
+            value={displayValue(insuranceNumber)}
+            onChange={(e) => onNumberChange(emptyToNull(e.target.value))}
+            placeholder="Not recorded yet"
+            disabled={extracting}
+            className={FIELD_CONTROL_CLASS}
+          />
+        </FieldShell>
+
+        <div className="flex flex-col justify-end gap-1.5">
+          <UploadButton
+            projectId={projectId}
+            maxFiles={1}
+            accept="application/pdf,.pdf"
+            onUpload={onUpload}
+          />
+          {extracting ? (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 aria-hidden="true" className="h-3 w-3 animate-spin" />
+              Reading the certificate&hellip;
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {hasNumber ? null : (
+        <div
+          role="alert"
+          className={cn(
+            "flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm",
+            "border-destructive/25 bg-destructive-light text-destructive-ink",
+          )}
+        >
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 h-4 w-4 shrink-0"
+          />
+          <p>Upload the insurance document to update the no.</p>
+        </div>
+      )}
+
+      {document?.url ? (
+        <Button
+          type="button"
+          onClick={() =>
+            dispatch(
+              openModal({
+                type: "previewFile",
+                payload: { fileUrl: document.url },
+              }),
+            )
+          }
+          aria-label={`Open the hbcf insurance document in a new tab`}
+          variant="ghost"
+          size="sm"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          <FileText aria-hidden="true" className="h-3.5 w-3.5" />
+          <span className="wrap-break-word">
+            {document.fileName || "HBCF insurance certificate"}
+          </span>
+          <ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0" />
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function PaymentStagesTable({
   stages,
   onChange,
@@ -874,17 +1056,14 @@ function PaymentStagesTable({
 
 function SourceDocumentCard({
   kind,
-  fileName,
   url,
-  onChange,
 }: {
   kind: "Tender" | "Contract";
   fileName: string;
   url: string;
   onChange: (field: "fileName" | "url", value: string) => void;
 }) {
-  const fileNameId = useId();
-  const urlId = useId();
+  const dispatch = useAppDispatch();
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
@@ -899,81 +1078,72 @@ function SourceDocumentCard({
           </span>
         </div>
         {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
+          <Button
+            type="button"
+            onClick={() =>
+              dispatch(
+                openModal({
+                  type: "previewFile",
+                  payload: { fileUrl: url },
+                }),
+              )
+            }
             aria-label={`Open the ${kind.toLowerCase()} document in a new tab`}
-            className="flex items-center gap-1 rounded-md text-xs font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            variant="ghost"
+            size="sm"
+            className="h-auto gap-1 px-0 text-xs font-medium text-primary hover:underline"
           >
             Open <ExternalLink aria-hidden="true" className="h-3 w-3" />
-          </a>
+          </Button>
         ) : null}
       </div>
-      <FieldShell label="File name" htmlFor={fileNameId}>
-        <Input
-          id={fileNameId}
-          value={fileName}
-          onChange={(e) => onChange("fileName", e.target.value)}
-          className={FIELD_CONTROL_CLASS}
-        />
-      </FieldShell>
-      <FieldShell label="File URL" htmlFor={urlId}>
-        <Input
-          id={urlId}
-          type="url"
-          value={url}
-          onChange={(e) => onChange("url", e.target.value)}
-          className={FIELD_CONTROL_CLASS}
-        />
-      </FieldShell>
     </div>
   );
 }
 
-function AutomationToggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        "flex w-full items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-        checked ? "border-primary/40 bg-primary/5" : "border-border bg-card",
-      )}
-    >
-      <div>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <span
-        aria-hidden="true"
-        className={cn(
-          "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
-          checked ? "bg-primary" : "bg-border",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-transform motion-reduce:transition-none",
-            checked ? "translate-x-4" : "translate-x-0.5",
-          )}
-        />
-      </span>
-    </button>
-  );
-}
+// function AutomationToggle({
+//   label,
+//   description,
+//   checked,
+//   onChange,
+// }: {
+//   label: string;
+//   description: string;
+//   checked: boolean;
+//   onChange: (v: boolean) => void;
+// }) {
+//   return (
+//     <button
+//       type="button"
+//       role="switch"
+//       aria-checked={checked}
+//       onClick={() => onChange(!checked)}
+//       className={cn(
+//         "flex w-full items-start justify-between gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+//         checked ? "border-primary/40 bg-primary/5" : "border-border bg-card",
+//       )}
+//     >
+//       <div>
+//         <p className="text-sm font-medium text-foreground">{label}</p>
+//         <p className="text-xs text-muted-foreground">{description}</p>
+//       </div>
+//       <span
+//         aria-hidden="true"
+//         className={cn(
+//           "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors",
+//           checked ? "bg-primary" : "bg-border",
+//         )}
+//       >
+//         <span
+//           className={cn(
+//             "absolute top-0.5 h-4 w-4 rounded-full bg-card shadow-sm transition-transform motion-reduce:transition-none",
+//             checked ? "translate-x-4" : "translate-x-0.5",
+//           )}
+//         />
+//       </span>
+//     </button>
+//   );
+// }
 
 function ValidationRow({
   validation,
@@ -1072,9 +1242,23 @@ export function ProjectOverviewTab({
   project: ProjectDetail;
   isAdmin: boolean;
 }) {
+  const params = useParams();
+  const dispatch = useAppDispatch();
+  const { startDate, estimatedEndDate } = project;
   const initialRequirements = (project.requirements ?? {}) as RequirementsData;
+  const [openSection, setOpenSection] = useState<string>();
   const [draft, setDraft] = useState<RequirementsData>(initialRequirements);
+  const [stateStartDate, setStateStartDate] = useState<string | null>(
+    toDateInputValue(startDate),
+  );
+  const [stateEstimatedEndDate, setStateEstimatedEndDate] = useState<
+    string | null
+  >(toDateInputValue(estimatedEndDate));
   const [saving, setSaving] = useState(false);
+  // OCR + model round-trip on the uploaded HBCF certificate. Separate from
+  // `saving` so the certificate field can be locked while it runs without
+  // disabling the rest of the form.
+  const [hbcfExtracting, setHbcfExtracting] = useState(false);
   // Validations and conflicts are produced upstream from the tender/contract
   // extraction and stored on the requirements payload — nothing in the app
   // derives them (`buildProjectRequirementsPayload` takes them as an argument),
@@ -1160,20 +1344,27 @@ export function ProjectOverviewTab({
     });
   };
 
-  const updateAutomationTrigger = (
-    field: "orderReminders" | "rainDelayCalculations" | "noticeCountdowns",
-    value: boolean,
-  ) => {
-    editDraft((current) => ({
-      ...current,
-      automationTriggers: {
-        ...(current.automationTriggers ?? {}),
-        [field]: value,
-      } as never,
-    }));
-  };
+  // const updateAutomationTrigger = (
+  //   field: "orderReminders" | "rainDelayCalculations" | "noticeCountdowns",
+  //   value: boolean,
+  // ) => {
+  //   editDraft((current) => ({
+  //     ...current,
+  //     automationTriggers: {
+  //       ...(current.automationTriggers ?? {}),
+  //       [field]: value,
+  //     } as never,
+  //   }));
+  // };
 
-  const handleSave = async () => {
+  /**
+   * @param override - Requirements to persist instead of the current `draft`.
+   *   State updates are async, so a flow that edits the draft and saves in the
+   *   same tick (the HBCF upload) has to hand the new payload in directly or it
+   *   would PATCH the pre-edit draft.
+   */
+  const handleSave = async (override?: RequirementsData) => {
+    const payload = override ?? draft;
     setSaving(true);
     try {
       const response = await fetchJson<ProjectDetail>(
@@ -1181,12 +1372,26 @@ export function ProjectOverviewTab({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requirements: draft }),
+          body: JSON.stringify({
+            requirements: payload,
+            name: payload.projectName,
+            startDate: stateStartDate,
+            estimatedEndDate: stateEstimatedEndDate,
+          }),
         },
         "Unable to update project",
       );
       toast.success("Project sections updated");
-      setDraft((response.data.requirements ?? draft) as RequirementsData);
+      // The header is a sibling reading `projects.activeProject`, not this
+      // tab's draft, so a saved HBCF number or PCA inspector kept showing
+      // "Not set" until a full reload. The PATCH returns the whole project,
+      // so hand it to the store the header actually reads.
+      dispatch(setActiveProject(response.data));
+      setDraft((response.data.requirements ?? payload) as RequirementsData);
+      setStateStartDate(toDateInputValue(response.data.startDate));
+      setStateEstimatedEndDate(
+        toDateInputValue(response.data.estimatedEndDate),
+      );
       setDirty(false);
     } catch (error) {
       toast.error(
@@ -1195,6 +1400,85 @@ export function ProjectOverviewTab({
     } finally {
       setSaving(false);
     }
+  };
+
+  /**
+   * Links an uploaded HBCF certificate to the project and fills in the number
+   * read off it.
+   *
+   * Extraction failure is not upload failure: the document reference is saved
+   * either way, so the certificate stays one click away and the red alert keeps
+   * asking for a number instead of the upload being lost.
+   * @param files - Result of the single-file HBCF upload.
+   */
+  const handleHbcfUpload = async (files: DBFile[]) => {
+    const file = files[0];
+    if (!file) return;
+
+    const hbcfInsuranceDocument: ProjectSourceDocumentReference = {
+      fileId: file.id,
+      fileName: file.filename,
+      url: file.url,
+      kind: "hbcfInsurance",
+    };
+
+    const toastId = toast.loading("Reading the HBCF certificate…");
+    setHbcfExtracting(true);
+    let extractedNumber = "";
+
+    try {
+      const response = await fetchJson<{
+        hbcfInsuranceNumber: string;
+        ok: boolean;
+        message: string;
+      }>(
+        `/api/projects/${project.id}/hbcf-extract`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: file.url,
+            fileId: file.id,
+            fileName: file.filename,
+          }),
+        },
+        "Unable to read the HBCF insurance document",
+      );
+
+      extractedNumber = (response.data.hbcfInsuranceNumber ?? "").trim();
+
+      if (extractedNumber) {
+        toast.success("HBCF insurance number read from the certificate", {
+          id: toastId,
+        });
+      } else {
+        toast.warning(
+          "No HBCF insurance number was found on the certificate. Enter it manually.",
+          { id: toastId },
+        );
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to read the HBCF insurance document",
+        { id: toastId },
+      );
+    } finally {
+      setHbcfExtracting(false);
+    }
+
+    const nextDraft: RequirementsData = {
+      ...draft,
+      legalAdministration: {
+        ...(draft.legalAdministration as object),
+        hbcfInsuranceNumber: extractedNumber || null,
+        hbcfInsuranceDocument,
+      } as never,
+    };
+
+    editDraft(() => nextDraft);
+    await handleSave(nextDraft);
   };
 
   const tender = (draft.sourceDocuments?.tender ?? {
@@ -1209,21 +1493,66 @@ export function ProjectOverviewTab({
     kind: "contract",
     fileId: "",
   }) as Record<string, string>;
-  const automation = draft.automationTriggers ?? {
-    orderReminders: false,
-    rainDelayCalculations: false,
-    noticeCountdowns: false,
-  };
-  const ownerContacts = (
-    draft.legalAdministration as Record<string, unknown> | undefined
-  )?.ownerContacts as
+  // const automation = draft.automationTriggers ?? {
+  //   orderReminders: false,
+  //   rainDelayCalculations: false,
+  //   noticeCountdowns: false,
+  // };
+  const legalAdministration = draft.legalAdministration as
+    | Record<string, unknown>
+    | undefined;
+  const ownerContacts = legalAdministration?.ownerContacts as
     | { names?: string[]; emails?: string[]; phones?: string[] }
     | undefined;
+  const hbcfInsuranceNumber =
+    (legalAdministration?.hbcfInsuranceNumber as string | null | undefined) ??
+    null;
+  const hbcfInsuranceDocument =
+    (legalAdministration?.hbcfInsuranceDocument as
+      | ProjectSourceDocumentReference
+      | null
+      | undefined) ?? null;
+
+  // Header chips and the compliance banner deep-link here via
+  // `#legalAdministration`. Re-apply on hashchange too — a click while
+  // already on Overview used to leave the accordion closed because `params`
+  // (the only prior dependency) does not change for a same-route hash nav.
+  useEffect(() => {
+    const applyHash = () => {
+      const section = window.location.hash.slice(1);
+      if (!section) return;
+      setOpenSection(section);
+      // Wait a tick for the accordion to expand before scrolling, otherwise
+      // the browser lands on a collapsed header and the fields stay off-screen.
+      window.setTimeout(() => {
+        document.getElementById(section)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 50);
+    };
+
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, [params]);
+
+  // Warn before discarding unsaved overview edits via refresh / close. In-app
+  // tab switches are a separate gap — this covers the browser-level loss path.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
   return (
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/70 pb-4">
+        <CardHeader className="sticky top-0 z-20 flex flex-row items-center justify-between gap-3 border-b border-border/70 bg-card pb-4 shadow-sm">
           <div>
             {/* The page <h1> is the project name in project-header.tsx and
                 nothing between here and it is an <h2>, so this panel title is
@@ -1261,7 +1590,16 @@ export function ProjectOverviewTab({
                 ) : null}
               </div>
             ) : null}
-            <Button onClick={handleSave} disabled={saving} aria-busy={saving}>
+            {dirty ? (
+              <Badge className="rounded-full bg-warning-light px-3 py-1 text-xs font-medium text-warning-ink">
+                Unsaved
+              </Badge>
+            ) : null}
+            <Button
+              onClick={() => handleSave()}
+              disabled={!dirty || saving}
+              aria-busy={saving}
+            >
               {saving ? "Saving…" : "Save changes"}
             </Button>
           </div>
@@ -1283,6 +1621,22 @@ export function ProjectOverviewTab({
               onChange={(v) =>
                 editDraft((c) => ({ ...c, projectType: v ?? "" }))
               }
+            />
+            <DateField
+              label="Start date (on-site)"
+              value={stateStartDate}
+              onChange={(v) => {
+                setStateStartDate(v);
+                setDirty(true);
+              }}
+            />
+            <DateField
+              label="Estimated end date"
+              value={stateEstimatedEndDate}
+              onChange={(v) => {
+                setStateEstimatedEndDate(v);
+                setDirty(true);
+              }}
             />
             <FieldShell label="Version">
               <p className="flex h-9 items-center rounded-lg border border-border bg-muted px-3 font-mono text-sm tabular-nums text-muted-foreground">
@@ -1319,30 +1673,6 @@ export function ProjectOverviewTab({
             </div>
           )}
 
-          {/* Automation triggers */}
-          <div className="grid gap-3 md:grid-cols-3">
-            <AutomationToggle
-              label="Order reminders"
-              description="Notify when material orders are due"
-              checked={Boolean(automation.orderReminders)}
-              onChange={(v) => updateAutomationTrigger("orderReminders", v)}
-            />
-            <AutomationToggle
-              label="Notice countdowns"
-              description="Track contractual notice periods"
-              checked={Boolean(automation.noticeCountdowns)}
-              onChange={(v) => updateAutomationTrigger("noticeCountdowns", v)}
-            />
-            <AutomationToggle
-              label="Rain delay calculations"
-              description="Auto-extend dates for weather delays"
-              checked={Boolean(automation.rainDelayCalculations)}
-              onChange={(v) =>
-                updateAutomationTrigger("rainDelayCalculations", v)
-              }
-            />
-          </div>
-
           {/* Conflicts */}
           {conflicts.length > 0 ? (
             <div className="space-y-2">
@@ -1361,7 +1691,13 @@ export function ProjectOverviewTab({
           ) : null}
 
           {/* Sections */}
-          <Accordion type="single" collapsible className="space-y-2">
+          <Accordion
+            type="single"
+            collapsible
+            value={openSection}
+            onValueChange={setOpenSection}
+            className="space-y-2"
+          >
             {sectionKeys.map((key) => {
               const meta = SECTION_META[key];
               const Icon = meta.icon;
@@ -1381,6 +1717,7 @@ export function ProjectOverviewTab({
               return (
                 <AccordionItem
                   key={key}
+                  id={key}
                   value={key}
                   className="rounded-xl border border-border bg-card px-4"
                 >
@@ -1410,7 +1747,7 @@ export function ProjectOverviewTab({
                       ) : null}
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-4 pb-4 pt-1 overflow-y-auto max-h-[75vh] no-scrollbar">
+                  <AccordionContent className="max-h-[75vh] space-y-4 overflow-y-auto pb-4 pt-1 no-scrollbar">
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {SECTION_FIELDS[key].map((config) => (
                         <div
@@ -1439,6 +1776,23 @@ export function ProjectOverviewTab({
                       />
                     ) : null}
 
+                    {key === "legalAdministration" ? (
+                      <HbcfInsuranceBlock
+                        projectId={project.id}
+                        insuranceNumber={hbcfInsuranceNumber}
+                        document={hbcfInsuranceDocument}
+                        extracting={hbcfExtracting}
+                        onNumberChange={(value) =>
+                          updateSectionField(
+                            "legalAdministration",
+                            "hbcfInsuranceNumber",
+                            value,
+                          )
+                        }
+                        onUpload={handleHbcfUpload}
+                      />
+                    ) : null}
+
                     {key === "commercialsAndClaims" ? (
                       <PaymentStagesTable
                         stages={
@@ -1453,7 +1807,7 @@ export function ProjectOverviewTab({
                       <div className="grid gap-4 rounded-xl border border-border bg-muted/40 p-4 md:grid-cols-2">
                         <TagListControl
                           label={
-                            <h5 className="text-sm font-medium text-foreground flex items-center">
+                            <h5 className="flex items-center text-sm font-medium text-foreground">
                               <Check
                                 aria-hidden="true"
                                 className="mr-1 h-3 w-3 shrink-0 text-success-ink"
@@ -1474,7 +1828,7 @@ export function ProjectOverviewTab({
                         />
                         <TagListControl
                           label={
-                            <h5 className="text-sm font-medium text-foreground flex items-center">
+                            <h5 className="flex items-center text-sm font-medium text-foreground">
                               <AlertTriangle
                                 aria-hidden="true"
                                 className="mr-1 h-3 w-3 shrink-0 text-warning-ink"

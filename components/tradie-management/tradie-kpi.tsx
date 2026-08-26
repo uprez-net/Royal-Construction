@@ -28,7 +28,10 @@ export function TradieKPI() {
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    // Three across as soon as there is room. Going 1 → 2 → 3 columns left the
+    // third card alone on a half-empty row at every width between the md and
+    // xl breakpoints, which covers most laptop windows.
+    <div className="grid gap-3 md:grid-cols-3">
       {allKPIs.map((kpi) => (
         <MetricCard
           key={kpi.title}

@@ -47,13 +47,34 @@ export default clerkMiddleware(async (auth, request) => {
     }
   }
 
-  if (!isPublicRoute(request) && !isAuthRoute(request)) await auth.protect()
-
   const { userId, sessionClaims } = await auth()
+
+  if (!isPublicRoute(request) && !isAuthRoute(request)) {
+    // auth.protect() only redirects requests it recognises as page navigations.
+    // A plain fetch() sends `sec-fetch-dest: empty` and no `next-url`, so it is
+    // neither a page request nor a server action, and Clerk falls through to
+    // notFound() — the request comes back 404 with an HTML body. That is why an
+    // expired session on /leads shows up as a pile of 404s on /api/leads rather
+    // than as one honest 401. Answer API routes ourselves so the status code
+    // describes what actually happened.
+    if (isApiRoute) {
+      if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
+    } else {
+      await auth.protect()
+    }
+  }
+
   if (isAdminRoute(request) && (await getUserByClerkId(userId ?? ""))?.role !== "ADMIN") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   if (sessionClaims?.public_metadata.role === "GUEST") {
+    // Same reasoning: a redirect to an HTML page is not a usable answer to a
+    // fetch(), which follows it and then fails to parse the body as JSON.
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
     return NextResponse.redirect(new URL("/guest", request.url))
   }
   if (isAuthRoute(request) && userId) {

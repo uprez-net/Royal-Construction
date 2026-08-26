@@ -56,6 +56,10 @@ enum MaterialStatus {
 enum LeadStage {
   NEW
   CONTACTED
+  /// Collecting the client's requirements. Absorbs the work that used to be
+  /// recorded as MEETING_SCHEDULED and IN_FOLLOW_UP, both of which described a
+  /// scheduled task rather than how far the deal had progressed.
+  DISCOVERY
   QUALIFIED
   QUOTED
   NEGOTIATING
@@ -67,6 +71,37 @@ enum LeadStage {
   CONVERTED
   CANCELLED
   DISQUALIFIED
+}
+
+/// What the task is. Taken from what people already typed into followupNotes
+/// on production, where "Organise a Meeting" appeared 4 times and
+/// "Send an Email/Text" twice, because there was no field for it.
+enum LeadTaskType {
+  CALL
+  EMAIL
+  MEETING
+  WAITING
+}
+
+/// Board columns. NEW and DONE cover today's behaviour; IN_PROGRESS exists so
+/// the Kanban has a middle column and is not written by anything yet.
+enum LeadTaskStatus {
+  NEW
+  IN_PROGRESS
+  DONE
+}
+
+enum LeadValueSource {
+  OFFER
+  MANUAL
+}
+
+/// How to read Tradie.lastQuotedPrice. Without it the number is ambiguous —
+/// 120 could be an hourly rate or a whole job — and the schedule cost silently
+/// multiplied every value by 8 hours a day regardless.
+enum TradiePriceUnit {
+  HOURLY
+  FIXED
 }
 
 enum HistoryType {
@@ -167,6 +202,7 @@ enum TradieApprovalActionType {
   INCIDENT_RESOLUTION
   TRADIE_REMOVAL
   SCHEDULE_APPROVAL
+  SCHEDULE_DELETION
 }
 
 enum TradieApprovalStatus {
@@ -282,18 +318,22 @@ model Material {
 }
 
 model Tradie {
-  id               String   @id @default(uuid())
-  name             String
-  trade            String
-  abn              String   @unique
-  phone            String   @unique
-  email            String   @unique
-  additionalEmails String[] @default([])
-  location         String?
-  isFavourite      Boolean  @default(false)
-  lastQuotedPrice  Decimal? @db.Decimal(8, 2)
-  rating           Decimal? @db.Decimal(2, 1)
-  note             String?  @db.Text
+  id                  String          @id @default(uuid())
+  name                String
+  trade               String
+  abn                 String          @unique
+  phone               String          @unique
+  email               String          @unique
+  additionalEmails    String[]        @default([])
+  location            String?
+  isFavourite         Boolean         @default(false)
+  lastQuotedPrice     Decimal?        @db.Decimal(8, 2)
+  /// Defaults to HOURLY: every existing row was entered under the old
+  /// hourly-only behaviour, so anything else would silently restate project
+  /// costs already on screen.
+  lastQuotedPriceUnit TradiePriceUnit @default(HOURLY)
+  rating              Decimal?        @db.Decimal(2, 1)
+  note                String?         @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -510,6 +550,7 @@ model User {
   activityLogs        ActivityLog[]
   assignedLeads       Lead[]           @relation("LeadAssignee")
   leadHistories       LeadHistory[]    @relation("LeadHistoryAuthor")
+  leadTasks           LeadTask[]       @relation("LeadTaskAssignee")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
   createdOffers       Offer[]          @relation("OfferCreatedBy")
@@ -561,10 +602,31 @@ model Lead {
   meetingMode            String?
   followupReminderSentAt DateTime?
   meetingReminderSentAt  DateTime?
+  /// When the scheduled task was closed out. Before these existed, the only
+  /// record that a follow-up had finished was the stage flipping to CONTACTED,
+  /// which is why a lead in negotiation lost 50 points for having a call
+  /// rescheduled. The stage no longer moves; these do.
+  followupCompletedAt    DateTime?
+  meetingCompletedAt     DateTime?
 
   lostReason String?
 
   urgent Boolean @default(false)
+
+  // ── Deal economics ────────────────────────────────────────────────
+  /// Numeric deal value. Auto-filled from the active offer's contract price
+  /// unless estimatedValueSource is MANUAL. `budget` above remains a
+  /// free-text note and is NOT the source of truth for any KPI.
+  estimatedValue       Decimal?         @db.Decimal(14, 2)
+  estimatedValueSource LeadValueSource?
+  /// Null means "inherit the stage default" (lib/leads/pipeline-stages.ts).
+  /// Never default this to 0 — that would read as 0% for every existing lead.
+  probabilityOverride  Int?
+  expectedCloseDate    DateTime?
+  /// Stamped by closeDatePatch() on stage transitions. Weighted pipeline and
+  /// win rate depend on these; updatedAt is not a usable substitute.
+  wonAt                DateTime?
+  lostAt               DateTime?
 
   MicrosoftmessageId String? @unique
 
@@ -574,6 +636,7 @@ model Lead {
   offers          Offer[]
   chatSessions    ChatSession[]
   history         LeadHistory[]
+  tasks           LeadTask[]
   noteAnnotations LeadNoteAnnotation[]
   files           File[]               @relation("LeadFiles")
   emails          LeadEmails[]         @relation("LeadEmails")
@@ -583,6 +646,9 @@ model Lead {
   @@index([stage])
   @@index([assignedId])
   @@index([createdAt])
+  @@index([expectedCloseDate])
+  @@index([wonAt])
+  @@index([lostAt])
 }
 
 model LeadNoteAnnotation {
@@ -601,6 +667,52 @@ model LeadNoteAnnotation {
 
   @@index([leadId])
   @@index([status])
+}
+
+/// Scheduled work on a lead: one row per task, many per lead.
+///
+/// Replaces the single followupDate / meetingDate pair on Lead, which could
+/// hold one follow-up and one meeting ever and overwrote the previous one on
+/// every save. Production has logged 54 "New Followup Stage Created" against 41
+/// leads, so that overwrite has been losing history for as long as the feature
+/// has existed.
+///
+/// A task never changes the lead's stage. That rule is the whole reason this
+/// table exists: scheduled work used to BE the stage, so completing a follow-up
+/// wrote CONTACTED and cost a deal in negotiation 50 points.
+model LeadTask {
+  id Int @id @default(autoincrement())
+
+  leadId Int
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  type   LeadTaskType
+  status LeadTaskStatus @default(NEW)
+
+  /// When the work is due. Null means "no date yet", which is the state 5
+  /// production leads are parked in today while the UI reports "All caught up".
+  dueDate DateTime?
+  dueTime String?
+
+  notes String? @db.Text
+
+  assignedId String?
+  assignedTo User?  @relation("LeadTaskAssignee", fields: [assignedId], references: [id])
+
+  /// Set when the task is closed out. Nothing recorded this before; the stage
+  /// flipping to CONTACTED was the only signal a follow-up had finished.
+  completedAt DateTime?
+  /// Guards against re-notifying. Mirrors followupReminderSentAt on Lead.
+  reminderSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([assignedId])
+  @@index([status])
+  /// The reminder crons and the Follow-ups tab both scan open work by date.
+  @@index([dueDate, completedAt])
 }
 
 model LeadHistory {
@@ -908,6 +1020,12 @@ model AdminOfferContent {
   costSchedule Json
   offerScope   Json
   offerContent Json
+  hbfcClaim    Json     @default("{\"claimAmount\": 800000}")
+  // Bumped by every per-section save. Each Offer stamps the version it was
+  // built from into Offer.workspaceState, so opening a still-editable offer can
+  // detect that admin content moved on and re-apply the current defaults, while
+  // an agreed/sent offer keeps its frozen snapshot.
+  version      Int      @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

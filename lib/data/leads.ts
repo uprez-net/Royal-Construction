@@ -1,10 +1,23 @@
 "use server";
 import prisma from "@/lib/prisma";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import { closeDatePatch, isClosedUnsuccessful, stageDef } from "@/lib/leads/pipeline-stages";
+import { resolveLeadStage } from "@/lib/leads/resolve-stage";
+import { LeadValidationError } from "@/lib/leads/lead-validation-error";
+import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
+import {
+  coerceMoney,
+  computeForecast,
+  computePipelineMetrics,
+  type ForecastResult,
+  type LeadForMetrics,
+  type PipelineMetrics,
+} from "@/lib/leads/pipeline-math";
 import { renderEmailHtml } from "../leads/render-email-html";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
@@ -262,7 +275,16 @@ export async function getAllLeads(): Promise<UiLead[]> {
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
-        files: true
+        files: true,
+        // Just the next open task, for the table's Follow-up cell. Ordered the
+        // same way the Tasks tab orders its list so the two agree on which one
+        // is "next": soonest due date first, undated last.
+        tasks: {
+          where: { completedAt: null },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          take: 1,
+          select: { dueDate: true, dueTime: true },
+        },
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -301,6 +323,7 @@ export async function getLeads(
   filterTiming?: string,
   filterLeadsWithoutProject?: boolean,
   isArchived?: boolean,
+  hasOpenTask?: boolean,
   pendingFollowUps?: boolean,
   upcomingFollowUps?: boolean,
   pendingMeetings?: boolean,
@@ -408,6 +431,23 @@ export async function getLeads(
           gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
         }
       }),
+      // Leads carrying scheduled work. Replaces filtering the Follow-ups tab by
+      // stage: a lead at Quoted or Negotiating can have a follow-up booked, and
+      // the stage filter never returned it.
+      // Nested under AND, not spread as bare `stage` and `OR` keys. `...where`
+      // above already carries an OR for the search terms, and a second OR at
+      // this level overwrites it in the object literal, so searching while the
+      // Follow-ups tab was open would have silently ignored the search text.
+      // Now keyed off the LeadTask table rather than the two date columns on
+      // Lead, so this stays in step with what the Follow-ups tab lists. The
+      // columns are still written for now and are dropped once nothing reads
+      // them; the tasks are the source of truth from here.
+      ...(hasOpenTask && {
+        AND: [
+          { stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] as LeadStage[] } },
+          { tasks: { some: { completedAt: null } } },
+        ],
+      }),
       ...(isMeetingScheduledFilterActive && {
         meetingDate: {
           not: null,
@@ -434,7 +474,16 @@ export async function getLeads(
         assignedUser: { select: { id: true, name: true, email: true } },
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
-        files: true
+        files: true,
+        // Just the next open task, for the table's Follow-up cell. Ordered the
+        // same way the Tasks tab orders its list so the two agree on which one
+        // is "next": soonest due date first, undated last.
+        tasks: {
+          where: { completedAt: null },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
+          take: 1,
+          select: { dueDate: true, dueTime: true },
+        },
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -667,7 +716,18 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
 export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
+  const createdValue = coerceMoney(input.estimatedValue);
   const actingUserId = await resolveActingUserId();
+
+  // Same rule updateLead enforces: a lead cannot sit in LOST/CANCELLED/
+  // DISQUALIFIED without a recorded reason. Enforced here too because a lead
+  // can be created directly in a closed stage — the add-lead modal does not
+  // offer one, but the API and the MCP create tool both accept it.
+  if (isClosedUnsuccessful(mappedStage) && !input.lostReason?.trim()) {
+    throw new LeadValidationError(
+      `Add a reason before creating a lead in ${stageDef(mappedStage).label}.`,
+    );
+  }
 
   const historyInput = input.history ?? [];
   const historyCreate = historyInput.map((entry) => {
@@ -759,6 +819,17 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         stage: mappedStage,
         ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
         budget: input.budget,
+        // A lead created with a value is manually owned until an offer exists;
+        // the offer sync then takes over only if the source is not MANUAL.
+        // Both fields derive from ONE parse so they cannot disagree — keying
+        // the source off the raw input instead would make a typed 0 set a
+        // value while leaving the source null.
+        estimatedValue: createdValue,
+        estimatedValueSource: createdValue === null ? null : "MANUAL",
+        expectedCloseDate: input.expectedCloseDate ?? null,
+        // A lead created directly in a closed stage needs its close date
+        // stamped, exactly as the two update paths do.
+        ...closeDatePatch(null, mappedStage, new Date()),
         type: input.type ?? [],
         notes: input.notes,
         meetingDate: input.meetingDate,
@@ -870,6 +941,11 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   const updateData: Prisma.LeadUpdateInput = {};
   const actingUserId = await resolveActingUserId();
 
+  // Read once, up front. Both the stage resolution below and the follow-up /
+  // meeting branches need the current row, and this used to be two separate
+  // findUnique calls that could disagree.
+  const existingLead = await prisma.lead.findUnique({ where: { id } });
+
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
   if (input.email !== undefined) updateData.email = input.email ?? "";
@@ -879,7 +955,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.secondaryPhone !== undefined) updateData.secondaryPhone = input.secondaryPhone;
   if (input.source !== undefined) updateData.source = input.source;
   if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
-  if (input.stage !== undefined) updateData.stage = mappedStage;
+  // NOTE: `stage` is deliberately NOT written here. The follow-up branches
+  // further down can also set it, so both inputs are resolved together after
+  // them and stamped once — see the resolveLeadStage call below.
   if (input.assignedId !== undefined) {
     const nextAssignedId = input.assignedId?.trim();
     updateData.assignedUser = nextAssignedId
@@ -887,13 +965,41 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       : { disconnect: true };
   }
   if (input.budget !== undefined) updateData.budget = input.budget;
+  // Deal economics. updateData is an explicit whitelist — new columns do not
+  // flow through on their own.
+  if (input.estimatedValue !== undefined) {
+    // coerceMoney, not `new Prisma.Decimal(...)` — Decimal THROWS on a
+    // non-numeric or whitespace-only string, which would reject the entire
+    // lead update (name, stage, notes and all) with a 500 rather than a
+    // field-level error. Zod rejects bad money at the API boundary; this is
+    // defence in depth for the paths that do not go through it.
+    updateData.estimatedValue = coerceMoney(input.estimatedValue);
+  }
+  if (input.estimatedValueSource !== undefined) {
+    updateData.estimatedValueSource = input.estimatedValueSource;
+  }
+  if (input.probabilityOverride !== undefined) {
+    updateData.probabilityOverride = input.probabilityOverride;
+  }
+  if (input.expectedCloseDate !== undefined) {
+    updateData.expectedCloseDate = input.expectedCloseDate;
+  }
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
   if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
-  if (input.meetingDate !== undefined) updateData.meetingDate = input.meetingDate;
+  // Setting a date reopens the task: a lead carries one meeting and one
+  // follow-up at a time, so a fresh date must not inherit the last one's
+  // completion stamp and show up already done.
+  if (input.meetingDate !== undefined) {
+    updateData.meetingDate = input.meetingDate;
+    if (input.meetingDate !== null) updateData.meetingCompletedAt = null;
+  }
   if (input.meetingTime !== undefined) updateData.meetingTime = input.meetingTime;
   if (input.meetingMode !== undefined) updateData.meetingMode = input.meetingMode;
-  if (input.followupDate !== undefined) updateData.followupDate = input.followupDate;
+  if (input.followupDate !== undefined) {
+    updateData.followupDate = input.followupDate;
+    if (input.followupDate !== null) updateData.followupCompletedAt = null;
+  }
   if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
   if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
   if (input.followupReminderSentAt !== undefined) updateData.followupReminderSentAt = input.followupReminderSentAt;
@@ -912,29 +1018,85 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     };
   }
 
-  const existingLead = await prisma.lead.findUnique({ where: { id } });
-
-  if (input.followupResponseOutcome === "yes") {
-    updateData.followupDate = null;
-    updateData.followupTime = null;
+  // Answering a follow-up closes the task. It used to null the date and write
+  // stage CONTACTED, and that stage write was the only record the software had
+  // that a follow-up had finished. It also cost a lead in negotiation 50 points
+  // for a call being answered. followupCompletedAt carries the fact now, and
+  // the date is kept so the tab can still show what was scheduled.
+  if (
+    input.followupResponseOutcome === "yes" ||
+    input.followupResponseOutcome === "notRequired"
+  ) {
+    updateData.followupCompletedAt = new Date();
     updateData.followupReminderSentAt = new Date();
-    if (existingLead?.stage === "IN_FOLLOW_UP") {
-      updateData.stage = "CONTACTED";
-    }
-  } else if (input.followupResponseOutcome === "notRequired") {
-    updateData.followupDate = null;
-    updateData.followupTime = null;
-    updateData.followupReminderSentAt = new Date();
-    if (existingLead?.stage === "IN_FOLLOW_UP") {
-      updateData.stage = "CONTACTED";
-    }
   } else if (input.followupResponseOutcome === "reschedule") {
     const nextFollowupDate = new Date();
     nextFollowupDate.setDate(nextFollowupDate.getDate() + 1);
     updateData.followupDate = nextFollowupDate;
     updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
     updateData.followupReminderSentAt = null;
-    updateData.stage = "IN_FOLLOW_UP";
+    updateData.followupCompletedAt = null;
+  }
+
+  // Single stage write. `stage` and `followupResponseOutcome` are independently
+  // optional on updateLeadSchema and both are exposed on the MCP surface, so
+  // they can arrive together; resolveLeadStage decides which wins. The
+  // close-date stamp is derived from the RESOLVED stage, never from the
+  // requested one, so the stage column and wonAt/lostAt can never describe two
+  // different transitions.
+  // Scheduling work advances an early lead into Discovery and does nothing
+  // else. Answering or clearing a task never moves the stage: that is the whole
+  // point of the split, and it is why "yes" is absent from this condition.
+  const taskScheduled =
+    input.followupResponseOutcome === "reschedule" ||
+    (input.followupDate !== undefined && input.followupDate !== null) ||
+    (input.meetingDate !== undefined && input.meetingDate !== null);
+
+  const resolvedStage = resolveLeadStage({
+    currentStage: existingLead?.stage ?? null,
+    requestedStage: mappedStage,
+    taskScheduled,
+  });
+  if (resolvedStage !== undefined) {
+    updateData.stage = resolvedStage;
+    Object.assign(
+      updateData,
+      closeDatePatch(existingLead?.stage ?? null, resolvedStage, new Date()),
+    );
+  }
+
+  // Reason enforcement. This mirrors the modal's check, which was the ONLY
+  // enforcement: the Zod schemas mark lostReason optional and nullable, so a
+  // direct PATCH, the MCP tool or any server-side caller could strand a lead in
+  // LOST/CANCELLED/DISQUALIFIED with no reason. Those rows land in the
+  // "Unknown" slice of the non-conversion charts, invisible to anyone auditing
+  // why work was lost.
+  //
+  // It fires on the two things this request can actually be blamed for:
+  //   1. moving a lead INTO a closed-unsuccessful stage, and
+  //   2. clearing the reason on a lead that is already in one.
+  //
+  // It deliberately does NOT fire on an unrelated edit to a lead that is
+  // already closed with no reason. Those rows predate the rule — staging has
+  // one today — and blocking every edit to them would make them permanently
+  // uneditable, including the edit that would supply the missing reason.
+  const effectiveStage = resolvedStage ?? existingLead?.stage;
+  if (effectiveStage && isClosedUnsuccessful(effectiveStage)) {
+    const enteringClosedStage =
+      resolvedStage !== undefined &&
+      !(existingLead && isClosedUnsuccessful(existingLead.stage));
+    const clearingReason =
+      input.lostReason !== undefined && !input.lostReason?.trim();
+
+    if (enteringClosedStage || clearingReason) {
+      const reason =
+        input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
+      if (!reason?.trim()) {
+        throw new LeadValidationError(
+          `Add a reason before moving this lead to ${stageDef(effectiveStage).label}.`,
+        );
+      }
+    }
   }
 
   if (input.meetingReviewOutcome === "no") {
@@ -951,7 +1113,13 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         ? [buildFollowupNotRequiredHistoryEntry()]
         : input.followupResponseOutcome === "reschedule"
           ? [buildFollowupRescheduledHistoryEntry(
-            (updateData.followupDate as Date | null | undefined)?.toISOString().slice(0, 10) ?? existingLead?.followupDate?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+            // Sydney, so the history line agrees with the date the operator
+            // picked rather than reading a day earlier all afternoon.
+            sydneyDateOnly(
+              (updateData.followupDate as Date | null | undefined) ??
+                existingLead?.followupDate ??
+                new Date(),
+            ),
             String(updateData.followupTime ?? existingLead?.followupTime ?? ""),
           )]
           : [];
@@ -972,8 +1140,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         action: "Lead note mention added",
         detail: annotation.comment || `Selected text: ${annotation.selectedText}`,
         type: "system" as const,
-        date: now.toISOString().slice(0, 10),
-        time: now.toTimeString().slice(0, 5),
+        date: sydneyDateOnly(now),
+        time: sydneyTimeOnly(now),
       };
     });
 
@@ -989,7 +1157,25 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);
-  const updated = await prisma.lead.update({
+  // Hand the lead's outstanding work over IN THE SAME TRANSACTION as the lead
+  // write. Split across two round trips, a failure on the second left the lead
+  // showing a new owner while its open tasks still pointed at the old one and
+  // still emailed them — which is the exact bug this reassignment exists to
+  // fix, reintroduced in a narrower window.
+  //
+  // Only open tasks move: a completed task records who actually did the work.
+  const reassignOpenTasks =
+    input.assignedId !== undefined
+      ? [
+          prisma.leadTask.updateMany({
+            where: { leadId: id, completedAt: null },
+            data: { assignedId: input.assignedId?.trim() || null },
+          }),
+        ]
+      : [];
+
+  const [updated] = await prisma.$transaction([
+    prisma.lead.update({
     where: { id },
     data: updateData,
     include: {
@@ -1000,7 +1186,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       emails: { orderBy: { createdAt: "desc" } },
       files: true
     },
-  });
+    }),
+    ...reassignOpenTasks,
+  ]);
 
   for (const annotation of annotationInputs) {
     try {
@@ -1089,7 +1277,24 @@ export async function getLeadsStats(): Promise<LeadsStats> {
       COUNT(*) FILTER (WHERE stage = 'QUOTED') AS quoted,
       COUNT(*) FILTER (WHERE stage IN ('WON', 'CONVERTED')) AS won,
       COUNT(*) FILTER (WHERE stage IN ('LOST', 'CANCELLED', 'DISQUALIFIED')) AS lost,
-      COUNT(*) FILTER (WHERE stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED')) AS "pendingFollowup"
+      -- Open tasks, counted from LeadTask.
+      --
+      -- This read Lead.followupDate and Lead.meetingDate, the columns the task
+      -- table replaced. Nothing writes them any more, so the card was frozen at
+      -- whatever the backfill left while the Tasks tab grew: 15 against 34 on
+      -- staging, on the same screen. Every task created from here would have
+      -- widened the gap.
+      --
+      -- Counted as TASKS, not leads. They coincide today because no lead holds
+      -- two, but four task types exist precisely so a lead can have a call and
+      -- a meeting at once.
+      (
+        SELECT COUNT(*) FROM "LeadTask" t
+        JOIN "Lead" tl ON tl.id = t."leadId"
+        WHERE t."completedAt" IS NULL
+          AND tl."isArchived" = false
+          AND tl.stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')
+      ) AS "pendingFollowup"
     FROM "Lead"
     WHERE "isArchived" = false
   `;
@@ -1116,6 +1321,17 @@ export async function getFollowupStats(): Promise<FollowupStats> {
   const todayUTC = fromZonedTime(todayStart, timeZone);
   const tomorrowUTC = fromZonedTime(tomorrowStart, timeZone);
 
+  // A Prisma.sql fragment, not a plain string: `${x}` in a $queryRaw template
+  // becomes a bound parameter, so a bare string would be sent as a value and
+  // the query would fail rather than filter.
+  //
+  // These counts used to key off stage IN ('IN_FOLLOW_UP', 'MEETING_SCHEDULED').
+  // Scheduled work is a task now, so the filter is the date plus "not yet
+  // completed", and the stage only decides whether the lead is still live at
+  // all. Without this clause the 13 closed and won leads on production that
+  // carry stale dates would count as outstanding work.
+  const OPEN_STAGES = Prisma.sql`stage NOT IN ('CONVERTED', 'WON', 'LOST', 'CANCELLED', 'DISQUALIFIED')`;
+
   const [stats] = await prisma.$queryRaw<
     {
       totalFollowUps: bigint;
@@ -1127,12 +1343,12 @@ export async function getFollowupStats(): Promise<FollowupStats> {
     }[]
   >`
     SELECT
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP') AS "totalFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
-      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND stage = 'IN_FOLLOW_UP' AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED') AS "totalMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
-      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND stage = 'MEETING_SCHEDULED' AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" <= ${todayUTC}) AS "pendingFollowUps",
+      COUNT(*) FILTER (WHERE "followupDate" IS NOT NULL AND "followupCompletedAt" IS NULL AND ${OPEN_STAGES} AND "followupDate" >= ${tomorrowUTC}) AS "upcomingFollowUps",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES}) AS "totalMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" < ${todayUTC}) AS "pendingMeetings",
+      COUNT(*) FILTER (WHERE "meetingDate" IS NOT NULL AND "meetingCompletedAt" IS NULL AND ${OPEN_STAGES} AND "meetingDate" >= ${tomorrowUTC}) AS "upcomingMeetings"
     FROM "Lead"
     WHERE "isArchived" = false
   `;
@@ -1252,12 +1468,87 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     value: Number(row.value),
   }));
 
+  const now = new Date();
+  const leadsForMetrics = await fetchLeadsForMetrics();
+  const current = fyQuarterOf(now);
+
   return {
     sourceData,
     conversionData,
     monthlyTrend,
     lostReasons,
+    pipelineMetrics: serializeMetrics(computePipelineMetrics(leadsForMetrics, now)),
+    forecast: serializeForecast(
+      computeForecast(leadsForMetrics, current.fy, current.quarter),
+    ),
   };
+}
+
+/* ── Pipeline metrics & forecast ──────────────────────────────────────
+ *
+ * These MUST stay uncached. lib/data/leads.ts has no caching primitives and
+ * must not gain any: under cacheComponents, a 'use cache' fetcher called in a
+ * page body prefills at `next build` and fails CI with ETIMEDOUT.
+ */
+
+const PIPELINE_SELECT = {
+  id: true,
+  stage: true,
+  estimatedValue: true,
+  probabilityOverride: true,
+  expectedCloseDate: true,
+  wonAt: true,
+  lostAt: true,
+} as const;
+
+async function fetchLeadsForMetrics(): Promise<LeadForMetrics[]> {
+  // The isArchived filter matches every other lead aggregate in this file.
+  // Soft-deleted leads are invisible everywhere else and must not inflate
+  // pipeline value here.
+  const rows = await prisma.lead.findMany({
+    where: { isArchived: false },
+    select: PIPELINE_SELECT,
+  });
+  return rows.map((row) => ({
+    ...row,
+    estimatedValue: row.estimatedValue?.toString() ?? null,
+  }));
+}
+
+/** Decimal cannot cross to a Client Component — stringify at the boundary. */
+function serializeMetrics(metrics: PipelineMetrics) {
+  return {
+    ...metrics,
+    totalValue: metrics.totalValue.toString(),
+    weightedValue: metrics.weightedValue.toString(),
+    byStage: metrics.byStage.map((bucket) => ({
+      ...bucket,
+      total: bucket.total.toString(),
+      weighted: bucket.weighted.toString(),
+    })),
+  };
+}
+
+function serializeForecast(forecast: ForecastResult) {
+  return {
+    ...forecast,
+    expectedValue: forecast.expectedValue.toString(),
+    weightedValue: forecast.weightedValue.toString(),
+    wonValue: forecast.wonValue.toString(),
+    bankedValue: forecast.bankedValue.toString(),
+  };
+}
+
+export type SafePipelineMetrics = ReturnType<typeof serializeMetrics>;
+export type SafeForecast = ReturnType<typeof serializeForecast>;
+
+/** Forecast for an arbitrary FY quarter — backs the quarter selector. */
+export async function getForecast(
+  fy: number,
+  quarter: FyQuarter,
+): Promise<SafeForecast> {
+  const leads = await fetchLeadsForMetrics();
+  return serializeForecast(computeForecast(leads, fy, quarter));
 }
 
 /**

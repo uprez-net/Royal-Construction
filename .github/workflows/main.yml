@@ -100,6 +100,16 @@ jobs:
       - name: Run typecheck
         run: pnpm typecheck
 
+      # Until now this workflow ran no tests at all despite its name, so every
+      # test in tests/ was opt-in and gated nothing. `test:unit` is the whole
+      # suite minus tests/offer/offer-document-print-pages.test.ts, which
+      # launches real headless Chromium, takes ~60s and has never executed in
+      # CI. Folding that one in is a deliberate follow-up, not a side effect of
+      # turning tests on: it fails rather than skips by design, so a launch
+      # problem here would block unrelated PRs.
+      - name: Run unit tests
+        run: pnpm test:unit
+
       - name: Build project (must not query the DB)
         run: pnpm build
 

@@ -4,12 +4,15 @@ import { withWorkflow } from "workflow/next";
 const nextConfig: NextConfig = {
   reactCompiler: true,
   cacheComponents: true,
+  // Hide the bottom-left dev badge ("N Issues") — it overlaps workflow UI in dev.
+  devIndicators: false,
   // docusign-esign ships UMD/AMD wrappers Turbopack can't parse (TP1200);
   // resolve it with native require at runtime instead, and suppress the
   // parse issue its externals-tracing pass reports during `next build`
   // (the SDK still loads fine at runtime via require).
   serverExternalPackages: ["docusign-esign"],
   turbopack: {
+    root: process.cwd(),
     ignoreIssue: [{ path: "**/node_modules/**/docusign-esign/**" }],
   },
   images: {

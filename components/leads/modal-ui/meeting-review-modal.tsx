@@ -19,6 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { Lead } from "@/lib/leads/types";
 import { fetchLead, updateLead } from "@/lib/leads/leads-service";
+import { completeTask, fetchOpenTasks } from "@/lib/leads/task-service";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
 import {
   buildMeetingDidNotTakePlaceHistoryEntry,
   buildMeetingReviewedHistoryEntry,
@@ -26,13 +29,20 @@ import {
 
 interface MeetingReviewModalProps {
   leadId: number;
+  /**
+   * The meeting being reviewed. Optional because the dialog is also reachable
+   * from a notification, which names a lead and not a task.
+   */
+  taskId?: number;
   onClose: () => void;
 }
 
 export function MeetingReviewModal({
   leadId,
+  taskId,
   onClose,
 }: MeetingReviewModalProps) {
+  const dispatch = useAppDispatch();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -79,6 +89,16 @@ export function MeetingReviewModal({
     setSaving(true);
 
     try {
+      // Order matters: the write carrying the CONTENT goes first.
+      //
+      // These are two requests and cannot be one transaction from the browser
+      // — the same constraint the follow-up dialog documents. What can be
+      // chosen is which half survives a failure between them. Closing the
+      // meeting first meant a failed updateLead discarded the discussion notes
+      // and the build scope while still marking the meeting done, with nothing
+      // left on screen to retype them from. This way round, a failure leaves
+      // the notes saved and the meeting still open — visible, and recoverable
+      // with the Done button.
       const updated = await updateLead(
         lead.id,
         tookPlace
@@ -98,6 +118,39 @@ export function MeetingReviewModal({
       );
 
       if (updated) {
+        // Close the meeting itself. This dialog recorded the outcome on the
+        // lead and left the task open, so every meeting ever reviewed stayed
+        // on the Tasks tab and in the "Open tasks" count for ever — a reload
+        // did not clear it, because nothing had actually closed it.
+        //
+        // Closed either way. "Didn't happen" is still an outcome: the booked
+        // meeting is finished with, and the history entry says what happened,
+        // so a replacement gets booked deliberately rather than by leaving an
+        // overdue row lying around.
+        // Scoped, for the same reason the follow-up dialog is: filtering the
+        // capped org-wide list could find no meeting on a lead that has one,
+        // and "Done" would then close nothing while saying it had.
+        const openMeetings = (await fetchOpenTasks({ leadIds: [lead.id] })).filter(
+          (t) => t.type === "MEETING",
+        );
+        // Exactly one meeting is closed, never a set.
+        //
+        // With a task id this is the row that was clicked. Without one —
+        // opened from a notification, which names only the lead — it is the
+        // earliest due, which is the meeting the reminder was about. Closing
+        // every open meeting would cancel bookings this dialog never
+        // mentioned; fetchOpenTasks already returns them soonest-first.
+        const meeting =
+          taskId === undefined
+            ? openMeetings[0]
+            : openMeetings.find((t) => t.id === taskId);
+        if (meeting) {
+          await completeTask(meeting.id);
+        }
+
+        // router.refresh() only re-renders server components; the Tasks tab
+        // holds its rows in client state, so it needs telling directly.
+        dispatch(bumpLeadTasks());
         router.refresh();
         onClose();
       }

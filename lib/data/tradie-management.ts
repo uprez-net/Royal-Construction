@@ -51,6 +51,7 @@ export async function createTradie(input: CreateTradieInput): Promise<TradieRow>
             trade: res.trade,
             isFavourite: res.isFavourite,
             lastQuotedPrice: res.lastQuotedPrice ? res.lastQuotedPrice.toString() : null,
+            lastQuotedPriceUnit: res.lastQuotedPriceUnit,
             rating: res.rating ? res.rating.toString() : null,
             jobsCompleted: 0,
             incidentCount: {
@@ -119,6 +120,7 @@ export async function getTradieById(tradieId: string): Promise<TradieDetails | n
         return {
             ...tradieFields,
             lastQuotedPrice: tradie.lastQuotedPrice?.toString(),
+            lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
             rating: tradie.rating?.toString(),
             jobsCompleted: schedules.length,
             reviews: ratings.map(r => ({
@@ -189,6 +191,7 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
                 requestedBy: user.id,
                 updationData: {
                     newHourlyRate: input.newHourlyRate,
+                    newPriceUnit: input.newPriceUnit,
                 } satisfies PriceUpdateJsonPayload
             },
             select: {
@@ -475,6 +478,7 @@ export async function getTradieGroupedByCategory(): Promise<TradiesByCategory[]>
                 trade: tradie.trade,
                 isFavourite: tradie.isFavourite,
                 lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
+            lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
                 rating: tradie.rating?.toString() ?? null,
 
                 jobsCompleted: tradie.schedules.filter(
@@ -619,6 +623,7 @@ export async function fetchFilteredTradies(input: TradieTableQuery): Promise<Tra
             return {
                 ...tradie,
                 lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
+            lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
                 rating: tradie.rating?.toString() ?? null,
                 jobsCompleted: tradie.schedules.filter(s => s.status === "COMPLETED").length,
                 incidentCount: {
@@ -863,6 +868,7 @@ export async function exportTradies() {
         return tradies.map(({ schedules, incidents, ...tradie }) => ({
             ...tradie,
             lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
+            lastQuotedPriceUnit: tradie.lastQuotedPriceUnit,
             rating: tradie.rating?.toString() ?? null,
             scheduledJobs: schedules.filter(s => ["CONFIRMED", "PENDING"].includes(s.status)).length,
             jobsCompleted: schedules.filter(s => s.status === "COMPLETED").length,

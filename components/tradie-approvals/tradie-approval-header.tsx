@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Trash2,
   CalendarDays,
+  CalendarX,
   CheckCircle,
 } from "lucide-react";
 import { KPIListItem, MetricCard } from "../common/metric-card";
@@ -60,6 +61,15 @@ export function TradieApprovalKPI() {
         iconTone: "bg-purple-600",
     },
     {
+        title: "Schedule Removals",
+        dataPoint: {
+          total: kpiData.scheduleDeletionCount,
+          trendDelta: 0, // Placeholder for trend delta calculation
+        },
+        Icon: CalendarX,
+        iconTone: "bg-rose-600",
+    },
+    {
         title: "Resolved Approvals",
         dataPoint: {
           total: kpiData.resolvedCount.accepted + kpiData.resolvedCount.rejected,
@@ -71,7 +81,7 @@ export function TradieApprovalKPI() {
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
       {allKPIs.map((kpi, index) => (
         <MetricCard
           key={index}

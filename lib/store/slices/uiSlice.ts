@@ -10,12 +10,14 @@ export type ModalType =
   | "createProject"
   | "tradieReminder"
   | "tradieScheduleDetails"
+  | "deleteTradieSchedule"
   | "projectDetail"
   | "addMaterial"
   | "viewPicture"
   | "addMilestone"
   | "addMilestonePicture"
   | "updateMilestoneStatus"
+  | "insuranceClaimDates"
   | "createOfferFile"
   | "createLead"
   | "followUpPrompt"
@@ -30,6 +32,7 @@ export type ModalType =
   | "adminApproval"
   | "approvalDetails"
   | "rejectTradieApprovals"
+  | "previewFile"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;
@@ -39,6 +42,16 @@ export interface UIState {
     type: ModalType;
     payload: UIModalPayload;
   };
+  /**
+   * Bumped whenever a task is closed, reopened or created from somewhere the
+   * Tasks tab cannot reach — which is both review dialogs, since they are
+   * rendered by the modal manager and have no handle on the tab's state.
+   *
+   * They called router.refresh(), which re-renders server components and can
+   * do nothing for a list held in client useState. The row stayed on screen
+   * until a manual reload, so a completed task still looked outstanding.
+   */
+  leadTasksVersion: number;
   projectFilters: {
     status: string | null;
     view: "grid" | "list";
@@ -59,9 +72,10 @@ const initialState: UIState = {
     type: null,
     payload: null,
   },
+  leadTasksVersion: 0,
   projectFilters: {
     status: null,
-    view: "grid",
+    view: "list",
     searchQuery: "",
     sortBy: "name",
     sortOrder: "asc",
@@ -85,6 +99,10 @@ const uiSlice = createSlice({
     closeModal(state) {
       state.modal.type = null;
       state.modal.payload = null;
+    },
+    /** Tell every open task list that the tasks it is showing have changed. */
+    bumpLeadTasks(state) {
+      state.leadTasksVersion += 1;
     },
     setProjectFilter(state, action: PayloadAction<{ status: string | null }>) {
       state.projectFilters.status = action.payload.status;
@@ -119,6 +137,7 @@ const uiSlice = createSlice({
 export const {
   openModal,
   closeModal,
+  bumpLeadTasks,
   setProjectFilter,
   setProjectView,
   setProjectSearchQuery,

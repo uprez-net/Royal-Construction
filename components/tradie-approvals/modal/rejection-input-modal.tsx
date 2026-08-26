@@ -6,6 +6,7 @@ import {
   PriceUpdateJsonPayload,
   SafeTradieApproval,
   ScheduleApprovalJsonPayload,
+  ScheduleDeletionJsonPayload,
 } from "@/types/tradie";
 import {
   Dialog,
@@ -32,6 +33,8 @@ import {
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { formatQuotedPrice } from "@/utils/calculations";
+import { rateCurrency } from "@/utils/formatters";
 
 interface TradieApprovalRejectionModalProps {
   open: boolean;
@@ -61,8 +64,19 @@ function ApprovalDetails({ approval }: { approval: SafeTradieApproval }) {
       const data = approval.updationData as PriceUpdateJsonPayload;
       return (
         <p>
-          New hourly rate requested:
-          <strong> ${data?.newHourlyRate}/hr</strong>
+          New price requested:
+          <strong>
+            {" "}
+            {data?.newHourlyRate != null
+              ? formatQuotedPrice(
+                  data.newHourlyRate,
+                  // Requests raised before the basis was captured are hourly by
+                  // definition — that was the only behaviour at the time.
+                  data.newPriceUnit ?? "HOURLY",
+                  rateCurrency.format,
+                )
+              : "—"}
+          </strong>
         </p>
       );
     }
@@ -74,10 +88,26 @@ function ApprovalDetails({ approval }: { approval: SafeTradieApproval }) {
           <p>Project: {data?.projectName}</p>
           <p>Milestone: {data?.milestoneName}</p>
           <p>Duration: {data?.durationDays} days</p>
-          <p>Cost: ${data?.cost}</p>
+          <p>Cost: {data?.cost}</p>
         </div>
       );
     }
+    case "SCHEDULE_DELETION": {
+      const data = approval.updationData as ScheduleDeletionJsonPayload;
+      return (
+        <div className="space-y-1 text-sm">
+          <p>Project: {data?.projectName}</p>
+          <p>Milestone: {data?.milestoneName}</p>
+          <p>Booked for: {data?.scheduledDate}</p>
+          <p>Duration: {data?.durationDays} days</p>
+          <p>Cost: {data?.cost}</p>
+          <p className="text-muted-foreground">
+            Rejecting leaves this booking in place.
+          </p>
+        </div>
+      );
+    }
+
     case "INCIDENT_RESOLUTION": {
       const data = approval.updationData as IncidentReportJsonPayload;
       return (

@@ -3,6 +3,7 @@ import { LeadStage as DBLeadStage, RunStatus, LeadEmails } from "@prisma/client"
 export type LeadStage =
   | 'New'
   | 'Contacted'
+  | 'Discovery'
   | 'Qualified'
   | 'Quoted'
   | 'Negotiating'
@@ -103,7 +104,14 @@ export interface Lead {
     name: string;
     email: string;
   } | null;
+  /** Free-text note only. `estimatedValue` is the source of truth for KPIs. */
   budget: BudgetRange | string;
+  /** Money as string — Decimal cannot cross to a Client Component. */
+  estimatedValue?: string | null;
+  estimatedValueSource?: "OFFER" | "MANUAL" | null;
+  /** Null inherits the stage default (lib/leads/pipeline-stages.ts). */
+  probabilityOverride?: number | null;
+  expectedCloseDate?: string | null;
   type: string;
   notes: string;
   notesDoc?: LeadRichTextDocument | null;
@@ -116,6 +124,9 @@ export interface Lead {
   followupNotes: string;
   followupReminderSentAt?: string | null;
   meetingReminderSentAt?: string | null;
+  /** Set when the task was closed out. The Follow-ups tab hides completed work. */
+  followupCompletedAt?: string | null;
+  meetingCompletedAt?: string | null;
   lostReason?: string;
   history: HistoryItem[];
   created: string;
@@ -155,6 +166,7 @@ export interface EmailTemplate {
 export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   New: DBLeadStage.NEW,
   Contacted: DBLeadStage.CONTACTED,
+  Discovery: DBLeadStage.DISCOVERY,
   Qualified: DBLeadStage.QUALIFIED,
   Quoted: DBLeadStage.QUOTED,
   Negotiating: DBLeadStage.NEGOTIATING,
@@ -167,3 +179,54 @@ export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   Cancelled: DBLeadStage.CANCELLED,
   Disqualified: DBLeadStage.DISQUALIFIED
 };
+
+/**
+ * Filter labels that are not stages but may still arrive in a bookmarked URL
+ * or a saved MCP call.
+ *
+ * Without this an unknown label maps to undefined, lib/data/leads.ts strips
+ * undefined out of the status array, the "is the array non-empty" guard then
+ * skips the stage filter entirely, and the caller gets EVERY non-archived lead
+ * back instead of an error — a wrong answer that looks like a working one.
+ */
+export const LEGACY_LEAD_STAGE_FILTER_ALIASES: Record<string, DBLeadStage> = {};
+
+/**
+ * Resolve a filter label to a DB stage, tolerating retired labels.
+ *
+ * `Object.hasOwn`, not a bare lookup: the label comes straight off a query
+ * string, and a plain object inherits from Object.prototype, so `toString`,
+ * `constructor` and `valueOf` all "resolve" to functions. Those would sail
+ * past the unknown-label guard and end up in a Prisma `where` clause.
+ */
+export function resolveLeadStageFilter(label: string): DBLeadStage | undefined {
+  if (Object.hasOwn(LeadStageToLeadStageDBMapping, label)) {
+    return LeadStageToLeadStageDBMapping[label as LeadStage];
+  }
+  if (Object.hasOwn(LEGACY_LEAD_STAGE_FILTER_ALIASES, label)) {
+    return LEGACY_LEAD_STAGE_FILTER_ALIASES[label];
+  }
+  return undefined;
+}
+
+/**
+ * Parse a comma-separated `status` query param into DB stages, reporting any
+ * label that did not resolve.
+ *
+ * Callers must treat a non-empty `unknown` as a bad request. Dropping unknown
+ * labels silently is what turns `?status=Garbage` into an unfiltered read of
+ * every lead in the table.
+ */
+export function parseLeadStageFilter(raw: string): {
+  stages: DBLeadStage[];
+  unknown: string[];
+} {
+  const stages: DBLeadStage[] = [];
+  const unknown: string[] = [];
+  for (const label of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const resolved = resolveLeadStageFilter(label);
+    if (resolved) stages.push(resolved);
+    else unknown.push(label);
+  }
+  return { stages, unknown };
+}

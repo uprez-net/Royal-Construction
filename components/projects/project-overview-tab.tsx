@@ -4,6 +4,7 @@ import { ArrowRightCircle, CalendarCheck, MapPin, Phone } from "lucide-react";
 
 import { ProjectWithStats } from "@/types/project";
 import { compactCurrency, dateFormat } from "@/utils/formatters";
+import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { Button } from "../ui/button";
 import type { TabType } from "./project-detail-modal";
 import { formatStatus, projectStatusConfig } from "./project-status";
@@ -43,7 +44,14 @@ export function OverviewTab({
       ? Math.round((spent / budget) * 100)
       : null;
   const remaining = budget !== null && spent !== null ? budget - spent : null;
-  const isOverBudget = remaining !== null && remaining < 0;
+  const status =
+    budget !== null && spent !== null ? getBudgetStatus(budget, spent) : null;
+  const isOverBudget = status === "OVER_BUDGET";
+  const isNotStarted = status === "NOT_STARTED";
+  // With a budget recorded, "no spend yet" means all of it is still remaining.
+  // The tile used to show "—" there, hiding a figure it could state exactly.
+  // Null only when there is no budget to draw down from.
+  const remainingToShow = budget !== null && budget > 0 ? remaining : null;
 
   const progressPercent = Math.min(
     100,
@@ -87,15 +95,25 @@ export function OverviewTab({
 
           <div className="rounded-lg bg-muted p-4">
             <p className="text-xs font-medium text-muted-foreground">
-              {isOverBudget ? "Over budget" : "Remaining"}
+              {isOverBudget
+                ? "Over budget"
+                : remainingToShow !== null
+                  ? "Remaining"
+                  : budget !== null && budget > 0
+                    ? "No spend recorded"
+                    : "No budget recorded"}
             </p>
             <p
               className={`mt-1 font-mono text-lg font-semibold tabular-nums ${
-                isOverBudget ? "text-destructive-ink" : "text-success-ink"
+                isOverBudget
+                  ? "text-destructive-ink"
+                  : isNotStarted
+                    ? "text-foreground"
+                    : "text-success-ink"
               }`}
             >
-              {remaining !== null
-                ? compactCurrency.format(Math.abs(remaining))
+              {remainingToShow !== null
+                ? compactCurrency.format(Math.abs(remainingToShow))
                 : "—"}
             </p>
           </div>

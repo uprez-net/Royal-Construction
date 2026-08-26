@@ -41,7 +41,6 @@ import TableView from "./views/table-view";
 import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
-import { LeadNotificationCard } from "./lead-notification-card";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -55,7 +54,6 @@ export default function Leads() {
   const {
     leads,
     stats,
-    followupStats,
     analyticsData,
     pageInfo,
     loading,
@@ -92,6 +90,20 @@ export default function Leads() {
   const statusParam =
     activeMetric === "total" ? "total" : (activeMetric ?? undefined);
 
+  /**
+   * The "Open tasks" card is not a stage filter.
+   *
+   * It means "leads carrying at least one open task", which no stage list can
+   * express — resolveStatusFilter maps "pendingFollowup" to an empty array,
+   * i.e. no filter at all. It was passed only by the click that set it, so the
+   * search/filter effect immediately fired a second, unfiltered request for
+   * the same click and normally landed last: the card said 14 and the table
+   * showed every lead in the business. Paging then dropped it for good.
+   * Derived from the active metric so it travels with every request.
+   */
+  const hasOpenTaskParam =
+    activeMetric === "pendingFollowup" ? true : undefined;
+
   /* ── Search + filter effect ── */
   useEffect(() => {
     const q = debouncedSearch.trim();
@@ -109,9 +121,16 @@ export default function Leads() {
                 .join(",") || undefined,
         filterTiming: activeFilterTiming,
         isArchived: statusParam?.includes("Archived") ? true : undefined,
+        hasOpenTask: hasOpenTaskParam,
       });
     }
-  }, [debouncedSearch, refreshLeadsData, statusParam, activeFilterTiming]);
+  }, [
+    debouncedSearch,
+    refreshLeadsData,
+    statusParam,
+    activeFilterTiming,
+    hasOpenTaskParam,
+  ]);
 
   /* ── URL params on mount ── */
   useEffect(() => {
@@ -130,9 +149,14 @@ export default function Leads() {
           validatedStatus = decodedStatus;
         } else {
           const parts = decodedStatus.split(",");
-          const allValid = parts.every(
-            (part) => leadStatusSchema.safeParse(part.trim()).success,
-          );
+          const allValid = parts.every((part) => {
+            const label = part.trim();
+            // "Archived" is a chip but not a stage, and "Converted" is a stage
+            // that was retired — a bookmarked ?status=Converted must keep
+            // working rather than silently falling back to no filter.
+            if (label === "Archived" || label === "Converted") return true;
+            return leadStatusSchema.safeParse(label).success;
+          });
           if (allValid) {
             validatedStatus = decodedStatus;
           }
@@ -140,10 +164,19 @@ export default function Leads() {
       }
 
       Promise.resolve().then(() => {
-        const params: { status?: string; query?: string } = {};
+        const params: {
+          status?: string;
+          query?: string;
+          hasOpenTask?: boolean;
+        } = {};
         if (validatedStatus) {
           setActiveMetric(validatedStatus);
           params.status = validatedStatus;
+          // Same rule as every other request: "pendingFollowup" is not a stage
+          // and needs the open-task filter travelling with it. Without this a
+          // bookmarked ?status=pendingFollowup loaded every lead first and
+          // raced the filtered request the metric effect fires next.
+          if (validatedStatus === "pendingFollowup") params.hasOpenTask = true;
         }
         if (decodedQuery && decodedQuery.trim().length > 0) {
           const query = decodedQuery.trim();
@@ -165,11 +198,7 @@ export default function Leads() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     if (tab === "followups") {
-      refreshLeadsData({
-        page: 1,
-        limit: 50,
-        status: ["Meeting Scheduled", "In Follow-up"].join(","),
-      });
+      refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
     } else if (tab === "table") {
       refreshLeadsData({ page: 1, limit: 10 });
     }
@@ -191,6 +220,7 @@ export default function Leads() {
       filterTiming: activeFilterTiming,
       query: debouncedSearch.trim() || undefined,
       isArchived: metric?.includes("Archived") ? true : undefined,
+      hasOpenTask: metric === "pendingFollowup" ? true : undefined,
     });
   };
 
@@ -202,6 +232,7 @@ export default function Leads() {
       status: statusParam,
       filterTiming,
       query: debouncedSearch.trim() || undefined,
+      hasOpenTask: hasOpenTaskParam,
     });
   };
 
@@ -213,6 +244,7 @@ export default function Leads() {
         query: searchTerm,
         status: statusParam,
         filterTiming: activeFilterTiming,
+        hasOpenTask: hasOpenTaskParam,
       });
     },
     [
@@ -221,6 +253,7 @@ export default function Leads() {
       pageInfo.limit,
       searchTerm,
       activeFilterTiming,
+      hasOpenTaskParam,
     ],
   );
 
@@ -392,9 +425,9 @@ export default function Leads() {
               active={activeMetric === "converted"}
             />
             <LeadMetricCard
-              label="Pending Follow-up"
+              label="Open tasks"
               value={String(stats.pendingFollowup)}
-              note="Leads awaiting next action"
+              note="Calls, emails and meetings still open"
               tone="warning"
               icon={Clock}
               onClick={() => handleMetricClick("pendingFollowup")}
@@ -411,7 +444,6 @@ export default function Leads() {
             />
           </div>
 
-          <LeadNotificationCard />
         </>
       )}
 
@@ -420,8 +452,8 @@ export default function Leads() {
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
           {(
             [
-              { key: "table" as TabType, label: "Table View", Icon: Table2 },
-              { key: "followups" as TabType, label: "Follow-ups", Icon: Clock },
+              { key: "table" as TabType, label: "Leads", Icon: Table2 },
+              { key: "followups" as TabType, label: "Tasks", Icon: Clock },
               {
                 key: "analytics" as TabType,
                 label: "Analytics",
@@ -447,7 +479,7 @@ export default function Leads() {
             </button>
           ))}
 
-          {!loading && (
+          {!loading && activeTab === "table" && (
             <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
               <Select
                 value={activeFilterTiming}
@@ -509,7 +541,6 @@ export default function Leads() {
                 <FollowupsView
                   loading={loadingLeads}
                   leads={leads}
-                  followupStats={followupStats}
                   onLeadUpdate={updateLeadInList}
                   onLeadDelete={removeLeadFromList}
                   showToast={showToast}
@@ -518,7 +549,7 @@ export default function Leads() {
               {activeTab === "analytics" && (
                 <AnalyticsView analytics={analyticsData} />
               )}
-              {activeTab !== "analytics" && (
+              {activeTab === "table" && (
                 <LeadPagination
                   leads={{
                     items: leads,

@@ -14,7 +14,10 @@ import {
   type ProjectUploadRecord,
   type ProjectWithStats,
   type SafeMilestone,
+  type BudgetSummary,
+  TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
+import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import type { File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
@@ -388,6 +391,17 @@ const projectsSlice = createSlice({
         chartRange: action.payload.range,
       };
     },
+    updateProjectTradieSchedule(state, action: PayloadAction<{ projectId: string; scheduleId: string; update: Partial<TradieScheduleWithTradieAndMilestone> }>) {
+      if (state.activeProject?.id === action.payload.projectId) {
+        const scheduleIndex = state.activeProject.tradieSchedules.findIndex((s) => s.id === action.payload.scheduleId);
+        if (scheduleIndex !== -1) {
+          state.activeProject.tradieSchedules[scheduleIndex] = {
+            ...state.activeProject.tradieSchedules[scheduleIndex],
+            ...action.payload.update,
+          };
+        }
+      }
+    },
     resetProjectDetailUiState(state, action: PayloadAction<string>) {
       if (action.payload === state.activeProject?.id) {
         state.activeProject = null;
@@ -479,6 +493,7 @@ const projectsSlice = createSlice({
             tradie: {
               name: schedule.tradieName,
               id: schedule.tradieId,
+              lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
               createdAt: new Date(),
               updatedAt: new Date(),
               email: schedule.contact.email,
@@ -525,6 +540,7 @@ const projectsSlice = createSlice({
               tradie: {
                 name: schedule.tradieName,
                 id: schedule.tradieId,
+                lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 email: schedule.contact.email,
@@ -678,6 +694,7 @@ export const {
   resetProjectDetailUiState,
   resetProjects,
   appendFileToProject,
+  updateProjectTradieSchedule,
 } = projectsSlice.actions;
 
 export const selectProjectsState = (state: RootState) => state.projects;
@@ -690,7 +707,7 @@ export const selectProjectDetailUiState = (projectId: string) =>
 export const selectProjectUploadQueue = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => projectsState.uploadsByProjectId[projectId] ?? {});
 
-export const selectActiveProjectBudgetSummary = createSelector(selectProjectsState, (projectsState) => {
+export const selectActiveProjectBudgetSummary = createSelector(selectProjectsState, (projectsState): BudgetSummary | null => {
   const project = projectsState.activeProject;
 
   if (!project) {
@@ -707,6 +724,7 @@ export const selectActiveProjectBudgetSummary = createSelector(selectProjectsSta
   const variance = totalBudget - spent;
   const remaining = Math.max(variance, 0);
   const spentPercent = totalBudget > 0 ? Math.round((spent / totalBudget) * 100) : 0;
+  const status = getBudgetStatus(totalBudget, spent);
 
   return {
     totalBudget,
@@ -714,6 +732,7 @@ export const selectActiveProjectBudgetSummary = createSelector(selectProjectsSta
     remaining,
     variance,
     spentPercent,
+    status,
   };
 });
 

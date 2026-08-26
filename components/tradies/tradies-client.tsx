@@ -658,6 +658,7 @@ export function TradiesClient({
                           id: item.id,
                           tradieId: "tradieId",
                           tradieName: item.tradieName,
+                          lastQuotedPriceUnit: item.lastQuotedPriceUnit,
                           tradeType: item.tradeType,
                           projectId: "item.projectId",
                           projectName: item.projectName,

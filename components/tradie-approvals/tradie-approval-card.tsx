@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   Calendar,
+  CalendarX,
   Check,
   Clock3,
   Loader2,
@@ -69,6 +70,13 @@ const approvalConfig = {
     icon: Calendar,
     badgeClass:
       "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300",
+  },
+
+  [TradieApprovalActionType.SCHEDULE_DELETION]: {
+    label: "Schedule Removal",
+    icon: CalendarX,
+    badgeClass:
+      "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300",
   },
 };
 

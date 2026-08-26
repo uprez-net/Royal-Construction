@@ -1,7 +1,5 @@
 import {
   CalendarCheck2,
-  Bell,
-  Wrench,
   Plus,
   DollarSign,
   ListChecks,
@@ -9,8 +7,6 @@ import {
   Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DonutChartCard } from "@/components/charts/donut-chart-card";
-import type { ProjectMilestoneMix } from "@/types/ui";
 import {
   PROJECT_STAGE_LABELS,
   PROJECT_STAGE_PERCENTAGE,
@@ -20,7 +16,11 @@ import {
   type TradieScheduleWithTradieAndMilestone,
   type UIMilestone,
 } from "@/types/project";
-import { currency, dateFormat } from "@/utils/formatters";
+import {
+  formatPaymentStageLabel,
+  matchPaymentStagesToProjectStages,
+} from "@/lib/projects/payment-stages";
+import { currency } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -79,37 +79,6 @@ const convertToVisualMilestone = (
   return rootMilestones;
 };
 
-const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
-  const stageMilestoneMap = new Map<
-    string,
-    { completed: number; total: number }
-  >();
-  for (const milestone of milestones) {
-    const stage = milestone.projectStage;
-    if (!stageMilestoneMap.has(stage)) {
-      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
-    }
-    const stageData = stageMilestoneMap.get(stage)!;
-    stageData.total++;
-    if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
-      stageData.completed++;
-    }
-  }
-  const totalStages = stageMilestoneMap.size;
-  const completedStages = Array.from(stageMilestoneMap.values()).filter(
-    (stageData) => stageData.completed === stageData.total,
-  ).length;
-  const inProgressStages = Array.from(stageMilestoneMap.values()).filter(
-    (stageData) =>
-      stageData.completed > 0 && stageData.completed < stageData.total,
-  ).length;
-  return {
-    totalStages,
-    completedStages,
-    inProgressStages: inProgressStages,
-  };
-};
-
 export function ProjectMilestonesTab({
   project,
   isAdmin,
@@ -118,6 +87,13 @@ export function ProjectMilestonesTab({
   isAdmin: boolean;
 }) {
   const dispatch = useAppDispatch();
+  const projectStageData = project.requirements?.commercialsAndClaims?.paymentStages;
+  // The contract's own claim schedule wins over the static stage table: the
+  // percentages there are what the owner actually agreed to pay per stage.
+  const contractStages = useMemo(
+    () => matchPaymentStagesToProjectStages(projectStageData),
+    [projectStageData],
+  );
   const visualMilestones = useMemo(
     () => convertToVisualMilestone(project.milestones),
     [project.milestones],
@@ -166,33 +142,6 @@ export function ProjectMilestonesTab({
       return acc;
     }, {});
   }, [tradieAlerts]);
-
-  const milestoneChartData: ProjectMilestoneMix[] = useMemo(() => {
-    const {
-      totalStages: projectStagesCount,
-      completedStages: completedStagesCount,
-      inProgressStages: inProgressStagesCount,
-    } = calcMilestoneOverviewData(project.milestones);
-    const graphData: ProjectMilestoneMix[] = [
-      {
-        status: "Completed",
-        count: completedStagesCount,
-        color: "var(--chart-2)",
-      },
-      {
-        status: "In Progress",
-        count: inProgressStagesCount,
-        color: "var(--chart-3)",
-      },
-      {
-        status: "Upcoming",
-        count:
-          projectStagesCount - completedStagesCount - inProgressStagesCount,
-        color: "var(--muted)",
-      }
-    ];
-    return graphData;
-  }, [project.milestones]);
 
   const handleOpenAddUpdateModal = (id: string) => {
     dispatch(
@@ -277,7 +226,7 @@ export function ProjectMilestonesTab({
     );
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+    <section className="grid gap-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -308,7 +257,7 @@ export function ProjectMilestonesTab({
               </li>
               <li className="flex items-center">
                 <span
-                  className="mr-1.5 inline-block size-2 rounded-full bg-muted-foreground"
+                  className="mr-1.5 inline-block size-2 rounded-full bg-chart-5"
                   aria-hidden="true"
                 />
                 Upcoming
@@ -345,11 +294,23 @@ export function ProjectMilestonesTab({
               })?.[0];
 
               const isActiveStage = stage === firstActiveStage;
-              const stagePercentage = PROJECT_STAGE_PERCENTAGE[stage] ?? 0;
+              const contractStage = contractStages[stage];
+              const stageLabel = contractStage
+                ? formatPaymentStageLabel(contractStage)
+                : (PROJECT_STAGE_LABELS[stage] ?? stage);
+              const stagePercentage =
+                contractStage?.percentage != null
+                  ? contractStage.percentage / 100
+                  : (PROJECT_STAGE_PERCENTAGE[stage] ?? 0);
               const projectBudget = Number(project.totalBudget);
-              const stageBudget = Number.isFinite(projectBudget)
-                ? stagePercentage * projectBudget
-                : null;
+              // The contract sum the claim amounts were derived from can differ
+              // from the project budget, so prefer the amount the schedule
+              // actually states and only compute one when it has none.
+              const stageBudget =
+                contractStage?.amount ??
+                (Number.isFinite(projectBudget)
+                  ? stagePercentage * projectBudget
+                  : null);
 
               // Sort milestone by status Completed > Active > Pending
               const sortedMilestones = [...milestones].sort((a, b) => {
@@ -397,7 +358,7 @@ export function ProjectMilestonesTab({
                               : "text-foreground",
                         )}
                       >
-                        {PROJECT_STAGE_LABELS[stage] ?? stage}
+                        {stageLabel}
                       </h3>
 
                       {isAdmin && (
@@ -473,120 +434,6 @@ export function ProjectMilestonesTab({
           )}
         </CardContent>
       </Card>
-
-      <div className="space-y-4">
-        <Card className="rounded-xl border-border/70 bg-card shadow-sm">
-          <CardHeader className="border-b border-border/70 pb-4">
-            <CardTitle
-              as="h2"
-              className="flex items-center gap-2 text-base font-semibold text-foreground"
-            >
-              <Bell className="size-4 text-warning-ink" aria-hidden="true" />
-              Upcoming tradie alerts
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-5">
-            {tradieAlerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {project.tradieSchedules.length === 0
-                  ? "No tradies are scheduled on this project yet."
-                  : "No tradie schedules need attention in the next week."}
-              </p>
-            ) : (
-              tradieAlerts.slice(0, 4).map((schedule) => (
-                <article
-                  key={schedule.id}
-                  className="flex items-center gap-3 rounded-[10px] border border-border/70 bg-card p-3.5"
-                >
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-warning-light text-warning-ink">
-                    <Wrench className="size-5" aria-hidden="true" />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground">
-                      {schedule.tradie.trade} • {schedule.tradie.name}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      ABN{" "}
-                      <span className="font-mono tabular-nums">
-                        {schedule.tradie.abn}
-                      </span>
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Needed for {schedule.milestone?.name ?? "general works"}{" "}
-                      on{" "}
-                      <span className="font-mono tabular-nums">
-                        {dateFormat.format(new Date(schedule.scheduledDate))}
-                      </span>
-                    </p>
-                  </div>
-
-                  <div className="ml-auto">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-9"
-                      aria-label={`Send reminder to ${schedule.tradie.name}`}
-                      onClick={() =>
-                        handleSendReminder({
-                          id: schedule.id,
-                          tradieId: schedule.tradieId,
-                          milestoneId: schedule.milestoneId ?? undefined,
-                          scheduledDate: new Date(
-                            schedule.scheduledDate,
-                          ).toISOString(),
-                          status: schedule.status,
-                          abn: schedule.tradie.abn,
-                          tradieName: schedule.tradie.name,
-                          tradeType: schedule.tradie.trade,
-                          projectId: schedule.projectId,
-                          projectName: project.name,
-                          taskLabel: `${project.milestones.find((m) => m.id === schedule.milestoneId)?.name ?? "General"} - ${schedule.tradie.trade}`,
-                          durationDays: schedule.durationDays,
-                          updatedAt: new Date(schedule.updatedAt).toISOString(),
-                          contact: {
-                            email: schedule.tradie.email,
-                            phone: schedule.tradie.phone,
-                            additionalEmails: schedule.tradie.additionalEmails,
-                          },
-                          siteManager: {
-                            name: project.siteManager?.name ?? "Site Manager",
-                            email:
-                              project.siteManager?.email ??
-                              "Site Manager Email",
-                            phone:
-                              project.siteManager?.phone ??
-                              "Site Manager Phone",
-                          },
-                          isFavourite: schedule.tradie.isFavourite,
-                          note: schedule.tradie.note,
-                          requiresQuote: schedule.requiresQuote,
-                          quotedPrice: schedule.quotedPrice ?? undefined,
-                        } satisfies TradieScheduleListItem)
-                      }
-                    >
-                      <Bell className="size-3.5" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </article>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <DonutChartCard
-          title="Milestone summary"
-          subtitle="Progress distribution across phases"
-          data={milestoneChartData}
-          labelKey="status"
-          valueKey="count"
-          colorByLabel={{
-            Completed: "var(--chart-2)",
-            "In Progress": "var(--chart-3)",
-            Upcoming: "var(--muted)",
-          }}
-        />
-      </div>
     </section>
   );
 }

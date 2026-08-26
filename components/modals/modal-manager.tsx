@@ -19,6 +19,7 @@ import type {
 import { CreateProjectModal } from "../projects/create-project-modal";
 import { ReminderModal } from "../tradies/reminder-send-modal";
 import { TradieScheduleDetailsModal } from "../tradies/details-view-modal";
+import { DeleteScheduleModal } from "../tradies/delete-schedule-modal";
 import {
   clearSelectedSchedules,
   fetchTradieCoordinationDashboard,
@@ -52,10 +53,12 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApprovalDetailModal } from "../tradie-approvals/modal/approval-detail-modal";
 import ScheduleTradieModal from "../projects/detail/modal/schedule-tradie-modal";
+import InsuranceClaimDatesModal from "../projects/detail/modal/insurance-claim-dates-modal";
 import { TradieApprovalRejectionModal } from "../tradie-approvals/modal/rejection-input-modal";
 import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
+import FilePreviewCanvas from "../shared/file-preview-canvas";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -110,6 +113,14 @@ export function ModalManager() {
     } finally {
       toast.dismiss(loading);
     }
+  };
+
+  // Removing a booking is an approval request, not a delete — the reason
+  // prompt collects what the admin will read.
+  const handleRequestScheduleDeletion = (row: TradieScheduleListItem) => {
+    dispatch(
+      openModal({ type: "deleteTradieSchedule", payload: { schedule: row } }),
+    );
   };
 
   const handleUpdateRowStatus = (row: TradieScheduleListItem) => {
@@ -171,10 +182,15 @@ export function ModalManager() {
         : undefined;
       const milestones = projectPayload
         ? projectPayload.milestones
-            .filter((m) => m.status !== MilestoneStatus.DONE)
+            .filter(
+              (m) =>
+                m.status !== MilestoneStatus.DONE &&
+                m.status !== MilestoneStatus.NOT_REQUIRED,
+            )
             .map((m) => ({
               id: m.id,
               name: m.name,
+              projectStage: m.projectStage,
             }))
         : undefined;
 
@@ -271,8 +287,35 @@ export function ModalManager() {
           onSendReminder={handleRowReminder}
           onCall={handleRowCallLogged}
           onUpdateStatus={handleUpdateRowStatus}
+          onRequestDelete={handleRequestScheduleDeletion}
         />
       );
+    case "deleteTradieSchedule": {
+      const scheduleToRemove = modal.payload?.schedule as
+        | TradieScheduleListItem
+        | undefined;
+
+      if (!scheduleToRemove) {
+        return null;
+      }
+
+      return (
+        <DeleteScheduleModal
+          open
+          schedule={{
+            id: scheduleToRemove.id,
+            tradieName: scheduleToRemove.tradieName,
+            tradeType: scheduleToRemove.tradeType,
+            projectName: scheduleToRemove.projectName,
+            scheduledDate: scheduleToRemove.scheduledDate,
+          }}
+          onClose={handleClose}
+          onSuccess={() => {
+            dispatch(fetchTradieCoordinationDashboard({ force: true }));
+          }}
+        />
+      );
+    }
     case "projectDetail": {
       const { project: statProject, isAdmin } = modal.payload as {
         project: ProjectWithStats;
@@ -342,6 +385,23 @@ export function ModalManager() {
           isAdmin={isAdmin}
         />
       );
+    case "insuranceClaimDates": {
+      const {
+        milestoneId: insuranceMilestoneId,
+        projectId: insuranceProjectId,
+      } = modal.payload as {
+        projectId: string;
+        milestoneId: string;
+      };
+      return (
+        <InsuranceClaimDatesModal
+          milestoneId={insuranceMilestoneId}
+          projectId={insuranceProjectId}
+          isOpen
+          onClose={handleClose}
+        />
+      );
+    }
     case "addMilestonePicture":
       const {
         milestoneId: addMilestonePictureId,
@@ -383,12 +443,32 @@ export function ModalManager() {
     case "followUpPrompt": {
       const leadId = Number(modal.payload?.leadId ?? 0);
       if (!leadId) return null;
-      return <FollowupPromptModal leadId={leadId} onClose={handleClose} />;
+      // taskId is optional: opened from a task row it scopes the dialog to that
+      // one task, opened from a notification it still means "this lead".
+      const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
+      return (
+        <FollowupPromptModal
+          leadId={leadId}
+          taskId={taskId}
+          onClose={handleClose}
+        />
+      );
     }
     case "meetingReview": {
       const leadId = Number(modal.payload?.leadId ?? 0);
       if (!leadId) return null;
-      return <MeetingReviewModal leadId={leadId} onClose={handleClose} />;
+      // Same contract as followUpPrompt: opened from a task row it scopes the
+      // dialog to that task and closes it on save. This used to be dropped, so
+      // reviewing a meeting recorded the outcome and left the task open for
+      // ever — it never left the Tasks tab, not even after a reload.
+      const taskId = Number(modal.payload?.taskId ?? 0) || undefined;
+      return (
+        <MeetingReviewModal
+          leadId={leadId}
+          taskId={taskId}
+          onClose={handleClose}
+        />
+      );
     }
     case "leadStatsDrilldown": {
       const title = String(modal.payload?.title ?? "Lead details");
@@ -500,6 +580,16 @@ export function ModalManager() {
         tradie: TradieDetails;
       };
       return <EditTradieModal open onClose={handleClose} tradie={tradie} />;
+    }
+    case "previewFile": {
+      const { fileUrl } = modal.payload as { fileUrl: string };
+      return (
+        <FilePreviewCanvas
+          key={fileUrl} // extra safety net — forces a clean remount
+          url={fileUrl}
+          onClose={handleClose} // swap in your actual close action
+        />
+      );
     }
     default:
       return null;

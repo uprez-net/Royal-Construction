@@ -1,7 +1,101 @@
 import { currency } from "./formatters";
 
-export const calculateScheduleTotalCost = (hourlyRate: number, durationDays: number): string => {
-  const NORMAL_WORKING_HOURS = 8;
-  const totalCost = hourlyRate * NORMAL_WORKING_HOURS * durationDays;
-  return currency.format(totalCost);
+/** Standard site day, used to turn an hourly rate into a daily cost. */
+export const NORMAL_WORKING_HOURS = 8;
+
+/**
+ * What a scheduled tradie costs for a stint of `durationDays`.
+ *
+ * `unit` is not optional by accident. `lastQuotedPrice` is a bare number, and
+ * 120 is a plausible hourly rate AND a plausible price for a small job — so
+ * without the unit this function silently multiplied every fixed quote by
+ * eight hours a day and reported a total many times too high.
+ */
+export function scheduleTotalCost(
+  price: number,
+  durationDays: number,
+  unit: "HOURLY" | "FIXED",
+): number {
+  return unit === "FIXED" ? price : price * NORMAL_WORKING_HOURS * durationDays;
+}
+
+/** Formatted for display. */
+export const calculateScheduleTotalCost = (
+  price: number,
+  durationDays: number,
+  unit: "HOURLY" | "FIXED",
+): string => currency.format(scheduleTotalCost(price, durationDays, unit));
+
+/**
+ * A quoted price with its basis, e.g. "$120.00/hr" or "$4,800.00 fixed".
+ *
+ * One formatter because the "/hr" suffix was previously hardcoded at five
+ * separate display sites. Recording the unit is pointless if the screen still
+ * says per-hour regardless.
+ */
+export function formatQuotedPrice(
+  amount: number,
+  unit: "HOURLY" | "FIXED",
+  format: (value: number) => string,
+): string {
+  return unit === "FIXED" ? `${format(amount)} fixed` : `${format(amount)}/hr`;
+}
+
+/**
+ * Parse a single quoted amount out of free text, e.g. "$5,000.00" or "AUD 1200".
+ *
+ * Quotes arrive as strings an AI extracted from a tradie's email, so they carry
+ * currency symbols, thousands separators and whatever else the tradie typed.
+ *
+ * Stripping non-digits is not good enough, and was actively dangerous: it
+ * concatenates every digit in the string, so "Quote for REF-2024: $5000"
+ * became 20,245,000 and "$1,200 plus $300 travel" became 1,200,300. This
+ * matches money-shaped tokens instead and REFUSES anything ambiguous —
+ * two amounts in one string is a question for a human, not a number to guess.
+ *
+ * Returns null for unparseable, ambiguous or negative input. Never 0: a zero
+ * quote is a real value and a failed parse must not present as one.
+ */
+const MONEY_TOKEN = /(?<![\w.])(?:\$\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?(?![\w.])|(?<![\w.])(?:\$\s*)?\d+(?:\.\d{1,2})?(?![\w.])/g;
+
+export function parseQuotedAmount(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  if (/-\s*\d/.test(raw)) return null; // a negative quote is not a quote
+
+  const matches = raw.match(MONEY_TOKEN);
+  if (!matches || matches.length !== 1) return null; // none, or ambiguous
+
+  const parsed = Number(matches[0].replace(/[$,\s]/g, ""));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+/**
+ * How a tradie expressed a quote before it is stored.
+ *
+ * Wider than {@link TradiePriceUnit} on purpose: tradies quote by the day
+ * ("$950 a day") at least as often as by the hour, but the column only knows
+ * HOURLY and FIXED. DAILY exists so the daily case survives extraction instead
+ * of being guessed at the point of writing.
+ */
+export type QuoteBasis = "FIXED" | "HOURLY" | "DAILY";
+
+/**
+ * Collapse a quote onto the two units the database stores.
+ *
+ * A daily rate becomes an hourly one at {@link NORMAL_WORKING_HOURS} a day —
+ * the same standard site day {@link scheduleTotalCost} already costs against,
+ * so a $950/day quote and the schedule total agree instead of drifting.
+ *
+ * The returned amount is deliberately unrounded: rounding belongs at the
+ * Decimal(8,2) column, and rounding here would push the error into the job
+ * total that is computed from it.
+ */
+export function normalizeQuoteBasis(
+  amount: number,
+  basis: QuoteBasis,
+): { amount: number; unit: "HOURLY" | "FIXED" } {
+  if (basis === "DAILY") {
+    return { amount: amount / NORMAL_WORKING_HOURS, unit: "HOURLY" };
+  }
+  return { amount, unit: basis };
 }

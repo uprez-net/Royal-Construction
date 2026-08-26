@@ -5,6 +5,7 @@ import { ChevronRight, MapPin } from "lucide-react";
 import type { ProjectWithStats } from "@/types/project";
 import { Badge } from "@/components/ui/badge";
 import { compactCurrency } from "@/utils/formatters";
+import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { formatStatus, projectStatusConfig } from "./project-status";
 import type { Role as UserRoles } from "@prisma/client";
 
@@ -51,11 +52,10 @@ export function EnhancedProjectCard({
   const config = projectStatusConfig(project.status);
   const spent = Number(project.spent);
   const budget = Number(project.totalBudget);
-  // A project can legitimately have no budget set yet; dividing by it produced
-  // `NaN%` on screen.
+  // A project can legitimately have no budget set yet; the `hasBudget` guard
+  // keeps the "—" display for the budget stat when no contract value is set.
   const hasBudget = Number.isFinite(budget) && budget > 0;
-  const spentPercent = hasBudget ? Math.round((spent / budget) * 100) : null;
-  const isOverBudget = spentPercent !== null && spentPercent > 100;
+  const isOverBudget = getBudgetStatus(budget, spent) === "OVER_BUDGET";
   const progress = Math.round(project.progressPercent);
   const progressLabelId = `project-progress-${project.id}`;
   const { totalStages, completedStages } = calcMilestoneOverviewData(
@@ -160,6 +160,9 @@ export function EnhancedProjectCard({
               </p>
             </div>
             <div className="text-center">
+              {/* Always "Spent": the figure below is the spend either way, and
+                  swapping the label for "No spend recorded" left a $0 with
+                  nothing naming it. */}
               <p className="font-medium text-muted-foreground">
                 {isOverBudget ? "Over budget" : "Spent"}
               </p>

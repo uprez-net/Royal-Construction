@@ -33,7 +33,13 @@ export interface ProjectSourceDocumentReference {
   fileId: string;
   fileName: string;
   url: string;
-  kind: "tender" | "contract";
+  /**
+   * `tender` and `contract` are the two documents the extraction workflow runs
+   * over. `hbcfInsurance` is the HBCF certificate uploaded later from the
+   * Legal & Administration section, and is referenced from that section rather
+   * than from the tender/contract `sourceDocuments` bundle.
+   */
+  kind: "tender" | "contract" | "hbcfInsurance";
 }
 
 export interface ProjectAutomationTriggers {
@@ -60,6 +66,27 @@ export interface ProjectLegalAdministrationSection {
   commencementTrigger: string | null;
   signedDate: string | null;
   pcaInspector: string | null;
+  /**
+   * Insurance coverage window for the build, captured when the first Slab-stage
+   * milestone is started (that stage is the physical start of construction).
+   * Stored as `yyyy-MM-dd`, matching `signedDate`. Optional because every
+   * requirements payload written before this field existed is missing it.
+   */
+  insuranceClaimStartDate?: string | null;
+  insuranceClaimEndDate?: string | null;
+  /**
+   * HBCF (Home Building Compensation Fund) certificate number. Read off the
+   * uploaded certificate by the HBCF extraction agent, and editable by hand
+   * when the certificate is unreadable. Null until a certificate has been
+   * uploaded and successfully read.
+   */
+  hbcfInsuranceNumber: string | null;
+  /**
+   * The uploaded HBCF certificate the number above was read from. Kept even
+   * when extraction fails, so the document stays linked and the number can be
+   * filled in manually.
+   */
+  hbcfInsuranceDocument: ProjectSourceDocumentReference | null;
 }
 
 export interface ProjectCommercialSection {

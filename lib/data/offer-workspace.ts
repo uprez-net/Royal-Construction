@@ -1,6 +1,7 @@
 "use server";
 
 import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
+import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -17,8 +18,17 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
+import {
+  applyAdminPrefillToSnapshot,
+  buildAdminOfferPrefill,
+} from "@/lib/offer/admin-offer-prefill";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
-import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
+import {
+  resolveOfferContractValue,
+  resolveOfferPriceSplit,
+} from "@/lib/offer/offer-contract-value";
+import { splitContractValueByGst } from "@/lib/offer/workspace-pricing";
 import {
   parseContractParticularOverrides,
   parseContractParticulars,
@@ -29,7 +39,10 @@ import type {
   OfferSignerStatus,
   OfferSignerStatusValue,
 } from "@/lib/offer/signing-status";
-import { collectOwnerIssues } from "@/lib/offer/workspace-model";
+import {
+  collectOwnerIssues,
+  type OfferWorkspaceStatus,
+} from "@/lib/offer/workspace-model";
 
 // Allowed lifecycle transitions for the offer WORKSPACE (the legacy
 // OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
@@ -86,6 +99,13 @@ type LoadedOfferWorkspace = {
   // "Awaiting signature" even after they had signed. Empty until an envelope is
   // sent.
   signerStatuses?: readonly OfferSignerStatus[];
+  // Admin content moved on since this offer was built, and the offer is FROZEN
+  // (agreed/sent onward) so its snapshot was deliberately left alone. Drives an
+  // advisory warn blocker; never blocks.
+  adminContentStale?: boolean;
+  // The offer was still editable, so the current admin defaults were re-applied
+  // and the returned snapshot + stateVersion are the refreshed ones.
+  adminContentRefreshed?: boolean;
 };
 
 type OfferRow = {
@@ -209,6 +229,79 @@ async function loadDeclineReason(
   return event?.note ?? null;
 }
 
+// Admin content versioning (see AdminOfferContent.version). Each offer stamps
+// the admin version its cost lines / allowances / exclusions / draft copy came
+// from. When the offer is OPENED and that stamp is behind the live admin
+// version, one of two things happens:
+//
+//   - the offer is still editable (`pending`): the current admin defaults are
+//     re-applied and persisted, so an admin correction reaches every offer that
+//     has not gone out yet without anyone reopening each one by hand;
+//   - the offer is agreed or sent: nothing is written. That snapshot is what the
+//     client was quoted and what the legal documents render from — rewriting it
+//     under them would change an issued price. The change is reported instead,
+//     as a warn blocker.
+//
+// Editability is asked of the `cost-schedule` step rather than hard-coded, so
+// this can never disagree with the freeze rule in offer-editability.ts.
+async function reapplyAdminContentIfStale(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  const snapshot = loaded.snapshot;
+  // A brand-new offer has nothing saved yet — the workspace seeds it from the
+  // live prefill the page already passed in, which is current by construction.
+  if (!snapshot) {
+    return loaded;
+  }
+
+  let prefill: Awaited<ReturnType<typeof buildAdminOfferPrefill>>;
+  try {
+    prefill = await buildAdminOfferPrefill();
+  } catch (error) {
+    // Opening the workspace must not fail because the admin row could not be
+    // read; the offer's own saved content is still perfectly usable.
+    console.error("[offer] admin content check on open failed:", error);
+    return loaded;
+  }
+  if (prefill.adminVersion === snapshot.adminContentVersion) {
+    return loaded;
+  }
+
+  const status = loaded.status.toLowerCase() as OfferWorkspaceStatus;
+  if (!isOfferBuildStepEditable("cost-schedule", status)) {
+    return { ...loaded, adminContentStale: true };
+  }
+
+  const refreshed = applyAdminPrefillToSnapshot(snapshot, prefill);
+  // Same optimistic-concurrency predicate the autosave uses (ADR 0002), so this
+  // can never land on a row another writer has moved on, nor on a revision that
+  // was archived between the read and this write.
+  const result = await prisma.offer.updateMany({
+    where: {
+      id: loaded.offerId,
+      isActive: true,
+      stateVersion: loaded.stateVersion,
+    },
+    data: {
+      workspaceState: serializeWorkspace(
+        refreshed,
+      ) as unknown as Prisma.InputJsonValue,
+      stateVersion: { increment: 1 },
+    },
+  });
+  if (result.count === 0) {
+    // Another writer got there first. Leave the stored state alone and hand back
+    // what we read; the next open re-checks and re-applies.
+    return { ...loaded, adminContentStale: true };
+  }
+  return {
+    ...loaded,
+    snapshot: refreshed,
+    stateVersion: loaded.stateVersion + 1,
+    adminContentRefreshed: true,
+  };
+}
+
 async function attachSignerStatus(
   loaded: LoadedOfferWorkspace,
 ): Promise<LoadedOfferWorkspace> {
@@ -281,11 +374,19 @@ export async function loadActiveOfferWorkspace(
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
       return attachSignerStatus(
-        await attachContractParticulars(await attachDeclineReason(toLoaded(healed))),
+        await attachContractParticulars(
+          await attachDeclineReason(
+            await reapplyAdminContentIfStale(toLoaded(healed)),
+          ),
+        ),
       );
     }
     return attachSignerStatus(
-      await attachContractParticulars(await attachDeclineReason(toLoaded(existing))),
+      await attachContractParticulars(
+        await attachDeclineReason(
+          await reapplyAdminContentIfStale(toLoaded(existing)),
+        ),
+      ),
     );
   }
 
@@ -390,9 +491,18 @@ export async function saveOfferWorkspace(input: {
   // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
   // blank override serialises to 0 cents — so reading it here stamped $0 on every
   // offer priced the normal way, which is what the Versions timeline displayed.
-  const contractValue = new Prisma.Decimal(
-    buildProposalInput(input.snapshot).customerPrice.selectedContractValueIncGst,
-  );
+  const selectedContractValueIncGst =
+    buildProposalInput(input.snapshot).customerPrice.selectedContractValueIncGst;
+  const contractValue = new Prisma.Decimal(selectedContractValueIncGst);
+  // The three money columns the Offers list prints (amount / GST / total) were
+  // never written after the row was minted at zero, so every offer read $0.00
+  // regardless of what the client was actually quoted. Derive them from the SAME
+  // number the proposal document prints, so the list and the PDF can never
+  // disagree — see splitContractValueByGst for why GST is a back-solve.
+  const priceSplit = splitContractValueByGst({
+    contractValueIncGst: selectedContractValueIncGst,
+    gstRate: input.snapshot.workspacePricingSettings.gstRate,
+  });
 
   // isActive is part of the predicate, not just the check above: forking a
   // revision deactivates this row without touching its stateVersion, so a save
@@ -406,6 +516,9 @@ export async function saveOfferWorkspace(input: {
     },
     data: {
       workspaceState: persisted as unknown as Prisma.InputJsonValue,
+      amount: new Prisma.Decimal(priceSplit.amountExGst),
+      gstAmount: new Prisma.Decimal(priceSplit.gstAmount),
+      totalAmount: new Prisma.Decimal(priceSplit.totalIncGst),
       contractValueIncGst: contractValue,
       stateVersion: { increment: 1 },
     },
@@ -427,6 +540,56 @@ export async function saveOfferWorkspace(input: {
       reason: "stale",
       currentStateVersion: current?.stateVersion ?? null,
     };
+  }
+
+  // Keep the lead's deal value in step with the quoted contract price.
+  // Offer.contractValueIncGst is the authoritative number once an offer
+  // exists; a second hand-typed figure on the lead would only ever disagree
+  // with it, and would leave the pipeline blank at exactly the stages where a
+  // real price is known.
+  //
+  // updateMany + the NOT filter skips manually-owned leads atomically, with no
+  // read-then-write race. A zero/absent price must not null an existing value,
+  // hence the greaterThan(0) guard. The offer update above is already scoped to
+  // isActive, so a superseded revision cannot reach this point.
+  //
+  // Deliberately non-fatal. The offer write above has ALREADY committed and
+  // bumped stateVersion; letting a sync failure throw here would report the
+  // save as failed while it actually succeeded, and the client would then
+  // retry against a stale expectedStateVersion and be told it is superseded.
+  // Mirroring the value onto the lead is secondary to persisting the offer.
+  try {
+    if (contractValue.greaterThan(0)) {
+      const offerLead = await prisma.offer.findUnique({
+        where: { id: input.offerId },
+        select: { leadId: true },
+      });
+      if (offerLead?.leadId) {
+        await prisma.lead.updateMany({
+          where: {
+            id: offerLead.leadId,
+            // Match the two syncable states EXPLICITLY. `NOT: { source: "MANUAL" }`
+            // looks equivalent but is not: it compiles to NOT (col = 'MANUAL'),
+            // which evaluates to NULL — not true — for rows where the column is
+            // NULL. That is every lead never manually overridden, so the sync
+            // would silently skip almost everything. Verified against Postgres.
+            OR: [
+              { estimatedValueSource: null },
+              { estimatedValueSource: "OFFER" },
+            ],
+          },
+          data: {
+            estimatedValue: contractValue,
+            estimatedValueSource: "OFFER",
+          },
+        });
+      }
+    }
+  } catch (error) {
+    console.error(
+      `[offer-workspace] lead value sync failed for offer ${input.offerId}; the offer itself saved successfully`,
+      error,
+    );
   }
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
@@ -542,6 +705,9 @@ export async function transitionOfferStatus(input: {
       },
     });
   });
+
+  // After the transaction, never inside it — see syncLeadStageForOffer.
+  await syncLeadStageForOffer(input.offerId);
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true, status: input.toStatus };
@@ -834,6 +1000,13 @@ export async function createOfferRevision(input: {
       data: { isActive: false, offerStatus: OfferStatus.SUPERSEDED },
     });
 
+    const forkedPriceSplit = resolveOfferPriceSplit(
+      currentRow.contractValueIncGst === null
+        ? null
+        : Number(currentRow.contractValueIncGst),
+      currentRow.workspaceState,
+    );
+
     const next = await tx.offer.create({
       data: {
         leadId: currentRow.leadId,
@@ -842,19 +1015,17 @@ export async function createOfferRevision(input: {
         isActive: true,
         createdById: input.actorId,
         offerStatus: OfferStatus.PENDING,
-        amount: currentRow.amount,
-        gstAmount: currentRow.gstAmount,
-        totalAmount: currentRow.totalAmount,
-        // Derive rather than copy: the parent's column may predate the fix that
-        // wrote the resolved price, and inheriting it would carry that $0 into
-        // every future revision even after the parent's own row is repaired.
+        // Derive rather than copy: the parent's columns may predate the fix
+        // that wrote the resolved price, and inheriting them would carry that
+        // $0 into every future revision even after the parent's own row is
+        // repaired. The fork starts as an unedited copy of the parent's
+        // snapshot, so it is priced identically until someone edits it — and a
+        // revision sent without an edit must not quote $0.
+        amount: forkedPriceSplit?.amountExGst ?? currentRow.amount,
+        gstAmount: forkedPriceSplit?.gstAmount ?? currentRow.gstAmount,
+        totalAmount: forkedPriceSplit?.totalIncGst ?? currentRow.totalAmount,
         contractValueIncGst:
-          resolveOfferContractValue(
-            currentRow.contractValueIncGst === null
-              ? null
-              : Number(currentRow.contractValueIncGst),
-            currentRow.workspaceState,
-          ) ?? currentRow.contractValueIncGst,
+          forkedPriceSplit?.totalIncGst ?? currentRow.contractValueIncGst,
         workspaceState:
           currentRow.workspaceState === null
             ? Prisma.JsonNull

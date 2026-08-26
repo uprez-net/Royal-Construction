@@ -8,6 +8,7 @@ import {
   Pencil,
   Phone,
   Star,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
@@ -24,6 +25,7 @@ import type {
 import { rateCurrency, dataTimeFormat, dateFormat } from "@/utils/formatters";
 import { daysUntil } from "@/utils/parser";
 import { RatingStars } from "../common/rating-stars";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 interface ViewDetailsModalProps {
   schedule: TradieUrgentReminderItem;
@@ -33,6 +35,8 @@ interface ViewDetailsModalProps {
   onSendReminder: (item: TradieScheduleListItem) => void;
   onCall: (item: TradieScheduleListItem) => void;
   onUpdateStatus?: (item: TradieScheduleListItem) => void;
+  /** Opens the reason prompt that sends the removal for admin approval. */
+  onRequestDelete: (item: TradieScheduleListItem) => void;
 }
 
 function getStatusStyles(status: string) {
@@ -123,11 +127,13 @@ export function TradieScheduleDetailsModal({
   onSendReminder,
   onCall,
   onUpdateStatus,
+  onRequestDelete,
 }: ViewDetailsModalProps) {
   const item = {
     id: schedule.id,
     tradieId: "tradieId",
     tradieName: schedule.tradieName,
+    lastQuotedPriceUnit: schedule.lastQuotedPriceUnit,
     tradeType: schedule.tradeType,
     projectId: "projectId",
     projectName: schedule.projectName,
@@ -202,7 +208,11 @@ export function TradieScheduleDetailsModal({
                   label="Last quoted price"
                   value={
                     <span className="truncate">
-                      {rateCurrency.format(Number(schedule.lastQuotedPrice))}
+                      {formatQuotedPrice(
+                        Number(schedule.lastQuotedPrice),
+                        schedule.lastQuotedPriceUnit,
+                        rateCurrency.format,
+                      )}
                     </span>
                   }
                 />
@@ -399,20 +409,37 @@ export function TradieScheduleDetailsModal({
               {schedule.status !== "CONFIRMED" &&
                 schedule.status !== "COMPLETED" &&
                 schedule.status !== "DECLINED" && (
-                  <Button
-                    onClick={() => onMarkAsDone(item)}
-                    className={cn(
-                      "h-auto rounded-[7px]",
-                      "bg-primary px-3.5 py-1.75",
-                      "text-[12.5px] font-semibold text-primary-foreground",
-                      "transition-all duration-200",
-                      "hover:-translate-y-px",
-                      "hover:bg-primary/90",
-                    )}
-                  >
-                    <Check className="mr-1.5 h-3.5 w-3.5" />
-                    Mark Confirmed
-                  </Button>
+                  <>
+                    <Button
+                      onClick={() => onMarkAsDone(item)}
+                      className={cn(
+                        "h-auto rounded-[7px]",
+                        "bg-primary px-3.5 py-1.75",
+                        "text-[12.5px] font-semibold text-primary-foreground",
+                        "transition-all duration-200",
+                        "hover:-translate-y-px",
+                        "hover:bg-primary/90",
+                      )}
+                    >
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      Mark Confirmed
+                    </Button>
+
+                    <Button
+                      onClick={() => onRequestDelete(item)}
+                      className={cn(
+                        "h-auto rounded-[7px]",
+                        "bg-red-500 px-3.5 py-1.75",
+                        "text-[12.5px] font-semibold text-primary-foreground",
+                        "transition-all duration-200",
+                        "hover:-translate-y-px",
+                        "hover:bg-red-600/90",
+                      )}
+                    >
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Request Deletion
+                    </Button>
+                  </>
                 )}
 
               {(schedule.status === "NO_RESPONSE" ||
@@ -438,6 +465,7 @@ export function TradieScheduleDetailsModal({
               <Button
                 variant="outline"
                 onClick={() => onSendReminder(item)}
+                disabled={["AWAITING_ADMIN_APPROVAL", "DECLINED", "CONFIRMED"].includes(item.status)}
                 className={cn(
                   "h-auto rounded-[7px]",
                   "border-border/70 bg-card",

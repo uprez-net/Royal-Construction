@@ -1,7 +1,8 @@
 'use server';
 import prisma from "@/lib/prisma";
-import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone, TradieApprovalActionType } from "@prisma/client";
+import { TradieSchedule, TradieScheduleStatus, Tradie, Project, User, Milestone, TradieApprovalActionType, TradieApprovalStatus } from "@prisma/client";
 import type { CreateTradieScheduleInput, UpdateTradieScheduleInput } from "@/utils/validators";
+import { TradiePriceUnit } from "@prisma/client";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
@@ -13,10 +14,10 @@ import { auth } from "@clerk/nextjs/server";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
-import { ScheduleApprovalJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import { DeleteScheduleInput, ScheduleApprovalJsonPayload, ScheduleDeletionJsonPayload, TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
-import { calculateScheduleTotalCost as calculateTotalCost } from "@/utils/calculations";
+import { normalizeQuoteBasis, parseQuotedAmount, scheduleTotalCost } from "@/utils/calculations";
 import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
@@ -39,6 +40,7 @@ const convertToTradieScheduleListItem = (schedule: TradieScheduleWithRelations):
     abn: schedule.tradie.abn,
     tradieId: schedule.tradieId,
     tradieName: schedule.tradie.name,
+    lastQuotedPriceUnit: schedule.tradie.lastQuotedPriceUnit,
     tradeType: schedule.tradie.trade,
     projectId: schedule.projectId,
     projectName: schedule.project.name,
@@ -149,7 +151,7 @@ export async function createTradieSchedule(input: CreateTradieScheduleInput) {
         trade: schedule.tradie.trade,
         scheduleDate: dateFormat.format(schedule.scheduledDate),
         durationDays: schedule.durationDays,
-        cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays),
+        cost: schedule.quotedPrice ?? currency.format(scheduleTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit)),
         milestoneId: schedule.milestoneId ?? undefined,
         milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
       });
@@ -231,7 +233,7 @@ export async function bulkCreateTradieSchedules(inputs: CreateTradieScheduleInpu
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: schedule.quotedPrice ?? calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays),
+          cost: schedule.quotedPrice ?? currency.format(scheduleTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays, schedule.tradie.lastQuotedPriceUnit)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
@@ -311,18 +313,85 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     if (!TRADIE_SCHEDULE_STATE_MACHINE[existingSchedule.status].includes(updates.status)) {
       throw new Error(`Invalid status transition from ${existingSchedule.status} to ${updates.status}`);
     }
+    // The quote was accepted as input and then dropped — `data` only ever
+    // carried the status. So a tradie could email "$5,000 for the job", the
+    // extractor would pull it out, the status would flip to QUOTE_RECEIVED,
+    // and every downstream number still fell back to `quotedPrice ?? totalCost`
+    // with quotedPrice null. Admins approved against an hourly estimate rather
+    // than the price the tradie actually quoted.
+    const quotedAmount = parseQuotedAmount(updates.quote);
+    // The amount alone does not say what it buys. A tradie replying "$950 a
+    // day" and one replying "$950 for the job" send the same number, and
+    // storing either as the job price makes one of them wrong by the length of
+    // the job. Normalise the basis first, then cost it.
+    const quoted =
+      quotedAmount !== null
+        ? normalizeQuoteBasis(quotedAmount, updates.quoteUnit ?? "FIXED")
+        : null;
+
     const schedule = await prisma.tradieSchedule.update({
       where: { id: scheduleId },
-      data: { status: updates.status },
+      data: {
+        status: updates.status,
+        // `quotedPrice` is the whole job, which is what every downstream
+        // display and approval treats it as - so a rate has to be costed
+        // across the booked duration before it lands here.
+        ...(quoted !== null
+          ? {
+            quotedPrice: scheduleTotalCost(
+              quoted.amount,
+              existingSchedule.durationDays,
+              quoted.unit,
+            ).toFixed(2),
+            requiresQuote: true,
+          }
+          : {}),
+      },
       include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
     });
+
+    // Recording the quote against the tradie is what makes `lastQuotedPrice`
+    // mean what it says. It carries the RATE the tradie named, not the job
+    // total - the total belongs to this one schedule and its duration, while
+    // the rate is what they will charge on the next one. FIXED used to be
+    // hardcoded here, which restated every hourly and daily quote as a lump
+    // sum the moment it arrived by email.
+    if (quoted !== null) {
+      await prisma.tradie
+        .update({
+          where: { id: schedule.tradieId },
+          data: {
+            lastQuotedPrice: quoted.amount.toFixed(2),
+            lastQuotedPriceUnit:
+              quoted.unit === "HOURLY"
+                ? TradiePriceUnit.HOURLY
+                : TradiePriceUnit.FIXED,
+          },
+        })
+        .catch((error) =>
+          // Best effort: the schedule already carries the quote, and losing the
+          // tradie-level copy must not fail the status change that recorded it.
+          console.error(
+            `[tradie ${schedule.tradieId}] failed to record last quoted price`,
+            error,
+          ),
+        );
+    }
 
     const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
     after(async () => {
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
-      const totalCost = calculateTotalCost(parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"), schedule.durationDays);
+      // Numeric, deliberately. calculateScheduleTotalCost returns a FORMATTED
+      // string, so `parseFloat(totalCost.toString())` below was parsing "$4,800"
+      // and yielding NaN — every approval and activity entry without an explicit
+      // quote displayed "$NaN". Format at the point of display instead.
+      const totalCost = scheduleTotalCost(
+        parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
+        schedule.durationDays,
+        schedule.tradie.lastQuotedPriceUnit,
+      );
 
       if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
         const approval = await prisma.tradieApproval.create({
@@ -339,7 +408,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
               milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
               scheduledDate: dateFormat.format(schedule.scheduledDate),
               durationDays: schedule.durationDays,
-              cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+              cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
             } satisfies ScheduleApprovalJsonPayload,
           },
           select: {
@@ -357,7 +426,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           scheduledDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           trade: schedule.tradie.trade,
@@ -370,7 +439,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
@@ -387,7 +456,9 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          quote: schedule.quotedPrice ?? totalCost,
+          quote: currency.format(
+            schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost,
+          ),
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
         });
         await logAction(activityLogEntry);
@@ -402,7 +473,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           approved: true,
@@ -416,7 +487,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           scheduledDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           trade: schedule.tradie.trade,
@@ -433,7 +504,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           trade: schedule.tradie.trade,
           scheduleDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           milestoneId: schedule.milestoneId ?? undefined,
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           approved: false,
@@ -447,7 +518,7 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
           milestoneName: schedule.milestone ? schedule.milestone.name : "General Task",
           scheduledDate: dateFormat.format(schedule.scheduledDate),
           durationDays: schedule.durationDays,
-          cost: currency.format(parseFloat(schedule.quotedPrice ?? totalCost.toString())),
+          cost: currency.format((schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost)),
           tradieId: schedule.tradieId,
           tradieName: schedule.tradie.name,
           trade: schedule.tradie.trade,
@@ -477,4 +548,164 @@ export async function updateTradieSchedule(scheduleId: string, updates: UpdateTr
     throw new Error("Failed to update tradie schedule.");
   }
 
+}
+
+/**
+ * Raises an admin approval request to remove a booked tradie schedule.
+ *
+ * Removal is never immediate. A booking that has been sent to a tradie — and
+ * in most cases confirmed by them — represents a commitment the site manager
+ * cannot quietly withdraw, so the request is recorded as a
+ * `SCHEDULE_DELETION` approval and every admin is notified. The schedule row
+ * is only deleted once an admin approves, in {@link handleAdminApproval}.
+ *
+ * @param input - The schedule to remove and the reason an admin will judge.
+ * @returns Whether the request was raised, with a message for the caller and
+ * the id of the approval when one was created.
+ */
+export async function requestTradieScheduleDeletion(input: DeleteScheduleInput) {
+  try {
+    const schedule = await prisma.tradieSchedule.findUnique({
+      where: { id: input.scheduleId },
+      include: { tradie: true, project: { include: { siteManager: true } }, milestone: true },
+    });
+    if (!schedule) {
+      throw new Error("Schedule not found");
+    }
+    const userId = await userHasAccessToSchedule(schedule.projectId);
+
+    // Without this an impatient click sends the same booking to the admin
+    // queue twice, and the second approval then fails on a row the first one
+    // already deleted.
+    const pendingRequest = await prisma.tradieApproval.findFirst({
+      where: {
+        tradieId: schedule.tradieId,
+        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+        status: TradieApprovalStatus.PENDING,
+        updationData: { path: ["scheduleId"], equals: schedule.id },
+      },
+      select: { id: true },
+    });
+    if (pendingRequest) {
+      return {
+        success: false,
+        message: "A deletion request for this schedule is already awaiting admin approval.",
+      };
+    }
+
+    const totalCost = scheduleTotalCost(
+      parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
+      schedule.durationDays,
+      schedule.tradie.lastQuotedPriceUnit,
+    );
+    const cost = currency.format(schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost);
+    const scheduledDate = dateFormat.format(schedule.scheduledDate);
+    const milestoneName = schedule.milestone ? schedule.milestone.name : "General Task";
+
+    const approval = await prisma.tradieApproval.create({
+      data: {
+        tradieId: schedule.tradieId,
+        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+        requestedBy: userId,
+        reason: input.reason,
+        // The booking is described here rather than looked up later on
+        // purpose: once the approval is granted the schedule row is gone, and
+        // the resolved request still has to read as a record of what was
+        // removed.
+        updationData: {
+          scheduleId: schedule.id,
+          projectId: schedule.projectId,
+          projectName: schedule.project.name,
+          milestoneId: schedule.milestoneId ?? undefined,
+          milestoneName,
+          scheduledDate,
+          durationDays: schedule.durationDays,
+          cost,
+          currentStatus: schedule.status,
+        } satisfies ScheduleDeletionJsonPayload,
+      },
+      select: { id: true },
+    });
+
+    after(async () => {
+      revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+      revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
+      const requester = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+      const notificationPayload = createNotification("tradieScheduleDeletionRequest", {
+        approvalId: approval.id,
+        scheduleId: schedule.id,
+        projectId: schedule.projectId,
+        projectName: schedule.project.name,
+        milestoneId: schedule.milestoneId ?? undefined,
+        milestoneName,
+        scheduledDate,
+        durationDays: schedule.durationDays,
+        cost,
+        tradieId: schedule.tradieId,
+        tradieName: schedule.tradie.name,
+        trade: schedule.tradie.trade,
+        reason: input.reason,
+        requestedBy: requester?.name ?? "A site manager",
+      });
+      const activityLogEntry = createActivityLogEntry("tradieScheduleDeletionRequested", {
+        projectId: schedule.projectId,
+        scheduleId: schedule.id,
+        tradieId: schedule.tradieId,
+        tradieName: schedule.tradie.name,
+        trade: schedule.tradie.trade,
+        scheduleDate: scheduledDate,
+        durationDays: schedule.durationDays,
+        cost,
+        milestoneId: schedule.milestoneId ?? undefined,
+        milestoneName,
+        reason: input.reason,
+      });
+      await logAction(activityLogEntry);
+      // Guarded because triggerNotification reads an empty recipient list as
+      // "broadcast to every user" — a request meant for admins must not reach
+      // the whole company if none are configured.
+      const adminIds = await getAllAdminUsersIds();
+      if (adminIds.length > 0) {
+        await triggerNotification(adminIds, notificationPayload);
+      }
+    });
+
+    return {
+      success: true,
+      message: "Deletion request submitted for admin approval.",
+      approvalId: approval.id,
+    };
+  } catch (error) {
+    console.error("Error requesting tradie schedule deletion:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to request schedule deletion.",
+    };
+  }
+}
+
+/**
+ * Sends a reminder email to a tradie regarding their scheduled task.
+ * @param to - The email address of the tradie.
+ * @param subject - The subject of the reminder email.
+ * @param body - The body content of the reminder email.
+ * @returns An object indicating the success or failure of the email sending operation.
+ * @throws {Error} If the email sending operation fails.
+ */
+export async function sendTradieScheduleReminder({ to, subject, body }: { to: string; subject: string; body: string }) {
+  try {
+    await sendEmail({
+      to,
+      subject,
+      body,
+    });
+
+    return { success: true, message: "Reminder sent successfully." };
+  } catch (error) {
+    console.error("Error sending tradie schedule reminder:", error);
+    throw new Error("Failed to send tradie schedule reminder.");
+  }
 }

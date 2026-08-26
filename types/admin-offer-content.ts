@@ -81,12 +81,23 @@ export interface OfferContentData {
   termsAndConditions: string; // default T&C text
 }
 
+export interface HBFCClaimData {
+  claimAmount: number; // default HBFC claim amount
+  loadingChargePercent: number; // default HBFC loading charge percentage
+  totalPremiumToBePaid: number; // default HBFC total premium to be paid
+}
+
 // ---- Aggregate ----
 export interface AdminOfferContent {
   buildScope: BuildScopeLines;
   costSchedule: CostScheduleData;
   offerScope: OfferScopeData;
   offerContent: OfferContentData;
+  hbfcClaim: HBFCClaimData;
+  // Monotonic content version, incremented by every per-section save. Offers
+  // stamp the version they were built from so a still-editable offer can pick up
+  // later admin changes on open (see buildAdminOfferPrefill).
+  version: number;
 }
 
 export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
@@ -101,4 +112,10 @@ export const EMPTY_ADMIN_OFFER_CONTENT: AdminOfferContent = {
     inclusionSchedule: [],
     termsAndConditions: "",
   },
+  hbfcClaim: {
+    claimAmount: 0,
+    loadingChargePercent: 0,
+    totalPremiumToBePaid: 0,
+  },
+  version: 1,
 };

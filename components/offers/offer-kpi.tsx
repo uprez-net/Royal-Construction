@@ -12,6 +12,8 @@ interface OfferKPIProps {
   approvedOffers: DataPoint;
   pendingOffers: DataPoint;
   sentOffers: DataPoint;
+  /** Offer revisions behind these totals; only the "Total Offers" caption uses it. */
+  totalVersions: number;
 }
 
 export function OfferKPI({
@@ -19,12 +21,25 @@ export function OfferKPI({
   approvedOffers,
   pendingOffers,
   sentOffers,
+  totalVersions,
 }: OfferKPIProps) {
-  const allKPIs: KPIListItem[] = [
-    { title: "Active Offers", dataPoint: activeOffers, Icon: Receipt, iconTone: "bg-teal-600" },
-    { title: "Approved Offers", dataPoint: approvedOffers, Icon: CheckCircle2, iconTone: "bg-green-600" },
-    { title: "Pending Offers", dataPoint: pendingOffers, Icon: Hourglass, iconTone: "bg-yellow-600" },
-    { title: "Sent Offers", dataPoint: sentOffers, Icon: Send, iconTone: "bg-blue-600" },
+  // Every count here is per lead, taken from that lead's active revision, so a
+  // client re-priced four times is one offer in exactly one status bucket —
+  // the same unit the table paginates over.
+  const allKPIs: (KPIListItem & { caption?: string })[] = [
+    {
+      title: "Total Offers",
+      dataPoint: activeOffers,
+      Icon: Receipt,
+      tone: "primary",
+      caption:
+        totalVersions > activeOffers.total
+          ? `${totalVersions} versions across all offers`
+          : undefined,
+    },
+    { title: "Approved Offers", dataPoint: approvedOffers, Icon: CheckCircle2, tone: "success" },
+    { title: "Pending Offers", dataPoint: pendingOffers, Icon: Hourglass, tone: "warning" },
+    { title: "Sent Offers", dataPoint: sentOffers, Icon: Send, tone: "info" },
   ];
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -35,7 +50,8 @@ export function OfferKPI({
           value={kpi.dataPoint.total}
           trendDelta={kpi.dataPoint.trendDelta}
           Icon={kpi.Icon}
-          iconTone={kpi.iconTone}
+          tone={kpi.tone}
+          caption={kpi.caption}
         />
       ))}
     </div>

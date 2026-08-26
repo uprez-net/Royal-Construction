@@ -23,6 +23,7 @@ export interface ApprovalKPI {
     incidentReportCount: number;
     deletionCount: number;
     scheduleCount: number;
+    scheduleDeletionCount: number;
     resolvedCount: {
         accepted: number;
         rejected: number;
@@ -36,5 +37,6 @@ export type TabKey =
     | "incident"
     | "delete"
     | "schedule"
+    | "scheduleDeletion"
     | "approved"
     | "rejected";

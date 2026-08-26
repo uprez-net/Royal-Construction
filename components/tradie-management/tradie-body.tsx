@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import type { TradieRow, TradieTableQuery } from "@/types/tradie";
 import { TradieCategory } from "./tabs/tradie-category";
 import { TradieTable } from "./tabs/tradie-table";
-import { TradieList } from "./tabs/tradie-list";
 import {
   CLEARED_TRADIE_QUERY,
   TRADIE_VIEW_PANEL_ID,
@@ -15,9 +14,9 @@ import {
 } from "./tradie-tabs";
 
 /**
- * Single filter predicate for every view. Category and List views used to honour
- * only search + favourite, so a trade or rating filter set elsewhere silently
- * stopped applying when the user switched view. All views now agree.
+ * Single filter predicate for both views. The Category view used to honour only
+ * search + favourite, so a trade or rating filter set elsewhere silently stopped
+ * applying when the user switched view. Both views now agree.
  */
 function matchesTradieQuery(tradie: TradieRow, query: TradieTableQuery) {
   const search = query.search?.trim().toLowerCase();
@@ -110,12 +109,6 @@ export function TradieBody() {
           groupedEmptyState
         );
       case "list":
-        return filteredTradiesByCategory.length > 0 ? (
-          <TradieList filteredTradies={filteredTradiesByCategory} />
-        ) : (
-          groupedEmptyState
-        );
-      case "table":
         return <TradieTable filteredTradies={filteredTradies} />;
       default:
         return null;

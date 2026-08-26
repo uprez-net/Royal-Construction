@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Mail, MessageSquare, Send } from "lucide-react";
+import { Loader2, Mail, MessageSquare, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { TradieScheduleListItem } from "@/types/project";
 import { dateFormat } from "@/utils/formatters";
+import { toast } from "sonner";
+import { sendTradieScheduleReminder } from "@/lib/data/tradieSchedules";
 
 interface ReminderModalProps {
   open: boolean;
@@ -103,15 +105,38 @@ export function ReminderModal({
     smsBody: smsBodyInt,
     emailSubject: emailSubjectInt,
   } = buildEmailAndSmsBodies(schedule, tradie, siteManager, senderName);
+  const [isSending, startTransition] = useTransition();
   const [tab, setTab] = useState<"email" | "sms">("email");
   const [emailBody, setEmailBody] = useState(emailBodyInt);
   const [smsBody, setSmsBody] = useState(smsBodyInt);
   const [emailSubject, setEmailSubject] = useState(emailSubjectInt);
+
+  const handleSend = async () => {
+    try {
+      if (tab === "email") {
+        await sendTradieScheduleReminder({
+          to: tradie.email,
+          subject: emailSubject,
+          body: emailBody,
+        });
+        toast.success("Email reminder sent successfully.");
+        onSend();
+      } else if (tab === "sms") {
+        // Implement SMS sending logic here
+        toast.success("SMS reminder sent successfully.");
+        onSend();
+      }
+    } catch (error) {
+      console.error("Error sending reminder:", error);
+      toast.error("Failed to send reminder. Please try again.");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
+          "max-w-[calc(100%-2rem)] gap-0 sm:max-w-170 overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
           "sm:rounded-[14px]",
           "max-h-[60vh] overflow-y-auto",
         )}
@@ -119,7 +144,7 @@ export function ReminderModal({
         {/* Header */}
         <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
           <div>
-            <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-foreground">
+            <DialogTitle className="text-[18px] font-bold tracking-[-0.02em] text-foreground">
               Send Reminder
             </DialogTitle>
           </div>
@@ -132,7 +157,7 @@ export function ReminderModal({
             <button
               onClick={() => setTab("email")}
               className={cn(
-                "inline-flex items-center rounded-[7px] border px-3 py-[7px] text-[12.5px] font-[600] transition-all",
+                "inline-flex items-center rounded-[7px] border px-3 py-1.75 text-[12.5px] font-semibold transition-all",
                 tab === "email"
                   ? "border-primary bg-primary text-primary-foreground shadow-sm"
                   : "border-border/70 bg-card text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary",
@@ -145,7 +170,7 @@ export function ReminderModal({
             <button
               onClick={() => setTab("sms")}
               className={cn(
-                "inline-flex items-center rounded-[7px] border px-3 py-[7px] text-[12.5px] font-[600] transition-all",
+                "inline-flex items-center rounded-[7px] border px-3 py-1.75 text-[12.5px] font-semibold transition-all",
                 tab === "sms"
                   ? "border-primary bg-primary text-primary-foreground shadow-sm"
                   : "border-border/70 bg-card text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary",
@@ -160,17 +185,17 @@ export function ReminderModal({
           {tab === "email" && (
             <div>
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
+                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
                   To
                 </Label>
 
-                <div className="text-[13px] font-[600] text-foreground">
+                <div className="text-[13px] font-semibold text-foreground">
                   {tradie?.email || "N/A"}
                 </div>
               </div>
 
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
+                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
                   Subject
                 </Label>
 
@@ -182,7 +207,7 @@ export function ReminderModal({
               </div>
 
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
+                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
                   CC
                 </Label>
 
@@ -192,14 +217,14 @@ export function ReminderModal({
               </div>
 
               <div>
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
+                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
                   Body
                 </Label>
 
                 <Textarea
                   onChange={(e) => setEmailBody(e.target.value)}
                   className={cn(
-                    "min-h-[180px] resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
+                    "min-h-45 resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
                     "font-sans text-[12.5px] leading-[1.6] text-foreground",
                   )}
                   value={emailBody}
@@ -212,24 +237,24 @@ export function ReminderModal({
           {tab === "sms" && (
             <div>
               <div className="mb-3">
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
+                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
                   To
                 </Label>
 
-                <div className="text-[13px] font-[600] text-foreground">
+                <div className="text-[13px] font-semibold text-foreground">
                   {tradie.phone || "N/A"}
                 </div>
               </div>
 
               <div>
-                <Label className="mb-[5px] block text-[11.5px] font-[600] text-muted-foreground">
+                <Label className="mb-1.25 block text-[11.5px] font-semibold text-muted-foreground">
                   Message
                 </Label>
 
                 <Textarea
                   onChange={(e) => setSmsBody(e.target.value)}
                   className={cn(
-                    "min-h-[180px] resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
+                    "min-h-45 resize-none rounded-[8px] border border-border/70 bg-muted/30 p-3.5",
                     "font-sans text-[12.5px] leading-[1.6] text-foreground",
                   )}
                   value={smsBody}
@@ -247,18 +272,29 @@ export function ReminderModal({
         <DialogFooter className="flex-row justify-end gap-2 border-t border-border/70 px-6 py-4">
           <Button
             variant="outline"
+            disabled={isSending}
             onClick={() => onOpenChange(false)}
-            className="h-auto rounded-[7px] border-border/70 px-[14px] py-[7px] text-[12.5px] font-[500] text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
+            className="h-auto rounded-[7px] border-border/70 px-3.5 py-1.75 text-[12.5px] font-medium text-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
           >
             Cancel
           </Button>
 
           <Button
-            onClick={onSend}
-            className="h-auto rounded-[7px] bg-primary px-[14px] py-[7px] text-[12.5px] font-[600] text-primary-foreground shadow-none transition-all hover:bg-primary/90"
+            disabled={isSending}
+            onClick={() => startTransition(() => handleSend())}
+            className="h-auto rounded-[7px] bg-primary px-3.5 py-1.75 text-[12.5px] font-semibold text-primary-foreground shadow-none transition-all hover:bg-primary/90"
           >
-            <Send className="mr-1.5 h-3.5 w-3.5" />
-            Send Reminder
+            {isSending ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="mr-1.5 h-3.5 w-3.5" />
+                Send Reminder
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

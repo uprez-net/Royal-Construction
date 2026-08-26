@@ -412,3 +412,31 @@ export const projectTabsValidator = z.enum([
 ]);
 
 export type ProjectDetailTabKey = z.infer<typeof projectTabsValidator>;
+/* -------------------------------------------------------------------------- */
+/*                            Insurance claim dates                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The project's insurance coverage window, captured when the first Slab-stage
+ * milestone is started. Dates are `yyyy-MM-dd` to match `signedDate` and the
+ * rest of the requirements payload.
+ */
+export const insuranceClaimDatesSchema = z
+  .object({
+    insuranceClaimStartDate: z.iso.date("Insurance claim start date is required"),
+    insuranceClaimEndDate: z.iso.date("Insurance claim end date is required"),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      new Date(data.insuranceClaimEndDate) <=
+      new Date(data.insuranceClaimStartDate)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["insuranceClaimEndDate"],
+        message: "End date must be after the start date",
+      });
+    }
+  });
+
+export type InsuranceClaimDatesInput = z.infer<typeof insuranceClaimDatesSchema>;

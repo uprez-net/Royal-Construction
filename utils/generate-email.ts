@@ -104,7 +104,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
 
             <h1 style="
             margin:0 0 24px;
-            color:white;
+            color:${RC_COLORS.text};
             font-size:30px;
             font-weight:bold;
             line-height:38px;">
@@ -137,7 +137,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <td style="padding:14px 20px;color:${RC_COLORS.muted};width:220px;border-top:1px solid ${RC_COLORS.border};">
             Project
             </td>
-            <td style="padding:14px 20px;color:white;border-top:1px solid ${RC_COLORS.border};">
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
             ${input.projectName}
             </td>
             </tr>
@@ -146,7 +146,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Trade
             </td>
-            <td style="padding:14px 20px;color:white;border-top:1px solid ${RC_COLORS.border};">
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
             ${input.tradeType}
             </td>
             </tr>
@@ -155,7 +155,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Milestone
             </td>
-            <td style="padding:14px 20px;color:white;border-top:1px solid ${RC_COLORS.border};">
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
             ${input.milestoneName ?? input.taskLabel}
             </td>
             </tr>
@@ -164,7 +164,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Scheduled Date
             </td>
-            <td style="padding:14px 20px;color:white;border-top:1px solid ${RC_COLORS.border};">
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
             ${formattedDate}
             </td>
             </tr>
@@ -173,7 +173,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Duration
             </td>
-            <td style="padding:14px 20px;color:white;border-top:1px solid ${RC_COLORS.border};">
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
             ${input.durationDays} day${input.durationDays > 1 ? "s" : ""}
             </td>
             </tr>
@@ -184,7 +184,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Agreed Price
             </td>
-            <td style="padding:14px 20px;color:white;border-top:1px solid ${RC_COLORS.border};">
+            <td style="padding:14px 20px;color:${RC_COLORS.text};border-top:1px solid ${RC_COLORS.border};">
             ${input.quotedPrice ?? "-"}
             </td>
             </tr>
@@ -205,7 +205,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             background:${RC_COLORS.card};
             border-left:4px solid ${RC_COLORS.gold};">
 
-            <p style="margin:0 0 12px;color:white;font-weight:bold;">
+            <p style="margin:0 0 12px;color:${RC_COLORS.text};font-weight:bold;">
             Site Manager
             </p>
 
@@ -242,7 +242,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             line-height:24px;
             color:${RC_COLORS.muted};">
 
-            <strong style="color:white;">Royal Constructions</strong><br><br>
+            <strong style="color:${RC_COLORS.text};">Royal Constructions</strong><br><br>
 
             Phone: ${RC_URLS.phoneDisplay}<br>
 

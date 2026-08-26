@@ -4,67 +4,127 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { OfferKPIs, PaginatedOfferResult } from "@/types/offer";
+import { KPIResult, OfferGroup, OfferKPIs, OfferWithLead, PaginatedOfferGroupResult } from "@/types/offer";
 import { calculateTrend } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
+import { closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
 
-export async function getOffers(page?: number, limit?: number, q?: string): Promise<PaginatedOfferResult> {
+/**
+ * Offer listing, grouped into one row per lead.
+ *
+ * A lead accumulates one `Offer` row per revision, so a flat listing showed the
+ * same client three or four times over. Pagination therefore runs over leads
+ * (the unit the table renders) and every revision for the leads on the page is
+ * fetched alongside them, which is what the expandable version history reads.
+ */
+export async function getOfferGroups(page?: number, limit?: number, q?: string): Promise<PaginatedOfferGroupResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
     const safeLimit = Number.isFinite(limit) && (limit ?? 12) > 0 ? Math.min(Math.floor(limit ?? 12), 100) : 12;
     const safeQuery = (q && q.trim() !== "") ? q.trim() : undefined;
     try {
-        const whereClause: Prisma.OfferWhereInput[] = [];
-        if (safeQuery) {
-            whereClause.push({
-                OR: [
-                    {
-                        lead: {
-                            name: { contains: safeQuery, mode: "insensitive" },
-                            email: { contains: safeQuery, mode: "insensitive" },
-                            phone: { contains: safeQuery, mode: "insensitive" },
-                            location: { contains: safeQuery, mode: "insensitive" },
-                        }
-                    }
-                ],
-            });
-        }
-        const [offers, totalCount] = await Promise.all([
-            prisma.offer.findMany({
-                where: { AND: whereClause },
-                include: {
-                    lead: true,
-                    offerFiles: {
-                        orderBy: { createdAt: "desc" },
-                        take: 1,
-                        select: {
-                            version: true,
-                        }
-                    },
-                },
+        // `some: {}` keeps out leads that have never been offered on. The search
+        // terms are OR'd: nesting them in one object (as the flat query did)
+        // AND's them, so a name match only counted when the email, phone and
+        // location all matched the same string too.
+        const leadWhere: Prisma.LeadWhereInput = {
+            offers: { some: {} },
+            ...(safeQuery
+                ? {
+                    OR: [
+                        { name: { contains: safeQuery, mode: "insensitive" } },
+                        { email: { contains: safeQuery, mode: "insensitive" } },
+                        { phone: { contains: safeQuery, mode: "insensitive" } },
+                        { location: { contains: safeQuery, mode: "insensitive" } },
+                    ],
+                }
+                : {}),
+        };
+
+        const [leads, totalCount, totalOfferCount] = await Promise.all([
+            prisma.lead.findMany({
+                where: leadWhere,
+                orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
                 skip: (safePage - 1) * safeLimit,
                 take: safeLimit,
+                include: {
+                    offers: {
+                        orderBy: [{ revisionNumber: "desc" }, { createdAt: "desc" }],
+                        include: {
+                            offerFiles: {
+                                orderBy: { version: "desc" },
+                                take: 1,
+                                select: { version: true },
+                            },
+                        },
+                    },
+                },
             }),
-            prisma.offer.count({
-                where: { AND: whereClause },
-            }),
+            prisma.lead.count({ where: leadWhere }),
+            prisma.offer.count({ where: { lead: leadWhere } }),
         ]);
-        const totalPages = Math.ceil(totalCount / safeLimit);
+
+        const items = leads.flatMap<OfferGroup>((leadRow) => {
+            const { offers, ...lead } = leadRow;
+
+            const revisions: OfferWithLead[] = offers.map(({ offerFiles, ...offer }) => {
+                // Repair-on-read, mirroring resolveOfferContractValue's rationale.
+                // These three columns were minted at zero and never written by the
+                // workspace autosave, so every row saved before that fix carries a
+                // $0 that never matched the document the client received, and no
+                // migration can recompute it outside the workspace schema. A
+                // positive stored total stays authoritative — it is what the save
+                // recorded — so only unpriced rows are derived from their own
+                // saved workspaceState.
+                const storedTotal = Number(offer.totalAmount);
+                const derived =
+                    storedTotal > 0
+                        ? null
+                        : resolveOfferPriceSplit(
+                            offer.contractValueIncGst === null
+                                ? null
+                                : Number(offer.contractValueIncGst),
+                            offer.workspaceState,
+                        );
+
+                return {
+                    ...offer,
+                    amount: (derived?.amountExGst ?? offer.amount).toString(),
+                    gstAmount: (derived?.gstAmount ?? offer.gstAmount).toString(),
+                    totalAmount: (derived?.totalIncGst ?? offer.totalAmount).toString(),
+                    contractValueIncGst:
+                        derived?.totalIncGst.toString() ??
+                        offer.contractValueIncGst?.toString() ??
+                        null,
+                    version: offerFiles[0]?.version ?? 1,
+                    lead,
+                };
+            });
+
+            // `some: {}` guarantees at least one, but a lead with none must not
+            // become a row with an undefined `latest`.
+            const latest = revisions.find((revision) => revision.isActive) ?? revisions[0];
+            if (!latest) return [];
+
+            return [{
+                leadId: lead.id,
+                lead,
+                reference: latest.baseReference || `OF-${lead.id}`,
+                latest,
+                revisions,
+                versionCount: revisions.length,
+            }];
+        });
 
         return {
-            items: offers.map(({ offerFiles, ...offer }) => ({
-                ...offer,
-                amount: offer.amount.toString(),
-                gstAmount: offer.gstAmount.toString(),
-                totalAmount: offer.totalAmount.toString(),
-                contractValueIncGst: offer.contractValueIncGst?.toString() ?? null,
-                version: offerFiles[0]?.version ?? 1,
-            })),
+            items,
             page: safePage,
             limit: safeLimit,
             totalCount,
-            totalPages,
+            totalOfferCount,
+            totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
         };
     } catch (error) {
         console.error("Error fetching offers:", error);
@@ -73,12 +133,15 @@ export async function getOffers(page?: number, limit?: number, q?: string): Prom
             page: safePage,
             limit: safeLimit,
             totalCount: 0,
+            totalOfferCount: 0,
             totalPages: 1,
         };
     }
 }
 
 type OfferKPIQueryResult = {
+    total_versions: bigint;
+
     all_offers: bigint;
 
     pending_offers: bigint;
@@ -102,6 +165,23 @@ type OfferKPIQueryResult = {
     sent_current_week: bigint;
 };
 
+/**
+ * The headline number is the running total; `calculateTrend` returns the current
+ * week as its `total`, which is why every card used to read as a weekly count
+ * while the `*_offers` columns went unused. Only the percentage is taken from it.
+ */
+const offerKPI = (total: bigint, current: bigint, previous: bigint): KPIResult => ({
+    total: Number(total),
+    trendDelta: calculateTrend(Number(current), Number(previous)).trendDelta,
+});
+
+/**
+ * Counts leads, not `Offer` rows, so the cards agree with the grouped table.
+ *
+ * Each lead is represented by one revision — the active one, else the highest
+ * revision number — picked by DISTINCT ON, so a lead with four revisions counts
+ * once and lands in the status bucket of the revision that is actually live.
+ */
 export async function getOfferKPIs(): Promise<OfferKPIs> {
     try {
         const now = new Date();
@@ -113,7 +193,14 @@ export async function getOfferKPIs(): Promise<OfferKPIs> {
         const previousWeekStart = subWeeks(currentWeekStart, 1);
 
         const [result] = await prisma.$queryRaw<OfferKPIQueryResult[]>`
+            WITH representative AS (
+                SELECT DISTINCT ON ("leadId") *
+                FROM "Offer"
+                ORDER BY "leadId", "isActive" DESC, "revisionNumber" DESC, "createdAt" DESC
+            )
             SELECT
+                (SELECT COUNT(*) FROM "Offer") AS total_versions,
+
                 COUNT(*) AS all_offers,
 
                 COUNT(*) FILTER (
@@ -121,15 +208,15 @@ export async function getOfferKPIs(): Promise<OfferKPIs> {
                 ) AS pending_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'ACCEPTED'
+                    WHERE "offerStatus" in ('ACCEPTED', 'AGREED', 'TENDER_DRAFT', 'TENDER_SENT', 'TENDER_SIGNED', 'CONTRACT_DRAFT', 'CONTRACT_SENT', 'CONTRACT_SIGNED', 'PROJECT')
                 ) AS approved_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'REJECTED'
+                    WHERE "offerStatus" in ('REJECTED', 'OFFER_DECLINED', 'TENDER_DECLINED', 'CONTRACT_DECLINED')
                 ) AS rejected_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'SENT'
+                    WHERE "offerStatus" in ('SENT', 'TENDER_SENT', 'CONTRACT_SENT')
                 ) AS sent_offers,
 
                 COUNT(*) FILTER (
@@ -153,68 +240,76 @@ export async function getOfferKPIs(): Promise<OfferKPIs> {
                 ) AS pending_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'ACCEPTED'
+                    WHERE "offerStatus" in ('ACCEPTED', 'AGREED', 'TENDER_DRAFT', 'TENDER_SENT', 'TENDER_SIGNED', 'CONTRACT_DRAFT', 'CONTRACT_SENT', 'CONTRACT_SIGNED', 'PROJECT')
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS approved_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'ACCEPTED'
+                    WHERE "offerStatus" in ('ACCEPTED', 'AGREED', 'TENDER_DRAFT', 'TENDER_SENT', 'TENDER_SIGNED', 'CONTRACT_DRAFT', 'CONTRACT_SENT', 'CONTRACT_SIGNED', 'PROJECT')
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS approved_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'REJECTED'
+                    WHERE "offerStatus" in ('REJECTED', 'OFFER_DECLINED', 'TENDER_DECLINED', 'CONTRACT_DECLINED')
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS rejected_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'REJECTED'
+                    WHERE "offerStatus" in ('REJECTED', 'OFFER_DECLINED', 'TENDER_DECLINED', 'CONTRACT_DECLINED')
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS rejected_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'SENT'
+                    WHERE "offerStatus" in ('SENT', 'TENDER_SENT', 'CONTRACT_SENT')
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS sent_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'SENT'
+                    WHERE "offerStatus" in ('SENT', 'TENDER_SENT', 'CONTRACT_SENT')
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS sent_current_week
-            FROM "Offer"
+            FROM representative
         `;
 
         return {
-            allOffers: calculateTrend(
-                Number(result.all_current_week),
-                Number(result.all_previous_week),
+            totalVersions: Number(result.total_versions),
+
+            allOffers: offerKPI(
+                result.all_offers,
+                result.all_current_week,
+                result.all_previous_week,
             ),
 
-            pendingOffers: calculateTrend(
-                Number(result.pending_current_week),
-                Number(result.pending_previous_week),
+            pendingOffers: offerKPI(
+                result.pending_offers,
+                result.pending_current_week,
+                result.pending_previous_week,
             ),
-            approvedOffers: calculateTrend(
-                Number(result.approved_current_week),
-                Number(result.approved_previous_week),
+            approvedOffers: offerKPI(
+                result.approved_offers,
+                result.approved_current_week,
+                result.approved_previous_week,
             ),
 
-            rejectedOffers: calculateTrend(
-                Number(result.rejected_current_week),
-                Number(result.rejected_previous_week),
+            rejectedOffers: offerKPI(
+                result.rejected_offers,
+                result.rejected_current_week,
+                result.rejected_previous_week,
             ),
-            sentOffers: calculateTrend(
-                Number(result.sent_current_week),
-                Number(result.sent_previous_week),
+            sentOffers: offerKPI(
+                result.sent_offers,
+                result.sent_current_week,
+                result.sent_previous_week,
             ),
         };
     } catch (error) {
         console.error("Error fetching offer KPIs:", error);
 
         return {
+            totalVersions: 0,
             allOffers: { total: 0, trendDelta: 0 },
             pendingOffers: { total: 0, trendDelta: 0 },
             approvedOffers: { total: 0, trendDelta: 0 },
@@ -224,12 +319,12 @@ export async function getOfferKPIs(): Promise<OfferKPIs> {
     }
 }
 
-export const getOffersCached = async (page?: number, limit?: number, q?: string) => {
+export const getOfferGroupsCached = async (page?: number, limit?: number, q?: string) => {
     "use cache";
     cacheTag("offers");
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getOffers(page, limit, q);
+    return getOfferGroups(page, limit, q);
 }
 
 export const getOfferKPIsCached = async () => {
@@ -245,7 +340,15 @@ const OFFER_TO_LEAD_STATUS_UPDATE_MAP: Record<OfferStatus, LeadStage> = {
     PENDING: "NEGOTIATING",
     SENT: "NEGOTIATING",
     ACCEPTED: "WON",
-    REJECTED: "LOST",
+    // NEGOTIATING, not LOST. A rejected offer is not a lost lead — REJECTED is
+    // explicitly reversible (the state machine allows REJECTED -> PENDING), and
+    // the three modern declined statuses below all map to NEGOTIATING for the
+    // same reason. It also closes a data-integrity hole: this path writes
+    // lead.stage through a nested update rather than updateLead, so it bypassed
+    // the rule that a lead cannot enter LOST without a recorded reason, and was
+    // producing LOST rows with a null lostReason that land in the "Unknown"
+    // slice of the non-conversion charts. Closing a lead stays a human action.
+    REJECTED: "NEGOTIATING",
     // Offer-acceptance signing (ADR 0004) is pre-agreed, so still negotiating.
     OFFER_SENT: "NEGOTIATING",
     OFFER_SIGNED: "NEGOTIATING",
@@ -312,7 +415,8 @@ export const updateOfferStatus = async (offerId: string, status: OfferStatus) =>
         
         const currentOffer = await prisma.offer.findUnique({
             where: { id: offerId },
-            select: { offerStatus: true, leadId: true },
+            // lead.stage is needed to work out the wonAt/lostAt patch below.
+            select: { offerStatus: true, leadId: true, lead: { select: { stage: true } } },
         });
         
         if (!currentOffer) {
@@ -325,13 +429,22 @@ export const updateOfferStatus = async (offerId: string, status: OfferStatus) =>
             throw new Error(`Invalid status transition from ${currentOffer.offerStatus} to ${status}`);
         }
 
+        // Most real wins are recorded through THIS path, not the lead modal —
+        // ACCEPTED/AGREED/TENDER_*/CONTRACT_*/PROJECT all map to WON. Stamping
+        // only in updateLead would leave the forecast blind to them.
+        const nextLeadStage = OFFER_TO_LEAD_STATUS_UPDATE_MAP[status];
         const offer = await prisma.offer.update({
             where: { id: offerId },
-            data: { 
+            data: {
                 offerStatus: status,
                 lead: {
                     update: {
-                        stage: OFFER_TO_LEAD_STATUS_UPDATE_MAP[status],
+                        stage: nextLeadStage,
+                        ...closeDatePatch(
+                            currentOffer.lead?.stage ?? null,
+                            nextLeadStage,
+                            new Date(),
+                        ),
                     }
                 }
             },

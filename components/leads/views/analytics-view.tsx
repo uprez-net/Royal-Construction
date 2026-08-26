@@ -26,6 +26,10 @@ interface AnalyticsViewProps {
   analytics: LeadAnalyticsData;
 }
 
+import { ForecastPanel } from "@/components/leads/forecast-panel";
+import { PipelineKpi } from "@/components/leads/pipeline-kpi";
+import { PipelineStageChart } from "@/components/leads/pipeline-stage-chart";
+
 /* ── BuildPro chart tokens ─────── */
 const CHART = {
   lead: "var(--royal-gold)",
@@ -66,7 +70,10 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
 
   const convChartConfig: ChartConfig = {
     total: { label: "Total", color: CHART.lead },
-    won: { label: "Won", color: CHART.success },
+    // Data key stays `won` because that is the API field name. The LABEL says
+    // Converted, matching the trend chart above and the KPI card. "Won" is not
+    // a word this UI shows anywhere else.
+    won: { label: "Converted", color: CHART.success },
   };
 
   const lostChartConfig: ChartConfig = {};
@@ -83,6 +90,14 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
 
   return (
     <div className="analytics-view">
+      <PipelineKpi
+        metrics={analytics.pipelineMetrics}
+        forecast={analytics.forecast}
+      />
+      <div className="analytics-row">
+        <PipelineStageChart metrics={analytics.pipelineMetrics} />
+        <ForecastPanel forecast={analytics.forecast} />
+      </div>
       <div className="analytics-summary" aria-label="Lead analytics summary">
         <div>
           <span>Top source</span>

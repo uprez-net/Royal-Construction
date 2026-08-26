@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 export function AppShellLoader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-transparent text-foreground animate-pulse">
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-transparent text-foreground animate-pulse">
       <div
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
@@ -25,7 +25,7 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
         }}
       />
 
-      <div className="flex min-h-screen">
+      <div className="flex h-full">
         {/* Sidebar */}
         <aside className="hidden w-16 shrink-0 border-r border-white/10 bg-slate-950 text-slate-300 shadow-[6px_0_28px_rgba(15,23,42,0.12)] md:flex md:flex-col md:items-center md:py-4">
           <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-teal-500/15 text-teal-400">
@@ -42,7 +42,7 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header */}
           <header className="sticky top-0 z-30 border-b border-white/60 bg-slate-950 text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur">
-            <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
                 <div>
                   <div className="h-6 w-32 rounded-md bg-teal-500/20" />
@@ -73,9 +73,8 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
           {/* Main Content */}
           <main
             className={cn(
-              "mx-auto flex w-full max-w-screen-2xl flex-1 flex-col gap-6",
+              "flex min-h-0 w-full flex-1 flex-col gap-6",
               "overflow-y-auto",
-              "max-h-[90vh]",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
               "[scrollbar-width:none]",
               "[-ms-overflow-style:none]",

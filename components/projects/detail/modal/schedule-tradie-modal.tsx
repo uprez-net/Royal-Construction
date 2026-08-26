@@ -19,11 +19,12 @@ import {
   setTradieLoading,
 } from "@/lib/store/slices/tradieManagementSlice";
 import { getTradieGroupedByCategoryCached } from "@/lib/data/tradie-management";
+import type { ProjectStage } from "@prisma/client";
 
 interface ScheduleTradieModalProps {
   open: boolean;
   onClose: () => void;
-  milestones: { id: string; name: string }[];
+  milestones: { id: string; name: string; projectStage: ProjectStage }[];
   projectId: string;
 }
 

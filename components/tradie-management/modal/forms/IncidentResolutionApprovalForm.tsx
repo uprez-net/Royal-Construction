@@ -276,32 +276,34 @@ export function IncidentResolutionApprovalForm({ approval, onSuccess }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
-          <Button
-            variant="outline"
-            disabled={mutation.isPending}
-            onClick={() => submit("rejected")}
-          >
-            Reject
-          </Button>
+        {approval.status === "PENDING" && (
+          <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => submit("rejected")}
+            >
+              Reject
+            </Button>
 
-          <Button
-            disabled={mutation.isPending || !resolution.trim()}
-            onClick={() => submit("approved")}
-          >
-            {mutation.isPending ? (
-              <>
-                <Loader2
-                  className="mr-2 size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Submitting…
-              </>
-            ) : (
-              "Approve resolution"
-            )}
-          </Button>
-        </div>
+            <Button
+              disabled={mutation.isPending || !resolution.trim()}
+              onClick={() => submit("approved")}
+            >
+              {mutation.isPending ? (
+                <>
+                  <Loader2
+                    className="mr-2 size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Submitting…
+                </>
+              ) : (
+                "Approve resolution"
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );

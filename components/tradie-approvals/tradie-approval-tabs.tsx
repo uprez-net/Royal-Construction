@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Clock3,
   Calendar,
+  CalendarX,
   DollarSign,
   AlertTriangle,
   Trash2,
@@ -91,6 +92,10 @@ export function TradieApprovalTabs() {
         break;
       case "schedule":
         updates.type = "SCHEDULE_APPROVAL";
+        updates.status = undefined;
+        break;
+      case "scheduleDeletion":
+        updates.type = "SCHEDULE_DELETION";
         updates.status = undefined;
         break;
       default:
@@ -277,6 +282,12 @@ function ApprovalTabs({ activeTab, onTabChange }: ApprovalTabsProps) {
       label: "Scheduling",
       count: kpiData.scheduleCount,
       icon: Calendar,
+    },
+    {
+      key: "scheduleDeletion",
+      label: "Schedule Removals",
+      count: kpiData.scheduleDeletionCount,
+      icon: CalendarX,
     },
   ];
 

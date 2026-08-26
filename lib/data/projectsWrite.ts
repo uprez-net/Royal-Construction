@@ -19,7 +19,14 @@ import { Prisma } from "@prisma/client";
 import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
 import { buildProjectRequirementsPayload, resolveProjectBudget } from "@/lib/data/projectFlow";
 import type { ProjectExtractionData } from "@/types/project-extraction";
+import { paymentStagesFromLabels } from "@/lib/projects/payment-stages";
 import { OfferWorkspaceCostLine } from "../offer/workspace-model";
+import {
+  collectProjectDateBlockers,
+  partitionBlockers,
+  ProjectDateBlockerError,
+} from "./projectReadiness";
+import { normalizeDateString } from "@/utils/date";
 
 /**
  * Creates a new project from manually entered project data.
@@ -145,44 +152,18 @@ export interface CreateProjectWithLeadInput {
     tender: ProjectSourceDocumentReference;
     contract: ProjectSourceDocumentReference;
   };
+  /**
+   * When `true`, the caller has already confirmed date-blocker warnings
+   * (e.g. via the review-stage prompt in create-project-modal). Hard
+   * blockers still throw — confirmation only suppresses the abort on
+   * advisory `signed_far_before_start` pairs the user has acknowledged.
+   */
+  confirmDateBlockers?: boolean;
 }
 
 function isFlatExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData): extraction is ProjectExtractionData {
   return "legalAdministrationSiteAddress" in extraction || "commercialsAndClaimsContractPrice" in extraction;
 }
-
-const LABEL_PERCENTAGE_RECORD: Record<string, number> = {
-  deposit: 5,
-  slab: 15,
-  frame: 25,
-  "lock up": 25,
-  "interior fit out": 20,
-  final: 10,
-};
-
-const calculatePercentageAmount = (
-  label: string,
-  totalContractSum: number | null,
-) => {
-  const percentageMatch = label.match(/(\d+(?:\.\d+)?)\s*%/);
-
-  const normalizedLabel = label.toLowerCase();
-
-  const percentage = percentageMatch
-    ? Number(percentageMatch[1])
-    : Object.entries(LABEL_PERCENTAGE_RECORD).find(([key]) =>
-      new RegExp(`\\b${key}\\b`).test(normalizedLabel),
-    )?.[1] ?? null;
-
-  return {
-    label,
-    percentage,
-    amount:
-      percentage !== null && totalContractSum !== null
-        ? (totalContractSum * percentage) / 100
-        : null,
-  };
-};
 
 function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData,
   sourceDocuments: {
@@ -209,6 +190,10 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
         commencementTrigger: extraction.legalAdministrationCommencementTrigger,
         signedDate: extraction.legalAdministrationSignedDate,
         pcaInspector: extraction.legalAdministrationPcaInspector,
+        // The HBCF certificate is uploaded from the project's Overview tab
+        // after handover; tender/contract extraction never carries it.
+        hbcfInsuranceNumber: null,
+        hbcfInsuranceDocument: null,
       },
       commercialsAndClaims: {
         totalContractSum: extraction.commercialsAndClaimsTotalContractSum,
@@ -221,7 +206,10 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
         claimStageSlabDollarValue: extraction.commercialsAndClaimsClaimStageSlabDollarValue,
         variationAdminFee: extraction.commercialsAndClaimsVariationAdminFee,
         latePenaltyRate: extraction.commercialsAndClaimsLatePenaltyRate,
-        paymentStages: extraction.commercialsAndClaimsPaymentStages.map((label) => calculatePercentageAmount(label, extraction.commercialsAndClaimsTotalContractSum)),
+        paymentStages: paymentStagesFromLabels(
+          extraction.commercialsAndClaimsPaymentStages,
+          extraction.commercialsAndClaimsTotalContractSum,
+        ),
       },
       subStructureAndGround: {
         concreteSlabClass: extraction.subStructureAndGroundConcreteSlabClass,
@@ -344,7 +332,8 @@ export async function createProjectWithLead({
   parties, 
   extraction, 
   sourceDocuments,
-  costLines 
+  costLines,
+  confirmDateBlockers = false,
 }: CreateProjectWithLeadInput): Promise<ProjectDetail> {
   try {
     const lead = await prisma.lead.findUnique({
@@ -397,6 +386,8 @@ export async function createProjectWithLead({
             commencementTrigger: "",
             signedDate: "",
             pcaInspector: "",
+            hbcfInsuranceNumber: null,
+            hbcfInsuranceDocument: null,
           },
           commercialsAndClaims: {
             totalContractSum: inferredSpecs?.projectBudget ?? 0,
@@ -467,6 +458,48 @@ export async function createProjectWithLead({
         },
         [],
       );
+
+    // ── Phase 2: normalize the signed date and run the readiness gate ──
+    // The signed date is a free-text field from OCR extraction, so normalize
+    // it to a canonical `YYYY-MM-DD` before it reaches the database. Then
+    // run `collectProjectDateBlockers` against the start date to catch
+    // impossible pairs (start before signed) and advisory gaps (missing
+    // PCA, unparseable signed date) before the project becomes Active.
+    const requirementsWithSignedDate = projectRequirements as ProjectRequirementsPayload & {
+      legalAdministration: { signedDate: string | null };
+    };
+    const rawSignedDate = requirementsWithSignedDate.legalAdministration?.signedDate ?? null;
+    const normalizedSignedDate = rawSignedDate ? normalizeDateString(rawSignedDate) : null;
+    // Write the canonical value back so the header and Overview read one
+    // consistent value. If parsing failed, keep the raw string so the header
+    // can render it with the "unverified" marker rather than silently
+    // discarding it.
+    if (normalizedSignedDate || rawSignedDate) {
+      requirementsWithSignedDate.legalAdministration = {
+        ...requirementsWithSignedDate.legalAdministration,
+        signedDate: normalizedSignedDate ?? rawSignedDate,
+      };
+    }
+
+    const dateBlockers = collectProjectDateBlockers({
+      signedDate: requirementsWithSignedDate.legalAdministration?.signedDate ?? null,
+      startDate,
+      hbcfInsuranceNumber: requirementsWithSignedDate.legalAdministration?.hbcfInsuranceNumber ?? null,
+      pcaInspector: requirementsWithSignedDate.legalAdministration?.pcaInspector ?? null,
+      status: "ACTIVE",
+    });
+    const { blocks, warns } = partitionBlockers(dateBlockers);
+
+    if (blocks.length > 0) {
+      throw new ProjectDateBlockerError(blocks);
+    }
+
+    // Advisory warns (missing PCA, unparseable signed date) create the
+    // project as NEEDS_ATTENTION instead of relying on the Prisma
+    // @default(ACTIVE), so the gap is visible rather than silent.
+    const shouldFlagNeedsAttention =
+      warns.length > 0 && !confirmDateBlockers;
+
     const newProjectId = await prisma.$transaction(async (tx) => {
       // Create customer first, then reference by customerId to satisfy Prisma types
       const customer = await createCustomerForProject({
@@ -492,8 +525,9 @@ export async function createProjectWithLead({
           startDate: normalisedStartDate,
           estimatedEndDate: normalisedEstimatedEndDate,
           siteManagerId: siteManagerId,
-          requirements: projectRequirements as unknown as Prisma.InputJsonValue,
+          requirements: requirementsWithSignedDate as unknown as Prisma.InputJsonValue,
           ...(parties ? { parties } : {}),
+          ...(shouldFlagNeedsAttention ? { status: "NEEDS_ATTENTION" as const } : {}),
           customerId: customer.id,
         }
       });
@@ -562,6 +596,9 @@ export async function createProjectWithLead({
     return newProjectDetail;
   } catch (error) {
     console.error("Error creating project from lead:", error);
+    if (error instanceof ProjectDateBlockerError) {
+      throw error;
+    }
     if (error instanceof Error) {
       switch (error.message) {
         case "LEAD_NOT_FOUND":

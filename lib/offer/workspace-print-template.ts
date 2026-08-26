@@ -127,6 +127,53 @@ export function formatArea(value: number): string {
   }).format(value)} m²`;
 }
 
+// Room counts for one dwelling — the major house or its granny home. Bathrooms
+// are captured as a decimal (a powder room is half a bathroom), so counts print
+// as entered rather than integer-formatted.
+export type OfferDwellingSpec = {
+  readonly bathrooms: number;
+  readonly bedrooms: number;
+  readonly garageSpaces: number;
+};
+
+export function formatRoomCount(value: number): string {
+  return new Intl.NumberFormat("en-AU", { maximumFractionDigits: 1 }).format(
+    value,
+  );
+}
+
+// The major house / granny home spec as one line, for the tender's Project
+// Particulars table where a full sub-table would push the cover page over.
+export function formatDwellingSpec(spec: OfferDwellingSpec): string {
+  return [
+    `${formatRoomCount(spec.bedrooms)} bedrooms`,
+    `${formatRoomCount(spec.bathrooms)} bathrooms`,
+    `${formatRoomCount(spec.garageSpaces)} garage spaces`,
+  ].join(" | ");
+}
+
+// The granny-home counts, or null when the build has no granny home — callers
+// drop their "Granny Home Specifications" section entirely in that case rather
+// than printing a dwelling of zero rooms.
+export function grannyDwellingSpec(
+  job: Pick<
+    OfferWorkspaceJob,
+    | "hasGrannyHome"
+    | "grannyBathrooms"
+    | "grannyBedrooms"
+    | "grannyGarageSpaces"
+  >,
+): OfferDwellingSpec | null {
+  if (!job.hasGrannyHome) {
+    return null;
+  }
+  return {
+    bathrooms: job.grannyBathrooms,
+    bedrooms: job.grannyBedrooms,
+    garageSpaces: job.grannyGarageSpaces,
+  };
+}
+
 // The "Lot Area … | Zoning …" line under the site address on the proposal
 // snapshot. Unfilled particulars are dropped rather than printed: "Lot Area:
 // 0 m²" reads to a client as a surveyed measurement of zero, and a bare

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import {
+  AlertTriangle,
   Calendar,
   CheckCircle2,
   ChevronLeft,
@@ -71,6 +72,10 @@ import {
   sectionFields,
   updateExtractionField,
 } from "./form/extracted-components";
+import {
+  compareSignedAndStartDates,
+  formatDisplayDate,
+} from "@/utils/date";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -131,6 +136,11 @@ export function CreateProjectModal({
   const [sourceDocuments, setSourceDocuments] =
     useState<ProjectDocumentBundle | null>(null);
   const uploadControllersRef = useRef<Record<string, AbortController>>({});
+  const [dateConfirmPrompt, setDateConfirmPrompt] = useState<{
+    signedDate: string;
+    startDate: string;
+    state: "start_before_signed" | "signed_far_before_start";
+  } | null>(null);
 
   const tenderQueue = useUploadQueue({ maxFiles: 1 });
   const contractQueue = useUploadQueue({ maxFiles: 1 });
@@ -260,6 +270,7 @@ export function CreateProjectModal({
     setSelectedManagerId(null);
     setManagerSearch("");
     setSourceDocuments(null);
+    setDateConfirmPrompt(null);
     stopListening();
     tenderQueue.resetQueue();
     contractQueue.resetQueue();
@@ -403,26 +414,8 @@ export function CreateProjectModal({
     }
   };
 
-  const handleSubmit = async () => {
-    if (!selectedLeadId) {
-      toast.error("Select a lead before continuing.");
-      return;
-    }
-
-    if (!selectedLocation) {
-      toast.error("Select a site location before creating the project.");
-      return;
-    }
-
-    if (!selectedSiteManager) {
-      toast.error("Select a site manager before creating the project.");
-      return;
-    }
-
-    if (!sourceDocuments) {
-      toast.error(
-        "Source documents are missing. Please retry the extraction process.",
-      );
+  const runCreate = async (confirmDateBlockers: boolean) => {
+    if (!selectedLeadId || !selectedLocation || !selectedSiteManager || !sourceDocuments) {
       return;
     }
 
@@ -465,6 +458,7 @@ export function CreateProjectModal({
           siteManagerId: selectedSiteManager.id,
           extraction: normalizedExtraction,
           sourceDocuments,
+          confirmDateBlockers,
         }),
       ).unwrap();
 
@@ -480,6 +474,70 @@ export function CreateProjectModal({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedLeadId) {
+      toast.error("Select a lead before continuing.");
+      return;
+    }
+
+    if (!selectedLocation) {
+      toast.error("Select a site location before creating the project.");
+      return;
+    }
+
+    if (!selectedSiteManager) {
+      toast.error("Select a site manager before creating the project.");
+      return;
+    }
+
+    if (!sourceDocuments) {
+      toast.error(
+        "Source documents are missing. Please retry the extraction process.",
+      );
+      return;
+    }
+
+    // The review schema coerces lot size on every keystroke and deliberately
+    // does not throw on a negative number (that crash is what took the page
+    // down). This path calls the server action directly, not the validated
+    // API route, so the sign check has to happen here.
+    if (extraction.lotSize !== null && extraction.lotSize < 0) {
+      toast.error("Lot size cannot be negative.");
+      return;
+    }
+
+    // ── Phase 3: date mismatch gate ──
+    // Compare the signed date against the start date before dispatching. If
+    // the pair is impossible (start before signed) or suspect (signed more
+    // than a year before start), show a confirmation prompt that states the
+    // exact dates and lets the user confirm or correct in place using the
+    // existing review-stage inputs.
+    const signedDateRaw = extraction.legalAdministrationSignedDate;
+    const effectiveStartDate =
+      normalizeDateString(signedDateRaw) || startDate || format(new Date(), "yyyy-MM-dd");
+
+    const comparison = compareSignedAndStartDates(signedDateRaw, effectiveStartDate);
+
+    if (
+      comparison.state === "start_before_signed" ||
+      comparison.state === "signed_far_before_start"
+    ) {
+      setDateConfirmPrompt({
+        signedDate: comparison.normalizedSignedDate ?? signedDateRaw ?? "(not set)",
+        startDate: comparison.normalizedStartDate ?? effectiveStartDate,
+        state: comparison.state,
+      });
+      return;
+    }
+
+    await runCreate(false);
+  };
+
+  const confirmDateMismatchAndCreate = async () => {
+    setDateConfirmPrompt(null);
+    await runCreate(true);
   };
 
   const handleClose = (nextOpen: boolean) => {
@@ -827,6 +885,61 @@ export function CreateProjectModal({
                 )}
               </Button>
             </div>
+
+            {dateConfirmPrompt ? (
+              <div className="rounded-2xl border border-warning/40 bg-warning-light p-5">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning-ink" aria-hidden="true" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-warning-ink">
+                      {dateConfirmPrompt.state === "start_before_signed"
+                        ? "Start date is before the signed date"
+                        : "Signed date is more than a year before the start date"}
+                    </p>
+                    <p className="text-sm text-warning-ink/90">
+                      Signed (contract executed):{" "}
+                      <span className="font-mono tabular-nums">
+                        {formatDisplayDate(dateConfirmPrompt.signedDate) ?? dateConfirmPrompt.signedDate}
+                      </span>
+                      <br />
+                      Start date (on-site):{" "}
+                      <span className="font-mono tabular-nums">
+                        {formatDisplayDate(dateConfirmPrompt.startDate) ?? dateConfirmPrompt.startDate}
+                      </span>
+                    </p>
+                    <p className="text-xs text-warning-ink/80">
+                      This pair is unusual for a real build. Correct the signed
+                      date in the Legal and administration section above, or
+                      confirm to proceed as-is.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDateConfirmPrompt(null)}
+                        disabled={isSubmitting}
+                      >
+                        Correct dates
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => void confirmDateMismatchAndCreate()}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Creating…
+                          </>
+                        ) : (
+                          "Confirm and create"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

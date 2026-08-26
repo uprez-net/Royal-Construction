@@ -92,6 +92,12 @@ export type OfferSendReadinessInput = {
   // WARN, never block: this is a model judgement on contract text, and a false
   // positive must not stop a live deal going out.
   readonly inclusionFindingCount?: number;
+  // Admin offer content changed after this offer was built, and the offer is
+  // already frozen (agreed/sent), so its snapshot was deliberately NOT rewritten
+  // — see reapplyAdminContentIfStale. WARN only: the frozen copy is the correct
+  // one to re-send, and the operator decides whether the change is material
+  // enough to warrant a new revision.
+  readonly adminContentStale?: boolean;
 };
 
 export function collectOfferSendBlockers({
@@ -100,6 +106,7 @@ export function collectOfferSendBlockers({
   expiryState,
   ownerIssues = [],
   inclusionFindingCount = 0,
+  adminContentStale = false,
 }: OfferSendReadinessInput): readonly OfferSendBlocker[] {
   const blockers: OfferSendBlocker[] = [];
 
@@ -141,6 +148,16 @@ export function collectOfferSendBlockers({
     blockers.push({
       id: "inclusion-consistency",
       label: `${inclusionFindingCount} inclusion ${inclusionFindingCount === 1 ? "mismatch" : "mismatches"} unresolved — review before sending`,
+      stepId: "offer-step-offer-document",
+      severity: "warn",
+    });
+  }
+
+  if (adminContentStale) {
+    blockers.push({
+      id: "admin-content-stale",
+      label:
+        "Admin offer content changed after this offer was issued — its saved copy is unchanged; create a new version to pick up the update.",
       stepId: "offer-step-offer-document",
       severity: "warn",
     });

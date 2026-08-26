@@ -136,6 +136,17 @@
   --destructive-light: oklch(0.936 0.031 17.7);
   --destructive-ink: oklch(0.534 0.23 28.5);
   --royal-gold-ink: oklch(0.530 0.12 77.3);
+
+  /* Pipeline stage ramp — cool grey through gold as likelihood rises, then
+     green for banked stages. The colour encodes progression, so the chart
+     reads as a funnel rather than an arbitrary palette. */
+  --stage-1: oklch(0.74 0.025 253);
+  --stage-2: oklch(0.78 0.055 88);
+  --stage-3: oklch(0.762 0.085 84);
+  --stage-4: oklch(0.735 0.105 80);
+  --stage-5: oklch(0.715 0.115 78);
+  --stage-6: oklch(0.694 0.12 77.3);
+  --stage-7: oklch(0.627 0.17 149.2);
 }
 
 .dark {
@@ -179,6 +190,15 @@
   --info-ink: oklch(0.616 0.16 262.9);
   --destructive-ink: oklch(0.632 0.16 28.5);
   --royal-gold-ink: oklch(0.616 0.1 77.3);
+
+  /* Stage ramp, dark theme — same progression, lifted for contrast. */
+  --stage-1: oklch(0.5 0.02 253);
+  --stage-2: oklch(0.55 0.05 88);
+  --stage-3: oklch(0.585 0.07 84);
+  --stage-4: oklch(0.61 0.09 80);
+  --stage-5: oklch(0.63 0.1 78);
+  --stage-6: oklch(0.66 0.115 77.3);
+  --stage-7: oklch(0.62 0.15 149.2);
 }
 
 @layer base {
@@ -1455,17 +1475,37 @@
 
 /* ── Followup list ─────────────────── */
 .fu-list {
-  padding: 6px 8px 8px;
+  padding: 4px 6px 6px;
 }
 
 /* ── Single followup item ──────────── */
+/* One row per task, not four stacked blocks.
+   Was: name, meta chips, a full-width notes box and the buttons on separate
+   lines, about 130px per lead. With 13 open follow-ups that is 1700px of
+   scrolling to read thirteen short facts, while two thirds of the width sat
+   empty. The grid puts them side by side and the notes column takes the slack. */
 .fu-item {
-  display: flex;
-  gap: 14px;
-  padding: 14px 12px;
-  border-radius: 10px;
+  display: grid;
+  grid-template-columns:
+    26px                    /* number */
+    minmax(150px, 1.1fr)    /* name + stage */
+    auto                    /* date, time, assignee */
+    minmax(0, 1.3fr)        /* notes, truncated */
+    auto;                   /* actions */
+
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 7px 10px;
+  border-radius: 8px;
   transition: background 0.15s;
   position: relative;
+}
+
+/* Both wrappers dissolve so their children become cells of .fu-item. */
+.fu-item-body,
+.fu-item-top {
+  display: contents;
 }
 
 .fu-item.fu-item-today {
@@ -1510,25 +1550,17 @@
 }
 
 /* ── Item body ─────────────────────── */
-.fu-item-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.fu-item-top {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .fu-item-name-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fu-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fu-item-name {
@@ -1553,7 +1585,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .fu-meta-chip {
@@ -1575,21 +1607,44 @@
 }
 
 /* ── Notes block ───────────────────── */
+/* Inline and single-line. A three-word note does not need a bordered panel
+   spanning the page; the title attribute carries anything that overflows. */
 .fu-notes-block {
   font-size: 12px;
   color: var(--text-secondary);
-  padding: 8px 10px;
+  padding: 3px 9px;
   background: var(--bg-body);
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--border-color);
-  line-height: 1.55;
+  line-height: 1.6;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fu-notes-block.fu-notes-empty {
+  background: none;
+  border-color: transparent;
+}
+
+@media (max-width: 1100px) {
+  .fu-item {
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: start;
+  }
+  .fu-item-meta,
+  .fu-notes-block,
+  .fu-item-actions {
+    grid-column: 2;
+  }
 }
 
 /* ── Action buttons ────────────────── */
 .fu-item-actions {
   display: flex;
   gap: 6px;
-  padding-top: 2px;
+  justify-content: flex-end;
 }
 
 .fu-action-btn {
@@ -2830,4 +2885,248 @@
   .leads-stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+/* ── Task form ─────────────────────────────────────────────────────────
+   Two chip groups and a note. Both groups replace values people were
+   already typing into the follow-up notes box, so the options are the
+   strings from production rather than a designed set. */
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-body);
+}
+
+.task-form-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.task-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  width: 34px;
+  flex-shrink: 0;
+}
+
+.task-chip-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.task-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-color);
+  background: hsl(var(--background));
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1.6;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.task-chip:hover {
+  border-color: var(--rule-strong, var(--border-color));
+  color: var(--text-primary);
+}
+
+.task-chip-on {
+  background: var(--stage-4, #0f766e);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.task-chip:focus-visible,
+.task-btn:focus-visible {
+  outline: 2px solid var(--stage-4, #0f766e);
+  outline-offset: 2px;
+}
+
+.task-form-input {
+  flex: 1;
+  min-width: 160px;
+  font-size: 12px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: var(--text-primary);
+}
+
+.task-form-error {
+  font-size: 11.5px;
+  color: var(--critical, #a81e17);
+  margin: 0;
+}
+
+.task-form-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.task-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: hsl(var(--background));
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.task-btn-primary {
+  background: var(--stage-4, #0f766e);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.task-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The task type, shown on every row so the list reads as work rather than
+   as a list of leads that happen to have dates. */
+.fu-type-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-body);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-chip,
+  .fu-item {
+    transition: none;
+  }
+}
+
+/* ── A lead's open tasks, on the lead page ─────────────────────────────
+   These four classes were referenced by lead-overview-tab and never
+   defined, so the row rendered as bare inline spans: the due date and
+   the note ran together as "Tue, 25 AugSite visit to scope the build". */
+.task-open-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-open-row {
+  display: grid;
+  /* Five children: type, due, note, Done, Remove. This was four columns, so
+     Remove wrapped onto its own line under the task. */
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-body);
+  font-size: 12px;
+}
+
+.task-open-due {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Truncated rather than wrapped, so one long note cannot push the Done
+   button out of reach. The full text is on the title attribute. */
+.task-open-note {
+  color: var(--text-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 34rem) {
+  .task-open-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 4px;
+  }
+  .task-open-note {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Tasks tab: one summary line, one list ─────────────────────────────
+   Replaces six stacked stat cards and a sidebar. The cards restated
+   numbers that were already on screen: "24 Pending" duplicated the list
+   badge and "1 Upcoming" duplicated a panel that listed the item. */
+.tasks-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-body);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tasks-summary strong {
+  color: var(--text-primary);
+  font-weight: 650;
+  font-size: 13px;
+}
+
+/* Sorted overdue, then today, then later, then unscheduled. The divider
+   names the boundary so the order is legible rather than implied. */
+.fu-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.fu-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-light, var(--border-color));
+}
+
+.fu-divider span {
+  order: 2;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }

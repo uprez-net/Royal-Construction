@@ -18,6 +18,7 @@ import {
     TradieRow,
     TradiesByCategory,
     TradieTableQuery,
+    TradieViewTab,
     UpdatePriceInput,
 } from "@/types/tradie";
 import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
@@ -36,8 +37,7 @@ interface TradieManagementState {
         incidentLodged: DataPoint;
         favouriteTradies: DataPoint;
     };
-    selectedCategory: string | null;
-    activeTab: "category" | "list" | "table";
+    activeTab: TradieViewTab;
     selectedTradieId: string | null;
     selectedTradieDetails: TradieDetails | null;
     query: TradieTableQuery;
@@ -53,8 +53,7 @@ const initialState: TradieManagementState = {
         incidentLodged: { total: 0, trendDelta: 0 },
         favouriteTradies: { total: 0, trendDelta: 0 },
     },
-    selectedCategory: null,
-    activeTab: "category",
+    activeTab: "list",
     selectedTradieId: null,
     selectedTradieDetails: null,
     query: {
@@ -196,7 +195,7 @@ const tradieManagementSlice = createSlice({
         clearState() {
             return initialState;
         },
-        setActiveTab(state, action: PayloadAction<"category" | "list" | "table">) {
+        setActiveTab(state, action: PayloadAction<TradieViewTab>) {
             state.activeTab = action.payload;
         },
         setTradies(state, action: PayloadAction<TradiesByCategory[]>) {
@@ -222,9 +221,6 @@ const tradieManagementSlice = createSlice({
         },
         setQuery(state, action: PayloadAction<Partial<TradieTableQuery>>) {
             state.query = { ...state.query, ...action.payload };
-        },
-        setSelectedCategory(state, action: PayloadAction<string | null>) {
-            state.selectedCategory = action.payload;
         },
     },
     extraReducers: (builder) => {
@@ -363,7 +359,6 @@ export const {
     setSelectedTradie,
     setKPIData,
     setQuery,
-    setSelectedCategory,
     setTradieLoading,
 } = tradieManagementSlice.actions;
 export default tradieManagementSlice.reducer;

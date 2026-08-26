@@ -110,9 +110,34 @@ export const updateTradieScheduleSchema = z.object({
     }),
   }),
   quote: z.string().optional(),
+  /**
+   * How to read `quote`. Tradies quote by the hour and by the day as often as
+   * they quote a lump sum, so the amount alone is ambiguous - $950 is a
+   * plausible day rate AND a plausible small job. Defaults to FIXED at the
+   * point of use: a caller that names a price for one scheduled job and says
+   * nothing else means the job.
+   */
+  quoteUnit: z.enum(["FIXED", "HOURLY", "DAILY"]).optional(),
 });
 
 export type UpdateTradieScheduleInput = z.infer<typeof updateTradieScheduleSchema>;
+
+/**
+ * Request removal of a tradie schedule.
+ *
+ * Deleting a booking is not immediate — the request goes to an admin, and the
+ * reason is the whole of what they have to decide on, so it is required rather
+ * than optional.
+ */
+export const deleteTradieScheduleSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(1, "A reason for the deletion is required")
+    .max(500, "Reason must be 500 characters or fewer"),
+});
+
+export type DeleteTradieScheduleInput = z.infer<typeof deleteTradieScheduleSchema>;
 
 /**
  * Tradie schedule route params

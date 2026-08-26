@@ -13,6 +13,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Lead } from "@/lib/leads/types";
 import { fetchLead, updateLead } from "@/lib/leads/leads-service";
 import {
+  completeTask,
+  createTask,
+  fetchOpenTasks,
+} from "@/lib/leads/task-service";
+import { sydneyStartOfDay } from "@/lib/dates/sydney";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { bumpLeadTasks } from "@/lib/store/slices/uiSlice";
+import {
   buildFollowupCompletedHistoryEntry,
   buildFollowupNotRequiredHistoryEntry,
   buildFollowupRescheduledHistoryEntry,
@@ -20,13 +28,17 @@ import {
 
 interface FollowupPromptModalProps {
   leadId: number;
+  /** Scope the outcome to one task. Omitted means every open follow-up. */
+  taskId?: number;
   onClose: () => void;
 }
 
 export function FollowupPromptModal({
   leadId,
+  taskId,
   onClose,
 }: FollowupPromptModalProps) {
+  const dispatch = useAppDispatch();
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -78,10 +90,39 @@ export function FollowupPromptModal({
     setSaving(true);
 
     try {
+      // Rescheduling closes the current task and opens the next one, which is
+      // what "reschedule" has always meant. It used to move Lead.followupDate,
+      // and nothing reads that any more: the tab and both reminder crons are on
+      // LeadTask, so a rescheduled follow-up disappeared.
+      //
+      // Answering closes the task and opens nothing.
+      // Scoped to the clicked task when one was named. Without taskId this
+      // came from a notification and means "this lead's open follow-ups".
+      // Meetings are excluded either way: closing them would cancel a booked
+      // meeting this dialog never mentions.
+      // Asked for by lead. This read the org-wide list and filtered it, and
+      // that list is capped — so on a lead whose follow-up sorted past the cap
+      // the loop below closed nothing and the dialog still reported success.
+      const open = (await fetchOpenTasks({ leadIds: [lead.id] })).filter(
+        (t) => t.type !== "MEETING" && (taskId === undefined || t.id === taskId),
+      );
+      for (const task of open) {
+        await completeTask(task.id);
+      }
+      if (choice === "reschedule") {
+        await createTask({
+          leadId: lead.id,
+          type: "CALL",
+          dueDate: sydneyStartOfDay(date).toISOString(),
+          dueTime: time || null,
+          notes: note || null,
+        });
+      }
+
       const updated = await updateLead(lead.id, {
-        followupDate: choice === "reschedule" ? date : null,
-        followupTime: choice === "reschedule" ? time : null,
-        stage: choice === "reschedule" ? "In Follow-up" : lead.stage,
+        // No stage. Answering a follow-up used to write CONTACTED through this
+        // path, which is how a lead in negotiation lost its progress to a
+        // calendar action.
         history:
           choice === "reschedule"
             ? [buildFollowupRescheduledHistoryEntry(date, time, note)]
@@ -91,6 +132,10 @@ export function FollowupPromptModal({
       });
 
       if (updated) {
+        // The tab's list is client state; router.refresh() cannot touch it.
+        // Without this the row stayed on screen until a manual reload, even
+        // though the task really had been closed.
+        dispatch(bumpLeadTasks());
         router.refresh();
         onClose();
       }

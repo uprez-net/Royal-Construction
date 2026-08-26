@@ -7,6 +7,7 @@ export type AdminOfferTabs =
   | "job-setup"
   | "cost-schedule"
   | "offer-scope"
+  | "HBFC-claim"
   | "offer-inclusions"
   | "offer-content";
 
@@ -16,6 +17,7 @@ const TABS: readonly { id: AdminOfferTabs; label: string }[] = [
   { id: "offer-scope", label: "Scope" },
   { id: "offer-inclusions", label: "Inclusions" },
   { id: "offer-content", label: "Offer Document" },
+  { id: "HBFC-claim", label: "HBCF Claim" },
 ];
 
 interface OfferContentHeaderProps {
