@@ -1,7 +1,7 @@
 "use client";
 import { CardContent } from "../ui/card";
 import { currency, dateFormat } from "@/utils/formatters";
-import { ChevronRight, Layers, ReceiptText, RefreshCw } from "lucide-react";
+import { ChevronRight, Layers, ReceiptText } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
+import { skeletonTableRows } from "../ui/skeleton";
 
 const money = (value: string) => {
   const parsed = parseFloat(value);
@@ -162,21 +163,15 @@ export function OfferTable({
               <tr>
                 <td colSpan={HEADERS.length} className="px-4 py-16 text-center">
                   {loading ? (
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <div className="flex size-12 items-center justify-center">
-                        <RefreshCw className="animate-spin size-5 text-muted-foreground" />
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold text-foreground">
-                          Loading offers...
-                        </p>
-
-                        <p className="text-xs text-muted-foreground">
-                          Your offers will appear here.
-                        </p>
-                      </div>
-                    </div>
+                    skeletonTableRows(HEADERS.length, 5).map((row, rowIndex) => (
+                      <tr key={`skeleton-row-${rowIndex}`} className="border-t border-border/70">
+                        {row.map((cell, cellIndex) => (
+                          <td key={`skeleton-cell-${cellIndex}`} className="px-4 py-3">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
                   ) : (
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="flex size-12 items-center justify-center">

@@ -545,7 +545,7 @@ export default function Leads() {
           {activeTab === "analytics" && (
             <AnalyticsView analytics={analyticsData} />
           )}
-          {activeTab === "table" && (
+          {activeTab !== "analytics" && (
             <LeadPagination
               leads={{
                 items: leads,

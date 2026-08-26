@@ -106,10 +106,7 @@ export function ModalManager() {
     const loading = toast.loading("Updating status...");
     handleClose();
     try {
-      await updateScheduleStatuses(
-        [row.id],
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-      );
+      await updateScheduleStatuses([row.id], TradieScheduleStatus.AWAITING_ADMIN_APPROVAL);
     } catch (error) {
       toast.error("Failed to update status. Please try again.");
       console.error("Error updating tradie schedule status:", error);

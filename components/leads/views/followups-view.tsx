@@ -73,7 +73,7 @@ function CompletedItem({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-4 py-2.5 last:border-b-0">
       <Check
-        className="size-3.5 shrink-0 text-[var(--success-ink)]"
+        className="size-3.5 shrink-0 text-success-ink"
         aria-hidden="true"
       />
       <span className="text-sm font-medium text-foreground">{task.lead.name}</span>
@@ -262,9 +262,9 @@ function FollowupItem({
       <TableRow
         className={
           isOverdue
-            ? "bg-[var(--destructive-light)]/40"
+            ? "bg-(--destructive-light)/40"
             : isToday
-              ? "bg-[var(--warning-light)]/70"
+              ? "bg-(--warning-light)/70"
               : undefined
         }
       >
@@ -297,7 +297,7 @@ function FollowupItem({
         <TableCell
           className={
             isOverdue
-              ? "font-medium tabular-nums text-[var(--destructive-ink)]"
+              ? "font-medium tabular-nums text-destructive-ink"
               : "tabular-nums text-muted-foreground"
           }
         >

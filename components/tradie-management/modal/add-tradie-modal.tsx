@@ -375,7 +375,7 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                           value={unit}
                           checked={formData.lastQuotedPriceUnit === unit}
                           onChange={() => updateField("lastQuotedPriceUnit", unit)}
-                          className="accent-(--primary)"
+                          className="accent-primary"
                         />
                         {label}
                       </label>
