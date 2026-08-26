@@ -1,4 +1,31 @@
+"use client";
+
+import Image from "next/image";
+import { useMemo, useState, type ReactNode } from "react";
+import { format } from "date-fns";
+import {
+  Bell,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  DollarSign,
+  Users,
+} from "lucide-react";
+
 import { StatusPill } from "@/components/common/status-pill";
+import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  daysLate,
+  duenessOf,
+  isSettled,
+  partitionActivities,
+} from "@/lib/projects/milestone-ledger";
 import { cn } from "@/lib/utils";
 import {
   ProjectDetail,
@@ -6,72 +33,116 @@ import {
   TradieScheduleWithTradieAndMilestone,
   UIMilestone,
 } from "@/types/project";
-import { currency, dateFormat, formatStatus } from "@/utils/formatters";
-import { ReactNode } from "react";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import {
-  Bell,
-  CheckCircle2,
-  Users,
-  Wrench,
-  ChevronDown,
-  BanIcon,
-  DollarSign,
-} from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { MilestoneActionGroup } from "./milestone-action-button";
+import { currency, formatStatus } from "@/utils/formatters";
 import { MilestoneStatus } from "@prisma/client";
 
-function getMilestoneTone(status: string) {
-  if (status === "DONE") {
-    return {
-      className: "border-border/70 bg-success-light",
-      pill: "success" as const,
-    };
-  }
+import { MilestoneActionGroup } from "./milestone-action-button";
 
-  if (status === "ACTIVE") {
-    return {
-      className: "border-border/70 bg-warning-light",
-      pill: "warning" as const,
-    };
-  }
+/** How many progress photos sit inline before the rest go behind a button. */
+const INLINE_PHOTO_LIMIT = 3;
 
-  if (status === "NOT_REQUIRED") {
-    return {
-      className: "border-border/70 bg-muted",
-      pill: "secondary" as const,
-    };
-  }
+const STATUS_TONE: Record<
+  MilestoneStatus,
+  "success" | "warning" | "neutral" | "secondary"
+> = {
+  [MilestoneStatus.DONE]: "success",
+  [MilestoneStatus.ACTIVE]: "warning",
+  [MilestoneStatus.PENDING]: "neutral",
+  [MilestoneStatus.NOT_REQUIRED]: "secondary",
+};
 
-  return {
-    className: "border-border/70 bg-muted/50",
-    pill: "neutral" as const,
-  };
+/** "27 Aug" — the year is noise on a schedule the user is already inside. */
+function shortDate(value: Date) {
+  return format(value, "d MMM");
 }
 
-function MilestoneMetaLine({
-  icon,
-  children,
-}: {
-  icon: ReactNode;
-  children: ReactNode;
-}) {
+function MetaItem({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="flex items-center gap-1.5">
       <span className="shrink-0" aria-hidden="true">
         {icon}
       </span>
-      <span className="truncate">{children}</span>
-    </div>
+      <span>{children}</span>
+    </span>
   );
 }
 
+/**
+ * The one fact that decides whether a row needs attention today.
+ *
+ * Overdue is the loudest thing a row can say, so it carries the destructive
+ * tone; imminent work carries the warning tone; everything else stays muted.
+ */
+function DuenessLine({ milestone }: { milestone: UIMilestone }) {
+  if (milestone.status === MilestoneStatus.NOT_REQUIRED) {
+    return <span>Not required</span>;
+  }
+
+  if (milestone.status === MilestoneStatus.DONE) {
+    const actual = milestone.actualDate ? new Date(milestone.actualDate) : null;
+
+    if (!actual) {
+      return <span>Completed</span>;
+    }
+
+    const late = daysLate(new Date(milestone.targetDate), actual);
+
+    return (
+      <MetaItem
+        icon={<CheckCircle2 className="size-3.5 text-success-ink" />}
+      >
+        Completed{" "}
+        <span className="font-mono tabular-nums">{shortDate(actual)}</span>
+        {late > 0 ? ` · ${late}d late` : null}
+      </MetaItem>
+    );
+  }
+
+  const dueness = duenessOf(new Date(milestone.targetDate), new Date());
+
+  if (dueness.kind === "overdue") {
+    return (
+      <MetaItem icon={<CircleAlert className="size-3.5" />}>
+        <span className="font-semibold text-destructive-ink">
+          Overdue {Math.abs(dueness.days)}d
+        </span>{" "}
+        · was due{" "}
+        <span className="font-mono tabular-nums">
+          {shortDate(new Date(milestone.targetDate))}
+        </span>
+      </MetaItem>
+    );
+  }
+
+  if (dueness.kind === "today") {
+    return (
+      <MetaItem icon={<Calendar className="size-3.5" />}>
+        <span className="font-semibold text-warning-ink">Due today</span>
+      </MetaItem>
+    );
+  }
+
+  return (
+    <MetaItem icon={<Calendar className="size-3.5" />}>
+      <span className={cn(dueness.kind === "soon" && "font-semibold text-warning-ink")}>
+        Due{" "}
+        <span className="font-mono tabular-nums">
+          {shortDate(new Date(milestone.targetDate))}
+        </span>
+        {dueness.kind === "soon" ? ` · in ${dueness.days}d` : null}
+      </span>
+    </MetaItem>
+  );
+}
+
+/**
+ * One activity in a stage.
+ *
+ * A flat row, not a card: stages already nest inside the ledger, and wrapping
+ * every activity — and then every sub-activity — in its own bordered surface is
+ * what drove the old tab to six bordered boxes around a single title. Depth is
+ * carried by one hairline rule instead.
+ */
 export function MilestoneCard({
   isAdmin,
   isActiveStage,
@@ -102,284 +173,276 @@ export function MilestoneCard({
   onSendReminder: (tradieReminder: TradieScheduleListItem) => void;
   onOpenViewPicture: (imageUrls: string[], selectedIndex: number) => void;
 }) {
-  const tone = getMilestoneTone(milestone.status);
-  const hasChildren = milestone.childrenMilestones.length > 0;
-  const isCompact = depth > 0;
-  const milestonePictures = milestone.files.filter((file) =>
+  const children = milestone.childrenMilestones;
+  const hasChildren = children.length > 0;
+  const isNotRequired = milestone.status === MilestoneStatus.NOT_REQUIRED;
+
+  // Finished parents open on request; anything still in flight opens by default,
+  // because its children are where the work actually is.
+  const [isOpen, setIsOpen] = useState(
+    milestone.status !== MilestoneStatus.DONE,
+  );
+
+  const photos = milestone.files.filter((file) =>
     file.fileType.startsWith("image/"),
   );
-  const imageUrls = milestonePictures.map((file) => file.url);
+  const photoUrls = photos.map((file) => file.url);
   const nextTradies = tradieAlertsByMilestone[milestone.id] ?? [];
-  // const budgetShare = Number(project.totalBudget)
-  //   ? (Number(milestone.budget) / Number(project.totalBudget)) * 100
-  //   : 0;
+  const settledChildren = children.filter(isSettled).length;
+  // Same ordering rule as a stage: what still needs doing sits above what does not.
+  const orderedChildren = useMemo(() => {
+    const { open, settled } = partitionActivities(children);
+    return [...open, ...settled];
+  }, [children]);
 
   return (
-    <article
-      className={cn(
-        "group relative overflow-hidden rounded-[12px] border p-4",
-        tone.className,
-        isCompact && "p-3",
-        depth > 0 && "ml-4",
-      )}
-    >
-      {depth > 0 ? (
-        <span
-          className="absolute -left-2.5 top-5 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary"
-          aria-hidden="true"
-        />
-      ) : null}
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div
-          className={cn(
-            "min-w-0 flex-1",
-            milestone.status === "NOT_REQUIRED" && "opacity-70 line-through",
-          )}
-        >
-          <div className="flex flex-wrap items-center gap-2">
+    <Collapsible asChild open={isOpen} onOpenChange={setIsOpen}>
+      <li
+        className={cn(
+          "grid gap-x-4 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto]",
+          depth === 0 && "border-t border-border/70 first:border-t-0",
+        )}
+      >
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
             <p
               className={cn(
-                "font-heading font-semibold text-foreground",
-                isCompact ? "text-sm" : "text-base",
+                "font-medium text-foreground",
+                depth > 0 ? "text-[13px]" : "text-sm",
+                isNotRequired && "text-muted-foreground line-through",
               )}
             >
               {milestone.name}
             </p>
 
-            <StatusPill tone={tone.pill}>
-              {milestone.status === "NOT_REQUIRED" && (
-                <BanIcon className="mr-1 h-4 w-4" aria-hidden="true" />
-              )}
+            <StatusPill tone={STATUS_TONE[milestone.status]}>
               {formatStatus(milestone.status)}
             </StatusPill>
 
             {hasChildren ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {milestone.childrenMilestones.length} sub-milestone
-                {milestone.childrenMilestones.length === 1 ? "" : "s"}
+              <span className="text-xs text-muted-foreground">
+                {settledChildren} of {children.length} item
+                {children.length === 1 ? "" : "s"} done
               </span>
             ) : null}
 
-            {milestonePictures.length > 0 ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {milestonePictures.length} photo
-                {milestonePictures.length === 1 ? "" : "s"}
+            {depth > 0 && photos.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                {photos.length} photo{photos.length === 1 ? "" : "s"}
               </span>
             ) : null}
           </div>
 
-          <div
-            className={cn(
-              "mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5",
-              isCompact && "gap-x-3",
-            )}
-          >
-            {milestone.actualDate ? (
-              <MilestoneMetaLine
-                icon={<CheckCircle2 className="h-3.5 w-3.5 text-success-ink" />}
-              >
-                Completed{" "}
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <DuenessLine milestone={milestone} />
+
+            {isAdmin && Number(milestone.budget) > 0 ? (
+              <MetaItem icon={<DollarSign className="size-3.5" />}>
+                Budget{" "}
                 <span className="font-mono tabular-nums">
-                  {dateFormat.format(new Date(milestone.actualDate))}
+                  {currency.format(Number(milestone.budget))}
                 </span>
-              </MilestoneMetaLine>
+              </MetaItem>
             ) : null}
 
-            {milestone.tradieSchedules.length > 0 ? (
-              <MilestoneMetaLine icon={<Users className="h-3.5 w-3.5" />}>
+            {isAdmin && Number(milestone.spend) > 0 ? (
+              <MetaItem icon={<DollarSign className="size-3.5" />}>
+                Spent{" "}
+                <span className="font-mono tabular-nums">
+                  {currency.format(Number(milestone.spend))}
+                </span>
+              </MetaItem>
+            ) : null}
+          </div>
+
+          {depth === 0 && photos.length > 0 ? (
+            <ul className="mt-2 flex list-none flex-wrap items-center gap-1.5">
+              {photos.slice(0, INLINE_PHOTO_LIMIT).map((photo, index) => (
+                <li key={photo.id}>
+                  <button
+                    type="button"
+                    aria-label={`Photo ${index + 1} of ${photos.length} for ${milestone.name}`}
+                    className="relative block h-[39px] w-[52px] overflow-hidden rounded-md border border-border/70 bg-muted transition-colors hover:border-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    onClick={() => onOpenViewPicture(photoUrls, index)}
+                  >
+                    <Image
+                      src={photo.url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      width={160}
+                      height={120}
+                    />
+                  </button>
+                </li>
+              ))}
+
+              {photos.length > INLINE_PHOTO_LIMIT ? (
+                <li>
+                  <button
+                    type="button"
+                    aria-label={`View all ${photos.length} photos for ${milestone.name}`}
+                    className="inline-flex min-h-8 items-center rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    onClick={() =>
+                      onOpenViewPicture(photoUrls, INLINE_PHOTO_LIMIT)
+                    }
+                  >
+                    +{photos.length - INLINE_PHOTO_LIMIT} more
+                  </button>
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
+
+          {milestone.tradieSchedules.length > 0 ? (
+            <div className="mt-1 text-xs text-muted-foreground">
+              <MetaItem icon={<Users className="size-3.5" />}>
                 {milestone.tradieSchedules
                   .map(
                     (schedule) =>
-                      `${schedule.tradie.name} - ${schedule.tradie.trade}`,
+                      `${schedule.tradie.name} — ${schedule.tradie.trade}`,
                   )
                   .join(", ")}
-              </MilestoneMetaLine>
-            ) : null}
-
-            {isAdmin && (
-              <>
-                {/* Milestone Budget Data */}
-                {parseFloat(milestone.budget) > 0 && (
-                  <MilestoneMetaLine
-                    icon={<DollarSign className="h-3.5 w-3.5" />}
-                  >
-                    Budget: {currency.format(parseFloat(milestone.budget))}
-                  </MilestoneMetaLine>
-                )}
-                {/* Milestone Spent Data */}
-                {milestone.spend && parseFloat(milestone.spend) > 0 && (
-                  <MilestoneMetaLine
-                    icon={<DollarSign className="h-3.5 w-3.5" />}
-                  >
-                    Spent: {currency.format(parseFloat(milestone.spend))}
-                  </MilestoneMetaLine>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        <MilestoneActionGroup
-          isActiveStage={isActiveStage}
-          milestone={milestone}
-          onOpenAddUpdateModal={onOpenAddUpdateModal}
-          onStatusUpdate={onStatusUpdate}
-          onStartMilestone={onStartMilestone}
-          onMarkasNotRequired={onMarkasNotRequired}
-        />
-      </div>
-
-      {milestonePictures.length > 0 ? (
-        <ul className="mt-3 grid list-none grid-cols-2 gap-1.5 sm:grid-cols-4">
-          {milestonePictures.slice(0, 3).map((picture, i) => (
-            <li key={picture.id}>
-              <button
-                type="button"
-                aria-label={`View progress photo ${i + 1} of ${milestone.name}`}
-                className="relative flex aspect-4/3 w-full items-center justify-center overflow-hidden rounded-md border border-border/70 bg-muted/50 text-xs text-muted-foreground transition-colors hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                onClick={() => onOpenViewPicture(imageUrls, i)}
-              >
-                <Image
-                  src={picture.url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                  width={800}
-                  height={600}
-                />
-              </button>
-            </li>
-          ))}
-          {milestonePictures.length > 3 ? (
-            <li
-              className="flex aspect-4/3 items-center justify-center rounded-md border border-border/70 bg-muted/50 text-xs font-medium text-muted-foreground"
-              onClick={() => onOpenViewPicture(imageUrls, 3)}
-            >
-              +{milestonePictures.length - 3} more
-            </li>
-          ) : null}
-        </ul>
-      ) : null}
-
-      {!isCompact && nextTradies.length > 0 ? (
-        <div className="mt-3 space-y-2">
-          {nextTradies.map((t) => (
-            <div
-              key={`tradie-alert-${t.id}`}
-              className="flex items-center gap-3 rounded-xl border border-border/70 bg-card p-3.5"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-warning-light text-warning-ink">
-                <Wrench className="h-4 w-4" aria-hidden="true" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground">
-                  Next up: {t.tradie.name} ({t.tradie.trade})
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Scheduled{" "}
-                  <span className="font-mono tabular-nums">
-                    {dateFormat.format(new Date(t.scheduledDate))}
-                  </span>
-                  {!["CONFIRMED", "COMPLETED"].includes(t.status)
-                    ? " — not confirmed"
-                    : null}
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label={`Send reminder to ${t.tradie.name}`}
-                onClick={() =>
-                  onSendReminder({
-                    id: t.id,
-                    tradieId: t.tradieId,
-                    milestoneId: t.milestoneId ?? undefined,
-                    scheduledDate: new Date(t.scheduledDate).toISOString(),
-                    abn: t.tradie.abn,
-                    status: t.status,
-                    tradeType: t.tradie.trade,
-                    tradieName: t.tradie.name,
-                    lastQuotedPriceUnit: t.tradie.lastQuotedPriceUnit,
-                    projectId: t.projectId,
-                    projectName: project.name,
-                    taskLabel: `${milestone.name} - ${t.tradie.trade}`,
-                    durationDays: t.durationDays,
-                    updatedAt: new Date(t.updatedAt).toISOString(),
-                    contact: {
-                      email: t.tradie.email,
-                      phone: t.tradie.phone,
-                      additionalEmails: t.tradie.additionalEmails,
-                    },
-                    siteManager: {
-                      name: project.siteManager?.name ?? "Site Manager",
-                      email: project.siteManager?.email ?? "Site Manager Email",
-                      phone: project.siteManager?.phone ?? "Site Manager Phone",
-                    },
-                    lastQuotedPrice: t.tradie.lastQuotedPrice,
-                    isFavourite: t.tradie.isFavourite,
-                    note: t.tradie.note,
-                    requiresQuote: t.requiresQuote,
-                    quotedPrice: t.quotedPrice ?? undefined,
-                  } satisfies TradieScheduleListItem)
-                }
-              >
-                <Bell className="mr-1 h-4 w-4" aria-hidden="true" />
-                Remind
-              </Button>
+              </MetaItem>
             </div>
-          ))}
-        </div>
-      ) : null}
+          ) : null}
 
-      {hasChildren ? (
-        <Collapsible defaultOpen={milestone.childrenMilestones.length <= 3}>
-          <div className="mt-4 rounded-[14px] border border-dashed border-border/70 bg-card px-3 py-2.5">
+          {depth === 0 && nextTradies.length > 0 ? (
+            <div className="mt-2 space-y-1.5">
+              {nextTradies.map((schedule) => (
+                <div
+                  key={`tradie-alert-${schedule.id}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs"
+                >
+                  <Bell
+                    className={cn(
+                      "size-3.5 shrink-0",
+                      schedule.status === "CONFIRMED"
+                        ? "text-muted-foreground"
+                        : "text-warning-ink",
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="text-foreground">
+                    <span className="font-medium">
+                      Booked: {schedule.tradie.name} ({schedule.tradie.trade})
+                    </span>{" "}
+                    <span className="text-muted-foreground">
+                      ·{" "}
+                      <span className="font-mono tabular-nums">
+                        {shortDate(new Date(schedule.scheduledDate))}
+                      </span>{" "}
+                      ·{" "}
+                      {schedule.status === "CONFIRMED"
+                        ? "confirmed"
+                        : "not confirmed"}
+                    </span>
+                  </span>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-8"
+                    onClick={() =>
+                      onSendReminder({
+                        id: schedule.id,
+                        tradieId: schedule.tradieId,
+                        milestoneId: schedule.milestoneId ?? undefined,
+                        scheduledDate: new Date(
+                          schedule.scheduledDate,
+                        ).toISOString(),
+                        abn: schedule.tradie.abn,
+                        status: schedule.status,
+                        tradeType: schedule.tradie.trade,
+                        tradieName: schedule.tradie.name,
+                        lastQuotedPriceUnit:
+                          schedule.tradie.lastQuotedPriceUnit,
+                        projectId: schedule.projectId,
+                        projectName: project.name,
+                        taskLabel: `${milestone.name} - ${schedule.tradie.trade}`,
+                        durationDays: schedule.durationDays,
+                        updatedAt: new Date(schedule.updatedAt).toISOString(),
+                        contact: {
+                          email: schedule.tradie.email,
+                          phone: schedule.tradie.phone,
+                          additionalEmails: schedule.tradie.additionalEmails,
+                        },
+                        siteManager: {
+                          name: project.siteManager?.name ?? "Site Manager",
+                          email:
+                            project.siteManager?.email ?? "Site Manager Email",
+                          phone:
+                            project.siteManager?.phone ?? "Site Manager Phone",
+                        },
+                        lastQuotedPrice: schedule.tradie.lastQuotedPrice,
+                        isFavourite: schedule.tradie.isFavourite,
+                        note: schedule.tradie.note,
+                        requiresQuote: schedule.requiresQuote,
+                        quotedPrice: schedule.quotedPrice ?? undefined,
+                      } satisfies TradieScheduleListItem)
+                    }
+                  >
+                    <Bell className="mr-1 size-3.5" aria-hidden="true" />
+                    Remind {schedule.tradie.name.split(" ")[0]}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {hasChildren ? (
             <CollapsibleTrigger asChild>
               <button
                 type="button"
-                className="group flex w-full items-center justify-between gap-3 text-left text-sm font-medium text-foreground transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                className="group mt-1.5 -ml-2 inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                <span>
-                  {milestone.childrenMilestones.length} sub-activity
-                  {milestone.childrenMilestones.length === 1 ? "" : "s"}
-                </span>
                 <ChevronDown
-                  className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                  className="size-3.5 transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
                   aria-hidden="true"
                 />
+                {isOpen ? "Hide" : "Show"} {children.length} item
+                {children.length === 1 ? "" : "s"}
+                <span className="sr-only">in {milestone.name}</span>
               </button>
             </CollapsibleTrigger>
+          ) : null}
+        </div>
 
-            <CollapsibleContent>
-              <div className="mt-3 overflow-y-auto no-scrollbar max-h-80 pr-2">
-                <div className="space-y-2">
-                  {milestone.childrenMilestones.map((child) => (
-                    <MilestoneCard
-                      key={child.id}
-                      isAdmin={isAdmin}
-                      isActiveStage={isActiveStage}
-                      milestone={child}
-                      project={project}
-                      depth={depth + 1}
-                      tradieAlertsByMilestone={tradieAlertsByMilestone}
-                      onOpenAddUpdateModal={onOpenAddUpdateModal}
-                      onStatusUpdate={onStatusUpdate}
-                      onStartMilestone={onStartMilestone}
-                      onSendReminder={onSendReminder}
-                      onOpenViewPicture={onOpenViewPicture}
-                      onMarkasNotRequired={onMarkasNotRequired}
-                    />
-                  ))}
-                </div>
-              </div>
-            </CollapsibleContent>
-          </div>
-        </Collapsible>
-      ) : null}
-    </article>
+        <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+          <MilestoneActionGroup
+            isActiveStage={isActiveStage}
+            milestone={milestone}
+            onOpenAddUpdateModal={onOpenAddUpdateModal}
+            onStatusUpdate={onStatusUpdate}
+            onStartMilestone={onStartMilestone}
+            onMarkasNotRequired={onMarkasNotRequired}
+          />
+        </div>
+
+        {hasChildren ? (
+          <CollapsibleContent className="sm:col-span-2">
+            <ul className="ml-1 list-none border-l border-border/70 pl-4">
+              {orderedChildren.map((child) => (
+                  <MilestoneCard
+                    key={child.id}
+                    isAdmin={isAdmin}
+                    isActiveStage={isActiveStage}
+                    milestone={child}
+                    project={project}
+                    depth={depth + 1}
+                    tradieAlertsByMilestone={tradieAlertsByMilestone}
+                    onOpenAddUpdateModal={onOpenAddUpdateModal}
+                    onStatusUpdate={onStatusUpdate}
+                    onStartMilestone={onStartMilestone}
+                    onSendReminder={onSendReminder}
+                    onOpenViewPicture={onOpenViewPicture}
+                    onMarkasNotRequired={onMarkasNotRequired}
+                  />
+              ))}
+            </ul>
+          </CollapsibleContent>
+        ) : null}
+      </li>
+    </Collapsible>
   );
 }

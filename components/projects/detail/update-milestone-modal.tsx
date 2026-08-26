@@ -64,9 +64,9 @@ function toDateInputValue(value: Date | string | null | undefined) {
 
 const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Pending", value: "PENDING" },
-  { label: "In Progress", value: "ACTIVE" },
-  { label: "Completed", value: "DONE" },
-  { label: "Not Required", value: "NOT_REQUIRED" },
+  { label: "Active", value: "ACTIVE" },
+  { label: "Done", value: "DONE" },
+  { label: "Not required", value: "NOT_REQUIRED" },
 ];
 
 const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
