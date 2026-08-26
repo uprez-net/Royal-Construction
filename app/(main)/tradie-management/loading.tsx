@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Mirrors the real layout of `TradieManagementClient` (flat card header, three
@@ -7,13 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export default function TradieManagementSkeleton() {
   return (
-    <div
-      className="space-y-6"
-      role="status"
-      aria-busy="true"
-      aria-live="polite"
-    >
-      <span className="sr-only">Loading tradies</span>
+    <PageSkeleton label="Loading tradies" className="space-y-6">
 
       {/* Header card */}
       <div className="rounded-lg border border-border/70 bg-card p-6 shadow-sm">
@@ -76,6 +70,6 @@ export default function TradieManagementSkeleton() {
           </div>
         ))}
       </div>
-    </div>
+    </PageSkeleton>
   );
 }

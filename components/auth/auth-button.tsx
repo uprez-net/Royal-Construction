@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import { Button } from "../ui/button";
 import Link from "next/link";
+import { Skeleton } from "../ui/skeleton";
 
 async function AuthContent() {
   const user = await auth();
@@ -39,7 +40,7 @@ async function AuthContent() {
 }
 
 function AuthFallback() {
-  return <div className="size-9 rounded-full bg-muted animate-pulse" />;
+  return <Skeleton className="size-9 rounded-full" />;
 }
 
 export function AuthButton() {
