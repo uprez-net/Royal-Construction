@@ -90,42 +90,85 @@ const ENQUIRY = [
 ].join("|");
 
 /**
- * Correspondence about a project that already exists, rather than a stranger
- * approaching the builder for the first time.
+ * Mail from someone selling to the builder rather than buying from them.
  *
- * The two vocabularies above are deliberately broad — `BUILD_WORK` holds bare
- * nouns ("extension", "duplex") and `ENQUIRY` holds the bare word "request" —
- * so any subject carrying one of each matched, and a builder's routine mail
- * carries one of each constantly. "Variation request - extension at 12 Smith
- * St" read as a brand new customer, which created a junk lead AND auto-sent
- * the welcome email to a certifier, a council officer or a supplier.
+ * This is what the info@ mailbox actually receives: an audit of 800 messages
+ * (Jul 2025 - Aug 2026) found trades, recruiters, cleaners, precast suppliers,
+ * finance brokers and marketing agencies far outnumber customers, and they
+ * write in the customer's vocabulary — "Construction Project Takeoff & Cost
+ * Estimate" and "Bid Request For Building Project" both reached the patterns
+ * and would have created a lead plus an automated welcome email.
  *
- * A customer who has never spoken to the builder does not write any of these
- * words. Widen the list rather than loosening a pattern when a new class of
- * project mail leaks through.
+ * Every term here was taken from a real message in that audit. Add to it the
+ * same way — from something that actually arrived, not from something that
+ * could conceivably arrive.
  */
-const PROJECT_ADMIN = [
-  "variation",
-  "inspection",
-  "payment",
-  "invoice",
-  "remittance",
-  "purchase order",
-  "progress claim",
-  "defect",
-  "further information",
-  "site instruction",
-  "practical completion",
-  "handover",
-  "warranty",
-  "final account",
-  "supplier",
-  "subcontractor",
-  "internal",
+const SOLICITATION = [
+  "takeoff",
+  "take off & cost",
+  "bid request",
+  "labour hire",
+  "trade partnership",
+  "tender opportunit(?:y|ies)",
+  "lead generation",
+  "looking for work",
+  "available for work",
+  "estimator",
+  "candidate",
+  "cadetship",
+  "apprenticeship",
+  "traineeship",
+  "recruitment",
+  "sponsorship",
+  "cleaning (?:services|support)",
+  "builders cleaning",
+  "silicone",
+  "precast",
+  "clearance stock",
+  "price book",
+  "construction finance",
+  "finance partner",
 ].join("|");
 
+/**
+ * Subjects this system itself sends.
+ *
+ * They come back to info@ as a cc, a self-copy or inside a bounce, and they
+ * are written in the customer's vocabulary because they are addressed to
+ * customers — "Your Building Offer — Lot 8358 Expedition Loop, Oran Park"
+ * carries a build word and a street address, which is exactly the shape of a
+ * genuine enquiry. Left alone it opens a second lead for a customer who
+ * already has one.
+ *
+ * Sourced from the send sites, not invented. When a new template is added
+ * there, add its distinctive stem here.
+ */
+const OWN_OUTBOUND = [
+  "your building (?:proposal|offer)",
+  "a royal constructions offer for your",
+  "welcome to royal constructions",
+  "next step for your",
+  "following up on your",
+  "royal constructions portfolio for your",
+  "finishes catalogue for your",
+  "quotation next steps for",
+  "fixed price building tender",
+  "residential building contract",
+  "offer acceptance",
+  "variation update for",
+  "site visit for",
+  "availability confirmation required",
+  "consultation with",
+  "work reminder",
+  "follow-?up (?:reminder|calendar event)",
+  "lead note",
+].join("|");
+
+/** Vetoes a pattern match, like SOLICITATION. */
+const OWN_OUTBOUND_PATTERN = new RegExp(String.raw`\b(?:${OWN_OUTBOUND})\b`);
+
 /** Vetoes a pattern match. Checked after the exact allowlist, never before it. */
-const PROJECT_ADMIN_PATTERN = new RegExp(String.raw`\b(?:${PROJECT_ADMIN})\b`);
+const SOLICITATION_PATTERN = new RegExp(String.raw`\b(?:${SOLICITATION})\b`);
 
 /**
  * Subjects a customer writes themselves, tested against the normalized
@@ -148,6 +191,27 @@ export const LEAD_SUBJECT_PATTERNS: readonly RegExp[] = [
   // "enquiry about building a duplex", "looking to build", "extension request".
   new RegExp(String.raw`\b(?:${BUILD_WORK})\b.{0,60}\b(?:${ENQUIRY})\b`),
   new RegExp(String.raw`\b(?:${ENQUIRY})\b.{0,60}\b(?:${BUILD_WORK})\b`),
+
+  // "I want to build a Granny Flat in Cherrybrook" — a customer stating the
+  // intention outright, with no second vocabulary anywhere in the subject. The
+  // allowlist holds only the website form's quoted variant, so before this the
+  // most explicit enquiry a person can write was the one shape that missed.
+  new RegExp(String.raw`\b(?:want|wants|wanting|keen|hoping|planning|looking) to (?:build|renovate)\b`),
+
+  // "New build" — the whole subject is the work and nothing else. Anchored, so
+  // it cannot fire on a build word buried in a sentence about something else.
+  new RegExp(String.raw`^(?:a |an |the )?(?:${BUILD_WORK})$`),
+
+  // "13 Binalog Road, Pendle Hill - New Build" — a street address is a
+  // customer naming their own site. Paired with BUILD_WORK only: pairing it
+  // with PRICE_ASK instead pulled in supplier quotes addressed to the builder
+  // ("Quote re: 24 Indian Ave Goulburn", "Estimate #870 1 TARPAN PL").
+  new RegExp(
+    String.raw`\b\d{1,4}[a-z]? [a-z]+(?: [a-z]+)? (?:rd|road|st|street|ave|avenue|cct|circuit|cres|crescent|dr|drive|pde|parade|tce|terrace|pl|place|way|ct|court|ln|lane|loop)\b.{0,60}\b(?:${BUILD_WORK})\b`,
+  ),
+  new RegExp(
+    String.raw`\b(?:${BUILD_WORK})\b.{0,60}\b\d{1,4}[a-z]? [a-z]+(?: [a-z]+)? (?:rd|road|st|street|ave|avenue|cct|circuit|cres|crescent|dr|drive|pde|parade|tce|terrace|pl|place|way|ct|court|ln|lane|loop)\b`,
+  ),
 
   // Generic first-contact subjects the site and the directories send.
   /\b(?:website|web|online) (?:enquiry|inquiry)\b/,
@@ -183,6 +247,19 @@ for (const pattern of LEAD_SUBJECT_PATTERNS) {
 const REPLY_PREFIX = /^(?:(?:re|fw|fwd|aw|tr|sv|vs)\s*(?:\[\d+\])?\s*:\s*)+/;
 
 /**
+ * Bounces and vacation autoresponders, which carry the subject of the message
+ * that triggered them and so inherit its vocabulary.
+ *
+ * The audit found five in 800, including "Undeliverable: Welcome to Royal
+ * Constructions — Your Home Building Journey Starts Here" — a bounce of this
+ * system's own welcome email. None matched, but only by luck: "Undeliverable:
+ * Request for Quotation - 145 Oran Park Dr" already carries both "request" and
+ * "quotation" and misses solely because no build noun happens to appear.
+ */
+const AUTO_REPLY_PREFIX =
+  /^(?:undeliverable|undelivered mail|automatic reply|auto(?:matic)? response|out of (?:the )?office|delivery (?:has failed|status notification)|mail delivery)\b/;
+
+/**
  * Longest subject the patterns will be run against.
  *
  * The patterns scan an attacker-controlled string synchronously inside the
@@ -199,9 +276,12 @@ export function isLeadSubject(subject: string | null | undefined): boolean {
   const normalized = normalizeSubject(subject);
   if (LEAD_SUBJECT_LINES.has(normalized)) return true;
   if (REPLY_PREFIX.test(normalized)) return false;
+  if (AUTO_REPLY_PREFIX.test(normalized)) return false;
   if (normalized.length > MAX_MATCHABLE_SUBJECT) return false;
-  // Project administration outranks the patterns: the vocabularies are broad
-  // enough that routine mail about a live job hits them by coincidence.
-  if (PROJECT_ADMIN_PATTERN.test(normalized)) return false;
+  // Selling outranks the patterns: a vendor writes in the customer's
+  // vocabulary, and this mailbox receives more vendors than customers.
+  if (SOLICITATION_PATTERN.test(normalized)) return false;
+  // Our own outbound, arriving back as a cc or self-copy.
+  if (OWN_OUTBOUND_PATTERN.test(normalized)) return false;
   return LEAD_SUBJECT_PATTERNS.some((pattern) => pattern.test(normalized));
 }

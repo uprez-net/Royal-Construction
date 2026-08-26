@@ -159,30 +159,76 @@ test("no pattern lost a word boundary to template-literal escaping", () => {
   }
 });
 
-test("project administration on a live job is not a new lead", () => {
-  // `BUILD_WORK` holds bare nouns and `ENQUIRY` holds the bare word "request",
-  // so before the PROJECT_ADMIN veto every one of these matched: a certifier,
-  // a council officer and a supplier each got a Lead row AND the automated
-  // "Welcome to Royal Constructions" email. The earlier negative test could not
-  // catch this class — each of its cases is missing one vocabulary entirely,
-  // whereas these carry both and are still plainly not a new customer.
+test("vendors selling to the builder are not leads", () => {
+  // What this mailbox actually receives. An audit of 800 real messages found
+  // trades, recruiters and suppliers outnumber customers, and they write in the
+  // customer's vocabulary — the first two below reached the patterns and each
+  // created a lead plus an automated welcome email to a cold outreach sender.
   for (const s of [
-    "Variation request - extension at 12 Smith St",
-    "Inspection request - duplex at 4 Jones Ave",
-    "Council: request for further information, extension DA-2024-119",
-    "Payment request - renovation stage 3",
-    "Purchase order 8891 - townhouse tiling quote",
-    "Supplier quote - duplex windows",
-    "Estimate revision for the extension - internal",
-    "Progress claim 4 - duplex at 4 Jones Ave, quote attached",
-    "Remittance advice - renovation final account",
-    "Defect list for the townhouse handover",
+    "Construction Project Takeoff & Cost Estimate",
+    "Bid Request For Building Project",
+    "Draftsman looking for work",
+    "Your New Remote Construction Estimator",
+    "Traffic Control • Cleaner Construction • General Labour Hire",
+    "Cleaning & Silicone Services – Trade Partnership with Royal Construction",
+    "Cadetship Inquiry – 1st Year Construction Management Student",
+    "AtoZ Construction Engineering Formwork - Request For Tender Opportunities",
+    "Flexible Construction Finance for Builders & Developers",
   ]) {
     assert.equal(isLeadSubject(s), false, s);
   }
 });
 
-test("the veto does not swallow a genuine first approach", () => {
+test("our own outbound coming back is not a new lead", () => {
+  // These arrive at info@ as a cc or self-copy. They are written to customers,
+  // so they carry a build word and often a street address — the exact shape of
+  // a genuine enquiry. Untreated they open a second lead for a customer who
+  // already has one. Stems are sourced from the send sites.
+  for (const s of [
+    "Your Building Offer — Lot 8358 Expedition Loop, Oran Park",
+    "Your Building Proposal — RC-Q-2026-011-R1 [RCOFR-DA31C8C86922]",
+    "Welcome to Royal Constructions — Your Home Building Journey Starts Here",
+    "Following up on your Double Storey, Granny Flat in Lot 3100 in Orchard Hills",
+    "Quotation next steps for Jane - Oran Park duplex ($840,000)",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("bounces and autoresponders are not leads", () => {
+  // A bounce carries the subject of whatever triggered it, so it inherits that
+  // subject's vocabulary. The audit found five in 800 — including a bounce of
+  // this system's own welcome email. "Undeliverable: Request for Quotation -
+  // 145 Oran Park Dr" already carries both "request" and "quotation" and missed
+  // only because no build noun happened to appear.
+  for (const s of [
+    "Undeliverable: Welcome to Royal Constructions — Your Home Building Journey Starts Here",
+    "Undeliverable: Request for Quotation – 145 Oran Park Dr, Oran Park NSW 2570, Australia Project",
+    "Automatic reply: Quote for a new home",
+    "Out of office: Granny flat estimate",
+    "Mail delivery failed: returning message to sender",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("a customer stating the job plainly is a lead", () => {
+  // Real subjects from the audit that the pattern layer dropped. Each carries
+  // only ONE vocabulary, and the paired patterns need two, so the most explicit
+  // enquiries a person can write were the ones that missed. A lost customer
+  // costs more than a junk lead.
+  for (const s of [
+    "I want to build a Granny Flat in Cherrybrook",
+    "New build",
+    "13 Binalog Road, Pendle Hill - New Build",
+    "We are looking to renovate",
+    "Wanting to build in Oran Park",
+  ]) {
+    assert.equal(isLeadSubject(s), true, s);
+  }
+});
+
+test("the vetoes do not swallow a genuine first approach", () => {
   // The counterpart to the test above: widening PROJECT_ADMIN must not start
   // rejecting the customer phrasings the patterns exist to catch.
   for (const s of [
