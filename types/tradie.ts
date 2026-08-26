@@ -100,6 +100,15 @@ export interface TradieTableQuery {
     tab: "all" | "flagged";
 }
 
+/**
+ * The two ways the tradie directory can be shown: trade-category tiles, or the
+ * flat list of every tradie. "list" is the tabular view — it was labelled
+ * "Table" beside a second, card-based "List" view that showed the same tradies
+ * with fewer columns, so the pair read as two names for one thing. The cards
+ * went and the table kept the name the team uses.
+ */
+export type TradieViewTab = "category" | "list";
+
 export interface UpdatePriceApprovalPayload {
     newHourlyRate: number;
     newPriceUnit?: TradiePriceUnit;

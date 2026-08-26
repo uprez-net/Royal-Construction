@@ -63,17 +63,27 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
   // Drive the fourth MoneyTile from the shared classifier so this tab agrees
   // with the stat cards, overview tab and project card.
+  //
+  // NOT_STARTED means either "no spend yet" or "no budget recorded", so the
+  // remaining figure is only meaningful once there is a budget to draw down
+  // from. When there is one, no spend means the entire budget is still
+  // remaining — reporting $0 was the opposite of the truth, on the tab where
+  // the number matters most. Without a budget the tile falls back to NaN,
+  // which MoneyTile renders as "—" rather than an invented zero.
+  const canShowRemaining = budget > 0 && Number.isFinite(spent);
   const summaryTileLabel = isOverBudget
     ? "Over budget"
-    : isNotStarted
-      ? "No spend recorded"
-      : "Budget remaining";
+    : canShowRemaining
+      ? "Budget remaining"
+      : budget > 0
+        ? "No spend recorded"
+        : "No budget recorded";
   const summaryTileTone: "neutral" | "success" | "destructive" = isOverBudget
     ? "destructive"
     : isNotStarted
       ? "neutral"
       : "success";
-  const summaryTileValue = isNotStarted ? 0 : Math.abs(remaining);
+  const summaryTileValue = canShowRemaining ? Math.abs(remaining) : Number.NaN;
 
   return (
     <div className="space-y-5">

@@ -333,7 +333,7 @@ export function ProjectsClient({
 
       <SectionCard
         title="Active projects"
-        description="Open a card for a quick view, or Details for the full project page."
+        description="Select a project for a quick view, or Details for the full project page."
         action={
           <div className="flex gap-2">
             <Button

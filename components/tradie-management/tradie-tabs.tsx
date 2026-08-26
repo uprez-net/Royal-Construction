@@ -11,7 +11,6 @@ import {
   Search,
   Square,
   Star,
-  Table,
   Users,
 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -26,9 +25,7 @@ import {
 } from "../ui/select";
 import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
 import { cn } from "@/lib/utils";
-import type { TradieTableQuery } from "@/types/tradie";
-
-export type TradieViewTab = "category" | "list" | "table";
+import type { TradieTableQuery, TradieViewTab } from "@/types/tradie";
 
 /** Shared ids so the tablist here and the tabpanel in `tradie-body` line up. */
 export const TRADIE_VIEW_PANEL_ID = "tradie-view-panel";
@@ -56,7 +53,6 @@ export function hasActiveTradieFilters(query: TradieTableQuery): boolean {
 const VIEW_TABS: { label: string; value: TradieViewTab; icon: LucideIcon }[] = [
   { label: "Category", value: "category", icon: Grid3x3 },
   { label: "List", value: "list", icon: List },
-  { label: "Table", value: "table", icon: Table },
 ];
 
 export function TradieTabs() {
@@ -199,9 +195,9 @@ export function TradieTabs() {
           />
         </div>
 
-        {/* Trade and rating filters live in every view. They used to render only
-            in Table view while their state persisted in Redux, so a filter set
-            in Table view kept applying with no visible control to undo it. */}
+        {/* Trade and rating filters live in both views. They used to render only
+            in the List view while their state persisted in Redux, so a filter
+            set there kept applying with no visible control to undo it. */}
         <Select
           value={query.category ?? "all"}
           onValueChange={(value) =>

@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 import { TRADE_ICON_TILE_CLASS } from "@/constants/tradeChip";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
-  setSelectedCategory,
   setActiveTab,
+  setQuery,
 } from "@/lib/store/slices/tradieManagementSlice";
 import {
   convertCategoryToTradieType,
@@ -28,9 +28,13 @@ export function TradieCategory({
 }) {
   const dispatch = useAppDispatch();
 
+  // A tile is a drill-down into the List view. It filters through `query`, the
+  // same state the trade Select writes, so the choice shows up as a removable
+  // filter chip. The accordion this replaced tracked its own selected category
+  // with no visible control to undo it.
   const handleActionClick = (category: string) => {
+    dispatch(setQuery({ category }));
     dispatch(setActiveTab("list"));
-    dispatch(setSelectedCategory(category));
   };
 
   return (

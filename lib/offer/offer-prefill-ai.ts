@@ -73,6 +73,13 @@ export const offerPrefillSchema = z.object({
     .describe(
       "The number of garage spaces the client has discussed. 0 if none are mentioned.",
     ),
+  numberOfShowers: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "The number of showers the client has discussed. This is NOT the bathroom count: a bathroom may have a bath and no shower, and a large bathroom may hold two. Only count showers actually mentioned; 0 if none are.",
+    ),
 });
 
 export type OfferPrefillDraft = z.infer<typeof offerPrefillSchema>;
@@ -84,13 +91,14 @@ const SYSTEM_PROMPT = `You are an assistant for Royal Constructions Pty Ltd, a N
 - buildScope: short customer-facing feature bullets for what the client wants built.
 - facade: the façade style/material, but ONLY when the lead clearly indicates one (e.g. mentions "Hamptons", "rendered", "face brick", "coastal", "contemporary") — pick the closest allowed option, otherwise leave it "".
 - introText: a brief, warm proposal introduction tailored to this client.
+- numberOfBedrooms, numberOfBathrooms, numberOfGarageSpaces, numberOfShowers: room/count fields the client actually mentioned (0 when not evidenced). numberOfShowers is separate from bathroom count — count showers explicitly discussed, not baths.
 - confidence + notesForEstimator: your self-assessment.
 </what_to_produce>
 
 <hard_rules>
 - These are DRAFTS an estimator will review. Accuracy over completeness.
 - NEVER fabricate, guess, or "fill in" plausible construction details that are not evidenced in the lead context. If a field is not supported, return "" (empty string) or [] (empty array).
-- Do NOT produce prices, dollar amounts, allowances, quantities, or a payment schedule — those are estimator decisions and out of scope.
+- Do NOT produce prices, dollar amounts, allowances, material quantities, or a payment schedule — those are estimator decisions and out of scope. The room/count fields above are the exception when the client explicitly states them.
 - Do NOT invent a site address, lot number, zoning, or floor areas — those come from documents, not this text pass. Leave anything you are unsure about blank.
 - buildScope bullets must be short (a few words each), customer-facing, and drawn only from features the client actually discussed.
 - Keep introText professional and generic if the context is thin; never assert facts you cannot support.
