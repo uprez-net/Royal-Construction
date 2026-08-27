@@ -279,6 +279,64 @@ test("a docx OCR cannot read is dropped, since the model cannot open it either",
   assert.deepEqual(set.names, ["brief.docx"]);
 });
 
+test("every downloaded file is kept for the lead, whatever the extractor made of it", async () => {
+  // Three different fates in the prompt — OCR'd to text, dropped outright,
+  // sent as bytes — and all three are still files the client sent, so all
+  // three have to reach the lead record.
+  const metadata = [
+    attachment({ id: "a", name: "plans.pdf" }),
+    attachment({
+      id: "b",
+      name: "brief.docx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+    attachment({ id: "c", name: "site.jpg", contentType: "image/jpeg" }),
+  ];
+  const set = await collectLeadAttachments(
+    sourceFor(metadata, {
+      a: Buffer.from("pdf-bytes"),
+      b: Buffer.from("docx-bytes"),
+      c: Buffer.from("jpg-bytes"),
+    }),
+    "message-1",
+    // Reads the PDF, finds nothing in the Word file or the photo.
+    async ({ name }) => (name === "plans.pdf" ? "Granny flat at 12 Smith St" : ""),
+  );
+
+  assert.deepEqual(
+    set.attachments.map((item) => `${item.name}:${item.kind}`),
+    ["plans.pdf:text", "site.jpg:file"],
+  );
+  assert.deepEqual(namesOf(set.skipped), ["brief.docx"]);
+
+  assert.deepEqual(
+    set.downloaded.map((item) => `${item.name}:${item.mediaType}`),
+    [
+      "plans.pdf:application/pdf",
+      "brief.docx:application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "site.jpg:image/jpeg",
+    ],
+  );
+  assert.equal(set.downloaded[1].data.toString(), "docx-bytes");
+});
+
+test("a file that never downloaded is not archived against the lead", async () => {
+  const set = await collectLeadAttachments(
+    sourceFor(
+      [
+        attachment({ id: "a", name: "broken.pdf" }),
+        attachment({ id: "b", name: "plans.pdf" }),
+      ],
+      { a: new GraphRequestError("Graph error 404", 404) },
+    ),
+    "message-1",
+    noOcrText,
+  );
+
+  assert.deepEqual(namesOf(set.downloaded), ["plans.pdf"]);
+});
+
 test("a failing OCR falls back rather than losing the attachment", async () => {
   const set = await collectLeadAttachments(
     sourceFor([attachment({ id: "a", name: "plans.pdf" })]),
@@ -362,7 +420,7 @@ test("a failed listing degrades to extracting from the body alone", async () => 
     "message-1",
   );
 
-  assert.deepEqual(set, { names: [], attachments: [], skipped: [] });
+  assert.deepEqual(set, { names: [], attachments: [], skipped: [], downloaded: [] });
 });
 
 test("a message with no attachments costs nothing beyond the listing", async () => {

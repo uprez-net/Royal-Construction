@@ -20,6 +20,20 @@ export interface SkippedAttachment {
   reason: string;
 }
 
+/**
+ * A file as it came off the mailbox, before anything was made of it.
+ *
+ * Kept whole and separate from `attachments` because what the extractor needs
+ * and what the lead should keep are different things: OCR reduces a plan set to
+ * text for the model, and a .docx OCR could not read is dropped from the prompt
+ * entirely — but the client still sent both, and both belong on the record.
+ */
+export interface DownloadedAttachment {
+  name: string;
+  mediaType: string;
+  data: Buffer;
+}
+
 export interface LeadAttachmentSet {
   /**
    * Every attachment the sender put on the message, readable or not. The
@@ -30,12 +44,15 @@ export interface LeadAttachmentSet {
   names: string[];
   attachments: LeadAttachment[];
   skipped: SkippedAttachment[];
+  /** Every file whose bytes we hold, for archiving against the saved lead. */
+  downloaded: DownloadedAttachment[];
 }
 
 export const EMPTY_LEAD_ATTACHMENTS: LeadAttachmentSet = {
   names: [],
   attachments: [],
   skipped: [],
+  downloaded: [],
 };
 
 const DOCX_MEDIA_TYPE =
@@ -350,6 +367,7 @@ export async function collectLeadAttachments(
 
   const { selected, skipped } = selectLeadAttachments(metadata);
   const attachments: LeadAttachment[] = [];
+  const downloaded: DownloadedAttachment[] = [];
 
   for (const item of selected) {
     try {
@@ -358,6 +376,15 @@ export async function collectLeadAttachments(
       const data = await withGraphRetry(`download ${item.name}`, () =>
         source.downloadMessageAttachment(messageId, item.id),
       );
+
+      // Recorded before the file is interpreted. Whether OCR could read it, and
+      // whether the model ends up seeing it, has no bearing on the client
+      // having sent it — the lead keeps the file either way.
+      downloaded.push({
+        name: item.name,
+        mediaType: resolveMediaType(item.name, item.contentType),
+        data,
+      });
 
       const prepared = await prepareAttachment(item, data, ocr);
       if (prepared.ok) {
@@ -379,5 +406,6 @@ export async function collectLeadAttachments(
       .map((item) => item.name),
     attachments,
     skipped,
+    downloaded,
   };
 }

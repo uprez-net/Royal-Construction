@@ -11,6 +11,7 @@ import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
 import { collectLeadAttachments } from '@/lib/graph/lead-attachments';
+import { archiveLeadAttachments } from '@/lib/leads/archive-lead-attachments';
 import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
 import { after } from 'next/server';
 
@@ -410,6 +411,21 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 },
               });
               console.log(`  Lead successfully saved to database with ID: ${newLead.id} and MicrosoftmessageId: ${message.id}`);
+
+              // Only once the lead has an id: it is what gives each file both
+              // its blob path and its row. Everything downloaded is kept, not
+              // just what the extractor could read — a .docx OCR gave up on is
+              // still the brief the client sent.
+              if (attachments.downloaded.length > 0) {
+                const archived = await archiveLeadAttachments(
+                  newLead.id,
+                  attachments.downloaded,
+                );
+                console.log(
+                  `  Archived ${archived}/${attachments.downloaded.length} attachment(s) against lead ${newLead.id}`,
+                );
+              }
+
               // After data Create Successfully Now give the Welcome Email Message to this client if Email and Name are present
               // ═══════════════════════════════════════════════════════
               // SEND WELCOME EMAIL AUTOMATICALLY
