@@ -10,8 +10,14 @@ import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
+import { collectLeadAttachments } from '@/lib/graph/lead-attachments';
 
 // export const runtime = 'nodejs';
+
+// Extraction already ran a model round-trip inline; downloading a set of plans
+// and sending them up with it pushes the slow case well past the default
+// serverless budget.
+export const maxDuration = 300;
 
 interface GraphNotificationBody {
   value?: Array<{
@@ -357,9 +363,31 @@ export async function POST(request: Request): Promise<Response> {
               continue; // Skip processing this message
             }
 
+            // Only now, once the message has cleared every gate and is going to
+            // the extractor, is it worth paying for the attachment round-trips.
+            //
+            // `hasAttachments` is deliberately not the condition: Graph reports
+            // it as false when every attachment is inline, which is how Outlook
+            // marks an image the sender pasted into the body — often the site
+            // photo the whole enquiry is about.
+            const attachments = await collectLeadAttachments(graphClient, message.id);
+            if (attachments.names.length > 0) {
+              console.log(
+                `  attachments (hasAttachments=${message.hasAttachments}): ` +
+                  `${attachments.attachments.length} sent to the extractor, ` +
+                  `${attachments.skipped.length} skipped` +
+                  (attachments.skipped.length > 0
+                    ? ` — ${attachments.skipped
+                        .map((item) => `${item.name}: ${item.reason}`)
+                        .join('; ')}`
+                    : ''),
+              );
+            }
+
             const extracted = await extractLeadFromMessage(
               message.subject ?? '',
               content,
+              attachments,
             );
 
             if (extracted) {

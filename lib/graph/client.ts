@@ -13,6 +13,32 @@ export interface EmailAttachment {
   contentBytes: string; // base64
 }
 
+/**
+ * One attachment on a received message, without its bytes.
+ *
+ * Listed separately from the download so a caller can decide what is worth
+ * pulling: a 40 MB video and a 2 KB signature logo both show up here, and
+ * neither should be fetched.
+ */
+export interface GraphAttachmentMetadata {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  /**
+   * True for a file embedded in the body by contentId — a signature logo, a
+   * tracking pixel, or a photo the sender pasted inline rather than attached.
+   */
+  isInline: boolean;
+  /**
+   * The Graph subtype: `#microsoft.graph.fileAttachment`,
+   * `#microsoft.graph.itemAttachment` (a forwarded email) or
+   * `#microsoft.graph.referenceAttachment` (a cloud link). Only the first has
+   * bytes to download.
+   */
+  odataType: string;
+}
+
 // Graph rejects a sendMail whose inline #fileAttachment payload exceeds ~3 MB.
 // Below that we send in one request; above it we create a draft, stream the
 // files through an upload session, then send the draft.
@@ -150,6 +176,13 @@ export interface GraphMessage {
   receivedDateTime: string;
   isRead: boolean;
 
+  /**
+   * Graph reports this as false when the only attachments are inline, so it is
+   * a hint for logging, never the gate on whether to look. See
+   * `listMessageAttachments`.
+   */
+  hasAttachments: boolean;
+
   bodyPreview?: string;
 
   body?: {
@@ -170,6 +203,8 @@ interface GraphContext {
   listInbox(top?: number, includeBody?: boolean): Promise<GraphMessage[]>;
   getTokenPreview(): Promise<string>;
   getMessageByResource(resource: string, includeBody?: boolean): Promise<GraphMessage>;
+  listMessageAttachments(messageId: string): Promise<GraphAttachmentMetadata[]>;
+  downloadMessageAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
   createMailboxSubscription(args: {
     notificationUrl: string;
     clientState: string;
@@ -207,12 +242,22 @@ interface GraphApiMessage {
 
   receivedDateTime?: string;
   isRead?: boolean;
+  hasAttachments?: boolean;
   bodyPreview?: string;
 
   body?: {
     contentType?: string;
     content?: string;
   };
+}
+
+interface GraphApiAttachment {
+  id?: string;
+  name?: string;
+  contentType?: string;
+  size?: number;
+  isInline?: boolean;
+  '@odata.type'?: string;
 }
 
 async function toJson(response: Response): Promise<unknown> {
@@ -306,6 +351,8 @@ function mapMessage(
 
     receivedDateTime: item.receivedDateTime ?? '',
     isRead: item.isRead ?? false,
+
+    hasAttachments: item.hasAttachments ?? false,
 
     bodyPreview: item.bodyPreview ?? undefined,
 
@@ -442,8 +489,8 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
     getMessageByResource: async (resource: string, includeBody = true) => {
       const token = await getAccessToken();
       const select = includeBody
-        ? 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,body,bodyPreview,internetMessageHeaders'
-        : 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,bodyPreview,internetMessageHeaders';
+        ? 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,hasAttachments,body,bodyPreview,internetMessageHeaders'
+        : 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,hasAttachments,bodyPreview,internetMessageHeaders';
       const url = buildGraphUrl(resource, select);
 
       // 2. Request plain text body to save LLM tokens if body is included
@@ -451,6 +498,56 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
 
       const message = await graphRequest<GraphApiMessage>('GET', url, token, undefined, headers);
       return mapMessage(message, includeBody);
+    },
+    listMessageAttachments: async (messageId: string) => {
+      const token = await getAccessToken();
+
+      // Metadata only. Asking for the collection without $select makes Graph
+      // inline every fileAttachment's base64 contentBytes in one response, so a
+      // mail carrying three large files is downloaded in full just to find out
+      // what is there.
+      const list = await graphRequest<{ value: GraphApiAttachment[] }>(
+        'GET',
+        `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}` +
+          '/attachments?$select=id,name,contentType,size,isInline',
+        token,
+      );
+
+      return (list.value ?? [])
+        .filter((attachment): attachment is GraphApiAttachment & { id: string } =>
+          Boolean(attachment.id),
+        )
+        .map((attachment) => ({
+          id: attachment.id,
+          name: attachment.name ?? 'attachment',
+          contentType: attachment.contentType ?? '',
+          size: attachment.size ?? 0,
+          isInline: attachment.isInline ?? false,
+          odataType: attachment['@odata.type'] ?? '',
+        }));
+    },
+    downloadMessageAttachment: async (messageId: string, attachmentId: string) => {
+      const token = await getAccessToken();
+
+      // $value streams the raw file. Fetching the attachment resource itself
+      // would hand back base64 inside JSON — a third more bytes over the wire
+      // and a decode on top.
+      const url =
+        `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}` +
+        `/attachments/${encodeURIComponent(attachmentId)}/$value`;
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const detail = await toJson(response);
+        throw new Error(
+          `Graph error ${response.status} downloading attachment ${attachmentId}: ${JSON.stringify(detail)}`,
+        );
+      }
+
+      return Buffer.from(await response.arrayBuffer());
     },
     sendMail: async ({ to, subject, body, cc, bcc, attachments }) => {
       const formatRecipients = (value?: string | string[]) =>
