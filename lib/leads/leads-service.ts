@@ -1,6 +1,7 @@
 "use client";
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { FetchError, fetchJson } from '@/utils/fetch';
+import type { UpdateLeadInput } from '@/utils/validators/lead';
 import { findLeadById, getAllLeads, getAnalyticsData, getFollowupStats, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
 import { sendCampaignEmail } from '../data/email-ad-hock';
 
@@ -142,7 +143,19 @@ export async function createLead(leadData: LeadCreatePayload): Promise<Lead | Du
   }
 }
 
-type LeadUpdatePayload = Partial<Omit<Lead, "runId" | "emails">> & {
+/**
+ * What PATCH /api/leads/[leadId] accepts.
+ *
+ * Two shapes reach it. The screens pass a partial of the UI `Lead`. The route's
+ * own validator, `updateLeadSchema`, is wider: it lets nullable fields be sent
+ * as `null` to clear them, which the UI type has no way to express. Both are
+ * valid requests, so the parameter admits both rather than forcing a cast at
+ * one of the call sites and pretending the difference is not there.
+ */
+export type LeadUpdatePayload = (
+  | Partial<Omit<Lead, "runId" | "emails">>
+  | UpdateLeadInput
+) & {
   annotationsToCreate?: LeadNoteAnnotationInput[];
 };
 

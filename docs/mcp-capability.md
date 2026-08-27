@@ -41,6 +41,13 @@ In practice, MCP clients need to support bearer-token or OAuth-style auth. If a 
 
 The table below reflects the current tool registry in [app/api/mcp/route.ts](../app/api/mcp/route.ts).
 
+Twelve write tools were **retired from this surface**. Their browser flows moved on from the
+server actions these handlers wrapped - project creation now runs through `createProjectWithLead`
+off an extracted tender and contract, milestone updates go through the milestone `/updates` route,
+lead writes go through `lib/leads/leads-service`, and file upload needs a file the agent does not
+have. Rather than keep a second, diverging implementation here, they are registered by the screens
+that own them and are reachable over WebMCP only. See [webmcp-capability.md](./webmcp-capability.md).
+
 | Tool | Purpose | Inputs | Output |
 | --- | --- | --- | --- |
 | `get_customer` | Search customers for dropdowns and project creation | `page`, `limit`, `q`, `search` | Paginated customer list |
@@ -49,25 +56,13 @@ The table below reflects the current tool registry in [app/api/mcp/route.ts](../
 | `get_projects` | List projects with summary stats | `status`, `page`, `limit`, `search`, `sortBy`, `sortOrder` | Paginated project list |
 | `get_project_lookup` | Lookup projects for autocomplete | `page`, `limit`, `q` | Paginated project lookup list |
 | `get_project` | Fetch a full project detail payload | `projectId` | Project detail payload |
-| `create_project` | Create a project | `name`, `location`, `budget`, `startDate`, `lotSize`, `customerMode`, optional `customerId`, optional `customerName`, optional `customerEmail`, optional `customerPhone`, optional `siteManagerId`, optional `notes`, optional `quoteFile` | Refreshed project detail payload |
-| `create_project_update` | Create a project site update | `projectId`, `notes`, optional `milestoneId`, optional `photoUrls` | Refreshed project detail payload |
 | `create_variation` | Create a variation for a project | `projectId`, `description`, `cost`, optional `requestedDate` | Variation payload |
 | `update_variation_status` | Approve or reject a variation | `projectId`, `variationId`, `status` | Variation payload |
 | `get_milestones` | List milestones for a project | `projectId` | Milestone array |
-| `create_milestone` | Create a milestone | `projectId`, `name`, optional `description`, `targetDate`, `budget`, optional `parentId` | Milestone payload |
-| `add_milestone_photos` | Attach uploaded files to a milestone | `projectId`, `milestoneId`, `fileIds` | Milestone photo attachment payload |
-| `update_milestone` | Update milestone status or dates | `projectId`, `milestoneId`, `status`, optional `startDate`, optional `actualDate`, optional `spend` | Milestone payload |
 | `get_leads` | List all leads | `q`, `status`, `filterTiming`, `page`, `limit` | Lead array |
-| `create_lead` | Create a lead | `name`, optional `phone`, optional `email`, optional `location`, optional `source`, optional `stage`, optional `assigned`, optional `budget`, optional `notes`, optional `followupDate`, optional `followupTime`, optional `followupNotes`, optional `lostReason`, optional `urgent`, optional `history` | Lead payload |
-| `update_lead` | Update a lead | `leadId` plus any lead update fields | Lead payload |
-| `delete_lead` | Delete a lead | `leadId` | `{ success: true }` |
 | `get_all_tradies` | Return the full tradie list | No inputs | Tradie array |
-| `get_tradie_coordination_dashboard` | Return the tradie coordination dashboard | `page`, `limit`, `search`, `projectId`, `tradeType`, `status`, `tab`, `sortBy`, `sortOrder` | Dashboard payload |
-| `create_tradie_schedule` | Create a tradie schedule | `tradieId`, `projectId`, optional `milestoneId`, `scheduledDate`, optional `durationDays` | Schedule payload |
-| `update_tradie_schedule` | Update schedule status | `scheduleId`, `status` | Schedule payload plus `requiresReplacement` |
 | `add_material` | Add material to a project | `projectId`, `materialData` with `name`, `category`, `specifications`, `quantity`, `unitCost`, `totalCost` | Material payload |
 | `address_council_lookup` | Lookup council/address suggestions | `query`, optional `limit` | Address suggestion payload |
-| `upload_file` | Upload a file to Blob and persist a file record | `fileBase64`, `fileName`, `fileSize`, `projectId`, optional `milestoneId` | `{ fileId }` |
 
 ## Input Notes By Tool Group
 
@@ -81,33 +76,27 @@ The table below reflects the current tool registry in [app/api/mcp/route.ts](../
 
 ### Project tools
 
-`create_project`, `create_project_update`, `create_variation`, `update_variation_status`, `get_project`, `get_milestones`, `create_milestone`, `add_milestone_photos`, and `update_milestone` are project-scoped.
+`get_project`, `get_milestones`, `create_variation` and `update_variation_status` are project-scoped.
 
-- `create_project` uses the same validator as the project creation route.
-- `create_project_update` resolves the current Clerk user from the auth context before writing, so the tool only works when the MCP client is authenticated.
 - `create_variation` and `update_variation_status` both operate on a single project and variation.
-- `add_milestone_photos` requires a non-empty list of file IDs.
-- `update_milestone` accepts status/date/spend updates validated by Zod.
+- `update_variation_status` additionally requires the ADMIN role.
+- Creating projects, milestones and site updates is no longer available here; those are WebMCP screen tools.
 
 ### Lead tools
 
-The lead tools accept the same shapes as the lead API routes.
+`get_leads` accepts the same query shape as the lead list route: `q`, `status`, `filterTiming`, `page`, `limit`. An unknown stage label is rejected rather than silently widening the query to every lead.
 
-- `create_lead` accepts the lead creation schema.
-- `update_lead` requires `leadId` plus the update payload.
-- `delete_lead` only needs `leadId`.
+Lead writes are not on this surface. They are WebMCP tools on the leads screen, calling the same `lib/leads/leads-service` functions the modals call.
 
 ### Tradie tools
 
-`create_tradie_schedule` and `update_tradie_schedule` use the tradie schedule validators from [utils/validators/tradies.ts](../utils/validators/tradies.ts).
+`get_tradies` and `get_all_tradies` are read-only lookups for resolving a tradie ID.
 
-- `create_tradie_schedule` requires the tradie, project, and schedule date.
-- `update_tradie_schedule` accepts a schedule ID and the new status.
-- `get_tradie_coordination_dashboard` returns the same aggregation shape used by the coordination UI.
+Scheduling is not on this surface. `create_tradie_schedule` and `update_tradie_schedule` are WebMCP screen tools, and the coordination dashboard is a screen aggregate rather than a tool.
 
 ### File and address tools
 
-`upload_file` takes the file as base64 in its arguments. It is MCP-only: a browser agent cannot produce that payload, so it is not registered over WebMCP.
+`upload_file` has been removed. It took the file as base64 in its arguments, which no agent can produce for a document it has never seen. The browser equivalents - `upload_lead_files` and `upload_project_files` - open the real file picker instead.
 
 `address_council_lookup` is a thin client around the address lookup HTTP endpoint. It accepts a free-text address query and an optional result limit.
 
@@ -138,16 +127,12 @@ Before you rely on a client, verify that it can do the following:
 - call streamable HTTP or HTTP-based MCP endpoints
 - attach bearer tokens to requests
 - handle JSON tool schemas
-- base64-encode file content if you need `upload_file`
 - surface tool lists and tool errors clearly enough for debugging
 
 ## Practical Usage Examples
 
 - Use `get_projects` to populate a project picker.
 - Use `get_project` when you need the full project detail graph.
-- Use `create_project_update` to post a site note and refresh the project state.
-- Use `get_tradie_coordination_dashboard` to power scheduling or coordination dashboards.
-- Use `upload_file` first, then pass the returned `fileId` into `add_milestone_photos`.
 - Use `address_council_lookup` when you need address normalization or council suggestion data before creating a project.
 
 ## Notes And Constraints
@@ -156,7 +141,6 @@ Before you rely on a client, verify that it can do the following:
 - Tool inputs are validated with Zod before the data helpers run.
 - Read tools use cached helpers where possible.
 - Write tools usually return refreshed domain payloads so clients do not need to re-query immediately.
-- `upload_file` is the most client-dependent tool because it requires binary file support.
 - Claude Code is the easiest direct client for the current remote HTTP server.
 - Claude Desktop needs a local bridge or a local MCP server shape to consume this remote endpoint cleanly.
 

@@ -46,10 +46,42 @@ import TableView from "./views/table-view";
 import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
-import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
-import { leadStages } from "@/utils/validators/lead";
+import { useWebMcpTools } from "@/hooks/use-webmcp-tool";
+import { createLeadSchema, leadStages, updateLeadSchema } from "@/utils/validators/lead";
+import { toToolInputJsonSchema } from "@/lib/tools/zod-to-json-schema";
+import { summariseZodIssues, webMcpError, webMcpJson, webMcpText } from "@/components/webmcp/tool-result";
+import {
+  createLead as createLeadOnServer,
+  deleteLead as deleteLeadOnServer,
+  isDuplicateLeadResult,
+  updateLead as updateLeadOnServer,
+  type LeadCreatePayload,
+} from "@/lib/leads/leads-service";
 
 type TabType = "table" | "followups" | "analytics";
+
+/**
+ * The lead write tools speak the same contract as POST /api/leads and
+ * PATCH /api/leads/[leadId]: those routes validate with exactly these schemas,
+ * so converting them is what keeps the tool and the form in step. Converted at
+ * module load rather than per render.
+ */
+const createLeadJsonSchema = toToolInputJsonSchema(createLeadSchema);
+
+/**
+ * `history` is dropped from the tool contract. It is the lead's audit trail,
+ * written by the app when something actually happens - an agent hand-authoring
+ * entries there would be forging a record, not updating a field.
+ */
+const updateLeadToolSchema = updateLeadSchema.omit({ history: true });
+
+const updateLeadJsonSchema: Record<string, unknown> = (() => {
+  const schema = toToolInputJsonSchema(updateLeadToolSchema);
+  // leadId travels as a route param over HTTP; a tool has only one argument bag.
+  const properties = { ...(schema.properties as Record<string, unknown>) };
+  properties.leadId = { type: "number", description: "The id of the lead to update." };
+  return { ...schema, properties, required: ["leadId"] };
+})();
 
 export default function Leads() {
   const searchParams = useSearchParams();
@@ -245,72 +277,155 @@ export default function Leads() {
 
   /* ── WebMCP: tools scoped to this screen ──
      Registered on mount and torn down on unmount, so an agent is only offered
-     the leads controls while the user is actually on the leads screen. These
-     drive the visible UI rather than re-querying behind it — the point of
-     exposing tools through the page instead of only through /api/mcp. */
+     the leads controls while the user is actually on the leads screen.
 
-  useWebMcpTool({
-    name: "leads_set_search",
-    title: "Search the visible leads list",
-    description:
-      "Types a term into the search box on the leads screen the user is looking at, so the list on screen narrows to matching leads. Prefer this over get_leads when the user wants to see results rather than be told them. Pass an empty string to clear the search. Note the list only re-queries for terms of five characters or more, exactly as when a person types.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "Text to search leads by. Empty string clears the search.",
+     The write tools call the same lib/leads/leads-service functions the modals
+     call, and feed the results back through the same useLeadsData setters, so
+     an agent edit lands in the visible list the way a human edit does. They
+     used to be MCP server tools wrapping lib/data/leads directly, which wrote
+     to the database without the screen ever knowing. */
+
+  useWebMcpTools([
+    {
+      name: "leads_set_search",
+      title: "Search the visible leads list",
+      description:
+        "Types a term into the search box on the leads screen the user is looking at, so the list on screen narrows to matching leads. Prefer this over get_leads when the user wants to see results rather than be told them. Pass an empty string to clear the search. Note the list only re-queries for terms of five characters or more, exactly as when a person types.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Text to search leads by. Empty string clears the search.",
+          },
         },
+        required: ["query"],
+        additionalProperties: false,
       },
-      required: ["query"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: true },
-    execute: async (input) => {
-      const query = String(input.query ?? "");
-      setActiveTab("table");
-      setSearchTerm(query);
-      return {
-        content: [{
-          type: "text" as const,
-          text: query
+      annotations: { readOnlyHint: true },
+      execute: async (input) => {
+        const query = String(input.query ?? "");
+        setActiveTab("table");
+        setSearchTerm(query);
+        return webMcpText(
+          query
             ? `Searching the visible leads list for "${query}".`
             : "Cleared the leads search.",
-        }],
-      };
-    },
-  });
-
-  useWebMcpTool({
-    name: "leads_filter_by_stage",
-    title: "Filter the visible leads list",
-    description:
-      "Filters the leads list on screen by pipeline stage. Also accepts three views that are not stages: \"total\" for every lead, \"Archived\" for archived leads, and \"pendingFollowup\" for leads carrying at least one open task. Pass nothing to clear the filter.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        stage: {
-          type: "string",
-          enum: [...leadStages, "total", "Archived", "pendingFollowup"],
-          description: "The stage or view to filter to. Omit to clear.",
-        },
+        );
       },
-      additionalProperties: false,
     },
-    annotations: { readOnlyHint: true },
-    execute: async (input) => {
-      const stage = input.stage ? String(input.stage) : null;
-      handleMetricClick(stage);
-      return {
-        content: [{
-          type: "text" as const,
-          text: stage
+    {
+      name: "leads_filter_by_stage",
+      title: "Filter the visible leads list",
+      description:
+        "Filters the leads list on screen by pipeline stage. Also accepts three views that are not stages: \"total\" for every lead, \"Archived\" for archived leads, and \"pendingFollowup\" for leads carrying at least one open task. Pass nothing to clear the filter.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          stage: {
+            type: "string",
+            enum: [...leadStages, "total", "Archived", "pendingFollowup"],
+            description: "The stage or view to filter to. Omit to clear.",
+          },
+        },
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true },
+      execute: async (input) => {
+        const stage = input.stage ? String(input.stage) : null;
+        handleMetricClick(stage);
+        return webMcpText(
+          stage
             ? `Filtered the visible leads list to ${stage}.`
             : "Cleared the leads filter.",
-        }],
-      };
+        );
+      },
     },
-  });
+    {
+      name: "create_lead",
+      title: "Create a lead",
+      description:
+        "Creates a lead and adds it to the top of the visible list. The client email is required and must be unique \u2014 if a lead with that email already exists this reports the duplicate instead of creating a second one, so read the result before retrying.",
+      inputSchema: createLeadJsonSchema,
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const parsed = createLeadSchema.safeParse(input);
+        if (!parsed.success) {
+          return webMcpError(summariseZodIssues(parsed.error));
+        }
+
+        const created = await createLeadOnServer(parsed.data as LeadCreatePayload);
+        if (isDuplicateLeadResult(created)) {
+          return webMcpError(
+            `${created.message} The existing lead is id ${created.existingLead.id} (${created.existingLead.name}).`,
+          );
+        }
+
+        prependLead(created);
+        void refreshStats();
+        return webMcpJson({ id: created.id, name: created.name, stage: created.stage });
+      },
+    },
+    {
+      name: "update_lead",
+      title: "Update a lead",
+      description:
+        "Updates fields on an existing lead and refreshes it in the visible list. Send only the fields you are changing. Moving a lead to a closed stage such as Lost requires lostReason in the same call.",
+      inputSchema: updateLeadJsonSchema,
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const { leadId, ...rest } = input as { leadId?: unknown };
+        const id = Number(leadId);
+        if (!Number.isFinite(id)) {
+          return webMcpError("leadId must be a number. Call get_leads to resolve it.");
+        }
+
+        const parsed = updateLeadToolSchema.safeParse(rest);
+        if (!parsed.success) {
+          return webMcpError(summariseZodIssues(parsed.error));
+        }
+
+        const updated = await updateLeadOnServer(id, parsed.data);
+        if (!updated) {
+          return webMcpError(`No lead found with id ${id}.`);
+        }
+
+        updateLeadInList(updated);
+        void refreshStats();
+        return webMcpJson({ id: updated.id, name: updated.name, stage: updated.stage });
+      },
+    },
+    {
+      name: "delete_lead",
+      title: "Archive a lead",
+      description:
+        "Archives a lead and removes it from the visible list. Resolve the id with get_leads first \u2014 this is not reversible from the UI.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          leadId: { type: "number", description: "The id of the lead to archive." },
+        },
+        required: ["leadId"],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const id = Number(input.leadId);
+        if (!Number.isFinite(id)) {
+          return webMcpError("leadId must be a number. Call get_leads to resolve it.");
+        }
+
+        const result = await deleteLeadOnServer(id);
+        if (!result.success) {
+          return webMcpError(result.message || `Could not archive lead ${id}.`);
+        }
+
+        removeLeadFromList(id);
+        void refreshStats();
+        return webMcpJson({ id, archived: true });
+      },
+    },
+  ]);
 
   const handlePageChange = useCallback(
     async (page: number) => {

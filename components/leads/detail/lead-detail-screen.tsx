@@ -7,8 +7,13 @@ import type { LeadEmails } from "@prisma/client";
 
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
 import LeadCommModal from "@/components/leads/modal-ui/lead-comm-modal";
+import { FilePickerCancelled, pickFiles, uploadFiles } from "@/components/webmcp/file-upload";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
 import { useAvailableUsers } from "@/hooks/use-available-users";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
 import type { Lead } from "@/lib/leads/types";
+
+const MAX_UPLOAD_FILES = 5;
 
 import { HbfcClaimCard } from "./hbfc-claim-card";
 import { LeadDetailTabs } from "./lead-detail-tabs";
@@ -48,6 +53,49 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
   const appendEmailToLead = useCallback((_leadId: number, email: LeadEmails) => {
     setLead((current) => ({ ...current, emails: [email, ...current.emails] }));
   }, []);
+
+  /* ── WebMCP: file upload for this lead ──
+     Replaces half of the retired `upload_file` MCP tool. That one took the file
+     as base64 in its arguments, which an agent has no way to produce — it has
+     never seen the document. This opens the real picker and then runs the same
+     client upload the Documents tab runs, so /api/upload writes the File row
+     and the header count updates without a reload. */
+  useWebMcpTool({
+    name: "upload_lead_files",
+    title: "Upload files to this lead",
+    description:
+      "Opens the file picker so the user can attach documents to the lead currently open, then uploads them and adds them to the lead's Documents tab. Returns the file ids and URLs. Use this rather than asking the user to upload manually; you cannot supply file content yourself.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: false },
+    execute: async () => {
+      let chosen: File[];
+      try {
+        chosen = await pickFiles({ multiple: true, maxFiles: MAX_UPLOAD_FILES });
+      } catch (error) {
+        if (error instanceof FilePickerCancelled) {
+          return webMcpError(
+            "The file picker closed without a selection. Ask the user to pick the files, then try again.",
+          );
+        }
+        throw error;
+      }
+
+      if (chosen.length === 0) {
+        return webMcpError("No files were selected.");
+      }
+
+      const uploaded = await uploadFiles(chosen, {
+        kind: "lead",
+        leadId: String(lead.id),
+      });
+
+      handleFilesUploaded(uploaded);
+      return webMcpJson({
+        leadId: lead.id,
+        files: uploaded.map(({ id, name, url }) => ({ fileId: id, fileName: name, url })),
+      });
+    },
+  });
 
   return (
     <div className="space-y-4 pb-4">

@@ -122,26 +122,51 @@ test("the offer path cannot put a lead in a closed stage without a reason", asyn
 
 test("lead-write tools report failures as errors", async () => {
   const { readFileSync } = await import("node:fs");
-  // The tool handlers moved out of app/(mcp)/api/mcp/route.ts into a registry
-  // shared with the WebMCP browser bridge; the rule they have to keep did not
-  // move. These tools declare an outputSchema, so a catch that returns neither
-  // isError nor structuredContent fails SDK output validation and the real
-  // message never reaches the agent.
+
+  // The rule: a lead tool that fails must say so with `isError`, not with a
+  // sentence that merely begins "Error". Without the flag a model reads the
+  // failure as data and carries on as though the write had landed.
+  //
+  // The tools have moved twice now — out of app/(mcp)/api/mcp/route.ts into the
+  // shared registry, and then the writes out of the registry onto the leads
+  // screen, because their browser path no longer matches the server action the
+  // handler wrapped. So the rule is checked in both places it now lives.
+
+  // Reads still run server-side, through the shared registry.
   const handlers = readFileSync("lib/tools/handlers.server.ts", "utf8");
-  for (const verb of ["updating lead", "creating lead", "fetching leads"]) {
-    const at = handlers.indexOf(`Error ${verb}`);
-    assert.ok(at > -1, `no catch found for "${verb}"`);
-    const before = handlers.slice(Math.max(0, at - 400), at);
-    assert.ok(before.includes("toToolError"), `"${verb}" catch does not go through toToolError`);
-  }
-  // ...and toToolError is what actually sets the flag, for every tool rather
-  // than only the three that were fixed by hand.
-  const result = readFileSync("lib/tools/result.ts", "utf8");
-  const at = result.indexOf("export const toToolError");
-  assert.ok(at > -1, "toToolError is gone");
+  const readAt = handlers.indexOf("Error fetching leads");
+  assert.ok(readAt > -1, "no catch found for get_leads");
   assert.ok(
-    result.slice(at, at + 200).includes("isError: true"),
+    handlers.slice(Math.max(0, readAt - 400), readAt).includes("toToolError"),
+    "the get_leads catch does not go through toToolError",
+  );
+
+  // Writes are registered by the screen and use its client-side equivalent.
+  const screen = readFileSync("components/leads/leads.tsx", "utf8");
+  for (const tool of ["create_lead", "update_lead", "delete_lead"]) {
+    const at = screen.indexOf(`name: "${tool}"`);
+    assert.ok(at > -1, `${tool} is no longer registered on the leads screen`);
+    // Each failure path in the tool body, up to the next tool declaration.
+    const body = screen.slice(at, screen.indexOf('    {\n      name: "', at + 1) + 1 || undefined);
+    assert.ok(body.includes("webMcpError"), `${tool} does not report failures with webMcpError`);
+  }
+
+  // ...and these two are what actually set the flag, for every tool rather than
+  // only the ones that were fixed by hand.
+  const serverResult = readFileSync("lib/tools/result.ts", "utf8");
+  const serverAt = serverResult.indexOf("export const toToolError");
+  assert.ok(serverAt > -1, "toToolError is gone");
+  assert.ok(
+    serverResult.slice(serverAt, serverAt + 200).includes("isError: true"),
     "toToolError no longer sets isError: true",
+  );
+
+  const clientResult = readFileSync("components/webmcp/tool-result.ts", "utf8");
+  const clientAt = clientResult.indexOf("export function webMcpError");
+  assert.ok(clientAt > -1, "webMcpError is gone");
+  assert.ok(
+    clientResult.slice(clientAt, clientAt + 200).includes("isError: true"),
+    "webMcpError no longer sets isError: true",
   );
 });
 

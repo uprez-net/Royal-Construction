@@ -81,6 +81,12 @@ interface CreateProjectModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  /**
+   * Seeds the lead-selection step. Used by the `start_project_creation` WebMCP
+   * tool, which can identify the lead but cannot drive the upload + extraction
+   * the rest of this wizard needs.
+   */
+  initialLeadId?: number | null;
 }
 
 type WizardStage =
@@ -104,13 +110,16 @@ export function CreateProjectModal({
   open,
   onOpenChange,
   onSuccess,
+  initialLeadId,
 }: CreateProjectModalProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const leadSearch = useLeadSearch("", 1, true);
   const siteManagers = useAppSelector((state) => state.siteManagers);
   const [search, setSearch] = useState("");
-  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  // The modal manager mounts this fresh on every open, so the initial value is
+  // enough to seed a preselected lead - no syncing effect required.
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(initialLeadId ?? null);
   const [stage, setStage] = useState<WizardStage>("selection");
   const [progressStep, setProgressStep] = useState(0);
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);

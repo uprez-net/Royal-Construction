@@ -31,6 +31,8 @@ import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { resetProjects, setProjects } from "@/lib/store/slices/projectsSlice";
 import { clearProjectFilters, openModal } from "@/lib/store/slices/uiSlice";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpError, webMcpText } from "@/components/webmcp/tool-result";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
@@ -101,6 +103,50 @@ export function ProjectsClient({
   const exportInFlightRef = useRef(false);
   // Bumped by the toast's Retry action to re-run the fetch effect.
   const [reloadNonce, setReloadNonce] = useState(0);
+
+  /* ── WebMCP: project creation is a wizard, not a call ──
+     `create_project` used to be an MCP tool wrapping lib/data/projectsWrite's
+     createProject. The browser has since moved to createProjectWithLead, which
+     needs an uploaded tender and contract plus the structured `extraction` the
+     Workflow DevKit run produces from them. An agent has neither, and cannot
+     invent them, so the honest tool opens the wizard on the right lead and
+     leaves the documents and the review to the person. */
+  useWebMcpTool({
+    name: "start_project_creation",
+    title: "Start creating a project",
+    description:
+      "Opens the new-project wizard, optionally with a lead already selected. Project creation needs a tender and a contract uploaded and read by the extraction step, so this hands the flow to the user rather than creating anything itself. Resolve the lead first with get_leads.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        leadId: {
+          type: "number",
+          description: "Lead to convert. Omit to let the user pick one in the wizard.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false },
+    execute: async (input) => {
+      const rawLeadId = input.leadId;
+      if (rawLeadId !== undefined && !Number.isFinite(Number(rawLeadId))) {
+        return webMcpError("leadId must be a number. Call get_leads to resolve it.");
+      }
+
+      dispatch(
+        openModal({
+          type: "createProject",
+          ...(rawLeadId === undefined ? {} : { payload: { leadId: Number(rawLeadId) } }),
+        }),
+      );
+
+      return webMcpText(
+        rawLeadId === undefined
+          ? "Opened the new-project wizard. The user needs to pick a lead and upload the tender and contract."
+          : `Opened the new-project wizard on lead ${Number(rawLeadId)}. The user needs to upload the tender and contract and review the extracted details before the project is created.`,
+      );
+    },
+  });
 
   const querySignature = `${statusFilter ?? "all"}|${searchQuery.trim()}|${sortBy}|${sortOrder}`;
   const hasActiveFilters = Boolean(statusFilter) || searchQuery.trim() !== "";

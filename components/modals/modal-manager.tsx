@@ -162,6 +162,11 @@ export function ModalManager() {
         <WorkflowStreamProvider initialRunId={""}>
           <CreateProjectModal
             open
+            initialLeadId={
+              modal.payload?.leadId === undefined
+                ? null
+                : Number(modal.payload.leadId)
+            }
             onOpenChange={(open) => {
               if (!open) handleClose();
             }}

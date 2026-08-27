@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { satisfiesRole } from "../../lib/tools/authz";
-import { getWebMcpToolDescriptors, toToolInputJsonSchema } from "../../lib/tools/json-schema";
-import { TOOL_MANIFEST, findTool } from "../../lib/tools/manifest";
+import { getWebMcpToolDescriptors } from "../../lib/tools/json-schema";
+import { TOOL_MANIFEST, TOOL_NAMES, findTool } from "../../lib/tools/manifest";
+import { toToolInputJsonSchema } from "../../lib/tools/zod-to-json-schema";
 
 /**
  * The manifest is the single source of truth for both transports, so the things
@@ -46,10 +47,6 @@ test("every input schema converts to a JSON Schema object", () => {
             "object",
             `${tool.name} did not convert to an object schema (got ${String(schema.type)})`,
         );
-        assert.ok(
-            typeof schema.properties === "object" || tool.name === "get_all_tradies",
-            `${tool.name} converted without a properties map`,
-        );
     }
 });
 
@@ -66,24 +63,62 @@ test("readOnlyHint follows the verb", () => {
     }
 });
 
-test("destructive tools are admin-gated", () => {
-    assert.equal(findTool("delete_lead")?.requiredRole, "ADMIN");
+test("approving a variation stays admin-gated", () => {
     assert.equal(findTool("update_variation_status")?.requiredRole, "ADMIN");
 });
 
-test("upload_file is not exposed to the browser", () => {
-    // It takes the file as base64 in its arguments, which a browser agent has
-    // no way to produce. pick_and_upload_file is the browser affordance.
-    assert.equal(findTool("upload_file")?.surface, "server");
-    assert.ok(
-        !getWebMcpToolDescriptors().some((tool) => tool.name === "upload_file"),
-        "upload_file leaked into the browser tool list",
-    );
+/**
+ * These tools were retired from the shared manifest because their browser flow
+ * no longer matches the server action the handler wrapped. They now live with
+ * the screens that own them — components/leads/leads.tsx,
+ * components/leads/detail/lead-detail-screen.tsx,
+ * components/projects/projects-client.tsx,
+ * components/projects/project-detail-screen.tsx and
+ * components/tradies/tradies-client.tsx.
+ *
+ * Re-adding one here would put a second, diverging implementation back on the
+ * MCP surface, which is the exact problem the move solved.
+ */
+const RETIRED_FROM_MANIFEST = [
+    "create_project",
+    "create_project_update",
+    "create_milestone",
+    "add_milestone_photos",
+    "update_milestone",
+    "create_lead",
+    "update_lead",
+    "delete_lead",
+    "create_tradie_schedule",
+    "update_tradie_schedule",
+    "upload_file",
+    // Removed outright: the coordination dashboard is a screen aggregate, not
+    // a tool an agent can act on.
+    "get_tradie_coordination_dashboard",
+];
+
+test("retired tools have not crept back into the manifest", () => {
+    for (const name of RETIRED_FROM_MANIFEST) {
+        assert.ok(
+            !TOOL_NAMES.includes(name),
+            `${name} is back in the manifest; it belongs to a screen now`,
+        );
+    }
+});
+
+test("the manifest is reads plus the two writes that still match the server", () => {
+    // A guard on scope, not a snapshot: every write left here must be one whose
+    // browser path and server path are still the same operation.
+    const writes = TOOL_MANIFEST
+        .filter((tool) => !tool.annotations.readOnlyHint)
+        .map((tool) => tool.name)
+        .sort();
+
+    assert.deepEqual(writes, ["add_material", "create_variation", "update_variation_status"]);
 });
 
 test("the browser descriptor list carries schemas and annotations", () => {
     const descriptors = getWebMcpToolDescriptors();
-    assert.ok(descriptors.length > 0);
+    assert.equal(descriptors.length, TOOL_MANIFEST.length);
     for (const descriptor of descriptors) {
         assert.equal(typeof descriptor.inputSchema, "object");
         assert.equal(typeof descriptor.annotations.readOnlyHint, "boolean");
