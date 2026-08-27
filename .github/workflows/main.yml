@@ -10,6 +10,12 @@ on:
       - main
       - staging
 
+# Supersede an in-flight run for the same PR, but never cancel a push to
+# main/staging -- those runs deploy, so they always run to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # ─── Shared env vars (referenced in all jobs) ────────────────────────────────
 env:
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
@@ -38,19 +44,124 @@ env:
   AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
   SCRAPEDO_TOKEN: ${{ secrets.SCRAPEDO_TOKEN }}
   REDIS_URL: ${{ secrets.REDIS_URL }}
+  # `puppeteer`'s postinstall downloads a ~170MB Chrome build on every install,
+  # in every job. Nothing in CI launches a browser: production PDF rendering
+  # uses puppeteer-core + @sparticuz/chromium (see lib/utils/generatePDF.ts, the
+  # full `puppeteer` package is the NODE_ENV=development branch only), and the
+  # one browser test -- tests/offer/offer-document-print-pages.test.ts -- is
+  # excluded from `test:unit`. If that test is ever folded into CI, drop this
+  # from the `test` job below and cache ~/.cache/puppeteer there instead.
+  PUPPETEER_SKIP_DOWNLOAD: "true"
   # PlaceHolder-Keys
   XERO_CLIENT_ID: "REPLACE_WITH_XERO_CLIENT_ID"
   XERO_CLIENT_SECRET: "REPLACE_WITH_XERO_CLIENT_SECRET"
   XERO_TENANT_ID: "REPLACE_WITH_XERO_TENANT_ID"
 
 jobs:
-  quality-checks:
+  # ─── Checks ────────────────────────────────────────────────────────────────
+  # lint / typecheck / test / build have no dependency on each other, so they
+  # run as four parallel jobs and the wall clock is the slowest one rather than
+  # the sum. `quality-checks` below fans them back in, so branch protection
+  # keeps working against a single required check.
+
+  lint:
     runs-on: ubuntu-latest
     environment: Preview
 
     env:
       NODE_ENV: "test"
-      # Guardrail: the quality-checks build must NOT depend on the database.
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup project
+        uses: ./.github/actions/setup
+        with:
+          # eslint-config-next enables no type-aware rules, so ESLint never
+          # needs the generated Prisma client.
+          prisma: "false"
+
+      # ESLint spends ~5s loading its config and plugins and ~20s on the 706
+      # files it lints. The cache reduces the second part to the files that
+      # actually changed. `content` strategy, not the default `metadata`: a
+      # fresh checkout rewrites every mtime, so metadata would always miss.
+      - name: Cache ESLint results
+        uses: actions/cache@v5
+        with:
+          path: .eslintcache
+          key: ${{ runner.os }}-eslint-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-eslint-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
+
+      - name: Run lint
+        run: pnpm lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    environment: Preview
+
+    env:
+      NODE_ENV: "test"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup project
+        uses: ./.github/actions/setup
+
+      # tsconfig.json already sets `incremental: true`, but the .tsbuildinfo it
+      # writes is gitignored, so CI threw it away every run and paid for a cold
+      # program each time (~20s vs ~8s warm).
+      - name: Cache TypeScript build info
+        uses: actions/cache@v5
+        with:
+          path: tsconfig.tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ hashFiles('pnpm-lock.yaml', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-${{ hashFiles('pnpm-lock.yaml', 'tsconfig.json') }}-
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    environment: Preview
+
+    env:
+      NODE_ENV: "test"
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup project
+        uses: ./.github/actions/setup
+
+      # `test:unit` is the whole suite minus
+      # tests/offer/offer-document-print-pages.test.ts, which launches real
+      # headless Chromium, takes ~60s and has never executed in CI. Folding that
+      # one in is a deliberate follow-up: it fails rather than skips by design,
+      # so a launch problem here would block unrelated PRs.
+      - name: Run unit tests
+        run: pnpm test:unit
+
+  build:
+    runs-on: ubuntu-latest
+    environment: Preview
+
+    env:
+      NODE_ENV: "test"
+      # `next build` runs the project-local `tsc` itself, which is exactly the
+      # work the `typecheck` job above does. Skipping it here keeps ~18s of
+      # duplicated type checking off this job while the `typecheck` job still
+      # gates the deploy. Both jobs are required by `quality-checks`, so type
+      # errors still fail the run -- and `vercel build` on the deploy path does
+      # not set this, so the deployed artifact is type-checked as well.
+      SKIP_BUILD_TYPECHECK: "1"
+      # Guardrail: the build check must NOT depend on the database.
       # Under Next 16 Cache Components a `'use cache'` fetcher called in a page
       # body is prefilled during `next build`, which runs its DB query at build
       # time -- and CI can't reliably reach Neon, so these builds flaked on
@@ -66,52 +177,59 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v5
+      - name: Setup project
+        uses: ./.github/actions/setup
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm                          # caches the pnpm store
-          cache-dependency-path: pnpm-lock.yaml
-
-      # NEW: Cache Next.js build output (.next/cache)
-      # Key rotates when lockfile OR any source file changes.
-      # Falls back to a lockfile-only key so a prior build cache is reused
-      # when only source files changed.
-      - name: Cache Next.js build
-        uses: actions/cache@v5
+      # Turbopack's persistent FileSystem cache (on by default since Next
+      # 16.3) lives in .next/cache/turbopack and takes the compile step from
+      # ~20s cold to ~3s warm.
+      #
+      # Restore only -- the save is a separate step below that runs on pushes
+      # to main/staging. The cache is ~480MB (~375MB packed), so writing a new
+      # entry on every PR would spend more time uploading than the warm compile
+      # saves, and would churn the 10GB repo cache budget (evicting the pnpm
+      # store cache, which every job depends on). Pushes write one entry that
+      # both the next run and this run's deploy job read.
+      #
+      # The key hashes only the lockfile and next.config.ts -- explicit paths,
+      # not a `**/*.ts` glob. The old glob walked node_modules in the deploy
+      # jobs (125k files) and, because it ran there *after* install, produced a
+      # different digest than the checks job, so the deploy's restore could
+      # never hit.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Prisma generate
-        run: pnpm prisma:generate
-
-      - name: Run lint
-        run: pnpm lint
-
-      - name: Run typecheck
-        run: pnpm typecheck
-
-      # Until now this workflow ran no tests at all despite its name, so every
-      # test in tests/ was opt-in and gated nothing. `test:unit` is the whole
-      # suite minus tests/offer/offer-document-print-pages.test.ts, which
-      # launches real headless Chromium, takes ~60s and has never executed in
-      # CI. Folding that one in is a deliberate follow-up, not a side effect of
-      # turning tests on: it fails rather than skips by design, so a launch
-      # problem here would block unrelated PRs.
-      - name: Run unit tests
-        run: pnpm test:unit
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
 
       - name: Build project (must not query the DB)
         run: pnpm build
+
+      - name: Save Next.js build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
+
+  # Fan-in so branch protection can keep requiring a single `quality-checks`
+  # check. It passes only when all four checks above pass.
+  quality-checks:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, build]
+    if: always()
+    steps:
+      - name: Verify check results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "One or more checks did not succeed."
+          exit 1
+      - name: All checks passed
+        run: echo "lint, typecheck, tests and build all passed."
+
+  # ─── Deploy ────────────────────────────────────────────────────────────────
 
   vercel-deploy-production:
     if: github.ref == 'refs/heads/main'
@@ -131,26 +249,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v5
+      # Also runs `prisma generate`, which this job used to do as its own step
+      # after the migrate.
+      - name: Setup project
+        uses: ./.github/actions/setup
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      # Install dependencies without cache (since we cached node_modules in quality-checks)
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile    # store is cached, only symlinks created
-      
-      # NEW: Restore Next.js build cache for Vercel build step
-      - name: Cache Next.js build
-        uses: actions/cache@v5
+      # Exact-key hit on the entry the `build` job saved earlier in this same
+      # run, so `vercel build` starts with a warm Turbopack cache.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
 
       - name: Run Prisma migrate
         env:
@@ -158,9 +270,6 @@ jobs:
         run: |
           export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
           pnpm prisma:migrate-deploy
-
-      - name: Run Prisma generate
-        run: pnpm prisma:generate
 
       - name: Install Vercel CLI
         run: pnpm add -g vercel
@@ -192,26 +301,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v5
+      # Also runs `prisma generate`, which this job used to do as its own step
+      # after the migrate.
+      - name: Setup project
+        uses: ./.github/actions/setup
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      # Install dependencies without cache (since we cached node_modules in quality-checks)
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile    # store is cached, only symlinks created
-
-      # NEW: Restore Next.js build cache
-      - name: Cache Next.js build
-        uses: actions/cache@v5
+      # Exact-key hit on the entry the `build` job saved earlier in this same
+      # run, so `vercel build` starts with a warm Turbopack cache.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('**/*.ts','**/*.tsx','**/*.js','**/*.jsx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
 
       - name: Run Prisma migrate
         env:
@@ -219,9 +322,6 @@ jobs:
         run: |
           export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
           pnpm prisma:migrate-deploy
-
-      - name: Run Prisma generate
-        run: pnpm prisma:generate
 
       - name: Install Vercel CLI
         run: pnpm add -g vercel

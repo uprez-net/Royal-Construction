@@ -1,6 +1,10 @@
 # Middleware Strategies
 
-> **Filename:** `proxy.ts` (Next.js <=15: `middleware.ts`). The code is identical; only the filename changes.
+> **Filename:** `proxy.ts` (Next.js <=15: `middleware.ts`).
+>
+> Next.js 16 also deprecated the `middleware` export name. Export the handler
+> as `proxy` — a `proxy.ts` file resolves `mod.proxy || mod.default`, so a bare
+> `export default` still runs but is the deprecated form.
 
 ## Public-First (marketing sites, blogs)
 
@@ -15,7 +19,7 @@ const isProtectedRoute = createRouteMatcher([
   '/api/private(.*)',
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) await auth.protect();
 });
 
@@ -41,7 +45,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/public(.*)',
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) await auth.protect();
 });
 ```
@@ -56,7 +60,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 const isInvoiceRoute = createRouteMatcher(['/invoices(.*)']);
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   if (isInvoiceRoute(req)) {
     await auth.protect((has) => has({ permission: 'org:invoices:create' }));
   }
@@ -80,7 +84,7 @@ For routes that accept different token types (OAuth tokens, machine-to-machine t
 const isMachineApi = createRouteMatcher(['/api/machine(.*)']);
 const isPublicApi = createRouteMatcher(['/api/public(.*)']);
 
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   if (isMachineApi(req)) await auth.protect({ token: 'm2m_token' });
   if (isPublicApi(req)) await auth.protect({ token: 'any' });
 });
@@ -95,7 +99,7 @@ Token types: `'session_token'` (default, browser sessions), `'oauth_token'`, `'a
 When session tasks are enabled (e.g., forced password reset, MFA setup), users may have a `pending` session status. You can handle this in middleware:
 
 ```typescript
-export default clerkMiddleware(async (auth, req) => {
+export const proxy = clerkMiddleware(async (auth, req) => {
   const { sessionStatus } = await auth();
 
   // Redirect pending sessions to task completion page

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { utils } from "xlsx";
+import { test } from "node:test";
 import { parseRoyalQuoteWorkbook } from "../../lib/offer/workspace-import";
+import { loadExcelJs } from "../../lib/spreadsheet/exceljs-loader";
+import type { WorkbookGrid } from "../../lib/spreadsheet/workbook-grid";
+import { readWorkbookGrid } from "../../lib/spreadsheet/workbook-grid";
 
 const sampleQuoteRows = makeRows(90);
 sampleQuoteRows[5][3] = "Plans";
@@ -56,53 +59,47 @@ areaRows[35][5] = 6369;
 areaRows[36][5] = 14861;
 areaRows[37][5] = 0;
 
-const workbook = utils.book_new();
-utils.book_append_sheet(
-  workbook,
-  utils.aoa_to_sheet(sampleQuoteRows),
-  "SAMPLE QUOTE",
-);
-utils.book_append_sheet(
-  workbook,
-  utils.aoa_to_sheet(costingRows),
-  "costing report",
-);
-utils.book_append_sheet(workbook, utils.aoa_to_sheet(areaRows), "area ");
+test("imports a SAMPLE QUOTE workbook", async () => {
+  const workbook = await buildWorkbookGrid([
+    { name: "SAMPLE QUOTE", rows: sampleQuoteRows },
+    { name: "costing report", rows: costingRows },
+    { name: "area ", rows: areaRows },
+  ]);
 
-const result = parseRoyalQuoteWorkbook(workbook, "test workbook.xlsx");
+  const result = parseRoyalQuoteWorkbook(workbook, "test workbook.xlsx");
 
-assert.equal(result.sourceName, "test workbook.xlsx");
-assert.deepEqual(
-  result.costLines.map((line) => ({
-    itemName: line.itemName,
-    stageCode: line.stageCode,
-    costExGst: line.costExGst,
-    sourceReference: line.sourceReference,
-  })),
-  [
-    {
-      itemName: "Plans",
-      stageCode: "A",
-      costExGst: 5500,
-      sourceReference: "SAMPLE QUOTE!H6",
-    },
-    {
-      itemName: "SLAB",
-      stageCode: "C",
-      costExGst: 40500,
-      sourceReference: "SAMPLE QUOTE!H16",
-    },
-  ],
-);
-assert.deepEqual(result.workspacePricingSettings, {
-  royalConstructionFeePct: 0.16,
-  royalConstructionOverheadPct: 0,
-  gstRate: 0.1,
-  hbcfTotalContractValue: 733875.88,
-  hbcfRate: 0.00966,
-  homeWarrantyHbcfFixed: 8500,
-  impactFeeFixed: 0,
-  loadingChargePercentage: 0,
+  assert.equal(result.sourceName, "test workbook.xlsx");
+  assert.deepEqual(
+    result.costLines.map((line) => ({
+      itemName: line.itemName,
+      stageCode: line.stageCode,
+      costExGst: line.costExGst,
+      sourceReference: line.sourceReference,
+    })),
+    [
+      {
+        itemName: "Plans",
+        stageCode: "A",
+        costExGst: 5500,
+        sourceReference: "SAMPLE QUOTE!H6",
+      },
+      {
+        itemName: "SLAB",
+        stageCode: "C",
+        costExGst: 40500,
+        sourceReference: "SAMPLE QUOTE!H16",
+      },
+    ],
+  );
+  assert.deepEqual(result.workspacePricingSettings, {
+    royalConstructionFeePct: 0.16,
+    royalConstructionOverheadPct: 0,
+    gstRate: 0.1,
+    hbcfTotalContractValue: 733875.88,
+    hbcfRate: 0.00966,
+    homeWarrantyHbcfFixed: 8500,
+    impactFeeFixed: 0,
+    loadingChargePercentage: 0,
 });
 assert.equal(result.areaBasis.groundFloorSqm, 110);
 assert.equal(result.areaBasis.firstFloorSqm, 90);
@@ -131,6 +128,7 @@ assert.deepEqual(result.ignoredProjectFields, [
   "TOTAL COST INCLUDING GST",
   "PAYMENTS",
 ]);
+});
 
 const v2QuoteRows = makeRows(160);
 v2QuoteRows[3] = [
@@ -168,57 +166,73 @@ v2SettingsRows[7][1] = 6000;
 v2SettingsRows[8][1] = 12000;
 v2SettingsRows[9][1] = 0.03;
 
-const v2Workbook = utils.book_new();
-utils.book_append_sheet(v2Workbook, utils.aoa_to_sheet(v2CoverRows), "COVER");
-utils.book_append_sheet(v2Workbook, utils.aoa_to_sheet(v2QuoteRows), "QUOTE");
-utils.book_append_sheet(
-  v2Workbook,
-  utils.aoa_to_sheet(v2SettingsRows),
-  "SETTINGS",
-);
+test("imports a v2 QUOTE workbook", async () => {
+  const v2Workbook = await buildWorkbookGrid([
+    { name: "COVER", rows: v2CoverRows },
+    { name: "QUOTE", rows: v2QuoteRows },
+    { name: "SETTINGS", rows: v2SettingsRows },
+  ]);
 
-const v2Result = parseRoyalQuoteWorkbook(v2Workbook, "quote template v2.xlsx");
+  const v2Result = parseRoyalQuoteWorkbook(v2Workbook, "quote template v2.xlsx");
 
-assert.deepEqual(
-  v2Result.costLines.map((line) => ({
-    itemName: line.itemName,
-    stageCode: line.stageCode,
-    tradeOrVendor: line.tradeOrVendor,
-    costExGst: line.costExGst,
-    sourceReference: line.sourceReference,
-  })),
-  [
-    {
-      itemName: "Plans & Specifications",
-      stageCode: "A",
-      tradeOrVendor: "Architect",
-      costExGst: 12000,
-      sourceReference: "QUOTE!E6",
-    },
-    {
-      itemName: "Site clearing",
-      stageCode: "B",
-      tradeOrVendor: "Excavator",
-      costExGst: 4500,
-      sourceReference: "QUOTE!E18",
-    },
-  ],
-);
-assert.deepEqual(v2Result.workspacePricingSettings, {
-  royalConstructionFeePct: 0.18,
-  royalConstructionOverheadPct: 0,
-  gstRate: 0.1,
-  hbcfTotalContractValue: 0,
-  hbcfRate: 0.014,
-  homeWarrantyHbcfFixed: 0,
-  impactFeeFixed: 0,
-  loadingChargePercentage: 0,
+  assert.deepEqual(
+    v2Result.costLines.map((line) => ({
+      itemName: line.itemName,
+      stageCode: line.stageCode,
+      tradeOrVendor: line.tradeOrVendor,
+      costExGst: line.costExGst,
+      sourceReference: line.sourceReference,
+    })),
+    [
+      {
+        itemName: "Plans & Specifications",
+        stageCode: "A",
+        tradeOrVendor: "Architect",
+        costExGst: 12000,
+        sourceReference: "QUOTE!E6",
+      },
+      {
+        itemName: "Site clearing",
+        stageCode: "B",
+        tradeOrVendor: "Excavator",
+        costExGst: 4500,
+        sourceReference: "QUOTE!E18",
+      },
+    ],
+  );
+  assert.deepEqual(v2Result.workspacePricingSettings, {
+    royalConstructionFeePct: 0.18,
+    royalConstructionOverheadPct: 0,
+    gstRate: 0.1,
+    hbcfTotalContractValue: 0,
+    hbcfRate: 0.014,
+    homeWarrantyHbcfFixed: 0,
+    impactFeeFixed: 0,
+    loadingChargePercentage: 0,
 });
 assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);
 assert.equal(v2Result.areaBasis.firstFloorSqm, 170.35);
 assert.equal(v2Result.areaBasis.alfrescoSqm, 27.5);
 assert.equal(v2Result.areaBasis.porchSqm, 8.5);
 assert.deepEqual(v2Result.validationMessages, []);
+});
+
+/**
+ * Write the fixture rows out as a real .xlsx and read them back through the
+ * production reader, so these tests cover the ExcelJS adapter — cell/row index
+ * alignment, error unwrapping and all — and not just the parsing rules.
+ */
+async function buildWorkbookGrid(
+  sheets: readonly { readonly name: string; readonly rows: unknown[][] }[],
+): Promise<WorkbookGrid> {
+  const { Workbook } = await loadExcelJs();
+  const workbook = new Workbook();
+  for (const sheet of sheets) {
+    workbook.addWorksheet(sheet.name).addRows(sheet.rows.map((row) => [...row]));
+  }
+
+  return readWorkbookGrid(await workbook.xlsx.writeBuffer());
+}
 
 function makeRows(count: number): unknown[][] {
   return Array.from({ length: count }, () =>

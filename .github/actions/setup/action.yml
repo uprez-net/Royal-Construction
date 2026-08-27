@@ -1,0 +1,38 @@
+name: Setup project
+description: >
+  Node + pnpm with the pnpm store cached, dependencies installed, and (by
+  default) the Prisma client generated. Shared by every job in main.yml so the
+  setup stays identical across the parallel checks and the deploy jobs.
+
+inputs:
+  prisma:
+    description: >
+      Run `prisma generate`. Needed by anything that reads `@prisma/client`
+      types or runtime -- typecheck, tests, build, deploy. ESLint is not
+      type-aware here, so lint can skip it.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup PNPM
+      uses: pnpm/action-setup@v5
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: 22
+        cache: pnpm # caches the pnpm store (~/.pnpm-store)
+        cache-dependency-path: pnpm-lock.yaml
+
+    # --prefer-offline keeps pnpm off the registry for anything already in the
+    # restored store; --frozen-lockfile is unchanged from before.
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile --prefer-offline
+
+    - name: Run Prisma generate
+      if: inputs.prisma == 'true'
+      shell: bash
+      run: pnpm prisma:generate
