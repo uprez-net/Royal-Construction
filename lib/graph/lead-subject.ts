@@ -129,17 +129,17 @@ const PROJECT_ADMIN = [
   "defects? (?:list|liability|notice|report|request)s?",
   "invoices?",
   // Statutory and certifier correspondence about a job already under way.
+  // Deliberately NOT here: CDC, development application, determination. They
+  // read as certifier vocabulary, but in this mailbox they are the customer's:
+  // "CDC- FOR DOUBLE STORY AND GRANNY-" attaches an approval and asks for a
+  // quote, and a DA approval arrives from the owner after a site visit. An
+  // adversarial example suggested vetoing them; the mailbox says otherwise.
   "notices? of intention",
   "notice to comply",
   "stop work orders?",
   "occupation certificates?",
   "construction certificates?",
   "compliance certificates?",
-  "complying development certificates?",
-  "\\bcdcs?\\b",
-  "development applications?",
-  "determinations?",
-  "determined",
   "principal certif(?:ier|ying authority)",
   // Supplier paperwork against a live order.
   "delivery dockets?",

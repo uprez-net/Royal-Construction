@@ -431,15 +431,11 @@ test("a mail gateway label does not disguise a reply or a bounce", () => {
   );
 });
 
-test("a certifier determining an approval is not a new lead", () => {
-  // A CDC determination names the job and its address, which is the exact
-  // shape of a genuine enquiry ("granny flat" + "9 Yala Rd"). The certifier
-  // would otherwise be enrolled as a customer and sent the welcome email.
-  for (const s of [
-    "Complying Development Certificate determined - granny flat - 9 Yala Rd Marayong",
-    "CDC determination - duplex 4 Jones Ave",
-    "Development application DA-2024-119 renovation determination",
-  ]) {
-    assert.equal(isLeadSubject(s), false, s);
-  }
+test("certifier vocabulary a customer also uses is not vetoed", () => {
+  // CDC and DA approvals arrive from OWNERS in this mailbox, attached to a
+  // request for a quote — "CDC- FOR DOUBLE STORY AND GRANNY-" is a buyer, not
+  // a certifier. Vetoing that vocabulary would block the customer, so the
+  // guard stops at paperwork only a live contract produces.
+  assert.equal(isLeadSubject("CDC approval attached - granny flat, quote please"), true);
+  assert.equal(isLeadSubject("DA approved - looking for a builder for our new home"), true);
 });
