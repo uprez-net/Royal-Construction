@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { addWeeks, format, isWithinInterval } from "date-fns";
-import { ChevronDown, Lock, Plus, ReceiptText } from "lucide-react";
+import { CalendarCheck2, ChevronDown, Lock, Plus } from "lucide-react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -430,11 +430,11 @@ export function ProjectMilestonesTab({
             as="h2"
             className="flex items-center gap-2 text-base font-semibold text-foreground"
           >
-            <ReceiptText
+            <CalendarCheck2
               className="size-4 text-muted-foreground"
               aria-hidden="true"
             />
-            {isAdmin ? "Claim schedule" : "Milestones"}
+            Stage schedule
           </CardTitle>
         </CardHeader>
 
