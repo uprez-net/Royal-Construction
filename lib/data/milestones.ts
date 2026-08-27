@@ -284,6 +284,7 @@ const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
 export async function updateMilestone(milestoneId: string, updateData: MilestoneUpdateData) {
   let normalizedUpdateData = {
     ...updateData,
+    targetDate: updateData.targetDate ? new Date(updateData.targetDate) : undefined,
     startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
     actualDate: updateData.actualDate ? new Date(updateData.actualDate) : undefined,
     invoiceId: null as string | null, // Ensure invoiceId is set to null if not provided
@@ -293,7 +294,13 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
     throw new Error(`Milestone with ID ${milestoneId} not found.`);
   }
 
-  if (updateData.status && !MILESTONE_STATE_MACHINE[milestone.status].includes(updateData.status)) {
+  // Staying put is always allowed: an update that leaves the status alone is
+  // editing something else — a target date most often — and the state machine
+  // describes which *moves* are legal, not whether a milestone may be touched.
+  const isStatusChange =
+    updateData.status != null && updateData.status !== milestone.status;
+
+  if (isStatusChange && !MILESTONE_STATE_MACHINE[milestone.status].includes(updateData.status!)) {
     throw new Error(`Invalid status transition from ${milestone.status} to ${updateData.status}.`);
   }
 

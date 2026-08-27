@@ -18,6 +18,11 @@ export const milestoneUpdateSchema = z
     .object({
         status: z.enum(MilestoneStatus),
 
+        // The date this activity is due. Seeded activities get an auto-spaced
+        // placeholder (project start + order * 4 days), so it has to be
+        // editable or "overdue" is measured against a date nobody chose.
+        targetDate: z.iso.date().optional(),
+
         // Required when milestone becomes ACTIVE or DONE
         startDate: z.iso.date().optional(),
 

@@ -19,6 +19,30 @@ import { MilestoneStatus } from "@prisma/client";
  * primary targets on a screen used one-handed on site, and 28px is under the
  * comfortable minimum.
  */
+/**
+ * Opens the update dialog. Present on every row, whatever the status and
+ * whether or not the stage is gated: a target date is planning, not work, and
+ * the dates that most need correcting sit on stages nobody can start yet.
+ */
+function EditActivityButton({
+  milestone,
+  onStatusUpdate,
+}: {
+  milestone: UIMilestone;
+  onStatusUpdate: (id: string, status?: MilestoneStatus) => void;
+}) {
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      aria-label={`Edit ${milestone.name}`}
+      onClick={() => onStatusUpdate(milestone.id, milestone.status)}
+    >
+      <Edit className="size-4" aria-hidden="true" />
+    </Button>
+  );
+}
+
 export function MilestoneActionGroup({
   isActiveStage,
   milestone,
@@ -53,6 +77,11 @@ export function MilestoneActionGroup({
           </span>
         ) : null}
 
+        <EditActivityButton
+          milestone={milestone}
+          onStatusUpdate={onStatusUpdate}
+        />
+
         <Button
           size="default"
           variant="outline"
@@ -75,13 +104,24 @@ export function MilestoneActionGroup({
   }
 
   if (milestone.status === MilestoneStatus.PENDING) {
-    // Gated stage: the banner owns the explanation.
+    // Gated stage: the banner owns the explanation of why work cannot start,
+    // but the date is still editable — this is where the placeholder dates are.
     if (!isActiveStage) {
-      return null;
+      return (
+        <EditActivityButton
+          milestone={milestone}
+          onStatusUpdate={onStatusUpdate}
+        />
+      );
     }
 
     return (
       <>
+        <EditActivityButton
+          milestone={milestone}
+          onStatusUpdate={onStatusUpdate}
+        />
+
         <Button
           size="default"
           variant="outline"
@@ -105,7 +145,9 @@ export function MilestoneActionGroup({
   }
 
   if (hasChildren) {
-    return null;
+    return (
+      <EditActivityButton milestone={milestone} onStatusUpdate={onStatusUpdate} />
+    );
   }
 
   return (
