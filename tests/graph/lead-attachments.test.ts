@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { GraphAttachmentMetadata } from "../../lib/graph/client";
+import { GraphRequestError, type GraphAttachmentMetadata } from "../../lib/graph/client";
 import {
   collectLeadAttachments,
   resolveMediaType,
@@ -183,12 +183,13 @@ test("the names of unreadable attachments still reach the extractor", async () =
 });
 
 test("a failed download does not lose the other attachments or throw", async () => {
+  // A 404 is an answer, so this one is skipped without burning retries on it.
   const metadata = [
     attachment({ id: "a", name: "broken.pdf" }),
     attachment({ id: "b", name: "plans.pdf" }),
   ];
   const set = await collectLeadAttachments(
-    sourceFor(metadata, { a: new Error("Graph error 404") }),
+    sourceFor(metadata, { a: new GraphRequestError("Graph error 404", 404) }),
     "message-1",
   );
 
@@ -199,11 +200,35 @@ test("a failed download does not lose the other attachments or throw", async () 
   assert.deepEqual(set.skipped, [{ name: "broken.pdf", reason: "download failed" }]);
 });
 
+test("a throttled download is retried rather than skipped", async () => {
+  // Graph throttles hard under a burst of notifications. Now that this runs
+  // after the 202, waiting it out is cheaper than losing the client's plans.
+  let calls = 0;
+  const set = await collectLeadAttachments(
+    {
+      listMessageAttachments: async () => [attachment({ id: "a", name: "plans.pdf" })],
+      downloadMessageAttachment: async () => {
+        calls += 1;
+        if (calls === 1) throw new GraphRequestError("throttled", 429, 0);
+        return Buffer.from("pdf-bytes");
+      },
+    },
+    "message-1",
+  );
+
+  assert.equal(calls, 2);
+  assert.deepEqual(
+    set.attachments.map((item) => item.name),
+    ["plans.pdf"],
+  );
+  assert.deepEqual(set.skipped, []);
+});
+
 test("a failed listing degrades to extracting from the body alone", async () => {
   const set = await collectLeadAttachments(
     {
       listMessageAttachments: async () => {
-        throw new Error("Graph error 503");
+        throw new GraphRequestError("Graph error 403", 403);
       },
       downloadMessageAttachment: async () => Buffer.alloc(0),
     },

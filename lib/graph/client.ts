@@ -269,6 +269,52 @@ async function toJson(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * A Graph call that came back with an HTTP status.
+ *
+ * The status is carried so a caller can tell a throttle from a refusal —
+ * `withGraphRetry` repeats the first and gives up on the second. The message
+ * keeps its original `Graph error <status>: <body>` shape.
+ */
+export class GraphRequestError extends Error {
+  readonly status: number;
+  /** Graph's own Retry-After, when it sent one. */
+  readonly retryAfterMs?: number;
+
+  constructor(message: string, status: number, retryAfterMs?: number) {
+    super(message);
+    this.name = 'GraphRequestError';
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+// Graph answers a throttle with Retry-After in seconds. The HTTP-date form is
+// legal too, so both are handled rather than silently parsing to NaN.
+function retryAfterMsOf(response: Response): number | undefined {
+  const header = response.headers.get('retry-after');
+  if (!header) {
+    return undefined;
+  }
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
+}
+
+async function throwGraphError(response: Response, context = ''): Promise<never> {
+  const data = await toJson(response);
+  throw new GraphRequestError(
+    `Graph error ${response.status}${context}: ${JSON.stringify(data)}`,
+    response.status,
+    retryAfterMsOf(response),
+  );
+}
+
 // 1. Updated graphRequest to accept optional customHeaders
 async function graphRequest<T>(
   method: string,
@@ -288,8 +334,7 @@ async function graphRequest<T>(
   });
 
   if (!response.ok) {
-    const data = await toJson(response);
-    throw new Error(`Graph error ${response.status}: ${JSON.stringify(data)}`);
+    await throwGraphError(response);
   }
 
   if (response.status === 204) {
@@ -541,10 +586,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       });
 
       if (!response.ok) {
-        const detail = await toJson(response);
-        throw new Error(
-          `Graph error ${response.status} downloading attachment ${attachmentId}: ${JSON.stringify(detail)}`,
-        );
+        await throwGraphError(response, ` downloading attachment ${attachmentId}`);
       }
 
       return Buffer.from(await response.arrayBuffer());

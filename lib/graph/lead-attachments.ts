@@ -1,4 +1,5 @@
 import type { GraphAttachmentMetadata } from './client';
+import { withGraphRetry } from './retry';
 
 /**
  * An attachment prepared for the lead extractor.
@@ -214,7 +215,9 @@ export async function collectLeadAttachments(
 
   let metadata: GraphAttachmentMetadata[];
   try {
-    metadata = await source.listMessageAttachments(messageId);
+    metadata = await withGraphRetry(`attachments of ${messageId}`, () =>
+      source.listMessageAttachments(messageId),
+    );
   } catch (error) {
     console.error(`  Failed to list attachments for message ${messageId}:`, error);
     return EMPTY_LEAD_ATTACHMENTS;
@@ -229,7 +232,11 @@ export async function collectLeadAttachments(
 
   for (const item of selected) {
     try {
-      const data = await source.downloadMessageAttachment(messageId, item.id);
+      // Per file, so one throttled download does not cost the others their
+      // attempts — and a file that is genuinely gone is skipped on its own.
+      const data = await withGraphRetry(`download ${item.name}`, () =>
+        source.downloadMessageAttachment(messageId, item.id),
+      );
       attachments.push(toLeadAttachment(item, data));
     } catch (error) {
       console.error(`  Failed to download attachment "${item.name}":`, error);
