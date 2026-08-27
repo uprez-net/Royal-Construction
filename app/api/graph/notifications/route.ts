@@ -1,5 +1,5 @@
 import { createGraphContext, GraphMessage } from '@/lib/graph/client';
-import { isLeadMessage } from "@/lib/graph/lead-subject";
+import { isLeadMessage, isLeadSubject } from "@/lib/graph/lead-subject";
 import { getGraphConfig } from '@/lib/graph/config';
 import prisma from "@/lib/prisma";
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
