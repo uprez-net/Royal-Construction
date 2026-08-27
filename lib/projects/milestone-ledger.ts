@@ -158,26 +158,24 @@ export function nextActivity<T extends LedgerMilestone>(
   };
   walk(milestones, null);
 
-  const candidates = [...parentOf.keys()];
-  const byTargetDate = (a: T, b: T) =>
+  // Active before pending, then soonest due.
+  const byUrgency = (a: T, b: T) =>
+    STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
     a.targetDate.getTime() - b.targetDate.getTime();
 
-  const activeLeaf = candidates
-    .filter(
-      (milestone) =>
-        milestone.status === MilestoneStatus.ACTIVE &&
-        milestone.childrenMilestones.length === 0,
-    )
-    .sort(byTargetDate)[0];
+  const outstanding = [...parentOf.keys()].filter(
+    (milestone) => !isSettled(milestone),
+  );
 
-  const pick =
-    activeLeaf ??
-    candidates
-      .filter((milestone) => milestone.status === MilestoneStatus.ACTIVE)
-      .sort(byTargetDate)[0] ??
-    candidates
-      .filter((milestone) => milestone.status === MilestoneStatus.PENDING)
-      .sort(byTargetDate)[0];
+  // Leaves only: a parent carries no Finish of its own, so naming one points
+  // the builder at a row they cannot act on. An active parent whose children
+  // are all done is the exception — it is outstanding with no leaf beneath it,
+  // and is then the row to name.
+  const leaves = outstanding.filter(
+    (milestone) => milestone.childrenMilestones.length === 0,
+  );
+
+  const pick = [...leaves].sort(byUrgency)[0] ?? [...outstanding].sort(byUrgency)[0];
 
   return pick ? { activity: pick, parent: parentOf.get(pick) ?? null } : null;
 }

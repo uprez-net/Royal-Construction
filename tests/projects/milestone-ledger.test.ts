@@ -389,3 +389,48 @@ test("a stated amount of zero is respected rather than recomputed", () => {
   // silently re-bill it.
   assert.equal(stageClaimAmount(0, 15, 33207), 0);
 });
+
+test("an active parent with only pending children names a child, not itself", () => {
+  // The regression: the fallback picked any ACTIVE activity once no active
+  // leaf existed, which is the parent — a row that carries no Finish, so the
+  // ledger pointed the builder at something they could not act on.
+  const stage = [
+    activity("Steel reinforcement", ACTIVE, "2026-08-27", {
+      children: [
+        activity("Mesh and bar chairs", PENDING, "2026-08-26"),
+        activity("Formwork check", PENDING, "2026-08-22"),
+      ],
+    }),
+  ];
+
+  const next = nextActivity(stage);
+  assert.equal(next?.activity.name, "Formwork check");
+  assert.equal(next?.parent?.name, "Steel reinforcement");
+});
+
+test("an active parent whose children are all done names itself", () => {
+  // Nothing is left beneath it, so it is the outstanding row and there is no
+  // leaf to prefer.
+  const stage = [
+    activity("Piering", ACTIVE, "2026-08-08", {
+      children: [
+        activity("Pier holes", DONE, "2026-08-05", { actualDate: "2026-08-05" }),
+        activity("Inspection", NOT_REQUIRED, "2026-08-07"),
+      ],
+    }),
+  ];
+
+  assert.equal(nextActivity(stage)?.activity.name, "Piering");
+});
+
+test("a settled activity is never the next step, at any depth", () => {
+  const stage = [
+    activity("Done parent", DONE, "2026-08-01", {
+      actualDate: "2026-08-01",
+      children: [activity("Done child", DONE, "2026-08-01", { actualDate: "2026-08-01" })],
+    }),
+    activity("Slab pour", PENDING, "2026-09-02"),
+  ];
+
+  assert.equal(nextActivity(stage)?.activity.name, "Slab pour");
+});

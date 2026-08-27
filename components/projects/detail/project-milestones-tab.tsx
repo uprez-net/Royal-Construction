@@ -396,8 +396,8 @@ export function ProjectMilestonesTab({
   const contractTotal = useMemo(() => {
     const projectBudget = Number(project.totalBudget);
 
-    return (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[]).reduce(
-      (total, stage) => {
+    const amounts = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
+      .map((stage) => {
         const contractStage = contractStages[stage];
         const percentage =
           contractStage?.percentage ??
@@ -405,14 +405,19 @@ export function ProjectMilestonesTab({
             ? PROJECT_STAGE_PERCENTAGE[stage] * 100
             : null);
 
-        return (
-          total +
-          (stageClaimAmount(contractStage?.amount, percentage, projectBudget) ??
-            0)
+        return stageClaimAmount(
+          contractStage?.amount,
+          percentage,
+          projectBudget,
         );
-      },
-      0,
-    );
+      })
+      .filter((amount): amount is number => amount !== null);
+
+    // No stage resolved an amount — the total is unknown, not zero. Printing
+    // $0 as a contract total would be a confident wrong number.
+    return amounts.length === 0
+      ? null
+      : amounts.reduce((total, amount) => total + amount, 0);
   }, [contractStages, project.totalBudget]);
   // Stage, [Claim], Progress, Status, Next up, disclosure.
   const columnCount = isAdmin ? 6 : 5;
@@ -760,7 +765,9 @@ export function ProjectMilestonesTab({
                         Contract total
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
-                        {currency.format(contractTotal)}
+                        {contractTotal === null
+                          ? "—"
+                          : currency.format(contractTotal)}
                       </TableCell>
                       <TableCell colSpan={columnCount - 2} />
                     </TableRow>

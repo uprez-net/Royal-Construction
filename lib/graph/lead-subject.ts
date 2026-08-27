@@ -107,24 +107,51 @@ const ENQUIRY = [
  * reach for. Add phrases here, not words.
  */
 const PROJECT_ADMIN = [
-  "variation",
-  "progress claim",
-  "purchase order",
-  "remittance",
-  "rfi",
-  "request for (?:further )?information",
-  "payment request",
-  "request for payment",
-  "inspection request",
-  "request for inspection",
-  "supplier quote",
-  "estimate revision",
-  "revised estimate",
+  "variations?",
+  "progress claims?",
+  "purchase orders?",
+  "remittances?",
+  "rfis?",
+  // "request for information" alone is how a customer asks about building, so
+  // only the council's own formulation is vetoed. `rfi` above covers the trade
+  // shorthand.
+  "request for further information",
+  "payment requests?",
+  "requests? for payment",
+  "inspection requests?",
+  "requests? for inspection",
+  "supplier quotes?",
+  "estimate revisions?",
+  "revised estimates?",
   "practical completion",
-  "site instruction",
-  "final account",
-  "defects? (?:list|liability|notice)",
-  "invoice",
+  "site instructions?",
+  "final accounts?",
+  "defects? (?:list|liability|notice|report|request)s?",
+  "invoices?",
+  // Statutory and certifier correspondence about a job already under way.
+  "notices? of intention",
+  "notice to comply",
+  "stop work orders?",
+  "occupation certificates?",
+  "construction certificates?",
+  "compliance certificates?",
+  "complying development certificates?",
+  "\\bcdcs?\\b",
+  "development applications?",
+  "determinations?",
+  "determined",
+  "principal certif(?:ier|ying authority)",
+  // Supplier paperwork against a live order.
+  "delivery dockets?",
+  "statements? of account",
+  "credit notes?",
+  "backorders?",
+  "packing slips?",
+  // Lender and insurer administration on a build in progress.
+  "drawdowns?",
+  "progress payments?",
+  "home warranty insurance",
+  "certificates? of insurance",
 ].join("|");
 
 /** Vetoes a pattern match, like SOLICITATION. */
@@ -145,17 +172,17 @@ const PROJECT_ADMIN_PATTERN = new RegExp(String.raw`\b(?:${PROJECT_ADMIN})\b`);
  * could conceivably arrive.
  */
 const SOLICITATION = [
-  "takeoff",
+  "takeoffs?",
   "take off & cost",
-  "bid request",
+  "bid requests?",
   "labour hire",
   "trade partnership",
   "tender opportunit(?:y|ies)",
   "lead generation",
   "looking for work",
   "available for work",
-  "estimator",
-  "candidate",
+  "estimators?",
+  "candidates?",
   "cadetship",
   "apprenticeship",
   "traineeship",
@@ -299,9 +326,15 @@ const REPLY_PREFIX = /^(?:(?:re|fw|fwd|aw|tr|sv|vs)\s*(?:\[\d+\])?\s*:\s*)+/;
  * system's own welcome email. None matched, but only by luck: "Undeliverable:
  * Request for Quotation - 145 Oran Park Dr" already carries both "request" and
  * "quotation" and misses solely because no build noun happens to appear.
+ *
+ * Spelling varies by mail system and `normalizeSubject` does not strip hyphens,
+ * so every form has to be spelled out: "Auto-Reply", "Auto Response",
+ * "Delivery failed" and "delivery has failed" are four different subjects.
+ * These are anchored prefixes, so widening them cannot swallow a customer —
+ * nobody opens an enquiry with "Undeliverable:".
  */
 const AUTO_REPLY_PREFIX =
-  /^(?:undeliverable|undelivered mail|automatic reply|auto(?:matic)? response|out of (?:the )?office|delivery (?:has failed|status notification)|mail delivery)\b/;
+  /^(?:undeliverable|undelivered mail|returned mail|failure notice|auto(?:matic)?[- ]?(?:reply|response|responder)|out of (?:the )?office|delivery (?:failed|has failed|status notification|failure)|mail delivery (?:failed|system|subsystem)|read receipt|not read)\b/;
 
 /**
  * Longest subject the patterns will be run against.
@@ -315,9 +348,75 @@ const AUTO_REPLY_PREFIX =
  */
 const MAX_MATCHABLE_SUBJECT = 256;
 
+/**
+ * The domain of an address, from either "a@b.com" or "Name <a@b.com>".
+ *
+ * Returns null when there is nothing usable, and every caller treats null as
+ * "cannot tell" rather than as a match — an unparseable sender must never be
+ * the reason a real enquiry is dropped.
+ */
+function domainOf(address: string | null | undefined): string | null {
+  const withinAngles = /<([^>]*)>/.exec(address ?? "");
+  const bare = (withinAngles ? withinAngles[1] : (address ?? "")).trim();
+  const at = bare.lastIndexOf("@");
+  if (at < 0) return null;
+
+  const domain = bare.slice(at + 1).toLowerCase().replace(/[>\s]+$/, "");
+  return domain.includes(".") ? domain : null;
+}
+
+/**
+ * Did this message come from us?
+ *
+ * Our own sends arrive back at the business mailbox as a cc, a self-copy or
+ * inside a bounce, and they are written to customers, so they read exactly
+ * like enquiries. `OWN_OUTBOUND` chases that by subject text, which is why it
+ * had to be narrowed away from stems a customer could also write. The sender
+ * settles it outright, and no phrasing can fool it.
+ */
+export function isOwnDomainSender(
+  from: string | null | undefined,
+  businessAddress: string | null | undefined,
+): boolean {
+  const sender = domainOf(from);
+  const own = domainOf(businessAddress);
+  return sender !== null && own !== null && sender === own;
+}
+
+/**
+ * Does this inbound message create a lead?
+ *
+ * The gate the notification handler should call: subject and sender together.
+ *
+ * Order matters. The exact allowlist is checked before the sender, because
+ * those subjects are our own website forms and the form mailer may well post
+ * from our own domain — gating them on the sender would silently drop every
+ * genuine website enquiry. Everything reaching the looser pattern layer is
+ * held to the sender rule as well.
+ */
+export function isLeadMessage(
+  subject: string | null | undefined,
+  from: string | null | undefined,
+  businessAddress: string | null | undefined,
+): boolean {
+  if (isLeadSubject(subject) && LEAD_SUBJECT_LINES.has(normalizeSubject(subject).replace(MAIL_GATEWAY_LABEL, ""))) return true;
+  if (isOwnDomainSender(from, businessAddress)) return false;
+  return isLeadSubject(subject);
+}
+
+/**
+ * Tags a mail gateway bolts onto the front of a subject: "[EXTERNAL]",
+ * "[SUSPECTED SPAM]", "[Ext]".
+ *
+ * They sit in front of everything else, so an unstripped "[EXTERNAL] Re: Custom
+ * Build Quote" defeats the reply and bounce prefixes and reads as a brand new
+ * enquiry. Bounded and repeated, since gateways stack them.
+ */
+const MAIL_GATEWAY_LABEL = /^(?:\[[^\]]{1,64}\]\s*)+/;
+
 /** Does this inbound subject identify a website enquiry? */
 export function isLeadSubject(subject: string | null | undefined): boolean {
-  const normalized = normalizeSubject(subject);
+  const normalized = normalizeSubject(subject).replace(MAIL_GATEWAY_LABEL, "");
   if (LEAD_SUBJECT_LINES.has(normalized)) return true;
   if (REPLY_PREFIX.test(normalized)) return false;
   if (AUTO_REPLY_PREFIX.test(normalized)) return false;

@@ -1,5 +1,5 @@
 import { createGraphContext, GraphMessage } from '@/lib/graph/client';
-import { isLeadSubject } from "@/lib/graph/lead-subject";
+import { isLeadMessage } from "@/lib/graph/lead-subject";
 import { getGraphConfig } from '@/lib/graph/config';
 import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
@@ -340,10 +340,19 @@ export async function POST(request: Request): Promise<Response> {
               continue;
             }
 
-            // Check if the message subject matches any of the predefined lead subject lines
-            if (!isLeadSubject(message.subject)) {
+            // Check if the message identifies a website enquiry. The sender is
+            // part of the test: our own outbound comes back here as a cc or a
+            // self-copy and is written to customers, so it reads like an
+            // enquiry no matter how the subject vocabulary is tuned.
+            if (
+              !isLeadMessage(
+                message.subject,
+                message.from,
+                process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'
+              )
+            ) {
               console.log(
-                `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+                `Message subject "${message.subject}" from ${message.from} does not identify a new lead. Skipping lead extraction.`
               );
               continue;
             }

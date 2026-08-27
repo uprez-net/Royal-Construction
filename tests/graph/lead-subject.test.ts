@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { LEAD_SUBJECT_LINES, LEAD_SUBJECT_PATTERNS, isLeadSubject, normalizeSubject } from "../../lib/graph/lead-subject";
+import { LEAD_SUBJECT_LINES, LEAD_SUBJECT_PATTERNS, isLeadMessage, isLeadSubject, isOwnDomainSender, normalizeSubject } from "../../lib/graph/lead-subject";
 
 test("the quoted 'I want to build' subject creates a lead", () => {
   // The regression: the allowlist held the quoted form while the normalizer
@@ -305,4 +305,141 @@ test("an oversized subject is refused instead of scanned", () => {
 
   // The cap must not be doing the work a real subject depends on.
   assert.equal(isLeadSubject("Quote for a new home"), true);
+});
+
+test("a bounce or autoresponder is not a lead, however it spells itself", () => {
+  // These carry the subject of whatever triggered them, so they inherit its
+  // vocabulary — including our own welcome email's. Mail systems spell the
+  // prefix differently and normalizeSubject does not strip hyphens, so
+  // "Auto-Reply" and "Automatic reply" are different strings to match.
+  for (const s of [
+    "Auto-Reply: Quote for a new home build",
+    "Auto Reply: Quote for a new home build",
+    "Autoreply: Quote for a new home build",
+    "Auto-Response: Quote for a new home build",
+    "Automatic reply: Quote for a new home build",
+    "Delivery failed: Quote for a new home build",
+    "Delivery has failed: Quote for a new home build",
+    "Mail delivery failed: Quote for a new home build",
+    "Returned mail: Quote for a new home build",
+    "Failure notice: Quote for a new home build",
+    "Undeliverable: Welcome to Royal Constructions",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("our own outbound is settled by the sender, not by subject wording", () => {
+  const own = "info@royalconstructions.com.au";
+
+  // The subject reads exactly like a customer's, because it was written to one.
+  assert.equal(
+    isLeadMessage("Following up on your quote for my extension", "sales@royalconstructions.com.au", own),
+    false,
+  );
+  assert.equal(
+    isLeadMessage("Your Building Offer - Lot 8358 Expedition Loop", "noreply@royalconstructions.com.au", own),
+    false,
+  );
+
+  // The identical subject from a member of the public is still a lead.
+  assert.equal(
+    isLeadMessage("Following up on your quote for my extension", "jane@gmail.com", own),
+    true,
+  );
+});
+
+test("a website form submission is a lead even when it posts from our own domain", () => {
+  // The form mailer may well send as us. Gating the allowlist on the sender
+  // would silently drop every genuine website enquiry, which is the one
+  // failure this whole module exists to prevent.
+  assert.equal(
+    isLeadMessage("I want to build Form Submission", "noreply@royalconstructions.com.au", "info@royalconstructions.com.au"),
+    true,
+  );
+});
+
+test("an unreadable sender never decides the outcome", () => {
+  const own = "info@royalconstructions.com.au";
+  for (const from of [null, undefined, "", "not-an-address", "@", "someone@localhost"]) {
+    assert.equal(isOwnDomainSender(from, own), false, String(from));
+  }
+  // ...and a missing business address cannot make every sender look like us.
+  assert.equal(isOwnDomainSender("jane@gmail.com", undefined), false);
+  assert.equal(isLeadMessage("quote for a new home", null, own), true);
+});
+
+test("the sender is matched on domain, in either address form", () => {
+  const own = "info@royalconstructions.com.au";
+  assert.equal(isOwnDomainSender("Sales <sales@ROYALCONSTRUCTIONS.com.au>", own), true);
+  assert.equal(isOwnDomainSender("sales@royalconstructions.com.au", "Info <info@royalconstructions.com.au>"), true);
+  // A lookalike domain is not us.
+  assert.equal(isOwnDomainSender("sales@royalconstructions.com", own), false);
+  assert.equal(isOwnDomainSender("sales@notroyalconstructions.com.au", own), false);
+});
+
+test("live-job vocabulary is vetoed in the plural too", () => {
+  // "variation" and "variations" are different strings to a word-boundary
+  // match, and mail about a live job uses both.
+  for (const s of [
+    "Variations for the extension at 12 Smith St",
+    "Purchase orders - townhouse tiling quote",
+    "Invoices for extension works",
+    "Progress claims 4 - duplex at 4 Jones Ave, quote attached",
+    "Takeoffs & cost estimate for your building project",
+    "Site instructions - duplex quote",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("a customer asking for information about building is still a lead", () => {
+  // Only the council's "request for further information" is administration.
+  // The bare phrase is how an ordinary person asks, and vetoing it dropped
+  // them.
+  assert.equal(isLeadSubject("Request for information about a new home build"), true);
+  assert.equal(isLeadSubject("Request for information on building a granny flat"), true);
+  assert.equal(
+    isLeadSubject("Council: request for further information, extension DA-2024-119"),
+    false,
+  );
+});
+
+test("a mail gateway label does not disguise a reply or a bounce", () => {
+  // Gateways prepend "[EXTERNAL]" and friends, which sits in front of the
+  // "Re:" the reply check is anchored on — so the reply reads as a brand new
+  // enquiry and opens a second lead for a customer we already have.
+  for (const s of [
+    "[EXTERNAL] Re: Custom Build Quote",
+    "[SUSPECTED SPAM] Re: quote for a new home",
+    "[EXT] Auto-Reply: Quote for a new home build",
+    "[EXTERNAL] Undeliverable: Welcome to Royal Constructions",
+    "[EXTERNAL] [SECURE] Re: Custom Build Quote",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+
+  // The label must not cost a genuine enquiry, on either matching layer.
+  assert.equal(isLeadSubject("[EXTERNAL] quote for a new home"), true);
+  assert.equal(
+    isLeadMessage(
+      "[EXTERNAL] I want to build Form Submission",
+      "noreply@royalconstructions.com.au",
+      "info@royalconstructions.com.au",
+    ),
+    true,
+  );
+});
+
+test("a certifier determining an approval is not a new lead", () => {
+  // A CDC determination names the job and its address, which is the exact
+  // shape of a genuine enquiry ("granny flat" + "9 Yala Rd"). The certifier
+  // would otherwise be enrolled as a customer and sent the welcome email.
+  for (const s of [
+    "Complying Development Certificate determined - granny flat - 9 Yala Rd Marayong",
+    "CDC determination - duplex 4 Jones Ave",
+    "Development application DA-2024-119 renovation determination",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
 });
