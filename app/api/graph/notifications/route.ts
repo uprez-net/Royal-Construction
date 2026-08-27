@@ -1,5 +1,5 @@
 import { createGraphContext, GraphMessage } from '@/lib/graph/client';
-import { isLeadMessage, isLeadSubject } from "@/lib/graph/lead-subject";
+import { isLeadMessage } from "@/lib/graph/lead-subject";
 import { getGraphConfig } from '@/lib/graph/config';
 import prisma from "@/lib/prisma";
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
@@ -267,7 +267,11 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           }
 
           // Check if the message subject matches any of the predefined lead subject lines
-          if (!isLeadSubject(message.subject)) {
+          if (!isLeadMessage(
+            message.subject,
+            message.from,
+            process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'
+          )) {
             console.log(
               `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
             );
