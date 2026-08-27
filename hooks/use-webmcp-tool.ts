@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
+import { runToolSafely } from "@/components/webmcp/tool-runtime";
+
 export type WebMcpToolConfig = {
     name: string;
     title?: string;
@@ -90,13 +92,21 @@ export function useWebMcpTools(configs: readonly WebMcpToolConfig[] | null | und
                         description: declaration.description,
                         ...(declaration.inputSchema ? { inputSchema: declaration.inputSchema } : {}),
                         ...(declaration.annotations ? { annotations: declaration.annotations } : {}),
-                        execute: async (input, options) => {
-                            const execute = executesRef.current.get(declaration.name);
-                            if (!execute) {
-                                throw new Error(`The ${declaration.name} tool is no longer available.`);
-                            }
-                            return execute(input, options);
-                        },
+                        execute: (input, options) =>
+                            runToolSafely(
+                                declaration.name,
+                                async (args, resolvedOptions) => {
+                                    const execute = executesRef.current.get(declaration.name);
+                                    if (!execute) {
+                                        throw new Error(
+                                            `The ${declaration.name} tool is no longer available.`,
+                                        );
+                                    }
+                                    return execute(args, resolvedOptions);
+                                },
+                                input,
+                                options,
+                            ),
                     },
                     { signal: controller.signal },
                 )

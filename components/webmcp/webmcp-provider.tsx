@@ -10,6 +10,7 @@ import type { AppRole } from "@/lib/tools/types";
 import { useAppSelector } from "@/lib/store/hooks";
 
 import { callBridgeTool } from "./bridge";
+import { runToolSafely } from "./tool-runtime";
 import { createUiTools, type CurrentView } from "./ui-tools";
 
 /**
@@ -72,14 +73,27 @@ export function WebMcpProvider({ role }: { role?: AppRole }) {
                 description: descriptor.description,
                 inputSchema: descriptor.inputSchema,
                 annotations: descriptor.annotations,
+                // Reading options.signal directly used to be a live crash: an
+                // implementation that invokes the callback without an options
+                // argument turned every bridged tool into a TypeError, which the
+                // user agent reported only as "UnknownError: Tool was executed
+                // but the invocation failed". runToolSafely normalises both
+                // arguments before the callback sees them.
                 execute: (input, options) =>
-                    callBridgeTool(descriptor.name, input, {
-                        signal: options.signal,
-                        // A write the user cannot see has not really happened as
-                        // far as they are concerned. The data layer revalidates
-                        // its own cache tags; this pulls the rendered tree.
-                        onMutated: () => routerRef.current.refresh(),
-                    }),
+                    runToolSafely(
+                        descriptor.name,
+                        (args, resolvedOptions) =>
+                            callBridgeTool(descriptor.name, args, {
+                                signal: resolvedOptions.signal,
+                                // A write the user cannot see has not really
+                                // happened as far as they are concerned. The data
+                                // layer revalidates its own cache tags; this pulls
+                                // the rendered tree.
+                                onMutated: () => routerRef.current.refresh(),
+                            }),
+                        input,
+                        options,
+                    ),
             });
         }
 
@@ -87,7 +101,11 @@ export function WebMcpProvider({ role }: { role?: AppRole }) {
             getView: () => viewRef.current,
             navigate: (href) => routerRef.current.push(href),
         })) {
-            register(tool);
+            register({
+                ...tool,
+                execute: (input, options) =>
+                    runToolSafely(tool.name, tool.execute, input, options),
+            });
         }
 
         return () => controller.abort();

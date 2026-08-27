@@ -40,11 +40,17 @@ declare namespace WebMCP {
          * API. Declared here so the in-page inspector can drive tools the way
          * an agent does. Drop this block once the package catches up.
          *
+         * `inputObject` admits both forms on purpose. The IDL says `object`,
+         * and has the user agent serialize it to JSON internally; shipping
+         * implementations have been observed taking the JSON string directly.
+         * Until that settles, passing either has to type-check — the inspector
+         * passes a string, which is what works against the current build.
+         *
          * The IDL types the result as a DOMString.
          */
         executeTool(
             tool: RegisteredTool,
-            inputObject?: object,
+            inputObject?: object | string,
             options?: ModelContextExecuteToolOptions,
         ): Promise<string>;
     }
