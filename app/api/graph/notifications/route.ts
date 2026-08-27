@@ -1,18 +1,16 @@
 import { createGraphContext, GraphMessage } from '@/lib/graph/client';
 import { isLeadSubject } from "@/lib/graph/lead-subject";
 import { getGraphConfig } from '@/lib/graph/config';
-import { extractLeadFromMessage } from '@/lib/graph/lead-extractor';
 import prisma from "@/lib/prisma";
-import { renderEmailHtml } from '@/lib/leads/render-email-html';
-import { Prisma } from '@prisma/client';
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
-import { collectLeadAttachments } from '@/lib/graph/lead-attachments';
-import { archiveLeadAttachments } from '@/lib/leads/archive-lead-attachments';
 import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
+import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
+import { processInboundLead } from '@/lib/workflow/lead-extraction';
+import { start } from 'workflow/api';
 import { after } from 'next/server';
 
 // export const runtime = 'nodejs';
@@ -74,76 +72,6 @@ async function isTradieMessage(fromEmail: string): Promise<boolean> {
     console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
     return false;
   }
-}
-
-/**
- * Checks whether a lead already exists by matching:
- * - sender email
- * - recipient emails
- * - contact number
- *
- * Returns true if any matching lead exists.
- *
- * @param fromEmail - Email address of the sender
- * @param toEmails - Recipient email addresses
- * @param contactNo - Extracted contact number
- */
-export async function checkLeadPresentWithEmailPhone(
-  fromEmail?: string,
-  toEmails: string[] = [],
-  contactNo?: string
-): Promise<boolean> {
-  const orConditions: Prisma.LeadWhereInput[] = [];
-
-  const normalizedFromEmail = fromEmail?.trim().toLowerCase();
-  const normalizedContactNo = contactNo?.trim();
-
-  const normalizedToEmails = toEmails
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (normalizedFromEmail) {
-    orConditions.push({
-      email: {
-        equals: normalizedFromEmail,
-        mode: "insensitive",
-      },
-    });
-  }
-
-  if (normalizedToEmails.length > 0) {
-    orConditions.push({
-      email: {
-        in: normalizedToEmails,
-        mode: "insensitive",
-      },
-    });
-  }
-
-  if (
-    normalizedContactNo &&
-    normalizedContactNo !== "0"
-  ) {
-    orConditions.push({
-      phone: normalizedContactNo,
-    });
-  }
-
-  // Nothing useful to search with
-  if (orConditions.length === 0) {
-    return false;
-  }
-
-  const existingLead = await prisma.lead.findFirst({
-    where: {
-      OR: orConditions,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return Boolean(existingLead);
 }
 
 function handleValidationToken(request: Request): Response | null {
@@ -355,124 +283,27 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             continue; // Skip processing this message
           }
 
-          // Only now, once the message has cleared every gate and is going to
-          // the extractor, is it worth paying for the attachment round-trips.
+          // Everything past this point — attachments, OCR, the model call, the
+          // lead row, the welcome email — is the slow, failure-prone half, and
+          // it used to run right here. Graph had already been told 202 by then,
+          // so a timeout or a rate-limited model call lost the enquiry with no
+          // trace and no second attempt.
           //
-          // `hasAttachments` is deliberately not the condition: Graph reports
-          // it as false when every attachment is inline, which is how Outlook
-          // marks an image the sender pasted into the body — often the site
-          // photo the whole enquiry is about.
-          const attachments = await collectLeadAttachments(graphClient, message.id);
-          if (attachments.names.length > 0) {
-            console.log(
-              `  attachments (hasAttachments=${message.hasAttachments}): ` +
-                `${attachments.attachments.length} sent to the extractor, ` +
-                `${attachments.skipped.length} skipped` +
-                (attachments.skipped.length > 0
-                  ? ` — ${attachments.skipped
-                      .map((item) => `${item.name}: ${item.reason}`)
-                      .join('; ')}`
-                  : ''),
-            );
-          }
+          // Handing it to a workflow makes each of those a step that retries on
+          // its own and resumes at the last boundary it cleared. `start` only
+          // enqueues the run, so nothing below waits on any of it.
+          const run = await start(processInboundLead, [
+            {
+              messageId: message.id,
+              subject: message.subject ?? '',
+              body: content,
+              from: message.from,
+            },
+          ]);
 
-          const extracted = await extractLeadFromMessage(
-            message.subject ?? '',
-            content,
-            attachments,
+          console.log(
+            `  Lead extraction workflow started for message ${message.id}: run ${run.runId}`,
           );
-
-          if (extracted) {
-            console.log(`  extractedLead: ${JSON.stringify(extracted)}`);
-            if (extracted.Status === false) {
-              // Double-check one final time right before saving to prevent race conditions from concurrent webhook calls
-              if (message.id && await isMessageAlreadyProcessed(message.id)) {
-                console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
-                continue;
-              }
-              else if (await checkLeadPresentWithEmailPhone(extracted.Email, [], extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
-                console.log(`  Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists in database. Aborting database save.`);
-                continue;
-              }
-
-              const phoneVal = extracted.ContactNo != null ? String(extracted.ContactNo) : '';
-              console.log('  Saving lead to database...');
-              const newLead = await prisma.lead.create({
-                data: {
-                  name: extracted.Name || 'Unknown Lead',
-                  email: message.from || extracted.Email,
-                  phone: phoneVal,
-                  location: extracted.Address || '',
-                  sourceDetail: 'Website',
-                  stage: 'CONTACTED',
-                  type: extracted.Type || [],
-                  notes: extracted.Info || '',
-                  MicrosoftmessageId: message.id,
-                },
-              });
-              console.log(`  Lead successfully saved to database with ID: ${newLead.id} and MicrosoftmessageId: ${message.id}`);
-
-              // Only once the lead has an id: it is what gives each file both
-              // its blob path and its row. Everything downloaded is kept, not
-              // just what the extractor could read — a .docx OCR gave up on is
-              // still the brief the client sent.
-              if (attachments.downloaded.length > 0) {
-                const archived = await archiveLeadAttachments(
-                  newLead.id,
-                  attachments.downloaded,
-                );
-                console.log(
-                  `  Archived ${archived}/${attachments.downloaded.length} attachment(s) against lead ${newLead.id}`,
-                );
-              }
-
-              // After data Create Successfully Now give the Welcome Email Message to this client if Email and Name are present
-              // ═══════════════════════════════════════════════════════
-              // SEND WELCOME EMAIL AUTOMATICALLY
-              // ═══════════════════════════════════════════════════════
-              if (newLead.email && newLead.name && graphClient) {
-                console.log('  Sending welcome email to new lead...');
-                try {
-                  // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
-                  const leadPreview = {
-                    id: newLead.id,
-                    name: newLead.name,
-                    email: newLead.email,
-                    type: newLead.type,
-                    location: newLead.location,
-                    notes: newLead.notes ?? undefined,
-                    budget: newLead.budget ?? undefined,
-                  };
-
-                  // 2. Generate the HTML body using your React Email template
-                  const htmlBody = await renderEmailHtml('Welcome', leadPreview);
-
-                  if (htmlBody) {
-                    // 2. Define the subject line
-                    const emailSubject = 'Welcome to Royal Constructions — Your Home Building Journey Starts Here';
-
-                    // 3. Send the email directly using the existing Graph Client
-                    await graphClient.sendMail({
-                      to: newLead.email,
-                      subject: emailSubject,
-                      body: htmlBody,
-                      cc: config.cc, // Include CC if configured
-                    });
-
-                    console.log(`  ✅ Welcome email successfully sent to ${newLead.email}`);
-                  } else {
-                    console.warn('  ⚠️ Failed to render welcome email HTML. No email sent.');
-                  }
-                } catch (emailError) {
-                  // We catch this error separately so that an email failure 
-                  // doesn't crash the webhook and prevent the lead from being saved
-                  console.error('  ❌ Failed to send welcome email:', emailError);
-                }
-              }
-            } else {
-              console.log('  Lead Extracted Found as Spam, Ignoring the lead');
-            }
-          }
         } catch (error) {
           console.error('Failed to extract or save lead to database:', error);
         }

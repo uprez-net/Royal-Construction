@@ -21,20 +21,33 @@ export interface SkippedAttachment {
 }
 
 /**
- * A file as it came off the mailbox, before anything was made of it.
+ * One downloaded file, described rather than carried.
  *
- * Kept whole and separate from `attachments` because what the extractor needs
- * and what the lead should keep are different things: OCR reduces a plan set to
- * text for the model, and a .docx OCR could not read is dropped from the prompt
- * entirely — but the client still sent both, and both belong on the record.
+ * Deliberately holds no bytes. This crosses workflow step boundaries, where
+ * everything is serialized into the run's event log — putting 10 MB of plans
+ * through that on every step would be the wrong place to keep a file. The
+ * mailbox is already durable storage, so `id` is enough: any step that needs
+ * the bytes fetches them again.
  */
-export interface DownloadedAttachment {
+export interface LeadAttachmentSummary {
+  /** Graph attachment id, so the bytes can be fetched again on demand. */
+  id: string;
   name: string;
   mediaType: string;
-  data: Buffer;
+  size: number;
+  /** What OCR read, or null when it found nothing usable. */
+  text: string | null;
+  /** Whether the model can read the raw bytes when there is no text. */
+  modelReadable: boolean;
 }
 
-export interface LeadAttachmentSet {
+/**
+ * What a message's attachments amount to, in a form a step can return.
+ *
+ * `files` is everything successfully downloaded, whatever became of it: the
+ * lead keeps all of them, while only some reach the prompt.
+ */
+export interface LeadAttachmentReport {
   /**
    * Every attachment the sender put on the message, readable or not. The
    * extractor is told these names even for the files it cannot open, so a lead
@@ -42,17 +55,26 @@ export interface LeadAttachmentSet {
    * than as an empty message.
    */
   names: string[];
+  files: LeadAttachmentSummary[];
+  skipped: SkippedAttachment[];
+}
+
+export const EMPTY_LEAD_ATTACHMENT_REPORT: LeadAttachmentReport = {
+  names: [],
+  files: [],
+  skipped: [],
+};
+
+export interface LeadAttachmentSet {
+  names: string[];
   attachments: LeadAttachment[];
   skipped: SkippedAttachment[];
-  /** Every file whose bytes we hold, for archiving against the saved lead. */
-  downloaded: DownloadedAttachment[];
 }
 
 export const EMPTY_LEAD_ATTACHMENTS: LeadAttachmentSet = {
   names: [],
   attachments: [],
   skipped: [],
-  downloaded: [],
 };
 
 const DOCX_MEDIA_TYPE =
@@ -231,10 +253,6 @@ export interface LeadAttachmentSource {
   downloadMessageAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
 }
 
-type PreparedAttachment =
-  | { ok: true; attachment: LeadAttachment }
-  | { ok: false; reason: string };
-
 /** Injectable so the OCR-shaped decisions below can be tested without Mistral. */
 export type OcrReader = (input: OcrInput) => Promise<string>;
 
@@ -278,35 +296,37 @@ async function readWithOcr(
 }
 
 /**
- * Turns downloaded bytes into something the extractor can use.
+ * Decides what a downloaded file amounts to.
  *
  * OCR first: a plan set or a written brief reduces to text far cheaper than
  * shipping the binary to the model, and it is the only way to read a .docx at
- * all. What OCR cannot read — a site photo, a plan that is pure linework —
- * falls back to the model, which can look at it. A format the model cannot
- * take either is dropped, its name still reaching the prompt.
+ * all. What OCR cannot read — a site photo, a plan that is pure linework — is
+ * left for the model, which can look at it. A format the model cannot take
+ * either has nothing left to try.
  */
-async function prepareAttachment(
+async function summarizeAttachment(
   metadata: GraphAttachmentMetadata,
   data: Buffer,
   ocr: OcrReader,
-): Promise<PreparedAttachment> {
+): Promise<LeadAttachmentSummary> {
   const mediaType = resolveMediaType(metadata.name, metadata.contentType);
   const support = SUPPORTED_MEDIA[mediaType];
 
+  const summary: LeadAttachmentSummary = {
+    id: metadata.id,
+    name: metadata.name,
+    mediaType,
+    size: data.byteLength,
+    text: null,
+    modelReadable: support?.agent ?? false,
+  };
+
   if (!support) {
-    return { ok: false, reason: `unreadable format ${mediaType || 'unknown'}` };
+    return summary;
   }
 
   if (support.ocr === null) {
-    return {
-      ok: true,
-      attachment: {
-        kind: 'text',
-        name: metadata.name,
-        text: data.toString('utf8').slice(0, MAX_TEXT_CHARS),
-      },
-    };
+    return { ...summary, text: data.toString('utf8').slice(0, MAX_TEXT_CHARS) };
   }
 
   const text = await readWithOcr(
@@ -317,25 +337,16 @@ async function prepareAttachment(
     support.ocr === 'image',
   );
 
-  if (text) {
-    return {
-      ok: true,
-      attachment: { kind: 'text', name: metadata.name, text: text.slice(0, MAX_TEXT_CHARS) },
-    };
-  }
-
-  if (support.agent) {
-    return {
-      ok: true,
-      attachment: { kind: 'file', name: metadata.name, mediaType, data },
-    };
-  }
-
-  return { ok: false, reason: 'no text found and the model cannot open the format' };
+  return text ? { ...summary, text: text.slice(0, MAX_TEXT_CHARS) } : summary;
 }
 
 /**
- * Lists a message's attachments and downloads the ones worth reading.
+ * Lists a message's attachments, downloads the ones worth reading, and reports
+ * what each turned out to be.
+ *
+ * Bytes are dropped on the way out. This is the expensive half — the downloads
+ * and the OCR — and it runs once, as one step; anything that needs the file
+ * again fetches it from the mailbox rather than carrying it through the run.
  *
  * Never throws. An enquiry with an unreachable attachment is still an enquiry,
  * and losing the lead because Graph refused one file would be worse than
@@ -346,9 +357,9 @@ export async function collectLeadAttachments(
   source: LeadAttachmentSource,
   messageId: string,
   ocr: OcrReader = mistralOcrReader,
-): Promise<LeadAttachmentSet> {
+): Promise<LeadAttachmentReport> {
   if (!messageId) {
-    return EMPTY_LEAD_ATTACHMENTS;
+    return EMPTY_LEAD_ATTACHMENT_REPORT;
   }
 
   let metadata: GraphAttachmentMetadata[];
@@ -358,16 +369,15 @@ export async function collectLeadAttachments(
     );
   } catch (error) {
     console.error(`  Failed to list attachments for message ${messageId}:`, error);
-    return EMPTY_LEAD_ATTACHMENTS;
+    return EMPTY_LEAD_ATTACHMENT_REPORT;
   }
 
   if (metadata.length === 0) {
-    return EMPTY_LEAD_ATTACHMENTS;
+    return EMPTY_LEAD_ATTACHMENT_REPORT;
   }
 
   const { selected, skipped } = selectLeadAttachments(metadata);
-  const attachments: LeadAttachment[] = [];
-  const downloaded: DownloadedAttachment[] = [];
+  const files: LeadAttachmentSummary[] = [];
 
   for (const item of selected) {
     try {
@@ -377,21 +387,7 @@ export async function collectLeadAttachments(
         source.downloadMessageAttachment(messageId, item.id),
       );
 
-      // Recorded before the file is interpreted. Whether OCR could read it, and
-      // whether the model ends up seeing it, has no bearing on the client
-      // having sent it — the lead keeps the file either way.
-      downloaded.push({
-        name: item.name,
-        mediaType: resolveMediaType(item.name, item.contentType),
-        data,
-      });
-
-      const prepared = await prepareAttachment(item, data, ocr);
-      if (prepared.ok) {
-        attachments.push(prepared.attachment);
-      } else {
-        skipped.push({ name: item.name, reason: prepared.reason });
-      }
+      files.push(await summarizeAttachment(item, data, ocr));
     } catch (error) {
       console.error(`  Failed to download attachment "${item.name}":`, error);
       skipped.push({ name: item.name, reason: 'download failed' });
@@ -404,8 +400,56 @@ export async function collectLeadAttachments(
     names: metadata
       .filter((item) => !(item.isInline && item.size < MIN_INLINE_BYTES))
       .map((item) => item.name),
-    attachments,
+    files,
     skipped,
-    downloaded,
   };
+}
+
+/**
+ * Rebuilds the extractor's view of the attachments, fetching bytes only for the
+ * files the model has to look at itself.
+ *
+ * A file OCR read is already text and needs nothing more. A file OCR could not
+ * read, and the model cannot open either, is named in the prompt but not sent —
+ * it still reaches the lead record, just not the model.
+ */
+export async function hydrateLeadAttachments(
+  report: LeadAttachmentReport,
+  source: LeadAttachmentSource,
+  messageId: string,
+): Promise<LeadAttachmentSet> {
+  const attachments: LeadAttachment[] = [];
+  const skipped = [...report.skipped];
+
+  for (const file of report.files) {
+    if (file.text !== null) {
+      attachments.push({ kind: 'text', name: file.name, text: file.text });
+      continue;
+    }
+
+    if (!file.modelReadable) {
+      skipped.push({
+        name: file.name,
+        reason: 'no text found and the model cannot open the format',
+      });
+      continue;
+    }
+
+    try {
+      const data = await withGraphRetry(`download ${file.name}`, () =>
+        source.downloadMessageAttachment(messageId, file.id),
+      );
+      attachments.push({
+        kind: 'file',
+        name: file.name,
+        mediaType: file.mediaType,
+        data,
+      });
+    } catch (error) {
+      console.error(`  Failed to re-read attachment "${file.name}":`, error);
+      skipped.push({ name: file.name, reason: 'could not be read back' });
+    }
+  }
+
+  return { names: report.names, attachments, skipped };
 }
