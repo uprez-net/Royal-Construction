@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { ExternalLink, Files, Loader2, Upload } from "lucide-react";
+import { Files, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -94,13 +94,6 @@ export function LeadDocumentsTab({
         >
           {formatFileSize(file.size)}
         </span>,
-
-        <Button key={`${file.id}-actions`} asChild size="sm" variant="ghost">
-          <a href={file.url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="mr-1 size-4" aria-hidden="true" />
-            Open
-          </a>
-        </Button>,
       ]),
     [files],
   );

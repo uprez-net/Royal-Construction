@@ -1,7 +1,11 @@
-import { ToolLoopAgent, tool } from 'ai';
+import { ToolLoopAgent, tool, type FilePart, type TextPart } from 'ai';
 import { gateway } from '../model';
 import { z } from 'zod';
 import { stripEmailThread, stripHtml } from '@/utils/formatters';
+import {
+  EMPTY_LEAD_ATTACHMENTS,
+  type LeadAttachmentSet,
+} from './lead-attachments';
 
 export interface LeadExtraction {
   Name: string;
@@ -87,8 +91,11 @@ const instruction =
   'townhouse, similar) that contain actual project details or questions. ' +
   'Set Status to true for spam, marketing, unrelated services, bot submissions, ' +
   'OR if the message lacks meaningful content (e.g. Name, Phone, Location, and ' +
-  'Message are all empty or contain gibberish/random text). Always call the emitLead tool ' +
-  'with the final fields.';
+  'Message are all empty or contain gibberish/random text). ' +
+  'An email may carry attachments — plans, sketches, site photos, a written ' +
+  'brief. Read them as part of the enquiry: they are often where the address, ' +
+  'the project type and the real detail live when the body says little more ' +
+  'than "see attached". Always call the emitLead tool with the final fields.';
 
 const leadExtractionAgent = new ToolLoopAgent({
   model: gateway(MODEL_NAME),
@@ -153,9 +160,56 @@ function normalizeProjectTypes(
   return filtered.length > 0 ? filtered : [];
 }
 
+/**
+ * Describes the sender's attachments to the model.
+ *
+ * The names matter even for files we could not open: "granny-flat-plans.dwg"
+ * tells the model an enquiry with a real project behind it arrived, which is
+ * the difference between a lead and a message scored as empty and dropped.
+ */
+function buildAttachmentPrompt(attachments: LeadAttachmentSet): string {
+  if (attachments.names.length === 0) {
+    return '';
+  }
+
+  const unreadable = attachments.skipped.filter((item) =>
+    attachments.names.includes(item.name),
+  );
+
+  let section =
+    '\nAttachments on this email:\n' +
+    attachments.names.map((name) => `- ${name}`).join('\n') +
+    '\n';
+
+  if (unreadable.length > 0) {
+    section +=
+      '\nNot included below (' +
+      unreadable.map((item) => `${item.name}: ${item.reason}`).join('; ') +
+      '). Treat these as attachments that exist but that you cannot read.\n';
+  }
+
+  for (const attachment of attachments.attachments) {
+    if (attachment.kind === 'text') {
+      section += `\nText read from ${attachment.name}:\n${attachment.text}\n`;
+    }
+  }
+
+  section +=
+    '\nAttachment rules:\n' +
+    '- Use details from the attachments to fill Name, Email, ContactNo, Address, Type and Info.\n' +
+    '- Text read from an attachment is OCR output and may be garbled or incomplete. Use what is legible and do not invent values it does not contain.\n' +
+    '- The email body and the attachments describe one enquiry; do not treat an attachment as a separate lead.\n' +
+    '- Say in Info what the client sent (for example "attached floor plans for a granny flat").\n' +
+    '- A genuine attachment such as plans, a sketch, a site photo or a written brief IS meaningful content: do not set Status = true for a thin body when the attachment carries the enquiry.\n' +
+    '- An attachment does not make a message genuine on its own. Invoices, resumes, catalogues and marketing decks are still Status = true.\n';
+
+  return section;
+}
+
 export async function extractLeadFromMessage(
   subject: string,
   body: string,
+  attachments: LeadAttachmentSet = EMPTY_LEAD_ATTACHMENTS,
 ): Promise<LeadExtraction | null> {
   if (!leadExtractionAgent) {
     console.warn('Lead extraction skipped: missing Gemini API key');
@@ -169,6 +223,12 @@ export async function extractLeadFromMessage(
 
   console.log('Extracting lead from message with subject:', subject.trim());
   console.log('Message body (Cleaned):', cleanBody);
+  if (attachments.names.length > 0) {
+    console.log(
+      `Attachments: ${attachments.names.join(', ')} ` +
+        `(${attachments.attachments.length} readable, ${attachments.skipped.length} skipped)`,
+    );
+  }
 
   const finalPrompt =
     'Extract the lead data from the email below.\n\n' +
@@ -185,11 +245,26 @@ export async function extractLeadFromMessage(
     '- Status = true for spam, marketing, or unrelated services.\n' +
     '- Status = true for pitches offering marketing, website, SEO, ads, or similar services.\n' +
     '- IMPORTANT: Status = true if the message is empty, or if it lacks meaningful content (e.g., Name, Phone, Location, and Message are all empty, missing, or contain only random/gibberish text like bot submissions). Incomplete forms with no real message are spam.\n\n' +
-    'Return the structured fields only.';
+    buildAttachmentPrompt(attachments) +
+    '\nReturn the structured fields only.';
+
+  // Readable binaries ride alongside the prompt as file parts. With none, this
+  // is a single text part — exactly what a plain string prompt compiles to.
+  const content: Array<TextPart | FilePart> = [{ type: 'text', text: finalPrompt }];
+  for (const attachment of attachments.attachments) {
+    if (attachment.kind === 'file') {
+      content.push({
+        type: 'file',
+        data: attachment.data,
+        mediaType: attachment.mediaType,
+        filename: attachment.name,
+      });
+    }
+  }
 
   const result = await runWithRateLimit(() =>
     leadExtractionAgent.generate({
-      prompt: finalPrompt,
+      messages: [{ role: 'user', content }],
     }),
   );
 

@@ -15,6 +15,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/graph/notifications(.*)",
   "/api/graph/book-consultant(.*)",
   "/api/graph/read-calender-dateTime(.*)",
+  "/api/graph/subscribe(.*)",
   // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
   "/api/docusign(.*)",
   '/.well-known(.*)',
