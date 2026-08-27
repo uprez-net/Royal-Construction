@@ -348,7 +348,7 @@ export function ModalManager() {
         />
       );
     }
-    case "addMilestone":
+    case "addMilestone": {
       const {
         projectId: addMilestoneProjectId,
         projectStage: addMilestoneProjectStage,
@@ -364,6 +364,7 @@ export function ModalManager() {
           onClose={handleClose}
         />
       );
+    }
     case "updateMilestoneStatus":
       const {
         milestoneId: updateMilestoneStatusId,

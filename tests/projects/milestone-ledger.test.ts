@@ -15,6 +15,7 @@ import {
   nextActivity,
   partitionActivities,
   sortActivities,
+  stageClaimAmount,
   stageRollup,
   stageState,
 } from "../../lib/projects/milestone-ledger";
@@ -360,4 +361,31 @@ test("flatten walks the whole tree depth-first", () => {
     flattenMilestones(stage).map((milestone) => milestone.name),
     ["Piering", "Pier holes", "Inspection", "Re-check", "Slab pour"],
   );
+});
+
+test("a stage claims the contract amount, even when it differs from the budget", () => {
+  // The contract sum the schedule was priced against can differ from the
+  // project budget; the agreed figure is the one that gets claimed.
+  assert.equal(stageClaimAmount(4981, 15, 33207), 4981);
+});
+
+test("a stage with no stated amount falls back to its percentage of the budget", () => {
+  // Compared within a cent: percentage-of-budget is binary float arithmetic,
+  // so 5% of 33,207 lands on 1660.3500000000001, not 1660.35.
+  const cent = 0.005;
+  assert.ok(Math.abs((stageClaimAmount(null, 15, 33207) ?? 0) - 4981.05) < cent);
+  assert.ok(
+    Math.abs((stageClaimAmount(undefined, 5, 33207) ?? 0) - 1660.35) < cent,
+  );
+});
+
+test("a stage claims nothing knowable without an amount, a percentage or a budget", () => {
+  assert.equal(stageClaimAmount(null, null, 33207), null);
+  assert.equal(stageClaimAmount(null, 15, Number.NaN), null);
+});
+
+test("a stated amount of zero is respected rather than recomputed", () => {
+  // A waived stage claims nothing; falling through to the percentage would
+  // silently re-bill it.
+  assert.equal(stageClaimAmount(0, 15, 33207), 0);
 });

@@ -226,11 +226,6 @@ export function MilestoneCard({
               </span>
             ) : null}
 
-            {depth > 0 && photos.length > 0 ? (
-              <span className="text-xs text-muted-foreground">
-                {photos.length} photo{photos.length === 1 ? "" : "s"}
-              </span>
-            ) : null}
           </div>
 
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -255,7 +250,7 @@ export function MilestoneCard({
             ) : null}
           </div>
 
-          {depth === 0 && photos.length > 0 ? (
+          {photos.length > 0 ? (
             <ul className="mt-2 flex list-none flex-wrap items-center gap-1.5">
               {photos.slice(0, INLINE_PHOTO_LIMIT).map((photo, index) => (
                 <li key={photo.id}>

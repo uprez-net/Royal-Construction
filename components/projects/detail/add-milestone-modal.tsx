@@ -153,7 +153,7 @@ export default function AddMilestoneModal({
           projectId,
         }),
       ).unwrap();
-      toast.success("Milestone created successfully");
+      toast.success("Activity created successfully");
       handleFormReset();
       onClose();
     } catch (error) {
@@ -364,7 +364,7 @@ export default function AddMilestoneModal({
                 </SelectContent>
               </Select>
               <p id="parentId-hint" className="text-xs text-muted-foreground">
-                Use this to nest the milestone under a larger phase.
+                Use this to nest the activity under a larger one.
               </p>
             </div>
           </div>

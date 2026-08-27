@@ -236,6 +236,30 @@ export function lastCompleted<T extends LedgerMilestone>(
 }
 
 /**
+ * What one stage claims, in dollars.
+ *
+ * The contract's own schedule wins: the amount there is what the owner agreed
+ * to pay for that stage, and the sum it was derived from can differ from the
+ * project budget. Only when the schedule states no amount is one computed from
+ * the stage percentage.
+ */
+export function stageClaimAmount(
+  contractAmount: number | null | undefined,
+  percentage: number | null,
+  projectBudget: number,
+): number | null {
+  if (contractAmount != null) {
+    return contractAmount;
+  }
+
+  if (!Number.isFinite(projectBudget) || percentage === null) {
+    return null;
+  }
+
+  return (percentage / 100) * projectBudget;
+}
+
+/**
  * The stage currently being worked: the first one not yet complete.
  *
  * Stages are claimed in contract order, so only this stage accepts work — every

@@ -22,6 +22,7 @@ import {
   lastCompleted,
   nextActivity,
   partitionActivities,
+  stageClaimAmount,
   stageRollup,
   stageState,
   type StageState,
@@ -231,14 +232,11 @@ export function ProjectMilestonesTab({
         (PROJECT_STAGE_PERCENTAGE[stage] != null
           ? PROJECT_STAGE_PERCENTAGE[stage] * 100
           : null);
-      // The contract sum the claim amounts were derived from can differ from
-      // the project budget, so prefer the amount the schedule actually states
-      // and only compute one when it has none.
-      const claim =
-        contractStage?.amount ??
-        (Number.isFinite(projectBudget) && percentage != null
-          ? (percentage / 100) * projectBudget
-          : null);
+      const claim = stageClaimAmount(
+        contractStage?.amount,
+        percentage,
+        projectBudget,
+      );
 
       return {
         stage,
@@ -392,10 +390,30 @@ export function ProjectMilestonesTab({
     );
   };
 
-  const contractTotal = ledgerStages.reduce(
-    (total, row) => total + (row.claim ?? 0),
-    0,
-  );
+  // "Contract total" means the whole claim schedule. Summing only the stages
+  // that currently carry activities would under-report it the moment a stage
+  // is emptied, and this figure is money.
+  const contractTotal = useMemo(() => {
+    const projectBudget = Number(project.totalBudget);
+
+    return (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[]).reduce(
+      (total, stage) => {
+        const contractStage = contractStages[stage];
+        const percentage =
+          contractStage?.percentage ??
+          (PROJECT_STAGE_PERCENTAGE[stage] != null
+            ? PROJECT_STAGE_PERCENTAGE[stage] * 100
+            : null);
+
+        return (
+          total +
+          (stageClaimAmount(contractStage?.amount, percentage, projectBudget) ??
+            0)
+        );
+      },
+      0,
+    );
+  }, [contractStages, project.totalBudget]);
   // Stage, [Claim], Progress, Status, Next up, disclosure.
   const columnCount = isAdmin ? 6 : 5;
 
