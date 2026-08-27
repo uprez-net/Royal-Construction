@@ -7,6 +7,7 @@ import {
   resolveMediaType,
   selectLeadAttachments,
   type LeadAttachmentSource,
+  type OcrReader,
 } from "../../lib/graph/lead-attachments";
 
 const MB = 1024 * 1024;
@@ -76,15 +77,29 @@ test("a large pasted image is kept even though it is inline", () => {
   assert.deepEqual(namesOf(selected), ["backyard.jpg"]);
 });
 
-test("formats the model cannot read are skipped with a reason", () => {
+test("formats nothing in the pipeline can read are skipped with a reason", () => {
   const { selected, skipped } = selectLeadAttachments([
     attachment({ name: "plans.dwg", contentType: "application/acad" }),
-    attachment({ name: "brief.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+    attachment({ name: "photos.zip", contentType: "application/zip" }),
   ]);
 
   assert.deepEqual(selected, []);
-  assert.deepEqual(namesOf(skipped), ["plans.dwg", "brief.docx"]);
+  assert.deepEqual(namesOf(skipped), ["plans.dwg", "photos.zip"]);
   assert.ok(skipped[0].reason.includes("unreadable"));
+});
+
+test("a .docx is downloaded now that OCR can read it", () => {
+  // It is not on the allowlist because the model can open it — it cannot. OCR
+  // is the only thing standing between a Word brief and being dropped.
+  const { selected } = selectLeadAttachments([
+    attachment({
+      name: "brief.docx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+  ]);
+
+  assert.deepEqual(namesOf(selected), ["brief.docx"]);
 });
 
 test("linked and forwarded-email attachments are skipped", () => {
@@ -134,6 +149,14 @@ test("no more than five attachments go up", () => {
   assert.equal(skipped.length, 2);
 });
 
+/** OCR that finds nothing, as it would on a photo of a backyard. */
+const noOcrText: OcrReader = async () => "";
+
+/** OCR that reads a document, as it would on a plan set or a brief. */
+function ocrReturning(text: string): OcrReader {
+  return async () => text;
+}
+
 function sourceFor(
   metadata: GraphAttachmentMetadata[],
   bytes: Record<string, Buffer | Error> = {},
@@ -148,24 +171,125 @@ function sourceFor(
   };
 }
 
-test("readable files come back as bytes and text files as characters", async () => {
-  const metadata = [
-    attachment({ id: "a", name: "plans.pdf" }),
-    attachment({ id: "b", name: "brief.txt", contentType: "text/plain" }),
-  ];
+test("a document OCRs to text instead of going up as bytes", async () => {
   const set = await collectLeadAttachments(
-    sourceFor(metadata, { b: Buffer.from("Knockdown rebuild in Parramatta") }),
+    sourceFor([attachment({ id: "a", name: "plans.pdf" })]),
     "message-1",
+    ocrReturning("Proposed granny flat, 12 Smith St, Parramatta"),
   );
 
-  assert.deepEqual(set.names, ["plans.pdf", "brief.txt"]);
   assert.deepEqual(
     set.attachments.map((item) => item.kind),
-    ["file", "text"],
+    ["text"],
   );
-  const [file, text] = set.attachments;
-  assert.equal(file.kind === "file" && file.mediaType, "application/pdf");
-  assert.equal(text.kind === "text" && text.text, "Knockdown rebuild in Parramatta");
+  const [text] = set.attachments;
+  assert.equal(
+    text.kind === "text" && text.text,
+    "Proposed granny flat, 12 Smith St, Parramatta",
+  );
+  assert.deepEqual(set.skipped, []);
+});
+
+test("a .docx is readable now that it goes through OCR", async () => {
+  // The whole reason docx is on the allowlist: the model cannot open one, so
+  // before OCR the file could only ever be named, never read.
+  const set = await collectLeadAttachments(
+    sourceFor([
+      attachment({
+        id: "a",
+        name: "brief.docx",
+        contentType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    ]),
+    "message-1",
+    ocrReturning("We would like to build a double storey home in Kellyville."),
+  );
+
+  assert.deepEqual(
+    set.attachments.map((item) => item.kind),
+    ["text"],
+  );
+});
+
+test("a text attachment is decoded without an OCR round-trip", async () => {
+  let ocrCalls = 0;
+  const set = await collectLeadAttachments(
+    sourceFor([attachment({ id: "a", name: "brief.txt", contentType: "text/plain" })], {
+      a: Buffer.from("Knockdown rebuild in Parramatta"),
+    }),
+    "message-1",
+    async () => {
+      ocrCalls += 1;
+      return "";
+    },
+  );
+
+  assert.equal(ocrCalls, 0, "already text — OCR would be a round-trip to be told so");
+  assert.equal(
+    set.attachments[0].kind === "text" && set.attachments[0].text,
+    "Knockdown rebuild in Parramatta",
+  );
+});
+
+test("a photo OCR cannot read falls back to the model, which can see it", async () => {
+  const set = await collectLeadAttachments(
+    sourceFor([attachment({ id: "a", name: "backyard.jpg", contentType: "image/jpeg" })]),
+    "message-1",
+    noOcrText,
+  );
+
+  const [file] = set.attachments;
+  assert.equal(file.kind, "file");
+  assert.equal(file.kind === "file" && file.mediaType, "image/jpeg");
+  assert.deepEqual(set.skipped, []);
+});
+
+test("a stray character off a letterbox is not treated as text", async () => {
+  // OCR over a site photo returns a number plate or a street number. Sending
+  // that instead of the image would lose the only thing worth reading.
+  const set = await collectLeadAttachments(
+    sourceFor([attachment({ id: "a", name: "site.jpg", contentType: "image/jpeg" })]),
+    "message-1",
+    ocrReturning("  42  "),
+  );
+
+  assert.equal(set.attachments[0].kind, "file");
+});
+
+test("a docx OCR cannot read is dropped, since the model cannot open it either", async () => {
+  const set = await collectLeadAttachments(
+    sourceFor([
+      attachment({
+        id: "a",
+        name: "brief.docx",
+        contentType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    ]),
+    "message-1",
+    noOcrText,
+  );
+
+  assert.deepEqual(set.attachments, []);
+  assert.deepEqual(set.skipped, [
+    { name: "brief.docx", reason: "no text found and the model cannot open the format" },
+  ]);
+  // Dropped, but still named — the enquiry is not an empty message.
+  assert.deepEqual(set.names, ["brief.docx"]);
+});
+
+test("a failing OCR falls back rather than losing the attachment", async () => {
+  const set = await collectLeadAttachments(
+    sourceFor([attachment({ id: "a", name: "plans.pdf" })]),
+    "message-1",
+    async () => {
+      throw new Error("Mistral 500");
+    },
+  );
+
+  assert.equal(set.attachments[0].kind, "file");
+  assert.deepEqual(set.skipped, []);
 });
 
 test("the names of unreadable attachments still reach the extractor", async () => {
@@ -175,6 +299,7 @@ test("the names of unreadable attachments still reach the extractor", async () =
   const set = await collectLeadAttachments(
     sourceFor([attachment({ id: "a", name: "plans.dwg", contentType: "application/acad" })]),
     "message-1",
+    noOcrText,
   );
 
   assert.deepEqual(set.names, ["plans.dwg"]);
@@ -191,6 +316,7 @@ test("a failed download does not lose the other attachments or throw", async () 
   const set = await collectLeadAttachments(
     sourceFor(metadata, { a: new GraphRequestError("Graph error 404", 404) }),
     "message-1",
+    noOcrText,
   );
 
   assert.deepEqual(
@@ -214,6 +340,7 @@ test("a throttled download is retried rather than skipped", async () => {
       },
     },
     "message-1",
+    noOcrText,
   );
 
   assert.equal(calls, 2);

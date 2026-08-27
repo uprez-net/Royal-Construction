@@ -190,13 +190,14 @@ function buildAttachmentPrompt(attachments: LeadAttachmentSet): string {
 
   for (const attachment of attachments.attachments) {
     if (attachment.kind === 'text') {
-      section += `\nContents of ${attachment.name}:\n${attachment.text}\n`;
+      section += `\nText read from ${attachment.name}:\n${attachment.text}\n`;
     }
   }
 
   section +=
     '\nAttachment rules:\n' +
     '- Use details from the attachments to fill Name, Email, ContactNo, Address, Type and Info.\n' +
+    '- Text read from an attachment is OCR output and may be garbled or incomplete. Use what is legible and do not invent values it does not contain.\n' +
     '- The email body and the attachments describe one enquiry; do not treat an attachment as a separate lead.\n' +
     '- Say in Info what the client sent (for example "attached floor plans for a granny flat").\n' +
     '- A genuine attachment such as plans, a sketch, a site photo or a written brief IS meaningful content: do not set Status = true for a thin body when the attachment carries the enquiry.\n' +

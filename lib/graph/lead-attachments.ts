@@ -1,13 +1,15 @@
 import type { GraphAttachmentMetadata } from './client';
 import { withGraphRetry } from './retry';
+import { isOcrConfigured, ocrFile, type OcrInput } from '@/lib/ocr';
 
 /**
  * An attachment prepared for the lead extractor.
  *
- * Split by how the model has to receive it. PDFs and photos go up as binary
- * file parts; text formats are decoded here and inlined as text, because a
- * provider's handling of a `text/csv` file part is far less predictable than
- * its handling of the same bytes as characters.
+ * Split by how the model has to receive it. Most files arrive as `text`: OCR
+ * reduces a plan set or a brief to characters far cheaper than shipping the
+ * binary, and text formats are simply decoded. `file` is the fallback for what
+ * OCR could not read — a site photo, a plan that is pure linework — where the
+ * model has to look at the thing itself.
  */
 export type LeadAttachment =
   | { kind: 'file'; name: string; mediaType: string; data: Buffer }
@@ -36,25 +38,48 @@ export const EMPTY_LEAD_ATTACHMENTS: LeadAttachmentSet = {
   skipped: [],
 };
 
-// What Gemini accepts as binary input. Anything outside this list is rejected
-// by the model rather than ignored, so it is filtered out here instead.
-const FILE_MEDIA_TYPES = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-]);
+const DOCX_MEDIA_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-// Formats we decode to characters instead of shipping as bytes.
-const TEXT_MEDIA_TYPES = new Set(['text/plain', 'text/csv', 'text/markdown']);
+interface MediaSupport {
+  /**
+   * How the file goes to OCR: as a document to be unpacked and parsed, as a
+   * still image, or not at all when its bytes are already characters.
+   */
+  ocr: 'document' | 'image' | null;
+  /**
+   * Whether the model can read the raw bytes itself. This is the fallback when
+   * OCR comes back empty — and for a format the model cannot take, the only
+   * alternative to OCR is dropping the file.
+   */
+  agent: boolean;
+}
+
+// Every format worth carrying, and what can be done with each. Anything absent
+// is filtered out before it is downloaded: the model rejects an unknown binary
+// rather than ignoring it, so an unfiltered .dwg would fail the whole call.
+const SUPPORTED_MEDIA: Record<string, MediaSupport> = {
+  'application/pdf': { ocr: 'document', agent: true },
+  // Word has no fallback — Gemini cannot open a .docx, so if OCR returns
+  // nothing there is nothing left to try.
+  [DOCX_MEDIA_TYPE]: { ocr: 'document', agent: false },
+  'image/png': { ocr: 'image', agent: true },
+  'image/jpeg': { ocr: 'image', agent: true },
+  'image/webp': { ocr: 'image', agent: true },
+  'image/heic': { ocr: 'image', agent: true },
+  'image/heif': { ocr: 'image', agent: true },
+  // Already text; OCR would be a round-trip to be told what we can read.
+  'text/plain': { ocr: null, agent: false },
+  'text/csv': { ocr: null, agent: false },
+  'text/markdown': { ocr: null, agent: false },
+};
 
 // Outlook sends plenty of attachments as application/octet-stream, and a web
 // form's mail relay is worse — the declared type is a hint, the extension is
 // what the sender actually chose.
 const EXTENSION_MEDIA_TYPES: Record<string, string> = {
   pdf: 'application/pdf',
+  docx: DOCX_MEDIA_TYPE,
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -86,6 +111,15 @@ const MIN_INLINE_BYTES = 40 * 1024;
 // One decoded text attachment should not be able to crowd the email body out
 // of the context window.
 const MAX_TEXT_CHARS = 20000;
+
+// OCR over a photo of a backyard returns a stray character off a letterbox or
+// a number plate. Below this the result is noise, and the image is better read
+// by the model that can actually see it.
+const MIN_OCR_TEXT_CHARS = 20;
+
+// One slow scan should not eat the invocation. Matches lib/workflow/project.ts,
+// where the same OCR endpoint is given the same budget.
+const OCR_TIMEOUT_MS = 75_000;
 
 const FILE_ATTACHMENT_ODATA_TYPE = '#microsoft.graph.fileAttachment';
 
@@ -142,7 +176,7 @@ export function selectLeadAttachments(metadata: GraphAttachmentMetadata[]): {
     }
 
     const mediaType = resolveMediaType(attachment.name, attachment.contentType);
-    if (!FILE_MEDIA_TYPES.has(mediaType) && !TEXT_MEDIA_TYPES.has(mediaType)) {
+    if (!SUPPORTED_MEDIA[mediaType]) {
       skip(`unreadable format ${mediaType || 'unknown'}`);
       continue;
     }
@@ -180,21 +214,107 @@ export interface LeadAttachmentSource {
   downloadMessageAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
 }
 
-function toLeadAttachment(
+type PreparedAttachment =
+  | { ok: true; attachment: LeadAttachment }
+  | { ok: false; reason: string };
+
+/** Injectable so the OCR-shaped decisions below can be tested without Mistral. */
+export type OcrReader = (input: OcrInput) => Promise<string>;
+
+const mistralOcrReader: OcrReader = async (input) => {
+  if (!isOcrConfigured()) {
+    console.warn(`  MISTRAL_AI_KEY is not set; skipping OCR for "${input.name}".`);
+    return '';
+  }
+
+  return ocrFile(input);
+};
+
+/**
+ * Reads a file through OCR, returning empty for anything that is not usable
+ * text.
+ *
+ * Never throws: OCR being down, unconfigured, or slow is a reason to fall back
+ * to the model, not to lose the attachment.
+ */
+async function readWithOcr(
+  reader: OcrReader,
+  name: string,
+  mediaType: string,
+  data: Buffer,
+  isImage: boolean,
+): Promise<string> {
+  try {
+    const text = await reader({
+      name,
+      mediaType,
+      data,
+      isImage,
+      timeoutMs: OCR_TIMEOUT_MS,
+    });
+    const trimmed = text.trim();
+    return trimmed.length >= MIN_OCR_TEXT_CHARS ? trimmed : '';
+  } catch (error) {
+    console.error(`  OCR failed for "${name}":`, error);
+    return '';
+  }
+}
+
+/**
+ * Turns downloaded bytes into something the extractor can use.
+ *
+ * OCR first: a plan set or a written brief reduces to text far cheaper than
+ * shipping the binary to the model, and it is the only way to read a .docx at
+ * all. What OCR cannot read — a site photo, a plan that is pure linework —
+ * falls back to the model, which can look at it. A format the model cannot
+ * take either is dropped, its name still reaching the prompt.
+ */
+async function prepareAttachment(
   metadata: GraphAttachmentMetadata,
   data: Buffer,
-): LeadAttachment {
+  ocr: OcrReader,
+): Promise<PreparedAttachment> {
   const mediaType = resolveMediaType(metadata.name, metadata.contentType);
+  const support = SUPPORTED_MEDIA[mediaType];
 
-  if (TEXT_MEDIA_TYPES.has(mediaType)) {
+  if (!support) {
+    return { ok: false, reason: `unreadable format ${mediaType || 'unknown'}` };
+  }
+
+  if (support.ocr === null) {
     return {
-      kind: 'text',
-      name: metadata.name,
-      text: data.toString('utf8').slice(0, MAX_TEXT_CHARS),
+      ok: true,
+      attachment: {
+        kind: 'text',
+        name: metadata.name,
+        text: data.toString('utf8').slice(0, MAX_TEXT_CHARS),
+      },
     };
   }
 
-  return { kind: 'file', name: metadata.name, mediaType, data };
+  const text = await readWithOcr(
+    ocr,
+    metadata.name,
+    mediaType,
+    data,
+    support.ocr === 'image',
+  );
+
+  if (text) {
+    return {
+      ok: true,
+      attachment: { kind: 'text', name: metadata.name, text: text.slice(0, MAX_TEXT_CHARS) },
+    };
+  }
+
+  if (support.agent) {
+    return {
+      ok: true,
+      attachment: { kind: 'file', name: metadata.name, mediaType, data },
+    };
+  }
+
+  return { ok: false, reason: 'no text found and the model cannot open the format' };
 }
 
 /**
@@ -208,6 +328,7 @@ function toLeadAttachment(
 export async function collectLeadAttachments(
   source: LeadAttachmentSource,
   messageId: string,
+  ocr: OcrReader = mistralOcrReader,
 ): Promise<LeadAttachmentSet> {
   if (!messageId) {
     return EMPTY_LEAD_ATTACHMENTS;
@@ -237,7 +358,13 @@ export async function collectLeadAttachments(
       const data = await withGraphRetry(`download ${item.name}`, () =>
         source.downloadMessageAttachment(messageId, item.id),
       );
-      attachments.push(toLeadAttachment(item, data));
+
+      const prepared = await prepareAttachment(item, data, ocr);
+      if (prepared.ok) {
+        attachments.push(prepared.attachment);
+      } else {
+        skipped.push({ name: item.name, reason: prepared.reason });
+      }
     } catch (error) {
       console.error(`  Failed to download attachment "${item.name}":`, error);
       skipped.push({ name: item.name, reason: 'download failed' });
