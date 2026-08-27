@@ -46,6 +46,8 @@ import TableView from "./views/table-view";
 import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
 import { useUser } from "@clerk/nextjs";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { leadStages } from "@/utils/validators/lead";
 
 type TabType = "table" | "followups" | "analytics";
 
@@ -240,6 +242,75 @@ export default function Leads() {
       hasOpenTask: hasOpenTaskParam,
     });
   };
+
+  /* ── WebMCP: tools scoped to this screen ──
+     Registered on mount and torn down on unmount, so an agent is only offered
+     the leads controls while the user is actually on the leads screen. These
+     drive the visible UI rather than re-querying behind it — the point of
+     exposing tools through the page instead of only through /api/mcp. */
+
+  useWebMcpTool({
+    name: "leads_set_search",
+    title: "Search the visible leads list",
+    description:
+      "Types a term into the search box on the leads screen the user is looking at, so the list on screen narrows to matching leads. Prefer this over get_leads when the user wants to see results rather than be told them. Pass an empty string to clear the search. Note the list only re-queries for terms of five characters or more, exactly as when a person types.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Text to search leads by. Empty string clears the search.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+    execute: async (input) => {
+      const query = String(input.query ?? "");
+      setActiveTab("table");
+      setSearchTerm(query);
+      return {
+        content: [{
+          type: "text" as const,
+          text: query
+            ? `Searching the visible leads list for "${query}".`
+            : "Cleared the leads search.",
+        }],
+      };
+    },
+  });
+
+  useWebMcpTool({
+    name: "leads_filter_by_stage",
+    title: "Filter the visible leads list",
+    description:
+      "Filters the leads list on screen by pipeline stage. Also accepts three views that are not stages: \"total\" for every lead, \"Archived\" for archived leads, and \"pendingFollowup\" for leads carrying at least one open task. Pass nothing to clear the filter.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        stage: {
+          type: "string",
+          enum: [...leadStages, "total", "Archived", "pendingFollowup"],
+          description: "The stage or view to filter to. Omit to clear.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true },
+    execute: async (input) => {
+      const stage = input.stage ? String(input.stage) : null;
+      handleMetricClick(stage);
+      return {
+        content: [{
+          type: "text" as const,
+          text: stage
+            ? `Filtered the visible leads list to ${stage}.`
+            : "Cleared the leads filter.",
+        }],
+      };
+    },
+  });
 
   const handlePageChange = useCallback(
     async (page: number) => {

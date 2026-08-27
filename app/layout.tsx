@@ -41,11 +41,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // it via calc(); unset everywhere else, so production is untouched.
   const isStaging = process.env.APP_ENV === "staging";
 
+  // Chrome 149-156 and Edge 150 gate document.modelContext behind an origin
+  // trial token, registered per-origin at chrome.com/origintrials. ChatGPT
+  // Desktop's built-in browser — the consumer this app targets — needs no
+  // token, so this is purely additional reach and stays inert when unset.
+  // Tokens expire with the trial and have to be reissued.
+  const webMcpOriginTrialToken = process.env.NEXT_PUBLIC_WEBMCP_ORIGIN_TRIAL_TOKEN;
+
   return (
     <html
       lang="en"
       className={`${sans.variable} ${heading.variable} ${mono.variable} h-full antialiased`}
     >
+      {webMcpOriginTrialToken ? (
+        <head>
+          <meta httpEquiv="origin-trial" content={webMcpOriginTrialToken} />
+        </head>
+      ) : null}
       <body
         className="min-h-full bg-background text-foreground"
         style={

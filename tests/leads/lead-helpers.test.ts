@@ -120,18 +120,29 @@ test("the offer path cannot put a lead in a closed stage without a reason", asyn
   assert.ok(!/:\s*"LOST"/.test(map), "no offer status may map a lead to LOST without a reason");
 });
 
-test("lead-write MCP tools report failures as errors", async () => {
+test("lead-write tools report failures as errors", async () => {
   const { readFileSync } = await import("node:fs");
-  const mcp = readFileSync("app/(mcp)/api/mcp/route.ts", "utf8");
-  // These tools declare an outputSchema, so a catch that returns neither
+  // The tool handlers moved out of app/(mcp)/api/mcp/route.ts into a registry
+  // shared with the WebMCP browser bridge; the rule they have to keep did not
+  // move. These tools declare an outputSchema, so a catch that returns neither
   // isError nor structuredContent fails SDK output validation and the real
   // message never reaches the agent.
+  const handlers = readFileSync("lib/tools/handlers.server.ts", "utf8");
   for (const verb of ["updating lead", "creating lead", "fetching leads"]) {
-    const at = mcp.indexOf(`Error ${verb}`);
+    const at = handlers.indexOf(`Error ${verb}`);
     assert.ok(at > -1, `no catch found for "${verb}"`);
-    const before = mcp.slice(Math.max(0, at - 400), at);
-    assert.ok(before.includes("isError: true"), `"${verb}" catch is missing isError: true`);
+    const before = handlers.slice(Math.max(0, at - 400), at);
+    assert.ok(before.includes("toToolError"), `"${verb}" catch does not go through toToolError`);
   }
+  // ...and toToolError is what actually sets the flag, for every tool rather
+  // than only the three that were fixed by hand.
+  const result = readFileSync("lib/tools/result.ts", "utf8");
+  const at = result.indexOf("export const toToolError");
+  assert.ok(at > -1, "toToolError is gone");
+  assert.ok(
+    result.slice(at, at + 200).includes("isError: true"),
+    "toToolError no longer sets isError: true",
+  );
 });
 
 /* ── stageOptionsFor ───────────────────────────────────────────────── */

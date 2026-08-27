@@ -2,7 +2,9 @@
 
 This document describes the current MCP server implementation in this repository, the tools it exposes, the inputs each tool accepts, and how a client can connect to it.
 
-The implementation lives in [app/api/mcp/route.ts](../app/api/mcp/route.ts). The server is built with `mcp-handler`, wraps requests with Clerk-based auth, and exposes a tool registry through `server.registerTool(...)`.
+The transport lives in [app/(mcp)/api/mcp/route.ts](../app/(mcp)/api/mcp/route.ts): built with `mcp-handler`, wrapped in Clerk-based auth, registering tools through `server.registerTool(...)`.
+
+The **tools themselves** live in [lib/tools/](../lib/tools/) — `manifest.ts` for the descriptors and `handlers.server.ts` for the implementations, joined by `registry.server.ts`. That registry is shared with the browser-side WebMCP surface, so the two transports expose the same tools by construction. See [webmcp-capability.md](./webmcp-capability.md).
 
 ## How It Works
 
@@ -11,10 +13,11 @@ At a high level, the MCP server follows this flow:
 1. A client connects to the MCP endpoint.
 2. The request passes through the `withMcpAuth(...)` wrapper.
 3. Clerk verifies the bearer token and attaches auth context to the request.
-4. `createMcpHandler(...)` creates the MCP server instance.
+4. `createMcpHandler(...)` creates the MCP server instance and iterates `TOOL_REGISTRY`.
 5. Each tool validates its input with Zod schemas from `utils/validators/*`.
-6. The tool handler calls the matching `lib/data/*` helper or a direct integration helper.
-7. The result is returned as structured MCP content and also serialized as text for client compatibility.
+6. Tools declaring a `requiredRole` are checked against the caller's role before dispatch.
+7. The tool handler calls the matching `lib/data/*` helper or a direct integration helper.
+8. The result is returned as structured MCP content and also serialized as text for client compatibility.
 
 Most read tools call cached helpers such as `getCachedProjects(...)`, `getCachedProjectById(...)`, `getCachedTradies(...)`, and `getCachedTradieCoordinationDashboard(...)`. Write tools call the underlying mutation helpers directly and then return the newly created or refreshed payload.
 
@@ -30,6 +33,7 @@ The MCP server is protected.
 - Requests must present a valid Clerk bearer token.
 - The auth wrapper uses `withMcpAuth(...)` and the request must satisfy the required scope configured by the server.
 - Tools that mutate data also depend on the authenticated user context.
+- `delete_lead` and `update_variation_status` additionally require the `ADMIN` role, enforced from the manifest before the handler runs.
 
 In practice, MCP clients need to support bearer-token or OAuth-style auth. If a client cannot attach an access token, it will not be able to call the protected tools.
 
@@ -53,7 +57,7 @@ The table below reflects the current tool registry in [app/api/mcp/route.ts](../
 | `create_milestone` | Create a milestone | `projectId`, `name`, optional `description`, `targetDate`, `budget`, optional `parentId` | Milestone payload |
 | `add_milestone_photos` | Attach uploaded files to a milestone | `projectId`, `milestoneId`, `fileIds` | Milestone photo attachment payload |
 | `update_milestone` | Update milestone status or dates | `projectId`, `milestoneId`, `status`, optional `startDate`, optional `actualDate`, optional `spend` | Milestone payload |
-| `get_leads` | List all leads | No inputs | Lead array |
+| `get_leads` | List all leads | `q`, `status`, `filterTiming`, `page`, `limit` | Lead array |
 | `create_lead` | Create a lead | `name`, optional `phone`, optional `email`, optional `location`, optional `source`, optional `stage`, optional `assigned`, optional `budget`, optional `notes`, optional `followupDate`, optional `followupTime`, optional `followupNotes`, optional `lostReason`, optional `urgent`, optional `history` | Lead payload |
 | `update_lead` | Update a lead | `leadId` plus any lead update fields | Lead payload |
 | `delete_lead` | Delete a lead | `leadId` | `{ success: true }` |
@@ -63,7 +67,7 @@ The table below reflects the current tool registry in [app/api/mcp/route.ts](../
 | `update_tradie_schedule` | Update schedule status | `scheduleId`, `status` | Schedule payload plus `requiresReplacement` |
 | `add_material` | Add material to a project | `projectId`, `materialData` with `name`, `category`, `specifications`, `quantity`, `unitCost`, `totalCost` | Material payload |
 | `address_council_lookup` | Lookup council/address suggestions | `query`, optional `limit` | Address suggestion payload |
-| `upload_file` | Upload a file to Blob and persist a file record | `file`, `projectId`, optional `milestoneId` | `{ fileId }` |
+| `upload_file` | Upload a file to Blob and persist a file record | `fileBase64`, `fileName`, `fileSize`, `projectId`, optional `milestoneId` | `{ fileId }` |
 
 ## Input Notes By Tool Group
 
@@ -103,7 +107,7 @@ The lead tools accept the same shapes as the lead API routes.
 
 ### File and address tools
 
-`upload_file` expects a real `File` object and can only be used by MCP clients that support binary file transport.
+`upload_file` takes the file as base64 in its arguments. It is MCP-only: a browser agent cannot produce that payload, so it is not registered over WebMCP.
 
 `address_council_lookup` is a thin client around the address lookup HTTP endpoint. It accepts a free-text address query and an optional result limit.
 
@@ -134,7 +138,7 @@ Before you rely on a client, verify that it can do the following:
 - call streamable HTTP or HTTP-based MCP endpoints
 - attach bearer tokens to requests
 - handle JSON tool schemas
-- send `File` objects if you need `upload_file`
+- base64-encode file content if you need `upload_file`
 - surface tool lists and tool errors clearly enough for debugging
 
 ## Practical Usage Examples
@@ -156,4 +160,4 @@ Before you rely on a client, verify that it can do the following:
 - Claude Code is the easiest direct client for the current remote HTTP server.
 - Claude Desktop needs a local bridge or a local MCP server shape to consume this remote endpoint cleanly.
 
-If you want, I can also add a short `README` pointer or a sample configuration snippet for a specific client such as Claude Desktop, Cursor, or Continue.
+For the browser-side surface — same tools, no OAuth, plus tools that move the UI — see [webmcp-capability.md](./webmcp-capability.md).

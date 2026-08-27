@@ -23,10 +23,13 @@ import { Notifications } from "./notifications";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WebMcpProvider } from "@/components/webmcp/webmcp-provider";
+import type { AppRole } from "@/lib/tools/types";
 
 export function AppShell({
   isAdmin,
   isSignedIn,
+  role,
   // description,
   breadcrumbs,
   // actions,
@@ -34,6 +37,7 @@ export function AppShell({
 }: {
   isAdmin: boolean;
   isSignedIn: boolean;
+  role?: AppRole;
   description?: string;
   breadcrumbs?: string[];
   actions?: ReactNode;
@@ -74,6 +78,9 @@ export function AppShell({
 
   return (
     <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-slate-900">
+      {/* Registers this app's tools with the browser's AI agent (WebMCP).
+          Renders nothing, and no-ops in browsers without document.modelContext. */}
+      {isSignedIn ? <WebMcpProvider role={role} /> : null}
       {/* Clean Light Background matching Email Theme */}
       <div className="flex h-full">
         

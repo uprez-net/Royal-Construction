@@ -10,6 +10,7 @@ async function LayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <AppShell
       isAdmin={user?.role === "ADMIN"}
+      role={user?.role}
       description="Royal Constructions - One place for all your construction project management needs."
       isSignedIn={!!user}
     >
