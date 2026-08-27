@@ -1,5 +1,5 @@
-import type { WorkBook, WorkSheet } from "xlsx";
-import { utils } from "xlsx";
+import type { WorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
+import { displayRows, rawRows } from "@/lib/spreadsheet/workbook-grid";
 import type {
   OfferAreaBasis,
   OfferAreaCalculator,
@@ -49,16 +49,16 @@ const PROJECT_PHASE_HEADERS = [
 ] as const;
 
 export function parseRoyalQuoteWorkbook(
-  workbook: WorkBook,
+  workbook: WorkbookGrid,
   sourceName: string,
 ): OfferWorkbookImportResult {
-  const quoteRows = readRows(workbook.Sheets.QUOTE, true);
-  const sampleRows = readRows(workbook.Sheets["SAMPLE QUOTE"], true);
-  const sampleDisplayRows = readRows(workbook.Sheets["SAMPLE QUOTE"], false);
-  const costingDisplayRows = readRows(workbook.Sheets["costing report"], false);
-  const areaRows = readRows(workbook.Sheets["area "], true);
-  const coverRows = readRows(workbook.Sheets.COVER, true);
-  const settingsRows = readRows(workbook.Sheets.SETTINGS, true);
+  const quoteRows = rawRows(workbook, "QUOTE");
+  const sampleRows = rawRows(workbook, "SAMPLE QUOTE");
+  const sampleDisplayRows = displayRows(workbook, "SAMPLE QUOTE");
+  const costingDisplayRows = displayRows(workbook, "costing report");
+  const areaRows = rawRows(workbook, "area ");
+  const coverRows = rawRows(workbook, "COVER");
+  const settingsRows = rawRows(workbook, "SETTINGS");
   const costLines =
     quoteRows.length > 0 ? parseV2QuoteRows(quoteRows) : parseSampleQuoteRows(sampleRows);
   const { areaBasis, areaCalculator } =
@@ -66,9 +66,9 @@ export function parseRoyalQuoteWorkbook(
   const formulaErrors = [
     ...findFormulaErrors("SAMPLE QUOTE", sampleDisplayRows),
     ...findFormulaErrors("costing report", costingDisplayRows),
-    ...findFormulaErrors("area", readRows(workbook.Sheets["area "], false)),
-    ...findFormulaErrors("QUOTE", readRows(workbook.Sheets.QUOTE, false)),
-    ...findFormulaErrors("COVER", readRows(workbook.Sheets.COVER, false)),
+    ...findFormulaErrors("area", displayRows(workbook, "area ")),
+    ...findFormulaErrors("QUOTE", displayRows(workbook, "QUOTE")),
+    ...findFormulaErrors("COVER", displayRows(workbook, "COVER")),
   ];
   // The real build-up (fee % + additions) lives on the SAMPLE QUOTE sheet; the
   // SETTINGS sheet is a rarely-present fallback.
@@ -92,21 +92,6 @@ export function parseRoyalQuoteWorkbook(
     validationMessages,
     ignoredProjectFields: findIgnoredProjectFields(costingDisplayRows),
   };
-}
-
-function readRows(
-  sheet: WorkSheet | undefined,
-  raw: boolean,
-): readonly (readonly unknown[])[] {
-  if (sheet === undefined) {
-    return [];
-  }
-
-  return utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    raw,
-    defval: "",
-  });
 }
 
 function getCell(

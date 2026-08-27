@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { fetchAllLeads } from "@/lib/leads/leads-service";
+import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { Download, Plus, RotateCw } from "lucide-react";
@@ -78,21 +79,11 @@ export function DashboardHeader({
           `${e.date} ${e.time}`.trim(),
         ]),
       );
-      // Loaded on demand: see projects-client.tsx.
-      const XLSX = await import("xlsx");
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]),
-        "Lead Data",
-      );
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]),
-        "History",
-      );
-      XLSX.writeFile(
-        wb,
+      await downloadWorkbook(
+        [
+          { name: "Lead Data", rows: [leadHeader, ...leadRows] },
+          { name: "History", rows: [historyHeader, ...historyRows] },
+        ],
         `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
       );
     } catch (error) {

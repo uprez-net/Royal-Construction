@@ -70,6 +70,7 @@
     "dompurify": "^3.4.9",
     "dotenv": "^17.4.2",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "franc": "^6.2.0",
     "input-otp": "^1.4.2",
     "libphonenumber-js": "^1.13.1",
@@ -106,7 +107,6 @@
     "vaul": "^1.1.2",
     "workflow": "^4.4.0",
     "xero-node": "^18.0.0",
-    "xlsx": "^0.18.5",
     "zod": "4"
   },
   "devDependencies": {
