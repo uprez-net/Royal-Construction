@@ -2,6 +2,7 @@
 
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { redirect } from "next/navigation";
 
 export default function TradieApprovalError({
   error,
@@ -53,7 +54,7 @@ export default function TradieApprovalError({
             </Button>
             <Button
               variant="outline"
-              onClick={() => (window.location.href = "/")}
+              onClick={() => redirect("/")}
               className="border-red-200 text-red-700 hover:bg-red-100"
             >
               Return Home
