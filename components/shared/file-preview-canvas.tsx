@@ -12,7 +12,7 @@
  *    npx shadcn@latest add dialog button tooltip scroll-area skeleton badge tabs separator
  *
  * 2. Rendering engines:
- *    npm install react-pdf docx-preview xlsx
+ *    npm install react-pdf docx-preview exceljs
  *
  * 3. Requires the companion file `pdf-viewer.tsx` in the same folder. The
  *    PDF engine (pdfjs-dist) touches browser-only globals as soon as its
@@ -72,7 +72,6 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { renderAsync } from "docx-preview";
-import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -85,6 +84,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { SheetMerge } from "@/lib/spreadsheet/workbook-grid";
+import { readWorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
 import {
   ChevronLeft,
   ChevronRight,
@@ -122,7 +123,7 @@ type FileKind = "pdf" | "docx" | "xlsx" | "unsupported";
 interface SheetData {
   name: string;
   rows: string[][];
-  merges: XLSX.Range[];
+  merges: SheetMerge[];
 }
 
 export interface FilePreviewCanvasProps {
@@ -148,7 +149,9 @@ function detectFileKind(url: string): FileKind {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "pdf") return "pdf";
   if (ext === "docx") return "docx";
-  if (ext === "xlsx" || ext === "xls") return "xlsx";
+  // ExcelJS reads the OOXML formats only, so a legacy binary .xls is not
+  // previewable — it falls through to the unsupported card and its download.
+  if (ext === "xlsx" || ext === "xlsm") return "xlsx";
   return "unsupported";
 }
 
@@ -335,16 +338,16 @@ function DocxViewer({
 
 // ── XLSX viewer ────────────────────────────────────────────────────────
 
-function buildMergeLookup(merges: XLSX.Range[]) {
+function buildMergeLookup(merges: SheetMerge[]) {
   const skip = new Set<string>();
   const anchors = new Map<string, { rowSpan: number; colSpan: number }>();
   for (const m of merges) {
-    const rowSpan = m.e.r - m.s.r + 1;
-    const colSpan = m.e.c - m.s.c + 1;
-    anchors.set(`${m.s.r}_${m.s.c}`, { rowSpan, colSpan });
-    for (let r = m.s.r; r <= m.e.r; r++) {
-      for (let c = m.s.c; c <= m.e.c; c++) {
-        if (r === m.s.r && c === m.s.c) continue;
+    const rowSpan = m.endRow - m.startRow + 1;
+    const colSpan = m.endColumn - m.startColumn + 1;
+    anchors.set(`${m.startRow}_${m.startColumn}`, { rowSpan, colSpan });
+    for (let r = m.startRow; r <= m.endRow; r++) {
+      for (let c = m.startColumn; c <= m.endColumn; c++) {
+        if (r === m.startRow && c === m.startColumn) continue;
         skip.add(`${r}_${c}`);
       }
     }
@@ -464,16 +467,12 @@ export default function FilePreviewCanvas({
         const res = await fetch(url);
         if (!res.ok) throw new Error(String(res.status));
         const buffer = await res.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: "array", cellStyles: true });
-        const parsed: SheetData[] = workbook.SheetNames.map((name) => {
-          const ws = workbook.Sheets[name];
-          const rows = XLSX.utils.sheet_to_json<string[]>(ws, {
-            header: 1,
-            raw: false,
-            defval: "",
-          });
-          return { name, rows, merges: (ws["!merges"] as XLSX.Range[]) || [] };
-        });
+        const workbook = await readWorkbookGrid(buffer);
+        const parsed: SheetData[] = [...workbook.values()].map((sheet) => ({
+          name: sheet.name,
+          rows: sheet.display.map((row) => [...row]),
+          merges: [...sheet.merges],
+        }));
         if (!cancelled) {
           setSheets(parsed);
           setLoading(false);
@@ -744,7 +743,7 @@ export default function FilePreviewCanvas({
                     <FileWarning className="h-8 w-8 text-muted-foreground" />
                   }
                   title="Unsupported file type"
-                  description="This preview supports PDF, DOCX and XLSX files."
+                  description="This preview supports PDF, DOCX and XLSX files. Save a legacy .xls workbook as .xlsx to preview it."
                   action={
                     <Button size="sm" onClick={handleDownload}>
                       Download file

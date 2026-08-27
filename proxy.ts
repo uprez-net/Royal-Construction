@@ -30,7 +30,11 @@ const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
 const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
 const isAdminRoute = createRouteMatcher(["/admin(.*)"])
 
-export default clerkMiddleware(async (auth, request) => {
+// Next 16 renamed the `middleware` convention to `proxy` and deprecated the
+// `middleware` export name. A `proxy.ts` file is resolved as `mod.proxy ||
+// mod.default`, so exporting the handler as `proxy` is the non-deprecated
+// form — keep it the only handler export, multiple are not supported.
+export const proxy = clerkMiddleware(async (auth, request) => {
   // Dev auth routes always pass through — they create the session
   if (isDevAuthRoute(request)) return
 
