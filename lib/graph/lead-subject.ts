@@ -90,6 +90,47 @@ const ENQUIRY = [
 ].join("|");
 
 /**
+ * Live-contract administration. A first approach never uses these words.
+ *
+ * An earlier version of this list used bare nouns ("inspection", "payment",
+ * "supplier") and an audit of 800 real messages showed it never fired, so it
+ * was deleted outright. Deleting was the wrong correction: the audit shows
+ * what arrives at info@ today, not what this vocabulary means. Variations,
+ * progress claims, RFIs and purchase orders are the daily language of a live
+ * job — this app has a Variations feature — and only the fact that such mail
+ * currently goes to a different address keeps it out of this inbox. Route one
+ * job's correspondence here and every message opens a fake customer and posts
+ * the welcome email to a certifier or a council officer.
+ *
+ * So the guard is narrow rather than absent: phrases that are unmistakably
+ * contract administration, never a single broad noun that a customer might
+ * reach for. Add phrases here, not words.
+ */
+const PROJECT_ADMIN = [
+  "variation",
+  "progress claim",
+  "purchase order",
+  "remittance",
+  "rfi",
+  "request for (?:further )?information",
+  "payment request",
+  "request for payment",
+  "inspection request",
+  "request for inspection",
+  "supplier quote",
+  "estimate revision",
+  "revised estimate",
+  "practical completion",
+  "site instruction",
+  "final account",
+  "defects? (?:list|liability|notice)",
+  "invoice",
+].join("|");
+
+/** Vetoes a pattern match, like SOLICITATION. */
+const PROJECT_ADMIN_PATTERN = new RegExp(String.raw`\b(?:${PROJECT_ADMIN})\b`);
+
+/**
  * Mail from someone selling to the builder rather than buying from them.
  *
  * This is what the info@ mailbox actually receives: an audit of 800 messages
@@ -147,8 +188,11 @@ const OWN_OUTBOUND = [
   "your building (?:proposal|offer)",
   "a royal constructions offer for your",
   "welcome to royal constructions",
-  "next step for your",
-  "following up on your",
+  // Templates whose opening words a customer could also write are pinned to
+  // the rest of the shape we actually send: ours names a location or a date,
+  // a customer's does not. "Site visit for my new build" is a customer.
+  "next step for your .{0,60}\\bin\\b",
+  "following up on your .{0,60}\\bin\\b",
   "royal constructions portfolio for your",
   "finishes catalogue for your",
   "quotation next steps for",
@@ -156,9 +200,9 @@ const OWN_OUTBOUND = [
   "residential building contract",
   "offer acceptance",
   "variation update for",
-  "site visit for",
+  "site visit for .{0,60}\\bon\\b",
   "availability confirmation required",
-  "consultation with",
+  "consultation with .{0,60}royal constructions",
   "work reminder",
   "follow-?up (?:reminder|calendar event)",
   "lead note",
@@ -280,6 +324,9 @@ export function isLeadSubject(subject: string | null | undefined): boolean {
   if (normalized.length > MAX_MATCHABLE_SUBJECT) return false;
   // Selling outranks the patterns: a vendor writes in the customer's
   // vocabulary, and this mailbox receives more vendors than customers.
+  // Administration on a live job outranks the patterns: the two vocabularies
+  // are broad enough that a builder's routine mail hits them by coincidence.
+  if (PROJECT_ADMIN_PATTERN.test(normalized)) return false;
   if (SOLICITATION_PATTERN.test(normalized)) return false;
   // Our own outbound, arriving back as a cc or self-copy.
   if (OWN_OUTBOUND_PATTERN.test(normalized)) return false;

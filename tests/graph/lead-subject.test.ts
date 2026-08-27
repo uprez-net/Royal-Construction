@@ -159,6 +159,52 @@ test("no pattern lost a word boundary to template-literal escaping", () => {
   }
 });
 
+test("live-contract administration is not a new lead", () => {
+  // The pattern layer needs one word from each of two broad lists, and a
+  // builder's routine mail supplies both by coincidence: "request" from one,
+  // "extension" from the other. Past the gate each of these creates a Lead and
+  // posts the welcome email, so a council officer or certifier is enrolled as a
+  // new customer once per message they send.
+  //
+  // A first version of this guard used bare nouns, never fired in an 800-message
+  // audit, and was deleted as imaginary. That was the wrong correction — the
+  // audit describes what reaches info@ today, not what the words mean. These are
+  // the daily vocabulary of a live job and this app has a Variations feature;
+  // only the current routing of that mail keeps it out. Narrow, do not delete.
+  for (const s of [
+    "Variation request - extension at 12 Smith St",
+    "Inspection request - duplex at 4 Jones Ave",
+    "Council: request for further information, extension DA-2024-119",
+    "Payment request - renovation stage 3",
+    "Purchase order 8891 - townhouse tiling quote",
+    "Supplier quote - duplex windows",
+    "Estimate revision for the extension - internal",
+    "Progress claim 4 - duplex at 4 Jones Ave, quote attached",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
+test("a customer who echoes our own wording is still a lead", () => {
+  // OWN_OUTBOUND pins each template to the shape we actually send — ours names a
+  // location or a date, a customer's does not. Before that narrowing, the bare
+  // stem "following up on your" swallowed the first subject here, which is an
+  // entirely ordinary thing for a customer to write back.
+  for (const s of [
+    "Following up on your quote for my extension",
+    "Following up on the granny flat estimate",
+  ]) {
+    assert.equal(isLeadSubject(s), true, s);
+  }
+  // ...while the templates themselves, which carry the location, still veto.
+  for (const s of [
+    "Following up on your Double Storey, Granny Flat in Lot 3100 in Orchard Hills",
+    "Consultation with Jane - Royal Constructions",
+  ]) {
+    assert.equal(isLeadSubject(s), false, s);
+  }
+});
+
 test("vendors selling to the builder are not leads", () => {
   // What this mailbox actually receives. An audit of 800 real messages found
   // trades, recruiters and suppliers outnumber customers, and they write in the
@@ -229,7 +275,7 @@ test("a customer stating the job plainly is a lead", () => {
 });
 
 test("the vetoes do not swallow a genuine first approach", () => {
-  // The counterpart to the test above: widening PROJECT_ADMIN must not start
+  // The counterpart to the tests above: widening any veto must not start
   // rejecting the customer phrasings the patterns exist to catch.
   for (const s of [
     "Custom Build Quote",
