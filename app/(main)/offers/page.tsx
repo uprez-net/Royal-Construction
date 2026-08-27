@@ -41,7 +41,6 @@ async function OfferPageClient() {
             rejected: offerKPIs.rejectedOffers.total,
             sent: offerKPIs.sentOffers.total,
           }}
-          initialTotalCount={offerKPIs.allOffers.total}
         />
         <OfferTable serverOffers={offers} />
       </Card>

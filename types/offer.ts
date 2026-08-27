@@ -104,6 +104,18 @@ export interface OfferKPIs {
     sentOffers: KPIResult;
 }
 
+/**
+ * The tab/filter buckets the offers table paginates by. These are *not*
+ * individual `OfferStatus` values: the offer lifecycle introduced terminal
+ * states (AGREED, TENDER_*, CONTRACT_*, PROJECT, *_DECLINED) that the old
+ * single-status tabs silently dropped. Each bucket maps to the same set of
+ * statuses the KPI query in `getOfferKPIs` uses, so a lead whose representative
+ * revision is `TENDER_SIGNED` counts (and filters) as "approved" here exactly
+ * as it does in the KPI cards. Buckets overlap by design — `TENDER_SENT` is
+ * both "sent" and "approved" — mirroring the KPI query.
+ */
+export type OfferStatusBucket = "all" | "pending" | "approved" | "rejected" | "sent";
+
 export const OfferStatusLabels: Record<OfferStatus, string> = {
     PENDING: "Pending",
     ACCEPTED: "Approved",
