@@ -617,11 +617,20 @@ const projectsSlice = createSlice({
             state.activeProject.status = "ACTIVE";
           }
           if (milestoneIndex !== -1) {
+            // Captured before the merge: a milestone can be updated more than
+            // once while DONE (editing its target date, correcting the spend),
+            // and adding the full amount each time inflated the project's
+            // "Spent to date" by one milestone per edit. Apply the difference.
+            const spendBeforeUpdate =
+              Number(state.activeProject!.milestones[milestoneIndex].spend) || 0;
+
             state.activeProject!.milestones[milestoneIndex] = { ...state.activeProject!.milestones[milestoneIndex], ...action.payload };
             const parentId = state.activeProject!.milestones[milestoneIndex].parentId;
             if (action.payload.status === "DONE") {
-              const spent = Number(action.payload.spend) ?? 0;
-              state.activeProject!.spent = (Number(state.activeProject!.spent) + spent).toString();
+              const spendAfterUpdate = Number(action.payload.spend) || 0;
+              state.activeProject!.spent = (
+                Number(state.activeProject!.spent) - spendBeforeUpdate + spendAfterUpdate
+              ).toString();
             }
             if (parentId && (action.payload.status === "DONE" || action.payload.status === "NOT_REQUIRED")) {
               const allChildrenMilestonesNotCompleted = state.activeProject!.milestones.filter((m) => m.parentId === parentId && !["DONE", "NOT_REQUIRED"].includes(m.status));

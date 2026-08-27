@@ -26,11 +26,7 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import {
-  MilestoneStatus,
-  TradieApprovalActionType,
-  TradieScheduleStatus,
-} from "@prisma/client";
+import { MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
@@ -352,17 +348,23 @@ export function ModalManager() {
         />
       );
     }
-    case "addMilestone":
-      const { projectId: addMilestoneProjectId } = modal.payload as {
+    case "addMilestone": {
+      const {
+        projectId: addMilestoneProjectId,
+        projectStage: addMilestoneProjectStage,
+      } = modal.payload as {
         projectId: string;
+        projectStage?: ProjectStage;
       };
       return (
         <AddMilestoneModal
           projectId={addMilestoneProjectId}
+          projectStage={addMilestoneProjectStage}
           isOpen
           onClose={handleClose}
         />
       );
+    }
     case "updateMilestoneStatus":
       const {
         milestoneId: updateMilestoneStatusId,

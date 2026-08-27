@@ -1,12 +1,38 @@
-import {
-  CalendarCheck2,
-  Plus,
-  DollarSign,
-  ListChecks,
-  ChevronsDown,
-  Check,
-} from "lucide-react";
+"use client";
+
+import { Fragment, useMemo, useState } from "react";
+import { addWeeks, format, isWithinInterval } from "date-fns";
+import { CalendarCheck2, ChevronDown, Lock, Plus } from "lucide-react";
+
+import { StatusPill } from "@/components/common/status-pill";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  duenessOf,
+  findWorkingStageIndex,
+  lastCompleted,
+  nextActivity,
+  partitionActivities,
+  stageClaimAmount,
+  stageRollup,
+  stageState,
+  type StageState,
+} from "@/lib/projects/milestone-ledger";
+import {
+  matchPaymentStagesToProjectStages,
+} from "@/lib/projects/payment-stages";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
+import { cn } from "@/lib/utils";
 import {
   PROJECT_STAGE_LABELS,
   PROJECT_STAGE_PERCENTAGE,
@@ -16,25 +42,10 @@ import {
   type TradieScheduleWithTradieAndMilestone,
   type UIMilestone,
 } from "@/types/project";
-import {
-  formatPaymentStageLabel,
-  matchPaymentStagesToProjectStages,
-} from "@/lib/projects/payment-stages";
 import { currency } from "@/utils/formatters";
-import { Button } from "@/components/ui/button";
-import { useAppDispatch } from "@/lib/store/hooks";
-import { openModal } from "@/lib/store/slices/uiSlice";
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
-import { useMemo } from "react";
+
 import { MilestoneCard } from "./milestone-tab/milestone-card";
-import { addWeeks, isWithinInterval } from "date-fns";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -79,6 +90,100 @@ const convertToVisualMilestone = (
   return rootMilestones;
 };
 
+interface LedgerStage {
+  stage: ProjectStage;
+  label: string;
+  percentage: number | null;
+  claim: number | null;
+  milestones: UIMilestone[];
+  state: StageState;
+  /** False while an earlier stage is still open: stages are claimed in order. */
+  isWorkable: boolean;
+  /** The stage holding this one up, when it is gated. */
+  blockedBy: LedgerStage | null;
+}
+
+function shortDate(value: Date) {
+  return format(value, "d MMM");
+}
+
+/**
+ * What a stage is waiting on, in one line.
+ *
+ * Every stage carries one — including the finished and the gated — because the
+ * question this tab exists to answer is "what happens next", and a row that
+ * answers it only when expanded makes the user open all six to find out.
+ */
+function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
+  const next = nextActivity(ledgerStage.milestones);
+  const rollup = stageRollup(ledgerStage.milestones);
+
+  if (ledgerStage.state === "complete") {
+    return (
+      <span className="text-muted-foreground">All {rollup.total} done</span>
+    );
+  }
+
+  if (!next) {
+    return <span className="text-muted-foreground">No activities yet</span>;
+  }
+
+  const name = next.parent
+    ? `${next.parent.name} › ${next.activity.name}`
+    : next.activity.name;
+
+  if (!ledgerStage.isWorkable) {
+    return (
+      <>
+        <span className="block truncate font-medium text-foreground">
+          {name}
+        </span>
+        <span className="block text-muted-foreground">
+          from{" "}
+          <span className="font-mono tabular-nums">
+            {shortDate(new Date(next.activity.targetDate))}
+          </span>
+          {ledgerStage.blockedBy ? ` · after ${ledgerStage.blockedBy.label}` : null}
+        </span>
+      </>
+    );
+  }
+
+  const dueness = duenessOf(new Date(next.activity.targetDate), new Date());
+  const detail =
+    dueness.kind === "overdue"
+      ? `Overdue ${Math.abs(dueness.days)}d`
+      : dueness.kind === "today"
+        ? "Due today"
+        : dueness.kind === "soon"
+          ? `Due in ${dueness.days}d`
+          : `Due ${shortDate(new Date(next.activity.targetDate))}`;
+
+  return (
+    <>
+      <span className="block truncate font-medium text-foreground">{name}</span>
+      <span
+        className={cn(
+          "block",
+          dueness.kind === "overdue"
+            ? "font-semibold text-destructive-ink"
+            : dueness.kind === "today" || dueness.kind === "soon"
+              ? "font-semibold text-warning-ink"
+              : "text-muted-foreground",
+        )}
+      >
+        {detail}
+      </span>
+    </>
+  );
+}
+
+function StageStatusPill({ state }: { state: StageState }) {
+  if (state === "complete") return <StatusPill tone="success">Complete</StatusPill>;
+  if (state === "active") return <StatusPill tone="warning">Active</StatusPill>;
+  return <StatusPill tone="neutral">Upcoming</StatusPill>;
+}
+
 export function ProjectMilestonesTab({
   project,
   isAdmin,
@@ -87,7 +192,8 @@ export function ProjectMilestonesTab({
   isAdmin: boolean;
 }) {
   const dispatch = useAppDispatch();
-  const projectStageData = project.requirements?.commercialsAndClaims?.paymentStages;
+  const projectStageData =
+    project.requirements?.commercialsAndClaims?.paymentStages;
   // The contract's own claim schedule wins over the static stage table: the
   // percentages there are what the owner actually agreed to pay per stage.
   const contractStages = useMemo(
@@ -98,17 +204,82 @@ export function ProjectMilestonesTab({
     () => convertToVisualMilestone(project.milestones),
     [project.milestones],
   );
-  const visualMilestonesGroupedByProjectStage = useMemo(() => {
-    return visualMilestones.reduce<Record<ProjectStage, UIMilestone[]>>(
+
+  const ledgerStages = useMemo<LedgerStage[]>(() => {
+    const grouped = visualMilestones.reduce<Record<string, UIMilestone[]>>(
       (acc, milestone) => {
-        const stage = milestone.projectStage;
-        acc[stage] = acc[stage] ?? [];
-        acc[stage].push(milestone);
+        acc[milestone.projectStage] = acc[milestone.projectStage] ?? [];
+        acc[milestone.projectStage].push(milestone);
         return acc;
       },
-      {} as Record<ProjectStage, UIMilestone[]>,
+      {},
     );
-  }, [visualMilestones]);
+
+    // Milestones arrive sorted by `order`, which need not follow the contract
+    // stages, so the ledger is driven by the canonical stage sequence instead.
+    const populated = (
+      Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[]
+    ).filter((stage) => grouped[stage]?.length);
+
+    const projectBudget = Number(project.totalBudget);
+    const states = populated.map((stage) => stageState(grouped[stage]));
+    const workingIndex = findWorkingStageIndex(states);
+
+    const rows: LedgerStage[] = populated.map((stage, index) => {
+      const contractStage = contractStages[stage];
+      const percentage =
+        contractStage?.percentage ??
+        (PROJECT_STAGE_PERCENTAGE[stage] != null
+          ? PROJECT_STAGE_PERCENTAGE[stage] * 100
+          : null);
+      const claim = stageClaimAmount(
+        contractStage?.amount,
+        percentage,
+        projectBudget,
+      );
+
+      return {
+        stage,
+        label: PROJECT_STAGE_LABELS[stage] ?? stage,
+        percentage,
+        claim,
+        milestones: grouped[stage],
+        state: states[index],
+        isWorkable: index === workingIndex,
+        blockedBy: null,
+      };
+    });
+
+    // A gated stage names the stage in front of it, which is the one currently
+    // being worked — not simply the row above, which may itself be complete.
+    const gate = workingIndex >= 0 ? rows[workingIndex] : null;
+    return rows.map((row) =>
+      row.isWorkable || row.state === "complete"
+        ? row
+        : { ...row, blockedBy: gate },
+    );
+  }, [visualMilestones, contractStages, project.totalBudget]);
+
+  const workingStage = ledgerStages.find((row) => row.isWorkable);
+
+  const [openStages, setOpenStages] = useState<ProjectStage[]>(() =>
+    workingStage ? [workingStage.stage] : [],
+  );
+  const [stagesShowingDone, setStagesShowingDone] = useState<ProjectStage[]>([]);
+
+  const toggleStage = (stage: ProjectStage) =>
+    setOpenStages((open) =>
+      open.includes(stage)
+        ? open.filter((candidate) => candidate !== stage)
+        : [...open, stage],
+    );
+
+  const toggleDone = (stage: ProjectStage) =>
+    setStagesShowingDone((shown) =>
+      shown.includes(stage)
+        ? shown.filter((candidate) => candidate !== stage)
+        : [...shown, stage],
+    );
 
   const tradieAlerts = useMemo(() => {
     const now = new Date();
@@ -161,9 +332,12 @@ export function ProjectMilestonesTab({
     );
   };
 
-  const handleAddMilestone = () => {
+  const handleAddMilestone = (stage: ProjectStage) => {
     dispatch(
-      openModal({ type: "addMilestone", payload: { projectId: project.id } }),
+      openModal({
+        type: "addMilestone",
+        payload: { projectId: project.id, projectStage: stage },
+      }),
     );
   };
 
@@ -216,64 +390,57 @@ export function ProjectMilestonesTab({
     );
   };
 
-  // Grouping by stage yields whatever order the milestones happened to arrive
-  // in (they are sorted by `order`, which need not follow the contract stages),
-  // so the accordion is driven by the canonical stage sequence instead.
-  const stageGroups = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
-    .filter((stage) => visualMilestonesGroupedByProjectStage[stage]?.length)
-    .map(
-      (stage) => [stage, visualMilestonesGroupedByProjectStage[stage]] as const,
-    );
+  // "Contract total" means the whole claim schedule. Summing only the stages
+  // that currently carry activities would under-report it the moment a stage
+  // is emptied, and this figure is money.
+  const contractTotal = useMemo(() => {
+    const projectBudget = Number(project.totalBudget);
+
+    const amounts = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
+      .map((stage) => {
+        const contractStage = contractStages[stage];
+        const percentage =
+          contractStage?.percentage ??
+          (PROJECT_STAGE_PERCENTAGE[stage] != null
+            ? PROJECT_STAGE_PERCENTAGE[stage] * 100
+            : null);
+
+        return stageClaimAmount(
+          contractStage?.amount,
+          percentage,
+          projectBudget,
+        );
+      })
+      .filter((amount): amount is number => amount !== null);
+
+    // No stage resolved an amount — the total is unknown, not zero. Printing
+    // $0 as a contract total would be a confident wrong number.
+    return amounts.length === 0
+      ? null
+      : amounts.reduce((total, amount) => total + amount, 0);
+  }, [contractStages, project.totalBudget]);
+  // Stage, [Claim], Progress, Status, Next up, disclosure.
+  const columnCount = isAdmin ? 6 : 5;
 
   return (
     <section className="grid gap-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle
-              as="h2"
-              className="flex items-center gap-2 text-base font-semibold text-foreground"
-            >
-              <CalendarCheck2
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-              Project milestones
-            </CardTitle>
-            <ul className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
-              <li className="flex items-center">
-                <span
-                  className="mr-1.5 inline-block size-2 rounded-full bg-success"
-                  aria-hidden="true"
-                />
-                Done
-              </li>
-              <li className="flex items-center">
-                <span
-                  className="mr-1.5 inline-block size-2 rounded-full bg-warning"
-                  aria-hidden="true"
-                />
-                Active
-              </li>
-              <li className="flex items-center">
-                <span
-                  className="mr-1.5 inline-block size-2 rounded-full bg-chart-5"
-                  aria-hidden="true"
-                />
-                Upcoming
-              </li>
-            </ul>
-          </div>
-          <div className="mt-6 flex items-center justify-end gap-2">
-            <Button size="sm" onClick={handleAddMilestone}>
-              <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
-              Add Activity
-            </Button>
-          </div>
+          <CardTitle
+            as="h2"
+            className="flex items-center gap-2 text-base font-semibold text-foreground"
+          >
+            <CalendarCheck2
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            Stage schedule
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 pt-5">
-          {stageGroups.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/70 px-4 py-12 text-center">
+
+        <CardContent className="px-0 pt-0">
+          {ledgerStages.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
               <p className="text-sm font-medium text-foreground">
                 No activities yet
               </p>
@@ -283,154 +450,331 @@ export function ProjectMilestonesTab({
               </p>
             </div>
           ) : (
-            stageGroups.map(([stage, milestones]) => {
-              const isStageComplete = milestones
-                .flatMap((m) => [m, ...m.childrenMilestones])
-                .every((m) => m.status !== "PENDING");
-              const firstActiveStage = stageGroups.find(([, milestones]) => {
-                return milestones
-                  .flatMap((m) => [m, ...m.childrenMilestones])
-                  .some((m) => m.status === "PENDING");
-              })?.[0];
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Stage</TableHead>
+                    {isAdmin ? (
+                      <TableHead className="text-right">Claim</TableHead>
+                    ) : null}
+                    <TableHead className="hidden sm:table-cell">
+                      Progress
+                    </TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      Status
+                    </TableHead>
+                    <TableHead className="hidden sm:table-cell">
+                      Next up
+                    </TableHead>
+                    <TableHead className="w-12">
+                      <span className="sr-only">Activities</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
 
-              const isActiveStage = stage === firstActiveStage;
-              const contractStage = contractStages[stage];
-              const stageLabel = contractStage
-                ? formatPaymentStageLabel(contractStage)
-                : (PROJECT_STAGE_LABELS[stage] ?? stage);
-              const stagePercentage =
-                contractStage?.percentage != null
-                  ? contractStage.percentage / 100
-                  : (PROJECT_STAGE_PERCENTAGE[stage] ?? 0);
-              const projectBudget = Number(project.totalBudget);
-              // The contract sum the claim amounts were derived from can differ
-              // from the project budget, so prefer the amount the schedule
-              // actually states and only compute one when it has none.
-              const stageBudget =
-                contractStage?.amount ??
-                (Number.isFinite(projectBudget)
-                  ? stagePercentage * projectBudget
-                  : null);
+                <TableBody>
+                  {ledgerStages.map((ledgerStage) => {
+                    const isOpen = openStages.includes(ledgerStage.stage);
+                    const rollup = stageRollup(ledgerStage.milestones);
+                    const { open, settled } = partitionActivities(
+                      ledgerStage.milestones,
+                    );
+                    const isShowingDone = stagesShowingDone.includes(
+                      ledgerStage.stage,
+                    );
+                    const mostRecent = lastCompleted(ledgerStage.milestones);
+                    const bodyId = `stage-activities-${ledgerStage.stage}`;
 
-              // Sort milestone by status Completed > Active > Pending
-              const sortedMilestones = [...milestones].sort((a, b) => {
-                const statusOrder: Record<MilestoneStatus, number> = {
-                  DONE: 0,
-                  ACTIVE: 1,
-                  PENDING: 2,
-                  NOT_REQUIRED: 3,
-                };
-                return statusOrder[a.status] - statusOrder[b.status];
-              });
-
-              return (
-                <Collapsible
-                  key={stage}
-                  defaultOpen={isActiveStage}
-                  className={cn(
-                    "rounded-lg border bg-card transition-colors",
-                    isStageComplete
-                      ? "border-emerald-500/30 bg-emerald-500/5"
-                      : isActiveStage
-                        ? "border-primary/40 bg-primary/5"
-                        : "border-border/70",
-                  )}
-                >
-                  <CollapsibleTrigger
-                    className={cn(
-                      "group flex w-full items-center justify-between px-4 py-3",
-                      "transition-colors hover:bg-muted/40",
-                      "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-                      isStageComplete && "hover:bg-emerald-500/10",
-                      isActiveStage &&
-                        !isStageComplete &&
-                        "hover:bg-primary/10",
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <h3
-                        className={cn(
-                          "text-sm font-semibold",
-                          isStageComplete
-                            ? "text-emerald-700 dark:text-emerald-400"
-                            : isActiveStage
-                              ? "text-primary"
-                              : "text-foreground",
-                        )}
-                      >
-                        {stageLabel}
-                      </h3>
-
-                      {isAdmin && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <DollarSign className="size-3.5" aria-hidden="true" />
-                          <span className="font-mono tabular-nums">
-                            {stageBudget === null
-                              ? "—"
-                              : currency.format(stageBudget)}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isStageComplete && (
-                        <Badge
-                          variant="default"
-                          className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-medium hover:bg-emerald-600"
+                    return (
+                      <Fragment key={ledgerStage.stage}>
+                        <TableRow
+                          className={cn(
+                            "cursor-pointer",
+                            isOpen && "bg-primary/5 hover:bg-primary/5",
+                          )}
+                          onClick={() => toggleStage(ledgerStage.stage)}
                         >
-                          <Check className="size-3.5" aria-hidden="true" />
-                          Complete
-                        </Badge>
-                      )}
+                          <TableCell>
+                            <span className="font-medium text-foreground">
+                              {ledgerStage.label}
+                            </span>
+                            {ledgerStage.percentage != null ? (
+                              <span className="ml-1.5 font-mono text-xs tabular-nums text-muted-foreground">
+                                {ledgerStage.percentage}%
+                              </span>
+                            ) : null}
 
-                      {isActiveStage && (
-                        <Badge
-                          variant="secondary"
-                          className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
-                        >
-                          <ListChecks className="size-3.5" aria-hidden="true" />
-                          Active
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                      >
-                        <ListChecks className="size-3.5" aria-hidden="true" />
-                        {milestones.length} activit
-                        {milestones.length === 1 ? "y" : "ies"}
-                      </Badge>
+                            {/* Below `sm` the Status and Next up columns are
+                                gone, so both fold in under the stage name. */}
+                            <span className="ml-1.5 inline-flex align-middle sm:hidden">
+                              <StageStatusPill state={ledgerStage.state} />
+                            </span>
+                            <span className="mt-1 block text-xs sm:hidden">
+                              <NextUp ledgerStage={ledgerStage} />
+                            </span>
+                          </TableCell>
 
-                      <ChevronsDown
-                        className="size-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </CollapsibleTrigger>
+                          {isAdmin ? (
+                            <TableCell className="text-right font-mono tabular-nums">
+                              {ledgerStage.claim === null
+                                ? "—"
+                                : currency.format(ledgerStage.claim)}
+                            </TableCell>
+                          ) : null}
 
-                  <CollapsibleContent>
-                    <div className="space-y-2 border-t border-border/70 p-3">
-                      {sortedMilestones.map((milestone) => (
-                        <MilestoneCard
-                          key={milestone.id}
-                          isActiveStage={isActiveStage}
-                          isAdmin={isAdmin}
-                          milestone={milestone}
-                          project={project}
-                          tradieAlertsByMilestone={tradieAlertsByMilestone}
-                          onOpenAddUpdateModal={handleOpenAddUpdateModal}
-                          onStatusUpdate={handleStatusUpdate}
-                          onStartMilestone={handleStartMilestone}
-                          onSendReminder={handleSendReminder}
-                          onOpenViewPicture={handleOpenViewPicture}
-                          onMarkasNotRequired={handleMarkAsNotRequired}
-                        />
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-            })
+                          <TableCell className="hidden sm:table-cell">
+                            <span className="flex items-center gap-2">
+                              <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                                {rollup.done} / {rollup.total}
+                              </span>
+                              <span
+                                className="h-1 w-14 overflow-hidden rounded-full bg-muted"
+                                aria-hidden="true"
+                              >
+                                <span
+                                  className={cn(
+                                    "block h-full rounded-full",
+                                    ledgerStage.state === "complete"
+                                      ? "bg-success-ink"
+                                      : "bg-warning-ink",
+                                  )}
+                                  style={{
+                                    width: `${
+                                      rollup.total
+                                        ? Math.round(
+                                            (rollup.done / rollup.total) * 100,
+                                          )
+                                        : 0
+                                    }%`,
+                                  }}
+                                />
+                              </span>
+                            </span>
+                          </TableCell>
+
+                          <TableCell className="hidden sm:table-cell">
+                            <StageStatusPill state={ledgerStage.state} />
+                          </TableCell>
+
+                          <TableCell className="hidden max-w-[22rem] text-xs sm:table-cell">
+                            <NextUp ledgerStage={ledgerStage} />
+                          </TableCell>
+
+                          <TableCell className="text-center">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-expanded={isOpen}
+                              aria-controls={isOpen ? bodyId : undefined}
+                              aria-label={`${isOpen ? "Hide" : "Show"} ${ledgerStage.label} activities`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleStage(ledgerStage.stage);
+                              }}
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "size-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+                                  isOpen && "rotate-180",
+                                )}
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+
+                        {isOpen ? (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell
+                              colSpan={columnCount}
+                              className="bg-background p-0"
+                            >
+                              <div id={bodyId}>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 px-4 py-2 text-xs text-muted-foreground">
+                                  {ledgerStage.isWorkable ||
+                                  ledgerStage.state === "complete" ? (
+                                    <span>
+                                      {ledgerStage.state === "complete"
+                                        ? `All ${rollup.total} activities done`
+                                        : `${rollup.remaining} to go · ${rollup.done} done`}
+                                      {rollup.notRequired > 0
+                                        ? ` · ${rollup.notRequired} not required`
+                                        : null}
+                                    </span>
+                                  ) : (
+                                    /* One explanation for the stage beats the
+                                       same sentence repeated on every row. */
+                                    <span className="flex items-center gap-1.5">
+                                      <Lock
+                                        className="size-3.5"
+                                        aria-hidden="true"
+                                      />
+                                      <span>
+                                        <span className="font-medium text-foreground">
+                                          Opens when {ledgerStage.blockedBy?.label}{" "}
+                                          is complete
+                                        </span>
+                                        {ledgerStage.blockedBy
+                                          ? ` · ${
+                                              stageRollup(
+                                                ledgerStage.blockedBy.milestones,
+                                              ).remaining
+                                            } ${ledgerStage.blockedBy.label} activities to go`
+                                          : null}
+                                      </span>
+                                    </span>
+                                  )}
+
+                                  <Button
+                                    size="default"
+                                    variant="ghost"
+                                    className="ml-auto text-primary"
+                                    onClick={() =>
+                                      handleAddMilestone(ledgerStage.stage)
+                                    }
+                                  >
+                                    <Plus className="size-4" aria-hidden="true" />
+                                    Add activity
+                                    <span className="sr-only">
+                                      to {ledgerStage.label}
+                                    </span>
+                                  </Button>
+                                </div>
+
+                                {open.length > 0 ? (
+                                  <ul className="list-none px-4">
+                                    {open.map((milestone) => (
+                                      <MilestoneCard
+                                        key={milestone.id}
+                                        isActiveStage={ledgerStage.isWorkable}
+                                        isAdmin={isAdmin}
+                                        milestone={milestone}
+                                        project={project}
+                                        tradieAlertsByMilestone={
+                                          tradieAlertsByMilestone
+                                        }
+                                        onOpenAddUpdateModal={
+                                          handleOpenAddUpdateModal
+                                        }
+                                        onStatusUpdate={handleStatusUpdate}
+                                        onStartMilestone={handleStartMilestone}
+                                        onSendReminder={handleSendReminder}
+                                        onOpenViewPicture={handleOpenViewPicture}
+                                        onMarkasNotRequired={
+                                          handleMarkAsNotRequired
+                                        }
+                                      />
+                                    ))}
+                                  </ul>
+                                ) : null}
+
+                                {settled.length > 0 ? (
+                                  <>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 bg-muted/60 px-4 py-1.5 text-xs text-muted-foreground">
+                                      <span>
+                                        {rollup.done} done
+                                        {mostRecent && open.length > 0 ? (
+                                          <>
+                                            {" · last "}
+                                            {mostRecent.name}{" "}
+                                            <span className="font-mono tabular-nums">
+                                              {shortDate(
+                                                new Date(
+                                                  mostRecent.actualDate as Date,
+                                                ),
+                                              )}
+                                            </span>
+                                          </>
+                                        ) : null}
+                                        {rollup.notRequired > 0
+                                          ? ` · ${rollup.notRequired} not required`
+                                          : null}
+                                      </span>
+
+                                      <Button
+                                        size="default"
+                                        variant="ghost"
+                                        className="text-primary"
+                                        aria-expanded={isShowingDone}
+                                        onClick={() =>
+                                          toggleDone(ledgerStage.stage)
+                                        }
+                                      >
+                                        {isShowingDone ? "Hide" : "Show"}
+                                        <span className="sr-only">
+                                          done activities in {ledgerStage.label}
+                                        </span>
+                                        <ChevronDown
+                                          className={cn(
+                                            "size-4 transition-transform duration-200 motion-reduce:transition-none",
+                                            isShowingDone && "rotate-180",
+                                          )}
+                                          aria-hidden="true"
+                                        />
+                                      </Button>
+                                    </div>
+
+                                    {isShowingDone ? (
+                                      <ul className="list-none px-4">
+                                        {settled.map((milestone) => (
+                                          <MilestoneCard
+                                            key={milestone.id}
+                                            isActiveStage={
+                                              ledgerStage.isWorkable
+                                            }
+                                            isAdmin={isAdmin}
+                                            milestone={milestone}
+                                            project={project}
+                                            tradieAlertsByMilestone={
+                                              tradieAlertsByMilestone
+                                            }
+                                            onOpenAddUpdateModal={
+                                              handleOpenAddUpdateModal
+                                            }
+                                            onStatusUpdate={handleStatusUpdate}
+                                            onStartMilestone={
+                                              handleStartMilestone
+                                            }
+                                            onSendReminder={handleSendReminder}
+                                            onOpenViewPicture={
+                                              handleOpenViewPicture
+                                            }
+                                            onMarkasNotRequired={
+                                              handleMarkAsNotRequired
+                                            }
+                                          />
+                                        ))}
+                                      </ul>
+                                    ) : null}
+                                  </>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+
+                {isAdmin ? (
+                  <TableFooter>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell className="text-xs font-normal text-muted-foreground">
+                        Contract total
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">
+                        {contractTotal === null
+                          ? "—"
+                          : currency.format(contractTotal)}
+                      </TableCell>
+                      <TableCell colSpan={columnCount - 2} />
+                    </TableRow>
+                  </TableFooter>
+                ) : null}
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
