@@ -51,7 +51,7 @@ export function WebMcpProvider({ role }: { role?: AppRole }) {
         // `unregisterTool` was dropped from the April 2026 draft.
         const controller = new AbortController();
 
-        const register = (tool: ModelContextTool) => {
+        const register = (tool: WebMCP.ModelContextTool) => {
             void modelContext
                 .registerTool(tool, { signal: controller.signal })
                 .catch((error: unknown) => {

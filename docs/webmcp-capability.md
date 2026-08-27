@@ -49,6 +49,7 @@ And the browser side:
 - `components/webmcp/bridge.ts` — posts a tool call to the bridge route.
 - `components/webmcp/ui-tools.ts` — the browser-only tools.
 - `hooks/use-webmcp-tool.ts` — registers one tool for as long as a screen is mounted.
+- `types/webmcp.d.ts` — pulls in the official `webmcp-types` definitions (see below).
 
 ```
 ChatGPT Desktop browser
@@ -62,6 +63,14 @@ webmcp-provider  --POST /api/webmcp/update_lead-->  proxy.ts (Clerk session)
                                                 ^
    Claude Code --OAuth bearer--> /api/mcp ------+
 ```
+
+## Types
+
+Type definitions come from [`webmcp-types`](https://www.npmjs.com/package/webmcp-types), published by the W3C Web Machine Learning CG alongside the spec. It is a `devDependency` and contributes the global `WebMCP.*` namespace and the `Document.modelContext` property.
+
+Because it sits outside DefinitelyTyped, TypeScript does not pick it up automatically. `types/webmcp.d.ts` pulls it in with `/// <reference types="webmcp-types" />` — deliberately not the `"types": ["webmcp-types"]` tsconfig option the README suggests first, since that would switch off automatic inclusion of every other `@types/*` package this project depends on.
+
+That same file carries one augmentation: `executeTool`, which is in the spec IDL but not in `webmcp-types` 0.1.5 (the package covers only the registration half of the API). `/webmcp-inspector` needs it. Delete that block when the package catches up.
 
 ## Tools
 
@@ -126,7 +135,7 @@ There is no way to drive ChatGPT Desktop's agent from a test. For manual verific
 
 ## Known limits
 
-- The spec is moving. `navigator.modelContext` became `document.modelContext` in July 2026; output schemas, streaming, progress reporting and consequential-action hints are still open. Every spec touchpoint is confined to `types/webmcp.d.ts`, `components/webmcp/webmcp-provider.tsx` and `hooks/use-webmcp-tool.ts`.
+- The spec is moving. `navigator.modelContext` became `document.modelContext` in July 2026; output schemas, streaming, progress reporting and consequential-action hints are still open. Tracking `webmcp-types` absorbs most of that churn; what it does not is confined to `types/webmcp.d.ts`, `components/webmcp/webmcp-provider.tsx` and `hooks/use-webmcp-tool.ts`.
 - No mainstream agent besides ChatGPT Desktop consumes page tools yet.
 - The app ingests untrusted external content (inbound email via `lib/graph/*`, lead notes, OCR'd attachments). An agent that reads a lead page while holding write tools is a prompt-injection path. `untrustedContentHint` is advisory; treat the write surface on lead and email screens as the area needing review first.
 - `pick_and_upload_file`, `prefill_form` and per-screen `apply_filter` beyond leads are not implemented. `useWebMcpTool` is the hook to add them with; the leads screen is the pattern to copy.

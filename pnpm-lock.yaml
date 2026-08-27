@@ -302,6 +302,9 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      webmcp-types:
+        specifier: ^0.1.5
+        version: 0.1.5
 
 packages:
 
@@ -8633,6 +8636,9 @@ packages:
 
   webdriver-bidi-protocol@0.4.2:
     resolution: {integrity: sha512-VSV+fzfChirL3e7jay2yUC7B4HQCGtEWEg/MSSQbK+qWbqeGlRLlXTzPpYr3XGUvbpDHumWZBJxgesg4N7dbtA==}
+
+  webmcp-types@0.1.5:
+    resolution: {integrity: sha512-QAfuzNJ+hiY2JLpPbD/6xZruLQlsqtWUDqQCRruqD0dbtZHDg6IUZ2K0zctlRokwuscGlr47i6hKv8mQPSQLhw==}
 
   webpack-virtual-modules@0.6.2:
     resolution: {integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==}
@@ -18478,6 +18484,8 @@ snapshots:
   web-worker@1.5.0: {}
 
   webdriver-bidi-protocol@0.4.2: {}
+
+  webmcp-types@0.1.5: {}
 
   webpack-virtual-modules@0.6.2: {}
 

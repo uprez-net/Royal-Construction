@@ -7,10 +7,10 @@ export type WebMcpToolConfig = {
     title?: string;
     description: string;
     inputSchema?: Record<string, unknown>;
-    annotations?: ModelContextToolAnnotations;
+    annotations?: WebMCP.ToolAnnotations;
     execute: (
         input: Record<string, unknown>,
-        options: ModelContextToolExecuteOptions,
+        options: WebMCP.ToolExecuteCallbackOptions,
     ) => Promise<unknown>;
 };
 
@@ -63,7 +63,7 @@ export function useWebMcpTool(config: WebMcpToolConfig | null): void {
             title?: string;
             description: string;
             inputSchema: Record<string, unknown> | null;
-            annotations: ModelContextToolAnnotations | null;
+            annotations: WebMCP.ToolAnnotations | null;
         };
 
         const controller = new AbortController();

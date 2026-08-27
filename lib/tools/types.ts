@@ -16,20 +16,24 @@ export type AppRole = "GUEST" | "ADMIN" | "CUSTOMER" | "SITE_MANAGER";
 export type ToolSurface = "both" | "server" | "browser";
 
 /**
- * The subset of WebMCP's `ToolAnnotations` dictionary we populate. Both fields
- * are hints: the browser agent may use them to decide how much confirmation a
- * call needs, but nothing in the spec *enforces* them. Real enforcement is the
- * `requiredRole` check in the bridge route.
+ * WebMCP's own `ToolAnnotations` (from the `webmcp-types` package — see
+ * types/webmcp.d.ts), with `readOnlyHint` promoted from optional to required.
+ *
+ * The spec defaults it to `false`, which is the safe default for a browser but
+ * the wrong one for a manifest: a tool that simply forgot to declare itself
+ * would silently read as a write, or worse, a copy-pasted entry would inherit a
+ * neighbour's hint. Requiring it means every tool states its own nature, and
+ * tests/webmcp/manifest.test.ts checks that the statement matches the verb.
+ *
+ * Both fields are still only hints. The browser agent may use them to decide how
+ * much confirmation a call needs, but nothing in the spec *enforces* them — real
+ * enforcement is the `requiredRole` check in the bridge route.
+ *
+ * `untrustedContentHint` marks payloads carrying text authored outside the
+ * organisation: inbound email bodies, lead notes, OCR'd attachments.
  */
-export type ToolAnnotations = {
-    /** The tool only reads. Never set this on anything that writes. */
+export type ToolAnnotations = WebMCP.ToolAnnotations & {
     readOnlyHint: boolean;
-    /**
-     * The tool's payload can contain text authored outside the organisation —
-     * inbound email bodies, lead notes, OCR'd attachments. Signals to the agent
-     * that the result is data, not instructions.
-     */
-    untrustedContentHint?: boolean;
 };
 
 export type ToolDescriptor = {

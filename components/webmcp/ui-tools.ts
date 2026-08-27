@@ -32,7 +32,7 @@ const asText = (data: unknown) => ({
 /** Sections the agent may navigate to, derived from the real sidebar. */
 const SECTIONS = navigationItems.map((item) => item.slug);
 
-export function createUiTools(deps: UiToolDeps): ModelContextTool[] {
+export function createUiTools(deps: UiToolDeps): WebMCP.ModelContextTool[] {
     return [
         {
             name: "get_current_view",

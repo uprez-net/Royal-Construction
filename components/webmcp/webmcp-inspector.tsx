@@ -14,10 +14,12 @@ type ToolRow = {
     description: string;
     readOnly: boolean;
     untrusted: boolean;
-    inputSchema?: Record<string, unknown>;
+    // WebMCP.RegisteredTool types this as `object` — it is a deep copy of
+    // whatever JSON Schema was registered, and only ever gets stringified here.
+    inputSchema?: object;
 };
 
-function describe(tool: RegisteredModelContextTool): ToolRow {
+function describe(tool: WebMCP.RegisteredTool): ToolRow {
     return {
         name: tool.name,
         description: tool.description,
