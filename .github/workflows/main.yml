@@ -131,6 +131,7 @@ jobs:
 
     env:
       NODE_ENV: "test"
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
 
     steps:
       - name: Checkout repository
