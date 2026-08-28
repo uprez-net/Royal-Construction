@@ -1,6 +1,7 @@
 import type { TradiePriceUnit } from "@prisma/client";
 import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
+import type { CertifierEngagementDetail } from "./compliance";
 
 export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize" | "requirements"> {
   totalBudget: string;
@@ -120,6 +121,8 @@ export interface ProjectDetail extends SafeProject {
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
   files: ProjectFile[];
   materials: SafeMaterial[];
+  /** Null until someone presses "Connect with Certifier". */
+  certifierEngagement: CertifierEngagementDetail | null;
 }
 
 export type ProjectKPIs = {

@@ -9,6 +9,7 @@ import {
   FileText,
   History,
   Mail,
+  ShieldCheck,
 } from "lucide-react";
 import { ProjectDetail } from "@/types/project";
 import { useCallback, useMemo, useRef } from "react";
@@ -30,6 +31,7 @@ export const VISIBLE_PROJECT_DETAIL_TABS = [
   "docs",
   "history",
   "communications",
+  "compliance",
 ] as const satisfies readonly ProjectDetailTabKey[];
 
 export type VisibleProjectDetailTabKey =
@@ -54,6 +56,9 @@ const TabIcons: Record<VisibleProjectDetailTabKey, React.ElementType> = {
   history: History,
   docs: FileText,
   communications: Mail,
+  // Pairs with the ShieldAlert the compliance banner above the tabs already
+  // uses: the same subject, one warning about it and one holding it.
+  compliance: ShieldCheck,
 };
 
 type BadgeTone = "primary" | "warning" | "danger" | "neutral";
@@ -121,6 +126,39 @@ const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
   };
 };
 
+/**
+ * What the Compliance badge counts.
+ *
+ * Anything not yet approved is outstanding — that is the whole job of the tab.
+ * A rejected document is counted separately only to pick the tone: it has
+ * already been round-tripped past the certifier once, which is a sharper
+ * problem than a document nobody has supplied yet.
+ *
+ * Silent until an engagement exists, so a project nobody has started this on
+ * does not wear a badge for it.
+ */
+const calcComplianceOverviewData = (
+  engagement: ProjectDetail["certifierEngagement"],
+) => {
+  if (!engagement) {
+    return { outstanding: 0, rejected: 0 };
+  }
+  let outstanding = 0;
+  let rejected = 0;
+  for (const document of engagement.documents) {
+    if (document.status !== "APPROVED") {
+      outstanding += 1;
+    }
+    // A rejection reason survives the status going back to PENDING — that is
+    // what tells the admin why they are uploading again, and it is the only
+    // trace that this document has been round-tripped.
+    if (document.status === "REJECTED" || document.rejectionReason) {
+      rejected += 1;
+    }
+  }
+  return { outstanding, rejected };
+};
+
 const generateProjectDetailTabs = (
   project: ProjectDetail,
 ): ProjectDetailTab[] => {
@@ -135,6 +173,8 @@ const generateProjectDetailTabs = (
     AWAITING_TRADIE_STATUSES.has(schedule.status),
   ).length;
   const tradieAlerts = blockedTradies + awaitingTradies;
+  const { outstanding: outstandingCompliance, rejected: rejectedCompliance } =
+    calcComplianceOverviewData(project.certifierEngagement);
 
   return [
     { key: "overview", label: "Overview" },
@@ -171,6 +211,25 @@ const generateProjectDetailTabs = (
         : {}),
     },
     { key: "docs", label: "Documents" },
+    {
+      key: "compliance",
+      label: "Compliance",
+      ...(outstandingCompliance > 0
+        ? {
+            badge: {
+              count: outstandingCompliance.toString(),
+              // A rejected document is work the certifier has already sent
+              // back, which is a different urgency from one nobody has
+              // supplied yet.
+              tone: rejectedCompliance > 0 ? "danger" : "warning",
+              description:
+                rejectedCompliance > 0
+                  ? `${outstandingCompliance} compliance documents outstanding, ${rejectedCompliance} sent back by the certifier`
+                  : `${outstandingCompliance} compliance documents outstanding`,
+            } satisfies TabBadge,
+          }
+        : {}),
+    },
     { key: "history", label: "History" },
     { key: "communications", label: "Communications" },
   ];

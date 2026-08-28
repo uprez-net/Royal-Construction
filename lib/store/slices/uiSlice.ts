@@ -33,6 +33,11 @@ export type ModalType =
   | "approvalDetails"
   | "rejectTradieApprovals"
   | "previewFile"
+  | "startCertifierEngagement"
+  | "certifierDiscovery"
+  | "certifierExtract"
+  | "certifierSendSignedCopies"
+  | "complianceComplete"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

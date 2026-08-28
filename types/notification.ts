@@ -215,6 +215,51 @@ export const notificationTemplates: NotificationTemplateFactory = {
     message: `${data.fileCount} photos uploaded for milestone ${data.milestoneName} in project ${data.projectName}`,
     url: `/projects/${data.projectId}?activeTab=milestones`,
   }),
+
+  // --- Compliance and certification ---------------------------------------
+
+  certifierOutreachSent: (data) => ({
+    title: `Documents Sent to Certifier: ${data.projectName}`,
+    message: `${data.documentCount} document${data.documentCount === 1 ? "" : "s"} sent to ${data.certifierEmail}. The next move is theirs.`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  certifierResponseReceived: (data) => ({
+    title: `Certifier Replied: ${data.projectName}`,
+    message: data.checklistDocumentId
+      ? `${data.attachmentCount} document${data.attachmentCount === 1 ? "" : "s"} received, including a checklist ready to extract`
+      : `${data.attachmentCount} document${data.attachmentCount === 1 ? "" : "s"} received from the certifier`,
+    // The extraction popup is only offered when there is actually a checklist
+    // to run it against; every id it needs rides the query string, because
+    // triggerNotification carries no structured payload of its own.
+    url: data.checklistDocumentId
+      ? `/projects/${data.projectId}?activeTab=compliance&action=certifierExtract&engagementId=${data.engagementId}&documentId=${data.checklistDocumentId}`
+      : `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceChecklistExtracted: (data) => ({
+    title: `Checklist Ready: ${data.projectName}`,
+    message: `The certifier's checklist came to ${data.itemCount} item${data.itemCount === 1 ? "" : "s"}, each now waiting on a document`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDocumentRejected: (data) => ({
+    title: `Document Sent Back: ${data.projectName}`,
+    message: `${data.resolvedBy} rejected ${data.documentLabel}: ${data.rejectionReason}`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceReviewSent: (data) => ({
+    title: `Compliance File Sent for Review: ${data.projectName}`,
+    message: `${data.documentCount} document${data.documentCount === 1 ? "" : "s"} are with the certifier for review`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceApproved: (data) => ({
+    title: `Compliance Approved: ${data.projectName}`,
+    message: `Every compliance document has been approved. The section is now closed.`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
 };
 
 /**

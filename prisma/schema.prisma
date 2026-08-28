@@ -220,6 +220,69 @@ enum ProjectStage {
   Final
 }
 
+/// The certifier engagement's position in the compliance and certification
+/// flow. Append-only: a retired value keeps its slot with a comment rather than
+/// being deleted, so historical rows stay readable.
+enum CertifierEngagementStatus {
+  NOT_STARTED
+  COLLECTING_DOCS
+  OUTREACH_SENT
+  AWAITING_RESPONSE
+  RESPONSE_RECEIVED
+  SIGNING
+  CHECKLIST_EXTRACTING
+  CHECKLIST_TRACKING
+  INSURANCE
+  IN_REVIEW
+  APPROVED
+}
+
+/// What a ComplianceDocument row holds. The first six are the documents the
+/// certifier must be sent up front; the next block is what comes back from
+/// them; CHECKLIST_ITEM is one line of the returned checklist, tracked as its
+/// own row so each can be uploaded and approved independently.
+///
+/// UNKNOWN is the classifier's fallback. An inbound attachment it cannot place
+/// lands here rather than being guessed at — a mislabelled document is worse
+/// than an unlabelled one, because only the second is visibly incomplete.
+enum ComplianceDocumentType {
+  DEPOSITED_PLAN
+  TITLE_SEARCH_DETAIL_AND_LEVEL
+  SURVEY
+  PRELIMINARY_ARCHITECTURAL_PLANS
+  PLANNING_CERTIFICATE_10_7
+  FULL_ARCHITECTURAL_DESIGN
+  INVOICE
+  FEE_PROPOSAL
+  CDC_FORM
+  CHECKLIST
+  SIGNED_FEE_PROPOSAL
+  SIGNED_CDC_FORM
+  CHECKLIST_ITEM
+  HOME_INSURANCE
+  UNKNOWN
+}
+
+/// PENDING is "we know we need this and do not have it"; UPLOADED is an admin
+/// putting it there; RECEIVED is one that arrived on an email from the
+/// certifier. The two are kept apart because only the first is something the
+/// admin can be asked to redo.
+enum ComplianceDocumentStatus {
+  PENDING
+  UPLOADED
+  RECEIVED
+  APPROVED
+  REJECTED
+}
+
+/// LeadEmails infers this by comparing emailFrom against the business mailbox,
+/// which breaks the moment mail is sent from an alias. Stored explicitly here:
+/// the thread view renders each bubble's side from it.
+enum CertifierEmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -246,17 +309,18 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  customer        Customer         @relation("CustomerProjects", fields: [customerId], references: [id])
-  siteManager     User?            @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
-  Lead            Lead             @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
-  milestones      Milestone[]
-  siteUpdates     SiteUpdate[]
-  variations      Variation[]
-  tradieSchedules TradieSchedule[]
-  files           File[]           @relation("ProjectFiles")
-  activityLogs    ActivityLog[]
-  materials       Material[]
-  tradies         Tradie[]         @relation("ProjectTradies")
+  customer            Customer             @relation("CustomerProjects", fields: [customerId], references: [id])
+  siteManager         User?                @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
+  Lead                Lead                 @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
+  milestones          Milestone[]
+  siteUpdates         SiteUpdate[]
+  variations          Variation[]
+  tradieSchedules     TradieSchedule[]
+  files               File[]               @relation("ProjectFiles")
+  activityLogs        ActivityLog[]
+  materials           Material[]
+  tradies             Tradie[]             @relation("ProjectTradies")
+  certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
 
   @@index([name])
   @@index([customerId])
@@ -407,28 +471,31 @@ model TradieRating {
 }
 
 model File {
-  id          String   @id @default(uuid())
-  projectId   String?
-  milestoneId String?
-  leadId      Int?
-  incidentId  String?
-  filename    String
-  fileType    String
-  filesize    Int
-  url         String
-  uploadedBy  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  projectId            String?
+  milestoneId          String?
+  leadId               Int?
+  incidentId           String?
+  complianceDocumentId String?
+  filename             String
+  fileType             String
+  filesize             Int
+  url                  String
+  uploadedBy           String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  project   Project?        @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone?      @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  lead      Lead?           @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
-  incident  TradieIncident? @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
-  User      User            @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project            Project?            @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone          Milestone?          @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  lead               Lead?               @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  incident           TradieIncident?     @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
+  complianceDocument ComplianceDocument? @relation("ComplianceDocumentFiles", fields: [complianceDocumentId], references: [id], onDelete: Cascade)
+  User               User                @relation("UserFiles", fields: [uploadedBy], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
   @@index([incidentId])
+  @@index([complianceDocumentId])
   @@index([leadId])
   @@index([uploadedBy])
 }
@@ -697,11 +764,11 @@ model LeadTask {
   notes String? @db.Text
 
   assignedId String?
-  assignedTo User?  @relation("LeadTaskAssignee", fields: [assignedId], references: [id])
+  assignedTo User?   @relation("LeadTaskAssignee", fields: [assignedId], references: [id])
 
   /// Set when the task is closed out. Nothing recorded this before; the stage
   /// flipping to CONTACTED was the only signal a follow-up had finished.
-  completedAt DateTime?
+  completedAt    DateTime?
   /// Guards against re-notifying. Mirrors followupReminderSentAt on Lead.
   reminderSentAt DateTime?
 
@@ -1028,4 +1095,106 @@ model AdminOfferContent {
   version      Int      @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+/// One project's dealings with its principal certifier, from the first document
+/// pack through to every checklist item being approved.
+///
+/// One per project, mirroring Project.leadId: the owning side holds the unique
+/// scalar FK and Project carries only the back-reference.
+///
+/// refToken is what makes the mail loop work. It is minted here, carried in the
+/// outreach subject as "[RCCERT-…]", and quoted back by every reply, which is
+/// how an inbound message is correlated to this row without trusting the
+/// sender's address. Same mechanism as OfferDocumentSend.trackedLinkToken.
+model CertifierEngagement {
+  id             String  @id @default(uuid())
+  projectId      String  @unique
+  refToken       String  @unique
+  /// The site address, appended to refToken to make a subject a human can read.
+  subjectAddress String
+  /// Denormalised snapshots rather than a relation, as EnvelopeSignature does
+  /// for signers: the certifier is a third party with no account here, and the
+  /// engagement should still read correctly if they are later replaced.
+  certifierName  String?
+  certifierEmail String?
+  certifierPhone String?
+
+  /// The Graph id of the most recent inbound message on this thread.
+  ///
+  /// Replies are built with Graph's createReply against it, which is the only
+  /// way to get real In-Reply-To and References headers — Graph refuses to set
+  /// either through internetMessageHeaders, so a plain send threads on subject
+  /// alone and comes apart the moment a client normalises it. Null until the
+  /// certifier has answered once, and replies fall back to a subject-threaded
+  /// send until then.
+  lastInboundMessageId String?
+
+  status CertifierEngagementStatus @default(NOT_STARTED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project              @relation("ProjectCertifierEngagement", fields: [projectId], references: [id], onDelete: Cascade)
+  documents ComplianceDocument[]
+  emails    CertifierEmail[]
+
+  @@index([status])
+}
+
+/// One tracked document on the engagement — a required document, something the
+/// certifier sent back, a signed copy, or a single checklist line.
+///
+/// order is deliberately NOT unique per engagement. Milestone pays for
+/// @@unique([projectId, order]) with a descending row-shift on every insert
+/// (lib/data/milestones.ts); checklist items are written once as a batch and
+/// never reordered, so the constraint would buy nothing and cost that.
+model ComplianceDocument {
+  id              String                   @id @default(uuid())
+  engagementId    String
+  documentType    ComplianceDocumentType
+  status          ComplianceDocumentStatus @default(PENDING)
+  /// The checklist line as the certifier worded it. Null for the fixed types,
+  /// whose label comes from constants/complianceDocuments.ts.
+  label           String?
+  order           Int                      @default(0)
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  files      File[]              @relation("ComplianceDocumentFiles")
+
+  @@index([engagementId])
+  @@index([engagementId, order])
+  @@index([status])
+}
+
+/// The mail trail with the certifier, in and out.
+///
+/// checksum is the dedup key, following LeadEmails: Graph re-notifies, a
+/// workflow step retries, and a thread quotes its own history, so the same
+/// message reaches this table more than once. The unique index is what makes
+/// createMany({ skipDuplicates: true }) safe to call blindly.
+model CertifierEmail {
+  id           String                  @id @default(uuid())
+  engagementId String
+  emailFrom    String
+  emailTo      String
+  subject      String
+  body         String                  @db.Text
+  checksum     String                  @unique @db.Text
+  direction    CertifierEmailDirection
+  /// [{ name, url }] — blob-backed copies of the message's attachments, so a
+  /// bubble can link them without a second query.
+  attachments  Json                    @default("[]")
+  sentAt       DateTime
+
+  createdAt DateTime @default(now())
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId])
+  @@index([engagementId, sentAt(sort: Desc)])
 }

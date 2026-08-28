@@ -7,6 +7,9 @@ import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
+import { extractCertifierRefToken } from '@/lib/graph/certifier-subject';
+import { isMachineGenerated } from '@/lib/graph/offer-reply-classify';
+import { processInboundCertifierEmail } from '@/lib/workflow/certifier-email';
 import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
 import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
 import { processInboundLead } from '@/lib/workflow/lead-extraction';
@@ -184,6 +187,64 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 contentType: message.headers.contentType ?? null,
               }),
             );
+            continue;
+          }
+
+          // Certifier thread: the subject carries [RCCERT-…]. Correlated on the
+          // token rather than on the sender, because a certifier's office
+          // answers from whichever address picks the job up.
+          const certifierToken = extractCertifierRefToken(message.subject);
+          if (certifierToken) {
+            const engagement = await prisma.certifierEngagement.findUnique({
+              where: { refToken: certifierToken },
+              select: { id: true },
+            });
+
+            if (!engagement) {
+              console.log(
+                `  Certifier ${certifierToken}: no matching engagement`,
+              );
+            } else if (isMachineGenerated(message.headers)) {
+              // A bounce quotes the original subject, so "Undeliverable: …
+              // [RCCERT-…]" correlates perfectly and is not the certifier
+              // replying. Logged rather than dropped silently: this is the
+              // only trace of a failed delivery today, and it is what a bounce
+              // classifier gets tuned against before one is built.
+              console.log(
+                `  Certifier ${certifierToken}: auto-generated`,
+                JSON.stringify({
+                  from: message.from,
+                  subject: message.subject,
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  returnPath: message.headers.returnPath ?? null,
+                  contentType: message.headers.contentType ?? null,
+                }),
+              );
+            } else {
+              // Everything past this point — downloading attachments, OCR, the
+              // classification call, the document rows, the notification — is
+              // the slow, failure-prone half, and Graph has already been told
+              // 202. Handing it to a workflow makes each of those a step that
+              // retries on its own and resumes at the last boundary it
+              // cleared. `start` only enqueues, so nothing below waits on it.
+              const run = await start(processInboundCertifierEmail, [
+                {
+                  messageId: message.id,
+                  refToken: certifierToken,
+                  subject: message.subject ?? '',
+                  body: content,
+                  from: message.from,
+                  to:
+                    message.to?.[0] ??
+                    process.env.BUSINESS_EMAIL ??
+                    'info@royalconstructions.com.au',
+                  receivedDateTime: message.receivedDateTime,
+                },
+              ]);
+              console.log(
+                `  Certifier ${certifierToken}: workflow started for message ${message.id}: run ${run.runId}`,
+              );
+            }
             continue;
           }
 

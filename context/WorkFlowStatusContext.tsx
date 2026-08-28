@@ -2,6 +2,10 @@
 
 import { OfferCreationStatus } from "@/types/offer";
 import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
+import {
+  COMPLIANCE_CHECKLIST_WORKFLOW,
+  type ComplianceChecklistStreamEvent,
+} from "@/types/compliance-workflow";
 import React, {
   createContext,
   useCallback,
@@ -26,6 +30,7 @@ type WorkflowStreamState = {
 
   creatingOffer: OfferCreationStatus;
   extractingTender: TenderExtractionWorkflowStreamEvent;
+  extractingChecklist: ComplianceChecklistStreamEvent | null;
 
   startListening: (runId: string) => void;
   stopListening: () => void;
@@ -84,6 +89,8 @@ export function WorkflowStreamProvider({
   const [creatingOffer, setCreatingOffer] =
     useState<OfferCreationStatus | null>(null);
   const [extractingTender, setExtractingTender] = useState<TenderExtractionWorkflowStreamEvent | null>(null);
+  const [extractingChecklist, setExtractingChecklist] =
+    useState<ComplianceChecklistStreamEvent | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const startIndexRef = useRef(0);
@@ -100,6 +107,10 @@ export function WorkflowStreamProvider({
     setError(null);
     setRunId(null);
     setCreatingOffer(null);
+    // Cleared alongside creatingOffer: a stale terminal event left here made a
+    // second run in the same provider look finished before it started.
+    setExtractingTender(null);
+    setExtractingChecklist(null);
     startIndexRef.current = 0;
 
     abortRef.current?.abort();
@@ -136,6 +147,7 @@ export function WorkflowStreamProvider({
     setError(null);
     setCreatingOffer(defaultCreatingOffer);
     setExtractingTender(defaultExtractingTender);
+    setExtractingChecklist(null);
     try {
       const res = await fetch(
         `/api/resume-stream/${id}?startIndex=${startIndexRef.current}`,
@@ -176,7 +188,13 @@ export function WorkflowStreamProvider({
 
           try {
             const payload = JSON.parse(line);
-            if( payload.type === "stage" || payload.type === "result" || payload.type === "error") {
+            // The checklist workflow tags its events, because it shares the
+            // "stage" / "result" / "error" shape with tender extraction and
+            // one route carries both.
+            if (payload.workflow === COMPLIANCE_CHECKLIST_WORKFLOW) {
+              setExtractingChecklist(payload);
+            }
+            else if( payload.type === "stage" || payload.type === "result" || payload.type === "error") {
               setExtractingTender(payload);
             }
             else if (payload.status) {
@@ -255,6 +273,10 @@ export function WorkflowStreamProvider({
       error,
       creatingOffer: creatingOffer ?? defaultCreatingOffer,
       extractingTender: extractingTender ?? defaultExtractingTender,
+      // Null rather than a default event: the checklist modal renders nothing
+      // until the run actually reports, and a synthetic "stage 0" would show a
+      // progress bar for work that has not started.
+      extractingChecklist,
       startListening,
       stopListening,
       reset,
@@ -266,6 +288,7 @@ export function WorkflowStreamProvider({
       error,
       creatingOffer,
       extractingTender,
+      extractingChecklist,
       startListening,
       stopListening,
       reset,

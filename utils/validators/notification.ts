@@ -244,6 +244,57 @@ export const notificationSchemas = {
         milestoneName: z.string(),
         fileCount: z.number(),
         projectName: z.string(),
-    })
+    }),
+
+    // --- Compliance and certification -------------------------------------
+    // Only the events someone has to know about or act on. Per-document
+    // approvals are deliberately absent: a checklist runs to twenty items, and
+    // a notification each would bury the two that matter — a rejection, which
+    // creates work, and the final approval, which ends it.
+
+    certifierOutreachSent: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        certifierEmail: z.string(),
+        documentCount: z.number(),
+    }),
+
+    certifierResponseReceived: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        engagementId: z.string(),
+        attachmentCount: z.number(),
+        /**
+         * The received checklist document, when the reply carried one. Its
+         * absence is what keeps the notification from offering to run an
+         * extraction with nothing to extract.
+         */
+        checklistDocumentId: z.string().optional(),
+    }),
+
+    complianceChecklistExtracted: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        itemCount: z.number(),
+    }),
+
+    complianceDocumentRejected: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        documentLabel: z.string(),
+        rejectionReason: z.string(),
+        resolvedBy: z.string(),
+    }),
+
+    complianceReviewSent: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        documentCount: z.number(),
+    }),
+
+    complianceApproved: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+    }),
 
 } as const;
