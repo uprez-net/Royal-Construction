@@ -55,6 +55,32 @@ export const CERTIFIER_RESPONSE_DOCUMENTS = [
 }[];
 
 /**
+ * What the certifier produced, as opposed to what the builder supplied.
+ *
+ * These arrive as attachments on the certifier's own reply, and they are not
+ * part of the review loop: the certifier is not going to approve their own
+ * invoice. Excluding them is what makes "every document approved" a condition
+ * that can actually be reached — counting them left the engagement permanently
+ * one approval short of closing, on documents with no approve control.
+ */
+export const CERTIFIER_SUPPLIED_TYPES: readonly ComplianceDocumentType[] = [
+  ComplianceDocumentType.INVOICE,
+  ComplianceDocumentType.FEE_PROPOSAL,
+  ComplianceDocumentType.CDC_FORM,
+  ComplianceDocumentType.CHECKLIST,
+  // An attachment the classifier could not place. It is shown so a person can
+  // label it, but until they do it is not evidence of anything.
+  ComplianceDocumentType.UNKNOWN,
+];
+
+/** Whether a document is part of the approve/reject loop. */
+export function isReviewableDocumentType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return !CERTIFIER_SUPPLIED_TYPES.includes(documentType);
+}
+
+/**
  * Every type the classifier is allowed to return, plus UNKNOWN. Signed copies
  * and checklist items are excluded deliberately: a signed form is identified by
  * where the admin uploaded it, not by reading it, and a checklist item is a

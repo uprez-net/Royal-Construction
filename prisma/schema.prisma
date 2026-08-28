@@ -1120,6 +1120,16 @@ model CertifierEngagement {
   certifierEmail String?
   certifierPhone String?
 
+  /// The Graph id of the most recent inbound message on this thread.
+  ///
+  /// Replies are built with Graph's createReply against it, which is the only
+  /// way to get real In-Reply-To and References headers — Graph refuses to set
+  /// either through internetMessageHeaders, so a plain send threads on subject
+  /// alone and comes apart the moment a client normalises it. Null until the
+  /// certifier has answered once, and replies fall back to a subject-threaded
+  /// send until then.
+  lastInboundMessageId String?
+
   status CertifierEngagementStatus @default(NOT_STARTED)
 
   createdAt DateTime @default(now())

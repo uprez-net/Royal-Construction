@@ -5,7 +5,7 @@ import {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
 } from "@prisma/client";
-import { ExternalLink, Loader2, ShieldCheck } from "lucide-react";
+import { ExternalLink, HelpCircle, Loader2, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,9 +18,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
   HBCF_INSURANCE_URL,
+  isReviewableDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -28,19 +36,40 @@ import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
+  identifyComplianceDocument,
   resolveComplianceDocument,
   sendCertifierReply,
-  sendComplianceForReview,
   uploadComplianceDocument,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
-import type { ComplianceDocumentWithFiles } from "@/types/compliance";
+import type {
+  CertifierEngagementDetail,
+  ComplianceDocumentWithFiles,
+} from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
 import { CertifierThread } from "./certifier-thread";
 import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
+
+/**
+ * Statuses that mean the signed copies have already gone to the certifier.
+ *
+ * `SIGNING` is claimed exactly once by the send, and every later status is
+ * downstream of it, so this doubles as "have the signatures actually been
+ * sent" — which is what gates asking the certifier for a checklist. Uploading
+ * the two files is not the same thing, and gating on that let an admin ask for
+ * a checklist against signatures still sitting in our own storage.
+ */
+const SIGNED_COPIES_SENT: ReadonlySet<CertifierEngagementStatus> = new Set([
+  CertifierEngagementStatus.SIGNING,
+  CertifierEngagementStatus.CHECKLIST_EXTRACTING,
+  CertifierEngagementStatus.CHECKLIST_TRACKING,
+  CertifierEngagementStatus.INSURANCE,
+  CertifierEngagementStatus.IN_REVIEW,
+  CertifierEngagementStatus.APPROVED,
+]);
 
 type ProjectComplianceTabProps = {
   project: ProjectDetail;
@@ -58,6 +87,10 @@ export function ProjectComplianceTab({
   const [insuranceAnswer, setInsuranceAnswer] = useState<"yes" | "no" | null>(
     null,
   );
+  // The finished file sits behind one more click, so returning to the tab after
+  // approval shows that the job is closed rather than dropping straight into a
+  // document index.
+  const [showFinalPage, setShowFinalPage] = useState(false);
 
   const engagement = project.certifierEngagement;
 
@@ -76,8 +109,7 @@ export function ProjectComplianceTab({
    *
    * This is the gallery pool. Opening a site photo attached to one checklist
    * item lets the viewer page through every other photo on the engagement,
-   * rather than the one or two on that row — which is what someone comparing
-   * evidence across items actually wants.
+   * rather than the one or two on that row.
    */
   const previewFiles = useMemo(
     () =>
@@ -109,21 +141,111 @@ export function ProjectComplianceTab({
     [engagement],
   );
 
+  /** Attachments the classifier could not place, and nobody has labelled yet. */
+  const unidentified = useMemo(
+    () =>
+      (engagement?.documents ?? []).filter(
+        (document) =>
+          document.documentType === ComplianceDocumentType.UNKNOWN &&
+          document.files.length > 0,
+      ),
+    [engagement],
+  );
+
+  /**
+   * What the certifier is being asked to sign off — everything the builder
+   * supplied. Their own invoice, fee proposal, CDC form and checklist are
+   * excluded; they are not going to approve those.
+   */
+  const reviewDocuments = useMemo(
+    () =>
+      (engagement?.documents ?? []).filter((document) =>
+        isReviewableDocumentType(document.documentType),
+      ),
+    [engagement],
+  );
+
+  const inReview = engagement?.status === CertifierEngagementStatus.IN_REVIEW;
+  const allEvidenceIn =
+    reviewDocuments.length > 0 &&
+    reviewDocuments.every((document) => document.files.length > 0);
+  const allApproved =
+    reviewDocuments.length > 0 &&
+    reviewDocuments.every(
+      (document) => document.status === ComplianceDocumentStatus.APPROVED,
+    );
+
+  /**
+   * Which controls a row shows.
+   *
+   * The rejected case is the one that matters. A rejection sends the document
+   * back to PENDING while the engagement stays in review, so it has to offer
+   * Upload again — showing Approve/Reject there, as this did, left the loop
+   * unable to finish, because an admin could only re-reject a document nobody
+   * had any way to re-supply.
+   */
+  const rowMode = (
+    document?: ComplianceDocumentWithFiles,
+  ): "upload" | "resolve" | "frozen" => {
+    if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
+    if (!inReview) return "upload";
+    if (!document || document.files.length === 0) return "upload";
+    return isAdmin ? "resolve" : "frozen";
+  };
+
+  /**
+   * Opens the completion prompt when the set has just become whole.
+   *
+   * Called with the engagement the server returned rather than from an effect,
+   * so the decision is made against what was actually written instead of a
+   * render that may not have happened yet.
+   */
+  const promptIfComplete = (next: CertifierEngagementDetail | null) => {
+    if (!next) return;
+
+    const review = next.documents.filter((document) =>
+      isReviewableDocumentType(document.documentType),
+    );
+    const whole =
+      review.length > 0 && review.every((document) => document.files.length > 0);
+    const closed =
+      review.length > 0 &&
+      review.every(
+        (document) => document.status === ComplianceDocumentStatus.APPROVED,
+      );
+
+    if (whole && !closed) {
+      dispatch(
+        openModal({
+          type: "complianceComplete",
+          payload: {
+            projectId: project.id,
+            documentCount: review.length,
+            // Re-supplying after a rejection round reads differently from
+            // finishing the collection for the first time.
+            isResend: next.status === CertifierEngagementStatus.IN_REVIEW,
+          },
+        }),
+      );
+    }
+  };
+
   /**
    * Uploads a file and points a compliance document at it.
    *
    * One helper for every upload control on the tab, because they differ only in
    * which document they target — a seeded row by id, or a type that has no row
-   * until now.
+   * until now. Returns the engagement as the server left it, so the caller can
+   * decide what follows without waiting for a re-render.
    */
   const attach = async (
     file: File,
     key: string,
     target: { documentId?: string; documentType?: ComplianceDocumentType },
-  ) => {
+  ): Promise<CertifierEngagementDetail | null> => {
     try {
       const uploaded = await uploadFile(file, key);
-      await dispatch(
+      const result = await dispatch(
         uploadComplianceDocument({
           projectId: project.id,
           fileId: uploaded.fileId,
@@ -131,9 +253,57 @@ export function ProjectComplianceTab({
         }),
       ).unwrap();
       toast.success(`${file.name} uploaded.`);
+      return result.engagement;
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : `Could not upload ${file.name}.`,
+      );
+      return null;
+    }
+  };
+
+  /** A required document, a checklist item, or the insurance certificate. */
+  const attachEvidence = async (
+    file: File,
+    key: string,
+    target: { documentId?: string; documentType?: ComplianceDocumentType },
+  ) => {
+    promptIfComplete(await attach(file, key, target));
+  };
+
+  /**
+   * A signed copy, which is the one upload with something to do afterwards.
+   *
+   * The certifier will not issue a checklist until they have both signatures,
+   * and nothing else in the flow would ever send them — so the send fires off
+   * the upload that completes the pair. Checked against the engagement the
+   * server just returned rather than the rendered one, which is still a version
+   * behind at this point.
+   */
+  const attachSignedCopy = async (
+    file: File,
+    signedType: ComplianceDocumentType,
+    documentId?: string,
+  ) => {
+    const next = await attach(file, signedType, {
+      documentId,
+      documentType: signedType,
+    });
+    if (!next) return;
+
+    const bothPresent = SIGNED_COPY_DOCUMENTS.every((copy) =>
+      next.documents.some(
+        (document) =>
+          document.documentType === copy.type && document.files.length > 0,
+      ),
+    );
+
+    if (bothPresent && !SIGNED_COPIES_SENT.has(next.status)) {
+      dispatch(
+        openModal({
+          type: "certifierSendSignedCopies",
+          payload: { projectId: project.id },
+        }),
       );
     }
   };
@@ -182,6 +352,26 @@ export function ProjectComplianceTab({
     }
   };
 
+  const handleIdentify = async (
+    documentId: string,
+    documentType: ComplianceDocumentType,
+  ) => {
+    try {
+      await dispatch(
+        identifyComplianceDocument({
+          projectId: project.id,
+          documentId,
+          documentType,
+        }),
+      ).unwrap();
+      toast.success("Document identified.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not identify the document.",
+      );
+    }
+  };
+
   // ---------------------------------------------------------------------
   // Nothing started yet — one button, as specified.
   // ---------------------------------------------------------------------
@@ -222,38 +412,69 @@ export function ProjectComplianceTab({
   }
 
   // ---------------------------------------------------------------------
-  // Everything approved — frozen, categorised, read-only.
+  // Everything approved — the section is closed, and the finished file is one
+  // click behind it.
   // ---------------------------------------------------------------------
 
   if (engagement.status === CertifierEngagementStatus.APPROVED) {
-    return <ComplianceFinalPage documents={engagement.documents} />;
+    if (showFinalPage) {
+      return <ComplianceFinalPage documents={engagement.documents} />;
+    }
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck
+              className="size-4 text-success-ink"
+              aria-hidden="true"
+            />
+            Compliance and Certification complete
+          </CardTitle>
+          <CardDescription>
+            The certifier has approved all {reviewDocuments.length} documents.
+            Nothing in this section can change now.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button type="button" onClick={() => setShowFinalPage(true)}>
+            Proceed
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   const collecting =
     engagement.status === CertifierEngagementStatus.NOT_STARTED ||
     engagement.status === CertifierEngagementStatus.COLLECTING_DOCS;
 
-  const hasResponse = engagement.documents.some(
-    (document) =>
-      document.status === ComplianceDocumentStatus.RECEIVED &&
-      CERTIFIER_RESPONSE_DOCUMENTS.some(
-        (response) => response.type === document.documentType,
-      ),
-  );
+  // Unidentified attachments count as a response: something arrived, it just
+  // has not been placed yet. Without this the blocks stayed hidden and the
+  // engagement stranded whenever the classifier was unsure.
+  const hasResponse =
+    unidentified.length > 0 ||
+    engagement.documents.some(
+      (document) =>
+        document.status === ComplianceDocumentStatus.RECEIVED &&
+        CERTIFIER_RESPONSE_DOCUMENTS.some(
+          (response) => response.type === document.documentType,
+        ),
+    );
 
   const signedCopies = SIGNED_COPY_DOCUMENTS.map((signed) => ({
     ...signed,
     document: documentsByType.get(signed.type),
   }));
-  const bothSigned = signedCopies.every(
-    (signed) => (signed.document?.files.length ?? 0) > 0,
-  );
+  const signedCopiesSent = SIGNED_COPIES_SENT.has(engagement.status);
 
   const checklistDocument = documentsByType.get(ComplianceDocumentType.CHECKLIST);
   const allChecklistUploaded =
     checklistItems.length > 0 &&
     checklistItems.every((item) => item.files.length > 0);
-  const inReview = engagement.status === CertifierEngagementStatus.IN_REVIEW;
+  const insuranceDocument = documentsByType.get(
+    ComplianceDocumentType.HOME_INSURANCE,
+  );
 
   return (
     <div className="space-y-6">
@@ -280,10 +501,10 @@ export function ProjectComplianceTab({
                   helperText={
                     document?.files.length ? undefined : "Not collected yet"
                   }
-                  mode={inReview ? (isAdmin ? "resolve" : "frozen") : "upload"}
+                  mode={rowMode(document)}
                   isBusy={isBusy || uploadingKey === required.type}
                   onUpload={(file) =>
-                    void attach(file, required.type, {
+                    void attachEvidence(file, required.type, {
                       documentId: document?.id,
                       documentType: required.type,
                     })
@@ -320,6 +541,71 @@ export function ProjectComplianceTab({
       </Card>
 
       {/* ---------------------------------------------------------------
+          Unidentified attachments
+      --------------------------------------------------------------- */}
+      {unidentified.length > 0 ? (
+        <Card className="border-warning/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HelpCircle
+                className="size-4 text-warning-ink"
+                aria-hidden="true"
+              />
+              Needs identifying
+            </CardTitle>
+            <CardDescription>
+              These arrived from the certifier but could not be read confidently
+              enough to place. Say what each one is and it moves into the right
+              block.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul>
+              {unidentified.map((document) => (
+                <li
+                  key={document.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 py-3 last:border-b-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    {document.files.map((file) => (
+                      <button
+                        key={file.id}
+                        type="button"
+                        onClick={() => handlePreviewFile(file.id)}
+                        className="block text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        {file.filename}
+                      </button>
+                    ))}
+                  </div>
+                  <Select
+                    disabled={isBusy}
+                    onValueChange={(value) =>
+                      void handleIdentify(
+                        document.id,
+                        value as ComplianceDocumentType,
+                      )
+                    }
+                  >
+                    <SelectTrigger className="w-56" size="sm">
+                      <SelectValue placeholder="What is this?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CERTIFIER_RESPONSE_DOCUMENTS.map((response) => (
+                        <SelectItem key={response.type} value={response.type}>
+                          {response.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ---------------------------------------------------------------
           Certifier response
       --------------------------------------------------------------- */}
       {hasResponse ? (
@@ -350,13 +636,18 @@ export function ProjectComplianceTab({
                   label={signed.label}
                   document={signed.document}
                   helperText="Please upload the signed copy"
-                  mode="upload"
+                  mode={rowMode(signed.document)}
                   isBusy={isBusy || uploadingKey === signed.type}
                   onUpload={(file) =>
-                    void attach(file, signed.type, {
-                      documentId: signed.document?.id,
-                      documentType: signed.type,
-                    })
+                    void attachSignedCopy(file, signed.type, signed.document?.id)
+                  }
+                  onApprove={() =>
+                    signed.document &&
+                    void handleResolve(signed.document, "approved")
+                  }
+                  onReject={() =>
+                    signed.document &&
+                    void handleResolve(signed.document, "rejected")
                   }
                   onPreviewFile={handlePreviewFile}
                 />
@@ -366,10 +657,7 @@ export function ProjectComplianceTab({
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 type="button"
-                // Held shut until both signed copies exist: the certifier will
-                // not issue a checklist against an unsigned fee proposal, so
-                // asking for one early just wastes a round trip.
-                disabled={!bothSigned || !checklistDocument || isBusy}
+                disabled={!signedCopiesSent || !checklistDocument || isBusy}
                 onClick={() =>
                   dispatch(
                     openModal({
@@ -385,9 +673,10 @@ export function ProjectComplianceTab({
               >
                 Get Checklist
               </Button>
-              {!bothSigned ? (
+              {!signedCopiesSent ? (
                 <p className="text-sm text-muted-foreground">
-                  Upload both signed copies first.
+                  Upload both signed copies — they go to the certifier
+                  automatically.
                 </p>
               ) : !checklistDocument ? (
                 <p className="text-sm text-muted-foreground">
@@ -418,18 +707,10 @@ export function ProjectComplianceTab({
                   label={complianceDocumentLabel(item.documentType, item.label)}
                   document={item}
                   helperText={item.files.length ? undefined : "Not supplied yet"}
-                  mode={
-                    inReview
-                      ? isAdmin
-                        ? "resolve"
-                        : "frozen"
-                      : item.status === ComplianceDocumentStatus.APPROVED
-                        ? "frozen"
-                        : "upload"
-                  }
+                  mode={rowMode(item)}
                   isBusy={isBusy || uploadingKey === item.id}
                   onUpload={(file) =>
-                    void attach(file, item.id, { documentId: item.id })
+                    void attachEvidence(file, item.id, { documentId: item.id })
                   }
                   onApprove={() => void handleResolve(item, "approved")}
                   onReject={() => void handleResolve(item, "rejected")}
@@ -441,32 +722,35 @@ export function ProjectComplianceTab({
             {/* -------------------------------------------------------
                 Home insurance
             ------------------------------------------------------- */}
-            {allChecklistUploaded && !inReview ? (
+            {allChecklistUploaded ? (
               <div className="rounded-lg border border-border/70 bg-muted/40 p-4">
-                <p className="font-medium text-foreground">
-                  Have you raised the home insurance?
-                </p>
-
-                {documentsByType.get(ComplianceDocumentType.HOME_INSURANCE)
-                  ?.files.length ? (
-                  <ul className="mt-2">
+                {insuranceDocument?.files.length ? (
+                  <ul>
                     <ComplianceDocumentRow
                       label="Home Insurance"
-                      document={documentsByType.get(
-                        ComplianceDocumentType.HOME_INSURANCE,
-                      )}
-                      mode="upload"
+                      document={insuranceDocument}
+                      mode={rowMode(insuranceDocument)}
                       isBusy={isBusy || uploadingKey === "home-insurance"}
                       onUpload={(file) =>
-                        void attach(file, "home-insurance", {
+                        void attachEvidence(file, "home-insurance", {
+                          documentId: insuranceDocument.id,
                           documentType: ComplianceDocumentType.HOME_INSURANCE,
                         })
+                      }
+                      onApprove={() =>
+                        void handleResolve(insuranceDocument, "approved")
+                      }
+                      onReject={() =>
+                        void handleResolve(insuranceDocument, "rejected")
                       }
                       onPreviewFile={handlePreviewFile}
                     />
                   </ul>
                 ) : (
                   <>
+                    <p className="font-medium text-foreground">
+                      Have you raised the home insurance?
+                    </p>
                     <div className="mt-3 flex gap-2">
                       <Button
                         type="button"
@@ -494,7 +778,7 @@ export function ProjectComplianceTab({
                           mode="upload"
                           isBusy={isBusy || uploadingKey === "home-insurance"}
                           onUpload={(file) =>
-                            void attach(file, "home-insurance", {
+                            void attachEvidence(file, "home-insurance", {
                               documentType:
                                 ComplianceDocumentType.HOME_INSURANCE,
                             })
@@ -524,35 +808,36 @@ export function ProjectComplianceTab({
             ) : null}
 
             {/* -------------------------------------------------------
-                Send for review
+                Send for review — the first send and every re-send after a
+                round of rejections, which is what lets the loop finish.
             ------------------------------------------------------- */}
-            {allChecklistUploaded && !inReview ? (
+            {allEvidenceIn && !allApproved ? (
               <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success-light px-4 py-3">
                 <p className="flex-1 font-medium text-foreground">
-                  Compliance and Certification complete
+                  {inReview
+                    ? "Everything sent back has been re-supplied"
+                    : "Compliance and Certification complete"}
                 </p>
                 <Button
                   type="button"
                   disabled={isBusy}
-                  onClick={async () => {
-                    try {
-                      await dispatch(
-                        sendComplianceForReview({ projectId: project.id }),
-                      ).unwrap();
-                      toast.success("Sent to the certifier for review.");
-                    } catch (error) {
-                      toast.error(
-                        error instanceof Error
-                          ? error.message
-                          : "Could not send the file.",
-                      );
-                    }
-                  }}
+                  onClick={() =>
+                    dispatch(
+                      openModal({
+                        type: "complianceComplete",
+                        payload: {
+                          projectId: project.id,
+                          documentCount: reviewDocuments.length,
+                          isResend: inReview,
+                        },
+                      }),
+                    )
+                  }
                 >
                   {isBusy ? (
                     <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                   ) : null}
-                  Send it to Certifier
+                  {inReview ? "Re-send to Certifier" : "Send it to Certifier"}
                 </Button>
               </div>
             ) : null}

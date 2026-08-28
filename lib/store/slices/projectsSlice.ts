@@ -23,6 +23,7 @@ import { fetchJson } from "@/utils/fetch";
 import type { CertifierEngagementDetail } from "@/types/compliance";
 import type {
   CertifierReplyInput,
+  ClassifyReceivedDocumentInput,
   ComplianceDocumentUploadInput,
   ResolveComplianceDocumentInput,
   StartEngagementInput,
@@ -415,6 +416,51 @@ export const resolveComplianceDocument = createAsyncThunk<
   }
 });
 
+export const sendSignedCopies = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/sendSignedCopies", async ({ projectId }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/signed-copies",
+      { method: "POST" },
+      "Unable to send the signed copies",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to send the signed copies",
+    );
+  }
+});
+
+export const identifyComplianceDocument = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string; documentId: string } & ClassifyReceivedDocumentInput,
+  { rejectValue: string }
+>(
+  "projects/identifyComplianceDocument",
+  async ({ projectId, documentId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/documents/${documentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        "Unable to identify the document",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to identify the document",
+      );
+    }
+  },
+);
+
 export const sendComplianceForReview = createAsyncThunk<
   { projectId: string; engagement: CertifierEngagementDetail | null },
   { projectId: string },
@@ -472,6 +518,8 @@ const complianceThunks = [
   sendCertifierOutreach,
   sendCertifierReply,
   resolveComplianceDocument,
+  sendSignedCopies,
+  identifyComplianceDocument,
   sendComplianceForReview,
   refreshCertifierEngagement,
 ] as const;

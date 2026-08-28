@@ -397,6 +397,15 @@ async function advanceAndNotify(
 ): Promise<void> {
   "use step";
 
+  // The message id is stamped unconditionally, outside the status guard: a
+  // second reply on an engagement that has already moved past
+  // RESPONSE_RECEIVED still has to become the message the next reply threads
+  // onto, or the conversation forks off the latest turn.
+  await prisma.certifierEngagement.update({
+    where: { id: engagement.id },
+    data: { lastInboundMessageId: message.messageId },
+  });
+
   await prisma.certifierEngagement.updateMany({
     where: {
       id: engagement.id,

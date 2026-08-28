@@ -11,8 +11,12 @@ import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
 import {
+  CERTIFIER_RESPONSE_DOCUMENTS,
+  CERTIFIER_SUPPLIED_TYPES,
   complianceDocumentLabel,
+  isReviewableDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
+  SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
 import {
   buildCertifierReplySubject,
@@ -376,13 +380,29 @@ export async function sendCertifierReply(
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
 
-  await client.sendMail({
-    to: certifierEmail,
-    subject,
-    body: input.body,
-    cc: config.cc,
-    ...(attachments.length > 0 ? { attachments } : {}),
-  });
+  if (engagement.lastInboundMessageId) {
+    // A real reply: Graph builds it from the certifier's own message, so it
+    // carries In-Reply-To, References and the conversation id, and lands in
+    // their existing thread rather than beside it.
+    await client.replyToMessage({
+      messageId: engagement.lastInboundMessageId,
+      body: input.body,
+      to: certifierEmail,
+      cc: config.cc,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    });
+  } else {
+    // Nothing to reply to yet — the certifier has not answered the outreach.
+    // Subject threading is all that is available, and it is what opens the
+    // thread the replies above will later join.
+    await client.sendMail({
+      to: certifierEmail,
+      subject,
+      body: input.body,
+      cc: config.cc,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    });
+  }
 
   await recordOutboundEmail({
     engagementId,
@@ -636,6 +656,11 @@ export async function resolveComplianceDocument(params: {
       where: {
         engagementId: document.engagementId,
         status: { not: ComplianceDocumentStatus.APPROVED },
+        // The certifier's own invoice, fee proposal, CDC form and checklist are
+        // not reviewed — they came from the certifier. Counting them held the
+        // engagement one approval short of closing for ever, against rows the
+        // UI gives nobody a way to approve.
+        documentType: { notIn: [...CERTIFIER_SUPPLIED_TYPES] },
       },
     });
     if (outstanding === 0) {
@@ -678,13 +703,18 @@ export async function resolveComplianceDocument(params: {
 export async function sendComplianceForReview(engagementId: string) {
   const engagement = await requireEngagement(engagementId);
 
-  const evidence = engagement.documents.filter(
-    (doc) => doc.documentType === ComplianceDocumentType.CHECKLIST_ITEM,
+  // The whole review set, not just the checklist: the required pack, the signed
+  // copies and the insurance certificate are all things the certifier is being
+  // asked to sign off, and sending with one of them empty wastes a round trip.
+  const evidence = engagement.documents.filter((doc) =>
+    isReviewableDocumentType(doc.documentType),
   );
   const outstanding = evidence.filter((doc) => doc.files.length === 0);
-  if (evidence.length > 0 && outstanding.length > 0) {
+  if (outstanding.length > 0) {
     throw new Error(
-      `${outstanding.length} checklist item${outstanding.length === 1 ? " is" : "s are"} still missing a document.`,
+      `${outstanding.length} document${outstanding.length === 1 ? " is" : "s are"} still missing: ${outstanding
+        .map((doc) => complianceDocumentLabel(doc.documentType, doc.label))
+        .join(", ")}.`,
     );
   }
 
@@ -711,11 +741,129 @@ export async function sendComplianceForReview(engagementId: string) {
 
   after(async () => {
     await notifyCompliance("complianceReviewSent", engagement.projectId, {
-      documentCount: engagement.documents.filter(
-        (doc) => doc.files.length > 0,
-      ).length,
+      documentCount: evidence.length,
     });
   });
 
   return sent;
+}
+
+/**
+ * Sends the countersigned fee proposal and CDC form back to the certifier.
+ *
+ * This is what the certifier is waiting on before they will issue a checklist,
+ * and it is the one step in the flow with no natural prompt — the admin has
+ * just uploaded two files and would otherwise have to know that a separate
+ * send has to happen. The UI fires it as soon as the second copy lands.
+ *
+ * Guarded on the status transition rather than on a flag: `SIGNING` is reached
+ * exactly once, so a double click, or two tabs both watching the same upload
+ * complete, produce one email rather than two.
+ */
+export async function sendSignedCopies(engagementId: string) {
+  const engagement = await requireEngagement(engagementId);
+
+  const signed = SIGNED_COPY_DOCUMENTS.map((copy) => ({
+    ...copy,
+    document: engagement.documents.find(
+      (doc) => doc.documentType === copy.type,
+    ),
+  }));
+
+  const missing = signed.filter(
+    (copy) => (copy.document?.files.length ?? 0) === 0,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Still waiting on the ${missing.map((copy) => copy.label).join(" and ")}.`,
+    );
+  }
+
+  const claimed = await advanceEngagementStatus(
+    engagementId,
+    [
+      CertifierEngagementStatus.RESPONSE_RECEIVED,
+      CertifierEngagementStatus.OUTREACH_SENT,
+      CertifierEngagementStatus.AWAITING_RESPONSE,
+    ],
+    CertifierEngagementStatus.SIGNING,
+  );
+
+  if (!claimed) {
+    // Someone else already sent them. Not an error — the caller's intent has
+    // been satisfied, just not by this call.
+    return { alreadySent: true as const };
+  }
+
+  const attachments = signed.flatMap((copy) =>
+    (copy.document?.files ?? []).map((file) => ({
+      fileId: file.id,
+      name: file.filename,
+      url: file.url,
+    })),
+  );
+
+  try {
+    await sendCertifierReply(engagementId, {
+      body: [
+        "<p>Hi,</p>",
+        `<p>Please find the signed fee proposal and CDC application form for <strong>${engagement.subjectAddress}</strong> attached.</p>`,
+        "<p>Could you send through your document checklist when you are ready?</p>",
+        "<p>Kind regards,<br/>Royal Constructions</p>",
+      ].join("\n"),
+      attachments,
+    });
+  } catch (error) {
+    // The status move is what gates "Get Checklist", so a failed send has to
+    // give it back — otherwise the admin is let through to ask for a checklist
+    // the certifier was never sent the signatures for.
+    await advanceEngagementStatus(
+      engagementId,
+      [CertifierEngagementStatus.SIGNING],
+      CertifierEngagementStatus.RESPONSE_RECEIVED,
+    );
+    throw error;
+  }
+
+  return { alreadySent: false as const, attachmentCount: attachments.length };
+}
+
+/**
+ * Relabels a received document the classifier could not place.
+ *
+ * Inbound attachments land as UNKNOWN when the model is not confident, which is
+ * the right default — a mislabelled document routes itself into the wrong slot
+ * silently. But without this there is no way back: the four response blocks key
+ * on document type, so an unclassified checklist left the whole engagement
+ * stranded with the file stored and unreachable.
+ *
+ * Deliberately narrow. Only an UNKNOWN document can be relabelled, and only to
+ * something a certifier actually sends, so this cannot be used to turn a
+ * rejected checklist item into an approved required document.
+ */
+export async function classifyReceivedDocument(params: {
+  projectId: string;
+  documentId: string;
+  documentType: ComplianceDocumentType;
+}) {
+  if (!CERTIFIER_RESPONSE_DOCUMENTS.some((doc) => doc.type === params.documentType)) {
+    throw new Error("That is not a document type the certifier sends.");
+  }
+
+  const claim = await prisma.complianceDocument.updateMany({
+    where: {
+      id: params.documentId,
+      documentType: ComplianceDocumentType.UNKNOWN,
+      engagement: { projectId: params.projectId },
+    },
+    data: { documentType: params.documentType },
+  });
+
+  if (claim.count === 0) {
+    throw new Error("That document has already been identified.");
+  }
+
+  after(() => revalidateEngagement(params.projectId));
+
+  return { documentId: params.documentId, documentType: params.documentType };
 }

@@ -82,6 +82,18 @@ export const complianceDiscoverySchema = z.object({
   documentType: z.enum(ComplianceDocumentType),
 });
 
+/**
+ * Labelling a received document the classifier left as UNKNOWN. Narrowed at the
+ * data layer to the four types a certifier actually sends.
+ */
+export const classifyReceivedDocumentSchema = z.object({
+  documentType: z.enum(ComplianceDocumentType),
+});
+
+export type ClassifyReceivedDocumentInput = z.infer<
+  typeof classifyReceivedDocumentSchema
+>;
+
 export type ComplianceDiscoveryInput = z.infer<
   typeof complianceDiscoverySchema
 >;

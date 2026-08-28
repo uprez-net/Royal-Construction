@@ -77,6 +77,7 @@ export function CertifierDiscoveryModal({
   const { uploadFile, uploadingKey } = useComplianceUpload(projectId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadRef = useRef<number | null>(null);
+  const sentRef = useRef(false);
 
   const [rows, setRows] = useState<Row[]>(() =>
     REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => ({
@@ -182,6 +183,7 @@ export function CertifierDiscoveryModal({
       toast.success("Documents sent to the certifier.");
       onOpenChange(false);
     } catch (sendError) {
+      sentRef.current = false;
       toast.error(
         sendError instanceof Error
           ? sendError.message
@@ -191,6 +193,26 @@ export function CertifierDiscoveryModal({
       setIsSending(false);
     }
   };
+
+  /**
+   * Sends as soon as the last document is in.
+   *
+   * Collecting the six IS the act of sending them — leaving a button for it
+   * meant the loop could finish, the modal could be closed, and the certifier
+   * would never hear anything. The ref guard is what stops the effect firing
+   * again while the request is in flight; on failure it is released so the
+   * button below can retry.
+   */
+  useEffect(() => {
+    if (!open || !allFound || !isDone || sentRef.current) {
+      return;
+    }
+    sentRef.current = true;
+    void handleSend();
+    // handleSend is recreated every render and is not part of the condition
+    // this effect is watching.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, allFound, isDone]);
 
   return (
     <Dialog
@@ -206,10 +228,13 @@ export function CertifierDiscoveryModal({
     >
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Collecting documents</DialogTitle>
+          <DialogTitle>
+            {isSending ? "Sending documents to certifier…" : "Collecting documents"}
+          </DialogTitle>
           <DialogDescription>
             Looking for each required document on the project. Anything missing
-            can be uploaded here.
+            can be uploaded here, and the whole pack goes to the certifier as
+            soon as it is complete.
           </DialogDescription>
         </DialogHeader>
 
@@ -341,7 +366,7 @@ export function CertifierDiscoveryModal({
             ) : (
               <Send className="size-4" aria-hidden="true" />
             )}
-            Send to certifier
+            {isSending ? "Sending…" : "Send to certifier"}
           </Button>
         </DialogFooter>
       </DialogContent>

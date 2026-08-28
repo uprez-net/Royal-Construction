@@ -58,6 +58,8 @@ import FilePreviewCanvas from "../shared/file-preview-canvas";
 import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
 import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
 import { CertifierExtractModal } from "./certifier-extract-modal";
+import { CertifierSendSignedCopiesModal } from "./certifier-send-signed-copies-modal";
+import { ComplianceCompleteModal } from "./compliance-complete-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -655,6 +657,40 @@ export function ModalManager() {
             }}
           />
         </WorkflowStreamProvider>
+      );
+    }
+    case "certifierSendSignedCopies": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <CertifierSendSignedCopiesModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceComplete": {
+      const {
+        projectId: id,
+        documentCount,
+        isResend,
+      } = modal.payload as {
+        projectId: string;
+        documentCount: number;
+        isResend?: boolean;
+      };
+      return (
+        <ComplianceCompleteModal
+          projectId={id}
+          documentCount={documentCount}
+          isResend={isResend ?? false}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
       );
     }
     default:

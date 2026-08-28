@@ -155,6 +155,22 @@ async function uploadAttachmentToDraft(
   }
 }
 
+export interface ReplyInput {
+  /** The Graph id of the message being replied to. */
+  messageId: string;
+  /** HTML prepended above whatever the reply draft already quotes. */
+  body: string;
+  attachments?: EmailAttachment[];
+  /**
+   * Overrides the recipients Graph derives from the original sender. The
+   * certifier engagement sets this to the address the engagement is defined by,
+   * so a reply from one person in a certifier's office still goes back to the
+   * mailbox the job is being run through.
+   */
+  to?: string | string[];
+  cc?: string | string[];
+}
+
 export interface EmailInput {
   to: string | string[];
   subject: string;
@@ -200,6 +216,17 @@ export interface GraphSubscription {
 
 interface GraphContext {
   sendMail(input: EmailInput): Promise<void>;
+  /**
+   * Sends a genuine reply to a message already in the mailbox.
+   *
+   * Threading is the whole point. A plain `sendMail` with "Re: …" in the
+   * subject threads only as well as the recipient's client guesses from the
+   * subject line, and Graph refuses to let `internetMessageHeaders` set
+   * `In-Reply-To` or `References` — only `x-` prefixed headers are accepted.
+   * Building the message with `createReply` is the supported way to get both,
+   * plus the conversation id, set correctly.
+   */
+  replyToMessage(input: ReplyInput): Promise<void>;
   listInbox(top?: number, includeBody?: boolean): Promise<GraphMessage[]>;
   getTokenPreview(): Promise<string>;
   getMessageByResource(resource: string, includeBody?: boolean): Promise<GraphMessage>;
@@ -590,6 +617,75 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       }
 
       return Buffer.from(await response.arrayBuffer());
+    },
+    replyToMessage: async ({ messageId, body, attachments, to, cc }) => {
+      const decodedAttachments =
+        attachments && attachments.length > 0 ? decodeAttachments(attachments) : [];
+
+      if (decodedAttachments.length > 0) {
+        assertAttachmentsSendable(decodedAttachments);
+      }
+
+      const token = await getAccessToken();
+      const originalUrl = `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}`;
+
+      // createReply returns a draft that already carries In-Reply-To,
+      // References and the conversation id, with the original quoted into its
+      // body. Everything below edits that draft rather than composing afresh,
+      // which is what keeps the reply in the thread.
+      const draft = await graphRequest<{ id?: string; body?: { content?: string } }>(
+        'POST',
+        `${originalUrl}/createReply`,
+        token,
+      );
+
+      if (!draft?.id) {
+        throw new Error('Graph did not return a reply draft id.');
+      }
+
+      const draftUrl = `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(draft.id)}`;
+
+      try {
+        const formatRecipients = (value?: string | string[]) =>
+          value
+            ? (Array.isArray(value) ? value : [value]).map(email => ({
+              emailAddress: {
+                address: email,
+              },
+            }))
+            : undefined;
+
+        const toRecipients = formatRecipients(to);
+        const ccRecipients = formatRecipients(cc);
+
+        await graphRequest('PATCH', draftUrl, token, {
+          body: {
+            contentType: 'HTML',
+            // Prepended rather than replacing: Graph put the quoted original
+            // in here, and dropping it leaves the certifier reading a bare
+            // line with no idea which of their messages it answers.
+            content: `${body}${draft.body?.content ?? ''}`,
+          },
+          ...(toRecipients && { toRecipients }),
+          ...(ccRecipients && { ccRecipients }),
+        });
+
+        for (const decoded of decodedAttachments) {
+          await uploadAttachmentToDraft(draftUrl, token, decoded);
+        }
+
+        await graphRequest('POST', `${draftUrl}/send`, token);
+      } catch (error) {
+        // Same cleanup the large-attachment send path does: a failed upload
+        // otherwise leaves a half-built draft in the mailbox forever.
+        await graphRequest('DELETE', draftUrl, token).catch((cleanupError) => {
+          console.error(
+            `Failed to delete orphaned Graph reply draft ${draft.id}; it will need clearing by hand.`,
+            cleanupError,
+          );
+        });
+        throw error;
+      }
     },
     sendMail: async ({ to, subject, body, cc, bcc, attachments }) => {
       const formatRecipients = (value?: string | string[]) =>
