@@ -10,6 +10,7 @@ import {
   CHECKLIST_EXTRACTION_SYSTEM_PROMPT,
 } from "@/lib/agent/checklist-extraction-prompts";
 import { runChecklistExtraction } from "@/lib/agent/checklistExtractionAgent";
+import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
 import { ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -216,6 +217,13 @@ async function saveChecklistItems(
       itemCount: saved,
     }),
   );
+
+  // The admin who pressed "Get Checklist" is watching the modal, but the site
+  // manager who has to supply the documents is not — this is the first they
+  // hear that the work exists.
+  await notifyCompliance("complianceChecklistExtracted", input.projectId, {
+    itemCount: saved,
+  });
 
   return saved;
 }

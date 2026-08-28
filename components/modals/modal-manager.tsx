@@ -634,9 +634,10 @@ export function ModalManager() {
         engagementId: string;
         documentId?: string;
       };
-      // The checklist arrives as an attachment on the certifier's reply, so a
-      // notification can open this before the document exists. Nothing to run
-      // against, so nothing is rendered.
+      // Both entry points guarantee this — the tab's button is disabled until a
+      // checklist exists, and the notification url is only parsed into a
+      // payload when it carries one. Kept as a guard rather than a cast so a
+      // third caller cannot quietly open a modal with nothing to run.
       if (!documentId) {
         return null;
       }

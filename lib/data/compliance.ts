@@ -21,6 +21,7 @@ import {
 } from "@/lib/graph/certifier-subject";
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
+import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -327,6 +328,10 @@ export async function sendCertifierOutreach(engagementId: string) {
         documentCount: files.length,
       }),
     );
+    await notifyCompliance("certifierOutreachSent", engagement.projectId, {
+      certifierEmail,
+      documentCount: files.length,
+    });
   });
 
   return { subject, attachmentCount: files.length };
@@ -590,6 +595,18 @@ export async function resolveComplianceDocument(params: {
     document.label,
   );
 
+  if (!approving) {
+    // Only the rejection is announced. Approving one of twenty checklist items
+    // is not news; being told to redo one is.
+    after(async () => {
+      await notifyCompliance("complianceDocumentRejected", params.projectId, {
+        documentLabel,
+        rejectionReason: params.rejectionReason ?? "",
+        resolvedBy: params.resolvedBy,
+      });
+    });
+  }
+
   after(async () => {
     await logAction(
       approving
@@ -622,7 +639,7 @@ export async function resolveComplianceDocument(params: {
       },
     });
     if (outstanding === 0) {
-      await advanceEngagementStatus(
+      const closed = await advanceEngagementStatus(
         document.engagementId,
         [
           CertifierEngagementStatus.IN_REVIEW,
@@ -631,6 +648,14 @@ export async function resolveComplianceDocument(params: {
         ],
         CertifierEngagementStatus.APPROVED,
       );
+      // Sent only by the call that actually closed the engagement. Two admins
+      // approving the last two documents at once would otherwise both see zero
+      // outstanding and both announce it.
+      if (closed) {
+        after(async () => {
+          await notifyCompliance("complianceApproved", params.projectId, {});
+        });
+      }
     }
   }
 
@@ -675,7 +700,7 @@ export async function sendComplianceForReview(engagementId: string) {
     CertifierEngagementStatus.IN_REVIEW,
   );
 
-  return sendCertifierReply(engagementId, {
+  const sent = await sendCertifierReply(engagementId, {
     body: [
       "<p>Hi,</p>",
       `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
@@ -683,4 +708,14 @@ export async function sendComplianceForReview(engagementId: string) {
       "<p>Kind regards,<br/>Royal Constructions</p>",
     ].join("\n"),
   });
+
+  after(async () => {
+    await notifyCompliance("complianceReviewSent", engagement.projectId, {
+      documentCount: engagement.documents.filter(
+        (doc) => doc.files.length > 0,
+      ).length,
+    });
+  });
+
+  return sent;
 }

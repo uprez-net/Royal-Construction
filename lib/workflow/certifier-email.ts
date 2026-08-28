@@ -18,7 +18,7 @@ import {
   type LeadAttachmentReport,
 } from "@/lib/graph/lead-attachments";
 import { withGraphRetry } from "@/lib/graph/retry";
-import { triggerNotification } from "@/lib/notification/novu";
+import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
 import { getAllAdminUsersIds } from "@/lib/data/user";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -343,10 +343,11 @@ async function archiveAttachments(
  */
 async function classifyStoredDocuments(
   stored: { documentId: string; name: string; url: string }[],
-): Promise<number> {
+): Promise<{ labelled: number; checklistDocumentId: string | null }> {
   "use step";
 
   let labelled = 0;
+  let checklistDocumentId: string | null = null;
 
   for (const item of stored) {
     try {
@@ -364,12 +365,21 @@ async function classifyStoredDocuments(
         data: { documentType: result.documentType },
       });
       labelled += 1;
+
+      // Reported back so the notification can offer to run the extraction. A
+      // certifier who attaches two checklists is answered with the first.
+      if (
+        result.documentType === ComplianceDocumentType.CHECKLIST &&
+        !checklistDocumentId
+      ) {
+        checklistDocumentId = item.documentId;
+      }
     } catch (error) {
       console.error(`  Failed to classify "${item.name}":`, error);
     }
   }
 
-  return labelled;
+  return { labelled, checklistDocumentId };
 }
 
 /**
@@ -383,6 +393,7 @@ async function advanceAndNotify(
   engagement: { id: string; projectId: string },
   message: InboundCertifierMessage,
   documentCount: number,
+  checklistDocumentId: string | null,
 ): Promise<void> {
   "use step";
 
@@ -409,22 +420,14 @@ async function advanceAndNotify(
     }),
   );
 
-  const adminIds = await getAllAdminUsersIds();
-  if (adminIds.length === 0) {
-    // Guarded rather than passing an empty array: triggerNotification treats []
-    // as "broadcast to every user", so an instance with no admin would tell the
-    // whole company about one certifier reply.
-    console.warn("  No admin users to notify about the certifier response.");
-    return;
-  }
-
-  await triggerNotification(adminIds, {
-    title: "Certifier has replied",
-    message: `${documentCount} document${documentCount === 1 ? "" : "s"} received for ${message.subject}`,
-    // triggerNotification carries no structured payload, so the routing rides
-    // the query string. notification-item.tsx matches on `action=` to open the
-    // extraction popup instead of navigating.
-    url: `/projects/${engagement.projectId}?activeTab=compliance&action=certifierExtract&engagementId=${engagement.id}`,
+  await notifyCompliance("certifierResponseReceived", engagement.projectId, {
+    engagementId: engagement.id,
+    attachmentCount: documentCount,
+    // Only set when a checklist actually arrived. The template uses its
+    // presence to decide whether the notification offers to run the extraction
+    // at all, so a reply that is just an invoice does not open a popup with
+    // nothing to work on.
+    ...(checklistDocumentId ? { checklistDocumentId } : {}),
   });
 }
 
@@ -479,14 +482,21 @@ export const processInboundCertifierEmail = async (
     stored.map((item) => ({ name: item.name, url: item.url })),
   );
 
+  let checklistDocumentId: string | null = null;
   if (stored.length > 0) {
-    const labelled = await classifyStoredDocuments(stored);
+    const classification = await classifyStoredDocuments(stored);
+    checklistDocumentId = classification.checklistDocumentId;
     console.log(
-      `  Classified ${labelled} of ${stored.length} certifier document(s).`,
+      `  Classified ${classification.labelled} of ${stored.length} certifier document(s).`,
     );
   }
 
-  await advanceAndNotify(engagement, message, stored.length);
+  await advanceAndNotify(
+    engagement,
+    message,
+    stored.length,
+    checklistDocumentId,
+  );
 
   return {
     status: "recorded",
