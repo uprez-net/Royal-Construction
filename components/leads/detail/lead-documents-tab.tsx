@@ -26,6 +26,7 @@ import {
   formatFileSize,
   formatFileType,
 } from "@/utils/formatters";
+import { filePreviewModal } from "@/utils/file-preview";
 import type { ClientPayload } from "@/utils/validators/files";
 
 const MAX_FILES = 5;
@@ -288,14 +289,19 @@ export function LeadDocumentsTab({
         <CardContent className="p-4">
           <DataTable
             onRowClick={(index) => {
-              const file = files[index];
-              dispatch(
-                openModal({
-                  type: "previewFile",
-                  payload: { fileUrl: file.url },
-                }),
+              // Lead files carry no stored MIME type (see fileTypeFromName
+              // above), so the name is the only signal the helper has for
+              // telling a photo from a document.
+              const action = filePreviewModal(
+                files.map((candidate) => ({
+                  url: candidate.url,
+                  name: candidate.name,
+                })),
+                index,
               );
+              if (action) dispatch(openModal(action));
             }}
+            rowLabel={(index) => `Open ${files[index]?.name ?? "file"}`}
             caption="Files uploaded against this lead, with type and size."
             headers={["#", "Name", "Type", "Size", ""]}
             align={["end", "start", "start", "end", "start"]}

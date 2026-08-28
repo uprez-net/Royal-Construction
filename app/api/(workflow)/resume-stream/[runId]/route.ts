@@ -6,8 +6,21 @@ import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 // import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
 import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
+import { ComplianceChecklistStreamEvent } from "@/types/compliance-workflow";
 
 export const maxDuration = 900; // 15 minutes
+
+/**
+ * Every event shape this route can carry.
+ *
+ * One route serves every workflow's stream, so the union has to name them all.
+ * The client tells them apart by their own discriminant — `type` for the
+ * extraction workflows, `status` for offer creation.
+ */
+type WorkflowStreamChunk =
+    | OfferCreationStatus
+    | TenderExtractionWorkflowStreamEvent
+    | ComplianceChecklistStreamEvent;
 
 export async function GET(
     request: NextRequest,
@@ -66,10 +79,10 @@ export async function GET(
         await connection(); // Ensure the connection is established before proceeding
         const run = getRun(runId);
         console.log(`Resuming stream for run ${runId} from index ${startIndex}`);
-        const stream = run.getReadable<OfferCreationStatus | TenderExtractionWorkflowStreamEvent>({ startIndex });
+        const stream = run.getReadable<WorkflowStreamChunk>({ startIndex });
         // Encode typed chunks as NDJSON for easy client parsing
         const encoder = new TextEncoder();
-        const ndjsonStream = new TransformStream<OfferCreationStatus | TenderExtractionWorkflowStreamEvent, Uint8Array>({
+        const ndjsonStream = new TransformStream<WorkflowStreamChunk, Uint8Array>({
             transform(chunk, controller) {
                 controller.enqueue(encoder.encode(JSON.stringify(chunk) + "\n"));
             },

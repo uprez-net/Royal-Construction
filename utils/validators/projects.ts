@@ -409,6 +409,7 @@ export const projectTabsValidator = z.enum([
   "docs",
   "history",
   "communications",
+  "compliance",
 ]);
 
 export type ProjectDetailTabKey = z.infer<typeof projectTabsValidator>;

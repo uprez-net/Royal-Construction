@@ -22,6 +22,32 @@ const isLeadActionNotification = (url: string): boolean => {
   return url.includes("action=followup") || url.includes("action=meetingReview");
 };
 
+/**
+ * A certifier reply that has a checklist waiting to be extracted.
+ *
+ * Matched on the query string because `triggerNotification` carries no
+ * structured payload — the url is the only channel the sender has, so the
+ * routing information rides in it. Same convention as the lead actions above.
+ */
+const isCertifierExtractNotification = (url: string): boolean => {
+  return url.includes("action=certifierExtract");
+};
+
+export const certifierExtractPayloadFromUrl = (
+  url: string,
+): { projectId: string; engagementId: string } | null => {
+  const cleaned = url.replaceAll("&amp;", "&");
+  const [path, query = ""] = cleaned.split("?");
+  const engagementId = new URLSearchParams(query).get("engagementId");
+  // The project id is the last path segment of /projects/<id>.
+  const projectId = path.split("/").filter(Boolean).pop();
+
+  if (!engagementId || !projectId) {
+    return null;
+  }
+  return { projectId, engagementId };
+};
+
 const getApprovalIdAndTypeFromUrl = (
   url: string,
 ): { approvalId: string; approvalType: string } => {
@@ -84,6 +110,7 @@ export function NotificationItem({
   const isBusy = busyId === n.id;
   const isAdminApproval = url ? isAdminApprovalNotification(url) : false;
   const isLeadAction = url ? isLeadActionNotification(url) : false;
+  const isCertifierExtract = url ? isCertifierExtractNotification(url) : false;
 
   const handleAdminApprovalAction = () => {
     if (isAdminApproval) {
@@ -109,6 +136,13 @@ export function NotificationItem({
         payload: { leadId },
       }),
     );
+  };
+
+  const handleCertifierExtract = () => {
+    if (!url) return;
+    const payload = certifierExtractPayloadFromUrl(url);
+    if (!payload) return;
+    dispatch(openModal({ type: "certifierExtract", payload }));
   };
 
   return (
@@ -250,6 +284,20 @@ export function NotificationItem({
                   >
                     <SquareArrowOutUpRight />
                     Open
+                  </Button>
+                )}
+                {isCertifierExtract && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCertifierExtract();
+                    }}
+                  >
+                    <SquareArrowOutUpRight />
+                    Extract checklist
                   </Button>
                 )}
               </div>

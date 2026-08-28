@@ -24,6 +24,7 @@ import {
 import { ProjectTradiesTab } from "./project-tradies-tab";
 import { ProjectHistoryTabs } from "./project-history-tabs";
 import { ProjectCommunicationTabs } from "./project-communication-tabs";
+import { ProjectComplianceTab } from "./compliance-tab/project-compliance-tab";
 import { Role } from "@prisma/client";
 
 export function ProjectDetailTabs({ project, role }: { project: ProjectDetail; role: Role }) {
@@ -106,6 +107,9 @@ export function ProjectDetailTabs({ project, role }: { project: ProjectDetail; r
         ) : null}
         {activeTab === "communications" ? (
           <ProjectCommunicationTabs project={project} />
+        ) : null}
+        {activeTab === "compliance" ? (
+          <ProjectComplianceTab project={project} isAdmin={isAdmin} />
         ) : null}
       </div>
     </section>

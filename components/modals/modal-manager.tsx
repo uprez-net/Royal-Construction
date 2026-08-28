@@ -55,6 +55,9 @@ import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
 import FilePreviewCanvas from "../shared/file-preview-canvas";
+import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
+import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
+import { CertifierExtractModal } from "./certifier-extract-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -591,6 +594,66 @@ export function ModalManager() {
           url={fileUrl}
           onClose={handleClose} // swap in your actual close action
         />
+      );
+    }
+    case "startCertifierEngagement": {
+      const { projectId: id, defaultAddress } = modal.payload as {
+        projectId: string;
+        defaultAddress: string;
+      };
+      return (
+        <StartCertifierEngagementModal
+          projectId={id}
+          defaultAddress={defaultAddress}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierDiscovery": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <CertifierDiscoveryModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierExtract": {
+      const {
+        projectId: id,
+        engagementId,
+        documentId,
+      } = modal.payload as {
+        projectId: string;
+        engagementId: string;
+        documentId?: string;
+      };
+      // The checklist arrives as an attachment on the certifier's reply, so a
+      // notification can open this before the document exists. Nothing to run
+      // against, so nothing is rendered.
+      if (!documentId) {
+        return null;
+      }
+      return (
+        // Scoped to the modal, as the createProject case is: the provider holds
+        // one run, and a second stream opened elsewhere would overwrite it.
+        <WorkflowStreamProvider initialRunId={""}>
+          <CertifierExtractModal
+            projectId={id}
+            engagementId={engagementId}
+            documentId={documentId}
+            open
+            onOpenChange={(open) => {
+              if (!open) handleClose();
+            }}
+          />
+        </WorkflowStreamProvider>
       );
     }
     default:

@@ -117,6 +117,7 @@ export function UploadButton({
         createdAt: new Date(),
         updatedAt: new Date(),
         incidentId: incidentId ?? null,
+        complianceDocumentId: null,
       } satisfies DBFile;
     } catch (error) {
       console.error("Error uploading file:", error);
