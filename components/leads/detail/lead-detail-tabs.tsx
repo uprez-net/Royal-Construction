@@ -12,12 +12,30 @@ import { LeadNotesTab } from "./lead-notes-tab";
 import { LeadOverviewTab } from "./lead-overview-tab";
 import { LeadScheduledWorkTab } from "./lead-scheduled-work-tab";
 import {
+  LEAD_DETAIL_TABS,
   LeadTabNavigation,
   isLeadDetailTab,
   leadTabPanelId,
   leadTabTriggerId,
   type LeadDetailTabKey,
 } from "./lead-tab-navigation";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
+import { leadSurfaceTools } from "@/lib/tools/surfaces";
+
+/** Module-level so the declaration the registration hook hashes stays stable. */
+const leadTabToolSchema = {
+  type: "object",
+  properties: {
+    tab: {
+      type: "string",
+      enum: [...LEAD_DETAIL_TABS],
+      description: "The tab to open.",
+    },
+  },
+  required: ["tab"],
+  additionalProperties: false,
+} as const;
 
 export function LeadDetailTabs({
   lead,
@@ -84,6 +102,35 @@ export function LeadDetailTabs({
     },
     [pathname, router, searchParamsString],
   );
+
+  /* ── WebMCP: move between this lead's tabs ──
+     Only the open tab's panel is mounted, so each tab's tools appear and
+     disappear with it. Goes through handleTabChange so the URL follows the
+     state, the way it does for a click. */
+  useWebMcpTool({
+    name: "navigate_to_lead_tab",
+    title: "Switch lead tab",
+    description:
+      "Opens one of the tabs on the lead currently in view. Each tab registers its own tools while it is open, so switching is how you reach them \u2014 the result says which ones this tab carries.",
+    inputSchema: leadTabToolSchema as unknown as Record<string, unknown>,
+    annotations: { readOnlyHint: true },
+    execute: async (input) => {
+      const tab = String(input.tab ?? "");
+      if (!isLeadDetailTab(tab)) {
+        return webMcpError(
+          `Unknown lead tab "${tab}". Available: ${LEAD_DETAIL_TABS.join(", ")}.`,
+        );
+      }
+
+      handleTabChange(tab);
+
+      return webMcpJson({
+        tab,
+        leadId: lead.id,
+        toolsNowAvailable: leadSurfaceTools(tab),
+      });
+    },
+  });
 
   return (
     <section className="space-y-4">

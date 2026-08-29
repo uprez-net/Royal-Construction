@@ -65,6 +65,8 @@ lib/tools/
   manifest.ts          8 shared descriptors, all reads. Client-safe.
   json-schema.ts       the browser-facing descriptor list
   zod-to-json-schema.ts  Zod -> JSON Schema, usable without the manifest
+  surfaces.ts          which tools live on which screen, for the navigation
+                       tools and the operating guide to share
   result.ts            toToolResult / toToolError (server side)
   authz.ts             the role gate
   operating-guide.ts   the agent guide, shared by both transports
@@ -113,7 +115,9 @@ The 8 shared tools from [mcp-capability.md](./mcp-capability.md), plus three UI 
 | Tool | Purpose |
 | --- | --- |
 | `get_current_view` | The route the user is on, and the project or tradie whose detail page is open. Call it first when the user says "this project" or "here". |
-| `navigate_to` | Opens a section, optionally a specific record. Checked against the real sidebar; arbitrary URLs are refused. |
+| `navigate_to` | Opens a section that is not a record. Checked against the real sidebar; arbitrary URLs are refused. |
+| `navigate_to_project` | Opens a project, by `projectId` or by `query`. A query is resolved through `get_project_lookup`; several matches return the candidates and move nothing, rather than guessing on the user's behalf. |
+| `navigate_to_lead` | Opens a lead by id, optionally on a tab. |
 | `get_operating_guide` | Returns the operating guide. WebMCP has no prompts primitive, so without this a browser agent would never see the guidance the MCP server ships as `mcp_royal_construction`. |
 
 ### Leads screen — `components/leads/leads.tsx`
@@ -139,6 +143,30 @@ Results feed back through `useLeadsData`'s own setters (`prependLead`, `updateLe
 `create_milestone`, `update_milestone`, `add_milestone_photos`, `upload_project_files`, `create_tradie_schedule`.
 
 None of these take a `projectId`. They act on the project that is open, so an agent cannot quietly edit a different one. `update_milestone` validates against the full refined `milestoneUpdateSchema`, which is what stops a half-filled `DONE` landing as a milestone marked complete with no spend against it.
+
+## Navigation and surfaces
+
+Screen tools create a discovery problem the shared manifest does not have: an
+agent cannot find a tool it cannot yet see. The navigation tools answer it by
+returning `toolsNowAvailable` — what the destination carries — alongside the
+route they took.
+
+That list comes from `lib/tools/surfaces.ts`, which is the one place the
+surface → tool map is written down. The operating guide reads the same module, so
+the guide and the navigation tools cannot tell an agent different stories, and
+the Puppeteer suite checks both against what a real page registers.
+
+Tab tools deserve their own note. Only the open tab's panel is mounted, in both
+`project-detail-tabs.tsx` and `lead-detail-tabs.tsx`, so a tab's tools genuinely
+appear and disappear as the user moves. `navigate_to_project_tab` and
+`navigate_to_lead_tab` go through the same `handleTabChange` a click does: the
+Redux store is what renders, the URL is what a deep link and the back button
+read, and moving one without the other leaves them disagreeing.
+
+`payments` is deliberately absent from the project tab enum. Its panel still
+renders for an admin, but its trigger is commented out in
+`project-tab-navigation.tsx`, so an agent sent there would have no way back
+except browser history.
 
 ## File upload
 
