@@ -33,9 +33,28 @@ import {
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { selectTradieAlerts } from "@/lib/projects/project-warnings";
-import { MILESTONE_TRANSITIONS } from "@/lib/projects/milestone-transitions";
+import {
+  MILESTONE_TRANSITIONS,
+  canTransition,
+  transitionRefusal,
+} from "@/lib/projects/milestone-transitions";
 import { useWebMcpTools } from "@/hooks/use-webmcp-tool";
-import { webMcpJson } from "@/components/webmcp/tool-result";
+import {
+  summariseZodIssues,
+  webMcpError,
+  webMcpJson,
+  webMcpText,
+} from "@/components/webmcp/tool-result";
+import { toToolInputJsonSchema } from "@/lib/tools/zod-to-json-schema";
+import {
+  addProjectMilestone,
+  updateProjectMilestoneStatus,
+} from "@/lib/store/slices/projectsSlice";
+import {
+  milestoneCreationSchema,
+  milestoneUpdateSchema,
+} from "@/utils/validators/milestone";
+import { isSettled } from "@/lib/projects/milestone-ledger";
 import { cn } from "@/lib/utils";
 import {
   PROJECT_STAGE_LABELS,
@@ -50,6 +69,59 @@ import { currency } from "@/utils/formatters";
 import { MilestoneStatus, ProjectStage } from "@prisma/client";
 
 import { MilestoneCard } from "./milestone-tab/milestone-card";
+
+/**
+ * Converted once, at module scope. The registration hook hashes the tool
+ * declaration to decide whether to re-register, so a schema rebuilt on each
+ * render would churn the agent's tool list on every keystroke in the tab.
+ */
+const milestoneCreateJsonSchema = toToolInputJsonSchema(milestoneCreationSchema);
+
+const milestoneIdOnlySchema = {
+  type: "object",
+  properties: {
+    milestoneId: { type: "string", description: "From get_milestones." },
+  },
+  required: ["milestoneId"],
+  additionalProperties: false,
+} as const;
+
+const startMilestoneSchema = {
+  type: "object",
+  properties: {
+    milestoneId: { type: "string", description: "From get_milestones." },
+    startDate: { type: "string", description: "The date work started, YYYY-MM-DD." },
+  },
+  required: ["milestoneId", "startDate"],
+  additionalProperties: false,
+} as const;
+
+const finishMilestoneSchema = {
+  type: "object",
+  properties: {
+    milestoneId: { type: "string", description: "From get_milestones." },
+    startDate: { type: "string", description: "The date work started, YYYY-MM-DD." },
+    actualDate: {
+      type: "string",
+      description: "The date work finished, YYYY-MM-DD. Cannot precede startDate.",
+    },
+    spend: { type: "number", description: "What the milestone actually cost." },
+  },
+  required: ["milestoneId", "startDate", "actualDate", "spend"],
+  additionalProperties: false,
+} as const;
+
+const updateMilestoneDetailsSchema = {
+  type: "object",
+  properties: {
+    milestoneId: { type: "string", description: "From get_milestones." },
+    targetDate: { type: "string", description: "The new due date, YYYY-MM-DD." },
+  },
+  required: ["milestoneId", "targetDate"],
+  additionalProperties: false,
+} as const;
+
+const asToolSchema = (schema: unknown) => schema as Record<string, unknown>;
 
 const convertToVisualMilestone = (
   milestones: MilestoneWithFilesTradiesUpdates[],
@@ -311,6 +383,83 @@ export function ProjectMilestonesTab({
      is currently workable, and which status each milestone may legally move to.
      Without those an agent picks a milestone in a gated stage, gets refused,
      and has no way to work out why. */
+  /**
+   * Every milestone on the project, flat, each with the stage that governs it.
+   *
+   * The tools need two lookups the tree does not give directly: is this
+   * milestone in the stage that is currently workable, and what may its status
+   * become. Building the index once means a tool answers both without walking
+   * the tree, and means a bad id is caught before anything is dispatched.
+   */
+  const milestoneIndex = useMemo(() => {
+    const index = new Map<
+      string,
+      { milestone: UIMilestone; stage: LedgerStage }
+    >();
+
+    for (const stage of ledgerStages) {
+      for (const milestone of stage.milestones) {
+        index.set(milestone.id, { milestone, stage });
+        for (const child of milestone.childrenMilestones) {
+          index.set(child.id, { milestone: child, stage });
+        }
+      }
+    }
+
+    return index;
+  }, [ledgerStages]);
+
+  /**
+   * Resolves a milestone id and checks the move is one the UI would offer.
+   *
+   * Two gates, and they fail for different reasons worth telling apart. The
+   * status machine says a DONE milestone cannot start again. The stage gate
+   * says a PENDING milestone in a later stage cannot start *yet* — the work in
+   * front of it is not finished. An agent told only "rejected" would retry;
+   * told which, it can either pick a different milestone or explain the wait.
+   */
+  // A tagged union rather than an optional `error`: `"error" in resolved`
+  // cannot narrow a member that declares the key as optional-undefined, and
+  // silently widening every use back to `string | undefined` is exactly the
+  // kind of thing that gets cast away.
+  type TransitionCheck =
+    | { ok: false; error: string }
+    | { ok: true; id: string; milestone: UIMilestone };
+
+  const resolveTransition = (
+    rawId: unknown,
+    to: MilestoneStatus,
+    options: { requireWorkableStage?: boolean } = {},
+  ): TransitionCheck => {
+    const id = typeof rawId === "string" ? rawId.trim() : "";
+    if (!id) {
+      return { ok: false, error: "milestoneId is required. Call get_milestones to resolve it." };
+    }
+
+    const found = milestoneIndex.get(id);
+    if (!found) {
+      return {
+        ok: false,
+        error: `No milestone ${id} on this project. Call get_milestones for the current ids.`,
+      };
+    }
+
+    const { milestone, stage } = found;
+    if (!canTransition(milestone.status, to)) {
+      return { ok: false, error: transitionRefusal(milestone.name, milestone.status, to) };
+    }
+
+    if (options.requireWorkableStage && !stage.isWorkable) {
+      const blocker = stage.blockedBy?.label ?? "an earlier stage";
+      return {
+        ok: false,
+        error: `"${milestone.name}" is in the ${stage.label} stage, which cannot be worked until ${blocker} is finished.`,
+      };
+    }
+
+    return { ok: true, id, milestone };
+  };
+
   useWebMcpTools([
     {
       name: "get_milestones",
@@ -363,6 +512,196 @@ export function ProjectMilestonesTab({
           activeStage: ledgerStages.find((stage) => stage.isWorkable)?.stage ?? null,
           stages,
         });
+      },
+    },
+    {
+      name: "create_milestone",
+      title: "Add a milestone",
+      description:
+        "Adds a milestone to this project. projectStage is required and must be one of the build stages. Pass parentId to nest it under an existing milestone \u2014 a parent is finished by its children, not on its own.",
+      inputSchema: milestoneCreateJsonSchema,
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const parsed = milestoneCreationSchema.safeParse(input);
+        if (!parsed.success) {
+          return webMcpError(summariseZodIssues(parsed.error));
+        }
+
+        const created = await dispatch(
+          addProjectMilestone({ projectId: project.id, ...parsed.data }),
+        ).unwrap();
+
+        return webMcpJson({
+          id: created.id,
+          name: created.name,
+          status: created.status,
+          canBecome: MILESTONE_TRANSITIONS[created.status],
+        });
+      },
+    },
+    {
+      name: "start_milestone",
+      title: "Start a milestone",
+      description:
+        "Marks a milestone as started, the way the Start button does. Only a PENDING milestone in the stage currently being worked can start; anything else is refused with the reason. Needs the date work actually began.",
+      inputSchema: asToolSchema(startMilestoneSchema),
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const resolved = resolveTransition(input.milestoneId, MilestoneStatus.ACTIVE, {
+          requireWorkableStage: true,
+        });
+        if (!resolved.ok) return webMcpError(resolved.error);
+
+        const parsed = milestoneUpdateSchema.safeParse({
+          status: MilestoneStatus.ACTIVE,
+          startDate: input.startDate,
+        });
+        if (!parsed.success) return webMcpError(summariseZodIssues(parsed.error));
+
+        const updated = await dispatch(
+          updateProjectMilestoneStatus({
+            projectId: project.id,
+            milestoneId: resolved.id,
+            ...parsed.data,
+          }),
+        ).unwrap();
+
+        return webMcpJson({ id: updated.id, name: updated.name, status: updated.status });
+      },
+    },
+    {
+      name: "finish_milestone",
+      title: "Finish a milestone",
+      description:
+        "Marks an ACTIVE milestone as done, the way the Finish button does. All of startDate, actualDate and spend are required together \u2014 a milestone recorded as complete with no cost against it is worse than one left open \u2014 and actualDate cannot precede startDate. A milestone with child activities is finished by finishing those.",
+      inputSchema: asToolSchema(finishMilestoneSchema),
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const resolved = resolveTransition(input.milestoneId, MilestoneStatus.DONE);
+        if (!resolved.ok) return webMcpError(resolved.error);
+
+        const outstanding = resolved.milestone.childrenMilestones.filter(
+          (child) => !isSettled(child),
+        );
+        if (outstanding.length > 0) {
+          return webMcpError(
+            `"${resolved.milestone.name}" is finished by its child activities. ${outstanding.length} of them are still open: ${outstanding.map((child) => child.name).join(", ")}.`,
+          );
+        }
+
+        const parsed = milestoneUpdateSchema.safeParse({
+          status: MilestoneStatus.DONE,
+          startDate: input.startDate,
+          actualDate: input.actualDate,
+          spend: input.spend,
+        });
+        if (!parsed.success) return webMcpError(summariseZodIssues(parsed.error));
+
+        const updated = await dispatch(
+          updateProjectMilestoneStatus({
+            projectId: project.id,
+            milestoneId: resolved.id,
+            ...parsed.data,
+          }),
+        ).unwrap();
+
+        return webMcpJson({ id: updated.id, name: updated.name, status: updated.status });
+      },
+    },
+    {
+      name: "set_milestone_not_required",
+      title: "Mark a milestone as not required",
+      description:
+        "Marks a PENDING milestone as not required for this build, the way the ban icon does. Reversible \u2014 it can be set back to PENDING from the milestone's own dialog if the scope changes.",
+      inputSchema: asToolSchema(milestoneIdOnlySchema),
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const resolved = resolveTransition(
+          input.milestoneId,
+          MilestoneStatus.NOT_REQUIRED,
+        );
+        if (!resolved.ok) return webMcpError(resolved.error);
+
+        const updated = await dispatch(
+          updateProjectMilestoneStatus({
+            projectId: project.id,
+            milestoneId: resolved.id,
+            status: MilestoneStatus.NOT_REQUIRED,
+          }),
+        ).unwrap();
+
+        return webMcpJson({ id: updated.id, name: updated.name, status: updated.status });
+      },
+    },
+    {
+      name: "update_milestone_details",
+      title: "Change a milestone's due date",
+      description:
+        "Changes when a milestone is due, without moving its status. Works at any status, including stages that cannot start yet \u2014 those carry auto-spaced placeholder dates nobody chose, so they are the ones that most need correcting.",
+      inputSchema: asToolSchema(updateMilestoneDetailsSchema),
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const id = typeof input.milestoneId === "string" ? input.milestoneId.trim() : "";
+        const found = id ? milestoneIndex.get(id) : undefined;
+        if (!found) {
+          return webMcpError(
+            `No milestone ${id || "(none given)"} on this project. Call get_milestones for the current ids.`,
+          );
+        }
+
+        // milestoneUpdateSchema always wants a status, so the milestone's own
+        // is re-sent. Anything else would move the machine as a side effect of
+        // editing a date.
+        const parsed = milestoneUpdateSchema.safeParse({
+          status: found.milestone.status,
+          targetDate: input.targetDate,
+          ...(found.milestone.startDate
+            ? { startDate: format(new Date(found.milestone.startDate), "yyyy-MM-dd") }
+            : {}),
+          ...(found.milestone.actualDate
+            ? { actualDate: format(new Date(found.milestone.actualDate), "yyyy-MM-dd") }
+            : {}),
+          ...(found.milestone.spend != null ? { spend: Number(found.milestone.spend) } : {}),
+        });
+        if (!parsed.success) return webMcpError(summariseZodIssues(parsed.error));
+
+        const updated = await dispatch(
+          updateProjectMilestoneStatus({
+            projectId: project.id,
+            milestoneId: found.milestone.id,
+            ...parsed.data,
+          }),
+        ).unwrap();
+
+        return webMcpJson({
+          id: updated.id,
+          name: updated.name,
+          status: updated.status,
+          targetDate: input.targetDate,
+        });
+      },
+    },
+    {
+      name: "add_milestone_photos",
+      title: "Attach photos to a milestone",
+      description:
+        "Opens the photo upload dialog for a milestone, the way the Add photo button does. It uploads nothing: you have no file content, so a person has to choose the photos and confirm. Tell the user the dialog is open and stop \u2014 do not report the photos as attached.",
+      inputSchema: asToolSchema(milestoneIdOnlySchema),
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        const id = typeof input.milestoneId === "string" ? input.milestoneId.trim() : "";
+        const found = id ? milestoneIndex.get(id) : undefined;
+        if (!found) {
+          return webMcpError(
+            `No milestone ${id || "(none given)"} on this project. Call get_milestones for the current ids.`,
+          );
+        }
+
+        handleOpenAddUpdateModal(found.milestone.id);
+
+        return webMcpText(
+          `Opened the photo dialog for "${found.milestone.name}". The user needs to choose the files and confirm — nothing has been attached yet.`,
+        );
       },
     },
   ]);

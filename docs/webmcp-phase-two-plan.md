@@ -50,7 +50,7 @@ to finish the action, and never claim it is done.
 | 2 | Removals + reference cleanup | done |
 | 3 | Navigation tools | done |
 | 4 | Project detail reads | done |
-| 5 | Project detail writes | pending |
+| 5 | Project detail writes | done |
 | 6 | Lead detail | pending |
 | 7 | `OPERATING_GUIDE` rewrite | pending |
 | 8 | Puppeteer smoke suite | pending |

@@ -28,6 +28,56 @@ import { DataTable } from "@/components/common/data-table";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { calculateScheduleTotalCost } from "@/utils/calculations";
+import { createBulkTradieScheduleForProject } from "@/lib/store/slices/projectsSlice";
+import { createTradieScheduleSchema } from "@/utils/validators/tradies";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { summariseZodIssues, webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
+import { MilestoneStatus } from "@prisma/client";
+
+/**
+ * Module-level so the registration hook's declaration hash stays stable.
+ *
+ * Deliberately narrower than createTradieScheduleSchema. `projectId` comes from
+ * the open project, and `emailContent` is left out entirely: the bulk path this
+ * tool uses does not read it, so advertising it would tell an agent it could
+ * write an outreach email that nothing would ever send.
+ */
+const scheduleTradieToolSchema = {
+  type: "object",
+  properties: {
+    schedules: {
+      type: "array",
+      minItems: 1,
+      description: "One entry per tradie. Several can be booked in one call.",
+      items: {
+        type: "object",
+        properties: {
+          tradieId: { type: "string", description: "From get_tradies." },
+          milestoneId: {
+            type: "string",
+            description:
+              "The activity this tradie is booked for, from get_milestones. Must be one that is not already done or marked not required.",
+          },
+          scheduledDate: { type: "string", description: "ISO date the work starts." },
+          durationDays: {
+            type: "integer",
+            minimum: 1,
+            description: "How many days the work runs. Defaults to 1.",
+          },
+          requiresQuote: {
+            type: "boolean",
+            description:
+              "True if the tradie must quote first. The booking then opens as AWAITING_QUOTE rather than PENDING.",
+          },
+        },
+        required: ["tradieId", "milestoneId", "scheduledDate"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["schedules"],
+  additionalProperties: false,
+} as const;
 
 /**
  * Formats a money value, falling back to an em dash rather than rendering
@@ -43,6 +93,87 @@ function money(value: string | number | null | undefined) {
 }
 
 export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
+  const dispatchTools = useAppDispatch();
+
+  /* ── WebMCP: book tradies onto this project ──
+     Goes through createBulkTradieScheduleForProject even for a single row,
+     because that is the path the Schedule tradies dialog takes and the two
+     paths do not behave the same. The single-row thunk's server action sends
+     the tradie an outreach email; the bulk one does not. A tool that emailed a
+     tradie where the equivalent click would not is a surprise nobody asked
+     for, so this matches the button.
+
+     The retired create_tradie_schedule used the single path. That is the
+     behaviour change, and it is the correction. */
+  useWebMcpTool({
+    name: "schedule_tradie",
+    title: "Book tradies onto this project",
+    description:
+      "Books one or more tradies onto activities of the project currently open. Resolve tradieId with get_tradies and milestoneId with get_milestones. Booking several in one call is the normal case \u2014 that is what the dialog does. No email is sent to the tradie on this path; the booking appears on the coordination board for someone to action.",
+    inputSchema: scheduleTradieToolSchema as unknown as Record<string, unknown>,
+    annotations: { readOnlyHint: false },
+    execute: async (input) => {
+      const rows = Array.isArray(input.schedules) ? input.schedules : [];
+      if (rows.length === 0) {
+        return webMcpError("schedules must contain at least one booking.");
+      }
+
+      // A milestone that is finished or waived is not offered in the dialog's
+      // dropdown, so booking against one would create a row the UI cannot show
+      // as anything sensible.
+      const bookable = new Map(
+        project.milestones
+          .filter(
+            (milestone) =>
+              milestone.status !== MilestoneStatus.DONE
+              && milestone.status !== MilestoneStatus.NOT_REQUIRED,
+          )
+          .map((milestone) => [milestone.id, milestone.name]),
+      );
+
+      const payloads = [];
+      for (const [index, row] of rows.entries()) {
+        const candidate = row as Record<string, unknown>;
+        const milestoneId =
+          typeof candidate.milestoneId === "string" ? candidate.milestoneId.trim() : "";
+
+        if (!bookable.has(milestoneId)) {
+          return webMcpError(
+            `Booking ${index + 1}: milestone ${milestoneId || "(none given)"} is not open for scheduling. Call get_milestones and pick one that is not DONE or NOT_REQUIRED.`,
+          );
+        }
+
+        const parsed = createTradieScheduleSchema.safeParse({
+          ...candidate,
+          projectId: project.id,
+        });
+        if (!parsed.success) {
+          return webMcpError(`Booking ${index + 1}: ${summariseZodIssues(parsed.error)}`);
+        }
+
+        payloads.push(parsed.data);
+      }
+
+      const created = await dispatchTools(
+        createBulkTradieScheduleForProject(payloads),
+      ).unwrap();
+
+      return webMcpJson({
+        projectId: project.id,
+        bookedCount: created.length,
+        schedules: created.map((schedule) => ({
+          id: schedule.id,
+          tradie: schedule.tradieName,
+          trade: schedule.tradeType,
+          milestone: schedule.milestoneName ?? bookable.get(schedule.milestoneId ?? "") ?? null,
+          status: schedule.status,
+          scheduledDate: schedule.scheduledDate,
+          durationDays: schedule.durationDays,
+        })),
+      });
+    },
+  });
+
   const getStatusTone = (status: TradieScheduleStatus) => {
     switch (status) {
       case "COMPLETED":

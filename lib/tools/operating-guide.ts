@@ -61,11 +61,16 @@ There is no tool that lists every project or every tradie. Search with \`get_pro
 
 ### Only on a project's page (\`navigate_to\` → \`projects\`, with the project id)
 
-\`get_project_warnings\`, \`create_milestone\`, \`update_milestone\`, \`add_milestone_photos\`, \`upload_project_files\`, \`create_tradie_schedule\`.
+\`get_project_warnings\`, \`upload_project_files\`.
 
-On its **Milestones** tab (\`navigate_to_project_tab\` → \`milestones\`): \`get_milestones\`.
+Everything else on a project belongs to a tab. Switch with \`navigate_to_project_tab\`:
 
-On its **Documents** tab (\`navigate_to_project_tab\` → \`docs\`): \`get_project_files\`.
+| Tab | Tools |
+|---|---|
+| \`overview\` | \`get_project_overview_details\`, \`set_and_update_project_overview_details\` |
+| \`milestones\` | \`get_milestones\`, \`create_milestone\`, \`start_milestone\`, \`finish_milestone\`, \`set_milestone_not_required\`, \`update_milestone_details\`, \`add_milestone_photos\` |
+| \`tradies\` | \`schedule_tradie\` |
+| \`docs\` | \`get_project_files\` |
 
 These act on the project that is open. They do not take a project id — you cannot use them to edit a different project, so navigate to the right one first.
 
@@ -91,23 +96,28 @@ Creating a lead needs a unique client email. If \`create_lead\` reports a duplic
 Moving a lead to a closed stage such as Lost requires \`lostReason\` in the **same** \`update_lead\` call.
 
 ### Add a milestone, with photos
-1. \`get_project_lookup\` → resolve \`projectId\`, then \`navigate_to\` that project
-2. \`create_milestone\` (\`projectStage\` is required)
-3. \`upload_project_files\` with that \`milestoneId\` — this opens the file picker for the user
-4. \`add_milestone_photos\` with the \`fileIds\` it returned
+1. \`get_project_lookup\` → resolve \`projectId\`
+2. \`navigate_to_project\` with \`tab: "milestones"\`
+3. \`create_milestone\` (\`projectStage\` is required)
+4. \`add_milestone_photos\` — this **opens a dialog and stops**. Tell the user to choose the photos and confirm. Do not report them as attached.
 
-You cannot upload a file yourself: you have no file content. \`upload_lead_files\` and \`upload_project_files\` ask the user to choose, then return the ids.
+You cannot upload a file yourself: you have no file content.
 
-### Complete a milestone
-\`update_milestone\` enforces the same rules as the form:
-- \`ACTIVE\` requires \`startDate\`
-- \`DONE\` requires \`startDate\`, \`actualDate\` and \`spend\`, and \`actualDate\` cannot precede \`startDate\`
+### Move a milestone along
+Four verbs, one per control on the row, each refusing anything the UI would not offer:
 
-Send them together. A partial call is rejected, not half-applied.
+- \`start_milestone\` — PENDING only, and only in the stage currently being worked. Needs \`startDate\`.
+- \`finish_milestone\` — ACTIVE only. Needs \`startDate\`, \`actualDate\` and \`spend\` together; \`actualDate\` cannot precede \`startDate\`. A milestone with child activities is finished by finishing those.
+- \`set_milestone_not_required\` — PENDING only. Reversible from the milestone's dialog.
+- \`update_milestone_details\` — changes the due date at any status, without moving it.
+
+\`get_milestones\` gives you each milestone's \`canBecome\` and \`isActiveStage\`, so read it before choosing a verb rather than guessing and being refused.
 
 ### Schedule a tradie
-1. \`get_tradies\` → resolve \`tradieId\`
-2. \`navigate_to\` the project → \`create_tradie_schedule\`
+1. \`get_tradies\` → resolve \`tradieId\`; \`get_milestones\` → resolve \`milestoneId\`
+2. \`navigate_to_project\` with \`tab: "tradies"\` → \`schedule_tradie\`
+
+Book several tradies in one call rather than one call each — that is what the dialog does. No email is sent to the tradie; the booking lands on the coordination board for someone to action.
 
 ---
 

@@ -65,11 +65,7 @@ export const PROJECTS_LIST_TOOLS = ["start_project_creation"] as const;
 export const PROJECT_DETAIL_TOOLS = [
     "navigate_to_project_tab",
     "get_project_warnings",
-    "create_milestone",
-    "update_milestone",
-    "add_milestone_photos",
     "upload_project_files",
-    "create_tradie_schedule",
 ] as const;
 
 /**
@@ -88,10 +84,18 @@ export const PROJECT_TAB_TOOLS: Record<
     (typeof VISIBLE_PROJECT_DETAIL_TABS)[number],
     readonly string[]
 > = {
-    overview: ["get_project_overview_details"],
-    milestones: ["get_milestones"],
+    overview: ["get_project_overview_details", "set_and_update_project_overview_details"],
+    milestones: [
+        "get_milestones",
+        "create_milestone",
+        "start_milestone",
+        "finish_milestone",
+        "set_milestone_not_required",
+        "update_milestone_details",
+        "add_milestone_photos",
+    ],
     payments: [],
-    tradies: [],
+    tradies: ["schedule_tradie"],
     docs: ["get_project_files"],
     history: [],
     communications: [],

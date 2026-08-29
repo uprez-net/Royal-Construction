@@ -4,24 +4,12 @@ import { useEffect } from "react";
 
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
-  addMilestonePhotos,
-  addProjectMilestone,
-  createTradieScheduleForProject,
   resetProjectDetailUiState,
   setActiveProject,
-  updateProjectMilestoneStatus,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
 import { useWebMcpTools } from "@/hooks/use-webmcp-tool";
-import {
-  toToolInputJsonSchema,
-  toToolInputJsonSchemaWithParams,
-} from "@/lib/tools/zod-to-json-schema";
-import {
-  summariseZodIssues,
-  webMcpError,
-  webMcpJson,
-} from "@/components/webmcp/tool-result";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
 import {
   describeTradieAlerts,
   selectComplianceWarnings,
@@ -31,12 +19,6 @@ import {
   pickFiles,
   uploadFiles,
 } from "@/components/webmcp/file-upload";
-import {
-  milestoneCreationSchema,
-  milestonePictureUploadSchema,
-  milestoneUpdateSchema,
-} from "@/utils/validators/milestone";
-import { createTradieScheduleSchema } from "@/utils/validators/tradies";
 
 import { ProjectComplianceAlert } from "./detail/project-compliance-alert";
 import { ProjectDetailTabs } from "./detail/project-detail-tabs";
@@ -48,28 +30,19 @@ import { ProjectTradieAlert } from "./detail/project-tradie-alert";
 const MAX_UPLOAD_FILES = 10;
 
 /**
- * These are the schemas the browser's own routes validate against, so the tools
- * and the modals cannot drift:
- *   create_milestone         POST  /api/projects/[projectId]/milestones
- *   update_milestone         PATCH /api/projects/[projectId]/milestones/[id]/updates
- *   add_milestone_photos     POST  /api/projects/[projectId]/milestones/[id]/add-photos
- *   create_tradie_schedule   POST  /api/tradie-schedules
+ * Only two tools live at screen level, and for the same reason: they belong to
+ * the project rather than to any one tab.
  *
- * projectId is supplied by the screen, never by the agent - the tools only
- * exist while a project is open, and acting on a different one silently would
- * be exactly the surprise this design is meant to avoid.
+ * Everything else moved to the tab that owns its state. That is not tidiness —
+ * a milestone tool needs to know which stage is workable and which transitions
+ * are legal, and only the milestone tab knows that. Registering it here would
+ * mean either duplicating the ledger or letting an agent attempt work the UI
+ * would not offer.
+ *
+ * projectId is supplied by the screen, never by the agent: the tools exist only
+ * while a project is open, and acting on a different one silently would be
+ * exactly the surprise this design avoids.
  */
-const milestoneCreateJsonSchema = toToolInputJsonSchema(milestoneCreationSchema);
-const milestoneUpdateJsonSchema = toToolInputJsonSchemaWithParams(milestoneUpdateSchema, {
-  milestoneId: { type: "string", description: "The milestone to update." },
-});
-const milestonePhotosJsonSchema = toToolInputJsonSchemaWithParams(milestonePictureUploadSchema, {
-  milestoneId: { type: "string", description: "The milestone to attach the files to." },
-});
-const tradieScheduleJsonSchema = toToolInputJsonSchema(
-  createTradieScheduleSchema.omit({ projectId: true }),
-);
-
 type ProjectRequirementsHeader = {
   siteAddress?: string | null;
   signedDate?: string | null;
@@ -143,59 +116,6 @@ export function ProjectDetailScreen({
       },
     },
     {
-      name: "create_milestone",
-      title: "Add a milestone",
-      description:
-        "Adds a milestone to the project currently open. projectStage is required and must be one of the build stages. Pass parentId to nest this under an existing milestone.",
-      inputSchema: milestoneCreateJsonSchema,
-      annotations: { readOnlyHint: false },
-      execute: async (input) => {
-        const parsed = milestoneCreationSchema.safeParse(input);
-        if (!parsed.success) {
-          return webMcpError(summariseZodIssues(parsed.error));
-        }
-
-        const created = await dispatch(
-          addProjectMilestone({ projectId: project.id, ...parsed.data }),
-        ).unwrap();
-
-        return webMcpJson({ id: created.id, name: created.name, status: created.status });
-      },
-    },
-    {
-      name: "update_milestone",
-      title: "Update a milestone",
-      description:
-        "Moves a milestone on the open project to a new status. ACTIVE requires startDate. DONE requires startDate, actualDate and spend, and actualDate cannot precede startDate - send them in the same call or the update is rejected. Resolve milestoneId with get_milestones.",
-      inputSchema: milestoneUpdateJsonSchema,
-      annotations: { readOnlyHint: false },
-      execute: async (input) => {
-        const { milestoneId, ...rest } = input as { milestoneId?: unknown };
-        const id = typeof milestoneId === "string" ? milestoneId.trim() : "";
-        if (!id) {
-          return webMcpError("milestoneId is required. Call get_milestones to resolve it.");
-        }
-
-        // The refined schema, not its shape: the conditional rules above are
-        // the whole reason a half-filled DONE update has to fail here rather
-        // than land as a milestone marked complete with no spend against it.
-        const parsed = milestoneUpdateSchema.safeParse(rest);
-        if (!parsed.success) {
-          return webMcpError(summariseZodIssues(parsed.error));
-        }
-
-        const updated = await dispatch(
-          updateProjectMilestoneStatus({
-            projectId: project.id,
-            milestoneId: id,
-            ...parsed.data,
-          }),
-        ).unwrap();
-
-        return webMcpJson({ id: updated.id, name: updated.name, status: updated.status });
-      },
-    },
-    {
       name: "upload_project_files",
       title: "Upload files to this project",
       description:
@@ -243,63 +163,6 @@ export function ProjectDetailScreen({
           projectId: project.id,
           milestoneId,
           files: uploaded.map(({ id, name, url }) => ({ fileId: id, fileName: name, url })),
-        });
-      },
-    },
-    {
-      name: "add_milestone_photos",
-      title: "Attach uploaded files to a milestone",
-      description:
-        "Attaches already-uploaded files to a milestone on the open project. Get the ids from upload_project_files first; this does not upload anything itself.",
-      inputSchema: milestonePhotosJsonSchema,
-      annotations: { readOnlyHint: false },
-      execute: async (input) => {
-        const { milestoneId, ...rest } = input as { milestoneId?: unknown };
-        const id = typeof milestoneId === "string" ? milestoneId.trim() : "";
-        if (!id) {
-          return webMcpError("milestoneId is required. Call get_milestones to resolve it.");
-        }
-
-        const parsed = milestonePictureUploadSchema.safeParse(rest);
-        if (!parsed.success) {
-          return webMcpError(summariseZodIssues(parsed.error));
-        }
-
-        const result = await dispatch(
-          addMilestonePhotos({
-            projectId: project.id,
-            milestoneId: id,
-            fileIds: parsed.data.fileIds,
-          }),
-        ).unwrap();
-
-        return webMcpJson({ milestoneId: result.id, fileCount: result.files.length });
-      },
-    },
-    {
-      name: "create_tradie_schedule",
-      title: "Schedule a tradie on this project",
-      description:
-        "Books a tradie onto the project currently open. Resolve tradieId with get_tradies, and milestoneId with get_milestones. scheduledDate is an ISO date.",
-      inputSchema: tradieScheduleJsonSchema,
-      annotations: { readOnlyHint: false },
-      execute: async (input) => {
-        const parsed = createTradieScheduleSchema.safeParse({
-          ...input,
-          projectId: project.id,
-        });
-        if (!parsed.success) {
-          return webMcpError(summariseZodIssues(parsed.error));
-        }
-
-        const schedule = await dispatch(
-          createTradieScheduleForProject(parsed.data),
-        ).unwrap();
-
-        return webMcpJson({
-          id: schedule.id,
-          tradieId: parsed.data.tradieId,
-          scheduledDate: parsed.data.scheduledDate,
         });
       },
     },

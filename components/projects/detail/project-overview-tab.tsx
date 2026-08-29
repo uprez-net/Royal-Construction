@@ -57,7 +57,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { setActiveProject } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
-import { webMcpJson } from "@/components/webmcp/tool-result";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
 import { useParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
@@ -221,6 +221,60 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
     { key: "finalCleanStatus", label: "Final clean status", type: "text" },
   ],
 };
+
+/**
+ * The section fields an agent may write, derived from the same table the form
+ * renders. Deriving rather than restating is the point: a field added to the
+ * accordion becomes writable by the tool automatically, and one removed stops
+ * being writable, without anyone remembering to update a second list.
+ *
+ * Two sections carry more than plain fields. `inclusionsAndExclusions` holds
+ * two string arrays that have no FieldConfig, and `commercialsAndClaims` holds
+ * the payment stage table; both are named explicitly.
+ */
+const WRITABLE_SECTION_FIELDS: Record<ProjectFlowSectionKey, string[]> =
+  Object.fromEntries(
+    (Object.keys(SECTION_FIELDS) as ProjectFlowSectionKey[]).map((section) => [
+      section,
+      SECTION_FIELDS[section].map((field) => field.key),
+    ]),
+  ) as Record<ProjectFlowSectionKey, string[]>;
+
+WRITABLE_SECTION_FIELDS.inclusionsAndExclusions = ["inclusions", "exclusions"];
+
+const overviewWriteToolSchema = {
+  type: "object",
+  properties: {
+    projectName: { type: "string", description: "The project's name." },
+    projectType: { type: "string", description: "The kind of build." },
+    summary: { type: "string", description: "The free-text summary." },
+    startDate: { type: "string", description: "Site start date, YYYY-MM-DD." },
+    estimatedEndDate: {
+      type: "string",
+      description: "Estimated completion date, YYYY-MM-DD.",
+    },
+    sections: {
+      type: "object",
+      description:
+        "Requirement sections to update. Only the fields you name are changed; everything else is left as it is.",
+      properties: Object.fromEntries(
+        (Object.keys(WRITABLE_SECTION_FIELDS) as ProjectFlowSectionKey[]).map(
+          (section) => [
+            section,
+            {
+              type: "object",
+              description: `${SECTION_META[section].label}. Fields: ${WRITABLE_SECTION_FIELDS[section].join(", ") || "none"}.`,
+              additionalProperties: true,
+            },
+          ],
+        ),
+      ),
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: false,
+} as const;
+
 
 // ---------------------------------------------------------------------------
 // Generic helpers
@@ -1332,6 +1386,93 @@ export function ProjectOverviewTab({
     },
   });
 
+  /* ── WebMCP: edit the overview ──
+     Partial in both directions. The requirements payload is PATCHed whole —
+     there is no field-level endpoint — so a tool that sent only what it was
+     given would blank every field it was not. It merges into the live `draft`
+     instead, which is also what makes an agent edit visible in the form the
+     user is looking at rather than only in the database. */
+  useWebMcpTool({
+    name: "set_and_update_project_overview_details",
+    title: "Edit the project overview",
+    description:
+      "Updates fields on the project's Overview tab and saves. Everything is optional and only what you name changes \u2014 unnamed fields keep their current values. Call get_project_overview_details first to see the field names and what they currently hold. Commercial fields are admin-only.",
+    inputSchema: overviewWriteToolSchema as unknown as Record<string, unknown>,
+    annotations: { readOnlyHint: false },
+    execute: async (input) => {
+      const sections = (input.sections ?? {}) as Partial<
+        Record<ProjectFlowSectionKey, Record<string, unknown>>
+      >;
+
+      const named = Object.keys(sections) as ProjectFlowSectionKey[];
+      const unknownSection = named.find((key) => !(key in WRITABLE_SECTION_FIELDS));
+      if (unknownSection) {
+        return webMcpError(
+          `Unknown section "${unknownSection}". Available: ${Object.keys(WRITABLE_SECTION_FIELDS).join(", ")}.`,
+        );
+      }
+
+      const forbidden = named.filter(
+        (key) => SECTION_META[key].isAdminOnly && !isAdmin,
+      );
+      if (forbidden.length > 0) {
+        return webMcpError(
+          `${forbidden.join(", ")} can only be edited by an admin. Report that rather than trying another route.`,
+        );
+      }
+
+      // A misspelt field would otherwise be written into the requirements blob
+      // and stay there, invisible, forever — the form never renders a key it
+      // does not know about.
+      for (const section of named) {
+        const allowed = WRITABLE_SECTION_FIELDS[section];
+        const bad = Object.keys(sections[section] ?? {}).filter(
+          (field) => !allowed.includes(field),
+        );
+        if (bad.length > 0) {
+          return webMcpError(
+            `${section} has no field${bad.length > 1 ? "s" : ""} ${bad.join(", ")}. Available: ${allowed.join(", ") || "none"}.`,
+          );
+        }
+      }
+
+      const merged: RequirementsData = { ...draft };
+      for (const section of named) {
+        merged[section] = {
+          ...((draft[section] ?? {}) as object),
+          ...(sections[section] ?? {}),
+        } as never;
+      }
+      if (typeof input.projectName === "string") merged.projectName = input.projectName;
+      if (typeof input.projectType === "string") merged.projectType = input.projectType;
+      if (typeof input.summary === "string") merged.summary = input.summary;
+
+      const nextStart =
+        typeof input.startDate === "string" ? input.startDate : stateStartDate;
+      const nextEnd =
+        typeof input.estimatedEndDate === "string"
+          ? input.estimatedEndDate
+          : stateEstimatedEndDate;
+
+      // Seeded before the save so the PATCH body picks them up — handleSave
+      // reads these from state, not from its argument.
+      setStateStartDate(nextStart);
+      setStateEstimatedEndDate(nextEnd);
+      setDraft(merged);
+
+      const result = await handleSave(merged);
+      if (!result.ok) return webMcpError(result.message);
+
+      return webMcpJson({
+        projectId: project.id,
+        sectionsUpdated: named,
+        fieldsUpdated: named.flatMap((section) =>
+          Object.keys(sections[section] ?? {}).map((field) => `${section}.${field}`),
+        ),
+      });
+    },
+  });
+
   const updateSectionField = (
     section: ProjectFlowSectionKey,
     field: string,
@@ -1409,7 +1550,9 @@ export function ProjectOverviewTab({
    *   same tick (the HBCF upload) has to hand the new payload in directly or it
    *   would PATCH the pre-edit draft.
    */
-  const handleSave = async (override?: RequirementsData) => {
+  const handleSave = async (
+    override?: RequirementsData,
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
     const payload = override ?? draft;
     setSaving(true);
     try {
@@ -1439,10 +1582,16 @@ export function ProjectOverviewTab({
         toDateInputValue(response.data.estimatedEndDate),
       );
       setDirty(false);
+      return { ok: true };
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to update project",
-      );
+      // Still toasted, because a person saving from the form learns about the
+      // failure that way. The return value exists for the WebMCP tool, which
+      // has to tell the agent the write did not land rather than let it report
+      // success on the strength of the call not throwing.
+      const message =
+        error instanceof Error ? error.message : "Unable to update project";
+      toast.error(message);
+      return { ok: false, message };
     } finally {
       setSaving(false);
     }
