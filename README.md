@@ -155,8 +155,9 @@ pnpm dev                 # in one terminal
 pnpm test:webmcp         # in another
 ```
 
-Point it elsewhere with `WEBMCP_BASE_URL`. It takes five to six minutes: the
-files run one at a time, because three browsers against one dev server means
+Point it elsewhere with `WEBMCP_BASE_URL`. Expect five to ten minutes, at the
+longer end against a cold dev server compiling routes on demand. The files run
+one at a time, because three browsers against one dev server means
 compile contention and a burst of Clerk development-instance sign-ins, and both
 of those show up as redirect loops rather than as anything legible.
 
