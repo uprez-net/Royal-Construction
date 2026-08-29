@@ -131,6 +131,14 @@ interface EmailComposerProps {
   to: string;
   /** The message being replied to, if any. Presence of this drives reply mode. */
   replyTo?: LeadEmails | null;
+  /**
+   * A draft to open with, from the WebMCP `send_lead_message` tool.
+   *
+   * Seeded once on mount and then left alone — the composer is remounted each
+   * time the dialog opens, so re-seeding would overwrite whatever the person
+   * has typed since.
+   */
+  initialBody?: string;
   projectType: string;
   location: string;
   onCancelReply?: () => void;
@@ -154,6 +162,7 @@ export function EmailComposer({
   onSent,
   projectType,
   location,
+  initialBody,
 }: EmailComposerProps) {
   const [body, setBody] = useState<LeadRichTextDocument>();
   const [sending, startTransition] = useTransition();
@@ -202,6 +211,18 @@ export function EmailComposer({
   useEffect(() => {
     bodyRef.current?.focus();
   }, [replyTo]);
+
+  // An agent may hand us a draft to open with. Once only, guarded by a ref
+  // rather than by a dependency list: `replaceNoteText` closes over the editor
+  // and would re-run this on every render if it were a dependency, wiping the
+  // person's edits as they typed.
+  const seededDraftRef = useRef(false);
+  useEffect(() => {
+    if (seededDraftRef.current || !initialBody?.trim()) return;
+    seededDraftRef.current = true;
+    replaceNoteText(initialBody);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBody]);
 
   async function handleSend() {
     if (body === undefined) {

@@ -28,6 +28,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useHbfcTimeline } from "@/hooks/useHbfcTimeline";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
 import {
   HBCF_FREE_COLOUR,
   hbcfAxisRange,
@@ -589,6 +591,34 @@ function CardSkeleton() {
 
 export function HbfcClaimCard({ leadId }: { leadId: number }) {
   const { data, loading, error } = useHbfcTimeline(leadId);
+
+  /* ── WebMCP: the claim picture this card draws ──
+     The card owns its own fetch, so the tool registers here rather than on the
+     screen: anywhere else would mean a second request for data already in
+     hand. It reports `loading` and `error` as errors rather than returning an
+     empty payload, because "no claims" and "not loaded yet" are very different
+     answers to "is there cover for this build?". */
+  useWebMcpTool({
+    name: "get_lead_hbcf_timeline",
+    title: "Read the HBCF claim timeline",
+    description:
+      "Returns the HBCF insurance picture for the lead currently open: the claims already holding cover with their windows and amounts, how much of the sum assured is used, and whether there is enough capacity for this build \u2014 including the date it frees up if there is not.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    execute: async () => {
+      if (error) return webMcpError(`The HBCF timeline could not be loaded: ${error}`);
+      if (loading || !data) {
+        return webMcpError("The HBCF timeline is still loading. Try again in a moment.");
+      }
+
+      return webMcpJson({
+        leadId,
+        generatedAt: data.generatedAt,
+        assessment: data.assessment as unknown as Record<string, unknown>,
+        claims: data.claims as unknown as Record<string, unknown>[],
+      });
+    },
+  });
   const [open, setOpen] = useState(false);
 
   const claims = useMemo(() => data?.claims ?? [], [data]);

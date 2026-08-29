@@ -18,6 +18,10 @@ interface LeadEmailSectionProps {
   location: string;
   isFullScreen?: boolean;
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
+  /** Draft handed in by the WebMCP send tool, for the composer to open with. */
+  initialDraft?: string;
+  /** Message the draft is a reply to, by id, from get_lead_comms. */
+  initialReplyToId?: string;
 }
 
 const ROYAL_DOMAIN = "@royalconstructions.com.au";
@@ -30,8 +34,15 @@ export function LeadEmailSection({
   location,
   isFullScreen = false,
   appendEmailToLead,
+  initialDraft,
+  initialReplyToId,
 }: LeadEmailSectionProps) {
-  const [replyTarget, setReplyTarget] = useState<LeadEmails | null>(null);
+  // Resolved at mount, which is when the dialog opens. The id came from
+  // get_lead_comms, so an id that no longer matches means the thread moved on;
+  // the draft still opens, just as a fresh message rather than a reply.
+  const [replyTarget, setReplyTarget] = useState<LeadEmails | null>(
+    () => emails.find((email) => email.id === initialReplyToId) ?? null,
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Chat reads oldest -> newest, top to bottom.
@@ -143,6 +154,7 @@ export function LeadEmailSection({
           leadId={leadId}
           to={leadEmail}
           replyTo={replyTarget}
+          initialBody={initialDraft}
           onCancelReply={() => setReplyTarget(null)}
           appendEmailToLead={appendEmailToLead}
           projectType={projectType}

@@ -51,9 +51,16 @@ There is no tool that lists every project or every tradie. Search with \`get_pro
 
 \`leads_filter_by_stage\`, \`create_lead\`, \`update_lead\`, \`delete_lead\` (admin only).
 
-### Only on a lead's page (\`navigate_to\` → \`leads\`, with the lead id)
+### Only on a lead's page (\`navigate_to_lead\`)
 
-\`upload_lead_files\`.
+\`upload_lead_files\`, \`get_lead_comms\`, \`send_lead_message\`, \`get_lead_hbcf_timeline\`.
+
+Its tabs, reached with \`navigate_to_lead_tab\`:
+
+| Tab | Tools |
+|---|---|
+| \`overview\` | \`edit_lead_details\` |
+| \`documents\` | \`get_lead_files\` |
 
 ### Only on the projects list (\`navigate_to\` → \`projects\`)
 
@@ -88,8 +95,16 @@ Project creation is **not** a single call. It needs a tender and a contract uplo
 
 ### Work a lead
 1. \`get_leads\` → resolve \`leadId\`
-2. \`navigate_to\` → \`leads\` (and the id, for one lead's page)
-3. \`update_lead\` / \`delete_lead\`, or \`upload_lead_files\` on the lead page
+2. \`navigate_to_lead\` with that id
+3. \`edit_lead_details\` on the \`overview\` tab, or \`upload_lead_files\` from anywhere on the page
+
+\`update_lead\` on the leads list and \`edit_lead_details\` on the lead's page write the same fields. Use whichever matches where you are.
+
+### Message a lead
+1. \`get_lead_comms\` → read the thread, and take the \`id\` of the message you are answering
+2. \`send_lead_message\` with your text and that \`replyToId\`
+
+\`send_lead_message\` **opens the dialog with your draft in it and stops**. Nothing is sent. Say the draft is waiting for the user to review; do not report the message as sent.
 
 Creating a lead needs a unique client email. If \`create_lead\` reports a duplicate, it is telling you the lead already exists — read the existing id out of the message instead of retrying.
 

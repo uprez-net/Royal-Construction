@@ -42,6 +42,8 @@ import {
   type LeadDetailFormData,
 } from "@/lib/leads/lead-helpers";
 import { updateLead } from "@/lib/leads/leads-service";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
 import { formatFyQuarter, fyQuarterOf } from "@/lib/leads/fy-quarter";
 import { stageDef } from "@/lib/leads/pipeline-stages";
 import type { Lead, LeadSource, LeadStage } from "@/lib/leads/types";
@@ -130,6 +132,46 @@ const SECTION_FIELDS: Record<
   ],
   lostReason: ["lostReason"],
 };
+
+/**
+ * The fields an agent may write, and how each is typed on the wire.
+ *
+ * Derived from SECTION_FIELDS so the tool cannot offer a field the form does
+ * not save, with `estimatedValueSource` left out: it is not an input on the
+ * form either (typing a value sets it to MANUAL, and a button clears it back
+ * to the offer), so exposing it would let an agent claim a figure came from the
+ * offer when it did not.
+ */
+const EDITABLE_LEAD_FIELDS = (
+  Object.values(SECTION_FIELDS).flat() as (keyof LeadDetailFormData)[]
+).filter((field) => field !== "estimatedValueSource");
+
+const LEAD_FIELD_SCHEMA: Record<string, { type: string; description: string }> = {
+  name: { type: "string", description: "Primary client's name. Cannot be blank." },
+  phone: { type: "string", description: "Primary client's phone." },
+  email: { type: "string", description: "Primary client's email. Cannot be blank or malformed." },
+  location: { type: "string", description: "Site location." },
+  secondaryName: { type: "string", description: "Second contact's name." },
+  secondaryPhone: { type: "string", description: "Second contact's phone." },
+  secondaryEmail: { type: "string", description: "Second contact's email." },
+  sourceDetail: { type: "string", description: "Where the lead came from." },
+  stage: { type: "string", description: "Pipeline stage. Moving to a lost stage needs lostReason in the same call." },
+  urgent: { type: "boolean", description: "Flags the lead as urgent." },
+  assignedId: { type: "string", description: "User id to assign to. Empty string unassigns." },
+  budget: { type: "string", description: "Budget bracket, free text." },
+  estimatedValue: { type: "string", description: "Deal value as a number in a string. Empty means not recorded." },
+  probabilityOverride: { type: "string", description: "Likelihood 0-100. Empty means inherit the stage default." },
+  expectedCloseDate: { type: "string", description: "Expected close date, YYYY-MM-DD." },
+  lostReason: { type: "string", description: "Why the lead was lost. Required when the stage is a lost one." },
+};
+
+const editLeadToolSchema = {
+  type: "object",
+  properties: Object.fromEntries(
+    EDITABLE_LEAD_FIELDS.map((field) => [field, LEAD_FIELD_SCHEMA[field]]),
+  ),
+  additionalProperties: false,
+} as const;
 
 /* ── Payload + validation ─────────────────────────────────────────────── */
 
@@ -267,6 +309,70 @@ export function LeadOverviewTab({
 
   const isSectionDirty = (key: LeadSectionKey) =>
     SECTION_FIELDS[key].some((field) => !Object.is(form[field], baseline[field]));
+
+  /* ── WebMCP: edit this lead ──
+     The form saves a section at a time; this saves whatever set of fields it
+     is given, which may span sections. Same validators, same payload builders,
+     same `updateLead` — so the tool cannot accept something the Save button
+     would refuse, and the cross-section rule (leaving a lost stage clears the
+     reason) applies here exactly as it does there. */
+  useWebMcpTool({
+    name: "edit_lead_details",
+    title: "Edit this lead",
+    description:
+      "Updates fields on the lead currently open. Everything is optional and only what you name changes. Moving the lead to a lost stage requires lostReason in the same call; moving it out of one clears the reason automatically.",
+    inputSchema: editLeadToolSchema as unknown as Record<string, unknown>,
+    annotations: { readOnlyHint: false },
+    execute: async (input) => {
+      const updates: Partial<LeadDetailFormData> = {};
+      for (const field of EDITABLE_LEAD_FIELDS) {
+        if (!(field in input)) continue;
+        (updates as Record<string, unknown>)[field] = input[field];
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return webMcpError(
+          `Nothing to change. Name at least one of: ${EDITABLE_LEAD_FIELDS.join(", ")}.`,
+        );
+      }
+
+      // Validated against the merged form, not the incoming fields alone: the
+      // rules are about the lead's resulting state. A lostReason already on the
+      // record satisfies a stage change that does not resend it.
+      const next = { ...form, ...updates } as LeadDetailFormData;
+      const touched = SECTION_ORDER.filter((key) =>
+        SECTION_FIELDS[key].some((field) => field in updates),
+      );
+
+      for (const key of touched) {
+        const message = validateSection(key, next);
+        if (message) return webMcpError(message);
+      }
+
+      const payload = Object.assign(
+        {},
+        ...touched.map((key) => buildSectionPayload(key, next)),
+      ) as SectionPayload;
+
+      const updated = await updateLead(lead.id, payload);
+      if (!updated) {
+        return webMcpError("The lead could not be updated. It may have been archived.");
+      }
+
+      // Re-seed the whole form from the response rather than just the written
+      // fields: unlike a section save, there is no half-typed edit elsewhere on
+      // screen that a full reset would throw away.
+      setForm(leadToFormData(updated));
+      onLeadUpdate(updated);
+
+      return webMcpJson({
+        leadId: lead.id,
+        fieldsUpdated: Object.keys(updates),
+        sectionsSaved: touched,
+        stage: updated.stage,
+      });
+    },
+  });
 
   const handleSectionSave = async (key: LeadSectionKey) => {
     const message = validateSection(key, form);

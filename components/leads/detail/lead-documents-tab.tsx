@@ -20,6 +20,20 @@ import {
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpJson } from "@/components/webmcp/tool-result";
+
+/** Module-level so the registration hook's declaration hash stays stable. */
+const leadFilesToolSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: "string",
+      description: "Filters by filename. Omit to list everything.",
+    },
+  },
+  additionalProperties: false,
+} as const;
 import type { Lead } from "@/lib/leads/types";
 import {
   buildBlobPath,
@@ -64,6 +78,40 @@ export function LeadDocumentsTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const files = lead.uploadedFiles;
+
+  /* ── WebMCP: the documents this tab shows ──
+     Reports `filename`, not the model's own `name`, so this and
+     get_project_files describe a file the same way. An agent should not have
+     to remember which entity it is looking at to know which key holds the
+     name. */
+  useWebMcpTool({
+    name: "get_lead_files",
+    title: "List this lead's documents",
+    description:
+      "Lists the documents attached to the lead currently open, as filename plus a direct URL. Filter with query to match part of a filename.",
+    inputSchema: leadFilesToolSchema as unknown as Record<string, unknown>,
+    annotations: { readOnlyHint: true },
+    execute: async (input) => {
+      const search = typeof input.query === "string"
+        ? input.query.trim().toLowerCase()
+        : "";
+
+      const matches = files.filter(
+        (file) => !search || file.name.toLowerCase().includes(search),
+      );
+
+      return webMcpJson({
+        leadId: lead.id,
+        totalCount: matches.length,
+        files: matches.map((file) => ({
+          id: file.id,
+          filename: file.name,
+          url: file.url,
+          size: file.size,
+        })),
+      });
+    },
+  });
   const rows = useMemo(
     () =>
       files.map((file, index) => [

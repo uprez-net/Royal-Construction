@@ -49,13 +49,16 @@ export const LEADS_LIST_TOOLS = [
 export const LEAD_DETAIL_TOOLS = [
     "navigate_to_lead_tab",
     "upload_lead_files",
+    "get_lead_comms",
+    "send_lead_message",
+    "get_lead_hbcf_timeline",
 ] as const;
 
 /** Keyed by the tab, because only the open tab's panel is mounted. */
 export const LEAD_TAB_TOOLS: Record<(typeof LEAD_DETAIL_TABS)[number], readonly string[]> = {
-    overview: [],
+    overview: ["edit_lead_details"],
     scheduledWork: [],
-    documents: [],
+    documents: ["get_lead_files"],
     notes: [],
 };
 

@@ -9,13 +9,19 @@ interface LeadCommModalProps {
   isOpen: boolean;
   onClose: () => void;
   appendEmailToLead: (leadId: number, email: LeadEmails) => void;
+  /** Draft to open the composer with, from the WebMCP send tool. */
+  initialDraft?: string;
+  /** Message that draft replies to, by id. */
+  initialReplyToId?: string;
 }
 
 export default function LeadCommModal({
   lead,
   isOpen,
   onClose,
-  appendEmailToLead
+  appendEmailToLead,
+  initialDraft,
+  initialReplyToId,
 }: LeadCommModalProps) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   return (
@@ -38,6 +44,8 @@ export default function LeadCommModal({
         location={lead.location}
         isFullScreen={isFullScreen}
         appendEmailToLead={appendEmailToLead}
+        initialDraft={initialDraft}
+        initialReplyToId={initialReplyToId}
       />
     </ModalShell>
   );
