@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { updateProjectMilestoneStatus } from "@/lib/store/slices/projectsSlice";
+import { MILESTONE_TRANSITIONS } from "@/lib/projects/milestone-transitions";
 import { MilestoneUpdateData, milestoneUpdateSchema } from "@/utils/validators";
 import type { MilestoneStatus } from "@prisma/client";
 import {
@@ -69,12 +70,6 @@ const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Not required", value: "NOT_REQUIRED" },
 ];
 
-const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ["ACTIVE", "NOT_REQUIRED"],
-  ACTIVE: ["DONE"],
-  DONE: [],
-  NOT_REQUIRED: ["PENDING"],
-};
 
 type MilestoneUpdateErrors = Partial<Record<keyof MilestoneUpdateData, string>>;
 
@@ -333,7 +328,7 @@ export default function UpdateMilestoneModal({
                       key={option.value}
                       value={option.value}
                       disabled={
-                        !STATE_MACHES[
+                        !MILESTONE_TRANSITIONS[
                           status ?? milestone?.status ?? "PENDING"
                         ].includes(option.value)
                       }

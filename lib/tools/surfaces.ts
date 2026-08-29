@@ -27,7 +27,6 @@ export const GLOBAL_TOOLS = [
     "get_leads",
     "get_project_lookup",
     "get_project",
-    "get_milestones",
     "get_customer",
     "get_site_managers",
     "get_tradies",
@@ -65,6 +64,7 @@ export const PROJECTS_LIST_TOOLS = ["start_project_creation"] as const;
 /** On a project's page whatever tab is open. */
 export const PROJECT_DETAIL_TOOLS = [
     "navigate_to_project_tab",
+    "get_project_warnings",
     "create_milestone",
     "update_milestone",
     "add_milestone_photos",
@@ -88,11 +88,11 @@ export const PROJECT_TAB_TOOLS: Record<
     (typeof VISIBLE_PROJECT_DETAIL_TABS)[number],
     readonly string[]
 > = {
-    overview: [],
-    milestones: [],
+    overview: ["get_project_overview_details"],
+    milestones: ["get_milestones"],
     payments: [],
     tradies: [],
-    docs: [],
+    docs: ["get_project_files"],
     history: [],
     communications: [],
 };

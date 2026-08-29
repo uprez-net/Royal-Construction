@@ -13,7 +13,6 @@ import { tradieSearchQuerySchema } from "@/utils/validators/tradies";
 import {
     customerLookupResponseSchema,
     leadsResponseSchema,
-    milestoneResponseSchema,
     projectDetailResponseSchema,
     projectLookupResponseSchema,
     siteManagerLookupResponseSchema,
@@ -64,11 +63,6 @@ export const addressLookupToolSchema = z.object({
 
 export const getTradieResponseSchema = z.object({
     tradies: tradiesResponseSchema,
-    totalCount: z.number(),
-});
-
-export const milestonesListResponseSchema = z.object({
-    milestones: z.array(milestoneResponseSchema),
     totalCount: z.number(),
 });
 
@@ -137,14 +131,6 @@ export const TOOL_MANIFEST: readonly ToolDescriptor[] = [
         description: "Get a project by id",
         inputSchema: projectParamSchema,
         outputSchema: projectDetailResponseSchema,
-        annotations: { readOnlyHint: true, untrustedContentHint: true },
-        surface: "both",
-    },
-    {
-        name: "get_milestones",
-        description: "List milestones for a project",
-        inputSchema: projectParamSchema,
-        outputSchema: milestonesListResponseSchema,
         annotations: { readOnlyHint: true, untrustedContentHint: true },
         surface: "both",
     },

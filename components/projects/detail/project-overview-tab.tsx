@@ -56,6 +56,8 @@ import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { setActiveProject } from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpJson } from "@/components/webmcp/tool-result";
 import { useParams } from "next/navigation";
 
 // ---------------------------------------------------------------------------
@@ -1285,6 +1287,50 @@ export function ProjectOverviewTab({
   const failCount = validations.filter((v) => v.severity === "fail").length;
   const warnCount = validations.filter((v) => v.severity === "warning").length;
   const countsAreStale = dirty && failCount + warnCount > 0;
+
+  /* ── WebMCP: read what this tab shows ──
+     The form is the project's requirements payload, section by section, and an
+     agent asked "what is the slab spec?" or "has the contract been signed?"
+     should not have to guess which of eight accordions holds the answer.
+
+     `draft`, not `project.requirements`: the answer has to match what the user
+     is looking at, unsaved edits included. `dirty` says whether it has been
+     saved, so the agent can say so rather than reporting an edit as fact. */
+  useWebMcpTool({
+    name: "get_project_overview_details",
+    title: "Read the project overview",
+    description:
+      "Returns everything the project's Overview tab shows: the top-level dates and summary, and each section of the requirements \u2014 legal and administration, sub-structure, inclusions and exclusions, utilities, wet areas, safety \u2014 plus any extraction conflicts and validation failures. Reflects unsaved edits on screen; `hasUnsavedEdits` says when that is the case.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    execute: async () => {
+      // Commercials are admin-only in SECTION_META and the accordion honours
+      // that. A tool that returned the contract sum regardless would be a way
+      // around the gate that costs one question to find.
+      const sections = Object.fromEntries(
+        sectionKeys
+          .filter((key) => isAdmin || !SECTION_META[key].isAdminOnly)
+          .map((key) => [key, draft[key] ?? null]),
+      );
+
+      return webMcpJson({
+        projectId: project.id,
+        projectName: draft.projectName ?? project.name,
+        projectType: draft.projectType ?? null,
+        summary: draft.summary ?? null,
+        startDate: stateStartDate,
+        estimatedEndDate: stateEstimatedEndDate,
+        version: draft.version ?? null,
+        sections,
+        conflicts,
+        validations,
+        hasUnsavedEdits: dirty,
+        adminOnlySectionsWithheld: isAdmin
+          ? []
+          : sectionKeys.filter((key) => SECTION_META[key].isAdminOnly),
+      });
+    },
+  });
 
   const updateSectionField = (
     section: ProjectFlowSectionKey,

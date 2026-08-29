@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { getCachedCustomersForDropdown } from "@/lib/data/customers";
 import { getLeads } from "@/lib/data/leads";
-import { getMilestonesByProject } from "@/lib/data/milestones";
 import {
     getCachedProjectById,
     getCachedProjectsForLookup,
@@ -24,7 +23,6 @@ import type { LeadStage as DBLeadStage } from "@prisma/client";
 import {
     addressLookupResponseSchema,
     getTradieResponseSchema,
-    milestonesListResponseSchema,
     type addressLookupToolSchema,
 } from "./manifest";
 import { removeAllNestedDateObjects, toToolError, toToolResult, toolErrorText, type ToolResult } from "./result";
@@ -144,23 +142,6 @@ async function get_project(params: In<typeof projectParamSchema>): Promise<ToolR
 }
 
 // ---------------------------------------------------------------------------
-// Milestones
-// ---------------------------------------------------------------------------
-
-async function get_milestones(params: In<typeof projectParamSchema>): Promise<ToolResult> {
-    try {
-        const res = removeAllNestedDateObjects(
-            await getMilestonesByProject(params.projectId),
-        ) as Awaited<ReturnType<typeof getMilestonesByProject>>;
-        return toToolResult(
-            validated(milestonesListResponseSchema, { milestones: res, totalCount: res.length }, "milestones response"),
-        );
-    } catch (error) {
-        return toToolError(toolErrorText("Error fetching milestones", error));
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Leads
 // ---------------------------------------------------------------------------
 
@@ -194,7 +175,6 @@ export const TOOL_HANDLERS = {
     get_tradies,
     get_project_lookup,
     get_project,
-    get_milestones,
     get_leads,
     address_council_lookup,
 };

@@ -37,7 +37,6 @@ Use \`navigate_to_project\` and \`navigate_to_lead\` to open a record, then \`na
 | \`get_leads\` | List and search leads |
 | \`get_project_lookup\` | Resolve a project named in words to its id. Requires \`mode: "lookup"\`. |
 | \`get_project\` | One project in full |
-| \`get_milestones\` | Milestones for a project |
 | \`get_customer\` | Search customers |
 | \`get_site_managers\` | Search site managers |
 | \`get_tradies\` | Search tradies by name or trade |
@@ -62,7 +61,11 @@ There is no tool that lists every project or every tradie. Search with \`get_pro
 
 ### Only on a project's page (\`navigate_to\` → \`projects\`, with the project id)
 
-\`create_milestone\`, \`update_milestone\`, \`add_milestone_photos\`, \`upload_project_files\`, \`create_tradie_schedule\`.
+\`get_project_warnings\`, \`create_milestone\`, \`update_milestone\`, \`add_milestone_photos\`, \`upload_project_files\`, \`create_tradie_schedule\`.
+
+On its **Milestones** tab (\`navigate_to_project_tab\` → \`milestones\`): \`get_milestones\`.
+
+On its **Documents** tab (\`navigate_to_project_tab\` → \`docs\`): \`get_project_files\`.
 
 These act on the project that is open. They do not take a project id — you cannot use them to edit a different project, so navigate to the right one first.
 

@@ -23,6 +23,10 @@ import {
   webMcpJson,
 } from "@/components/webmcp/tool-result";
 import {
+  describeTradieAlerts,
+  selectComplianceWarnings,
+} from "@/lib/projects/project-warnings";
+import {
   FilePickerCancelled,
   pickFiles,
   uploadFiles,
@@ -114,6 +118,30 @@ export function ProjectDetailScreen({
      store, so the tabs the user is looking at update - and it means the tool
      and the form cannot disagree about what a valid payload is. */
   useWebMcpTools([
+    {
+      name: "get_project_warnings",
+      title: "What needs attention on this project",
+      description:
+        "Reports what is wrong with the project currently open: compliance details missing from a live job, and tradie bookings that are confirmed or attached to a milestone due within the week. This is the same set the warning chips and alert cards on screen are showing, so you can answer \u201cwhat is blocking this?\u201d without reading the page.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      execute: async () => {
+        // Two branches of the same project, reported separately because they
+        // are separate problems with separate fixes: compliance is a form to
+        // fill on the overview tab, a booking alert is a person to call.
+        const compliance = selectComplianceWarnings(displayedProject);
+        const tradies = describeTradieAlerts(displayedProject.tradieSchedules);
+
+        return webMcpJson({
+          projectId: displayedProject.id,
+          projectName: displayedProject.name,
+          status: displayedProject.status,
+          compliance,
+          tradies,
+          hasWarnings: compliance.length > 0 || tradies.length > 0,
+        });
+      },
+    },
     {
       name: "create_milestone",
       title: "Add a milestone",

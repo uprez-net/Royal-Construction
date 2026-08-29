@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { addWeeks, format, isWithinInterval } from "date-fns";
+import { format } from "date-fns";
 import { CalendarCheck2, ChevronDown, Lock, Plus } from "lucide-react";
 
 import { StatusPill } from "@/components/common/status-pill";
@@ -32,6 +32,10 @@ import {
 } from "@/lib/projects/payment-stages";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { selectTradieAlerts } from "@/lib/projects/project-warnings";
+import { MILESTONE_TRANSITIONS } from "@/lib/projects/milestone-transitions";
+import { useWebMcpTools } from "@/hooks/use-webmcp-tool";
+import { webMcpJson } from "@/components/webmcp/tool-result";
 import { cn } from "@/lib/utils";
 import {
   PROJECT_STAGE_LABELS,
@@ -281,24 +285,10 @@ export function ProjectMilestonesTab({
         : [...shown, stage],
     );
 
-  const tradieAlerts = useMemo(() => {
-    const now = new Date();
-    const nextWeek = addWeeks(now, 1);
-
-    return project.tradieSchedules.filter((schedule) => {
-      const hasAlertStatus = schedule.status === "CONFIRMED";
-
-      const targetDate = schedule.milestone?.targetDate;
-      const isMilestoneDueSoon =
-        targetDate &&
-        isWithinInterval(new Date(targetDate), {
-          start: now,
-          end: nextWeek,
-        });
-
-      return hasAlertStatus || isMilestoneDueSoon;
-    });
-  }, [project.tradieSchedules]);
+  const tradieAlerts = useMemo(
+    () => selectTradieAlerts(project.tradieSchedules),
+    [project.tradieSchedules],
+  );
 
   const tradieAlertsByMilestone = useMemo(() => {
     return tradieAlerts.reduce<
@@ -313,6 +303,69 @@ export function ProjectMilestonesTab({
       return acc;
     }, {});
   }, [tradieAlerts]);
+
+  /* ── WebMCP: milestone reads, scoped to this tab ──
+     get_milestones used to be a shared manifest tool reading the database
+     directly. It is here now because the answer an agent needs is not the raw
+     rows: it is the rows plus the two things only this tab knows — which stage
+     is currently workable, and which status each milestone may legally move to.
+     Without those an agent picks a milestone in a gated stage, gets refused,
+     and has no way to work out why. */
+  useWebMcpTools([
+    {
+      name: "get_milestones",
+      title: "List this project's milestones",
+      description:
+        "Lists the milestones of the project currently open, grouped by contract stage, with each one's status and the statuses it may move to next. Only one stage is workable at a time \u2014 `isActiveStage` says which \u2014 and a milestone in a later stage cannot be started until that one is finished. This is where the milestoneId the other milestone tools need comes from.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true, untrustedContentHint: true },
+      execute: async () => {
+        const describe = (milestone: UIMilestone, isActiveStage: boolean) => ({
+          id: milestone.id,
+          name: milestone.name,
+          status: milestone.status,
+          projectStage: milestone.projectStage,
+          order: milestone.order,
+          targetDate: milestone.targetDate
+            ? new Date(milestone.targetDate).toISOString()
+            : null,
+          startDate: milestone.startDate
+            ? new Date(milestone.startDate).toISOString()
+            : null,
+          actualDate: milestone.actualDate
+            ? new Date(milestone.actualDate).toISOString()
+            : null,
+          budget: milestone.budget?.toString() ?? null,
+          spend: milestone.spend?.toString() ?? null,
+          isActiveStage,
+          // A parent is finished by its children, so finish_milestone refuses
+          // one that still has unsettled work below it.
+          childMilestoneIds: milestone.childrenMilestones.map((child) => child.id),
+          canBecome: MILESTONE_TRANSITIONS[milestone.status],
+        });
+
+        const stages = ledgerStages.map((stage) => ({
+          stage: stage.stage,
+          label: stage.label,
+          state: stage.state,
+          isActiveStage: stage.isWorkable,
+          blockedBy: stage.blockedBy?.label ?? null,
+          milestones: stage.milestones.flatMap((milestone) => [
+            describe(milestone, stage.isWorkable),
+            ...milestone.childrenMilestones.map((child) =>
+              describe(child, stage.isWorkable),
+            ),
+          ]),
+        }));
+
+        return webMcpJson({
+          projectId: project.id,
+          activeStage: ledgerStages.find((stage) => stage.isWorkable)?.stage ?? null,
+          stages,
+        });
+      },
+    },
+  ]);
 
   const handleOpenAddUpdateModal = (id: string) => {
     dispatch(

@@ -15,6 +15,24 @@ import {
 import { ProjectDetail } from "@/types/project";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
+import { webMcpJson } from "@/components/webmcp/tool-result";
+
+/** Module-level so the registration hook's declaration hash stays stable. */
+const projectFilesToolSchema = {
+  type: "object",
+  properties: {
+    query: {
+      type: "string",
+      description: "Filters by filename or file type. Omit to list everything.",
+    },
+    milestoneId: {
+      type: "string",
+      description: "Only files attached to this milestone.",
+    },
+  },
+  additionalProperties: false,
+} as const;
 
 interface ProjectQuotesTabProps {
   project: ProjectDetail;
@@ -65,6 +83,53 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
         ?.name ?? "—"
     );
   };
+
+  /* ── WebMCP: the documents this tab shows ──
+     Deliberately reads `files`, not `project.files`. The tender and the
+     contract are hidden from a non-admin above, and a tool that read the
+     unfiltered list would hand an agent the filenames and blob URLs the screen
+     is withholding — the agent would then quote them back to the person who is
+     not allowed to see them. */
+  useWebMcpTool({
+    name: "get_project_files",
+    title: "List this project's documents",
+    description:
+      "Lists the documents on the project currently open, as filename plus a direct URL. Filter with query to match a filename or file type, or with milestoneId to get just the files attached to one milestone. Returns only the documents this user is allowed to see.",
+    inputSchema: projectFilesToolSchema as unknown as Record<string, unknown>,
+    annotations: { readOnlyHint: true },
+    execute: async (input) => {
+      const search = typeof input.query === "string"
+        ? input.query.trim().toLowerCase()
+        : "";
+      const milestoneId = typeof input.milestoneId === "string"
+        ? input.milestoneId.trim()
+        : "";
+
+      const matches = files
+        .filter((file) => !milestoneId || file.milestoneId === milestoneId)
+        .filter((file) =>
+          !search
+          || `${file.filename} ${formatFileType(file.fileType)}`
+            .toLowerCase()
+            .includes(search),
+        );
+
+      return webMcpJson({
+        projectId: project.id,
+        totalCount: matches.length,
+        files: matches.map((file) => ({
+          id: file.id,
+          filename: file.filename,
+          url: file.url,
+          fileType: file.fileType,
+          filesize: file.filesize,
+          milestoneId: file.milestoneId,
+          milestone: milestoneName(file.milestoneId),
+          uploadedAt: new Date(file.createdAt).toISOString(),
+        })),
+      });
+    },
+  });
 
   return (
     <Card className="rounded-xl border-border/70 bg-card shadow-sm">

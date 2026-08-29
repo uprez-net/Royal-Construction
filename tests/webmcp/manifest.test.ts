@@ -95,6 +95,11 @@ const RETIRED_FROM_MANIFEST = [
     // a tool an agent can act on.
     "get_tradie_coordination_dashboard",
 
+    // Relocated to the screen that can answer the question properly: the
+    // milestone tab knows which stage is workable and which transitions are
+    // legal, and the raw rows without those are close to useless.
+    "get_milestones",
+
     // Too expensive or too stale to carry on every page.
     "get_projects",        // whole project rows with stats; get_project_lookup answers the same question
     "get_all_tradies",     // the unfiltered directory; get_tradies is the same read with a filter

@@ -2,32 +2,18 @@ import { ProjectDetail, TradieScheduleListItem } from "@/types/project";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bell, Wrench } from "lucide-react";
 import { useMemo } from "react";
-import { addWeeks, isWithinInterval } from "date-fns";
 import { dateFormat } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
+import { selectTradieAlerts } from "@/lib/projects/project-warnings";
 
 export function ProjectTradieAlert({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
-  const tradieAlerts = useMemo(() => {
-    const now = new Date();
-    const nextWeek = addWeeks(now, 1);
-
-    return project.tradieSchedules.filter((schedule) => {
-      const hasAlertStatus = schedule.status === "CONFIRMED";
-
-      const targetDate = schedule.milestone?.targetDate;
-      const isMilestoneDueSoon =
-        targetDate &&
-        isWithinInterval(new Date(targetDate), {
-          start: now,
-          end: nextWeek,
-        });
-
-      return hasAlertStatus || isMilestoneDueSoon;
-    });
-  }, [project.tradieSchedules]);
+  const tradieAlerts = useMemo(
+    () => selectTradieAlerts(project.tradieSchedules),
+    [project.tradieSchedules],
+  );
 
   const handleSendReminder = (tradieReminder: TradieScheduleListItem) => {
     dispatch(
