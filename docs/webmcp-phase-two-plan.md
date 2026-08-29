@@ -52,7 +52,7 @@ to finish the action, and never claim it is done.
 | 4 | Project detail reads | done |
 | 5 | Project detail writes | done |
 | 6 | Lead detail | done |
-| 7 | `OPERATING_GUIDE` rewrite | pending |
+| 7 | `OPERATING_GUIDE` rewrite | done |
 | 8 | Puppeteer smoke suite | pending |
 
 ## Target surface map

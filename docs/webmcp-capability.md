@@ -132,7 +132,15 @@ Results feed back through `useLeadsData`'s own setters (`prependLead`, `updateLe
 
 ### Lead detail — `components/leads/detail/lead-detail-screen.tsx`
 
-`upload_lead_files` — opens the file picker, uploads to `leads/<id>/…`, and appends to the Documents tab.
+`upload_lead_files`, `get_lead_comms`, `send_lead_message`, plus `navigate_to_lead_tab` from `lead-detail-tabs.tsx` and `get_lead_hbcf_timeline` from `hbfc-claim-card.tsx`.
+
+`get_lead_comms` and `send_lead_message` were specified against `email-composer.tsx`. They are not there. The composer holds only a draft — the thread is `emails: LeadEmails[]` in `email-section.tsx` — and both mount inside `LeadCommModal`, which renders only once a person has opened the dialog. Registered there, an agent could never see them. The screen already owns `lead.emails` and `appendEmailToLead`, and is always mounted.
+
+`send_lead_message` does not send. It seeds `initialDraft` / `initialReplyToId` through the modal to the composer and stops, so a person reviews the text before it reaches a customer. The composer seeds once, behind a ref: it remounts each time the dialog opens, and re-seeding would overwrite what the user has typed since. The draft is cleared on close, so opening Messages by hand later does not refill the composer with text nobody wrote.
+
+Its tab tools live with their panels, because only the open panel is mounted: `edit_lead_details` on the overview tab, `get_lead_files` on the documents tab.
+
+`edit_lead_details` takes fields rather than sections, but runs them through the same `validateSection` and `buildSectionPayload` the per-section Save buttons use, against the merged form rather than the incoming fields alone — the rules are about the lead's resulting state, so a `lostReason` already on the record satisfies a stage change that does not resend it.
 
 ### Projects list — `components/projects/projects-client.tsx`
 
@@ -140,9 +148,28 @@ Results feed back through `useLeadsData`'s own setters (`prependLead`, `updateLe
 
 ### Project detail — `components/projects/project-detail-screen.tsx`
 
-`create_milestone`, `update_milestone`, `add_milestone_photos`, `upload_project_files`, `create_tradie_schedule`.
+The screen keeps only what belongs to the project rather than to a tab: `get_project_warnings` and `upload_project_files`, plus `navigate_to_project_tab` from `project-detail-tabs.tsx`.
 
-None of these take a `projectId`. They act on the project that is open, so an agent cannot quietly edit a different one. `update_milestone` validates against the full refined `milestoneUpdateSchema`, which is what stops a half-filled `DONE` landing as a milestone marked complete with no spend against it.
+| Tab | Tools |
+| --- | --- |
+| `overview` | `get_project_overview_details`, `set_and_update_project_overview_details` |
+| `milestones` | `get_milestones`, `create_milestone`, `start_milestone`, `finish_milestone`, `set_milestone_not_required`, `update_milestone_details`, `add_milestone_photos` |
+| `tradies` | `schedule_tradie` |
+| `docs` | `get_project_files` |
+
+None take a `projectId`. They act on the project that is open, so an agent cannot quietly edit a different one.
+
+**`update_milestone` became four verbs**, one per control on the row. Each carries only the fields its transition needs, so a half-filled `DONE` cannot be composed, and each checks `MILESTONE_TRANSITIONS` (`lib/projects/milestone-transitions.ts`) before dispatching. The old tool ran `milestoneUpdateSchema` and stopped there — which checks that a target status arrived with its required fields but has no idea what status the milestone is actually *in*, so a fully-populated `DONE` on a `PENDING` milestone passed and skipped the work.
+
+Two refusals are kept distinct. The status machine says a `DONE` milestone cannot start again; the stage gate says a `PENDING` one cannot start *yet*, because the stage in front of it is unfinished. An agent told only "rejected" retries; told which, it either picks another milestone or explains the wait.
+
+**`add_milestone_photos` opens the dialog and stops.** It never could upload anything — an agent has no file content — so the headless version was attaching files nobody watched arrive.
+
+**`schedule_tradie` replaces `create_tradie_schedule`** and always dispatches `createBulkTradieScheduleForProject`, even for a single booking, because that is the path the Schedule tradies dialog takes. The two paths differ: the single-row thunk's server action emails the tradie, the bulk one does not. A tool that emailed a tradie where the equivalent click would not is a surprise nobody asked for.
+
+**`set_and_update_project_overview_details` merges into the live draft** rather than sending what it was given. `requirements` is PATCHed as a whole JSON blob, so a partial send would blank every field it omitted. Its writable fields are derived from `SECTION_FIELDS`, so the form and the tool cannot disagree about what exists, and an unknown field name is refused rather than written into the blob where nothing would ever render it.
+
+Two reads are narrower than their data on purpose. `get_project_files` reads the already-filtered list, because the tender and contract are hidden from a non-admin on screen and a tool returning their filenames and blob URLs would be a way around that gate; `get_project_overview_details` drops the commercials section for the same reason.
 
 ## Navigation and surfaces
 
@@ -151,10 +178,18 @@ agent cannot find a tool it cannot yet see. The navigation tools answer it by
 returning `toolsNowAvailable` — what the destination carries — alongside the
 route they took.
 
-That list comes from `lib/tools/surfaces.ts`, which is the one place the
-surface → tool map is written down. The operating guide reads the same module, so
-the guide and the navigation tools cannot tell an agent different stories, and
-the Puppeteer suite checks both against what a real page registers.
+That list comes from `lib/tools/surfaces.ts`, which is where the surface → tool
+map is written down.
+
+The operating guide restates it rather than importing it, and that is worth
+explaining. `surfaces.ts` reads its tab lists from two `"use client"` components,
+and the guide is read by the MCP route on the *server*, where a client module's
+exports are references rather than values. So the guide keeps its own copy, and
+`tests/webmcp/operating-guide.test.ts` asserts the two agree in both directions:
+no tool named in the guide that nothing registers, and no registered tool the
+guide never mentions. The failure that guards against is not a broken build — it
+is an agent being told a tool exists, not finding it, and reporting the
+capability as missing.
 
 Tab tools deserve their own note. Only the open tab's panel is mounted, in both
 `project-detail-tabs.tsx` and `lead-detail-tabs.tsx`, so a tab's tools genuinely
@@ -206,7 +241,11 @@ Screen tools need neither: they go through the store, so the tab the user is loo
 
 ## Testing
 
-- `tests/webmcp/manifest.test.ts` — names, uniqueness, JSON Schema conversion, the `readOnlyHint` rule, the admin gate, the role logic, and that the twelve retired tools stay retired. Fast.
+- `tests/webmcp/manifest.test.ts` — names, uniqueness, JSON Schema conversion, the `readOnlyHint` rule, the role logic, that the retired tools stay retired, and that the manifest holds no writes at all.
+- `tests/webmcp/surfaces.test.ts` — the surface map agrees with the manifest, every tab has an entry, and `payments` is not offered for navigation.
+- `tests/webmcp/operating-guide.test.ts` — the guide and the surface map name the same tools, and the guide stays short enough to prepend to every conversation.
+- `tests/webmcp/tool-runtime.test.ts` — a tool callback never rejects, whatever the user agent passes it.
+- `tests/projects/milestone-transitions.test.ts`, `tests/projects/project-warnings.test.ts` — the rules the milestone verbs and `get_project_warnings` enforce.
 - `tests/webmcp/registry-parity.test.ts` — every manifest entry has a handler and vice versa. Slow (boots the data layer); `registry.server.ts` enforces the same invariant at import time.
 
 There is no way to drive ChatGPT Desktop's agent from a test. For manual verification, `/webmcp-inspector` (development only, under the authenticated shell) lists `getTools()` and runs any tool through `executeTool()`. Because screen tools register on mount, the list there changes as you navigate — that is the behaviour to check.
@@ -215,6 +254,6 @@ There is no way to drive ChatGPT Desktop's agent from a test. For manual verific
 
 - The spec is moving. `navigator.modelContext` became `document.modelContext` in July 2026; output schemas, streaming, progress reporting and consequential-action hints are still open. Tracking `webmcp-types` absorbs most of that churn; what it does not is confined to `types/webmcp.d.ts`, `components/webmcp/webmcp-provider.tsx` and `hooks/use-webmcp-tool.ts`.
 - No mainstream agent besides ChatGPT Desktop consumes page tools yet.
-- Screen tools are only reachable from their screen. An agent asked to update a lead from the dashboard must `navigate_to` first — the operating guide says so explicitly, but it is a real constraint, not a detail.
+- Screen tools are only reachable from their screen, and tab tools only from their tab. An agent asked to update a lead from the dashboard must navigate twice. The navigation tools' `toolsNowAvailable` and the operating guide both say so, but it is a real constraint, not a detail.
 - The app ingests untrusted external content (inbound email via `lib/graph/*`, lead notes, OCR'd attachments). An agent that reads a lead page while holding write tools is a prompt-injection path. `untrustedContentHint` is advisory.
 - Project creation, and anything that emails a customer, remain human actions. See the phase-two plan for the reasoning.
