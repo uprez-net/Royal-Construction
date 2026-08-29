@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
+import { useWebMcpRole } from "@/components/webmcp/role-context";
 import { runToolSafely } from "@/components/webmcp/tool-runtime";
+import { satisfiesRole } from "@/lib/tools/authz";
+import type { AppRole } from "@/lib/tools/types";
 
 export type WebMcpToolConfig = {
     name: string;
@@ -10,6 +13,15 @@ export type WebMcpToolConfig = {
     description: string;
     inputSchema?: Record<string, unknown>;
     annotations?: WebMCP.ToolAnnotations;
+    /**
+     * Minimum role required to see this tool.
+     *
+     * Omit for a tool anyone signed in may use. When set, the tool is left out
+     * of the registration entirely for a role that does not satisfy it, so the
+     * agent never sees a capability it cannot exercise. This is a menu filter,
+     * not a boundary — see components/webmcp/role-context.tsx.
+     */
+    requiredRole?: AppRole;
     execute: (
         input: Record<string, unknown>,
         options: WebMCP.ToolExecuteCallbackOptions,
@@ -44,22 +56,31 @@ type Declaration = Omit<WebMcpToolConfig, "execute">;
  * once some state exists.
  */
 export function useWebMcpTools(configs: readonly WebMcpToolConfig[] | null | undefined): void {
+    const role = useWebMcpRole();
     const executesRef = useRef(new Map<string, WebMcpToolConfig["execute"]>());
+
+    // Role filtering happens before anything else, so a tool the user cannot
+    // use is absent from the ref map and from the declaration key alike — it is
+    // never registered, and a role change re-runs the registration effect.
+    const allowed = useMemo(
+        () => (configs ?? []).filter((config) => satisfiesRole(config.requiredRole, role)),
+        [configs, role],
+    );
 
     useEffect(() => {
         const next = new Map<string, WebMcpToolConfig["execute"]>();
-        for (const config of configs ?? []) {
+        for (const config of allowed) {
             next.set(config.name, config.execute);
         }
         executesRef.current = next;
-    }, [configs]);
+    }, [allowed]);
 
     // Only the declarations are compared. Two renders that describe the same
     // tools must not re-register them, however new the closures are.
     const declarationKey = useMemo(() => {
-        if (!configs || configs.length === 0) return null;
+        if (allowed.length === 0) return null;
         return JSON.stringify(
-            configs.map(({ name, title, description, inputSchema, annotations }) => ({
+            allowed.map(({ name, title, description, inputSchema, annotations }) => ({
                 name,
                 title: title ?? null,
                 description,
@@ -67,7 +88,7 @@ export function useWebMcpTools(configs: readonly WebMcpToolConfig[] | null | und
                 annotations: annotations ?? null,
             })),
         );
-    }, [configs]);
+    }, [allowed]);
 
     useEffect(() => {
         if (!declarationKey || !hasWebMcp()) return;

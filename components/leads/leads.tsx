@@ -409,6 +409,10 @@ export default function Leads() {
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false },
+      // Archiving is the one lead write with no undo in the UI, so it is kept
+      // out of a non-admin agent's menu entirely rather than offered and then
+      // refused. The route does not check this; see role-context.tsx.
+      requiredRole: "ADMIN",
       execute: async (input) => {
         const id = Number(input.leadId);
         if (!Number.isFinite(id)) {

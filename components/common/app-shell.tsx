@@ -24,6 +24,7 @@ import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WebMcpProvider } from "@/components/webmcp/webmcp-provider";
+import { WebMcpRoleProvider } from "@/components/webmcp/role-context";
 import type { AppRole } from "@/lib/tools/types";
 
 export function AppShell({
@@ -330,7 +331,9 @@ export function AppShell({
               "[&::-webkit-scrollbar]:hidden",
             )}
           >
-            {children}
+            {/* Screens register their own WebMCP tools several levels down;
+                the role they gate on rides a context rather than a prop. */}
+            <WebMcpRoleProvider role={role}>{children}</WebMcpRoleProvider>
           </main>
         </div>
       </div>
