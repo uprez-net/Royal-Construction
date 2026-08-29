@@ -108,6 +108,8 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
 | `pnpm start` | Run production server |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript check |
+| `pnpm test` | Unit suite (`tests/`) |
+| `pnpm test:webmcp` | WebMCP browser smoke suite (`e2e/`) — see below |
 | `pnpm prisma:generate` | Generate Prisma client |
 | `pnpm prisma:seed` | Seed database |
 | `pnpm seed:projects` | Seed projects only |
@@ -119,6 +121,7 @@ app/              Next.js routes, layouts, and API handlers
 components/       UI — common shell, feature screens, shadcn primitives
 lib/              Server data helpers, Redux store, auth, integrations
 prisma/           Schema, migrations, and seed scripts
+e2e/              Browser smoke tests, run explicitly and never by `pnpm test`
 hooks/            Client-side React hooks
 types/            Shared TypeScript types
 utils/            Pure helpers and validators
@@ -135,6 +138,37 @@ Key routes:
 | `/tradie` | Tradie coordination |
 | `/leads` | Lead management |
 | `/sign-in`, `/sign-up` | Clerk auth |
+
+## WebMCP smoke suite
+
+`pnpm test:webmcp` drives the app's [WebMCP](./docs/webmcp-capability.md) tool
+surface in headless Chrome: it navigates to each screen, checks the tools that
+screen is supposed to register are there, runs one read tool on each, and checks
+that tools scoped elsewhere are **not** there.
+
+It is deliberately separate from `pnpm test`. It needs a running dev server and
+a database with at least one project and one lead in it, and a unit suite that
+silently depends on either is a unit suite nobody trusts.
+
+```bash
+pnpm dev                 # in one terminal
+pnpm test:webmcp         # in another
+```
+
+Point it elsewhere with `WEBMCP_BASE_URL`. Authentication is handled for you:
+in development `proxy.ts` bounces an unauthenticated page request through
+`/api/dev/sign-in` and back.
+
+Headless Chrome has no WebMCP, so `e2e/webmcp/shim.ts` installs a stand-in
+`document.modelContext` before the app's own script runs. It mimics two
+behaviours of shipping implementations that the app has to survive — arguments
+arriving as a JSON string, and the tool callback invoked with no options
+argument — so a regression in that handling fails here rather than in someone's
+browser.
+
+It performs no destructive writes. `add_milestone_photos` is checked only to
+the point of opening its dialog, and `send_lead_message` is never called at all:
+it aims a composer at a real customer, which is no place for a smoke test.
 
 ## Documentation
 
