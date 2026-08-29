@@ -1,5 +1,7 @@
 import { addWeeks, isWithinInterval } from "date-fns";
 
+import { normalizeDateString } from "@/utils/date";
+
 import type {
     ProjectDetail,
     TradieScheduleWithTradieAndMilestone,
@@ -78,7 +80,16 @@ export function selectComplianceWarnings(project: ProjectDetail): ComplianceWarn
     // Unlike the two above, this one holds whatever the status is: a contract
     // date nobody can parse is wrong information, not missing information, and
     // it stays wrong after the job finishes.
-    if (legal.signedDate && !isParseableDate(legal.signedDate)) {
+    //
+    // `normalizeDateString`, not `new Date()`. The header decides what to badge
+    // as unverified with this exact function, and it is considerably more
+    // capable than the built-in parser: it reads dd/mm/yyyy in Australian order
+    // rather than American, strips ordinal suffixes, and understands the
+    // "signed this 4 day of October 2023" phrasing that comes out of contract
+    // extraction. A hand-rolled check here would flag dates the screen shows
+    // perfectly well, and the agent would contradict the page in front of the
+    // user.
+    if (legal.signedDate && normalizeDateString(legal.signedDate) === null) {
         warnings.push({
             field: "signedDate",
             message: `Signed date "${legal.signedDate}" could not be read as a date and shows as unverified.`,
@@ -86,11 +97,6 @@ export function selectComplianceWarnings(project: ProjectDetail): ComplianceWarn
     }
 
     return warnings;
-}
-
-/** Matches what `normalizeDateString` accepts in the header. */
-function isParseableDate(value: string): boolean {
-    return !Number.isNaN(new Date(value).getTime());
 }
 
 /**

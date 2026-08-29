@@ -20,6 +20,7 @@ import {
     firstProjectId,
     launchBrowser,
     openPage,
+    signIn,
     readTool,
     toolNames,
     visit,
@@ -39,6 +40,7 @@ describe("surface scoping", () => {
     before(async () => {
         browser = await launchBrowser();
         page = await openPage(browser);
+        await signIn(page);
     });
 
     after(async () => {
@@ -112,9 +114,11 @@ describe("surface scoping", () => {
         const leadId = await firstLeadId(page);
 
         await visit(page, `/leads/${leadId}`);
+        await expectTools(page, LEAD_DETAIL_TOOLS);
         await expectToolsAbsent(page, PROJECT_DETAIL_TOOLS);
 
         await visit(page, `/projects/${projectId}`);
+        await expectTools(page, PROJECT_DETAIL_TOOLS);
         await expectToolsAbsent(page, LEAD_DETAIL_TOOLS);
     });
 

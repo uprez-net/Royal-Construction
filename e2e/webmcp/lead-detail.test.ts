@@ -10,6 +10,7 @@ import {
     firstLeadId,
     launchBrowser,
     openPage,
+    signIn,
     readTool,
     runTool,
     toolNames,
@@ -24,6 +25,7 @@ describe("lead detail", () => {
     before(async () => {
         browser = await launchBrowser();
         page = await openPage(browser);
+        await signIn(page);
         await visit(page, "/leads");
         leadId = await firstLeadId(page);
     });
@@ -124,6 +126,9 @@ describe("lead detail", () => {
 
     test("a tab's tools are gone when that tab is not open", async () => {
         await visit(page, `/leads/${leadId}?activeTab=documents`);
+        // Prove the tab mounted before asserting the other tab's tools are
+        // gone, or this passes for the wrong reason.
+        await expectTools(page, LEAD_TAB_TOOLS.documents);
         await expectToolsAbsent(page, LEAD_TAB_TOOLS.overview);
     });
 });

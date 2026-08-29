@@ -248,6 +248,10 @@ Screen tools need neither: they go through the store, so the tab the user is loo
 - `tests/projects/milestone-transitions.test.ts`, `tests/projects/project-warnings.test.ts` — the rules the milestone verbs and `get_project_warnings` enforce.
 - `tests/webmcp/registry-parity.test.ts` — every manifest entry has a handler and vice versa. Slow (boots the data layer); `registry.server.ts` enforces the same invariant at import time.
 
+`pnpm test:webmcp` drives the surface in headless Chrome — see the README. It is
+separate from `pnpm test` on purpose: it needs a dev server and a database with
+records in it.
+
 There is no way to drive ChatGPT Desktop's agent from a test. For manual verification, `/webmcp-inspector` (development only, under the authenticated shell) lists `getTools()` and runs any tool through `executeTool()`. Because screen tools register on mount, the list there changes as you navigate — that is the behaviour to check.
 
 ## Known limits

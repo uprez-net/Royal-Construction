@@ -76,6 +76,46 @@ test("a readable signed date is not flagged", () => {
     );
 });
 
+test("the date formats actually in the database are not flagged", () => {
+    // Every one of these is a real signedDate from the projects table, and none
+    // of them survives a bare `new Date()`: "03/09/2025" comes out as March in
+    // the American order rather than September in the Australian one, and the
+    // ordinal and contract phrasings do not parse at all. The header reads them
+    // all through normalizeDateString and shows them as verified, so anything
+    // this function flags is the agent contradicting the page.
+    for (const signedDate of [
+        "2024-05-06",
+        "03/09/2025",
+        "27 Oct 2025",
+        "04/10/2023",
+        "27th Oct 2025",
+        "signed this 4 day of October 2023",
+    ]) {
+        assert.deepEqual(
+            selectComplianceWarnings(projectWith("ACTIVE", {
+                signedDate,
+                pcaInspector: "K. Rowe",
+                hbcfInsuranceNumber: "HB-9912",
+            })),
+            [],
+            `"${signedDate}" was flagged as unreadable, but the header renders it`,
+        );
+    }
+});
+
+test("a date that is genuinely nonsense is still flagged", () => {
+    // The guard is only worth having if it still catches the case it exists
+    // for: extraction returning prose where a date belongs.
+    const warnings = selectComplianceWarnings(projectWith("ACTIVE", {
+        signedDate: "on completion of the slab",
+        pcaInspector: "K. Rowe",
+        hbcfInsuranceNumber: "HB-9912",
+    }));
+
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].field, "signedDate");
+});
+
 test("a confirmed booking always alerts, whenever its milestone is due", () => {
     const now = new Date("2026-09-01");
     const far = scheduleWith({ status: "CONFIRMED", targetDate: new Date("2027-01-01") });

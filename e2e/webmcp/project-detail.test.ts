@@ -13,6 +13,7 @@ import {
     firstProjectId,
     launchBrowser,
     openPage,
+    signIn,
     readTool,
     runTool,
     visit,
@@ -33,6 +34,7 @@ describe("project detail", () => {
     before(async () => {
         browser = await launchBrowser();
         page = await openPage(browser);
+        await signIn(page);
         await visit(page, "/projects");
         projectId = await firstProjectId(page);
     });
@@ -144,6 +146,10 @@ describe("project detail", () => {
         // The whole model rests on this. If tab tools leaked across tabs, the
         // agent would be offered work the screen cannot show it doing.
         await visit(page, `/projects/${projectId}?activeTab=docs`);
+        // Prove the tab actually mounted first. A tool that has not registered
+        // yet is indistinguishable from one that is correctly absent, and this
+        // assertion would pass for the wrong reason.
+        await expectTools(page, PROJECT_TAB_TOOLS.docs);
         await expectToolsAbsent(page, [
             ...PROJECT_TAB_TOOLS.milestones,
             ...PROJECT_TAB_TOOLS.tradies,

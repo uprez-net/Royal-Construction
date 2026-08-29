@@ -155,9 +155,17 @@ pnpm dev                 # in one terminal
 pnpm test:webmcp         # in another
 ```
 
-Point it elsewhere with `WEBMCP_BASE_URL`. Authentication is handled for you:
-in development `proxy.ts` bounces an unauthenticated page request through
-`/api/dev/sign-in` and back.
+Point it elsewhere with `WEBMCP_BASE_URL`. It takes five to six minutes: the
+files run one at a time, because three browsers against one dev server means
+compile contention and a burst of Clerk development-instance sign-ins, and both
+of those show up as redirect loops rather than as anything legible.
+
+Authentication is handled for you. The suite goes to `/api/dev/sign-in`
+explicitly rather than letting `proxy.ts` bounce it there: the redirect chain is
+resolved by the browser before any page script runs, and the ticket exchange
+that would break the loop is client-side, so an unauthenticated first navigation
+ends in `ERR_TOO_MANY_REDIRECTS`. Sign-in is retried, since a failed ticket
+exchange is transient.
 
 Headless Chrome has no WebMCP, so `e2e/webmcp/shim.ts` installs a stand-in
 `document.modelContext` before the app's own script runs. It mimics two
