@@ -97,3 +97,13 @@ to finish the action, and never claim it is done.
   trigger, so it is reachable only by URL. The navigation tool does not offer it.
 - `hooks/use-clerk-management.ts` posts to `/api/invitations`, which does not
   exist.
+- The compliance half of `lib/projects/project-warnings.ts` restates checks that
+  `project-header.tsx` and `project-compliance-alert.tsx` each compute for
+  themselves. Deduplicating those means touching their render logic, which was
+  beyond this change; the module says so and names both files, and they already
+  differed slightly before it existed (only the header flags an unreadable
+  signed date).
+- Screen tools still run with the full ambient session. `requiredRole` keeps a
+  tool out of the agent's menu, which is not the same as stopping it: only 4 of
+  45 routes under `app/api` check role at all. That is the boundary worth
+  fixing next, and it is a server change, not a WebMCP one.
