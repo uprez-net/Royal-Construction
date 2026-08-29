@@ -287,34 +287,6 @@ export default function Leads() {
 
   useWebMcpTools([
     {
-      name: "leads_set_search",
-      title: "Search the visible leads list",
-      description:
-        "Types a term into the search box on the leads screen the user is looking at, so the list on screen narrows to matching leads. Prefer this over get_leads when the user wants to see results rather than be told them. Pass an empty string to clear the search. Note the list only re-queries for terms of five characters or more, exactly as when a person types.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "Text to search leads by. Empty string clears the search.",
-          },
-        },
-        required: ["query"],
-        additionalProperties: false,
-      },
-      annotations: { readOnlyHint: true },
-      execute: async (input) => {
-        const query = String(input.query ?? "");
-        setActiveTab("table");
-        setSearchTerm(query);
-        return webMcpText(
-          query
-            ? `Searching the visible leads list for "${query}".`
-            : "Cleared the leads search.",
-        );
-      },
-    },
-    {
       name: "leads_filter_by_stage",
       title: "Filter the visible leads list",
       description:

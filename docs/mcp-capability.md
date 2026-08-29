@@ -32,8 +32,7 @@ The MCP server is protected.
 
 - Requests must present a valid Clerk bearer token.
 - The auth wrapper uses `withMcpAuth(...)` and the request must satisfy the required scope configured by the server.
-- Tools that mutate data also depend on the authenticated user context.
-- `delete_lead` and `update_variation_status` additionally require the `ADMIN` role, enforced from the manifest before the handler runs.
+- No tool on this surface mutates data any more, so the role gate the manifest carries (`requiredRole`, enforced by `assertRole` before the handler runs) currently has nothing to guard. It stays because the next write tool to arrive here should be gated by declaring a role, not by remembering to write a check.
 
 In practice, MCP clients need to support bearer-token or OAuth-style auth. If a client cannot attach an access token, it will not be able to call the protected tools.
 
@@ -41,34 +40,35 @@ In practice, MCP clients need to support bearer-token or OAuth-style auth. If a 
 
 The table below reflects the current tool registry in [app/api/mcp/route.ts](../app/api/mcp/route.ts).
 
-Twelve write tools were **retired from this surface**. Their browser flows moved on from the
-server actions these handlers wrapped - project creation now runs through `createProjectWithLead`
-off an extracted tender and contract, milestone updates go through the milestone `/updates` route,
-lead writes go through `lib/leads/leads-service`, and file upload needs a file the agent does not
-have. Rather than keep a second, diverging implementation here, they are registered by the screens
-that own them and are reachable over WebMCP only. See [webmcp-capability.md](./webmcp-capability.md).
+**This surface is now read-only.** Every write moved to the screen that owns it, reachable over
+WebMCP only - see [webmcp-capability.md](./webmcp-capability.md). Two rounds of retirement got here.
+First the twelve write tools whose browser flows had moved on from the server actions these handlers
+wrapped: project creation now runs through `createProjectWithLead` off an extracted tender and
+contract, milestone updates go through the milestone `/updates` route, lead writes go through
+`lib/leads/leads-service`, and file upload needs a file the agent does not have. Then `add_material`
+and the two variation tools, for the same reason.
+
+Two reads left as well. `get_projects` returned whole project rows with stats, which is too large a
+payload to carry in a tool result when `get_project_lookup` answers the same question in three
+fields; `get_all_tradies` returned the unfiltered directory, which `get_tradies` already does with a
+filter. Point callers at the replacements.
 
 | Tool | Purpose | Inputs | Output |
 | --- | --- | --- | --- |
 | `get_customer` | Search customers for dropdowns and project creation | `page`, `limit`, `q`, `search` | Paginated customer list |
 | `get_site_managers` | Search site managers for assignment | `page`, `limit`, `q`, `search` | Paginated site manager list |
 | `get_tradies` | Search tradies for lookup and scheduling | `search`, `q`, `limit`, `page` | Tradie list |
-| `get_projects` | List projects with summary stats | `status`, `page`, `limit`, `search`, `sortBy`, `sortOrder` | Paginated project list |
 | `get_project_lookup` | Lookup projects for autocomplete | `page`, `limit`, `q` | Paginated project lookup list |
 | `get_project` | Fetch a full project detail payload | `projectId` | Project detail payload |
-| `create_variation` | Create a variation for a project | `projectId`, `description`, `cost`, optional `requestedDate` | Variation payload |
-| `update_variation_status` | Approve or reject a variation | `projectId`, `variationId`, `status` | Variation payload |
 | `get_milestones` | List milestones for a project | `projectId` | Milestone array |
 | `get_leads` | List all leads | `q`, `status`, `filterTiming`, `page`, `limit` | Lead array |
-| `get_all_tradies` | Return the full tradie list | No inputs | Tradie array |
-| `add_material` | Add material to a project | `projectId`, `materialData` with `name`, `category`, `specifications`, `quantity`, `unitCost`, `totalCost` | Material payload |
 | `address_council_lookup` | Lookup council/address suggestions | `query`, optional `limit` | Address suggestion payload |
 
 ## Input Notes By Tool Group
 
 ### Lookup tools
 
-`get_customer`, `get_site_managers`, `get_projects`, `get_project_lookup`, `get_tradies`, and `get_tradie_coordination_dashboard` all accept query-style inputs. These are the same paginated search shapes used by the app routes.
+`get_customer`, `get_site_managers`, `get_project_lookup` and `get_tradies` all accept query-style inputs. These are the same paginated search shapes used by the app routes.
 
 - Page numbers default to the first page when omitted.
 - Limits are capped by the validator.
@@ -76,11 +76,10 @@ that own them and are reachable over WebMCP only. See [webmcp-capability.md](./w
 
 ### Project tools
 
-`get_project`, `get_milestones`, `create_variation` and `update_variation_status` are project-scoped.
+`get_project` and `get_milestones` are project-scoped and take a `projectId`.
 
-- `create_variation` and `update_variation_status` both operate on a single project and variation.
-- `update_variation_status` additionally requires the ADMIN role.
-- Creating projects, milestones and site updates is no longer available here; those are WebMCP screen tools.
+- `get_project_lookup` requires `mode: "lookup"` alongside its query fields. Omitting it is a validation error, not an empty result.
+- Creating projects, milestones, site updates, variations and materials is not available here; those are WebMCP screen tools.
 
 ### Lead tools
 
@@ -90,9 +89,9 @@ Lead writes are not on this surface. They are WebMCP tools on the leads screen, 
 
 ### Tradie tools
 
-`get_tradies` and `get_all_tradies` are read-only lookups for resolving a tradie ID.
+`get_tradies` is the read-only lookup for resolving a tradie ID. It requires a query - there is no unfiltered listing.
 
-Scheduling is not on this surface. `create_tradie_schedule` and `update_tradie_schedule` are WebMCP screen tools, and the coordination dashboard is a screen aggregate rather than a tool.
+Scheduling is not on this surface. It is a WebMCP screen tool on the project's tradie tab, and the coordination dashboard is a screen aggregate rather than a tool.
 
 ### File and address tools
 
@@ -131,7 +130,7 @@ Before you rely on a client, verify that it can do the following:
 
 ## Practical Usage Examples
 
-- Use `get_projects` to populate a project picker.
+- Use `get_project_lookup` to populate a project picker.
 - Use `get_project` when you need the full project detail graph.
 - Use `address_council_lookup` when you need address normalization or council suggestion data before creating a project.
 
@@ -140,7 +139,6 @@ Before you rely on a client, verify that it can do the following:
 - The current implementation is tightly coupled to Clerk auth.
 - Tool inputs are validated with Zod before the data helpers run.
 - Read tools use cached helpers where possible.
-- Write tools usually return refreshed domain payloads so clients do not need to re-query immediately.
 - Claude Code is the easiest direct client for the current remote HTTP server.
 - Claude Desktop needs a local bridge or a local MCP server shape to consume this remote endpoint cleanly.
 

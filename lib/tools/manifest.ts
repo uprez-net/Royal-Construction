@@ -5,26 +5,19 @@ import {
     customerLookupQuerySchema,
     siteManagerLookupQuerySchema,
 } from "@/utils/validators/lookups";
-import { addMaterialSchema } from "@/utils/validators/material";
 import {
-    createVariationSchema,
-    projectListQuerySchema,
     projectLookupQuerySchema,
     projectParamSchema,
-    variationParamSchema,
 } from "@/utils/validators/projects";
 import { tradieSearchQuerySchema } from "@/utils/validators/tradies";
 import {
     customerLookupResponseSchema,
     leadsResponseSchema,
-    materialResponseSchema,
     milestoneResponseSchema,
     projectDetailResponseSchema,
     projectLookupResponseSchema,
-    projectsResponseSchema,
     siteManagerLookupResponseSchema,
     tradiesResponseSchema,
-    variationResponseSchema,
 } from "@/utils/validators/mcp";
 
 import type { ToolDescriptor } from "./types";
@@ -32,31 +25,28 @@ import type { ToolDescriptor } from "./types";
 /**
  * The shared tool manifest.
  *
- * Scope note: this file holds the tools that are the *same* operation whether a
- * backend agent calls them over MCP or a browser agent calls them through the
- * bridge — reads, plus the two writes whose server contract and browser
- * contract still agree.
+ * Scope note: this file holds cheap, always-relevant *lookups* — the operations
+ * that mean the same thing whether a backend agent calls them over MCP or a
+ * browser agent calls them through the bridge, and that are worth carrying on
+ * every page because any conversation might start with one.
  *
- * The write tools that drive the leads and projects screens are NOT here. Their
- * browser flows diverged from the server-action signatures these tools used to
- * wrap (project creation now runs through `createProjectWithLead` off an
- * extracted tender/contract, milestone updates go through the milestone
- * `/updates` route, lead writes go through `lib/leads/leads-service`), so they
- * are registered by the screens that own them, against the exact code path the
- * UI uses. See components/leads/leads.tsx, components/projects/*-screen.tsx and
- * docs/webmcp-capability.md.
+ * Nothing that writes is here any more, and that is deliberate. The write tools
+ * that drive the leads and projects screens diverged from the server-action
+ * signatures they used to wrap (project creation now runs through
+ * `createProjectWithLead` off an extracted tender/contract, milestone updates go
+ * through the milestone `/updates` route, lead writes go through
+ * `lib/leads/leads-service`), so they are registered by the screens that own
+ * them, against the exact code path a click takes.
+ *
+ * Nor is everything readable here. A read whose payload is large, or whose
+ * answer only makes sense on one screen, belongs to that screen too — see
+ * docs/webmcp-capability.md for which read lives where, and why `get_projects`
+ * and `get_all_tradies` left.
  */
 
 // ---------------------------------------------------------------------------
 // Composite schemas
 // ---------------------------------------------------------------------------
-
-export const emptyInputSchema = z.object({}).strict();
-
-export const variationCreateToolSchema = projectParamSchema.extend(createVariationSchema.shape);
-export const variationUpdateToolSchema = variationParamSchema.extend({
-    status: z.enum(["APPROVED", "REJECTED"]),
-});
 
 /**
  * Was an inline ZodRawShape in the route. Promoted to a ZodObject so every
@@ -126,23 +116,17 @@ export const TOOL_MANIFEST: readonly ToolDescriptor[] = [
     },
     {
         name: "get_tradies",
-        description: "Search tradies for dropdowns and lookup",
+        description:
+            "Search tradies by name or trade. Use q or search to narrow, and limit to cap the result — there is no unfiltered listing, because the full directory is too large to be useful in a tool result.",
         inputSchema: tradieSearchQuerySchema,
         outputSchema: getTradieResponseSchema,
         annotations: { readOnlyHint: true },
         surface: "both",
     },
     {
-        name: "get_projects",
-        description: "List projects with stats",
-        inputSchema: projectListQuerySchema,
-        outputSchema: projectsResponseSchema,
-        annotations: { readOnlyHint: true, untrustedContentHint: true },
-        surface: "both",
-    },
-    {
         name: "get_project_lookup",
-        description: "Lookup projects for dropdowns",
+        description:
+            "List projects as id, name and location, for resolving a project the user named in words. Requires mode: \"lookup\". Takes q to search, and page/limit to page. This is the way to turn \"the Henderson job\" into a project id before navigating to it.",
         inputSchema: projectLookupQuerySchema,
         outputSchema: projectLookupResponseSchema,
         annotations: { readOnlyHint: true },
@@ -154,24 +138,6 @@ export const TOOL_MANIFEST: readonly ToolDescriptor[] = [
         inputSchema: projectParamSchema,
         outputSchema: projectDetailResponseSchema,
         annotations: { readOnlyHint: true, untrustedContentHint: true },
-        surface: "both",
-    },
-    {
-        name: "create_variation",
-        description: "Create a project variation",
-        inputSchema: variationCreateToolSchema,
-        outputSchema: variationResponseSchema,
-        annotations: { readOnlyHint: false },
-        surface: "both",
-    },
-    {
-        name: "update_variation_status",
-        description: "Approve or reject a variation",
-        inputSchema: variationUpdateToolSchema,
-        outputSchema: variationResponseSchema,
-        annotations: { readOnlyHint: false },
-        // Approving a variation commits the business to a cost change.
-        requiredRole: "ADMIN",
         surface: "both",
     },
     {
@@ -188,22 +154,6 @@ export const TOOL_MANIFEST: readonly ToolDescriptor[] = [
         inputSchema: leadLookupParamSchema,
         outputSchema: leadsResponseSchema,
         annotations: { readOnlyHint: true, untrustedContentHint: true },
-        surface: "both",
-    },
-    {
-        name: "get_all_tradies",
-        description: "List all tradies for scheduling",
-        inputSchema: emptyInputSchema,
-        outputSchema: getTradieResponseSchema,
-        annotations: { readOnlyHint: true },
-        surface: "both",
-    },
-    {
-        name: "add_material",
-        description: "Add material to a project",
-        inputSchema: addMaterialSchema,
-        outputSchema: materialResponseSchema,
-        annotations: { readOnlyHint: false },
         surface: "both",
     },
     {

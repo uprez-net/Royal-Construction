@@ -36,24 +36,33 @@ The split is not stylistic. Twelve write tools started life on the MCP server wr
 | Tool | Why it could not stay |
 | --- | --- |
 | `create_project` | Browser now calls `createProjectWithLead`, needing an uploaded tender + contract and the `extraction` payload the Workflow DevKit run produces from them. |
-| `create_project_update` | Posts to `/api/projects/[id]/updates` with `photoUrls`; the handler called `createProjectUpdate` directly and the screen never saw the write. |
+| `create_project_update` | Posted to `/api/projects/[id]/updates` with `photoUrls`; the handler called `createProjectUpdate` directly and the screen never saw the write. **Since removed outright** — posting an update is something the user should watch happen. |
 | `create_milestone` | `milestoneCreationSchema` gained a required `projectStage`. |
 | `update_milestone` | Goes through the milestone `/updates` route, and the tool's schema had dropped `milestoneUpdateSchema`'s conditional rules by `.extend()`-ing its shape. |
 | `add_milestone_photos` | Only meaningful after an upload the agent cannot perform. |
 | `create_lead` / `update_lead` / `delete_lead` | Browser goes through `lib/leads/leads-service`, which handles the duplicate-lead 409 and keeps the visible list in step. |
 | `create_tradie_schedule` | Belongs to an open project; the thunk feeds the store. |
-| `update_tradie_schedule` | Advertised `quote` and `quoteUnit`, which `PATCH /api/tradie-schedules/[id]` parses and then discards — only `status` is forwarded. |
+| `update_tradie_schedule` | Advertised `quote` and `quoteUnit`, which `PATCH /api/tradie-schedules/[id]` parses and then discards — only `status` is forwarded. **Since removed outright** — it is not part of the current coordination flow. |
 | `upload_file` | Took the file as base64 in its arguments. An agent has no file content. |
 | `get_tradie_coordination_dashboard` | **Removed outright.** A screen aggregate, not an operation. |
 
-`tests/webmcp/manifest.test.ts` asserts none of these reappear in the shared manifest.
+A second round then took five more, for a different reason: a globally-registered tool has to earn its place in every conversation, and these did not.
+
+| Tool | Why it left |
+| --- | --- |
+| `get_projects` | Whole project rows with stats. `get_project_lookup` answers the same question — resolve a name to an id — in three fields. |
+| `get_all_tradies` | The unfiltered directory, and slow. `get_tradies` is the same read with a filter. |
+| `add_material` | Server-side write against an implementation the UI has moved past. |
+| `create_variation`, `update_variation_status` | Not needed yet; they return to the project detail page later. |
+
+`tests/webmcp/manifest.test.ts` asserts none of these reappear in the shared manifest, and that it holds no write tools at all.
 
 ## Architecture
 
 ```
 lib/tools/
   types.ts             ToolDescriptor, AppRole, annotations
-  manifest.ts          13 shared descriptors. Client-safe.
+  manifest.ts          8 shared descriptors, all reads. Client-safe.
   json-schema.ts       the browser-facing descriptor list
   zod-to-json-schema.ts  Zod -> JSON Schema, usable without the manifest
   result.ts            toToolResult / toToolError (server side)
@@ -64,6 +73,7 @@ lib/tools/
 
 components/webmcp/
   webmcp-provider.tsx  registers the shared tools + the global UI tools
+  role-context.tsx     the role a screen tool gates its registration on
   bridge.ts            posts a shared-tool call to the bridge route
   ui-tools.ts          navigate_to, get_current_view, get_operating_guide
   tool-result.ts       webMcpText / webMcpJson / webMcpError (client side)
@@ -98,7 +108,7 @@ That same file carries one augmentation: `executeTool`, which is in the spec IDL
 
 ### Always available
 
-The 13 shared tools from [mcp-capability.md](./mcp-capability.md), plus three UI tools:
+The 8 shared tools from [mcp-capability.md](./mcp-capability.md), plus three UI tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -108,7 +118,9 @@ The 13 shared tools from [mcp-capability.md](./mcp-capability.md), plus three UI
 
 ### Leads screen — `components/leads/leads.tsx`
 
-`leads_set_search`, `leads_filter_by_stage`, `create_lead`, `update_lead`, `delete_lead`.
+`leads_filter_by_stage`, `create_lead`, `update_lead`, `delete_lead` (admin only).
+
+`leads_set_search` was removed: `get_leads` answers the same question faster and without depending on browser state.
 
 Input schemas are converted from `createLeadSchema` and `updateLeadSchema` — the same validators `POST /api/leads` and `PATCH /api/leads/[leadId]` use, so the tool and the form cannot disagree about a valid payload. `history` is omitted from `update_lead`: it is the lead's audit trail, and an agent authoring entries there would be forging a record.
 
@@ -124,13 +136,9 @@ Results feed back through `useLeadsData`'s own setters (`prependLead`, `updateLe
 
 ### Project detail — `components/projects/project-detail-screen.tsx`
 
-`create_project_update`, `create_milestone`, `update_milestone`, `add_milestone_photos`, `upload_project_files`, `create_tradie_schedule`.
+`create_milestone`, `update_milestone`, `add_milestone_photos`, `upload_project_files`, `create_tradie_schedule`.
 
 None of these take a `projectId`. They act on the project that is open, so an agent cannot quietly edit a different one. `update_milestone` validates against the full refined `milestoneUpdateSchema`, which is what stops a half-filled `DONE` landing as a milestone marked complete with no spend against it.
-
-### Tradie coordination — `components/tradies/tradies-client.tsx`
-
-`update_tradie_schedule` — status only, because status is all the route acts on.
 
 ## File upload
 
@@ -139,7 +147,9 @@ None of these take a `projectId`. They act on the project that is open, so an ag
 ## Authentication and authorization
 
 - **Authentication** is the Clerk session cookie. `proxy.ts` answers any unauthenticated `/api/*` request with a `401`, and `/api/webmcp` is deliberately absent from its `isPublicRoute` list. Screen tools inherit the same session, since they go through the app's own routes.
-- **Authorization** is the `requiredRole` field on a shared descriptor, enforced in the bridge route via `assertRole`. `update_variation_status` requires `ADMIN`.
+- **Authorization** is the `requiredRole` field, declared on a shared descriptor or on a screen tool's config. On the bridge it is enforced by `assertRole` before the handler runs; on a screen tool `useWebMcpTools` simply leaves the tool out of the registration, so the agent never sees it. `delete_lead` requires `ADMIN`.
+
+  Be clear about the difference. The bridge check is enforcement — the tool cannot run. The screen-tool check is a menu filter: it stops the agent wasting turns on a call that would fail, but a screen tool calls the app's own routes, and most of those do not check role. Anything that genuinely must not happen has to be refused by the route.
 
 Both checks are server-side on purpose. The provider also filters the list it registers by role, but only so the agent does not waste turns on calls that will 403 — a page-registered tool runs with the full ambient session, so the decision that counts cannot live in the browser.
 
@@ -148,7 +158,7 @@ The bridge applies a per-user ceiling of 60 calls/minute. It is instance-local: 
 ## Annotations
 
 - `readOnlyHint` — `true` for `get_*` and `*_lookup`, `false` for everything else. A unit test asserts this follows the verb on the shared manifest, because a write mislabelled read-only is the mistake that costs data.
-- `untrustedContentHint` — `true` on `get_leads`, `get_projects`, `get_project` and `get_milestones`. Those payloads carry lead notes and Graph-ingested email bodies: text written by people outside the business, which the agent should treat as data and not as instructions.
+- `untrustedContentHint` — `true` on `get_leads`, `get_project` and `get_milestones`. Those payloads carry lead notes and Graph-ingested email bodies: text written by people outside the business, which the agent should treat as data and not as instructions.
 
 Both are **hints**. Nothing in the spec enforces them, and ChatGPT's confirmation policy for consequential actions is theirs, not ours. The role gate is the only boundary that is actually enforced.
 
@@ -164,7 +174,7 @@ Screen tools also flatten Zod failures with `summariseZodIssues`, which names th
 
 Shared write tools rely on `lib/data/*` revalidating its own cache tags, and the bridge returns a `mutated` flag so the provider can call `router.refresh()`.
 
-Screen tools need neither: they go through the store, so the tab the user is looking at re-renders. `update_tradie_schedule` additionally re-fetches the coordination dashboard, because its tab totals are aggregated server-side and a moved row alone would leave them stale.
+Screen tools need neither: they go through the store, so the tab the user is looking at re-renders.
 
 ## Testing
 

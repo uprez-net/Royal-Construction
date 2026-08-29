@@ -40,8 +40,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
-import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
 import {
   clearSelectedSchedules,
   fetchTradieCoordinationDashboard,
@@ -170,61 +168,6 @@ export function TradiesClient({
     dispatch(setTradies(initialTradies));
     dispatch(hydrateTradieCoordination(initialDashboard));
   }, [dispatch, initialDashboard, initialTradies]);
-
-  /* ── WebMCP: schedule status, scoped to the coordination screen ──
-     The retired MCP tool advertised the full updateTradieScheduleSchema, but
-     PATCH /api/tradie-schedules/[scheduleId] only ever forwards `status` to
-     lib/data/tradieSchedules - `quote` and `quoteUnit` are parsed and dropped,
-     and the `notes` the UI sends is not in the schema at all. Advertising
-     fields that do nothing teaches an agent it changed something it did not,
-     so the tool takes exactly what the route acts on. */
-  useWebMcpTool({
-    name: "update_tradie_schedule",
-    title: "Update a booking status",
-    description:
-      "Changes the status of a tradie booking on the coordination screen. Resolve scheduleId from the visible schedule list. Only the status can be changed here; quotes and notes are edited from the booking's own dialog.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        scheduleId: { type: "string", description: "The booking to update." },
-        status: {
-          type: "string",
-          enum: Object.values(TradieScheduleStatus),
-          description: "The new booking status.",
-        },
-      },
-      required: ["scheduleId", "status"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: false },
-    execute: async (input) => {
-      const scheduleId =
-        typeof input.scheduleId === "string" ? input.scheduleId.trim() : "";
-      if (!scheduleId) {
-        return webMcpError("scheduleId is required.");
-      }
-
-      const status = String(input.status ?? "");
-      if (!Object.values(TradieScheduleStatus).includes(status as TradieScheduleStatus)) {
-        return webMcpError(
-          `status must be one of: ${Object.values(TradieScheduleStatus).join(", ")}.`,
-        );
-      }
-
-      await dispatch(
-        updateTradieScheduleStatus({
-          scheduleId,
-          status: status as TradieScheduleStatus,
-        }),
-      ).unwrap();
-
-      // The dashboard aggregates counts server-side, so the row moving is not
-      // enough - the tab totals beside it would still show the old split.
-      void dispatch(fetchTradieCoordinationDashboard({ force: true }));
-
-      return webMcpJson({ scheduleId, status });
-    },
-  });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

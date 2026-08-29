@@ -6,7 +6,6 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   addMilestonePhotos,
   addProjectMilestone,
-  addProjectUpdate,
   createTradieScheduleForProject,
   resetProjectDetailUiState,
   setActiveProject,
@@ -33,7 +32,6 @@ import {
   milestonePictureUploadSchema,
   milestoneUpdateSchema,
 } from "@/utils/validators/milestone";
-import { createProjectUpdateSchema } from "@/utils/validators/projects";
 import { createTradieScheduleSchema } from "@/utils/validators/tradies";
 
 import { ProjectComplianceAlert } from "./detail/project-compliance-alert";
@@ -48,7 +46,6 @@ const MAX_UPLOAD_FILES = 10;
 /**
  * These are the schemas the browser's own routes validate against, so the tools
  * and the modals cannot drift:
- *   create_project_update    POST  /api/projects/[projectId]/updates
  *   create_milestone         POST  /api/projects/[projectId]/milestones
  *   update_milestone         PATCH /api/projects/[projectId]/milestones/[id]/updates
  *   add_milestone_photos     POST  /api/projects/[projectId]/milestones/[id]/add-photos
@@ -58,7 +55,6 @@ const MAX_UPLOAD_FILES = 10;
  * exist while a project is open, and acting on a different one silently would
  * be exactly the surprise this design is meant to avoid.
  */
-const projectUpdateJsonSchema = toToolInputJsonSchema(createProjectUpdateSchema);
 const milestoneCreateJsonSchema = toToolInputJsonSchema(milestoneCreationSchema);
 const milestoneUpdateJsonSchema = toToolInputJsonSchemaWithParams(milestoneUpdateSchema, {
   milestoneId: { type: "string", description: "The milestone to update." },
@@ -118,31 +114,6 @@ export function ProjectDetailScreen({
      store, so the tabs the user is looking at update - and it means the tool
      and the form cannot disagree about what a valid payload is. */
   useWebMcpTools([
-    {
-      name: "create_project_update",
-      title: "Post a site update",
-      description:
-        "Posts a site update to the project currently open, optionally against one of its milestones. Photo URLs must already be uploaded - call upload_project_files first if the user has files to attach.",
-      inputSchema: projectUpdateJsonSchema,
-      annotations: { readOnlyHint: false },
-      execute: async (input) => {
-        const parsed = createProjectUpdateSchema.safeParse(input);
-        if (!parsed.success) {
-          return webMcpError(summariseZodIssues(parsed.error));
-        }
-
-        const updated = await dispatch(
-          addProjectUpdate({
-            projectId: project.id,
-            notes: parsed.data.notes,
-            milestoneId: parsed.data.milestoneId ?? null,
-            photoUrls: parsed.data.photoUrls ?? [],
-          }),
-        ).unwrap();
-
-        return webMcpJson({ projectId: updated.id, notes: parsed.data.notes });
-      },
-    },
     {
       name: "create_milestone",
       title: "Add a milestone",
@@ -281,7 +252,7 @@ export function ProjectDetailScreen({
       name: "create_tradie_schedule",
       title: "Schedule a tradie on this project",
       description:
-        "Books a tradie onto the project currently open. Resolve tradieId with get_all_tradies or get_tradies, and milestoneId with get_milestones. scheduledDate is an ISO date.",
+        "Books a tradie onto the project currently open. Resolve tradieId with get_tradies, and milestoneId with get_milestones. scheduledDate is an ISO date.",
       inputSchema: tradieScheduleJsonSchema,
       annotations: { readOnlyHint: false },
       execute: async (input) => {

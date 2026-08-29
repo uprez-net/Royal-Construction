@@ -2,28 +2,22 @@ import { z } from "zod";
 
 import { getCachedCustomersForDropdown } from "@/lib/data/customers";
 import { getLeads } from "@/lib/data/leads";
-import { addMaterialToProject } from "@/lib/data/material";
 import { getMilestonesByProject } from "@/lib/data/milestones";
 import {
     getCachedProjectById,
-    getCachedProjects,
     getCachedProjectsForLookup,
 } from "@/lib/data/projects";
 import { getCachedSiteManagersForDropdown } from "@/lib/data/siteManagers";
-import { getCachedTradies, getTradiesForLookup } from "@/lib/data/tradies";
-import { createVariation, updateVariationStatus } from "@/lib/data/variations";
+import { getTradiesForLookup } from "@/lib/data/tradies";
 import { parseLeadStageFilter } from "@/lib/leads/types";
 import { fetchJson } from "@/utils/fetch";
 import type { AddressSuggestion } from "@/utils/validators/files";
 import {
     customerLookupResponseSchema,
     leadsResponseSchema,
-    materialResponseSchema,
     projectDetailResponseSchema,
     projectLookupResponseSchema,
-    projectsResponseSchema,
     siteManagerLookupResponseSchema,
-    variationResponseSchema,
 } from "@/utils/validators/mcp";
 import type { LeadStage as DBLeadStage } from "@prisma/client";
 
@@ -32,16 +26,12 @@ import {
     getTradieResponseSchema,
     milestonesListResponseSchema,
     type addressLookupToolSchema,
-    type variationCreateToolSchema,
-    type variationUpdateToolSchema,
 } from "./manifest";
 import { removeAllNestedDateObjects, toToolError, toToolResult, toolErrorText, type ToolResult } from "./result";
 
 import type { leadLookupParamSchema } from "@/utils/validators/lead";
 import type { customerLookupQuerySchema, siteManagerLookupQuerySchema } from "@/utils/validators/lookups";
-import type { addMaterialSchema } from "@/utils/validators/material";
 import type {
-    projectListQuerySchema,
     projectLookupQuerySchema,
     projectParamSchema,
 } from "@/utils/validators/projects";
@@ -110,18 +100,6 @@ async function get_tradies(params: In<typeof tradieSearchQuerySchema>): Promise<
     }
 }
 
-async function get_all_tradies(): Promise<ToolResult> {
-    try {
-        const tradies = removeAllNestedDateObjects(await getCachedTradies()) as Awaited<
-            ReturnType<typeof getCachedTradies>
-        >;
-        const payload = { tradies, totalCount: Array.isArray(tradies) ? tradies.length : 0 };
-        return toToolResult(validated(getTradieResponseSchema, payload, "tradies response"));
-    } catch (error) {
-        return toToolError(toolErrorText("Error fetching tradies", error));
-    }
-}
-
 async function address_council_lookup({ query, limit }: In<typeof addressLookupToolSchema>): Promise<ToolResult> {
     try {
         const trimmedQuery = query.trim();
@@ -145,15 +123,6 @@ async function address_council_lookup({ query, limit }: In<typeof addressLookupT
 // Projects
 // ---------------------------------------------------------------------------
 
-async function get_projects(params: In<typeof projectListQuerySchema>): Promise<ToolResult> {
-    try {
-        const res = removeAllNestedDateObjects(await getCachedProjects(params));
-        return toToolResult(validated(projectsResponseSchema, res, "projects response"));
-    } catch (error) {
-        return toToolError(toolErrorText("Error fetching projects", error));
-    }
-}
-
 async function get_project_lookup(params: In<typeof projectLookupQuerySchema>): Promise<ToolResult> {
     try {
         const res = removeAllNestedDateObjects(
@@ -171,28 +140,6 @@ async function get_project(params: In<typeof projectParamSchema>): Promise<ToolR
         return toToolResult(validated(projectDetailResponseSchema, res, "project detail response"));
     } catch (error) {
         return toToolError(toolErrorText("Error fetching project", error));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Variations
-// ---------------------------------------------------------------------------
-
-async function create_variation(params: In<typeof variationCreateToolSchema>): Promise<ToolResult> {
-    try {
-        const res = removeAllNestedDateObjects(await createVariation(params.projectId, params));
-        return toToolResult(validated(variationResponseSchema, res, "variation response"));
-    } catch (error) {
-        return toToolError(toolErrorText("Error creating variation", error));
-    }
-}
-
-async function update_variation_status(params: In<typeof variationUpdateToolSchema>): Promise<ToolResult> {
-    try {
-        const res = removeAllNestedDateObjects(await updateVariationStatus(params.variationId, params.status));
-        return toToolResult(validated(variationResponseSchema, res, "variation response"));
-    } catch (error) {
-        return toToolError(toolErrorText("Error updating variation status", error));
     }
 }
 
@@ -240,33 +187,15 @@ async function get_leads({ q, status, filterTiming, page, limit }: In<typeof lea
 }
 
 // ---------------------------------------------------------------------------
-// Materials
-// ---------------------------------------------------------------------------
-
-async function add_material(params: In<typeof addMaterialSchema>): Promise<ToolResult> {
-    try {
-        const res = removeAllNestedDateObjects(await addMaterialToProject(params.projectId, params.materialData));
-        return toToolResult(validated(materialResponseSchema, res, "material response"));
-    } catch (error) {
-        return toToolError(toolErrorText("Error adding material", error));
-    }
-}
-
-// ---------------------------------------------------------------------------
 
 export const TOOL_HANDLERS = {
     get_customer,
     get_site_managers,
     get_tradies,
-    get_projects,
     get_project_lookup,
     get_project,
-    create_variation,
-    update_variation_status,
     get_milestones,
     get_leads,
-    get_all_tradies,
-    add_material,
     address_council_lookup,
 };
 

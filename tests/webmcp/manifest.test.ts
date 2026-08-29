@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { satisfiesRole } from "../../lib/tools/authz";
 import { getWebMcpToolDescriptors } from "../../lib/tools/json-schema";
-import { TOOL_MANIFEST, TOOL_NAMES, findTool } from "../../lib/tools/manifest";
+import { TOOL_MANIFEST, TOOL_NAMES } from "../../lib/tools/manifest";
 import { toToolInputJsonSchema } from "../../lib/tools/zod-to-json-schema";
 
 /**
@@ -63,21 +63,21 @@ test("readOnlyHint follows the verb", () => {
     }
 });
 
-test("approving a variation stays admin-gated", () => {
-    assert.equal(findTool("update_variation_status")?.requiredRole, "ADMIN");
-});
-
 /**
- * These tools were retired from the shared manifest because their browser flow
- * no longer matches the server action the handler wrapped. They now live with
- * the screens that own them — components/leads/leads.tsx,
- * components/leads/detail/lead-detail-screen.tsx,
- * components/projects/projects-client.tsx,
- * components/projects/project-detail-screen.tsx and
- * components/tradies/tradies-client.tsx.
+ * Tools that must not come back to the shared manifest, for two different
+ * reasons.
  *
- * Re-adding one here would put a second, diverging implementation back on the
- * MCP surface, which is the exact problem the move solved.
+ * The first group left because their browser flow no longer matches the server
+ * action the handler wrapped. They live with the screens that own them —
+ * components/leads/leads.tsx, components/leads/detail/lead-detail-screen.tsx,
+ * components/projects/projects-client.tsx,
+ * components/projects/project-detail-screen.tsx. Re-adding one here would put a
+ * second, diverging implementation back on the MCP surface, which is the exact
+ * problem the move solved.
+ *
+ * The second group left because a globally-registered tool has to earn its
+ * place in every conversation, and these did not: too large a payload, too slow,
+ * or an operation the UI has moved past. See docs/webmcp-capability.md.
  */
 const RETIRED_FROM_MANIFEST = [
     "create_project",
@@ -94,6 +94,13 @@ const RETIRED_FROM_MANIFEST = [
     // Removed outright: the coordination dashboard is a screen aggregate, not
     // a tool an agent can act on.
     "get_tradie_coordination_dashboard",
+
+    // Too expensive or too stale to carry on every page.
+    "get_projects",        // whole project rows with stats; get_project_lookup answers the same question
+    "get_all_tradies",     // the unfiltered directory; get_tradies is the same read with a filter
+    "add_material",        // server-side write against an implementation the UI has moved past
+    "create_variation",    // returns to the project detail page later
+    "update_variation_status",
 ];
 
 test("retired tools have not crept back into the manifest", () => {
@@ -105,15 +112,18 @@ test("retired tools have not crept back into the manifest", () => {
     }
 });
 
-test("the manifest is reads plus the two writes that still match the server", () => {
-    // A guard on scope, not a snapshot: every write left here must be one whose
-    // browser path and server path are still the same operation.
+test("the shared manifest holds no writes", () => {
+    // A guard on scope, not a snapshot. Every write now belongs to the screen
+    // that owns it, so it goes through the code path a click takes and the user
+    // sees the result. A write reappearing here is a write the browser cannot
+    // see happen — and it would arrive with no role gate worth the name, since
+    // the bridge's assertRole has nothing left to guard.
     const writes = TOOL_MANIFEST
         .filter((tool) => !tool.annotations.readOnlyHint)
         .map((tool) => tool.name)
         .sort();
 
-    assert.deepEqual(writes, ["add_material", "create_variation", "update_variation_status"]);
+    assert.deepEqual(writes, []);
 });
 
 test("the browser descriptor list carries schemas and annotations", () => {
