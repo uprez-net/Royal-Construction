@@ -27,6 +27,7 @@ import {
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import {
+  canSendRequiredPack,
   hasSentRequiredPack,
   sentToCertifierUrls,
   unsentRequiredDocuments,
@@ -377,6 +378,14 @@ export async function sendCertifierOutreach(engagementId: string) {
 async function sendUpdatedRequiredDocuments(
   engagement: CertifierEngagementDetail,
 ) {
+  // The tab stops offering this at the same line, so reaching it here means a
+  // stale page or a second tab that has not seen the checklist arrive.
+  if (!canSendRequiredPack(engagement)) {
+    throw new Error(
+      "The certifier has issued their checklist, so the required pack is no longer part of the flow. Send the updated document on the thread instead.",
+    );
+  }
+
   const sentUrls = sentToCertifierUrls(engagement);
   const updated = unsentRequiredDocuments(engagement).map((doc) => ({
     label: complianceDocumentLabel(doc.documentType, doc.label),

@@ -41,10 +41,12 @@ import {
   isApprovableDocumentType,
   isRequiredDocumentType,
   isReviewSubmissionType,
+  isSignedCopyType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
 import {
+  canSendRequiredPack,
   hasSentRequiredPack,
   isRequiredPackComplete,
   unsentRequiredDocuments,
@@ -284,6 +286,23 @@ export function ProjectComplianceTab({
     document?: ComplianceDocumentWithFiles,
   ): "upload" | "resolve" | "frozen" => {
     if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
+
+    // The pack and the signed forms are settled once the certifier has issued
+    // a checklist. Nothing in the flow re-sends them from there — the send that
+    // did is closed off at the same line — and a replacement now deletes what
+    // it replaces, so Replace here would destroy the copy the certifier is
+    // working from with no way to put it back. Corrections to a document they
+    // already hold go out on the thread, as one message about one file.
+    if (
+      document &&
+      engagement &&
+      !canSendRequiredPack(engagement) &&
+      (isRequiredDocumentType(document.documentType) ||
+        isSignedCopyType(document.documentType))
+    ) {
+      return "frozen";
+    }
+
     if (!inReview) return "upload";
     // Sent back. The old file is still attached, so a row that only asked "has
     // it got a file?" showed Approve/Reject here and left the loop unable to
@@ -314,6 +333,10 @@ export function ProjectComplianceTab({
   ) => {
     if (!isRequiredDocumentType(uploadedType)) return;
     if (!next || !isRequiredPackComplete(next)) return;
+    // Past the checklist the pack is no longer something the flow sends, so
+    // completing it again is not news. Replacing a document there is a message
+    // about one file, which the thread composer carries.
+    if (!canSendRequiredPack(next)) return;
 
     const outstanding = unsentRequiredDocuments(next);
     if (outstanding.length === 0) return;
@@ -714,8 +737,14 @@ export function ProjectComplianceTab({
    * right — the send disappeared the moment the outreach went. This brings it
    * back for exactly that case, and it clears itself once the replacement has
    * been sent.
+   *
+   * Bounded at the checklist. Beyond it the pack is not a step the engagement
+   * still has, and the button was reappearing over a live review — offering to
+   * re-run the collection send while the certifier was working through their
+   * own checklist.
    */
-  const hasUnsentRequired = !collecting && unsentRequired.length > 0;
+  const hasUnsentRequired =
+    !collecting && canSendRequiredPack(engagement) && unsentRequired.length > 0;
   const responseDocuments = [
     ...CERTIFIER_RESPONSE_DOCUMENTS.map((response) =>
       documentsByType.get(response.type),

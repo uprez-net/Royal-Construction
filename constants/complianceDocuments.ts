@@ -163,6 +163,17 @@ export const SIGNED_COPY_DOCUMENTS = [
   },
 ] as const;
 
+const SIGNED_COPY_TYPES: ReadonlySet<ComplianceDocumentType> = new Set(
+  SIGNED_COPY_DOCUMENTS.map((copy) => copy.type),
+);
+
+/** Whether a document is one of the certifier's own forms, countersigned. */
+export function isSignedCopyType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return SIGNED_COPY_TYPES.has(documentType);
+}
+
 /**
  * How the collected file divides up, in flow order.
  *

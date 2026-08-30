@@ -89,3 +89,35 @@ export function hasSentRequiredPack(
     engagement.status !== CertifierEngagementStatus.COLLECTING_DOCS
   );
 }
+
+/**
+ * Everything before the certifier starts issuing their checklist.
+ *
+ * A positive list rather than an exclusion, so a status added later to the back
+ * of the flow closes the send rather than quietly reopening it.
+ */
+const PACK_SENDABLE_STATUSES: ReadonlySet<CertifierEngagementStatus> = new Set([
+  CertifierEngagementStatus.NOT_STARTED,
+  CertifierEngagementStatus.COLLECTING_DOCS,
+  CertifierEngagementStatus.OUTREACH_SENT,
+  CertifierEngagementStatus.AWAITING_RESPONSE,
+  CertifierEngagementStatus.RESPONSE_RECEIVED,
+  CertifierEngagementStatus.SIGNING,
+]);
+
+/**
+ * Whether sending the required pack is still a step this engagement has.
+ *
+ * The pack is what opens the engagement, and correcting it is only the same act
+ * for as long as the certifier is still reading it. Once they have issued a
+ * checklist they have moved on to the evidence against it, and re-sending the
+ * plan set at that point is not a stage of the flow but a message about one
+ * document — which the thread composer is for. Leaving the send on offer there
+ * put a button on the tab that re-opened the collection step in the middle of a
+ * review.
+ */
+export function canSendRequiredPack(
+  engagement: CertifierEngagementDetail,
+): boolean {
+  return PACK_SENDABLE_STATUSES.has(engagement.status);
+}
