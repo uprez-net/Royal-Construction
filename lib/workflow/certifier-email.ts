@@ -11,6 +11,10 @@ import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
+import {
+  discardSupersededFiles,
+  placeInboundDocument,
+} from "@/lib/compliance/document-replacement";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import {
@@ -340,8 +344,16 @@ async function archiveAttachments(
  * treated as UNKNOWN, because a required document arriving back from the
  * certifier is not a thing that happens and would overwrite the copy the
  * project already holds.
+ *
+ * Placing a document replaces whatever the category was holding. A certifier
+ * sends a fee proposal, it gets discussed on the phone, and a revised one comes
+ * back on the same thread — the second is the fee proposal from that moment on,
+ * and stamping a type on it while the first kept its row left the engagement
+ * with two, the tab reading the older of them, and the outdated copy following
+ * the job through to the finished file.
  */
 async function classifyStoredDocuments(
+  engagementId: string,
   stored: { documentId: string; name: string; url: string }[],
 ): Promise<{ labelled: number; checklistDocumentId: string | null }> {
   "use step";
@@ -360,19 +372,36 @@ async function classifyStoredDocuments(
         continue;
       }
 
-      await prisma.complianceDocument.update({
-        where: { id: item.documentId },
-        data: { documentType: result.documentType },
+      const placed = await placeInboundDocument({
+        engagementId,
+        documentId: item.documentId,
+        documentType: result.documentType,
       });
+      if (!placed.documentId) {
+        // A retry that has already been through this one.
+        continue;
+      }
+
+      // The blobs are reclaimed here rather than left to the cleanup, but only
+      // ever the ones no email links at — the copy this replaced arrived as an
+      // attachment on an earlier message, and that bubble still has to open it.
+      await discardSupersededFiles(engagementId, placed.superseded);
+      if (placed.superseded.length > 0) {
+        console.log(
+          `  "${item.name}" replaced ${placed.superseded.length} superseded ${result.documentType} file(s).`,
+        );
+      }
       labelled += 1;
 
-      // Reported back so the notification can offer to run the extraction. A
+      // Reported back so the notification can offer to run the extraction, and
+      // it is the surviving row that is reported — a revised checklist has to
+      // be extracted over the document everything else already points at. A
       // certifier who attaches two checklists is answered with the first.
       if (
         result.documentType === ComplianceDocumentType.CHECKLIST &&
         !checklistDocumentId
       ) {
-        checklistDocumentId = item.documentId;
+        checklistDocumentId = placed.documentId;
       }
     } catch (error) {
       console.error(`  Failed to classify "${item.name}":`, error);
@@ -493,7 +522,7 @@ export const processInboundCertifierEmail = async (
 
   let checklistDocumentId: string | null = null;
   if (stored.length > 0) {
-    const classification = await classifyStoredDocuments(stored);
+    const classification = await classifyStoredDocuments(engagement.id, stored);
     checklistDocumentId = classification.checklistDocumentId;
     console.log(
       `  Classified ${classification.labelled} of ${stored.length} certifier document(s).`,

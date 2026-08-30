@@ -7,7 +7,6 @@ import {
   ComplianceDocumentType,
   Prisma,
 } from "@prisma/client";
-import { del } from "@vercel/blob";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
@@ -27,6 +26,10 @@ import {
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import {
+  discardSupersededFiles,
+  placeInboundDocument,
+} from "@/lib/compliance/document-replacement";
+import {
   canSendRequiredPack,
   hasSentRequiredPack,
   sentToCertifierUrls,
@@ -38,7 +41,6 @@ import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
-  certifierEmailAttachments,
   certifierEngagementInclude,
   type CertifierEmailAttachment,
   type CertifierEngagementDetail,
@@ -511,46 +513,6 @@ export async function sendCertifierReply(
 // ---------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------
-
-/**
- * Reclaims the storage behind files a replacement pushed out.
- *
- * Two things it deliberately does not do. It never throws: the upload it
- * follows is already committed, and an unreachable blob store is not a reason
- * to fail work that succeeded. And it leaves alone any blob the mail trail
- * links at — a thread bubble points straight at the object rather than at a
- * File row, so reclaiming one the certifier was emailed would turn their copy
- * of the conversation into a dead link. Those are left for the storage cleanup
- * to age out.
- */
-async function discardSupersededFiles(
-  engagementId: string,
-  files: { id: string; url: string }[],
-): Promise<void> {
-  try {
-    const emails = await prisma.certifierEmail.findMany({
-      where: { engagementId },
-      select: { attachments: true },
-    });
-    const onThread = new Set(
-      emails.flatMap((email) =>
-        certifierEmailAttachments(email.attachments).map((item) => item.url),
-      ),
-    );
-
-    const urls = files
-      .map((file) => file.url)
-      .filter((url) => !onThread.has(url));
-    if (urls.length > 0) {
-      await del(urls);
-    }
-  } catch (error) {
-    console.error(
-      `Could not remove ${files.length} superseded compliance file(s)`,
-      error,
-    );
-  }
-}
 
 /**
  * Attaches an already-uploaded file to a compliance document.
@@ -1127,6 +1089,11 @@ export async function sendSignedCopies(engagementId: string) {
  * Deliberately narrow. Only an UNKNOWN document can be relabelled, and only to
  * something a certifier actually sends, so this cannot be used to turn a
  * rejected checklist item into an approved required document.
+ *
+ * Placing it is a replacement, not a rename: the same category may already hold
+ * the copy this one supersedes — the classifier is least sure precisely when a
+ * certifier re-sends a revised form — so it goes through the same path the
+ * workflow's own classification does.
  */
 export async function classifyReceivedDocument(params: {
   projectId: string;
@@ -1137,20 +1104,35 @@ export async function classifyReceivedDocument(params: {
     throw new Error("That is not a document type the certifier sends.");
   }
 
-  const claim = await prisma.complianceDocument.updateMany({
+  const arrival = await prisma.complianceDocument.findFirst({
     where: {
       id: params.documentId,
       documentType: ComplianceDocumentType.UNKNOWN,
       engagement: { projectId: params.projectId },
     },
-    data: { documentType: params.documentType },
+    select: { id: true, engagementId: true },
   });
 
-  if (claim.count === 0) {
+  if (!arrival) {
     throw new Error("That document has already been identified.");
   }
 
-  after(() => revalidateEngagement(params.projectId));
+  const placed = await placeInboundDocument({
+    engagementId: arrival.engagementId,
+    documentId: arrival.id,
+    documentType: params.documentType,
+  });
 
-  return { documentId: params.documentId, documentType: params.documentType };
+  // Two admins on the same unplaced attachment: the transaction let one
+  // through and found nothing left for the other.
+  if (!placed.documentId) {
+    throw new Error("That document has already been identified.");
+  }
+
+  after(async () => {
+    revalidateEngagement(params.projectId);
+    await discardSupersededFiles(arrival.engagementId, placed.superseded);
+  });
+
+  return { documentId: placed.documentId, documentType: params.documentType };
 }
