@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CertifierEmailDirection,
   CertifierEngagementStatus,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
@@ -53,9 +54,10 @@ import {
   uploadComplianceDocument,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
-import type {
-  CertifierEngagementDetail,
-  ComplianceDocumentWithFiles,
+import {
+  certifierEmailAttachments,
+  type CertifierEngagementDetail,
+  type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
@@ -208,6 +210,33 @@ export function ProjectComplianceTab({
     const action = filePreviewModal(previewFiles, index);
     if (action) dispatch(openModal(action));
   };
+
+  /**
+   * Every file the certifier has actually been sent.
+   *
+   * Read off the mail trail rather than off the status, because the status
+   * only says the pack went once. Each outbound row records the blob URL of
+   * what it carried, so a file missing from this set has never left the
+   * building — which is precisely what replacing a document produces, and what
+   * `sendUpdatedRequiredDocuments` attaches when the send below is pressed
+   * again. Same test on both sides, so the button and the email it triggers
+   * cannot disagree about what is outstanding.
+   */
+  const sentToCertifier = useMemo(
+    () =>
+      new Set(
+        (engagement?.emails ?? [])
+          .filter(
+            (email) => email.direction === CertifierEmailDirection.OUTBOUND,
+          )
+          .flatMap((email) =>
+            certifierEmailAttachments(email.attachments).map(
+              (attachment) => attachment.url,
+            ),
+          ),
+      ),
+    [engagement],
+  );
 
   const checklistItems = useMemo(
     () =>
@@ -647,6 +676,21 @@ export function ProjectComplianceTab({
   const requiredDocuments = REQUIRED_COMPLIANCE_DOCUMENTS.map((required) =>
     documentsByType.get(required.type),
   );
+
+  /**
+   * A required document the certifier does not have the current copy of.
+   *
+   * Replacing one after the pack has gone leaves them reading a superseded
+   * file with nothing on the tab to say so and no way to put it right — the
+   * send disappeared the moment the engagement left collection. This brings it
+   * back for exactly that case, and it clears itself once the replacement has
+   * been sent.
+   */
+  const hasUnsentRequired =
+    !collecting &&
+    requiredDocuments.some((document) =>
+      document?.files.some((file) => !sentToCertifier.has(file.url)),
+    );
   const responseDocuments = [
     ...CERTIFIER_RESPONSE_DOCUMENTS.map((response) =>
       documentsByType.get(response.type),
@@ -707,22 +751,34 @@ export function ProjectComplianceTab({
             onOpenChange={toggleSection("required")}
             isActive={activeSection === "required"}
             footer={
-              collecting ? (
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() =>
-                    dispatch(
-                      openModal({
-                        type: "certifierDiscovery",
-                        payload: { projectId: project.id },
-                      }),
-                    )
-                  }
-                  disabled={isBusy}
-                >
-                  Find and send documents
-                </Button>
+              collecting || hasUnsentRequired ? (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() =>
+                      dispatch(
+                        openModal({
+                          type: "certifierDiscovery",
+                          payload: { projectId: project.id },
+                        }),
+                      )
+                    }
+                    disabled={isBusy}
+                  >
+                    {collecting
+                      ? "Find and send documents"
+                      : "Send updated documents"}
+                  </Button>
+                  {/* The one thing the row itself cannot say: the file on it
+                      is current, and the certifier's copy is not. */}
+                  {!collecting ? (
+                    <p className="text-xs text-muted-foreground">
+                      A document has been replaced since the pack was sent — the
+                      certifier still has the old copy.
+                    </p>
+                  ) : null}
+                </div>
               ) : null
             }
           >

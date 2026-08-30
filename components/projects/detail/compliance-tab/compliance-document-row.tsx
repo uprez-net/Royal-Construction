@@ -82,10 +82,11 @@ export function ComplianceDocumentRow({
    * Whether what is currently attached is what the certifier sent back.
    *
    * There is no per-file verdict to read — a rejection lands on the document,
-   * and an upload appends rather than replaces — so the reason being set is
-   * exactly "everything on this row is the attempt they refused". It clears the
-   * moment a replacement is uploaded, which is also when these stop being the
-   * rejected files, so the two move together without a marker of their own.
+   * and what hangs off it is whatever the last upload left there — so the
+   * reason being set is exactly "everything on this row is the attempt they
+   * refused". It clears the moment a replacement is uploaded, which is also
+   * when the replacement supersedes those files, so the two move together
+   * without a marker of their own.
    */
   const sentBack = Boolean(document?.rejectionReason);
 

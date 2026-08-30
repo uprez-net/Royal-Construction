@@ -7,6 +7,7 @@ import {
   ComplianceDocumentType,
   Prisma,
 } from "@prisma/client";
+import { del } from "@vercel/blob";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
@@ -31,6 +32,7 @@ import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
+  certifierEmailAttachments,
   certifierEngagementInclude,
   type CertifierEmailAttachment,
   type CertifierEngagementDetail,
@@ -287,6 +289,20 @@ export async function sendCertifierOutreach(engagementId: string) {
     .filter((doc) => requiredTypes.has(doc.documentType))
     .flatMap((doc) => doc.files);
 
+  // The pack has already gone once, and something on it has since been
+  // replaced — the tab offers the send again for exactly that. It cannot be
+  // the same act twice over: a second outreach would open a thread beside the
+  // one already running, re-attach documents the certifier has had for weeks,
+  // and carry the same subject and body as the first, which collides on
+  // checksum so the resend would not even be recorded. It rides the existing
+  // thread instead, carrying only what they have not been sent.
+  if (
+    engagement.status !== CertifierEngagementStatus.NOT_STARTED &&
+    engagement.status !== CertifierEngagementStatus.COLLECTING_DOCS
+  ) {
+    return sendUpdatedRequiredDocuments(engagement);
+  }
+
   const config = getGraphConfig();
   const client = await createGraphContext(config);
   const subject = buildCertifierSubject(
@@ -340,6 +356,71 @@ export async function sendCertifierOutreach(engagementId: string) {
   });
 
   return { subject, attachmentCount: files.length };
+}
+
+/**
+ * Sends the required documents the certifier has not seen, on the open thread.
+ *
+ * "Not seen" is read off the mail trail rather than off a timestamp: every
+ * outbound row records the blob URL of what it carried, so a file whose URL
+ * appears on none of them is one that has never left the building. That is
+ * exactly the set a replacement creates — the old copy's URL is on the
+ * outreach, the new one's is nowhere — and it is the same test the Compliance
+ * tab uses to decide whether to offer the send at all, so the button and the
+ * message it triggers cannot disagree about what is outstanding.
+ *
+ * The status is left alone. The engagement is already past outreach and this
+ * does not move it on; re-supplying a plan set is not a step of its own.
+ */
+async function sendUpdatedRequiredDocuments(
+  engagement: CertifierEngagementDetail,
+) {
+  const sentUrls = new Set(
+    engagement.emails
+      .filter((email) => email.direction === CertifierEmailDirection.OUTBOUND)
+      .flatMap((email) =>
+        certifierEmailAttachments(email.attachments).map((item) => item.url),
+      ),
+  );
+
+  const requiredTypes = new Set<ComplianceDocumentType>(
+    REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+  );
+  const updated = engagement.documents
+    .filter((doc) => requiredTypes.has(doc.documentType))
+    .map((doc) => ({
+      label: complianceDocumentLabel(doc.documentType, doc.label),
+      files: doc.files.filter((file) => !sentUrls.has(file.url)),
+    }))
+    .filter((doc) => doc.files.length > 0);
+
+  if (updated.length === 0) {
+    throw new Error(
+      "The certifier already has the current copy of every required document.",
+    );
+  }
+
+  const labels = updated
+    .map((doc) => escapeEmailHtml(doc.label))
+    .join(", ");
+
+  return sendCertifierReply(engagement.id, {
+    body: [
+      "<p>Hi,</p>",
+      `<p>An updated copy of the following for <strong>${escapeEmailHtml(
+        engagement.subjectAddress,
+      )}</strong> is attached: ${labels}.</p>`,
+      "<p>Please use these in place of the versions sent earlier.</p>",
+      "<p>Kind regards,<br/>Royal Constructions</p>",
+    ].join("\n"),
+    attachments: updated.flatMap((doc) =>
+      doc.files.map((file) => ({
+        fileId: file.id,
+        name: file.filename,
+        url: file.url,
+      })),
+    ),
+  });
 }
 
 /**
@@ -434,6 +515,46 @@ export async function sendCertifierReply(
 // ---------------------------------------------------------------------------
 
 /**
+ * Reclaims the storage behind files a replacement pushed out.
+ *
+ * Two things it deliberately does not do. It never throws: the upload it
+ * follows is already committed, and an unreachable blob store is not a reason
+ * to fail work that succeeded. And it leaves alone any blob the mail trail
+ * links at — a thread bubble points straight at the object rather than at a
+ * File row, so reclaiming one the certifier was emailed would turn their copy
+ * of the conversation into a dead link. Those are left for the storage cleanup
+ * to age out.
+ */
+async function discardSupersededFiles(
+  engagementId: string,
+  files: { id: string; url: string }[],
+): Promise<void> {
+  try {
+    const emails = await prisma.certifierEmail.findMany({
+      where: { engagementId },
+      select: { attachments: true },
+    });
+    const onThread = new Set(
+      emails.flatMap((email) =>
+        certifierEmailAttachments(email.attachments).map((item) => item.url),
+      ),
+    );
+
+    const urls = files
+      .map((file) => file.url)
+      .filter((url) => !onThread.has(url));
+    if (urls.length > 0) {
+      await del(urls);
+    }
+  } catch (error) {
+    console.error(
+      `Could not remove ${files.length} superseded compliance file(s)`,
+      error,
+    );
+  }
+}
+
+/**
  * Attaches an already-uploaded file to a compliance document.
  *
  * `/api/upload` has already written the File row, so this only points it at the
@@ -462,7 +583,11 @@ export async function attachComplianceDocumentFile(params: {
     throw new Error(`File ${params.fileId} not found.`);
   }
 
-  const { document, sentBackFor } = await prisma.$transaction(async (tx) => {
+  const {
+    document,
+    sentBackFor,
+    superseded,
+  } = await prisma.$transaction(async (tx) => {
     let target = params.documentId
       ? await tx.complianceDocument.findFirst({
         where: { id: params.documentId, engagementId: params.engagementId },
@@ -496,6 +621,23 @@ export async function attachComplianceDocumentFile(params: {
       });
     }
 
+    // Every upload control on the tab is a single-file "Replace": one row
+    // holds one document, not a growing pile of attempts at it. Appending
+    // instead left the old copy attached — rendered on the row, offered to the
+    // certifier by the next send, and counted by the vault — with its blob
+    // never reclaimed. Read inside the transaction so the row cannot be left
+    // pointing at two files even briefly.
+    const superseded = await tx.file.findMany({
+      where: { complianceDocumentId: target.id, id: { not: file.id } },
+      select: { id: true, url: true },
+    });
+
+    if (superseded.length > 0) {
+      await tx.file.deleteMany({
+        where: { id: { in: superseded.map((stale) => stale.id) } },
+      });
+    }
+
     await tx.file.update({
       where: { id: file.id },
       data: { complianceDocumentId: target.id },
@@ -517,13 +659,22 @@ export async function attachComplianceDocumentFile(params: {
       },
     });
 
-    return { document, sentBackFor };
+    return { document, sentBackFor, superseded };
   });
 
   const documentLabel = complianceDocumentLabel(
     document.documentType,
     document.label,
   );
+
+  // What the replacement pushed out. The rows are already gone; this is the
+  // storage behind them, reclaimed after the response like every other
+  // follow-on here.
+  if (superseded.length > 0) {
+    after(async () => {
+      await discardSupersededFiles(params.engagementId, superseded);
+    });
+  }
 
   after(async () => {
     revalidateEngagement(params.projectId);
