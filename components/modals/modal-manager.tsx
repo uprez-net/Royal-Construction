@@ -58,6 +58,7 @@ import FilePreviewCanvas from "../shared/file-preview-canvas";
 import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
 import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
 import { CertifierExtractModal } from "./certifier-extract-modal";
+import { CertifierPackReadyModal } from "./certifier-pack-ready-modal";
 import { CertifierSendSignedCopiesModal } from "./certifier-send-signed-copies-modal";
 import { ComplianceCompleteModal } from "./compliance-complete-modal";
 import { ComplianceRejectModal } from "./compliance-reject-modal";
@@ -620,6 +621,31 @@ export function ModalManager() {
       return (
         <CertifierDiscoveryModal
           projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierPackReady": {
+      const {
+        projectId: id,
+        documentCount,
+        updatedCount,
+        isResend,
+      } = modal.payload as {
+        projectId: string;
+        documentCount: number;
+        updatedCount: number;
+        isResend?: boolean;
+      };
+      return (
+        <CertifierPackReadyModal
+          projectId={id}
+          documentCount={documentCount}
+          updatedCount={updatedCount}
+          isResend={isResend ?? false}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

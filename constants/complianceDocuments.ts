@@ -39,6 +39,17 @@ export type RequiredComplianceDocument =
 export type RequiredComplianceDocumentType =
   RequiredComplianceDocument["type"];
 
+const REQUIRED_TYPES: ReadonlySet<ComplianceDocumentType> = new Set(
+  REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+);
+
+/** Whether a document is part of the pack that opens the engagement. */
+export function isRequiredDocumentType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return REQUIRED_TYPES.has(documentType);
+}
+
 /**
  * What the certifier sends back, which is the second half of the classifier's
  * job. Kept separate from the required list because the two are never confused

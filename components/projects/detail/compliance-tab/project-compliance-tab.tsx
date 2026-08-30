@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CertifierEmailDirection,
   CertifierEngagementStatus,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
@@ -40,10 +39,16 @@ import {
   complianceDocumentLabel,
   HBCF_INSURANCE_URL,
   isApprovableDocumentType,
+  isRequiredDocumentType,
   isReviewSubmissionType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
+import {
+  hasSentRequiredPack,
+  isRequiredPackComplete,
+  unsentRequiredDocuments,
+} from "@/lib/compliance/required-pack";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -54,10 +59,9 @@ import {
   uploadComplianceDocument,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
-import {
-  certifierEmailAttachments,
-  type CertifierEngagementDetail,
-  type ComplianceDocumentWithFiles,
+import type {
+  CertifierEngagementDetail,
+  ComplianceDocumentWithFiles,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
@@ -212,29 +216,14 @@ export function ProjectComplianceTab({
   };
 
   /**
-   * Every file the certifier has actually been sent.
+   * Required documents the certifier does not have the current copy of.
    *
-   * Read off the mail trail rather than off the status, because the status
-   * only says the pack went once. Each outbound row records the blob URL of
-   * what it carried, so a file missing from this set has never left the
-   * building — which is precisely what replacing a document produces, and what
-   * `sendUpdatedRequiredDocuments` attaches when the send below is pressed
-   * again. Same test on both sides, so the button and the email it triggers
-   * cannot disagree about what is outstanding.
+   * The same reading `sendUpdatedRequiredDocuments` does on the server — off
+   * the mail trail, not off the status — so the send offered here and the mail
+   * it produces cannot disagree about what is outstanding.
    */
-  const sentToCertifier = useMemo(
-    () =>
-      new Set(
-        (engagement?.emails ?? [])
-          .filter(
-            (email) => email.direction === CertifierEmailDirection.OUTBOUND,
-          )
-          .flatMap((email) =>
-            certifierEmailAttachments(email.attachments).map(
-              (attachment) => attachment.url,
-            ),
-          ),
-      ),
+  const unsentRequired = useMemo(
+    () => (engagement ? unsentRequiredDocuments(engagement) : []),
     [engagement],
   );
 
@@ -303,6 +292,43 @@ export function ProjectComplianceTab({
     if (!document || document.files.length === 0) return "upload";
     if (!isApprovableDocumentType(document.documentType)) return "frozen";
     return isAdmin ? "resolve" : "frozen";
+  };
+
+  /**
+   * Opens the send prompt when the required pack has just become whole.
+   *
+   * The pack is the one part of the flow with no natural end: the six rows sit
+   * there filling up and nothing announces that the last one has landed, so an
+   * admin who collected them by hand rather than through the discovery loop was
+   * left with a completed section and no indication that anything happens next.
+   *
+   * It fires on a replacement too, which is the second reading it carries — the
+   * certifier is working from a superseded copy from the moment the upload
+   * lands, and that is worth saying rather than leaving to be noticed. Held to
+   * the same evidence the send bar uses, so a pack the certifier already has in
+   * full prompts nothing.
+   */
+  const promptIfPackReady = (
+    next: CertifierEngagementDetail | null,
+    uploadedType: ComplianceDocumentType,
+  ) => {
+    if (!isRequiredDocumentType(uploadedType)) return;
+    if (!next || !isRequiredPackComplete(next)) return;
+
+    const outstanding = unsentRequiredDocuments(next);
+    if (outstanding.length === 0) return;
+
+    dispatch(
+      openModal({
+        type: "certifierPackReady",
+        payload: {
+          projectId: project.id,
+          documentCount: REQUIRED_COMPLIANCE_DOCUMENTS.length,
+          updatedCount: outstanding.length,
+          isResend: hasSentRequiredPack(next),
+        },
+      }),
+    );
   };
 
   /**
@@ -410,6 +436,9 @@ export function ProjectComplianceTab({
     const next = await attach(file, key, target);
     if (wasSentBack) return;
 
+    // Two prompts, never on the same upload: one watches the required pack and
+    // the other what the review send carries, and no document type is in both.
+    promptIfPackReady(next, target.documentType);
     promptIfComplete(next, target.documentType);
   };
 
@@ -678,19 +707,15 @@ export function ProjectComplianceTab({
   );
 
   /**
-   * A required document the certifier does not have the current copy of.
+   * Whether the send has to come back after the engagement left collection.
    *
-   * Replacing one after the pack has gone leaves them reading a superseded
-   * file with nothing on the tab to say so and no way to put it right — the
-   * send disappeared the moment the engagement left collection. This brings it
+   * Replacing a required document then leaves the certifier reading a
+   * superseded file, with nothing on the tab to say so and no way to put it
+   * right — the send disappeared the moment the outreach went. This brings it
    * back for exactly that case, and it clears itself once the replacement has
    * been sent.
    */
-  const hasUnsentRequired =
-    !collecting &&
-    requiredDocuments.some((document) =>
-      document?.files.some((file) => !sentToCertifier.has(file.url)),
-    );
+  const hasUnsentRequired = !collecting && unsentRequired.length > 0;
   const responseDocuments = [
     ...CERTIFIER_RESPONSE_DOCUMENTS.map((response) =>
       documentsByType.get(response.type),

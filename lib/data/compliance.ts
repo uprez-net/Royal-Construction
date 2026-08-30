@@ -26,6 +26,11 @@ import {
 } from "@/lib/graph/certifier-subject";
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
+import {
+  hasSentRequiredPack,
+  sentToCertifierUrls,
+  unsentRequiredDocuments,
+} from "@/lib/compliance/required-pack";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
@@ -296,10 +301,7 @@ export async function sendCertifierOutreach(engagementId: string) {
   // and carry the same subject and body as the first, which collides on
   // checksum so the resend would not even be recorded. It rides the existing
   // thread instead, carrying only what they have not been sent.
-  if (
-    engagement.status !== CertifierEngagementStatus.NOT_STARTED &&
-    engagement.status !== CertifierEngagementStatus.COLLECTING_DOCS
-  ) {
+  if (hasSentRequiredPack(engagement)) {
     return sendUpdatedRequiredDocuments(engagement);
   }
 
@@ -375,24 +377,11 @@ export async function sendCertifierOutreach(engagementId: string) {
 async function sendUpdatedRequiredDocuments(
   engagement: CertifierEngagementDetail,
 ) {
-  const sentUrls = new Set(
-    engagement.emails
-      .filter((email) => email.direction === CertifierEmailDirection.OUTBOUND)
-      .flatMap((email) =>
-        certifierEmailAttachments(email.attachments).map((item) => item.url),
-      ),
-  );
-
-  const requiredTypes = new Set<ComplianceDocumentType>(
-    REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
-  );
-  const updated = engagement.documents
-    .filter((doc) => requiredTypes.has(doc.documentType))
-    .map((doc) => ({
-      label: complianceDocumentLabel(doc.documentType, doc.label),
-      files: doc.files.filter((file) => !sentUrls.has(file.url)),
-    }))
-    .filter((doc) => doc.files.length > 0);
+  const sentUrls = sentToCertifierUrls(engagement);
+  const updated = unsentRequiredDocuments(engagement).map((doc) => ({
+    label: complianceDocumentLabel(doc.documentType, doc.label),
+    files: doc.files.filter((file) => !sentUrls.has(file.url)),
+  }));
 
   if (updated.length === 0) {
     throw new Error(

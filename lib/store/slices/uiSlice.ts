@@ -35,6 +35,7 @@ export type ModalType =
   | "previewFile"
   | "startCertifierEngagement"
   | "certifierDiscovery"
+  | "certifierPackReady"
   | "certifierExtract"
   | "certifierSendSignedCopies"
   | "complianceComplete"
