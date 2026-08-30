@@ -82,6 +82,54 @@ const SIGNED_COPIES_SENT: ReadonlySet<CertifierEngagementStatus> = new Set([
   CertifierEngagementStatus.APPROVED,
 ]);
 
+/**
+ * Statuses `sendComplianceForReview` will leave, mirrored from the server.
+ *
+ * The send is guarded on that transition, so prompting for it outside this set
+ * offers a button whose only possible outcome is an error toast.
+ */
+const READY_FOR_REVIEW_STATUSES: ReadonlySet<CertifierEngagementStatus> =
+  new Set([
+    CertifierEngagementStatus.CHECKLIST_TRACKING,
+    CertifierEngagementStatus.INSURANCE,
+    CertifierEngagementStatus.IN_REVIEW,
+  ]);
+
+/**
+ * Whether the collection phase is actually finished.
+ *
+ * "Every reviewable document has a file" is not enough on its own. Until the
+ * certifier issues a checklist, the reviewable set holds nothing but the six
+ * required rows — so the upload that completed the required pack satisfied it
+ * and opened the completion prompt in the middle of collection, offering a send
+ * the server would have refused anyway. The checklist is the thing the
+ * certifier is waiting to see, so its existence, and the status that arrives
+ * with it, are part of being done.
+ *
+ * One function for the prompt and the send bar both, because the two claiming
+ * different things about the same engagement is what the drift would look like.
+ */
+function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
+  if (!READY_FOR_REVIEW_STATUSES.has(engagement.status)) {
+    return false;
+  }
+
+  const hasChecklist = engagement.documents.some(
+    (document) =>
+      document.documentType === ComplianceDocumentType.CHECKLIST_ITEM,
+  );
+  if (!hasChecklist) {
+    return false;
+  }
+
+  const review = engagement.documents.filter((document) =>
+    isReviewableDocumentType(document.documentType),
+  );
+  return (
+    review.length > 0 && review.every((document) => document.files.length > 0)
+  );
+}
+
 /** The collapsible blocks the tab is built from, in flow order. */
 type SectionKey =
   | "required"
@@ -196,9 +244,7 @@ export function ProjectComplianceTab({
   );
 
   const inReview = engagement?.status === CertifierEngagementStatus.IN_REVIEW;
-  const allEvidenceIn =
-    reviewDocuments.length > 0 &&
-    reviewDocuments.every((document) => document.files.length > 0);
+  const allEvidenceIn = engagement ? isReadyForReview(engagement) : false;
   const allApproved =
     reviewDocuments.length > 0 &&
     reviewDocuments.every(
@@ -231,33 +277,30 @@ export function ProjectComplianceTab({
    * render that may not have happened yet.
    */
   const promptIfComplete = (next: CertifierEngagementDetail | null) => {
-    if (!next) return;
+    if (!next || !isReadyForReview(next)) return;
 
     const review = next.documents.filter((document) =>
       isReviewableDocumentType(document.documentType),
     );
-    const whole =
-      review.length > 0 && review.every((document) => document.files.length > 0);
-    const closed =
-      review.length > 0 &&
-      review.every(
-        (document) => document.status === ComplianceDocumentStatus.APPROVED,
-      );
+    // Already signed off. Re-uploading against an approved engagement is not a
+    // reason to ask whether to send it for approval again.
+    const closed = review.every(
+      (document) => document.status === ComplianceDocumentStatus.APPROVED,
+    );
+    if (closed) return;
 
-    if (whole && !closed) {
-      dispatch(
-        openModal({
-          type: "complianceComplete",
-          payload: {
-            projectId: project.id,
-            documentCount: review.length,
-            // Re-supplying after a rejection round reads differently from
-            // finishing the collection for the first time.
-            isResend: next.status === CertifierEngagementStatus.IN_REVIEW,
-          },
-        }),
-      );
-    }
+    dispatch(
+      openModal({
+        type: "complianceComplete",
+        payload: {
+          projectId: project.id,
+          documentCount: review.length,
+          // Re-supplying after a rejection round reads differently from
+          // finishing the collection for the first time.
+          isResend: next.status === CertifierEngagementStatus.IN_REVIEW,
+        },
+      }),
+    );
   };
 
   /**

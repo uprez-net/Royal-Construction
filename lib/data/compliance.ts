@@ -717,15 +717,8 @@ export async function sendComplianceForReview(engagementId: string) {
         .join(", ")}.`,
     );
   }
-  const requiredTypes = new Set<ComplianceDocumentType>(
-    REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
-  );
-  const files = engagement.documents
-    .filter((doc) => requiredTypes.has(doc.documentType))
-    .flatMap((doc) => doc.files);
-  const body = outreachBody(engagement.certifierName, engagement.subjectAddress);
 
-  await advanceEngagementStatus(
+  const claimed = await advanceEngagementStatus(
     engagementId,
     [
       CertifierEngagementStatus.CHECKLIST_TRACKING,
@@ -737,13 +730,45 @@ export async function sendComplianceForReview(engagementId: string) {
     CertifierEngagementStatus.IN_REVIEW,
   );
 
-  const sent = await sendCertifierReply(engagementId, {
-    body: body,
-    attachments: files.map((file) => ({
+  // The transition is the only thing standing between this and a "the checklist
+  // is complete" email sent in the middle of collection — the required pack
+  // alone satisfies the missing-documents check above, because no checklist
+  // items exist yet to be missing. Ignoring the claim sent that email anyway,
+  // against an engagement whose status had not moved an inch.
+  if (!claimed) {
+    throw new Error(
+      "The certifier's checklist has to be issued before the file can go for review.",
+    );
+  }
+
+  // Every file behind the review set, in document order.
+  //
+  // The certifier is being asked to approve each of these rows, so each one has
+  // to arrive with the message that asks — the checklist items and the
+  // insurance certificate, which have never been sent, and anything re-supplied
+  // after a rejection, which is the entire point of a re-send. Sending the body
+  // on its own left the certifier with a message saying everything was attached
+  // and nothing attached to it.
+  //
+  // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
+  // which asserts the total against the mailbox's MaxSendSize and switches to
+  // an upload session past the inline ceiling on its own.
+  const attachments = evidence.flatMap((doc) =>
+    doc.files.map((file) => ({
       fileId: file.id,
       name: file.filename,
       url: file.url,
     })),
+  );
+
+  const sent = await sendCertifierReply(engagementId, {
+    body: [
+      "<p>Hi,</p>",
+      `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
+      "<p>Could you review it and let us know if anything needs revising?</p>",
+      "<p>Kind regards,<br/>Royal Constructions</p>",
+    ].join("\n"),
+    attachments,
   });
 
   after(async () => {
