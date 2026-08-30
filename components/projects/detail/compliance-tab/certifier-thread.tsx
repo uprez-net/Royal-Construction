@@ -7,12 +7,6 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
@@ -35,6 +29,8 @@ type CertifierThreadProps = {
     body: string;
     attachments: CertifierReplyAttachment[];
   }) => Promise<void>;
+  /** Set by the modal that hosts this, so the transcript uses the extra room. */
+  isFullScreen?: boolean;
 };
 
 /**
@@ -45,12 +41,16 @@ type CertifierThreadProps = {
  * the sender for the company domain. That column exists precisely so this does
  * not have to guess — mail sent from an alias, or a reply relayed through a
  * ticketing system, both broke the domain check.
+ *
+ * Renders bare rather than in a Card: it lives inside `ModalShell`, which
+ * already supplies the frame, the title and the close/fullscreen controls.
  */
 export function CertifierThread({
   projectId,
   emails,
   isSending,
   onSend,
+  isFullScreen = false,
 }: CertifierThreadProps) {
   const dispatch = useAppDispatch();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -126,22 +126,10 @@ export function CertifierThread({
   };
 
   return (
-    <Card className="gap-0 overflow-hidden py-0">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b py-3">
-        <div className="flex items-center gap-2">
-          <Mail className="size-4 text-primary" aria-hidden="true" />
-          <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Certifier thread
-          </CardTitle>
-        </div>
-        <Badge variant="secondary">
-          {orderedEmails.length} message{orderedEmails.length === 1 ? "" : "s"}
-        </Badge>
-      </CardHeader>
-
-      <CardContent className="p-0">
+    <div className="flex flex-col">
+      <div className="min-h-0 flex-1">
         {orderedEmails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
+          <div className="flex flex-col items-center justify-center py-16 text-center">
             <Mail
               className="mb-3 size-8 text-muted-foreground/40"
               aria-hidden="true"
@@ -154,7 +142,12 @@ export function CertifierThread({
             </p>
           </div>
         ) : (
-          <ScrollArea className="h-80 px-4">
+          <ScrollArea
+            className={cn(
+              "rounded-lg border border-border/70 bg-muted/20 px-4",
+              isFullScreen ? "h-[65vh]" : "h-[52vh] max-h-115",
+            )}
+          >
             <div className="flex flex-col py-4">
               {orderedEmails.map((email) => {
                 const isSent =
@@ -226,9 +219,9 @@ export function CertifierThread({
             </div>
           </ScrollArea>
         )}
-      </CardContent>
+      </div>
 
-      <div className="border-t border-border/70 p-3">
+      <div className="mt-3 shrink-0 border-t border-border/70 pt-3">
         <Textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
@@ -291,6 +284,6 @@ export function CertifierThread({
           </Button>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import { FolderOpen } from "lucide-react";
 import { useMemo } from "react";
 
 import { DataTable } from "@/components/common/data-table";
+import { ComplianceSectionCard } from "./compliance-section-card";
 import { complianceDocumentLabel } from "@/constants/complianceDocuments";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -21,8 +22,12 @@ import { dataTimeFormat, formatFileSize } from "@/utils/formatters";
  */
 export function ComplianceDocumentVault({
   documents,
+  open,
+  onOpenChange,
 }: {
   documents: ComplianceDocumentWithFiles[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
   const files = useMemo(
@@ -68,14 +73,17 @@ export function ComplianceDocumentVault({
   );
 
   return (
-    <section aria-labelledby="compliance-vault-heading" className="space-y-3">
-      <h3
-        id="compliance-vault-heading"
-        className="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
-      >
-        Document vault
-      </h3>
-
+    <ComplianceSectionCard
+      title="Document vault"
+      description="Every file on this engagement, newest first."
+      icon={FolderOpen}
+      badge={{
+        label: `${files.length} file${files.length === 1 ? "" : "s"}`,
+        tone: files.length > 0 ? "primary" : "neutral",
+      }}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <DataTable
         onRowClick={(index) => {
           // The vault is the one list that holds every file on the engagement,
@@ -112,6 +120,6 @@ export function ComplianceDocumentVault({
           </div>
         }
       />
-    </section>
+    </ComplianceSectionCard>
   );
 }
