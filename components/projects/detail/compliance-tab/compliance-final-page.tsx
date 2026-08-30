@@ -1,71 +1,17 @@
 "use client";
 
-import { ComplianceDocumentType } from "@prisma/client";
 import { CheckCircle2, FileText } from "lucide-react";
 import { useMemo } from "react";
 
-import { complianceDocumentLabel } from "@/constants/complianceDocuments";
+import {
+  COMPLIANCE_DOCUMENT_SECTIONS,
+  complianceDocumentLabel,
+} from "@/constants/complianceDocuments";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import type { ComplianceDocumentWithFiles } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import { dataTimeFormat } from "@/utils/formatters";
-
-/**
- * How the finished file is divided.
- *
- * Grouped by where each document came from rather than by status — by this
- * point everything is approved, so status tells the reader nothing, while
- * provenance is what someone auditing the job actually wants: what we sent,
- * what the certifier sent back, what was signed, what the checklist required,
- * and the insurance.
- */
-const DIVISIONS: {
-  heading: string;
-  description: string;
-  types: ComplianceDocumentType[];
-}[] = [
-  {
-    heading: "Required documents",
-    description: "The pack sent to the certifier to open the engagement.",
-    types: [
-      ComplianceDocumentType.DEPOSITED_PLAN,
-      ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL,
-      ComplianceDocumentType.SURVEY,
-      ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
-      ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
-      ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
-    ],
-  },
-  {
-    heading: "Certifier response",
-    description: "What came back from the certifier.",
-    types: [
-      ComplianceDocumentType.INVOICE,
-      ComplianceDocumentType.FEE_PROPOSAL,
-      ComplianceDocumentType.CDC_FORM,
-      ComplianceDocumentType.CHECKLIST,
-    ],
-  },
-  {
-    heading: "Signed forms",
-    description: "Returned to the certifier with signatures.",
-    types: [
-      ComplianceDocumentType.SIGNED_FEE_PROPOSAL,
-      ComplianceDocumentType.SIGNED_CDC_FORM,
-    ],
-  },
-  {
-    heading: "Checklist evidence",
-    description: "One document per item the certifier asked for.",
-    types: [ComplianceDocumentType.CHECKLIST_ITEM],
-  },
-  {
-    heading: "Home insurance",
-    description: "Home Building Compensation Fund cover for the build.",
-    types: [ComplianceDocumentType.HOME_INSURANCE],
-  },
-];
 
 /**
  * The completed compliance file.
@@ -104,7 +50,7 @@ export function ComplianceFinalPage({
 
   const byDivision = useMemo(
     () =>
-      DIVISIONS.map((division) => ({
+      COMPLIANCE_DOCUMENT_SECTIONS.map((division) => ({
         ...division,
         documents: documents.filter(
           (document) =>
@@ -127,8 +73,8 @@ export function ComplianceFinalPage({
             Compliance and certification complete
           </p>
           <p className="mt-0.5 text-sm text-success-ink">
-            Every document has been approved by the certifier. This file is now
-            read-only.
+            The certifier has approved every item on their checklist. This
+            file is now read-only.
           </p>
         </div>
       </div>

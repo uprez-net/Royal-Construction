@@ -57,11 +57,10 @@ export const CERTIFIER_RESPONSE_DOCUMENTS = [
 /**
  * What the certifier produced, as opposed to what the builder supplied.
  *
- * These arrive as attachments on the certifier's own reply, and they are not
- * part of the review loop: the certifier is not going to approve their own
- * invoice. Excluding them is what makes "every document approved" a condition
- * that can actually be reached — counting them left the engagement permanently
- * one approval short of closing, on documents with no approve control.
+ * These arrive as attachments on the certifier's own reply, so they are neither
+ * ours to complete nor ours to send back. Excluding them is what makes the
+ * review send's "nothing is missing" check reachable — counting the certifier's
+ * own invoice would have held the send shut on a row nobody here can fill.
  */
 export const CERTIFIER_SUPPLIED_TYPES: readonly ComplianceDocumentType[] = [
   ComplianceDocumentType.INVOICE,
@@ -73,11 +72,34 @@ export const CERTIFIER_SUPPLIED_TYPES: readonly ComplianceDocumentType[] = [
   ComplianceDocumentType.UNKNOWN,
 ];
 
-/** Whether a document is part of the approve/reject loop. */
-export function isReviewableDocumentType(
+/**
+ * Whether the builder supplies this document, rather than the certifier.
+ *
+ * The required pack, the signed copies, the checklist evidence and the
+ * insurance certificate. This is the set the review send has to find complete,
+ * and the set it puts on the message.
+ */
+export function isBuilderSuppliedDocumentType(
   documentType: ComplianceDocumentType,
 ): boolean {
   return !CERTIFIER_SUPPLIED_TYPES.includes(documentType);
+}
+
+/**
+ * Whether a document goes through the approve/reject loop.
+ *
+ * Only checklist evidence does, and this is deliberately narrower than "the
+ * builder supplied it". The required pack went to the certifier to open the
+ * engagement and the signed copies are their own forms come back signed —
+ * neither is something they were ever going to sit in judgement on. What they
+ * review is the evidence against the checklist they themselves issued, so that
+ * is the only row that gets a decision pair, and the only one whose approval is
+ * allowed to hold the engagement open.
+ */
+export function isApprovableDocumentType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return documentType === ComplianceDocumentType.CHECKLIST_ITEM;
 }
 
 /**
@@ -139,6 +161,60 @@ export const SIGNED_COPY_DOCUMENTS = [
     signs: ComplianceDocumentType.CDC_FORM,
   },
 ] as const;
+
+/**
+ * How the collected file divides up, in flow order.
+ *
+ * Grouped by where each document came from rather than by status: what we sent,
+ * what came back, what was signed, what the checklist required, and the
+ * insurance. Provenance is what someone auditing the job is looking for, and
+ * unlike status it still means something once everything is approved.
+ *
+ * The finished file and the vault both read this, so the two cannot end up
+ * describing the same engagement differently. Types are taken from the lists
+ * above rather than restated, so a document type added to one of them cannot
+ * quietly fall out of the file.
+ *
+ * UNKNOWN is deliberately absent: an attachment nobody has placed has no
+ * provenance to file it under. The vault sweeps up whatever is left over into a
+ * section of its own; the finished file never sees one, because an engagement
+ * cannot close with an unidentified document on it.
+ */
+export const COMPLIANCE_DOCUMENT_SECTIONS: readonly {
+  heading: string;
+  description: string;
+  types: readonly ComplianceDocumentType[];
+}[] = [
+  {
+    heading: "Required documents",
+    description: "The pack sent to the certifier to open the engagement.",
+    types: REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+  },
+  {
+    heading: "Certifier response",
+    description: "What came back from the certifier.",
+    types: CERTIFIER_RESPONSE_DOCUMENTS.map((doc) => doc.type),
+  },
+  {
+    heading: "Signed forms",
+    description: "Returned to the certifier with signatures.",
+    types: SIGNED_COPY_DOCUMENTS.map((copy) => copy.type),
+  },
+  {
+    heading: "Checklist evidence",
+    description: "One document per item the certifier asked for.",
+    types: [ComplianceDocumentType.CHECKLIST_ITEM],
+  },
+  {
+    heading: "Home insurance",
+    description: "Home Building Compensation Fund cover for the build.",
+    types: [ComplianceDocumentType.HOME_INSURANCE],
+  },
+];
+
+/** Every type that has a section. Anything else is unplaced, not unlisted. */
+export const SECTIONED_DOCUMENT_TYPES: ReadonlySet<ComplianceDocumentType> =
+  new Set(COMPLIANCE_DOCUMENT_SECTIONS.flatMap((section) => section.types));
 
 /**
  * Where an admin raises home builders compensation cover when they have not

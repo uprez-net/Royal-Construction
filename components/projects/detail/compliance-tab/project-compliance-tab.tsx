@@ -38,7 +38,8 @@ import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
   HBCF_INSURANCE_URL,
-  isReviewableDocumentType,
+  isApprovableDocumentType,
+  isBuilderSuppliedDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -122,11 +123,12 @@ function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
     return false;
   }
 
-  const review = engagement.documents.filter((document) =>
-    isReviewableDocumentType(document.documentType),
+  const supplied = engagement.documents.filter((document) =>
+    isBuilderSuppliedDocumentType(document.documentType),
   );
   return (
-    review.length > 0 && review.every((document) => document.files.length > 0)
+    supplied.length > 0 &&
+    supplied.every((document) => document.files.length > 0)
   );
 }
 
@@ -231,34 +233,45 @@ export function ProjectComplianceTab({
   );
 
   /**
-   * What the certifier is being asked to sign off — everything the builder
-   * supplied. Their own invoice, fee proposal, CDC form and checklist are
-   * excluded; they are not going to approve those.
+   * Everything the builder supplied, which is what goes over for review.
+   *
+   * Wider than what gets approved: the certifier's own invoice, fee proposal,
+   * CDC form and checklist are excluded because they are not ours, but the
+   * required pack and the signed copies are here because the file is not
+   * complete without them, even though nobody approves them.
    */
-  const reviewDocuments = useMemo(
+  const suppliedDocuments = useMemo(
     () =>
       (engagement?.documents ?? []).filter((document) =>
-        isReviewableDocumentType(document.documentType),
+        isBuilderSuppliedDocumentType(document.documentType),
       ),
     [engagement],
   );
 
   const inReview = engagement?.status === CertifierEngagementStatus.IN_REVIEW;
   const allEvidenceIn = engagement ? isReadyForReview(engagement) : false;
+  // Only the checklist evidence is ever approved, so it alone decides whether
+  // the engagement is finished. Measuring this against every supplied document
+  // left it permanently short, on rows with no approve control to press.
   const allApproved =
-    reviewDocuments.length > 0 &&
-    reviewDocuments.every(
+    checklistItems.length > 0 &&
+    checklistItems.every(
       (document) => document.status === ComplianceDocumentStatus.APPROVED,
     );
 
   /**
    * Which controls a row shows.
    *
-   * The rejected case is the one that matters. A rejection sends the document
-   * back to PENDING while the engagement stays in review, so it has to offer
-   * Upload again — showing Approve/Reject there, as this did, left the loop
-   * unable to finish, because an admin could only re-reject a document nobody
-   * had any way to re-supply.
+   * Only checklist evidence is ever decided on. Everything else the builder
+   * supplied is uploadable right up until the file goes over, and frozen from
+   * then on — not because it is awaiting a verdict, but because the certifier
+   * is reading the copy we sent and it must not move underneath them.
+   *
+   * Within the checklist, the rejected case is the one that matters. A
+   * rejection sends the item back to PENDING while the engagement stays in
+   * review, so it has to offer Upload again — showing Approve/Reject there, as
+   * this did, left the loop unable to finish, because an admin could only
+   * re-reject an item nobody had any way to re-supply.
    */
   const rowMode = (
     document?: ComplianceDocumentWithFiles,
@@ -266,6 +279,7 @@ export function ProjectComplianceTab({
     if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
     if (!inReview) return "upload";
     if (!document || document.files.length === 0) return "upload";
+    if (!isApprovableDocumentType(document.documentType)) return "frozen";
     return isAdmin ? "resolve" : "frozen";
   };
 
@@ -279,22 +293,26 @@ export function ProjectComplianceTab({
   const promptIfComplete = (next: CertifierEngagementDetail | null) => {
     if (!next || !isReadyForReview(next)) return;
 
-    const review = next.documents.filter((document) =>
-      isReviewableDocumentType(document.documentType),
-    );
     // Already signed off. Re-uploading against an approved engagement is not a
-    // reason to ask whether to send it for approval again.
-    const closed = review.every(
-      (document) => document.status === ComplianceDocumentStatus.APPROVED,
-    );
+    // reason to ask whether to send it for approval again. Read off the
+    // checklist alone, because that is the only part anybody approves.
+    const closed = next.documents
+      .filter((document) => isApprovableDocumentType(document.documentType))
+      .every(
+        (document) => document.status === ComplianceDocumentStatus.APPROVED,
+      );
     if (closed) return;
+
+    const supplied = next.documents.filter((document) =>
+      isBuilderSuppliedDocumentType(document.documentType),
+    );
 
     dispatch(
       openModal({
         type: "complianceComplete",
         payload: {
           projectId: project.id,
-          documentCount: review.length,
+          documentCount: supplied.length,
           // Re-supplying after a rejection round reads differently from
           // finishing the collection for the first time.
           isResend: next.status === CertifierEngagementStatus.IN_REVIEW,
@@ -509,8 +527,8 @@ export function ProjectComplianceTab({
               Compliance and Certification complete
             </CardTitle>
             <CardDescription>
-              The certifier has approved all {reviewDocuments.length} documents.
-              Nothing in this section can change now.
+              The certifier has approved all {checklistItems.length} checklist
+              items. Nothing in this section can change now.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -1022,7 +1040,7 @@ export function ProjectComplianceTab({
                     type: "complianceComplete",
                     payload: {
                       projectId: project.id,
-                      documentCount: reviewDocuments.length,
+                      documentCount: suppliedDocuments.length,
                       isResend: inReview,
                     },
                   }),

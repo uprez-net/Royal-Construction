@@ -12,9 +12,9 @@ import { after } from "next/server";
 
 import {
   CERTIFIER_RESPONSE_DOCUMENTS,
-  CERTIFIER_SUPPLIED_TYPES,
   complianceDocumentLabel,
-  isReviewableDocumentType,
+  isApprovableDocumentType,
+  isBuilderSuppliedDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -570,6 +570,17 @@ export async function resolveComplianceDocument(params: {
     throw new Error("Compliance document not found on this project.");
   }
 
+  // The certifier reviews the evidence they asked for, and nothing else. The
+  // required pack and the signed copies are already theirs; approving or
+  // rejecting one of those is not a decision anybody is entitled to make, and
+  // the UI no longer offers it — this is what stops a stale tab, or a direct
+  // call, from making it anyway and freezing a row nobody can then re-upload.
+  if (!isApprovableDocumentType(document.documentType)) {
+    throw new Error(
+      `${complianceDocumentLabel(document.documentType, document.label)} is not reviewed by the certifier.`,
+    );
+  }
+
   after(() => revalidateEngagement(params.projectId));
 
   const approving = params.decision === "approved";
@@ -656,11 +667,11 @@ export async function resolveComplianceDocument(params: {
       where: {
         engagementId: document.engagementId,
         status: { not: ComplianceDocumentStatus.APPROVED },
-        // The certifier's own invoice, fee proposal, CDC form and checklist are
-        // not reviewed — they came from the certifier. Counting them held the
-        // engagement one approval short of closing for ever, against rows the
+        // Checklist evidence is the whole of the review loop, so it is the
+        // whole of what can hold the engagement open. Counting anything else
+        // left it permanently one approval short of closing, against rows the
         // UI gives nobody a way to approve.
-        documentType: { notIn: [...CERTIFIER_SUPPLIED_TYPES] },
+        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
       },
     });
     if (outstanding === 0) {
@@ -703,11 +714,12 @@ export async function resolveComplianceDocument(params: {
 export async function sendComplianceForReview(engagementId: string) {
   const engagement = await requireEngagement(engagementId);
 
-  // The whole review set, not just the checklist: the required pack, the signed
-  // copies and the insurance certificate are all things the certifier is being
-  // asked to sign off, and sending with one of them empty wastes a round trip.
+  // Everything the builder was responsible for, not just the checklist. Only
+  // the checklist evidence gets approved or rejected, but the required pack,
+  // the signed copies and the insurance certificate all have to be on the file
+  // before it goes over — a send with one of them empty wastes a round trip.
   const evidence = engagement.documents.filter((doc) =>
-    isReviewableDocumentType(doc.documentType),
+    isBuilderSuppliedDocumentType(doc.documentType),
   );
   const outstanding = evidence.filter((doc) => doc.files.length === 0);
   if (outstanding.length > 0) {
@@ -741,14 +753,13 @@ export async function sendComplianceForReview(engagementId: string) {
     );
   }
 
-  // Every file behind the review set, in document order.
+  // Every file the builder put on the engagement, in document order.
   //
-  // The certifier is being asked to approve each of these rows, so each one has
-  // to arrive with the message that asks — the checklist items and the
-  // insurance certificate, which have never been sent, and anything re-supplied
-  // after a rejection, which is the entire point of a re-send. Sending the body
-  // on its own left the certifier with a message saying everything was attached
-  // and nothing attached to it.
+  // The message says everything is attached, and before this nothing was. The
+  // checklist evidence is the part the certifier has never seen and is about to
+  // rule on, including whatever was re-supplied after a rejection; the rest
+  // rides along so the review reads against one complete file rather than
+  // against whatever the certifier can still find further up the thread.
   //
   // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
   // which asserts the total against the mailbox's MaxSendSize and switches to
