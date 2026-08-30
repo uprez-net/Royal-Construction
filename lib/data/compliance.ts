@@ -373,9 +373,9 @@ export async function sendCertifierReply(
   const requested = input.attachments ?? [];
   const files = requested.length
     ? await prisma.file.findMany({
-        where: { id: { in: requested.map((item) => item.fileId) } },
-        select: { id: true, url: true, filename: true, fileType: true },
-      })
+      where: { id: { in: requested.map((item) => item.fileId) } },
+      select: { id: true, url: true, filename: true, fileType: true },
+    })
     : [];
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
@@ -462,16 +462,16 @@ export async function attachComplianceDocumentFile(params: {
   const document = await prisma.$transaction(async (tx) => {
     let target = params.documentId
       ? await tx.complianceDocument.findFirst({
-          where: { id: params.documentId, engagementId: params.engagementId },
-        })
+        where: { id: params.documentId, engagementId: params.engagementId },
+      })
       : params.documentType
         ? await tx.complianceDocument.findFirst({
-            where: {
-              engagementId: params.engagementId,
-              documentType: params.documentType,
-            },
-            orderBy: { order: "asc" },
-          })
+          where: {
+            engagementId: params.engagementId,
+            documentType: params.documentType,
+          },
+          orderBy: { order: "asc" },
+        })
         : null;
 
     if (!target) {
@@ -588,13 +588,13 @@ export async function resolveComplianceDocument(params: {
     },
     data: approving
       ? {
-          status: ComplianceDocumentStatus.APPROVED,
-          rejectionReason: null,
-        }
+        status: ComplianceDocumentStatus.APPROVED,
+        rejectionReason: null,
+      }
       : {
-          status: ComplianceDocumentStatus.PENDING,
-          rejectionReason: params.rejectionReason ?? null,
-        },
+        status: ComplianceDocumentStatus.PENDING,
+        rejectionReason: params.rejectionReason ?? null,
+      },
   });
 
   if (claim.count === 0) {
@@ -631,20 +631,20 @@ export async function resolveComplianceDocument(params: {
     await logAction(
       approving
         ? createActivityLogEntry("complianceDocumentApproved", {
-            projectId: params.projectId,
-            engagementId: document.engagementId,
-            documentId: document.id,
-            documentLabel,
-            resolvedBy: params.resolvedBy,
-          })
+          projectId: params.projectId,
+          engagementId: document.engagementId,
+          documentId: document.id,
+          documentLabel,
+          resolvedBy: params.resolvedBy,
+        })
         : createActivityLogEntry("complianceDocumentRejected", {
-            projectId: params.projectId,
-            engagementId: document.engagementId,
-            documentId: document.id,
-            documentLabel,
-            resolvedBy: params.resolvedBy,
-            rejectionReason: params.rejectionReason ?? "",
-          }),
+          projectId: params.projectId,
+          engagementId: document.engagementId,
+          documentId: document.id,
+          documentLabel,
+          resolvedBy: params.resolvedBy,
+          rejectionReason: params.rejectionReason ?? "",
+        }),
     );
   });
 
@@ -717,6 +717,13 @@ export async function sendComplianceForReview(engagementId: string) {
         .join(", ")}.`,
     );
   }
+  const requiredTypes = new Set<ComplianceDocumentType>(
+    REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+  );
+  const files = engagement.documents
+    .filter((doc) => requiredTypes.has(doc.documentType))
+    .flatMap((doc) => doc.files);
+  const body = outreachBody(engagement.certifierName, engagement.subjectAddress);
 
   await advanceEngagementStatus(
     engagementId,
@@ -731,12 +738,12 @@ export async function sendComplianceForReview(engagementId: string) {
   );
 
   const sent = await sendCertifierReply(engagementId, {
-    body: [
-      "<p>Hi,</p>",
-      `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
-      "<p>Could you review it and let us know if anything needs revising?</p>",
-      "<p>Kind regards,<br/>Royal Constructions</p>",
-    ].join("\n"),
+    body: body,
+    attachments: files.map((file) => ({
+      fileId: file.id,
+      name: file.filename,
+      url: file.url,
+    })),
   });
 
   after(async () => {
