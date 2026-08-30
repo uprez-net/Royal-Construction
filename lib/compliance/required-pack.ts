@@ -94,9 +94,10 @@ export function hasSentRequiredPack(
  * Everything before the certifier starts issuing their checklist.
  *
  * A positive list rather than an exclusion, so a status added later to the back
- * of the flow closes the send rather than quietly reopening it.
+ * of the flow reads as past the line rather than quietly reopening what sits
+ * before it.
  */
-const PACK_SENDABLE_STATUSES: ReadonlySet<CertifierEngagementStatus> = new Set([
+const PRE_CHECKLIST_STATUSES: ReadonlySet<CertifierEngagementStatus> = new Set([
   CertifierEngagementStatus.NOT_STARTED,
   CertifierEngagementStatus.COLLECTING_DOCS,
   CertifierEngagementStatus.OUTREACH_SENT,
@@ -104,6 +105,22 @@ const PACK_SENDABLE_STATUSES: ReadonlySet<CertifierEngagementStatus> = new Set([
   CertifierEngagementStatus.RESPONSE_RECEIVED,
   CertifierEngagementStatus.SIGNING,
 ]);
+
+/**
+ * Whether the certifier has started issuing their checklist.
+ *
+ * The one line the collection half of the tab ends at. Everything before it is
+ * assembling and sending what opens the engagement; everything after is the
+ * evidence against the checklist they issued, and the controls for the first
+ * have no meaning in the second — extracting a checklist that already exists,
+ * re-sending a pack that is no longer part of the flow, replacing a document
+ * the certifier is reading right now.
+ */
+export function hasReachedChecklistStage(
+  engagement: CertifierEngagementDetail,
+): boolean {
+  return !PRE_CHECKLIST_STATUSES.has(engagement.status);
+}
 
 /**
  * Whether sending the required pack is still a step this engagement has.
@@ -119,5 +136,5 @@ const PACK_SENDABLE_STATUSES: ReadonlySet<CertifierEngagementStatus> = new Set([
 export function canSendRequiredPack(
   engagement: CertifierEngagementDetail,
 ): boolean {
-  return PACK_SENDABLE_STATUSES.has(engagement.status);
+  return !hasReachedChecklistStage(engagement);
 }

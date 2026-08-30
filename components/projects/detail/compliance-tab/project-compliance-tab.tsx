@@ -47,6 +47,7 @@ import {
 } from "@/constants/complianceDocuments";
 import {
   canSendRequiredPack,
+  hasReachedChecklistStage,
   hasSentRequiredPack,
   isRequiredPackComplete,
   unsentRequiredDocuments,
@@ -673,6 +674,10 @@ export function ProjectComplianceTab({
     engagement.status === CertifierEngagementStatus.NOT_STARTED ||
     engagement.status === CertifierEngagementStatus.COLLECTING_DOCS;
 
+  // The line the collection half of the tab ends at: past it every control for
+  // assembling and sending the pack is describing a step that has happened.
+  const inChecklistStage = hasReachedChecklistStage(engagement);
+
   // Unidentified attachments count as a response: something arrived, it just
   // has not been placed yet. Without this the blocks stayed hidden and the
   // engagement stranded whenever the classifier was unsure.
@@ -941,37 +946,43 @@ export function ProjectComplianceTab({
               onOpenChange={toggleSection("response")}
               isActive={activeSection === "response"}
               footer={
-                <div className="space-y-2">
-                  <Button
-                    type="button"
-                    className="w-full"
-                    disabled={!signedCopiesSent || !checklistDocument || isBusy}
-                    onClick={() =>
-                      dispatch(
-                        openModal({
-                          type: "certifierExtract",
-                          payload: {
-                            projectId: project.id,
-                            engagementId: engagement.id,
-                            documentId: checklistDocument?.id,
-                          },
-                        }),
-                      )
-                    }
-                  >
-                    Get Checklist
-                  </Button>
-                  {!signedCopiesSent ? (
-                    <p className="text-xs text-muted-foreground">
-                      Upload both signed copies — they go to the certifier
-                      automatically.
-                    </p>
-                  ) : !checklistDocument ? (
-                    <p className="text-xs text-muted-foreground">
-                      Waiting on the certifier&apos;s checklist.
-                    </p>
-                  ) : null}
-                </div>
+                // Nothing left to ask for. The extraction has already run —
+                // that is what moved the engagement here — so the button would
+                // re-run it over a checklist that exists, and both notes under
+                // it are about waiting for a reply that has arrived.
+                inChecklistStage ? null : (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={!signedCopiesSent || !checklistDocument || isBusy}
+                      onClick={() =>
+                        dispatch(
+                          openModal({
+                            type: "certifierExtract",
+                            payload: {
+                              projectId: project.id,
+                              engagementId: engagement.id,
+                              documentId: checklistDocument?.id,
+                            },
+                          }),
+                        )
+                      }
+                    >
+                      Get Checklist
+                    </Button>
+                    {!signedCopiesSent ? (
+                      <p className="text-xs text-muted-foreground">
+                        Upload both signed copies — they go to the certifier
+                        automatically.
+                      </p>
+                    ) : !checklistDocument ? (
+                      <p className="text-xs text-muted-foreground">
+                        Waiting on the certifier&apos;s checklist.
+                      </p>
+                    ) : null}
+                  </div>
+                )
               }
             >
               <ul>
