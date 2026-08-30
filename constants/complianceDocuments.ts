@@ -55,34 +55,24 @@ export const CERTIFIER_RESPONSE_DOCUMENTS = [
 }[];
 
 /**
- * What the certifier produced, as opposed to what the builder supplied.
+ * What the review send actually carries, and therefore what it counts.
  *
- * These arrive as attachments on the certifier's own reply, so they are neither
- * ours to complete nor ours to send back. Excluding them is what makes the
- * review send's "nothing is missing" check reachable — counting the certifier's
- * own invoice would have held the send shut on a row nobody here can fill.
+ * Not everything the builder supplied. The required pack went out with the
+ * outreach and the signed copies with their own send, so both are already on
+ * the thread this replies into — re-attaching them puts the whole architectural
+ * set back on the wire for every round of a review that is only ever about the
+ * checklist. What the certifier has not seen is the evidence against the
+ * checklist they issued and the insurance certificate behind it.
  */
-export const CERTIFIER_SUPPLIED_TYPES: readonly ComplianceDocumentType[] = [
-  ComplianceDocumentType.INVOICE,
-  ComplianceDocumentType.FEE_PROPOSAL,
-  ComplianceDocumentType.CDC_FORM,
-  ComplianceDocumentType.CHECKLIST,
-  // An attachment the classifier could not place. It is shown so a person can
-  // label it, but until they do it is not evidence of anything.
-  ComplianceDocumentType.UNKNOWN,
+export const REVIEW_SUBMISSION_TYPES: readonly ComplianceDocumentType[] = [
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.HOME_INSURANCE,
 ];
 
-/**
- * Whether the builder supplies this document, rather than the certifier.
- *
- * The required pack, the signed copies, the checklist evidence and the
- * insurance certificate. This is the set the review send has to find complete,
- * and the set it puts on the message.
- */
-export function isBuilderSuppliedDocumentType(
+export function isReviewSubmissionType(
   documentType: ComplianceDocumentType,
 ): boolean {
-  return !CERTIFIER_SUPPLIED_TYPES.includes(documentType);
+  return REVIEW_SUBMISSION_TYPES.includes(documentType);
 }
 
 /**

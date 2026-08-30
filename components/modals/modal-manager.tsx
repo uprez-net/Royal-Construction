@@ -60,6 +60,7 @@ import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
 import { CertifierExtractModal } from "./certifier-extract-modal";
 import { CertifierSendSignedCopiesModal } from "./certifier-send-signed-copies-modal";
 import { ComplianceCompleteModal } from "./compliance-complete-modal";
+import { ComplianceRejectModal } from "./compliance-reject-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -686,6 +687,28 @@ export function ModalManager() {
           projectId={id}
           documentCount={documentCount}
           isResend={isResend ?? false}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceReject": {
+      const {
+        projectId: id,
+        documentId,
+        documentLabel,
+      } = modal.payload as {
+        projectId: string;
+        documentId: string;
+        documentLabel: string;
+      };
+      return (
+        <ComplianceRejectModal
+          projectId={id}
+          documentId={documentId}
+          documentLabel={documentLabel}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

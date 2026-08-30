@@ -14,7 +14,7 @@ import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
   isApprovableDocumentType,
-  isBuilderSuppliedDocumentType,
+  isReviewSubmissionType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -25,6 +25,7 @@ import {
 } from "@/lib/graph/certifier-subject";
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
+import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -453,13 +454,15 @@ export async function attachComplianceDocumentFile(params: {
 }) {
   const file = await prisma.file.findUnique({
     where: { id: params.fileId },
-    select: { id: true, filename: true },
+    // `url` is read for the re-supply email below, which attaches the
+    // replacement rather than telling the certifier one exists somewhere.
+    select: { id: true, filename: true, url: true },
   });
   if (!file) {
     throw new Error(`File ${params.fileId} not found.`);
   }
 
-  const document = await prisma.$transaction(async (tx) => {
+  const { document, sentBackFor } = await prisma.$transaction(async (tx) => {
     let target = params.documentId
       ? await tx.complianceDocument.findFirst({
         where: { id: params.documentId, engagementId: params.engagementId },
@@ -498,17 +501,29 @@ export async function attachComplianceDocumentFile(params: {
       data: { complianceDocumentId: target.id },
     });
 
+    // Read before the update wipes it. A reason on the row means the certifier
+    // sent this document back, and this upload is the answer to that — which is
+    // both worth telling them about and impossible to know a moment later.
+    const sentBackFor = target.rejectionReason;
+
     // Clearing rejectionReason is half the point of a re-upload: the document
     // is back in play, and leaving the old reason on it would keep showing why
     // the previous attempt failed as though it were still current.
-    return tx.complianceDocument.update({
+    const document = await tx.complianceDocument.update({
       where: { id: target.id },
       data: {
         status: ComplianceDocumentStatus.UPLOADED,
         rejectionReason: null,
       },
     });
+
+    return { document, sentBackFor };
   });
+
+  const documentLabel = complianceDocumentLabel(
+    document.documentType,
+    document.label,
+  );
 
   after(async () => {
     revalidateEngagement(params.projectId);
@@ -517,16 +532,101 @@ export async function attachComplianceDocumentFile(params: {
         projectId: params.projectId,
         engagementId: params.engagementId,
         documentId: document.id,
-        documentLabel: complianceDocumentLabel(
-          document.documentType,
-          document.label,
-        ),
+        documentLabel,
         fileName: file.filename,
       }),
     );
   });
 
+  // There is one home insurance certificate and two places that need it. The
+  // Overview tab's HBCF block wants the number off it and a link to the file;
+  // collecting it here used to leave that half untouched, so a project with the
+  // certificate already in hand still read as missing its insurance number.
+  if (document.documentType === ComplianceDocumentType.HOME_INSURANCE) {
+    after(async () => {
+      await recordHomeInsuranceOnProject({
+        projectId: params.projectId,
+        fileId: file.id,
+      });
+    });
+  }
+
+  // A replacement for something the certifier sent back. They asked for a
+  // change and have no way of knowing it has been made — the file just appears
+  // on our side — so the upload is what tells them, quoting the reason back so
+  // they can see it is the thing they asked for.
+  if (sentBackFor) {
+    after(async () => {
+      await notifyCertifierOfResupply({
+        engagementId: params.engagementId,
+        documentLabel,
+        rejectionReason: sentBackFor,
+        file: { id: file.id, filename: file.filename, url: file.url },
+      });
+    });
+  }
+
   return document;
+}
+
+/**
+ * Escapes HTML-sensitive characters before a value goes into an email body.
+ *
+ * A rejection reason is typed by an admin and quoted straight back to the
+ * certifier, so it is the one string on this thread that a person composes
+ * freehand and a mail client renders as markup.
+ */
+function escapeEmailHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Tells the certifier that something they rejected has been redone.
+ *
+ * Sent on the upload rather than waiting for another round of "send for
+ * review": a rejection is a conversation the certifier started and is waiting
+ * on, and holding the answer back until somebody remembers to press a button
+ * leaves them looking at a file they think is still wrong.
+ *
+ * Never throws. The replacement is already stored and already visible in the
+ * tab; a mailbox that is down is not a reason to fail an upload that worked.
+ */
+async function notifyCertifierOfResupply(params: {
+  engagementId: string;
+  documentLabel: string;
+  rejectionReason: string;
+  file: { id: string; filename: string; url: string };
+}): Promise<void> {
+  try {
+    const engagement = await requireEngagement(params.engagementId);
+
+    await sendCertifierReply(params.engagementId, {
+      body: [
+        "<p>Hi,</p>",
+        `<p>You sent back <strong>${escapeEmailHtml(params.documentLabel)}</strong> for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> with this note:</p>`,
+        `<blockquote style="margin:0 0 1em;padding:0 0 0 1em;border-left:3px solid #ccc;">${escapeEmailHtml(params.rejectionReason)}</blockquote>`,
+        "<p>That has been addressed and the replacement is attached. Could you take another look?</p>",
+        "<p>Kind regards,<br/>Royal Constructions</p>",
+      ].join("\n"),
+      attachments: [
+        {
+          fileId: params.file.id,
+          name: params.file.filename,
+          url: params.file.url,
+        },
+      ],
+    });
+  } catch (error) {
+    console.error(
+      `Could not tell the certifier that "${params.documentLabel}" was re-supplied`,
+      error,
+    );
+  }
 }
 
 /**
@@ -714,12 +814,12 @@ export async function resolveComplianceDocument(params: {
 export async function sendComplianceForReview(engagementId: string) {
   const engagement = await requireEngagement(engagementId);
 
-  // Everything the builder was responsible for, not just the checklist. Only
-  // the checklist evidence gets approved or rejected, but the required pack,
-  // the signed copies and the insurance certificate all have to be on the file
-  // before it goes over — a send with one of them empty wastes a round trip.
+  // The checklist evidence and the insurance certificate. Everything else the
+  // builder supplied is already on this thread — the required pack came with
+  // the outreach, the signed copies with their own send — so the review is the
+  // one message that carries what the certifier has not seen.
   const evidence = engagement.documents.filter((doc) =>
-    isBuilderSuppliedDocumentType(doc.documentType),
+    isReviewSubmissionType(doc.documentType),
   );
   const outstanding = evidence.filter((doc) => doc.files.length === 0);
   if (outstanding.length > 0) {
@@ -753,13 +853,8 @@ export async function sendComplianceForReview(engagementId: string) {
     );
   }
 
-  // Every file the builder put on the engagement, in document order.
-  //
-  // The message says everything is attached, and before this nothing was. The
-  // checklist evidence is the part the certifier has never seen and is about to
-  // rule on, including whatever was re-supplied after a rejection; the rest
-  // rides along so the review reads against one complete file rather than
-  // against whatever the certifier can still find further up the thread.
+  // Every file behind that set, in document order. The message says everything
+  // is attached, and before this nothing was.
   //
   // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
   // which asserts the total against the mailbox's MaxSendSize and switches to

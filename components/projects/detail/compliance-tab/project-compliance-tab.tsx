@@ -39,7 +39,7 @@ import {
   complianceDocumentLabel,
   HBCF_INSURANCE_URL,
   isApprovableDocumentType,
-  isBuilderSuppliedDocumentType,
+  isReviewSubmissionType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -96,16 +96,20 @@ const READY_FOR_REVIEW_STATUSES: ReadonlySet<CertifierEngagementStatus> =
     CertifierEngagementStatus.IN_REVIEW,
   ]);
 
+/** The checklist evidence and the insurance certificate — what the send carries. */
+const reviewSubmission = (engagement: CertifierEngagementDetail) =>
+  engagement.documents.filter((document) =>
+    isReviewSubmissionType(document.documentType),
+  );
+
 /**
  * Whether the collection phase is actually finished.
  *
- * "Every reviewable document has a file" is not enough on its own. Until the
- * certifier issues a checklist, the reviewable set holds nothing but the six
- * required rows — so the upload that completed the required pack satisfied it
- * and opened the completion prompt in the middle of collection, offering a send
- * the server would have refused anyway. The checklist is the thing the
- * certifier is waiting to see, so its existence, and the status that arrives
- * with it, are part of being done.
+ * Measured over the send set alone, and gated on the checklist existing. Both
+ * halves were learned the hard way: counting every document the builder
+ * supplied meant the six required rows satisfied the condition on their own,
+ * before the certifier had issued anything, and the upload that completed the
+ * required pack opened the completion prompt in the middle of collection.
  *
  * One function for the prompt and the send bar both, because the two claiming
  * different things about the same engagement is what the drift would look like.
@@ -115,20 +119,15 @@ function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
     return false;
   }
 
-  const hasChecklist = engagement.documents.some(
+  const submission = reviewSubmission(engagement);
+  const hasChecklist = submission.some(
     (document) =>
       document.documentType === ComplianceDocumentType.CHECKLIST_ITEM,
   );
-  if (!hasChecklist) {
-    return false;
-  }
 
-  const supplied = engagement.documents.filter((document) =>
-    isBuilderSuppliedDocumentType(document.documentType),
-  );
   return (
-    supplied.length > 0 &&
-    supplied.every((document) => document.files.length > 0)
+    hasChecklist &&
+    submission.every((document) => document.files.length > 0)
   );
 }
 
@@ -232,19 +231,9 @@ export function ProjectComplianceTab({
     [engagement],
   );
 
-  /**
-   * Everything the builder supplied, which is what goes over for review.
-   *
-   * Wider than what gets approved: the certifier's own invoice, fee proposal,
-   * CDC form and checklist are excluded because they are not ours, but the
-   * required pack and the signed copies are here because the file is not
-   * complete without them, even though nobody approves them.
-   */
-  const suppliedDocuments = useMemo(
-    () =>
-      (engagement?.documents ?? []).filter((document) =>
-        isBuilderSuppliedDocumentType(document.documentType),
-      ),
+  /** What the review send carries, and therefore what "all N documents" counts. */
+  const submissionDocuments = useMemo(
+    () => (engagement ? reviewSubmission(engagement) : []),
     [engagement],
   );
 
@@ -278,6 +267,10 @@ export function ProjectComplianceTab({
   ): "upload" | "resolve" | "frozen" => {
     if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
     if (!inReview) return "upload";
+    // Sent back. The old file is still attached, so a row that only asked "has
+    // it got a file?" showed Approve/Reject here and left the loop unable to
+    // finish — an admin could re-reject an item nobody had a way to re-supply.
+    if (document?.rejectionReason) return "upload";
     if (!document || document.files.length === 0) return "upload";
     if (!isApprovableDocumentType(document.documentType)) return "frozen";
     return isAdmin ? "resolve" : "frozen";
@@ -290,7 +283,16 @@ export function ProjectComplianceTab({
    * so the decision is made against what was actually written instead of a
    * render that may not have happened yet.
    */
-  const promptIfComplete = (next: CertifierEngagementDetail | null) => {
+  const promptIfComplete = (
+    next: CertifierEngagementDetail | null,
+    uploadedType: ComplianceDocumentType,
+  ) => {
+    // Only an upload that is part of the send can be the one that completes it.
+    // Without this the prompt fired on any upload at all once the set happened
+    // to be whole — replacing a required document while the checklist was live
+    // opened "Compliance and Certification complete" over a document that has
+    // nothing to do with the send.
+    if (!isReviewSubmissionType(uploadedType)) return;
     if (!next || !isReadyForReview(next)) return;
 
     // Already signed off. Re-uploading against an approved engagement is not a
@@ -303,16 +305,12 @@ export function ProjectComplianceTab({
       );
     if (closed) return;
 
-    const supplied = next.documents.filter((document) =>
-      isBuilderSuppliedDocumentType(document.documentType),
-    );
-
     dispatch(
       openModal({
         type: "complianceComplete",
         payload: {
           projectId: project.id,
-          documentCount: supplied.length,
+          documentCount: reviewSubmission(next).length,
           // Re-supplying after a rejection round reads differently from
           // finishing the collection for the first time.
           isResend: next.status === CertifierEngagementStatus.IN_REVIEW,
@@ -356,13 +354,34 @@ export function ProjectComplianceTab({
     }
   };
 
-  /** A required document, a checklist item, or the insurance certificate. */
+  /**
+   * A required document, a checklist item, or the insurance certificate.
+   *
+   * `documentType` is required even where an id already identifies the row —
+   * the server ignores it then, but the completion prompt needs to know what
+   * was just uploaded to decide whether it has any bearing on the send.
+   */
   const attachEvidence = async (
     file: File,
     key: string,
-    target: { documentId?: string; documentType?: ComplianceDocumentType },
+    target: { documentId?: string; documentType: ComplianceDocumentType },
   ) => {
-    promptIfComplete(await attach(file, key, target));
+    // Read before the upload clears it. A row carrying a rejection reason is
+    // one the certifier sent back, and the server answers that upload with its
+    // own mail on the thread — so the bulk re-send prompt is not offered on top
+    // of it. Two messages about the same fix, one of them asking whether to
+    // send the whole set again, is not what anybody meant by re-supplying.
+    const before = target.documentId
+      ? engagement?.documents.find(
+          (document) => document.id === target.documentId,
+        )
+      : documentsByType.get(target.documentType);
+    const wasSentBack = Boolean(before?.rejectionReason);
+
+    const next = await attach(file, key, target);
+    if (wasSentBack) return;
+
+    promptIfComplete(next, target.documentType);
   };
 
   /**
@@ -412,38 +431,47 @@ export function ProjectComplianceTab({
     toast.success("Sent to the certifier.");
   };
 
-  const handleResolve = async (
-    document: ComplianceDocumentWithFiles,
-    decision: "approved" | "rejected",
-  ) => {
-    let rejectionReason: string | undefined;
-    if (decision === "rejected") {
-      // A reason is mandatory server-side, so it is collected before the call
-      // rather than letting the request come back as a validation error.
-      const reason = window.prompt(
-        `Why is "${complianceDocumentLabel(document.documentType, document.label)}" being sent back?`,
-      );
-      if (!reason?.trim()) {
-        return;
-      }
-      rejectionReason = reason.trim();
-    }
-
+  const handleApprove = async (document: ComplianceDocumentWithFiles) => {
     try {
       await dispatch(
         resolveComplianceDocument({
           projectId: project.id,
           documentId: document.id,
-          decision,
-          rejectionReason,
+          decision: "approved",
         }),
       ).unwrap();
-      toast.success(decision === "approved" ? "Approved." : "Sent back.");
+      toast.success("Approved.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not resolve the document.",
+        error instanceof Error ? error.message : "Could not approve the document.",
       );
     }
+  };
+
+  /**
+   * Rejection goes through a dialog; approval does not.
+   *
+   * The asymmetry is the reason. Approving is one click with nothing to say,
+   * while sending something back has to carry why — and that reason is read
+   * three times over: by whoever re-uploads, on the row until they do, and by
+   * the certifier, quoted back to them on the mail that follows the
+   * replacement. A `window.prompt` was collecting it in a single unstyled line
+   * that froze the tab and, on a phone, the page behind it.
+   */
+  const handleReject = (document: ComplianceDocumentWithFiles) => {
+    dispatch(
+      openModal({
+        type: "complianceReject",
+        payload: {
+          projectId: project.id,
+          documentId: document.id,
+          documentLabel: complianceDocumentLabel(
+            document.documentType,
+            document.label,
+          ),
+        },
+      }),
+    );
   };
 
   const handleIdentify = async (
@@ -718,10 +746,10 @@ export function ProjectComplianceTab({
                       })
                     }
                     onApprove={() =>
-                      document && void handleResolve(document, "approved")
+                      document && void handleApprove(document)
                     }
                     onReject={() =>
-                      document && void handleResolve(document, "rejected")
+                      document && handleReject(document)
                     }
                     onPreviewFile={handlePreviewFile}
                   />
@@ -865,11 +893,11 @@ export function ProjectComplianceTab({
                     }
                     onApprove={() =>
                       signed.document &&
-                      void handleResolve(signed.document, "approved")
+                      void handleApprove(signed.document)
                     }
                     onReject={() =>
                       signed.document &&
-                      void handleResolve(signed.document, "rejected")
+                      handleReject(signed.document)
                     }
                     onPreviewFile={handlePreviewFile}
                   />
@@ -909,10 +937,11 @@ export function ProjectComplianceTab({
                     onUpload={(file) =>
                       void attachEvidence(file, item.id, {
                         documentId: item.id,
+                        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
                       })
                     }
-                    onApprove={() => void handleResolve(item, "approved")}
-                    onReject={() => void handleResolve(item, "rejected")}
+                    onApprove={() => void handleApprove(item)}
+                    onReject={() => handleReject(item)}
                     onPreviewFile={handlePreviewFile}
                   />
                 ))}
@@ -937,10 +966,10 @@ export function ProjectComplianceTab({
                           })
                         }
                         onApprove={() =>
-                          void handleResolve(insuranceDocument, "approved")
+                          void handleApprove(insuranceDocument)
                         }
                         onReject={() =>
-                          void handleResolve(insuranceDocument, "rejected")
+                          handleReject(insuranceDocument)
                         }
                         onPreviewFile={handlePreviewFile}
                       />
@@ -1040,7 +1069,7 @@ export function ProjectComplianceTab({
                     type: "complianceComplete",
                     payload: {
                       projectId: project.id,
-                      documentCount: suppliedDocuments.length,
+                      documentCount: submissionDocuments.length,
                       isResend: inReview,
                     },
                   }),
