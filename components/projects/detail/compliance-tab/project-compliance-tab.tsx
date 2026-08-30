@@ -619,7 +619,7 @@ export function ProjectComplianceTab({
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => setShowFinalPage(true)}>
-              Proceed
+              View final document list
             </Button>
             {/* The conversation outlives the engagement — it is the record of
                 how the approval was reached. */}
