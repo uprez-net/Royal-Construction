@@ -6,6 +6,12 @@ import { useRef } from "react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { ComplianceDocumentWithFiles } from "@/types/compliance";
 import { dataTimeFormat } from "@/utils/formatters";
@@ -72,6 +78,17 @@ export function ComplianceDocumentRow({
   const status = document?.status ?? ComplianceDocumentStatus.PENDING;
   const files = document?.files ?? [];
 
+  /**
+   * Whether what is currently attached is what the certifier sent back.
+   *
+   * There is no per-file verdict to read — a rejection lands on the document,
+   * and an upload appends rather than replaces — so the reason being set is
+   * exactly "everything on this row is the attempt they refused". It clears the
+   * moment a replacement is uploaded, which is also when these stop being the
+   * rejected files, so the two move together without a marker of their own.
+   */
+  const sentBack = Boolean(document?.rejectionReason);
+
   return (
     <li className="flex flex-wrap items-start gap-x-4 gap-y-2 border-b border-border/70 py-3 last:border-b-0">
       <FileText
@@ -88,25 +105,59 @@ export function ComplianceDocumentRow({
         </div>
 
         {files.length > 0 ? (
-          <ul className="mt-1 space-y-0.5">
-            {files.map((file) => (
-              <li key={file.id} className="text-sm">
-                {/* A button, not a link: this opens a viewer in place rather
-                    than navigating, and handing the tab to a blob URL is what
-                    this replaced. */}
-                <button
-                  type="button"
-                  onClick={() => onPreviewFile?.(file.id)}
-                  className="text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          // Site photographs and scans arrive named things like
+          // "WhatsApp Image 2025-08-14 at 09.41.22 (3).jpeg". Twenty of those
+          // set the width of a card that is meant to sit three to a row, so the
+          // name is clipped and the full one moves into the tooltip — which is
+          // where the rejection note goes too, because the file it belongs to
+          // is the thing the reader is already pointing at.
+          <TooltipProvider>
+            <ul className="mt-1 space-y-0.5">
+              {files.map((file) => (
+                <li
+                  key={file.id}
+                  className="flex min-w-0 items-baseline gap-2 text-sm"
                 >
-                  {file.filename}
-                </button>
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {dataTimeFormat.format(new Date(file.createdAt))}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {/* A button, not a link: this opens a viewer in place
+                          rather than navigating, and handing the tab to a blob
+                          URL is what this replaced. */}
+                      <button
+                        type="button"
+                        onClick={() => onPreviewFile?.(file.id)}
+                        className={cn(
+                          "min-w-0 truncate text-left underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                          sentBack
+                            ? // Struck rather than hidden: it is still the only
+                              // evidence of what was tried, and it still opens.
+                              "text-muted-foreground line-through decoration-destructive-ink/70"
+                            : "text-primary hover:underline",
+                        )}
+                      >
+                        {file.filename}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      sideOffset={6}
+                      className="max-w-xs flex-col items-stretch gap-1 py-2 text-left"
+                    >
+                      <p className="break-all">{file.filename}</p>
+                      {sentBack ? (
+                        <p className="border-t border-background/25 pt-1 text-background/80">
+                          Sent back: {document?.rejectionReason}
+                        </p>
+                      ) : null}
+                    </TooltipContent>
+                  </Tooltip>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {dataTimeFormat.format(new Date(file.createdAt))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </TooltipProvider>
         ) : helperText ? (
           <p className="mt-0.5 text-sm text-muted-foreground">{helperText}</p>
         ) : null}
