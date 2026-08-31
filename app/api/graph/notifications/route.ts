@@ -7,8 +7,14 @@ import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
-import { extractCertifierRefToken } from '@/lib/graph/certifier-subject';
+import {
+  extractCertifierRefToken,
+  isPublicMailDomain,
+  subjectMentionsSiteAddress,
+} from '@/lib/graph/certifier-subject';
 import { isMachineGenerated } from '@/lib/graph/offer-reply-classify';
+import { normalizeEmailAddress } from '@/utils/formatters';
+import { CertifierEmailDirection } from '@prisma/client';
 import { processInboundCertifierEmail } from '@/lib/workflow/certifier-email';
 import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
 import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
@@ -75,6 +81,101 @@ async function isTradieMessage(fromEmail: string): Promise<boolean> {
     console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
     return false;
   }
+}
+
+interface CertifierMatch {
+  refToken: string;
+  /** Null only for a token with no engagement behind it. */
+  engagement: { id: string } | null;
+  matchedOn: 'token' | 'address';
+}
+
+/**
+ * The certifier engagement an inbound message belongs to, if any.
+ *
+ * Two correlations, in order of confidence:
+ *
+ * 1. The `[RCCERT-…]` token we minted. Exact, and the reason it exists.
+ * 2. The site address in the subject. Certifiers run their own job numbering
+ *    and answer under it — "260449-11 14 Example St, Marrickville" — with our
+ *    token retyped away, stripped by a ticketing system, or never quoted
+ *    because the reply was composed fresh rather than by hitting Reply. The
+ *    address is the one thing always on the subject, because it is what
+ *    identifies the job to them, so that is what the reverse lookup runs on.
+ *
+ * The address route is deliberately narrower than the token route, because it
+ * is an inference and the token is not. It considers only engagements the pack
+ * has actually gone out on, only a sender who looks like the certifier it went
+ * to, and only when exactly one engagement matches. Anything short of that
+ * falls through to the lead path — where an uncorrelated message went before
+ * any of this existed — rather than guessing a project onto it.
+ *
+ * A null `engagement` alongside a token means the subject carried one of ours
+ * with nothing behind it: a stale thread on a deleted project. Still ours, so
+ * it stops at the certifier branch rather than being read as an enquiry.
+ */
+async function matchCertifierEngagement(
+  subject: string | undefined | null,
+  fromEmail: string | undefined | null,
+): Promise<CertifierMatch | null> {
+  const token = extractCertifierRefToken(subject);
+  if (token) {
+    const engagement = await prisma.certifierEngagement.findUnique({
+      where: { refToken: token },
+      select: { id: true },
+    });
+    return { refToken: token, engagement, matchedOn: 'token' };
+  }
+
+  const sender = normalizeEmailAddress(fromEmail ?? '');
+  const domain = sender.slice(sender.indexOf('@') + 1);
+  if (!domain) {
+    return null;
+  }
+
+  const candidates = await prisma.certifierEngagement.findMany({
+    where: {
+      certifierEmail: isPublicMailDomain(domain)
+        ? // Nothing about "@gmail.com" says this is a certifier rather than the
+          // homeowner writing about the same site, so the whole address has to
+          // match. That costs the "whoever in the office picks the job up"
+          // tolerance the next branch keeps, and it is the right trade: a
+          // missed correlation is a message in the lead queue, a wrong one
+          // files a client's enquiry as compliance.
+          { equals: sender, mode: 'insensitive' }
+        : { endsWith: `@${domain}`, mode: 'insensitive' },
+      // An engagement still being assembled has never told this certifier the
+      // address, so a message quoting it cannot be a reply to it.
+      emails: { some: { direction: CertifierEmailDirection.OUTBOUND } },
+    },
+    select: { id: true, refToken: true, subjectAddress: true },
+  });
+
+  const matches = candidates.filter((candidate) =>
+    subjectMentionsSiteAddress(subject, candidate.subjectAddress),
+  );
+
+  if (matches.length !== 1) {
+    if (matches.length > 1) {
+      // One certifier, two of our jobs, and a subject that reads as both —
+      // two units of the same address, most likely. Picking one would file
+      // documents against the wrong project, which is worse than filing them
+      // nowhere, so it is left for a human and logged loudly enough to find.
+      console.log(
+        `  Certifier address match ambiguous for "${subject ?? ''}": ${matches
+          .map((match) => match.refToken)
+          .join(', ')}`,
+      );
+    }
+    return null;
+  }
+
+  const [match] = matches;
+  return {
+    refToken: match.refToken,
+    engagement: { id: match.id },
+    matchedOn: 'address',
+  };
 }
 
 function handleValidationToken(request: Request): Response | null {
@@ -190,15 +291,16 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             continue;
           }
 
-          // Certifier thread: the subject carries [RCCERT-…]. Correlated on the
-          // token rather than on the sender, because a certifier's office
+          // Certifier thread: correlated on our [RCCERT-…] token where it
+          // survived the round trip, and on the site address in the subject
+          // where it did not. Never on the sender alone — a certifier's office
           // answers from whichever address picks the job up.
-          const certifierToken = extractCertifierRefToken(message.subject);
-          if (certifierToken) {
-            const engagement = await prisma.certifierEngagement.findUnique({
-              where: { refToken: certifierToken },
-              select: { id: true },
-            });
+          const certifierMatch = await matchCertifierEngagement(
+            message.subject,
+            message.from,
+          );
+          if (certifierMatch) {
+            const { refToken: certifierToken, engagement } = certifierMatch;
 
             if (!engagement) {
               console.log(
@@ -242,7 +344,8 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 },
               ]);
               console.log(
-                `  Certifier ${certifierToken}: workflow started for message ${message.id}: run ${run.runId}`,
+                `  Certifier ${certifierToken}: workflow started for message ${message.id} ` +
+                  `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;
