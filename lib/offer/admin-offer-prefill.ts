@@ -285,15 +285,9 @@ export function reevaluateFormulaCostLines(
     TIE_COST: area.tieCost,
     TOTAL_TILES_REQUIRED: calc.totalTilesRequired,
     KITCHEN_AREA: basis.kitchenSqm,
-    TOTAL_AREA:
-      basis.groundFloorSqm +
+    TOTAL_FLOORING_AREA:
       basis.firstFloorSqm +
-      basis.garageSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.grannyFlatSqm +
-      basis.balconySqm +
-      basis.voidSqm,
+      basis.balconySqm,
     TOTAL_SHOWERS: job.showerCount,
     TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,
     TOTAL_LINENS: job.linenCount,
