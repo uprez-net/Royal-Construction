@@ -22,6 +22,46 @@ import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { skeletonTableRows } from "../ui/skeleton";
+import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
+import { useWebMcpTools } from "@/hooks/use-webmcp-tool";
+
+/** Module-level so the registration hook's declaration hash stays stable. */
+const searchOffersSchema = {
+  type: "object",
+  properties: {
+    q: {
+      type: "string",
+      description:
+        "Client name or offer reference to search for. Pass an empty string to clear the search and show every offer again.",
+    },
+  },
+  required: ["q"],
+  additionalProperties: false,
+} as const;
+
+/**
+ * One offer group as the agent sees it — the same facts as the visible row.
+ *
+ * Deliberately not the raw OfferGroup: that carries the whole Lead on every row,
+ * which is most of the payload and none of the answer. `leadId` is the id that
+ * matters, because it is what navigate_to_offer takes.
+ */
+function toAgentRow(group: OfferGroup) {
+  const { latest } = group;
+  return {
+    leadId: group.leadId,
+    reference: group.reference,
+    client: group.lead.name,
+    type: group.lead.type,
+    versionCount: group.versionCount,
+    amountExGst: latest.amount,
+    gstAmount: latest.gstAmount,
+    totalAmount: latest.totalAmount,
+    status: latest.offerStatus,
+    sentAt: latest.sentAt ? new Date(latest.sentAt).toISOString() : null,
+    acceptedAt: latest.acceptedAt ? new Date(latest.acceptedAt).toISOString() : null,
+  };
+}
 
 const money = (value: string) => {
   const parsed = parseFloat(value);
@@ -107,6 +147,72 @@ export function OfferTable({
     (leadId: number) => router.push(`/offers/${leadId}`),
     [router],
   );
+
+  /* ── WebMCP: the offers list ──
+     Reads the rows already on screen rather than re-querying, so the agent and
+     the user are looking at the same page of the same list. The status tabs are
+     not part of this: `tabId` in offer-filter.tsx is local state nothing reads,
+     so there is no filter to report and the payload says so rather than
+     implying a filter was applied. */
+  useWebMcpTools([
+    {
+      name: "get_offers",
+      title: "List the offers on screen",
+      description:
+        "Returns the page of offers the user is currently looking at, one row per lead with its revision count and latest amounts. Use leadId with navigate_to_offer to open one. This is the visible page, not the whole database — check page against totalPages before concluding an offer does not exist, and use search_offers to narrow instead of paging through.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true },
+      execute: async () =>
+        webMcpJson({
+          items: offers.items.map(toAgentRow),
+          page: offers.page,
+          limit: offers.limit,
+          totalCount: offers.totalCount,
+          totalPages: offers.totalPages,
+          totalOfferCount: offers.totalOfferCount,
+          // Said plainly because the screen implies otherwise: the tab strip
+          // above the table renders Pending/Approved/Rejected/Sent buttons that
+          // filter nothing. An agent that assumed they did would under-report.
+          statusFilter: null,
+          note: "No status filter is applied — the list's status tabs do not filter. Filter these rows yourself if the user asked for one status.",
+        }),
+    },
+    {
+      name: "search_offers",
+      title: "Search the offers list",
+      description:
+        "Searches offers by client name or reference and replaces what the table shows. Pass an empty q to clear the search. Returns the same shape as get_offers. This moves the user's view, so say what you searched for.",
+      inputSchema: searchOffersSchema as unknown as Record<string, unknown>,
+      annotations: { readOnlyHint: false },
+      execute: async (input) => {
+        if (typeof input.q !== "string") {
+          return webMcpError("q is required. Pass an empty string to clear the search.");
+        }
+        const q = input.q.trim();
+
+        try {
+          // page 1: a search that kept the old page number would land on an
+          // empty page whenever the result set shrank.
+          const result = await dispatch(
+            fetchOffers({ page: 1, limit: offers.limit, q }),
+          ).unwrap();
+
+          return webMcpJson({
+            query: q,
+            items: result.items.map(toAgentRow),
+            page: result.page,
+            limit: result.limit,
+            totalCount: result.totalCount,
+            totalPages: result.totalPages,
+          });
+        } catch (error) {
+          return webMcpError(
+            `Could not search offers: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      },
+    },
+  ]);
 
   const handleRowKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTableRowElement>, leadId: number) => {
