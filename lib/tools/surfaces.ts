@@ -36,6 +36,7 @@ export const GLOBAL_TOOLS = [
     "navigate_to",
     "navigate_to_lead",
     "navigate_to_project",
+    "navigate_to_offer",
 ] as const;
 
 export const LEADS_LIST_TOOLS = [
@@ -63,6 +64,52 @@ export const LEAD_TAB_TOOLS: Record<(typeof LEAD_DETAIL_TABS)[number], readonly 
 };
 
 export const PROJECTS_LIST_TOOLS = ["start_project_creation"] as const;
+
+export const OFFERS_LIST_TOOLS = ["get_offers", "search_offers"] as const;
+
+/**
+ * The offer workspace registers every one of its tools from one component.
+ *
+ * The other detail screens key their tools by tab, because only the open tab's
+ * panel is mounted. The offer workspace is the opposite shape: its ten sections
+ * are JSX inside offer-workspace-screen.tsx with no per-section state owners, so
+ * all of the state — and therefore every tool — lives in the one container
+ * (new-offer-workspace.tsx). Keying these by section would promise the agent a
+ * registry that churns, when in fact the list never changes while the workspace
+ * is open. Gating happens at call time instead; see lib/offer/webmcp-gating.ts.
+ *
+ * Sections 6-10 (Send & negotiate, Tender access, Tender, Contract, Project)
+ * have no tools yet. Everything they do is outbound or a status attestation.
+ */
+export const OFFER_WORKSPACE_TOOLS = [
+    // Orientation and reads
+    "get_offer_workspace_state",
+    "get_offer_section_data",
+    "open_offer_section",
+    "get_cost_schedule",
+    "get_pricing_summary",
+    "validate_offer_for_send",
+    // 1. Job setup
+    "prefill_job_setup_from_lead",
+    "update_job_setup",
+    // 2. Cost schedule
+    "update_cost_requirements",
+    "add_workbook_item",
+    "update_workbook_item",
+    "remove_workbook_item",
+    // 3. Pricing
+    "update_pricing_inputs",
+    "set_customer_price",
+    // 4. Scope
+    "add_scope_item",
+    "update_scope_item",
+    "remove_scope_item",
+    // 5. Offer document
+    "update_offer_document_content",
+    "add_inclusion_item",
+    "update_inclusion_item",
+    "remove_inclusion_item",
+] as const;
 
 /** On a project's page whatever tab is open. */
 export const PROJECT_DETAIL_TOOLS = [
@@ -103,6 +150,11 @@ export const PROJECT_TAB_TOOLS: Record<
     history: [],
     communications: [],
 };
+
+/** Everything reachable in a lead's offer workspace. Not keyed by section. */
+export function offerSurfaceTools(): string[] {
+    return [...OFFER_WORKSPACE_TOOLS];
+}
 
 /** Everything reachable on a lead's page with `tab` open. */
 export function leadSurfaceTools(tab?: string): string[] {

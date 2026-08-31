@@ -1,11 +1,13 @@
 "use client";
 
 import { navigationItems } from "@/lib/mock-data";
+import { OFFERS_GUIDE } from "@/lib/tools/offers-guide";
 import { OPERATING_GUIDE } from "@/lib/tools/operating-guide";
 import {
     LEAD_DETAIL_TABS,
     NAVIGABLE_PROJECT_TABS,
     leadSurfaceTools,
+    offerSurfaceTools,
     projectSurfaceTools,
 } from "@/lib/tools/surfaces";
 
@@ -257,15 +259,77 @@ export function createUiTools(deps: UiToolDeps): WebMCP.ModelContextTool[] {
             },
         },
         {
+            name: "navigate_to_offer",
+            title: "Open a lead's offer",
+            description:
+                "Opens the offer workspace for a lead. Resolve leadId with get_leads first. NOTE: this provisions an offer for the lead if it does not already have one — opening the workspace is how an offer is created, there is no separate create tool. A lead has many revisions but only one active; this always opens the active one. The offer tools exist only while this page is open.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    leadId: { type: "number", description: "The lead whose offer to open, from get_leads." },
+                },
+                required: ["leadId"],
+                additionalProperties: false,
+            },
+            // Not read-only: arriving can create the Offer row (ADR 0002).
+            annotations: { readOnlyHint: false },
+            execute: async (input) => {
+                const leadId = Number(input.leadId);
+                if (!Number.isFinite(leadId) || leadId <= 0) {
+                    return webMcpError(
+                        "leadId must be a positive number. Call get_leads to resolve it.",
+                    );
+                }
+
+                const href = `/offers/${leadId}`;
+                deps.navigate(href);
+
+                return asText({
+                    navigatedTo: href,
+                    leadId,
+                    // The page has not mounted yet, so this is what the tools
+                    // *will* be. Re-read your tool list before relying on it.
+                    toolsNowAvailable: offerSurfaceTools(),
+                    // The offer ladder is too large to carry in the global
+                    // guide, so the agent is told where it lives instead.
+                    nextActions: [
+                        "Call get_offer_workspace_state to see the status and which sections are writable.",
+                        'Call get_operating_guide with surface: "offers" for the section rules.',
+                    ],
+                });
+            },
+        },
+        {
             name: "get_operating_guide",
             title: "Get operating guide",
             description:
-                "Returns the operating guide for this platform: how to resolve record ids, which tool sequences exist for each workflow, and the rules for writes. Read this before your first write operation.",
-            inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                "Returns the operating guide for this platform: how to resolve record ids, which tool sequences exist for each workflow, and the rules for writes. Read this before your first write operation. Pass surface: \"offers\" for the offer workspace's own guide — its ten sections, their lock rules, and which values are calculated rather than stored.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    surface: {
+                        type: "string",
+                        enum: ["offers"],
+                        description:
+                            "Return a screen's own guide instead of the platform one. Omit for the platform guide.",
+                    },
+                },
+                additionalProperties: false,
+            },
             annotations: { readOnlyHint: true },
-            execute: async () => ({
-                content: [{ type: "text" as const, text: OPERATING_GUIDE }],
-            }),
+            execute: async (input) => {
+                const surface = typeof input.surface === "string" ? input.surface.trim() : "";
+                if (surface && surface !== "offers") {
+                    return webMcpError(
+                        `No guide for surface "${surface}". The only surface guide is "offers"; omit the argument for the platform guide.`,
+                    );
+                }
+                return {
+                    content: [
+                        { type: "text" as const, text: surface === "offers" ? OFFERS_GUIDE : OPERATING_GUIDE },
+                    ],
+                };
+            },
         },
     ];
 }

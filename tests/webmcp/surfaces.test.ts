@@ -32,6 +32,7 @@ const UI_TOOL_NAMES = [
     "navigate_to",
     "navigate_to_lead",
     "navigate_to_project",
+    "navigate_to_offer",
 ];
 
 test("every shared manifest tool is listed as globally available", () => {

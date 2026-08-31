@@ -63,7 +63,7 @@ describe("surface scoping", () => {
         }
     });
 
-    test("the dashboard is read-only", async () => {
+    test("the dashboard is read-only, bar the one tool that admits it is not", async () => {
         // Nothing on the dashboard owns a record, so nothing there should be
         // able to change one.
         await visit(page, "/dashboard");
@@ -74,8 +74,23 @@ describe("surface scoping", () => {
         for (const tool of tools) {
             const readOnly = (tool.annotations as { readOnlyHint?: boolean } | undefined)
                 ?.readOnlyHint;
-            // The navigation tools declare readOnlyHint: true — they change the
-            // view, not the data — so every tool on this page should.
+
+            if (tool.name === "navigate_to_offer") {
+                // The exception, and it is declared rather than overlooked:
+                // opening a lead's offer workspace PROVISIONS the Offer row if
+                // the lead has none (ADR 0002), so this navigation really can
+                // write. Labelling it read-only to keep this loop tidy would be
+                // exactly the mislabelling the annotation exists to prevent.
+                assert.equal(
+                    readOnly,
+                    false,
+                    "navigate_to_offer can create an Offer row, so it must not claim to be read-only",
+                );
+                continue;
+            }
+
+            // Every other navigation tool declares readOnlyHint: true — it
+            // changes the view, not the data — so every tool left should.
             assert.ok(readOnly, `${tool.name} is registered on the dashboard but is not read-only`);
         }
     });
