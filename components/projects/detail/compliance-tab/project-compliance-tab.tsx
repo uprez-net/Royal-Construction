@@ -56,10 +56,13 @@ import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
+  complianceScope,
   identifyComplianceDocument,
   resolveComplianceDocument,
+  selectComplianceMutations,
   sendCertifierReply,
   uploadComplianceDocument,
+  type ComplianceScope,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
 import type {
@@ -158,9 +161,41 @@ export function ProjectComplianceTab({
   isAdmin,
 }: ProjectComplianceTabProps) {
   const dispatch = useAppDispatch();
-  const mutation = useAppSelector((state) => state.projects.mutations.compliance);
-  const isBusy = mutation.status === "pending";
-  const { uploadFile, uploadingKey } = useComplianceUpload(project.id);
+  const complianceMutations = useAppSelector(selectComplianceMutations);
+  const { uploadFile, isUploading } = useComplianceUpload(project.id);
+
+  /**
+   * Whether one scope has a write in flight.
+   *
+   * Both halves count, and they are consecutive rather than concurrent: an
+   * upload is a transfer to blob storage followed by a request pointing a
+   * document at it, and the control has to stay disabled across the join. The
+   * transfer is local to this component and the request is in the store, which
+   * is why the two are read from different places and OR-ed here.
+   */
+  const isScopeBusy = (scope: ComplianceScope) =>
+    isUploading(scope) || complianceMutations[scope]?.status === "pending";
+
+  /**
+   * Whether any of several scopes is busy.
+   *
+   * What the sends are gated on. A send carries a set of documents, so it has
+   * to be blocked by a write to any of them as well as by its own request —
+   * offering "Send it to Certifier" while a checklist item is midway through
+   * being replaced would post a set the admin is still changing.
+   */
+  const isAnyScopeBusy = (scopes: readonly ComplianceScope[]) =>
+    scopes.some(isScopeBusy);
+
+  /** The scope a document row files its writes under. */
+  const scopeOf = (
+    document: ComplianceDocumentWithFiles | undefined,
+    documentType?: ComplianceDocumentType,
+  ) =>
+    complianceScope.document({
+      documentId: document?.id,
+      documentType,
+    });
   const [insuranceAnswer, setInsuranceAnswer] = useState<"yes" | "no" | null>(
     null,
   );
@@ -408,14 +443,19 @@ export function ProjectComplianceTab({
    */
   const attach = async (
     file: File,
-    key: string,
     target: { documentId?: string; documentType?: ComplianceDocumentType },
   ): Promise<CertifierEngagementDetail | null> => {
+    // The transfer and the request that follows it are filed under the same
+    // key, so the row stays busy for the whole operation rather than going
+    // idle in the gap between them. Derived here rather than passed in: a
+    // caller free to invent its own key is a caller free to disagree with the
+    // scope the store will end up writing to.
+    const key = complianceScope.document(target);
     try {
       const uploaded = await uploadFile(file, key);
       // Set a small timeout to wait for the file entry to be created in the database before trying to attach it to a document. This is a workaround for a race condition that
       // can occur when uploading large files, where the file entry may not be immediately available in the database after the upload completes.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 850));
       const result = await dispatch(
         uploadComplianceDocument({
           projectId: project.id,
@@ -442,7 +482,6 @@ export function ProjectComplianceTab({
    */
   const attachEvidence = async (
     file: File,
-    key: string,
     target: { documentId?: string; documentType: ComplianceDocumentType },
   ) => {
     // Read before the upload clears it. A row carrying a rejection reason is
@@ -457,7 +496,7 @@ export function ProjectComplianceTab({
       : documentsByType.get(target.documentType);
     const wasSentBack = Boolean(before?.rejectionReason);
 
-    const next = await attach(file, key, target);
+    const next = await attach(file, target);
     if (wasSentBack) return;
 
     // Two prompts, never on the same upload: one watches the required pack and
@@ -480,7 +519,7 @@ export function ProjectComplianceTab({
     signedType: ComplianceDocumentType,
     documentId?: string,
   ) => {
-    const next = await attach(file, signedType, {
+    const next = await attach(file, {
       documentId,
       documentType: signedType,
     });
@@ -663,7 +702,7 @@ export function ProjectComplianceTab({
           onClose={() => setIsThreadOpen(false)}
           projectId={project.id}
           emails={engagement.emails}
-          isSending={isBusy}
+          isSending={isScopeBusy(complianceScope.reply)}
           onSend={handleReply}
         />
       </>
@@ -704,6 +743,80 @@ export function ProjectComplianceTab({
   const insuranceDocument = documentsByType.get(
     ComplianceDocumentType.HOME_INSURANCE,
   );
+
+  /**
+   * The insurance upload, as one target rather than two.
+   *
+   * The row renders in two branches — a supplied certificate, and the
+   * yes/no prompt that precedes it — and they aim at the document differently:
+   * the first by id, the second by type, because until a file lands there may
+   * be no row to point at. Declaring the target once means the scope the
+   * control reads and the scope the request writes cannot disagree, which they
+   * silently would if each branch built its own.
+   */
+  const insuranceUpload = insuranceDocument?.files.length
+    ? {
+        documentId: insuranceDocument.id,
+        documentType: ComplianceDocumentType.HOME_INSURANCE,
+      }
+    : { documentType: ComplianceDocumentType.HOME_INSURANCE };
+  const insuranceScope = complianceScope.document(insuranceUpload);
+
+  // -------------------------------------------------------------------
+  // What each send is blocked by.
+  //
+  // A send is not just its own request: it carries a set of documents, and
+  // posting that set while one of them is halfway through being replaced sends
+  // the certifier something nobody meant to send. So each send is gated on its
+  // own scope plus the scopes of everything it carries — and on nothing else,
+  // which is the point. Work in one block no longer stops work in another.
+  // -------------------------------------------------------------------
+  const requiredScopes = REQUIRED_COMPLIANCE_DOCUMENTS.map((required) =>
+    scopeOf(documentsByType.get(required.type), required.type),
+  );
+  const signedCopyScopes = signedCopies.map((signed) =>
+    scopeOf(signed.document, signed.type),
+  );
+  const checklistScopes = checklistItems.map((item) =>
+    scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+  );
+
+  /** The pack send, and the six documents it puts in the mail. */
+  const requiredPackBusy = isAnyScopeBusy([
+    complianceScope.outreach,
+    ...requiredScopes,
+  ]);
+
+  /**
+   * Asking for the checklist.
+   *
+   * Gated on the signed copies rather than on the checklist document, because
+   * that is what the request is actually waiting on — and the send of those
+   * copies fires off the upload that completes the pair, so the two rows and
+   * the send that follows them are one operation as far as this button is
+   * concerned.
+   */
+  const checklistRequestBusy = isAnyScopeBusy([
+    complianceScope.signedCopies,
+    scopeOf(checklistDocument, ComplianceDocumentType.CHECKLIST),
+    ...signedCopyScopes,
+  ]);
+
+  /** The review send, and every document it submits. */
+  const reviewBusy = isAnyScopeBusy([
+    complianceScope.review,
+    insuranceScope,
+    ...checklistScopes,
+  ]);
+
+  /**
+   * Whether the review send has claimed the documents it carries.
+   *
+   * While it is in the air the checklist rows and the insurance row are frozen
+   * — not because they are busy in their own right, but because they are the
+   * payload, and changing one underneath the request is what this prevents.
+   */
+  const submissionClaimed = isScopeBusy(complianceScope.review);
 
   // -------------------------------------------------------------------
   // Which block the flow is waiting on, and therefore which one opens.
@@ -823,7 +936,7 @@ export function ProjectComplianceTab({
                         }),
                       )
                     }
-                    disabled={isBusy}
+                    disabled={requiredPackBusy}
                   >
                     {collecting
                       ? "Find and send documents"
@@ -853,9 +966,9 @@ export function ProjectComplianceTab({
                       document?.files.length ? undefined : "Not collected yet"
                     }
                     mode={rowMode(document)}
-                    isBusy={isBusy || uploadingKey === required.type}
+                    isBusy={isScopeBusy(scopeOf(document, required.type))}
                     onUpload={(file) =>
-                      void attachEvidence(file, required.type, {
+                      void attachEvidence(file, {
                         documentId: document?.id,
                         documentType: required.type,
                       })
@@ -907,7 +1020,7 @@ export function ProjectComplianceTab({
                       ))}
                     </div>
                     <Select
-                      disabled={isBusy}
+                      disabled={isScopeBusy(scopeOf(document))}
                       onValueChange={(value) =>
                         void handleIdentify(
                           document.id,
@@ -955,7 +1068,11 @@ export function ProjectComplianceTab({
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!signedCopiesSent || !checklistDocument || isBusy}
+                      disabled={
+                        !signedCopiesSent ||
+                        !checklistDocument ||
+                        checklistRequestBusy
+                      }
                       onClick={() =>
                         dispatch(
                           openModal({
@@ -1004,7 +1121,13 @@ export function ProjectComplianceTab({
                     document={signed.document}
                     helperText="Please upload the signed copy"
                     mode={rowMode(signed.document)}
-                    isBusy={isBusy || uploadingKey === signed.type}
+                    // Their own upload, and the send it triggers: the pair goes
+                    // to the certifier as one act, so neither row is editable
+                    // while that is happening.
+                    isBusy={
+                      isScopeBusy(scopeOf(signed.document, signed.type)) ||
+                      isScopeBusy(complianceScope.signedCopies)
+                    }
                     onUpload={(file) =>
                       void attachSignedCopy(
                         file,
@@ -1054,9 +1177,13 @@ export function ProjectComplianceTab({
                       item.files.length ? undefined : "Not supplied yet"
                     }
                     mode={rowMode(item)}
-                    isBusy={isBusy || uploadingKey === item.id}
+                    isBusy={
+                      isScopeBusy(
+                        scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+                      ) || submissionClaimed
+                    }
                     onUpload={(file) =>
-                      void attachEvidence(file, item.id, {
+                      void attachEvidence(file, {
                         documentId: item.id,
                         documentType: ComplianceDocumentType.CHECKLIST_ITEM,
                       })
@@ -1079,12 +1206,9 @@ export function ProjectComplianceTab({
                         label="Home Insurance"
                         document={insuranceDocument}
                         mode={rowMode(insuranceDocument)}
-                        isBusy={isBusy || uploadingKey === "home-insurance"}
+                        isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
                         onUpload={(file) =>
-                          void attachEvidence(file, "home-insurance", {
-                            documentId: insuranceDocument.id,
-                            documentType: ComplianceDocumentType.HOME_INSURANCE,
-                          })
+                          void attachEvidence(file, insuranceUpload)
                         }
                         onApprove={() =>
                           void handleApprove(insuranceDocument)
@@ -1129,12 +1253,11 @@ export function ProjectComplianceTab({
                             label="Home Insurance"
                             helperText="Upload the certificate of insurance"
                             mode="upload"
-                            isBusy={isBusy || uploadingKey === "home-insurance"}
+                            isBusy={
+                              isScopeBusy(insuranceScope) || submissionClaimed
+                            }
                             onUpload={(file) =>
-                              void attachEvidence(file, "home-insurance", {
-                                documentType:
-                                  ComplianceDocumentType.HOME_INSURANCE,
-                              })
+                              void attachEvidence(file, insuranceUpload)
                             }
                           />
                         </ul>
@@ -1183,7 +1306,7 @@ export function ProjectComplianceTab({
             </p>
             <Button
               type="button"
-              disabled={isBusy}
+              disabled={reviewBusy}
               onClick={() =>
                 dispatch(
                   openModal({
@@ -1197,7 +1320,7 @@ export function ProjectComplianceTab({
                 )
               }
             >
-              {isBusy ? (
+              {submissionClaimed ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               ) : null}
               {inReview ? "Re-send to Certifier" : "Send it to Certifier"}
@@ -1224,7 +1347,7 @@ export function ProjectComplianceTab({
         onClose={() => setIsThreadOpen(false)}
         projectId={project.id}
         emails={engagement.emails}
-        isSending={isBusy}
+        isSending={isScopeBusy(complianceScope.reply)}
         onSend={handleReply}
       />
     </div>

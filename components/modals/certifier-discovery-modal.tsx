@@ -1,5 +1,6 @@
 "use client";
 
+import type { ComplianceDocumentType } from "@prisma/client";
 import {
   AlertCircle,
   CheckCircle2,
@@ -23,7 +24,9 @@ import { REQUIRED_COMPLIANCE_DOCUMENTS } from "@/constants/complianceDocuments";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
+  complianceScope,
   refreshCertifierEngagement,
+  selectComplianceMutation,
   sendCertifierOutreach,
   uploadComplianceDocument,
 } from "@/lib/store/slices/projectsSlice";
@@ -71,10 +74,24 @@ export function CertifierDiscoveryModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
-  const mutation = useAppSelector(
-    (state) => state.projects.mutations.compliance,
+  // The outreach scope alone. This used to read the tab's single compliance
+  // flag, which meant an upload on any row of the tab behind this modal
+  // disabled the send here.
+  const outreach = useAppSelector(
+    selectComplianceMutation(complianceScope.outreach),
   );
-  const { uploadFile, uploadingKey } = useComplianceUpload(projectId);
+  const { uploadFile, isUploading } = useComplianceUpload(projectId);
+
+  /**
+   * A row's key, matching the scope the upload will file under.
+   *
+   * The loop always names the document by type — the required rows are seeded
+   * server-side but this screen does not read their ids — so the scope is the
+   * type one, and building it through `complianceScope` rather than by hand is
+   * what keeps it that way if the dispatch below ever gains a documentId.
+   */
+  const rowScope = (documentType: ComplianceDocumentType) =>
+    complianceScope.document({ documentType });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadRef = useRef<number | null>(null);
   const sentRef = useRef(false);
@@ -154,7 +171,7 @@ export function CertifierDiscoveryModal({
   const handleUpload = async (file: File, index: number) => {
     const row = rows[index];
     try {
-      const uploaded = await uploadFile(file, row.type);
+      const uploaded = await uploadFile(file, rowScope(row.type));
       await dispatch(
         uploadComplianceDocument({
           projectId,
@@ -316,13 +333,13 @@ export function CertifierDiscoveryModal({
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled={uploadingKey === row.type}
+                  disabled={isUploading(rowScope(row.type))}
                   onClick={() => {
                     pendingUploadRef.current = index;
                     fileInputRef.current?.click();
                   }}
                 >
-                  {uploadingKey === row.type ? (
+                  {isUploading(rowScope(row.type)) ? (
                     <Loader2
                       className="size-4 animate-spin"
                       aria-hidden="true"
@@ -357,7 +374,7 @@ export function CertifierDiscoveryModal({
               !allFound ||
               !isDone ||
               isSending ||
-              mutation.status === "pending"
+              outreach.status === "pending"
             }
             onClick={() => void handleSend()}
           >

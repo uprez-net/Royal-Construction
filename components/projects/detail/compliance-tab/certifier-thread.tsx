@@ -45,6 +45,15 @@ type CertifierThreadProps = {
  * Renders bare rather than in a Card: it lives inside `ModalShell`, which
  * already supplies the frame, the title and the close/fullscreen controls.
  */
+/**
+ * The composer's upload key.
+ *
+ * The one control here, and deliberately not a document scope: an attachment
+ * belongs to the message being written, not to any row on the compliance file,
+ * so it must not share a busy flag with one.
+ */
+const COMPOSER_UPLOAD_KEY = "composer";
+
 export function CertifierThread({
   projectId,
   emails,
@@ -57,7 +66,8 @@ export function CertifierThread({
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [body, setBody] = useState("");
   const [pending, setPending] = useState<CertifierReplyAttachment[]>([]);
-  const { uploadFile, uploadingKey } = useComplianceUpload(projectId);
+  const { uploadFile, isUploading } = useComplianceUpload(projectId);
+  const isAttaching = isUploading(COMPOSER_UPLOAD_KEY);
 
   const orderedEmails = useMemo(
     () =>
@@ -101,7 +111,7 @@ export function CertifierThread({
 
   const handleAttach = async (file: File) => {
     try {
-      const uploaded = await uploadFile(file, "composer");
+      const uploaded = await uploadFile(file, COMPOSER_UPLOAD_KEY);
       setPending((current) => [
         ...current,
         { fileId: uploaded.fileId, name: uploaded.name, url: uploaded.url },
@@ -258,10 +268,10 @@ export function CertifierThread({
             type="button"
             variant="ghost"
             size="sm"
-            disabled={uploadingKey === "composer" || isSending}
+            disabled={isAttaching || isSending}
             onClick={() => attachmentInputRef.current?.click()}
           >
-            {uploadingKey === "composer" ? (
+            {isAttaching ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             ) : (
               <Paperclip className="size-4" aria-hidden="true" />

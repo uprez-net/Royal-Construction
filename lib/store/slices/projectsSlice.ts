@@ -1,4 +1,11 @@
-import { createAsyncThunk, createSelector, createSlice, isAnyOf, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSelector,
+  createSlice,
+  isAnyOf,
+  type AsyncThunk,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 
 import type { RootState } from "@/lib/store";
 
@@ -18,7 +25,7 @@ import {
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
-import type { File as ProjectFiles } from "@prisma/client"
+import type { ComplianceDocumentType, File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
 import type { CertifierEngagementDetail } from "@/types/compliance";
 import type {
@@ -40,14 +47,18 @@ type MutationKey =
   | "createTradieSchedule"
   | "addMilestone"
   | "updateMilestone"
-  | "addMilestonePhotos"
-  // Compliance and certification. `compliance` is one shared key rather than
-  // one per action deliberately: the tab only ever has a single request in
-  // flight, and every one of them ends by replacing the same engagement, so
-  // splitting them would give the UI six flags it would have to OR together.
-  | "compliance";
+  | "addMilestonePhotos";
 
 type ProjectsMutationState = Record<MutationKey, ProjectMutationState>;
+
+/**
+ * In-flight compliance work, filed one entry per {@link ComplianceScope}.
+ *
+ * Absent means idle. Entries are written on the first request against a scope
+ * and left behind afterwards, so a caller can read the outcome of the last
+ * write to a row as well as whether one is running now.
+ */
+type ComplianceMutationState = Record<ComplianceScope, ProjectMutationState>;
 
 type ProjectUploadState = Record<string, Record<string, ProjectUploadRecord>>;
 
@@ -56,6 +67,14 @@ export interface ProjectsState {
   activeProject: ProjectDetail | null;
   optimisticUpdates: Record<string, Partial<Record<string, unknown>>>;
   mutations: ProjectsMutationState;
+  /**
+   * Compliance writes, tracked per scope rather than as one flag.
+   *
+   * Separate from `mutations` because it is keyed by a value rather than by a
+   * fixed set of names — the tab has one scope per document row, and those are
+   * only known once the engagement has been read.
+   */
+  complianceMutations: ComplianceMutationState;
   uploadsByProjectId: ProjectUploadState;
   detailUi: {
     byProjectId: Record<
@@ -84,7 +103,6 @@ const initialMutationState = (): ProjectsMutationState => ({
   addMilestone: { status: "idle", error: null },
   updateMilestone: { status: "idle", error: null },
   addMilestonePhotos: { status: "idle", error: null },
-  compliance: { status: "idle", error: null },
 });
 
 const initialState: ProjectsState = {
@@ -92,6 +110,7 @@ const initialState: ProjectsState = {
   activeProject: null,
   optimisticUpdates: {},
   mutations: initialMutationState(),
+  complianceMutations: {},
   uploadsByProjectId: {},
   detailUi: {
     byProjectId: {},
@@ -286,6 +305,57 @@ export const addMilestonePhotos = createAsyncThunk<
 /* -------------------------------------------------------------------------- */
 /*                        Compliance and certification                        */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * The unit of "something is being written" on the compliance file.
+ *
+ * One shared flag was the wrong grain. The tab carries an upload control on
+ * every document row plus four sends and a thread composer, and a single
+ * `pending` disabled all of them for the duration of any one request — so
+ * replacing a checklist photo froze the five rows beside it, the composer, and
+ * the send bar, for as long as the transfer took.
+ *
+ * A scope is coarser than a thunk and finer than the tab: it names the thing
+ * being written, not the request writing it. Two requests against the same row
+ * still serialise, which is what anybody expects of Replace and Approve on one
+ * document, while work on different rows runs side by side.
+ */
+export type ComplianceScope = string;
+
+/** How a request names the row it is writing to. */
+type ComplianceDocumentTarget = {
+  documentId?: string | null;
+  documentType?: ComplianceDocumentType | null;
+};
+
+export const complianceScope = {
+  /** Opening the engagement — nothing else exists yet, so it stands alone. */
+  engagement: "engagement" as ComplianceScope,
+  /** The required pack going out to the certifier. */
+  outreach: "outreach" as ComplianceScope,
+  /** Both signed forms going back. */
+  signedCopies: "signed-copies" as ComplianceScope,
+  /** The submission that closes collection. */
+  review: "review" as ComplianceScope,
+  /** One message on the thread. */
+  reply: "reply" as ComplianceScope,
+  /** A plain re-read. Writes nothing, so nothing should block on it. */
+  refresh: "refresh" as ComplianceScope,
+  /**
+   * One document row.
+   *
+   * Keyed by id where the row has one and by type where it does not, because
+   * the first upload against a signed copy or the insurance certificate is what
+   * creates the row it targets — there is no id to key on until it lands. The
+   * id wins whenever both are supplied so that an upload and the approve that
+   * follows it file under the same scope rather than two.
+   */
+  document: ({
+    documentId,
+    documentType,
+  }: ComplianceDocumentTarget): ComplianceScope =>
+    documentId ? `document:${documentId}` : `type:${documentType ?? "unknown"}`,
+} as const;
 
 /**
  * Every compliance mutation returns the whole engagement.
@@ -505,24 +575,66 @@ export const refreshCertifierEngagement = createAsyncThunk<
   }
 });
 
+/** What every compliance thunk resolves to: the engagement, wholesale. */
+type ComplianceResult = {
+  projectId: string;
+  engagement: CertifierEngagementDetail | null;
+};
+
 /**
- * The compliance thunks, grouped so the reducer can match on them as a set.
+ * Pairs a compliance thunk with the scope its state is filed under.
  *
- * `isAnyOf` over the thunk objects rather than a string prefix check: a typo in
- * a prefix fails silently at runtime, while a missing entry here is a type
- * error the moment the thunk's payload shape stops matching.
+ * Written as a table rather than as a switch on `action.type` for the same
+ * reason `isAnyOf` is preferred over a prefix check: a type string typed by
+ * hand fails silently at runtime, whereas a scope function that cannot read the
+ * thunk's own argument is a type error on this line. The scope is stored
+ * accepting `never` so the table can hold nine differently-argued thunks — the
+ * reducer only ever calls it with the argument that thunk was dispatched with.
  */
-const complianceThunks = [
-  startCertifierEngagement,
-  uploadComplianceDocument,
-  sendCertifierOutreach,
-  sendCertifierReply,
-  resolveComplianceDocument,
-  sendSignedCopies,
-  identifyComplianceDocument,
-  sendComplianceForReview,
-  refreshCertifierEngagement,
-] as const;
+function complianceOperation<Arg extends { projectId: string }>(
+  thunk: AsyncThunk<ComplianceResult, Arg, { rejectValue: string }>,
+  scope: (arg: Arg) => ComplianceScope,
+) {
+  return { thunk, scope: scope as (arg: never) => ComplianceScope };
+}
+
+const complianceOperations = [
+  complianceOperation(startCertifierEngagement, () => complianceScope.engagement),
+  complianceOperation(uploadComplianceDocument, complianceScope.document),
+  complianceOperation(sendCertifierOutreach, () => complianceScope.outreach),
+  complianceOperation(sendCertifierReply, () => complianceScope.reply),
+  complianceOperation(resolveComplianceDocument, complianceScope.document),
+  complianceOperation(sendSignedCopies, () => complianceScope.signedCopies),
+  complianceOperation(identifyComplianceDocument, complianceScope.document),
+  complianceOperation(sendComplianceForReview, () => complianceScope.review),
+  complianceOperation(refreshCertifierEngagement, () => complianceScope.refresh),
+];
+
+const complianceThunks = complianceOperations.map((operation) => operation.thunk);
+
+const complianceScopeByTypePrefix = new Map(
+  complianceOperations.map((operation) => [
+    operation.thunk.typePrefix,
+    operation.scope,
+  ]),
+);
+
+/**
+ * Which scope a compliance action belongs to.
+ *
+ * Falls back to the thunk's own prefix rather than throwing: an operation left
+ * out of the table above still gets a stable key of its own, so the worst case
+ * is a control that does not know it is busy — not a reducer that crashes
+ * mid-write and leaves the engagement half-replaced.
+ */
+function complianceScopeOf(action: {
+  type: string;
+  meta: { arg: unknown };
+}): ComplianceScope {
+  const typePrefix = action.type.slice(0, action.type.lastIndexOf("/"));
+  const scope = complianceScopeByTypePrefix.get(typePrefix);
+  return scope ? scope(action.meta.arg as never) : typePrefix;
+}
 
 const isComplianceThunkPending = isAnyOf(
   ...complianceThunks.map((thunk) => thunk.pending),
@@ -551,6 +663,12 @@ const projectsSlice = createSlice({
       state.projects = [...action.payload];
     },
     setActiveProject(state, action: PayloadAction<ProjectDetail | null>) {
+      // Scopes are keyed by document id and type, neither of which means
+      // anything on a different project. Carrying them across would leave a
+      // row on the new project reading the outcome of a write to another one.
+      if (state.activeProject?.id !== action.payload?.id) {
+        state.complianceMutations = {};
+      }
       state.activeProject = action.payload;
     },
     syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
@@ -688,6 +806,7 @@ const projectsSlice = createSlice({
       state.activeProject = null;
       state.optimisticUpdates = {};
       state.mutations = initialMutationState();
+      state.complianceMutations = {};
       state.uploadsByProjectId = {};
       state.detailUi.byProjectId = {};
     }
@@ -957,20 +1076,28 @@ const projectsSlice = createSlice({
           error: action.payload ?? action.error.message ?? "Unable to add photos to milestone",
         };
       })
-      // Compliance: every thunk lands the same way — one shared mutation flag
-      // and the engagement replaced wholesale — so they are registered through
-      // one matcher rather than eighteen near-identical cases.
-      .addMatcher(isComplianceThunkPending, (state) => {
-        state.mutations.compliance = { status: "pending", error: null };
+      // Compliance: every thunk lands the same way — the engagement replaced
+      // wholesale — so they are registered through one matcher rather than
+      // twenty-seven near-identical cases. What differs is where the status
+      // goes: each request files under its own scope, so several can be in
+      // flight at once without any of them speaking for the others.
+      .addMatcher(isComplianceThunkPending, (state, action) => {
+        state.complianceMutations[complianceScopeOf(action)] = {
+          status: "pending",
+          error: null,
+        };
       })
       .addMatcher(isComplianceThunkFulfilled, (state, action) => {
-        state.mutations.compliance = { status: "succeeded", error: null };
+        state.complianceMutations[complianceScopeOf(action)] = {
+          status: "succeeded",
+          error: null,
+        };
         if (state.activeProject?.id === action.payload.projectId) {
           state.activeProject.certifierEngagement = action.payload.engagement;
         }
       })
       .addMatcher(isComplianceThunkRejected, (state, action) => {
-        state.mutations.compliance = {
+        state.complianceMutations[complianceScopeOf(action)] = {
           status: "failed",
           error:
             action.payload ??
@@ -1007,6 +1134,40 @@ export const selectProjectDetailUiState = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => {
     return projectsState.detailUi.byProjectId[projectId] ?? defaultDetailUiState;
   });
+
+/** Shared so an untouched scope reads as one stable object, not a new one. */
+const IDLE_MUTATION: ProjectMutationState = { status: "idle", error: null };
+
+export const selectComplianceMutations = (state: RootState) =>
+  state.projects.complianceMutations;
+
+/**
+ * One scope's state, `idle` where nothing has been dispatched against it.
+ *
+ * A plain selector factory rather than a memoised one: it returns a value
+ * already in the store (or the shared idle object), so there is nothing to
+ * memoise and it is safe to build fresh on every render.
+ */
+export const selectComplianceMutation =
+  (scope: ComplianceScope) =>
+  (state: RootState): ProjectMutationState =>
+    state.projects.complianceMutations[scope] ?? IDLE_MUTATION;
+
+/**
+ * Whether any of the named scopes has a write in flight.
+ *
+ * Takes several because most controls depend on more than one: the review send
+ * is blocked by its own request and by a write to anything it carries, and
+ * offering it while a checklist item is still uploading would send a set the
+ * admin is halfway through changing. Returns a boolean, so the factory can be
+ * called inline without a re-render on every store change.
+ */
+export const selectIsCompliancePending =
+  (...scopes: ComplianceScope[]) =>
+  (state: RootState): boolean =>
+    scopes.some(
+      (scope) => state.projects.complianceMutations[scope]?.status === "pending",
+    );
 
 export const selectProjectUploadQueue = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => projectsState.uploadsByProjectId[projectId] ?? {});

@@ -16,7 +16,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { startCertifierEngagement } from "@/lib/store/slices/projectsSlice";
+import {
+  complianceScope,
+  selectComplianceMutation,
+  startCertifierEngagement,
+} from "@/lib/store/slices/projectsSlice";
 
 type StartCertifierEngagementModalProps = {
   projectId: string;
@@ -41,8 +45,11 @@ export function StartCertifierEngagementModal({
   onOpenChange,
 }: StartCertifierEngagementModalProps) {
   const dispatch = useAppDispatch();
+  // Only this engagement's own scope: the modal opens before anything else on
+  // the compliance file exists, but the store is shared with a tab that may
+  // still be finishing a write on another project's behalf.
   const mutation = useAppSelector(
-    (state) => state.projects.mutations.compliance,
+    selectComplianceMutation(complianceScope.engagement),
   );
   const isPending = mutation.status === "pending";
 
