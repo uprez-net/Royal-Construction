@@ -699,20 +699,14 @@ export function ModalManager() {
       );
     }
     case "complianceComplete": {
-      const {
-        projectId: id,
-        documentCount,
-        isResend,
-      } = modal.payload as {
+      const { projectId: id, documentCount } = modal.payload as {
         projectId: string;
         documentCount: number;
-        isResend?: boolean;
       };
       return (
         <ComplianceCompleteModal
           projectId={id}
           documentCount={documentCount}
-          isResend={isResend ?? false}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

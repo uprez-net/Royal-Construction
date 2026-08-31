@@ -1,31 +1,58 @@
 "use client";
 
-import { CheckCircle2, FileText } from "lucide-react";
-import { useMemo } from "react";
+import { CheckCircle2, FileText, MessagesSquare } from "lucide-react";
+import { useMemo, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   COMPLIANCE_DOCUMENT_SECTIONS,
   complianceDocumentLabel,
 } from "@/constants/complianceDocuments";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
-import type { ComplianceDocumentWithFiles } from "@/types/compliance";
+import type {
+  CertifierEmailRecord,
+  ComplianceDocumentWithFiles,
+} from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import { dataTimeFormat } from "@/utils/formatters";
+import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
+import { CertifierThreadModal } from "./certifier-thread-modal";
+
+type ComplianceFinalPageProps = {
+  documents: ComplianceDocumentWithFiles[];
+  projectId: string;
+  emails: CertifierEmailRecord[];
+  isSendingReply: boolean;
+  onSendReply: (input: {
+    body: string;
+    attachments: CertifierReplyAttachment[];
+  }) => Promise<void>;
+};
 
 /**
  * The completed compliance file.
  *
- * Shown once every document is approved and the section is frozen. Read-only by
- * construction: there is no control on this page, because the point of it is
- * that nothing here can change any more.
+ * Shown as soon as every document is approved and the section is frozen. The
+ * documents themselves are read-only by construction — nothing here can change
+ * any more — so the only controls are the two ways of looking at what is
+ * already there: a file preview, and the thread.
+ *
+ * The conversation is on this page rather than the tab behind it because the
+ * tab behind it no longer renders once the engagement closes, and the thread is
+ * the record of how the approval was reached — the part of a finished job
+ * anybody actually comes back for.
  */
 export function ComplianceFinalPage({
   documents,
-}: {
-  documents: ComplianceDocumentWithFiles[];
-}) {
+  projectId,
+  emails,
+  isSendingReply,
+  onSendReply,
+}: ComplianceFinalPageProps) {
   const dispatch = useAppDispatch();
+  const [isThreadOpen, setIsThreadOpen] = useState(false);
 
   // The gallery pool spans the whole finished file, not one division: someone
   // reviewing the completed job wants to page through every photo in it.
@@ -63,12 +90,12 @@ export function ComplianceFinalPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3 rounded-xl border border-success/40 bg-success-light px-4 py-3">
+      <div className="flex flex-wrap items-start gap-3 rounded-xl border border-success/40 bg-success-light px-4 py-3">
         <CheckCircle2
           className="mt-0.5 size-5 shrink-0 text-success-ink"
           aria-hidden="true"
         />
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="font-medium text-foreground">
             Compliance and certification complete
           </p>
@@ -77,6 +104,20 @@ export function ComplianceFinalPage({
             file is now read-only.
           </p>
         </div>
+        {/* The conversation outlives the engagement — it is the record of how
+            the approval was reached, and still the way to raise anything with
+            the certifier after the fact. */}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsThreadOpen(true)}
+        >
+          <MessagesSquare className="size-4" aria-hidden="true" />
+          Show certifier thread
+          {emails.length > 0 ? (
+            <Badge variant="secondary">{emails.length}</Badge>
+          ) : null}
+        </Button>
       </div>
 
       {byDivision.map((division) => (
@@ -136,6 +177,15 @@ export function ComplianceFinalPage({
           </ul>
         </section>
       ))}
+
+      <CertifierThreadModal
+        open={isThreadOpen}
+        onClose={() => setIsThreadOpen(false)}
+        projectId={projectId}
+        emails={emails}
+        isSending={isSendingReply}
+        onSend={onSendReply}
+      />
     </div>
   );
 }

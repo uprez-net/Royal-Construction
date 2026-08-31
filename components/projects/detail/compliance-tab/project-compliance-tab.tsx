@@ -96,16 +96,21 @@ const SIGNED_COPIES_SENT: ReadonlySet<CertifierEngagementStatus> = new Set([
 ]);
 
 /**
- * Statuses `sendComplianceForReview` will leave, mirrored from the server.
+ * Statuses the review send is offered from.
  *
- * The send is guarded on that transition, so prompting for it outside this set
- * offers a button whose only possible outcome is an error toast.
+ * Narrower than what `sendComplianceForReview` will accept, and deliberately
+ * so. The server still allows a re-send out of IN_REVIEW; nothing on the tab
+ * asks for one. The whole set goes over once, when the collection finishes for
+ * the first time — after that the file is with the certifier and a replacement
+ * is a message about one document, which the server already sends on its own
+ * with the new file attached. Offering the bulk send on top of that put two
+ * emails on the thread for a single upload, the second of them re-attaching
+ * every checklist file the certifier was already reading.
  */
 const READY_FOR_REVIEW_STATUSES: ReadonlySet<CertifierEngagementStatus> =
   new Set([
     CertifierEngagementStatus.CHECKLIST_TRACKING,
     CertifierEngagementStatus.INSURANCE,
-    CertifierEngagementStatus.IN_REVIEW,
   ]);
 
 /** The checklist evidence and the insurance certificate — what the send carries. */
@@ -115,7 +120,11 @@ const reviewSubmission = (engagement: CertifierEngagementDetail) =>
   );
 
 /**
- * Whether the collection phase is actually finished.
+ * Whether the collection phase has just finished, for the first time.
+ *
+ * Goes false the moment the file is with the certifier and never comes back:
+ * IN_REVIEW is not in the set above, so this is what holds the review send to
+ * one send.
  *
  * Measured over the send set alone, and gated on the checklist existing. Both
  * halves were learned the hard way: counting every document the builder
@@ -199,10 +208,6 @@ export function ProjectComplianceTab({
   const [insuranceAnswer, setInsuranceAnswer] = useState<"yes" | "no" | null>(
     null,
   );
-  // The finished file sits behind one more click, so returning to the tab after
-  // approval shows that the job is closed rather than dropping straight into a
-  // document index.
-  const [showFinalPage, setShowFinalPage] = useState(false);
   const [isThreadOpen, setIsThreadOpen] = useState(false);
   /**
    * Which blocks the reader has opened or shut by hand.
@@ -295,14 +300,6 @@ export function ProjectComplianceTab({
 
   const inReview = engagement?.status === CertifierEngagementStatus.IN_REVIEW;
   const allEvidenceIn = engagement ? isReadyForReview(engagement) : false;
-  // Only the checklist evidence is ever approved, so it alone decides whether
-  // the engagement is finished. Measuring this against every supplied document
-  // left it permanently short, on rows with no approve control to press.
-  const allApproved =
-    checklistItems.length > 0 &&
-    checklistItems.every(
-      (document) => document.status === ComplianceDocumentStatus.APPROVED,
-    );
 
   /**
    * Which controls a row shows.
@@ -391,11 +388,17 @@ export function ProjectComplianceTab({
   };
 
   /**
-   * Opens the completion prompt when the set has just become whole.
+   * Opens the completion prompt when the set becomes whole for the first time.
    *
    * Called with the engagement the server returned rather than from an effect,
    * so the decision is made against what was actually written instead of a
    * render that may not have happened yet.
+   *
+   * `isReadyForReview` is what holds it to the first time. Once the file has
+   * gone for review the engagement is past the statuses it reads, so replacing
+   * a checklist item there prompts nothing — which is the point. The server
+   * answers a replacement with its own message about that one document, and
+   * this used to put a second email behind it re-sending the entire set.
    */
   const promptIfComplete = (
     next: CertifierEngagementDetail | null,
@@ -409,25 +412,12 @@ export function ProjectComplianceTab({
     if (!isReviewSubmissionType(uploadedType)) return;
     if (!next || !isReadyForReview(next)) return;
 
-    // Already signed off. Re-uploading against an approved engagement is not a
-    // reason to ask whether to send it for approval again. Read off the
-    // checklist alone, because that is the only part anybody approves.
-    const closed = next.documents
-      .filter((document) => isApprovableDocumentType(document.documentType))
-      .every(
-        (document) => document.status === ComplianceDocumentStatus.APPROVED,
-      );
-    if (closed) return;
-
     dispatch(
       openModal({
         type: "complianceComplete",
         payload: {
           projectId: project.id,
           documentCount: reviewSubmission(next).length,
-          // Re-supplying after a rejection round reads differently from
-          // finishing the collection for the first time.
-          isResend: next.status === CertifierEngagementStatus.IN_REVIEW,
         },
       }),
     );
@@ -655,57 +645,22 @@ export function ProjectComplianceTab({
   }
 
   // ---------------------------------------------------------------------
-  // Everything approved — the section is closed, and the finished file is one
-  // click behind it.
+  // Everything approved — the finished file, straight away.
+  //
+  // It used to sit behind a "View final document list" button on a card whose
+  // only other content restated what the final page says in its own header.
+  // A closed engagement has one thing left to look at, so this shows it.
   // ---------------------------------------------------------------------
 
   if (engagement.status === CertifierEngagementStatus.APPROVED) {
-    if (showFinalPage) {
-      return <ComplianceFinalPage documents={engagement.documents} />;
-    }
-
     return (
-      <>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck
-                className="size-4 text-success-ink"
-                aria-hidden="true"
-              />
-              Compliance and Certification complete
-            </CardTitle>
-            <CardDescription>
-              The certifier has approved all {checklistItems.length} checklist
-              items. Nothing in this section can change now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => setShowFinalPage(true)}>
-              View final document list
-            </Button>
-            {/* The conversation outlives the engagement — it is the record of
-                how the approval was reached. */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsThreadOpen(true)}
-            >
-              <MessagesSquare className="size-4" aria-hidden="true" />
-              Show certifier thread
-            </Button>
-          </CardContent>
-        </Card>
-
-        <CertifierThreadModal
-          open={isThreadOpen}
-          onClose={() => setIsThreadOpen(false)}
-          projectId={project.id}
-          emails={engagement.emails}
-          isSending={isScopeBusy(complianceScope.reply)}
-          onSend={handleReply}
-        />
-      </>
+      <ComplianceFinalPage
+        documents={engagement.documents}
+        projectId={project.id}
+        emails={engagement.emails}
+        isSendingReply={isScopeBusy(complianceScope.reply)}
+        onSendReply={handleReply}
+      />
     );
   }
 
@@ -1290,19 +1245,18 @@ export function ProjectComplianceTab({
         </div>
 
         {/* -------------------------------------------------------------
-            Send for review — the first send and every re-send after a
-            round of rejections, which is what lets the loop finish.
+            Send for review — the one send that puts the file with the
+            certifier. On offer while the collection is still open, and
+            gone the moment it has happened.
 
             Full width and outside the grid on purpose: it is the one
             action that closes the whole engagement, so it must not sit
             inside a card that happens to be collapsed.
         ------------------------------------------------------------- */}
-        {allEvidenceIn && !allApproved ? (
+        {allEvidenceIn ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success-light px-4 py-3">
             <p className="flex-1 font-medium text-foreground">
-              {inReview
-                ? "Everything sent back has been re-supplied"
-                : "Compliance and Certification complete"}
+              Compliance and Certification complete
             </p>
             <Button
               type="button"
@@ -1314,7 +1268,6 @@ export function ProjectComplianceTab({
                     payload: {
                       projectId: project.id,
                       documentCount: submissionDocuments.length,
-                      isResend: inReview,
                     },
                   }),
                 )
@@ -1323,7 +1276,7 @@ export function ProjectComplianceTab({
               {submissionClaimed ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               ) : null}
-              {inReview ? "Re-send to Certifier" : "Send it to Certifier"}
+              Send it to Certifier
             </Button>
           </div>
         ) : null}

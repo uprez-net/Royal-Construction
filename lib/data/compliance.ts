@@ -1015,15 +1015,31 @@ export async function sendComplianceForReview(engagementId: string) {
     })),
   );
 
-  const sent = await sendCertifierReply(engagementId, {
-    body: [
-      "<p>Hi,</p>",
-      `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
-      "<p>Could you review it and let us know if anything needs revising?</p>",
-      "<p>Kind regards,<br/>Royal Constructions</p>",
-    ].join("\n"),
-    attachments,
-  });
+  let sent;
+  try {
+    sent = await sendCertifierReply(engagementId, {
+      body: [
+        "<p>Hi,</p>",
+        `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
+        "<p>Could you review it and let us know if anything needs revising?</p>",
+        "<p>Kind regards,<br/>Royal Constructions</p>",
+      ].join("\n"),
+      attachments,
+    });
+  } catch (error) {
+    // Give the status back. IN_REVIEW is what the tab reads to decide the file
+    // is with the certifier: it withdraws the send and freezes every row. The
+    // send is offered once, so leaving the status claimed after a send that
+    // never left the building strands the engagement — nothing left to press
+    // here, and nothing on the certifier's end to answer. Back to whatever it
+    // was a moment ago, which is the step the admin is actually still on.
+    await advanceEngagementStatus(
+      engagementId,
+      [CertifierEngagementStatus.IN_REVIEW],
+      engagement.status,
+    );
+    throw error;
+  }
 
   after(async () => {
     await notifyCompliance("complianceReviewSent", engagement.projectId, {
@@ -1032,6 +1048,76 @@ export async function sendComplianceForReview(engagementId: string) {
   });
 
   return sent;
+}
+
+/**
+ * "A", "A and B", "A, B and C" — a list a sentence can hold.
+ */
+function listSentence(items: readonly string[]): string {
+  if (items.length < 2) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * What the certifier still owes when the signatures go back, and the words for
+ * asking, in the order they are asked for.
+ *
+ * Only these two. The fee proposal and the CDC form are not chased here
+ * whatever our own vault says — we are attaching them back signed, so they
+ * plainly arrived, and a filing gap on our side is not something to ask the
+ * certifier to fix.
+ */
+const SIGNED_COPIES_FOLLOW_UPS: readonly {
+  type: ComplianceDocumentType;
+  phrase: string;
+}[] = [
+  { type: ComplianceDocumentType.CHECKLIST, phrase: "document checklist" },
+  { type: ComplianceDocumentType.INVOICE, phrase: "invoice" },
+];
+
+/**
+ * What to say when the signed copies go back.
+ *
+ * Written from what the certifier has actually sent rather than fixed, because
+ * the fixed version asked every certifier for their document checklist —
+ * including the ones who had attached it to the same email as the fee proposal
+ * and the CDC form, which is common. Asking someone to send a document that is
+ * already in our vault, in a reply to the mail they sent it on, is how a thread
+ * stops being read.
+ *
+ * So the ask covers only what is genuinely outstanding, and when the checklist
+ * is already in hand the mail says what happens next instead of asking for
+ * anything.
+ */
+function signedCopiesBody(engagement: CertifierEngagementDetail): string {
+  const received = new Set(
+    engagement.documents
+      .filter((doc) => doc.files.length > 0)
+      .map((doc) => doc.documentType),
+  );
+
+  const outstanding = SIGNED_COPIES_FOLLOW_UPS.filter(
+    (item) => !received.has(item.type),
+  ).map((item) => item.phrase);
+
+  const greeting = engagement.certifierName
+    ? `Hi ${escapeEmailHtml(engagement.certifierName)},`
+    : "Hi,";
+  const address = escapeEmailHtml(engagement.subjectAddress);
+
+  return [
+    `<p>${greeting}</p>`,
+    `<p>Please find the signed fee proposal and CDC application form for <strong>${address}</strong> attached.</p>`,
+    outstanding.length > 0
+      ? `<p>Could you send through your ${listSentence(outstanding)} when you are ready?</p>`
+      : null,
+    received.has(ComplianceDocumentType.CHECKLIST)
+      ? "<p>Your document checklist has already come through — we are working through it now and will send the evidence across as soon as it is together.</p>"
+      : null,
+    "<p>Kind regards,<br/>Royal Constructions</p>",
+  ]
+    .filter((paragraph): paragraph is string => paragraph !== null)
+    .join("\n");
 }
 
 /**
@@ -1045,6 +1131,9 @@ export async function sendComplianceForReview(engagementId: string) {
  * Guarded on the status transition rather than on a flag: `SIGNING` is reached
  * exactly once, so a double click, or two tabs both watching the same upload
  * complete, produce one email rather than two.
+ *
+ * What it says is `signedCopiesBody`'s job, and that depends on what the
+ * certifier has sent so far.
  */
 export async function sendSignedCopies(engagementId: string) {
   const engagement = await requireEngagement(engagementId);
@@ -1091,12 +1180,7 @@ export async function sendSignedCopies(engagementId: string) {
 
   try {
     await sendCertifierReply(engagementId, {
-      body: [
-        "<p>Hi,</p>",
-        `<p>Please find the signed fee proposal and CDC application form for <strong>${engagement.subjectAddress}</strong> attached.</p>`,
-        "<p>Could you send through your document checklist when you are ready?</p>",
-        "<p>Kind regards,<br/>Royal Constructions</p>",
-      ].join("\n"),
+      body: signedCopiesBody(engagement),
       attachments,
     });
   } catch (error) {

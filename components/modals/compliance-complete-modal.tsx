@@ -19,8 +19,6 @@ import { sendComplianceForReview } from "@/lib/store/slices/projectsSlice";
 type ComplianceCompleteModalProps = {
   projectId: string;
   documentCount: number;
-  /** True on a re-send, after the certifier sent something back. */
-  isResend: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -29,9 +27,10 @@ type ComplianceCompleteModalProps = {
  * The prompt that closes out the collection phase.
  *
  * Opened by the upload that completes the set, and reachable again from the
- * banner on the tab — the same modal serves the first send and every re-send
- * after a round of rejections, because from the certifier's side they are the
- * same act.
+ * banner on the tab, which are the same moment reached two ways. It is a
+ * once-per-engagement prompt: a replacement made after the file has gone to
+ * the certifier is answered by its own message about that one document, not by
+ * offering to send the set a second time.
  *
  * Sending is a deliberate click rather than something that happens on the
  * upload: it puts every document beyond the admin's reach until the certifier
@@ -40,7 +39,6 @@ type ComplianceCompleteModalProps = {
 export function ComplianceCompleteModal({
   projectId,
   documentCount,
-  isResend,
   open,
   onOpenChange,
 }: ComplianceCompleteModalProps) {
@@ -78,9 +76,7 @@ export function ComplianceCompleteModal({
             Compliance and Certification complete
           </DialogTitle>
           <DialogDescription>
-            {isResend
-              ? `Everything the certifier sent back has been re-supplied. All ${documentCount} documents are ready to go again.`
-              : `All ${documentCount} documents are collected. Sending them puts the file with the certifier for review — nothing can be changed until they answer.`}
+            {`All ${documentCount} documents are collected. Sending them puts the file with the certifier for review — nothing can be changed until they answer.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -99,7 +95,7 @@ export function ComplianceCompleteModal({
             ) : (
               <Send className="size-4" aria-hidden="true" />
             )}
-            {isResend ? "Re-send to Certifier" : "Send it to Certifier"}
+            Send it to Certifier
           </Button>
         </DialogFooter>
       </DialogContent>
