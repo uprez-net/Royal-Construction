@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ProjectDetail } from "@/types/project";
-import type { File as DBFile } from "@prisma/client";
+import { ComplianceDocumentType, type File as DBFile } from "@prisma/client";
 import type {
   ProjectRequirementsPayload,
   ProjectFlowSectionKey,
@@ -54,7 +54,10 @@ import {
 } from "lucide-react";
 import { UploadButton } from "@/components/common/upload-button";
 import { useAppDispatch } from "@/lib/store/hooks";
-import { setActiveProject } from "@/lib/store/slices/projectsSlice";
+import {
+  setActiveProject,
+  uploadComplianceDocument,
+} from "@/lib/store/slices/projectsSlice";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
 import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
@@ -1674,6 +1677,31 @@ export function ProjectOverviewTab({
 
     editDraft(() => nextDraft);
     await handleSave(nextDraft);
+
+    // One certificate, filed in both places it is needed. The compliance
+    // checklist asks for home insurance too, and without this the same PDF had
+    // to be uploaded a second time over there — against a row the certifier is
+    // waiting on, which is the half more likely to be forgotten.
+    //
+    // Only when an engagement exists to file it against, and never fatal: the
+    // number and the document reference are already saved above, and a project
+    // with no certifier yet has nowhere to put this and needs nothing doing.
+    if (project.certifierEngagement) {
+      try {
+        await dispatch(
+          uploadComplianceDocument({
+            projectId: project.id,
+            fileId: file.id,
+            documentType: ComplianceDocumentType.HOME_INSURANCE,
+          }),
+        ).unwrap();
+      } catch (error) {
+        console.error(
+          "Saved the HBCF certificate, but could not file it on the compliance checklist",
+          error,
+        );
+      }
+    }
   };
 
   const tender = (draft.sourceDocuments?.tender ?? {

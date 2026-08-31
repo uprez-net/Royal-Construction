@@ -17,6 +17,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
 import { webMcpJson } from "@/components/webmcp/tool-result";
+import { filePreviewModal } from "@/utils/file-preview";
 
 /** Module-level so the registration hook's declaration hash stays stable. */
 const projectFilesToolSchema = {
@@ -172,14 +173,24 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
       <CardContent className="p-4">
         <DataTable
           onRowClick={(index) => {
-            const file = visibleFiles[index];
-            dispatch(
-              openModal({
-                type: "previewFile",
-                payload: { fileUrl: file.url },
-              }),
+            // Clicking a picture opens the gallery over every other image in
+            // the filtered list, not just the one row — the search term the
+            // user typed is what defines "the rest of the images" here.
+            const action = filePreviewModal(
+              // Mapped rather than passed through: `filename` is this model's
+              // name field, and leaving the helper to fall back to parsing the
+              // blob URL would work only for as long as the path keeps
+              // embedding the name.
+              visibleFiles.map((candidate) => ({
+                url: candidate.url,
+                name: candidate.filename,
+                fileType: candidate.fileType,
+              })),
+              index,
             );
+            if (action) dispatch(openModal(action));
           }}
+          rowLabel={(index) => `Open ${visibleFiles[index]?.filename ?? "document"}`}
           caption="Documents uploaded to this project, with size, type, linked milestone and upload time."
           headers={["#", "Name", "Size", "Type", "Milestone", "Uploaded"]}
           align={["end", "start", "end", "start", "start", "start"]}

@@ -117,6 +117,21 @@ const projectDetailInclude = {
   },
   files: true,
   materials: true,
+  // Carried on the detail payload rather than fetched by the tab, so the tab
+  // badge, the tab body and the compliance alert all read one consistent
+  // snapshot instead of three that can disagree mid-render.
+  certifierEngagement: {
+    include: {
+      // Single-key sort: the surrounding `as const` would otherwise make a
+      // tuple Prisma will not accept. `order` is assigned densely per
+      // engagement, so a tie-break is not needed.
+      documents: {
+        include: { files: true },
+        orderBy: { order: "asc" as const },
+      },
+      emails: { orderBy: { sentAt: "asc" as const } },
+    },
+  },
 } as const;
 
 const defaultPageSize = 12;

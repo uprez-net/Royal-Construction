@@ -149,6 +149,7 @@ export const PROJECT_TAB_TOOLS: Record<
     docs: ["get_project_files"],
     history: [],
     communications: [],
+    compliance: []
 };
 
 /** Everything reachable in a lead's offer workspace. Not keyed by section. */

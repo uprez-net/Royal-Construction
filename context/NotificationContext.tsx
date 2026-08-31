@@ -15,6 +15,9 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { certifierExtractPayloadFromUrl } from "@/components/notification/notification-item";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -44,6 +47,7 @@ export const NotificationProvider = ({
 }) => {
   const { user, isLoaded } = useUser();
   const queryClient = useQueryClient();
+  const dispatch = useAppDispatch();
 
   const novu = useMemo(() => {
     if (!isLoaded || !user) return null;
@@ -121,6 +125,21 @@ export const NotificationProvider = ({
           return [data.result, ...old];
         },
       );
+
+      // A certifier reply carrying a checklist opens the extraction popup as
+      // it arrives, rather than waiting for someone to notice the bell. The
+      // routing rides the redirect url because triggerNotification carries no
+      // structured payload; the same predicate backs the click-to-open button
+      // in notification-item.tsx.
+      const url = data.result.redirect?.url;
+      if (url && url.includes("action=certifierExtract")) {
+        const payload = certifierExtractPayloadFromUrl(url);
+        if (payload) {
+          dispatch(
+            openModal({ type: "certifierExtract", payload }),
+          );
+        }
+      }
     },
   );
 

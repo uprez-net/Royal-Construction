@@ -134,5 +134,65 @@ export const activityLogSchemas = {
         milestoneId: z.string(),
         milestoneName: z.string(),
         fileCount: z.number(),
-    })
+    }),
+
+    // --- Compliance and certification -------------------------------------
+    // Every payload carries projectId because ActivityLog.projectId is
+    // non-null; the engagement is reached through the project, never the other
+    // way round. The actor is named in the payload rather than in authorId,
+    // which logAction does not persist.
+
+    certifierOutreachSent: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        certifierEmail: z.string(),
+        refToken: z.string(),
+        documentCount: z.number(),
+    }),
+
+    certifierReplySent: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        certifierEmail: z.string(),
+        attachmentCount: z.number(),
+    }),
+
+    certifierResponseReceived: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        emailFrom: z.string(),
+        subject: z.string(),
+        attachmentCount: z.number(),
+    }),
+
+    complianceDocumentUploaded: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        documentId: z.string(),
+        documentLabel: z.string(),
+        fileName: z.string(),
+    }),
+
+    complianceDocumentApproved: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        documentId: z.string(),
+        documentLabel: z.string(),
+        resolvedBy: z.string(),
+    }),
+
+    complianceDocumentRejected: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        documentId: z.string(),
+        documentLabel: z.string(),
+        resolvedBy: z.string(),
+        rejectionReason: z.string(),
+    }),
+
+    checklistExtracted: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        itemCount: z.number(),
+    }),
 }

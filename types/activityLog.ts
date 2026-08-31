@@ -211,6 +211,76 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
         milestoneId: data.milestoneId,
     }),
+
+    // --- Compliance and certification -------------------------------------
+    // These are the audit trail for a process that runs largely over email,
+    // where the only other record of what was sent and when lives in a mailbox
+    // nobody on the project can see.
+
+    certifierOutreachSent: (data) => ({
+        id: uuidv4(),
+        type: "certifierOutreachSent",
+        message: `Sent ${data.documentCount} document${data.documentCount === 1 ? "" : "s"} to the certifier at ${data.certifierEmail} (${data.refToken})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    certifierReplySent: (data) => ({
+        id: uuidv4(),
+        type: "certifierReplySent",
+        message: data.attachmentCount > 0
+            ? `Replied to the certifier at ${data.certifierEmail} with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`
+            : `Replied to the certifier at ${data.certifierEmail}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    certifierResponseReceived: (data) => ({
+        id: uuidv4(),
+        type: "certifierResponseReceived",
+        message: `Certifier replied from ${data.emailFrom}: "${data.subject}" with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDocumentUploaded: (data) => ({
+        id: uuidv4(),
+        type: "complianceDocumentUploaded",
+        message: `${data.documentLabel} uploaded (${data.fileName})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDocumentApproved: (data) => ({
+        id: uuidv4(),
+        type: "complianceDocumentApproved",
+        message: `${data.documentLabel} approved by ${data.resolvedBy}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDocumentRejected: (data) => ({
+        id: uuidv4(),
+        type: "complianceDocumentRejected",
+        message: `${data.documentLabel} rejected by ${data.resolvedBy}: ${data.rejectionReason}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    checklistExtracted: (data) => ({
+        id: uuidv4(),
+        type: "checklistExtracted",
+        message: `Certifier checklist extracted into ${data.itemCount} tracked item${data.itemCount === 1 ? "" : "s"}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
 };
 
 /**

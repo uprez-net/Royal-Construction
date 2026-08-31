@@ -55,6 +55,13 @@ import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
 import FilePreviewCanvas from "../shared/file-preview-canvas";
+import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
+import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
+import { CertifierExtractModal } from "./certifier-extract-modal";
+import { CertifierPackReadyModal } from "./certifier-pack-ready-modal";
+import { CertifierSendSignedCopiesModal } from "./certifier-send-signed-copies-modal";
+import { ComplianceCompleteModal } from "./compliance-complete-modal";
+import { ComplianceRejectModal } from "./compliance-reject-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -595,6 +602,148 @@ export function ModalManager() {
           key={fileUrl} // extra safety net — forces a clean remount
           url={fileUrl}
           onClose={handleClose} // swap in your actual close action
+        />
+      );
+    }
+    case "startCertifierEngagement": {
+      const { projectId: id, defaultAddress } = modal.payload as {
+        projectId: string;
+        defaultAddress: string;
+      };
+      return (
+        <StartCertifierEngagementModal
+          projectId={id}
+          defaultAddress={defaultAddress}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierDiscovery": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <CertifierDiscoveryModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierPackReady": {
+      const {
+        projectId: id,
+        documentCount,
+        updatedCount,
+        isResend,
+      } = modal.payload as {
+        projectId: string;
+        documentCount: number;
+        updatedCount: number;
+        isResend?: boolean;
+      };
+      return (
+        <CertifierPackReadyModal
+          projectId={id}
+          documentCount={documentCount}
+          updatedCount={updatedCount}
+          isResend={isResend ?? false}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierExtract": {
+      const {
+        projectId: id,
+        engagementId,
+        documentId,
+      } = modal.payload as {
+        projectId: string;
+        engagementId: string;
+        documentId?: string;
+      };
+      // Both entry points guarantee this — the tab's button is disabled until a
+      // checklist exists, and the notification url is only parsed into a
+      // payload when it carries one. Kept as a guard rather than a cast so a
+      // third caller cannot quietly open a modal with nothing to run.
+      if (!documentId) {
+        return null;
+      }
+      return (
+        // Scoped to the modal, as the createProject case is: the provider holds
+        // one run, and a second stream opened elsewhere would overwrite it.
+        <WorkflowStreamProvider initialRunId={""}>
+          <CertifierExtractModal
+            projectId={id}
+            engagementId={engagementId}
+            documentId={documentId}
+            open
+            onOpenChange={(open) => {
+              if (!open) handleClose();
+            }}
+          />
+        </WorkflowStreamProvider>
+      );
+    }
+    case "certifierSendSignedCopies": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <CertifierSendSignedCopiesModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceComplete": {
+      const {
+        projectId: id,
+        documentCount,
+        isResend,
+      } = modal.payload as {
+        projectId: string;
+        documentCount: number;
+        isResend?: boolean;
+      };
+      return (
+        <ComplianceCompleteModal
+          projectId={id}
+          documentCount={documentCount}
+          isResend={isResend ?? false}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceReject": {
+      const {
+        projectId: id,
+        documentId,
+        documentLabel,
+      } = modal.payload as {
+        projectId: string;
+        documentId: string;
+        documentLabel: string;
+      };
+      return (
+        <ComplianceRejectModal
+          projectId={id}
+          documentId={documentId}
+          documentLabel={documentLabel}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
         />
       );
     }

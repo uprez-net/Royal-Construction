@@ -94,7 +94,7 @@ export function OfferTable({
 }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { offers: stateOffers, loading } = useAppSelector(
+  const { offers: stateOffers, filters, loading } = useAppSelector(
     (state) => state.offers,
   );
   const [expandedLeadIds, setExpandedLeadIds] = useState<number[]>([]);
@@ -115,7 +115,17 @@ export function OfferTable({
       // Expansion is keyed by lead id, which only identifies a row on the page
       // it was opened from, so a page change closes everything.
       setExpandedLeadIds([]);
-      await dispatch(fetchOffers({ page, limit: offers.limit })).unwrap();
+      // Reuse the store's active filters so paginating after a tab/search
+      // selection keeps that selection. The old call dropped both, which reset
+      // the table to the unfiltered list on every page beyond the first.
+      await dispatch(
+        fetchOffers({
+          page,
+          limit: offers.limit,
+          status: filters.status,
+          q: filters.q,
+        }),
+      ).unwrap();
     } catch (error) {
       console.error("Error fetching offers for page", page, error);
       toast.error("Failed to load offers for page " + page);

@@ -1,4 +1,11 @@
-import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSelector,
+  createSlice,
+  isAnyOf,
+  type AsyncThunk,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 
 import type { RootState } from "@/lib/store";
 
@@ -18,15 +25,40 @@ import {
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
-import type { File as ProjectFiles } from "@prisma/client"
+import type { ComplianceDocumentType, File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
+import type { CertifierEngagementDetail } from "@/types/compliance";
+import type {
+  CertifierReplyInput,
+  ClassifyReceivedDocumentInput,
+  ComplianceDocumentUploadInput,
+  ResolveComplianceDocumentInput,
+  StartEngagementInput,
+} from "@/utils/validators/compliance";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
 import { createProjectWithLead, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
 import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
 
-type MutationKey = "createProject" | "createVariation" | "addUpdate" | "addMaterial" | "createTradieSchedule" | "addMilestone" | "updateMilestone" | "addMilestonePhotos";
+type MutationKey =
+  | "createProject"
+  | "createVariation"
+  | "addUpdate"
+  | "addMaterial"
+  | "createTradieSchedule"
+  | "addMilestone"
+  | "updateMilestone"
+  | "addMilestonePhotos";
 
 type ProjectsMutationState = Record<MutationKey, ProjectMutationState>;
+
+/**
+ * In-flight compliance work, filed one entry per {@link ComplianceScope}.
+ *
+ * Absent means idle. Entries are written on the first request against a scope
+ * and left behind afterwards, so a caller can read the outcome of the last
+ * write to a row as well as whether one is running now.
+ */
+type ComplianceMutationState = Record<ComplianceScope, ProjectMutationState>;
 
 type ProjectUploadState = Record<string, Record<string, ProjectUploadRecord>>;
 
@@ -35,6 +67,14 @@ export interface ProjectsState {
   activeProject: ProjectDetail | null;
   optimisticUpdates: Record<string, Partial<Record<string, unknown>>>;
   mutations: ProjectsMutationState;
+  /**
+   * Compliance writes, tracked per scope rather than as one flag.
+   *
+   * Separate from `mutations` because it is keyed by a value rather than by a
+   * fixed set of names — the tab has one scope per document row, and those are
+   * only known once the engagement has been read.
+   */
+  complianceMutations: ComplianceMutationState;
   uploadsByProjectId: ProjectUploadState;
   detailUi: {
     byProjectId: Record<
@@ -70,6 +110,7 @@ const initialState: ProjectsState = {
   activeProject: null,
   optimisticUpdates: {},
   mutations: initialMutationState(),
+  complianceMutations: {},
   uploadsByProjectId: {},
   detailUi: {
     byProjectId: {},
@@ -260,6 +301,351 @@ export const addMilestonePhotos = createAsyncThunk<
   }
 });
 
+
+/* -------------------------------------------------------------------------- */
+/*                        Compliance and certification                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The unit of "something is being written" on the compliance file.
+ *
+ * One shared flag was the wrong grain. The tab carries an upload control on
+ * every document row plus four sends and a thread composer, and a single
+ * `pending` disabled all of them for the duration of any one request — so
+ * replacing a checklist photo froze the five rows beside it, the composer, and
+ * the send bar, for as long as the transfer took.
+ *
+ * A scope is coarser than a thunk and finer than the tab: it names the thing
+ * being written, not the request writing it. Two requests against the same row
+ * still serialise, which is what anybody expects of Replace and Approve on one
+ * document, while work on different rows runs side by side.
+ */
+export type ComplianceScope = string;
+
+/** How a request names the row it is writing to. */
+type ComplianceDocumentTarget = {
+  documentId?: string | null;
+  documentType?: ComplianceDocumentType | null;
+};
+
+export const complianceScope = {
+  /** Opening the engagement — nothing else exists yet, so it stands alone. */
+  engagement: "engagement" as ComplianceScope,
+  /** The required pack going out to the certifier. */
+  outreach: "outreach" as ComplianceScope,
+  /** Both signed forms going back. */
+  signedCopies: "signed-copies" as ComplianceScope,
+  /** The submission that closes collection. */
+  review: "review" as ComplianceScope,
+  /** One message on the thread. */
+  reply: "reply" as ComplianceScope,
+  /** A plain re-read. Writes nothing, so nothing should block on it. */
+  refresh: "refresh" as ComplianceScope,
+  /**
+   * One document row.
+   *
+   * Keyed by id where the row has one and by type where it does not, because
+   * the first upload against a signed copy or the insurance certificate is what
+   * creates the row it targets — there is no id to key on until it lands. The
+   * id wins whenever both are supplied so that an upload and the approve that
+   * follows it file under the same scope rather than two.
+   */
+  document: ({
+    documentId,
+    documentType,
+  }: ComplianceDocumentTarget): ComplianceScope =>
+    documentId ? `document:${documentId}` : `type:${documentType ?? "unknown"}`,
+} as const;
+
+/**
+ * Every compliance mutation returns the whole engagement.
+ *
+ * The alternative — patching individual documents into the store — means the
+ * reducer has to know which of a dozen server-side transitions just happened,
+ * because approving the last document also moves the engagement's own status
+ * and one write changes two things. Returning the engagement makes the store a
+ * copy of the server's answer instead of a second opinion about it.
+ */
+async function replaceEngagement(
+  projectId: string,
+  path: string,
+  init: RequestInit,
+  fallbackMessage: string,
+) {
+  await fetchJson<unknown>(
+    `/api/projects/${projectId}/compliance${path}`,
+    init,
+    fallbackMessage,
+  );
+  const refreshed = await fetchJson<CertifierEngagementDetail | null>(
+    `/api/projects/${projectId}/compliance`,
+    { method: "GET" },
+    fallbackMessage,
+  );
+  return { projectId, engagement: refreshed.data };
+}
+
+const jsonPost = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export const startCertifierEngagement = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string } & StartEngagementInput,
+  { rejectValue: string }
+>("projects/startCertifierEngagement", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "",
+      jsonPost(payload),
+      "Unable to start the certifier engagement",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to start the certifier engagement",
+    );
+  }
+});
+
+export const uploadComplianceDocument = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string } & ComplianceDocumentUploadInput,
+  { rejectValue: string }
+>("projects/uploadComplianceDocument", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/documents",
+      jsonPost(payload),
+      "Unable to attach the uploaded document",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to attach the uploaded document",
+    );
+  }
+});
+
+export const sendCertifierOutreach = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/sendCertifierOutreach", async ({ projectId }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/outreach",
+      { method: "POST" },
+      "Unable to send the documents to the certifier",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to send the documents to the certifier",
+    );
+  }
+});
+
+export const sendCertifierReply = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string } & CertifierReplyInput,
+  { rejectValue: string }
+>("projects/sendCertifierReply", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/reply",
+      jsonPost(payload),
+      "Unable to send the reply",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to send the reply",
+    );
+  }
+});
+
+export const resolveComplianceDocument = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string } & ResolveComplianceDocumentInput,
+  { rejectValue: string }
+>("projects/resolveComplianceDocument", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      `/documents/${payload.documentId}/resolve`,
+      jsonPost(payload),
+      "Unable to resolve the document",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to resolve the document",
+    );
+  }
+});
+
+export const sendSignedCopies = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/sendSignedCopies", async ({ projectId }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/signed-copies",
+      { method: "POST" },
+      "Unable to send the signed copies",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to send the signed copies",
+    );
+  }
+});
+
+export const identifyComplianceDocument = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string; documentId: string } & ClassifyReceivedDocumentInput,
+  { rejectValue: string }
+>(
+  "projects/identifyComplianceDocument",
+  async ({ projectId, documentId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/documents/${documentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        "Unable to identify the document",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to identify the document",
+      );
+    }
+  },
+);
+
+export const sendComplianceForReview = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/sendComplianceForReview", async ({ projectId }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/review",
+      { method: "POST" },
+      "Unable to send the file to the certifier",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to send the file to the certifier",
+    );
+  }
+});
+
+/**
+ * Refreshes the engagement without mutating anything.
+ *
+ * Used after the discovery modal and the checklist workflow, both of which
+ * write through their own routes and leave the store a version behind.
+ */
+export const refreshCertifierEngagement = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string },
+  { rejectValue: string }
+>("projects/refreshCertifierEngagement", async ({ projectId }, thunkApi) => {
+  try {
+    const response = await fetchJson<CertifierEngagementDetail | null>(
+      `/api/projects/${projectId}/compliance`,
+      { method: "GET" },
+      "Unable to load the compliance file",
+    );
+    return { projectId, engagement: response.data };
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to load the compliance file",
+    );
+  }
+});
+
+/** What every compliance thunk resolves to: the engagement, wholesale. */
+type ComplianceResult = {
+  projectId: string;
+  engagement: CertifierEngagementDetail | null;
+};
+
+/**
+ * Pairs a compliance thunk with the scope its state is filed under.
+ *
+ * Written as a table rather than as a switch on `action.type` for the same
+ * reason `isAnyOf` is preferred over a prefix check: a type string typed by
+ * hand fails silently at runtime, whereas a scope function that cannot read the
+ * thunk's own argument is a type error on this line. The scope is stored
+ * accepting `never` so the table can hold nine differently-argued thunks — the
+ * reducer only ever calls it with the argument that thunk was dispatched with.
+ */
+function complianceOperation<Arg extends { projectId: string }>(
+  thunk: AsyncThunk<ComplianceResult, Arg, { rejectValue: string }>,
+  scope: (arg: Arg) => ComplianceScope,
+) {
+  return { thunk, scope: scope as (arg: never) => ComplianceScope };
+}
+
+const complianceOperations = [
+  complianceOperation(startCertifierEngagement, () => complianceScope.engagement),
+  complianceOperation(uploadComplianceDocument, complianceScope.document),
+  complianceOperation(sendCertifierOutreach, () => complianceScope.outreach),
+  complianceOperation(sendCertifierReply, () => complianceScope.reply),
+  complianceOperation(resolveComplianceDocument, complianceScope.document),
+  complianceOperation(sendSignedCopies, () => complianceScope.signedCopies),
+  complianceOperation(identifyComplianceDocument, complianceScope.document),
+  complianceOperation(sendComplianceForReview, () => complianceScope.review),
+  complianceOperation(refreshCertifierEngagement, () => complianceScope.refresh),
+];
+
+const complianceThunks = complianceOperations.map((operation) => operation.thunk);
+
+const complianceScopeByTypePrefix = new Map(
+  complianceOperations.map((operation) => [
+    operation.thunk.typePrefix,
+    operation.scope,
+  ]),
+);
+
+/**
+ * Which scope a compliance action belongs to.
+ *
+ * Falls back to the thunk's own prefix rather than throwing: an operation left
+ * out of the table above still gets a stable key of its own, so the worst case
+ * is a control that does not know it is busy — not a reducer that crashes
+ * mid-write and leaves the engagement half-replaced.
+ */
+function complianceScopeOf(action: {
+  type: string;
+  meta: { arg: unknown };
+}): ComplianceScope {
+  const typePrefix = action.type.slice(0, action.type.lastIndexOf("/"));
+  const scope = complianceScopeByTypePrefix.get(typePrefix);
+  return scope ? scope(action.meta.arg as never) : typePrefix;
+}
+
+const isComplianceThunkPending = isAnyOf(
+  ...complianceThunks.map((thunk) => thunk.pending),
+);
+const isComplianceThunkFulfilled = isAnyOf(
+  ...complianceThunks.map((thunk) => thunk.fulfilled),
+);
+const isComplianceThunkRejected = isAnyOf(
+  ...complianceThunks.map((thunk) => thunk.rejected),
+);
+
 const projectsSlice = createSlice({
   name: "projects",
   initialState,
@@ -277,6 +663,12 @@ const projectsSlice = createSlice({
       state.projects = [...action.payload];
     },
     setActiveProject(state, action: PayloadAction<ProjectDetail | null>) {
+      // Scopes are keyed by document id and type, neither of which means
+      // anything on a different project. Carrying them across would leave a
+      // row on the new project reading the outcome of a write to another one.
+      if (state.activeProject?.id !== action.payload?.id) {
+        state.complianceMutations = {};
+      }
       state.activeProject = action.payload;
     },
     syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
@@ -414,6 +806,7 @@ const projectsSlice = createSlice({
       state.activeProject = null;
       state.optimisticUpdates = {};
       state.mutations = initialMutationState();
+      state.complianceMutations = {};
       state.uploadsByProjectId = {};
       state.detailUi.byProjectId = {};
     }
@@ -682,6 +1075,35 @@ const projectsSlice = createSlice({
           status: "failed",
           error: action.payload ?? action.error.message ?? "Unable to add photos to milestone",
         };
+      })
+      // Compliance: every thunk lands the same way — the engagement replaced
+      // wholesale — so they are registered through one matcher rather than
+      // twenty-seven near-identical cases. What differs is where the status
+      // goes: each request files under its own scope, so several can be in
+      // flight at once without any of them speaking for the others.
+      .addMatcher(isComplianceThunkPending, (state, action) => {
+        state.complianceMutations[complianceScopeOf(action)] = {
+          status: "pending",
+          error: null,
+        };
+      })
+      .addMatcher(isComplianceThunkFulfilled, (state, action) => {
+        state.complianceMutations[complianceScopeOf(action)] = {
+          status: "succeeded",
+          error: null,
+        };
+        if (state.activeProject?.id === action.payload.projectId) {
+          state.activeProject.certifierEngagement = action.payload.engagement;
+        }
+      })
+      .addMatcher(isComplianceThunkRejected, (state, action) => {
+        state.complianceMutations[complianceScopeOf(action)] = {
+          status: "failed",
+          error:
+            action.payload ??
+            action.error.message ??
+            "Unable to update the compliance file",
+        };
       });
   }
 });
@@ -712,6 +1134,40 @@ export const selectProjectDetailUiState = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => {
     return projectsState.detailUi.byProjectId[projectId] ?? defaultDetailUiState;
   });
+
+/** Shared so an untouched scope reads as one stable object, not a new one. */
+const IDLE_MUTATION: ProjectMutationState = { status: "idle", error: null };
+
+export const selectComplianceMutations = (state: RootState) =>
+  state.projects.complianceMutations;
+
+/**
+ * One scope's state, `idle` where nothing has been dispatched against it.
+ *
+ * A plain selector factory rather than a memoised one: it returns a value
+ * already in the store (or the shared idle object), so there is nothing to
+ * memoise and it is safe to build fresh on every render.
+ */
+export const selectComplianceMutation =
+  (scope: ComplianceScope) =>
+  (state: RootState): ProjectMutationState =>
+    state.projects.complianceMutations[scope] ?? IDLE_MUTATION;
+
+/**
+ * Whether any of the named scopes has a write in flight.
+ *
+ * Takes several because most controls depend on more than one: the review send
+ * is blocked by its own request and by a write to anything it carries, and
+ * offering it while a checklist item is still uploading would send a set the
+ * admin is halfway through changing. Returns a boolean, so the factory can be
+ * called inline without a re-render on every store change.
+ */
+export const selectIsCompliancePending =
+  (...scopes: ComplianceScope[]) =>
+  (state: RootState): boolean =>
+    scopes.some(
+      (scope) => state.projects.complianceMutations[scope]?.status === "pending",
+    );
 
 export const selectProjectUploadQueue = (projectId: string) =>
   createSelector(selectProjectsState, (projectsState) => projectsState.uploadsByProjectId[projectId] ?? {});

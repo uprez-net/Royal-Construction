@@ -4,7 +4,7 @@ import { cacheTag, cacheLife, revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { startOfWeek, subWeeks } from "date-fns";
-import { KPIResult, OfferGroup, OfferKPIs, OfferWithLead, PaginatedOfferGroupResult } from "@/types/offer";
+import { KPIResult, OfferGroup, OfferKPIs, OfferStatusBucket, OfferWithLead, PaginatedOfferGroupResult } from "@/types/offer";
 import { calculateTrend } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
@@ -13,24 +13,69 @@ import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
 
 /**
+ * Maps a filter tab to the set of `OfferStatus` values its representative
+ * revision may be in. `all` is the absence of a status filter. The memberships
+ * are duplicated from `getOfferKPIs`'s raw SQL on purpose: the tab counts come
+ * from the KPI cards, so a lead must land in the same bucket whether it is
+ * counted (KPI) or filtered (table). The buckets overlap (e.g. TENDER_SENT is
+ * both sent and approved) to match the KPI query exactly.
+ */
+const OFFER_STATUS_BUCKETS: Record<Exclude<OfferStatusBucket, "all">, OfferStatus[]> = {
+    pending: ["PENDING"],
+    approved: ["ACCEPTED", "AGREED", "TENDER_DRAFT", "TENDER_SENT", "TENDER_SIGNED", "CONTRACT_DRAFT", "CONTRACT_SENT", "CONTRACT_SIGNED", "PROJECT"],
+    rejected: ["REJECTED", "OFFER_DECLINED", "TENDER_DECLINED", "CONTRACT_DECLINED"],
+    sent: ["SENT", "TENDER_SENT", "CONTRACT_SENT"],
+};
+
+/**
  * Offer listing, grouped into one row per lead.
  *
  * A lead accumulates one `Offer` row per revision, so a flat listing showed the
  * same client three or four times over. Pagination therefore runs over leads
  * (the unit the table renders) and every revision for the leads on the page is
  * fetched alongside them, which is what the expandable version history reads.
+ *
+ * Status filtering is over the *representative* revision (active else highest
+ * revision number), the same selection rule `getOfferKPIs` uses, so a lead is
+ * counted and filtered in the bucket of the revision that is actually live.
  */
-export async function getOfferGroups(page?: number, limit?: number, q?: string): Promise<PaginatedOfferGroupResult> {
+export async function getOfferGroups(
+    page?: number,
+    limit?: number,
+    q?: string,
+    status: OfferStatusBucket = "all",
+): Promise<PaginatedOfferGroupResult> {
     const safePage = Number.isFinite(page) && (page ?? 1) > 0 ? Math.floor(page ?? 1) : 1;
     const safeLimit = Number.isFinite(limit) && (limit ?? 12) > 0 ? Math.min(Math.floor(limit ?? 12), 100) : 12;
     const safeQuery = (q && q.trim() !== "") ? q.trim() : undefined;
+    const bucketStatuses = status && status !== "all" ? OFFER_STATUS_BUCKETS[status] : null;
     try {
+        // Leads whose representative revision lands in the selected status
+        // bucket. Computed up front with the same DISTINCT ON rule the KPIs use,
+        // so the filter and the KPI cards agree on which revision speaks for a
+        // lead. An empty result set is meaningful ("no leads in this bucket"),
+        // so `id IN ([])` correctly yields no rows.
+        let leadIdsInBucket: number[] | null = null;
+        if (bucketStatuses) {
+            const rows = await prisma.$queryRaw<{ leadId: number }[]>`
+                WITH representative AS (
+                    SELECT DISTINCT ON ("leadId") "leadId", "offerStatus"
+                    FROM "Offer"
+                    ORDER BY "leadId", "isActive" DESC, "revisionNumber" DESC, "createdAt" DESC
+                )
+                SELECT "leadId" FROM representative
+                WHERE "offerStatus" IN (${Prisma.join(bucketStatuses)})
+            `;
+            leadIdsInBucket = rows.map((row) => row.leadId);
+        }
+
         // `some: {}` keeps out leads that have never been offered on. The search
         // terms are OR'd: nesting them in one object (as the flat query did)
         // AND's them, so a name match only counted when the email, phone and
         // location all matched the same string too.
         const leadWhere: Prisma.LeadWhereInput = {
             offers: { some: {} },
+            ...(leadIdsInBucket !== null ? { id: { in: leadIdsInBucket } } : {}),
             ...(safeQuery
                 ? {
                     OR: [
@@ -319,12 +364,17 @@ export async function getOfferKPIs(): Promise<OfferKPIs> {
     }
 }
 
-export const getOfferGroupsCached = async (page?: number, limit?: number, q?: string) => {
+export const getOfferGroupsCached = async (
+    page?: number,
+    limit?: number,
+    q?: string,
+    status?: OfferStatusBucket,
+) => {
     "use cache";
     cacheTag("offers");
     cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getOfferGroups(page, limit, q);
+    return getOfferGroups(page, limit, q, status);
 }
 
 export const getOfferKPIsCached = async () => {

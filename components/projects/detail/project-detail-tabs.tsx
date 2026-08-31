@@ -24,6 +24,7 @@ import {
 import { ProjectTradiesTab } from "./project-tradies-tab";
 import { ProjectHistoryTabs } from "./project-history-tabs";
 import { ProjectCommunicationTabs } from "./project-communication-tabs";
+import { ProjectComplianceTab } from "./compliance-tab/project-compliance-tab";
 import { Role } from "@prisma/client";
 import { useWebMcpTool } from "@/hooks/use-webmcp-tool";
 import { webMcpError, webMcpJson } from "@/components/webmcp/tool-result";
@@ -169,6 +170,9 @@ export function ProjectDetailTabs({ project, role }: { project: ProjectDetail; r
         ) : null}
         {activeTab === "communications" ? (
           <ProjectCommunicationTabs project={project} />
+        ) : null}
+        {activeTab === "compliance" ? (
+          <ProjectComplianceTab project={project} isAdmin={isAdmin} />
         ) : null}
       </div>
     </section>
