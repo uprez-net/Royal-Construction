@@ -62,7 +62,7 @@ A second round then took five more, for a different reason: a globally-registere
 ```
 lib/tools/
   types.ts             ToolDescriptor, AppRole, annotations
-  manifest.ts          8 shared descriptors, all reads. Client-safe.
+  manifest.ts          7 shared descriptors, all reads. Client-safe.
   json-schema.ts       the browser-facing descriptor list
   zod-to-json-schema.ts  Zod -> JSON Schema, usable without the manifest
   surfaces.ts          which tools live on which screen, for the navigation
@@ -70,6 +70,7 @@ lib/tools/
   result.ts            toToolResult / toToolError (server side)
   authz.ts             the role gate
   operating-guide.ts   the agent guide, shared by both transports
+  offers-guide.ts      the offers surface guide, served on request
   handlers.server.ts   name -> handler, calling lib/data/*
   registry.server.ts   manifest + handlers, joined; throws on drift
 
@@ -110,7 +111,7 @@ That same file carries one augmentation: `executeTool`, which is in the spec IDL
 
 ### Always available
 
-The 8 shared tools from [mcp-capability.md](./mcp-capability.md), plus three UI tools:
+The 7 shared tools from [mcp-capability.md](./mcp-capability.md), plus the UI tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -118,7 +119,8 @@ The 8 shared tools from [mcp-capability.md](./mcp-capability.md), plus three UI 
 | `navigate_to` | Opens a section that is not a record. Checked against the real sidebar; arbitrary URLs are refused. |
 | `navigate_to_project` | Opens a project, by `projectId` or by `query`. A query is resolved through `get_project_lookup`; several matches return the candidates and move nothing, rather than guessing on the user's behalf. |
 | `navigate_to_lead` | Opens a lead by id, optionally on a tab. |
-| `get_operating_guide` | Returns the operating guide. WebMCP has no prompts primitive, so without this a browser agent would never see the guidance the MCP server ships as `mcp_royal_construction`. |
+| `navigate_to_offer` | Opens a lead's offer workspace. The one global tool that is **not** read-only: arriving provisions the `Offer` row if the lead has none (ADR 0002), which is why there is no `create_offer` tool. |
+| `get_operating_guide` | Returns the operating guide. WebMCP has no prompts primitive, so without this a browser agent would never see the guidance the MCP server ships as `mcp_royal_construction`. Takes an optional `surface: "offers"` for the offers guide, which is too large to carry in the string sent on every conversation. |
 
 ### Leads screen — `components/leads/leads.tsx`
 
@@ -170,6 +172,27 @@ Two refusals are kept distinct. The status machine says a `DONE` milestone canno
 **`set_and_update_project_overview_details` merges into the live draft** rather than sending what it was given. `requirements` is PATCHed as a whole JSON blob, so a partial send would blank every field it omitted. Its writable fields are derived from `SECTION_FIELDS`, so the form and the tool cannot disagree about what exists, and an unknown field name is refused rather than written into the blob where nothing would ever render it.
 
 Two reads are narrower than their data on purpose. `get_project_files` reads the already-filtered list, because the tender and contract are hidden from a non-admin on screen and a tool returning their filenames and blob URLs would be a way around that gate; `get_project_overview_details` drops the commercials section for the same reason.
+
+### Offers list — `components/offers/offer-table.tsx`
+
+`get_offers`, `search_offers`. `get_offers` reads the page already in
+`state.offers` rather than refetching, and reports `statusFilter: null` — the
+list's status tabs are wired to nothing, so a tool implying otherwise would have
+the agent under-report.
+
+### Offer workspace — `components/offers/new-workflow/new-offer-workspace.tsx`
+
+Twenty-one tools: six reads plus the data-entry writes for sections 1–5.
+Sections 6–10 are outbound or status attestations and have no tools.
+
+Unlike every other detail screen, these are **not keyed by tab**. The workspace's
+ten sections are JSX with no per-section state owners — all of the state lives
+in the one container — so the list is flat, the registry is stable while the page
+is open, and gating happens at call time through `lib/offer/webmcp-gating.ts`.
+
+Full detail, including the lock model and why writes ride the autosave rather
+than saving themselves, is in
+[webmcp-offers-surface.md](./webmcp-offers-surface.md).
 
 ## Navigation and surfaces
 
@@ -243,7 +266,9 @@ Screen tools need neither: they go through the store, so the tab the user is loo
 
 - `tests/webmcp/manifest.test.ts` — names, uniqueness, JSON Schema conversion, the `readOnlyHint` rule, the role logic, that the retired tools stay retired, and that the manifest holds no writes at all.
 - `tests/webmcp/surfaces.test.ts` — the surface map agrees with the manifest, every tab has an entry, and `payments` is not offered for navigation.
-- `tests/webmcp/operating-guide.test.ts` — the guide and the surface map name the same tools, and the guide stays short enough to prepend to every conversation.
+- `tests/webmcp/operating-guide.test.ts` — the guides and the surface map name the same tools, each guide stays within its budget, and the offers ladder stays out of the string sent on every conversation.
+- `tests/offer/webmcp-gating.test.ts` — the offers write gate over all seventeen offer statuses and five build steps, checked against the predicate the UI locks on.
+- `tests/offer/webmcp-tools.test.ts` — the offers tool factories with fake mutators. Where successful offer writes are covered, since the browser suite deliberately makes none.
 - `tests/webmcp/tool-runtime.test.ts` — a tool callback never rejects, whatever the user agent passes it.
 - `tests/projects/milestone-transitions.test.ts`, `tests/projects/project-warnings.test.ts` — the rules the milestone verbs and `get_project_warnings` enforce.
 - `tests/webmcp/registry-parity.test.ts` — every manifest entry has a handler and vice versa. Slow (boots the data layer); `registry.server.ts` enforces the same invariant at import time.
