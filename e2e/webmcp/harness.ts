@@ -351,6 +351,19 @@ export async function firstLeadId(page: Page): Promise<number> {
     return items[0].id;
 }
 
+/**
+ * A lead whose offer workspace can be opened.
+ *
+ * Any lead will do: opening `/offers/<leadId>` provisions the offer if the lead
+ * has none (ADR 0002), which is also why this is the only fixture the offers
+ * suite needs. It does mean the suite can create an Offer row on a lead that had
+ * none — a provisioning write, not a destructive one, and the same thing a
+ * person clicking into the workspace does.
+ */
+export async function firstOfferLeadId(page: Page): Promise<number> {
+    return firstLeadId(page);
+}
+
 /** Tools that were retired in phase two and must not come back anywhere. */
 export const RETIRED_TOOLS = [
     "get_projects",

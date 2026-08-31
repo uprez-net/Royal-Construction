@@ -155,11 +155,12 @@ pnpm dev                 # in one terminal
 pnpm test:webmcp         # in another
 ```
 
-Point it elsewhere with `WEBMCP_BASE_URL`. Expect five to ten minutes, at the
-longer end against a cold dev server compiling routes on demand. The files run
-one at a time, because three browsers against one dev server means
-compile contention and a burst of Clerk development-instance sign-ins, and both
-of those show up as redirect loops rather than as anything legible.
+Point it elsewhere with `WEBMCP_BASE_URL`. Expect ten to fifteen minutes, at the
+longer end against a cold dev server compiling routes on demand — the three
+offers specs roughly doubled the file count. The files run one at a time,
+because several browsers against one dev server means compile contention and a
+burst of Clerk development-instance sign-ins, and both of those show up as
+redirect loops rather than as anything legible.
 
 Authentication is handled for you. The suite goes to `/api/dev/sign-in`
 explicitly rather than letting `proxy.ts` bounce it there: the redirect chain is
