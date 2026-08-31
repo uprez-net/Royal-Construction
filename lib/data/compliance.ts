@@ -424,6 +424,18 @@ async function sendUpdatedRequiredDocuments(
 }
 
 /**
+ * Whether Graph answered "that message is not there".
+ *
+ * 404 is the only status that means the reply target itself is missing, as
+ * opposed to the mailbox being unreachable or the send being refused — those
+ * have to keep throwing, or a real outage would quietly fork every thread onto
+ * a subject-only send.
+ */
+function isMissingGraphMessage(error: unknown): boolean {
+  return (error as { status?: unknown } | null)?.status === 404;
+}
+
+/**
  * Replies on the existing thread.
  *
  * Used by the composer, by the signed-copy send and by the review send. All
@@ -462,28 +474,53 @@ export async function sendCertifierReply(
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
 
-  if (engagement.lastInboundMessageId) {
-    // A real reply: Graph builds it from the certifier's own message, so it
-    // carries In-Reply-To, References and the conversation id, and lands in
-    // their existing thread rather than beside it.
-    await client.replyToMessage({
-      messageId: engagement.lastInboundMessageId,
-      body: input.body,
-      to: certifierEmail,
-      cc: config.cc,
-      ...(attachments.length > 0 ? { attachments } : {}),
-    });
-  } else {
-    // Nothing to reply to yet — the certifier has not answered the outreach.
-    // Subject threading is all that is available, and it is what opens the
-    // thread the replies above will later join.
-    await client.sendMail({
+  // Subject threading: what opens the thread before the certifier has answered,
+  // and what is left if the message we were replying onto is gone.
+  const sendOnSubject = () =>
+    client.sendMail({
       to: certifierEmail,
       subject,
       body: input.body,
       cc: config.cc,
       ...(attachments.length > 0 ? { attachments } : {}),
     });
+
+  if (engagement.lastInboundMessageId) {
+    // A real reply: Graph builds it from the certifier's own message, so it
+    // carries In-Reply-To, References and the conversation id, and lands in
+    // their existing thread rather than beside it.
+    try {
+      await client.replyToMessage({
+        messageId: engagement.lastInboundMessageId,
+        body: input.body,
+        to: certifierEmail,
+        cc: config.cc,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
+    } catch (error) {
+      if (!isMissingGraphMessage(error)) {
+        throw error;
+      }
+      // The id no longer resolves. Exchange mints a new one when a message is
+      // moved, so filing the certifier's reply into a folder is enough to do
+      // it, and deleting it certainly is. Without this the engagement is
+      // wedged: every later send — the signed copies, the review pack, a
+      // resupply notice — dies on a stale id with a perfectly good
+      // subject-threaded path sitting right there.
+      console.warn(
+        `Certifier engagement ${engagementId}: reply target ${engagement.lastInboundMessageId} is gone; falling back to subject threading.`,
+      );
+      // Cleared so the next send goes straight down the fallback rather than
+      // paying for the same 404 again. The certifier's next reply restores it.
+      await prisma.certifierEngagement.update({
+        where: { id: engagementId },
+        data: { lastInboundMessageId: null },
+      });
+      await sendOnSubject();
+    }
+  } else {
+    // Nothing to reply to yet — the certifier has not answered the outreach.
+    await sendOnSubject();
   }
 
   await recordOutboundEmail({
