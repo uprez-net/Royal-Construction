@@ -202,6 +202,8 @@ export function OfferStepSection({
   locked = false,
   status = null,
   defaultOpen = false,
+  open: controlledOpen,
+  onOpenChange,
   children,
 }: {
   readonly id: string;
@@ -211,9 +213,28 @@ export function OfferStepSection({
   readonly locked?: boolean;
   readonly status?: OfferStepStatus | null;
   readonly defaultOpen?: boolean;
+  /**
+   * Open state lifted to the caller.
+   *
+   * Optional, so a section rendered without it keeps behaving exactly as it did
+   * — the workspace is the only caller that needs to drive this. It does,
+   * because `open_offer_section` has to be able to bring a section on screen the
+   * way a click would; a tool that edited a panel the user cannot see would be
+   * working behind their back.
+   */
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(next);
+      return;
+    }
+    setUncontrolledOpen(next);
+  };
   return (
     <section id={id} className="scroll-mt-[var(--offer-sticky-offset,13rem)]">
       <StepHeader
@@ -224,7 +245,7 @@ export function OfferStepSection({
         locked={locked}
         status={status}
         open={open}
-        onToggle={() => setOpen((current) => !current)}
+        onToggle={() => setOpen(!open)}
       />
       {!open ? null : locked ? (
         // A disabled fieldset natively blocks every descendant control (inputs,

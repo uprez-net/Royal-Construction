@@ -247,7 +247,9 @@ function SaveIndicator({ state }: { readonly state: OfferSaveState }) {
 // `scroll-mt-52`, which reserves space for the pinned header + stepper, so the
 // target always lands just below the sticky chrome — reliable across header
 // heights without manual offset math.
-function scrollToWorkflowStep(target: string) {
+// Exported so `open_offer_section` moves the page the same way a click on
+// the stepper does, rather than reimplementing the offset behaviour.
+export function scrollToWorkflowStep(target: string) {
   const el = document.getElementById(target);
   if (!el) {
     return;

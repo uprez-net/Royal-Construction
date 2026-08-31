@@ -105,6 +105,15 @@ import {
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
 import { OfferWorkspaceScreen } from "./offer-workspace-screen";
+import { useWebMcpTools } from "@/hooks/use-webmcp-tool";
+import { scrollToWorkflowStep } from "./offer-workspace-header";
+import type { OfferToolDeps } from "./webmcp/deps";
+import { createCostScheduleTools } from "./webmcp/cost-schedule-tools";
+import { createDocumentTools } from "./webmcp/document-tools";
+import { createJobSetupTools } from "./webmcp/job-setup-tools";
+import { createOrientationTools } from "./webmcp/orientation-tools";
+import { createPricingTools } from "./webmcp/pricing-tools";
+import { createScopeTools } from "./webmcp/scope-tools";
 
 function contractDefaultsFromWorkspace(
   job: OfferWorkspaceJob,
@@ -306,6 +315,18 @@ export function NewOfferWorkspace({
   );
   // Autosave chrome: makes the debounced persistence visible and surfaces a
   // failure instead of swallowing it. "idle" until the first save is attempted.
+  /**
+   * Which step sections are expanded.
+   *
+   * Lifted out of OfferStepSection (which still owns its own state when this is
+   * not passed) so `open_offer_section` can bring one on screen. It lives here
+   * rather than in the screen because this is where the WebMCP tools register.
+   */
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const setSectionOpen = useCallback((id: string, open: boolean) => {
+    setOpenSections((current) => ({ ...current, [id]: open }));
+  }, []);
+
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -1656,39 +1677,119 @@ export function NewOfferWorkspace({
   // Pre-fill the job from the lead's contact + sales conversation (Phase 0
   // deterministic + Phase 1 AI draft). Explicit user action, so the returned
   // patch is applied over current state (the estimator reviews the result).
-  const prefillFromLead = useCallback(() => {
+  // Returns its outcome so `prefill_job_setup_from_lead` can report what
+  // happened. The button ignores the promise and reads `prefillResult`, exactly
+  // as before — the two paths run the same code rather than diverging.
+  const prefillFromLead = useCallback(async (): Promise<{
+    ok: boolean;
+    message: string;
+  }> => {
     if (leadId === undefined) {
-      return;
+      return { ok: false, message: "This offer is not attached to a lead." };
     }
     setPrefilling(true);
     setPrefillResult(null);
-    void (async () => {
-      try {
-        const result = await generateOfferPrefillFromLead({ leadId });
-        setPrefillResult(result);
-        if (result.ok) {
-          if (Object.keys(result.job).length > 0) {
-            setJob((current) => applyPrefillPatch(current, result.job));
-          }
-          if (Object.keys(result.draft).length > 0) {
-            setDraft((current) => ({ ...current, ...result.draft }));
-          }
+    try {
+      const result = await generateOfferPrefillFromLead({ leadId });
+      setPrefillResult(result);
+      if (result.ok) {
+        const jobFields = Object.keys(result.job);
+        const draftFields = Object.keys(result.draft);
+        if (jobFields.length > 0) {
+          setJob((current) => applyPrefillPatch(current, result.job));
         }
-      } catch (error) {
-        console.error("[offer] prefill from lead failed:", error);
-        setPrefillResult({
-          ok: false,
-          error: `Failed to pre-fill from the lead: ${(error as Error).message}`,
-        });
-      } finally {
-        setPrefilling(false);
+        if (draftFields.length > 0) {
+          setDraft((current) => ({ ...current, ...result.draft }));
+        }
+        return {
+          ok: true,
+          message:
+            jobFields.length + draftFields.length === 0
+              ? "The lead had nothing to pre-fill with."
+              : `Pre-filled ${[...jobFields, ...draftFields].join(", ")} from the lead.`,
+        };
       }
-    })();
+      return { ok: false, message: result.error };
+    } catch (error) {
+      console.error("[offer] prefill from lead failed:", error);
+      const message = `Failed to pre-fill from the lead: ${(error as Error).message}`;
+      setPrefillResult({ ok: false, error: message });
+      return { ok: false, message };
+    } finally {
+      setPrefilling(false);
+    }
   }, [leadId]);
+
+  /* ── WebMCP: the offer workspace ──
+     Registered here, not per section, and that is a deliberate departure from
+     the lead and project screens. Those key their tools by tab because only the
+     open tab's panel is mounted. The ten offer sections are JSX in
+     offer-workspace-screen.tsx with no per-section state owners — every one of
+     the useStates above lives in this component — so there is nowhere else for
+     a tool to close over the state it needs. The registry is stable for as long
+     as the workspace is open; gating happens at call time instead, through
+     lib/offer/webmcp-gating.ts. */
+  const offerToolDeps: OfferToolDeps = {
+    leadId,
+    status,
+    reference: job.reference,
+    revision: job.revision,
+    stateVersion: stateVersionRef.current,
+    saveState,
+    job,
+    lines,
+    allowances,
+    exclusions,
+    draft,
+    areaCalculator,
+    pricingSettings: workspacePricingSettings,
+    pricing,
+    customerPrice,
+    directTotal,
+    totalAreaSqm,
+    effectiveMargin,
+    selectedPriceInput,
+    standardPriceInput,
+    priceAdjustmentLabel,
+    overrideReason,
+    updateJob,
+    updateLine,
+    addLine,
+    removeLine,
+    updateAreaCalculator,
+    updatePricingSettings: updateWorkspacePricingSettings,
+    updateAllowance,
+    updateExclusion,
+    addAllowance,
+    addExclusion,
+    removeAllowance,
+    removeExclusion,
+    updateDraft,
+    setSelectedPriceInput,
+    setStandardPriceInput,
+    setPriceAdjustmentLabel,
+    setOverrideReason,
+    setSectionOpen: (anchorId, open) => setSectionOpen(anchorId, open),
+    scrollToSection: scrollToWorkflowStep,
+    prefillFromLead,
+  };
+
+  // A fresh array each render is fine: useWebMcpTools compares the declarations
+  // and holds the callbacks in a ref, so this re-registers nothing.
+  useWebMcpTools([
+    ...createOrientationTools(offerToolDeps),
+    ...createJobSetupTools(offerToolDeps),
+    ...createCostScheduleTools(offerToolDeps),
+    ...createPricingTools(offerToolDeps),
+    ...createScopeTools(offerToolDeps),
+    ...createDocumentTools(offerToolDeps),
+  ]);
 
   return (
     <>
       <OfferWorkspaceScreen
+        openSections={openSections}
+        onSectionOpenChange={setSectionOpen}
         allowances={allowances}
         areaCalculator={areaCalculator}
         rateConstants={resolvedRateConstants}

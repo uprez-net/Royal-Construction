@@ -73,6 +73,7 @@ import {
   OfferStepSection,
   type OfferStepStatus,
 } from "./offer-workspace-step-section";
+import { OFFER_PHASE_UNLOCK_HINT } from "@/lib/offer/webmcp-gating";
 import { isOfferPhaseUnlocked } from "@/lib/offer/workflow";
 import {
   isOfferBuildStepEditable,
@@ -210,9 +211,20 @@ type OfferWorkspaceScreenProps = {
   readonly onPriceAdjustmentLabelChange: (value: string) => void;
   readonly onSelectedPriceInputChange: (value: string) => void;
   readonly onStandardPriceInputChange: (value: string) => void;
+  /**
+   * Which step sections are expanded, owned by the workspace container.
+   *
+   * Lifted out of OfferStepSection so `open_offer_section` can expand one. The
+   * container owns it rather than this component because the container is where
+   * the WebMCP tools register — see new-offer-workspace.tsx.
+   */
+  readonly openSections: Readonly<Record<string, boolean>>;
+  readonly onSectionOpenChange: (id: string, open: boolean) => void;
 };
 
 export function OfferWorkspaceScreen({
+  openSections,
+  onSectionOpenChange,
   allowances,
   areaCalculator,
   rateConstants,
@@ -457,6 +469,8 @@ export function OfferWorkspaceScreen({
           ) : null}
           <OfferStepSection
             id="offer-step-job-setup"
+            open={openSections["offer-step-job-setup"] ?? false}
+            onOpenChange={(next) => onSectionOpenChange("offer-step-job-setup", next)}
             index={1}
             phase="Offer"
             title="Job setup"
@@ -475,6 +489,8 @@ export function OfferWorkspaceScreen({
 
           <OfferStepSection
             id="offer-step-cost-schedule"
+            open={openSections["offer-step-cost-schedule"] ?? false}
+            onOpenChange={(next) => onSectionOpenChange("offer-step-cost-schedule", next)}
             index={2}
             phase="Offer"
             title="Cost schedule"
@@ -502,6 +518,8 @@ export function OfferWorkspaceScreen({
 
           <OfferStepSection
             id="offer-step-pricing"
+            open={openSections["offer-step-pricing"] ?? false}
+            onOpenChange={(next) => onSectionOpenChange("offer-step-pricing", next)}
             index={3}
             phase="Offer"
             title="Pricing"
@@ -530,6 +548,8 @@ export function OfferWorkspaceScreen({
 
           <OfferStepSection
             id="offer-step-scope"
+            open={openSections["offer-step-scope"] ?? false}
+            onOpenChange={(next) => onSectionOpenChange("offer-step-scope", next)}
             index={4}
             phase="Offer"
             title="Scope"
@@ -550,6 +570,8 @@ export function OfferWorkspaceScreen({
 
           <OfferStepSection
             id="offer-step-offer-document"
+            open={openSections["offer-step-offer-document"] ?? false}
+            onOpenChange={(next) => onSectionOpenChange("offer-step-offer-document", next)}
             index={5}
             phase="Offer"
             title="Offer document"
@@ -583,6 +605,8 @@ export function OfferWorkspaceScreen({
 
           <OfferStepSection
             id="offer-step-send"
+            open={openSections["offer-step-send"] ?? false}
+            onOpenChange={(next) => onSectionOpenChange("offer-step-send", next)}
             index={6}
             phase="Offer"
             title="Send & negotiate"
@@ -633,7 +657,7 @@ export function OfferWorkspaceScreen({
             phase="Tender"
             title="Tender access"
             unlocked={isOfferPhaseUnlocked(status, "tender")}
-            unlockHint="Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."
+            unlockHint={OFFER_PHASE_UNLOCK_HINT.tender}
           >
             <TenderGatePanel
               status={status}
@@ -682,7 +706,7 @@ export function OfferWorkspaceScreen({
             phase="Contract"
             title="Contract"
             unlocked={isOfferPhaseUnlocked(status, "contract")}
-            unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
+            unlockHint={OFFER_PHASE_UNLOCK_HINT.contract}
           >
             <ContractPanel
               signerStatuses={signerStatuses}
@@ -708,7 +732,7 @@ export function OfferWorkspaceScreen({
             phase="Handoff"
             title="Project"
             unlocked={isOfferPhaseUnlocked(status, "handoff")}
-            unlockHint="Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."
+            unlockHint={OFFER_PHASE_UNLOCK_HINT.handoff}
           >
             <ProjectHandoffPanel
               customerPrice={customerPrice}
