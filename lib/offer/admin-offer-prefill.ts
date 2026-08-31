@@ -288,6 +288,15 @@ export function reevaluateFormulaCostLines(
     TOTAL_FLOORING_AREA:
       basis.firstFloorSqm +
       basis.balconySqm,
+    TOTAL_AREA:
+      basis.groundFloorSqm +
+      basis.firstFloorSqm +
+      basis.garageSqm +
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.grannyFlatSqm +
+      basis.balconySqm +
+      basis.voidSqm,
     TOTAL_SHOWERS: job.showerCount,
     TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,
     TOTAL_LINENS: job.linenCount,
