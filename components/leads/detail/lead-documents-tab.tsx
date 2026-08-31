@@ -9,15 +9,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/common/data-table";
 import { UploadDropzone } from "@/components/common/upload-dropzone";
-import { useUploadQueue, type QueuedUploadFile } from "@/hooks/use-upload-queue";
+import {
+  useUploadQueue,
+  type QueuedUploadFile,
+} from "@/hooks/use-upload-queue";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
   completeProjectUpload,
   registerProjectUpload,
   updateProjectUploadProgress,
 } from "@/lib/store/slices/projectsSlice";
+import { openModal } from "@/lib/store/slices/uiSlice";
 import type { Lead } from "@/lib/leads/types";
-import { buildBlobPath, formatFileSize, formatFileType } from "@/utils/formatters";
+import {
+  buildBlobPath,
+  formatFileSize,
+  formatFileType,
+} from "@/utils/formatters";
 import type { ClientPayload } from "@/utils/validators/files";
 
 const MAX_FILES = 5;
@@ -66,17 +74,12 @@ export function LeadDocumentsTab({
           {index + 1}
         </span>,
 
-        <a
+        <span
           key={`${file.id}-name`}
-          href={file.url}
-          target="_blank"
-          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {file.name}
-          <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="sr-only">(opens in a new tab)</span>
-        </a>,
+        </span>,
 
         <span
           key={`${file.id}-type`}
@@ -236,7 +239,10 @@ export function LeadDocumentsTab({
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  <Loader2
+                    className="h-3 w-3 animate-spin"
+                    aria-hidden="true"
+                  />
                   Uploading…
                 </>
               ) : (
@@ -276,7 +282,10 @@ export function LeadDocumentsTab({
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Uploaded files
           </CardTitle>
           <p className="text-sm text-muted-foreground tabular-nums">
@@ -285,6 +294,15 @@ export function LeadDocumentsTab({
         </CardHeader>
         <CardContent className="p-4">
           <DataTable
+            onRowClick={(index) => {
+              const file = files[index];
+              dispatch(
+                openModal({
+                  type: "previewFile",
+                  payload: { fileUrl: file.url },
+                }),
+              );
+            }}
             caption="Files uploaded against this lead, with type and size."
             headers={["#", "Name", "Type", "Size", ""]}
             align={["end", "start", "start", "end", "start"]}

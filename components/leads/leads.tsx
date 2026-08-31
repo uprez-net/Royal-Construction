@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
+import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useLeadsData } from "@/hooks/use-leads-data";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -262,7 +263,6 @@ export default function Leads() {
   );
 
   const handleExport = async () => {
-    const XLSX = await import("xlsx");
     const allLeads = await fetchAllLeads();
     const leadHeader = [
       "leadId",
@@ -317,19 +317,11 @@ export default function Leads() {
         `${e.date} ${e.time}`.trim(),
       ]),
     );
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet([leadHeader, ...leadRows]),
-      "Lead Data",
-    );
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet([historyHeader, ...historyRows]),
-      "History",
-    );
-    XLSX.writeFile(
-      wb,
+    await downloadWorkbook(
+      [
+        { name: "Lead Data", rows: [leadHeader, ...leadRows] },
+        { name: "History", rows: [historyHeader, ...historyRows] },
+      ],
       `Royal_Constructions_Leads_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   };

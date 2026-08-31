@@ -4,10 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import type { OfferWorkbookImportResult } from "@/lib/offer/workspace-import";
 import { parseRoyalQuoteWorkbook } from "@/lib/offer/workspace-import";
+import { readWorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
 import { FileSpreadsheet } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useState } from "react";
-import { read } from "xlsx";
 
 type WorkbookImportControlProps = {
   readonly importResult: OfferWorkbookImportResult | null;
@@ -26,8 +26,17 @@ export function WorkbookImportControl({
       return;
     }
 
+    // The reader handles the OOXML formats only. A legacy binary .xls simply
+    // fails to unzip, so name the real problem instead of surfacing that.
+    if (file.name.toLowerCase().endsWith(".xls")) {
+      setErrorMessage(
+        "Legacy .xls workbooks aren't supported. Open the file in Excel and save it as .xlsx, then import it again.",
+      );
+      return;
+    }
+
     try {
-      const workbook = read(await file.arrayBuffer(), { type: "array" });
+      const workbook = await readWorkbookGrid(await file.arrayBuffer());
       onImported(parseRoyalQuoteWorkbook(workbook, file.name));
       setErrorMessage(null);
     } catch (error) {
@@ -72,7 +81,7 @@ export function WorkbookImportControl({
             Workbook file
           </span>
           <Input
-            accept=".xlsx,.xlsm,.xls"
+            accept=".xlsx,.xlsm"
             className="bg-white/95"
             id="offer-workbook-import"
             type="file"

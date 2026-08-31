@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { resetProjects, setProjects } from "@/lib/store/slices/projectsSlice";
 import { clearProjectFilters, openModal } from "@/lib/store/slices/uiSlice";
@@ -277,17 +278,8 @@ export function ProjectsClient({
         ];
       });
 
-      // Loaded on demand: a module-scope import ships the whole xlsx library to
-      // every visitor to pay for a button most never press.
-      const XLSX = await import("xlsx");
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(
-        workbook,
-        XLSX.utils.aoa_to_sheet([headers, ...rows]),
-        "Projects Data",
-      );
-      XLSX.writeFile(
-        workbook,
+      await downloadWorkbook(
+        [{ name: "Projects Data", rows: [headers, ...rows] }],
         `Royal_Constructions_Projects_${new Date().toISOString().slice(0, 10)}.xlsx`,
       );
     } catch (error) {

@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { exportTradies } from "@/lib/data/tradie-management";
+import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
@@ -15,10 +16,6 @@ export function TradieHeader() {
 
   const handleExport = async () => {
     try {
-      // xlsx is a large dependency and only the Export button needs it, so it is
-      // loaded on demand instead of in every visitor's page bundle.
-      const XLSX = await import("xlsx");
-
       const allTradies = await exportTradies();
       const tradieHeader = [
         "name",
@@ -44,15 +41,8 @@ export function TradieHeader() {
         t.jobsCompleted,
       ]);
 
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.aoa_to_sheet([tradieHeader, ...tradieRows]),
-        "Tradie Data",
-      );
-
-      XLSX.writeFile(
-        wb,
+      await downloadWorkbook(
+        [{ name: "Tradie Data", rows: [tradieHeader, ...tradieRows] }],
         `Royal_Constructions_Tradies_${new Date().toISOString().slice(0, 10)}.xlsx`,
       );
       toast.success("Tradies exported.");

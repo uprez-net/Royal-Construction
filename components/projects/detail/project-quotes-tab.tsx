@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Files, Search } from "lucide-react";
+import { Files, Search } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,8 @@ import {
   formatFileType,
 } from "@/utils/formatters";
 import { ProjectDetail } from "@/types/project";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 interface ProjectQuotesTabProps {
   project: ProjectDetail;
@@ -30,14 +32,13 @@ function formatUploadedAt(value: Date | string) {
 }
 
 export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
+  const dispatch = useAppDispatch();
   const files = project.files.filter((file) => {
-    const isAdminOnlyFileType = file.filename.toLowerCase().includes("tender") || file.filename.toLowerCase().includes("contract");
-    if (isAdmin && isAdminOnlyFileType) {
-      return true;
-    } else if (!isAdmin && !isAdminOnlyFileType) {
-      return true;
-    }
-    return false;
+    const isAdminOnlyFileType =
+      file.filename.toLowerCase().includes("tender") ||
+      file.filename.toLowerCase().includes("contract");
+
+    return isAdmin || !isAdminOnlyFileType;
   });
   const [query, setQuery] = useState("");
 
@@ -105,6 +106,15 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
       </CardHeader>
       <CardContent className="p-4">
         <DataTable
+          onRowClick={(index) => {
+            const file = visibleFiles[index];
+            dispatch(
+              openModal({
+                type: "previewFile",
+                payload: { fileUrl: file.url },
+              }),
+            );
+          }}
           caption="Documents uploaded to this project, with size, type, linked milestone and upload time."
           headers={["#", "Name", "Size", "Type", "Milestone", "Uploaded"]}
           align={["end", "start", "end", "start", "start", "start"]}
@@ -116,17 +126,12 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
               {index + 1}
             </span>,
 
-            <a
+            <span
               key={`${file.id}-name`}
-              href={file.url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               {file.filename}
-              <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="sr-only">(opens in a new tab)</span>
-            </a>,
+            </span>,
 
             <span
               key={`${file.id}-size`}
