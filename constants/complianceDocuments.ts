@@ -1,4 +1,7 @@
-import { ComplianceDocumentType } from "@prisma/client";
+import {
+  ComplianceDocumentStatus,
+  ComplianceDocumentType,
+} from "@prisma/client";
 
 /**
  * The documents the certifier is sent before anything else can happen.
@@ -116,6 +119,28 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   ComplianceDocumentType.UNKNOWN,
 ] as const;
 
+/**
+ * Every type a checklist line can be *asking for*.
+ *
+ * Deliberately not CLASSIFIABLE_DOCUMENT_TYPES, though the two overlap almost
+ * entirely. That list governs what an inbound attachment may be identified as,
+ * and excludes the signed copies because a signed form is identified by where
+ * the admin uploaded it rather than by reading it. This list answers a different
+ * question — what is this line of the checklist after — and "please complete the
+ * attached application form and return it signed" is one of the commonest lines
+ * on a certifier's checklist. So the signed copies belong here and not there.
+ *
+ * CHECKLIST_ITEM is excluded because a checklist line cannot ask for a checklist
+ * line, and UNKNOWN because "we could not tell" is not something to ask for.
+ */
+export const MAPPABLE_DOCUMENT_TYPES = Object.values(
+  ComplianceDocumentType,
+).filter(
+  (type) =>
+    type !== ComplianceDocumentType.CHECKLIST_ITEM &&
+    type !== ComplianceDocumentType.UNKNOWN,
+) as [ComplianceDocumentType, ...ComplianceDocumentType[]];
+
 const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
   ...Object.fromEntries(
     [...REQUIRED_COMPLIANCE_DOCUMENTS, ...CERTIFIER_RESPONSE_DOCUMENTS].map(
@@ -143,6 +168,35 @@ export function complianceDocumentLabel(
     return label.trim();
   }
   return DOCUMENT_LABELS[documentType] ?? documentType;
+}
+
+/**
+ * Whether a row has been settled without a document behind it.
+ *
+ * An admin marks a checklist line NOT_REQUIRED when it does not apply to this
+ * job — the certifier struck it through, or already holds the document, or the
+ * category simply does not arise. One predicate rather than a status comparison
+ * repeated at each site, because it is read in five places that must agree:
+ * the progress counts, the review send on both client and server, the row's
+ * controls, and the check that closes the engagement. A disagreement between
+ * any two of them strands the engagement.
+ */
+export function isNotRequired(status: ComplianceDocumentStatus): boolean {
+  return status === ComplianceDocumentStatus.NOT_REQUIRED;
+}
+
+/**
+ * Whether this row still owes the certifier a document.
+ *
+ * The counterpart to the above, and the shape most callers actually want: a row
+ * is outstanding when nothing has been supplied for it and nobody has said it is
+ * not needed.
+ */
+export function isOutstandingEvidence(document: {
+  status: ComplianceDocumentStatus;
+  files: readonly unknown[];
+}): boolean {
+  return !isNotRequired(document.status) && document.files.length === 0;
 }
 
 /**

@@ -2,6 +2,7 @@ import {
   CertifierEngagementStatus,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  Prisma,
 } from "@prisma/client";
 import { getWritable, sleep } from "workflow";
 
@@ -9,7 +10,10 @@ import {
   buildChecklistExtractionPrompt,
   CHECKLIST_EXTRACTION_SYSTEM_PROMPT,
 } from "@/lib/agent/checklist-extraction-prompts";
-import { runChecklistExtraction } from "@/lib/agent/checklistExtractionAgent";
+import {
+  runChecklistExtraction,
+  type ExtractedChecklistItem,
+} from "@/lib/agent/checklistExtractionAgent";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
 import { ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
@@ -19,11 +23,29 @@ import {
   COMPLIANCE_CHECKLIST_WORKFLOW,
   type ChecklistExtractionInput,
   type ChecklistExtractionResult,
-  type ChecklistItem,
   type ChecklistStage,
   type ComplianceChecklistStreamEvent,
 } from "@/types/compliance-workflow";
 import { logAction } from "@/lib/data/actionLog";
+import {
+  checklistItemDetail,
+  type ChecklistDocumentDetail,
+} from "@/types/compliance";
+
+/**
+ * Collapses case, punctuation and spacing so two wordings of the same item
+ * compare equal.
+ *
+ * The fallback key when a checklist numbers nothing, so it has to survive the
+ * differences a re-issued document picks up on its own — a dash becoming an
+ * en dash, a double space, a changed capital.
+ */
+function comparableLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 // The wire contract lives in types/compliance-workflow.ts and is re-exported
 // here so existing server-side imports keep working. It cannot live in this
@@ -158,40 +180,131 @@ async function extractItems(markdown: string) {
 /**
  * Writes one tracked row per checklist item.
  *
- * A single createMany, which is why ComplianceDocument.order carries no unique
- * constraint: the whole set is written at once and never reordered, so paying
- * for the descending row-shift Milestone needs would buy nothing.
+ * Matches rather than replaces. The previous version deleted this engagement's
+ * PENDING checklist rows and re-created the whole set, which left every item
+ * that already had a file behind it standing beside a fresh empty twin — the
+ * delete could not reach it, and the insert did not know it existed. So a second
+ * run of the extraction quietly doubled half the checklist.
  *
- * Idempotent by deletion-then-insert inside a transaction, scoped to this
- * engagement's CHECKLIST_ITEM rows that nobody has uploaded against yet. A
- * retry after a write that landed but whose result was lost re-creates the same
- * set; an item that already has evidence on it is left alone rather than having
- * that evidence orphaned.
+ * Matching also buys the thing that makes re-extraction safe to offer at all: a
+ * revised checklist can be read over the top of a live one without touching a
+ * status, a rejection reason, or an uploaded file. Those three are the whole
+ * record of work already done, and an extraction has no business rewriting them.
+ *
+ * Still one transaction and still idempotent — a retry after a write that landed
+ * but whose result was lost matches every row it wrote the first time and
+ * changes nothing.
  */
 async function saveChecklistItems(
   input: ChecklistExtractionInput,
-  items: ChecklistItem[],
+  items: ExtractedChecklistItem[],
+  document: ChecklistDocumentDetail | null,
 ): Promise<number> {
   "use step";
 
   const saved = await prisma.$transaction(async (tx) => {
-    await tx.complianceDocument.deleteMany({
+    const existing = await tx.complianceDocument.findMany({
       where: {
         engagementId: input.engagementId,
         documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-        status: ComplianceDocumentStatus.PENDING,
       },
+      select: {
+        id: true,
+        label: true,
+        status: true,
+        detail: true,
+        _count: { select: { files: true } },
+      },
+      orderBy: { order: "asc" },
     });
 
-    const created = await tx.complianceDocument.createMany({
-      data: items.map((item) => ({
-        engagementId: input.engagementId,
-        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-        status: ComplianceDocumentStatus.PENDING,
-        label: item.label,
-        order: item.order,
-      })),
-    });
+    // Claimed once each: two rows worded the same must not both match the same
+    // extracted item and leave the other looking like it was dropped.
+    const unclaimed = new Set(existing.map((row) => row.id));
+    const claim = (id: string) => {
+      unclaimed.delete(id);
+      return id;
+    };
+
+    /**
+     * Finds the row an extracted item is a new reading of.
+     *
+     * Clause first — "4a" is the certifier's own identifier for the line and it
+     * survives a rewording, which is exactly the case where matching on text
+     * fails. Normalised label second, for the checklists that number nothing.
+     */
+    const matchExisting = (item: ExtractedChecklistItem): string | null => {
+      const clause = item.detail?.clause;
+      if (clause) {
+        const byClause = existing.find(
+          (row) =>
+            unclaimed.has(row.id) &&
+            checklistItemDetail(row.detail)?.clause === clause,
+        );
+        if (byClause) return claim(byClause.id);
+      }
+      const wanted = comparableLabel(item.label);
+      const byLabel = existing.find(
+        (row) =>
+          unclaimed.has(row.id) && comparableLabel(row.label ?? "") === wanted,
+      );
+      return byLabel ? claim(byLabel.id) : null;
+    };
+
+    for (const item of items) {
+      const matchedId = matchExisting(item);
+      const detail = (item.detail ?? null) as Prisma.InputJsonValue | null;
+
+      if (matchedId) {
+        await tx.complianceDocument.update({
+          where: { id: matchedId },
+          data: {
+            label: item.label,
+            order: item.order,
+            detail: detail ?? Prisma.DbNull,
+            // status, rejectionReason and files are deliberately absent. A
+            // re-read of the checklist is not a verdict on work already done.
+          },
+        });
+        continue;
+      }
+
+      await tx.complianceDocument.create({
+        data: {
+          engagementId: input.engagementId,
+          documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+          status: ComplianceDocumentStatus.PENDING,
+          label: item.label,
+          order: item.order,
+          detail: detail ?? Prisma.DbNull,
+        },
+      });
+    }
+
+    // Rows the revised checklist no longer lists. Only the untouched ones go:
+    // anything carrying a file, or already settled one way or the other, is
+    // evidence of work and outlives the line that asked for it.
+    const removable = existing.filter(
+      (row) =>
+        unclaimed.has(row.id) &&
+        row.status === ComplianceDocumentStatus.PENDING &&
+        row._count.files === 0,
+    );
+    if (removable.length > 0) {
+      await tx.complianceDocument.deleteMany({
+        where: { id: { in: removable.map((row) => row.id) } },
+      });
+    }
+
+    // What the document says about itself lives on the document's own row —
+    // the same row the extraction was run against, so a revised checklist
+    // overwrites it in the step that rewrites the items.
+    if (document) {
+      await tx.complianceDocument.update({
+        where: { id: input.documentId },
+        data: { detail: document as unknown as Prisma.InputJsonValue },
+      });
+    }
 
     await tx.certifierEngagement.updateMany({
       where: {
@@ -207,7 +320,7 @@ async function saveChecklistItems(
       data: { status: CertifierEngagementStatus.CHECKLIST_TRACKING },
     });
 
-    return created.count;
+    return items.length;
   });
 
   await logAction(
@@ -313,7 +426,11 @@ export const extractComplianceChecklist = async (
     }
 
     await emitStage("Saving checklist");
-    const saved = await saveChecklistItems(input, extraction.items);
+    const saved = await saveChecklistItems(
+      input,
+      extraction.items,
+      extraction.document,
+    );
 
     const result: ChecklistExtractionResult = {
       status: "success",

@@ -181,6 +181,15 @@ export const activityLogSchemas = {
         resolvedBy: z.string(),
     }),
 
+    complianceDocumentNotRequired: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        documentId: z.string(),
+        documentLabel: z.string(),
+        resolvedBy: z.string(),
+        notRequired: z.boolean(),
+    }),
+
     complianceDocumentRejected: z.object({
         projectId: z.string(),
         engagementId: z.string(),

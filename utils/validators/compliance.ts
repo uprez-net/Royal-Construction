@@ -125,6 +125,22 @@ export type ResolveComplianceDocumentInput = z.infer<
   typeof resolveComplianceDocumentSchema
 >;
 
+/**
+ * Marking a checklist line as not applying to this job, or putting it back.
+ *
+ * `notRequired` is explicit rather than a toggle so the request says what it
+ * wants rather than what it wants to invert. Two admins clicking at once then
+ * agree on the outcome instead of racing to flip it past each other.
+ */
+export const setComplianceDocumentNotRequiredSchema = z.object({
+  documentId: idSchema,
+  notRequired: z.boolean(),
+});
+
+export type SetComplianceDocumentNotRequiredInput = z.infer<
+  typeof setComplianceDocumentNotRequiredSchema
+>;
+
 // ============================================================================
 // Email
 // ============================================================================

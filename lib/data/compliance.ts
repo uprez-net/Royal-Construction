@@ -14,6 +14,8 @@ import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
   isApprovableDocumentType,
+  isNotRequired,
+  isOutstandingEvidence,
   isReviewSubmissionType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
@@ -914,12 +916,21 @@ export async function resolveComplianceDocument(params: {
     const outstanding = await prisma.complianceDocument.count({
       where: {
         engagementId: document.engagementId,
-        status: { not: ComplianceDocumentStatus.APPROVED },
         // Checklist evidence is the whole of the review loop, so it is the
         // whole of what can hold the engagement open. Counting anything else
         // left it permanently one approval short of closing, against rows the
         // UI gives nobody a way to approve.
         documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+        // The two ways a row can be settled. NOT_REQUIRED never becomes
+        // APPROVED — nobody approves a document that was never supplied — so
+        // without it here a single waved-off line holds the engagement open
+        // for good.
+        status: {
+          notIn: [
+            ComplianceDocumentStatus.APPROVED,
+            ComplianceDocumentStatus.NOT_REQUIRED,
+          ],
+        },
       },
     });
     if (outstanding === 0) {
@@ -952,6 +963,101 @@ export async function resolveComplianceDocument(params: {
 }
 
 /**
+ * Marks a checklist line as not applying to this job, or puts it back.
+ *
+ * The one judgement on a checklist row that nothing infers. A certifier's
+ * checklist is a standard list sent for every job, so several lines routinely do
+ * not apply to this one — they are struck through on the document, or they ask
+ * for something the certifier already holds. Nothing in the pipeline can read a
+ * strikethrough reliably, so the admin says so.
+ *
+ * Restricted to checklist items on purpose. The required pack and the signed
+ * copies are what opens the engagement and there is no version of this job where
+ * one of them is optional; letting a row of either be waved through would be a
+ * way to send the certifier an incomplete pack and have the tab call it done.
+ *
+ * Setting it never touches an uploaded file. A line can be marked not required
+ * after something was uploaded against it — the certifier says they have it
+ * after all — and the file stays where it is, so putting the row back restores
+ * the evidence with it.
+ */
+export async function setComplianceDocumentNotRequired(params: {
+  projectId: string;
+  documentId: string;
+  notRequired: boolean;
+  resolvedBy: string;
+}) {
+  const document = await prisma.complianceDocument.findFirst({
+    where: {
+      id: params.documentId,
+      engagement: { projectId: params.projectId },
+    },
+    select: {
+      id: true,
+      engagementId: true,
+      documentType: true,
+      label: true,
+      status: true,
+      _count: { select: { files: true } },
+    },
+  });
+
+  if (!document) {
+    throw new Error("Compliance document not found on this project.");
+  }
+
+  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
+    throw new Error(
+      `${complianceDocumentLabel(document.documentType, document.label)} is not a checklist item.`,
+    );
+  }
+
+  // An approved row is settled and the certifier has passed it. Re-opening that
+  // as "not required" would take a decision of theirs back on their behalf.
+  if (document.status === ComplianceDocumentStatus.APPROVED) {
+    throw new Error(
+      `${complianceDocumentLabel(document.documentType, document.label)} has already been approved.`,
+    );
+  }
+
+  // Going back is a return to where the row actually stands, not a blanket
+  // PENDING: a line that still has its upload should show as uploaded again
+  // rather than asking for a file that is already there.
+  const status = params.notRequired
+    ? ComplianceDocumentStatus.NOT_REQUIRED
+    : document._count.files > 0
+      ? ComplianceDocumentStatus.UPLOADED
+      : ComplianceDocumentStatus.PENDING;
+
+  if (status === document.status) {
+    return { changed: false as const, status: document.status };
+  }
+
+  await prisma.complianceDocument.update({
+    where: { id: document.id },
+    data: { status },
+  });
+
+  after(() => revalidateEngagement(params.projectId));
+
+  await logAction(
+    createActivityLogEntry("complianceDocumentNotRequired", {
+      projectId: params.projectId,
+      engagementId: document.engagementId,
+      documentId: document.id,
+      documentLabel: complianceDocumentLabel(
+        document.documentType,
+        document.label,
+      ),
+      resolvedBy: params.resolvedBy,
+      notRequired: params.notRequired,
+    }),
+  );
+
+  return { changed: true as const, status };
+}
+
+/**
  * Sends the completed checklist to the certifier for review.
  *
  * Moves the engagement to IN_REVIEW first, then sends. That order is
@@ -969,7 +1075,10 @@ export async function sendComplianceForReview(engagementId: string) {
   const evidence = engagement.documents.filter((doc) =>
     isReviewSubmissionType(doc.documentType),
   );
-  const outstanding = evidence.filter((doc) => doc.files.length === 0);
+  // A line the admin marked as not applying to this job is not missing — it is
+  // answered. Counting it here is what used to make an engagement unsendable
+  // over a document nobody was ever going to supply.
+  const outstanding = evidence.filter(isOutstandingEvidence);
   if (outstanding.length > 0) {
     throw new Error(
       `${outstanding.length} document${outstanding.length === 1 ? " is" : "s are"} still missing: ${outstanding
@@ -1004,16 +1113,24 @@ export async function sendComplianceForReview(engagementId: string) {
   // Every file behind that set, in document order. The message says everything
   // is attached, and before this nothing was.
   //
+  // Rows marked not required are left out even where they still hold a file —
+  // a line can be waved off after something was uploaded against it, and the
+  // file stays so that putting the row back restores the evidence with it. It
+  // is not part of this submission, and attaching it would send the certifier a
+  // document for an item somebody has already decided they do not need.
+  //
   // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
   // which asserts the total against the mailbox's MaxSendSize and switches to
   // an upload session past the inline ceiling on its own.
-  const attachments = evidence.flatMap((doc) =>
-    doc.files.map((file) => ({
-      fileId: file.id,
-      name: file.filename,
-      url: file.url,
-    })),
-  );
+  const attachments = evidence
+    .filter((doc) => !isNotRequired(doc.status))
+    .flatMap((doc) =>
+      doc.files.map((file) => ({
+        fileId: file.id,
+        name: file.filename,
+        url: file.url,
+      })),
+    );
 
   let sent;
   try {

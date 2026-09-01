@@ -30,6 +30,27 @@ export type ChecklistStage = (typeof CHECKLIST_EXTRACTION_PROGRESS)[number];
 export type ChecklistItem = {
   label: string;
   order: number;
+  /**
+   * What the extraction read about the line beyond its name.
+   *
+   * Structurally duplicated from ChecklistItemDetail in types/compliance.ts
+   * rather than imported, and deliberately: this module is the wire contract and
+   * the note at the top of the file is the reason — the progress modal is a
+   * client component, and types/compliance.ts pulls in Prisma. A type-only
+   * import would erase, but the enum ChecklistItemDetail.mapsToType refers to is
+   * a runtime value, so importing it here would be one refactor away from
+   * dragging Prisma into the browser bundle again.
+   *
+   * Optional because the modal only reports what was extracted; nothing on the
+   * client acts on it.
+   */
+  detail?: {
+    clause?: string;
+    group?: string;
+    description?: string;
+    requirements?: string[];
+    references?: string[];
+  } | null;
 };
 
 export type ChecklistExtractionResult = {

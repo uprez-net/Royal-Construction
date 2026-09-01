@@ -7,6 +7,8 @@ import {
 } from "@prisma/client";
 
 import {
+  isNotRequired,
+  isOutstandingEvidence,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
@@ -234,9 +236,9 @@ const calcComplianceOverviewData = (
     // that cannot be cleared.
     case CertifierEngagementStatus.CHECKLIST_TRACKING:
     case CertifierEngagementStatus.INSURANCE: {
-      const outstanding = checklist.filter(
-        (document) => document.files.length === 0,
-      ).length;
+      // A line marked as not applying to this job is answered, not missing.
+      // Counting it left a badge on the tab that nobody could ever clear.
+      const outstanding = checklist.filter(isOutstandingEvidence).length;
       return {
         outstanding,
         rejected: 0,
@@ -250,7 +252,9 @@ const calcComplianceOverviewData = (
     // item has been round-tripped.
     case CertifierEngagementStatus.IN_REVIEW: {
       const unresolved = checklist.filter(
-        (document) => document.status !== ComplianceDocumentStatus.APPROVED,
+        (document) =>
+          document.status !== ComplianceDocumentStatus.APPROVED &&
+          !isNotRequired(document.status),
       );
       const rejected = unresolved.filter(
         (document) =>

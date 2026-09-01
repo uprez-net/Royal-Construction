@@ -264,6 +264,17 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    complianceDocumentNotRequired: (data) => ({
+        id: uuidv4(),
+        type: "complianceDocumentNotRequired",
+        message: data.notRequired
+            ? `${data.documentLabel} marked not required by ${data.resolvedBy}`
+            : `${data.documentLabel} put back as required by ${data.resolvedBy}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceDocumentRejected: (data) => ({
         id: uuidv4(),
         type: "complianceDocumentRejected",

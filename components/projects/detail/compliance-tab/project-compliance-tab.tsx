@@ -39,6 +39,8 @@ import {
   complianceDocumentLabel,
   HBCF_INSURANCE_URL,
   isApprovableDocumentType,
+  isNotRequired,
+  isOutstandingEvidence,
   isRequiredDocumentType,
   isReviewSubmissionType,
   isSignedCopyType,
@@ -61,13 +63,15 @@ import {
   resolveComplianceDocument,
   selectComplianceMutations,
   sendCertifierReply,
+  setComplianceDocumentNotRequired,
   uploadComplianceDocument,
   type ComplianceScope,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
-import type {
-  CertifierEngagementDetail,
-  ComplianceDocumentWithFiles,
+import {
+  checklistItemDetail,
+  type CertifierEngagementDetail,
+  type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
@@ -146,10 +150,10 @@ function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
       document.documentType === ComplianceDocumentType.CHECKLIST_ITEM,
   );
 
-  return (
-    hasChecklist &&
-    submission.every((document) => document.files.length > 0)
-  );
+  // A line the admin marked as not applying to this job is answered, not
+  // missing. Counting it left the send unreachable over a document nobody was
+  // ever going to supply.
+  return hasChecklist && !submission.some(isOutstandingEvidence);
 }
 
 /** The collapsible blocks the tab is built from, in flow order. */
@@ -319,6 +323,10 @@ export function ProjectComplianceTab({
     document?: ComplianceDocumentWithFiles,
   ): "upload" | "resolve" | "frozen" => {
     if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
+
+    // Settled without a document behind it. The row keeps the control that puts
+    // it back, which the row renders itself; it offers nothing else.
+    if (document && isNotRequired(document.status)) return "frozen";
 
     // The pack and the signed forms are settled once the certifier has issued
     // a checklist. Nothing in the flow re-sends them from there — the send that
@@ -585,6 +593,38 @@ export function ProjectComplianceTab({
     );
   };
 
+  /**
+   * Marks a checklist line as not applying to this job, or puts it back.
+   *
+   * No confirmation dialog, unlike a rejection. There is nothing to collect —
+   * the act carries no reason the way a rejection has to — and it is reversible
+   * from the same button, which is what makes a single click the right weight
+   * for it.
+   */
+  const handleSetNotRequired = async (
+    document: ComplianceDocumentWithFiles,
+    notRequired: boolean,
+  ) => {
+    try {
+      await dispatch(
+        setComplianceDocumentNotRequired({
+          projectId: project.id,
+          documentId: document.id,
+          notRequired,
+        }),
+      ).unwrap();
+      toast.success(
+        notRequired ? "Marked not required." : "Back on the checklist.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not update the document.",
+      );
+    }
+  };
+
   const handleIdentify = async (
     documentId: string,
     documentType: ComplianceDocumentType,
@@ -692,9 +732,10 @@ export function ProjectComplianceTab({
   const signedCopiesSent = SIGNED_COPIES_SENT.has(engagement.status);
 
   const checklistDocument = documentsByType.get(ComplianceDocumentType.CHECKLIST);
+  // Gates the insurance question. A waved-off line must not hold it shut —
+  // that is the whole point of being able to wave one off.
   const allChecklistUploaded =
-    checklistItems.length > 0 &&
-    checklistItems.every((item) => item.files.length > 0);
+    checklistItems.length > 0 && !checklistItems.some(isOutstandingEvidence);
   const insuranceDocument = documentsByType.get(
     ComplianceDocumentType.HOME_INSURANCE,
   );
@@ -794,9 +835,22 @@ export function ProjectComplianceTab({
   const toggleSection = (key: SectionKey) => (open: boolean) =>
     setSections((current) => ({ ...current, [key]: open }));
 
+  /**
+   * How many of these are done with.
+   *
+   * "Supplied" is the common case but not the only one: a checklist line the
+   * admin marked as not applying to this job is finished too, and counting it
+   * as outstanding leaves a progress bar that can never fill and a card that
+   * always looks unfinished.
+   */
   const countSupplied = (
     documents: (ComplianceDocumentWithFiles | undefined)[],
-  ) => documents.filter((document) => (document?.files.length ?? 0) > 0).length;
+  ) =>
+    documents.filter(
+      (document) =>
+        document &&
+        (document.files.length > 0 || isNotRequired(document.status)),
+    ).length;
 
   const requiredDocuments = REQUIRED_COMPLIANCE_DOCUMENTS.map((required) =>
     documentsByType.get(required.type),
@@ -1128,6 +1182,7 @@ export function ProjectComplianceTab({
                       item.label,
                     )}
                     document={item}
+                    detail={checklistItemDetail(item.detail)}
                     helperText={
                       item.files.length ? undefined : "Not supplied yet"
                     }
@@ -1145,6 +1200,17 @@ export function ProjectComplianceTab({
                     }
                     onApprove={() => void handleApprove(item)}
                     onReject={() => handleReject(item)}
+                    // Offered to an admin, and only while the file is still
+                    // being assembled. Once it is with the certifier the answer
+                    // to "is this needed" is theirs, and it comes back as an
+                    // approval or a rejection rather than as a row nobody has
+                    // to fill in any more.
+                    onSetNotRequired={
+                      isAdmin && !inReview
+                        ? (notRequired) =>
+                            void handleSetNotRequired(item, notRequired)
+                        : undefined
+                    }
                     onPreviewFile={handlePreviewFile}
                   />
                 ))}

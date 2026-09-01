@@ -267,12 +267,22 @@ enum ComplianceDocumentType {
 /// putting it there; RECEIVED is one that arrived on an email from the
 /// certifier. The two are kept apart because only the first is something the
 /// admin can be asked to redo.
+///
+/// NOT_REQUIRED is the admin saying this line does not apply to this job -- the
+/// certifier struck it through, or already holds the document, or it is a
+/// category that does not arise here. It is set by hand and only on a checklist
+/// item: nothing infers it. It is deliberately a status rather than a flag,
+/// because it is an answer to "where is this document up to" and everything
+/// that counts outstanding work already reads status. A NOT_REQUIRED row is
+/// never chased, never counted, and never blocks the review send or the
+/// engagement closing.
 enum ComplianceDocumentStatus {
   PENDING
   UPLOADED
   RECEIVED
   APPROVED
   REJECTED
+  NOT_REQUIRED
 }
 
 /// LeadEmails infers this by comparing emailFrom against the business mailbox,
@@ -1159,6 +1169,15 @@ model ComplianceDocument {
   label           String?
   order           Int                      @default(0)
   rejectionReason String?
+  /// What the extraction read about this line beyond its name -- the clarifying
+  /// description, the conditions the file has to satisfy, the standards and
+  /// instruments it cites. Display-only and optional everywhere: null on every
+  /// row written before the richer extraction, and on every fixed type, whose
+  /// name comes from constants/complianceDocuments.ts.
+  ///
+  /// Shape depends on documentType and is parsed defensively at the boundary
+  /// (types/compliance.ts), the way CertifierEmail.attachments already is.
+  detail          Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

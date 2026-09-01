@@ -33,6 +33,7 @@ import type {
   ClassifyReceivedDocumentInput,
   ComplianceDocumentUploadInput,
   ResolveComplianceDocumentInput,
+  SetComplianceDocumentNotRequiredInput,
   StartEngagementInput,
 } from "@/utils/validators/compliance";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
@@ -498,6 +499,35 @@ export const resolveComplianceDocument = createAsyncThunk<
   }
 });
 
+/**
+ * Marks a checklist line as not applying to this job, or puts it back.
+ *
+ * Filed under the same document scope as the upload and the resolve, so the row
+ * is busy for this the way it is for those and an admin cannot start an upload
+ * against a line they are halfway through waving off.
+ */
+export const setComplianceDocumentNotRequired = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string } & SetComplianceDocumentNotRequiredInput,
+  { rejectValue: string }
+>(
+  "projects/setComplianceDocumentNotRequired",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/documents/${payload.documentId}/not-required`,
+        jsonPost(payload),
+        "Unable to update the document",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to update the document",
+      );
+    }
+  },
+);
+
 export const sendSignedCopies = createAsyncThunk<
   { projectId: string; engagement: CertifierEngagementDetail | null },
   { projectId: string },
@@ -616,6 +646,10 @@ const complianceOperations = [
   complianceOperation(sendCertifierOutreach, () => complianceScope.outreach),
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
+  complianceOperation(
+    setComplianceDocumentNotRequired,
+    complianceScope.document,
+  ),
   complianceOperation(sendSignedCopies, () => complianceScope.signedCopies),
   complianceOperation(identifyComplianceDocument, complianceScope.document),
   complianceOperation(sendComplianceForReview, () => complianceScope.review),
