@@ -220,9 +220,9 @@ export function ProjectComplianceTab({
    * a card left alone keeps following the flow as the engagement moves on,
    * while one that was clicked stays where it was put.
    */
-  const [sections, setSections] = useState<Partial<Record<SectionKey, boolean>>>(
-    {},
-  );
+  const [sections, setSections] = useState<
+    Partial<Record<SectionKey, boolean>>
+  >({});
 
   const engagement = project.certifierEngagement;
 
@@ -465,7 +465,9 @@ export function ProjectComplianceTab({
       return result.engagement;
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : `Could not upload ${file.name}.`,
+        error instanceof Error
+          ? error.message
+          : `Could not upload ${file.name}.`,
       );
       return null;
     }
@@ -562,7 +564,9 @@ export function ProjectComplianceTab({
       toast.success("Approved.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not approve the document.",
+        error instanceof Error
+          ? error.message
+          : "Could not approve the document.",
       );
     }
   };
@@ -640,7 +644,9 @@ export function ProjectComplianceTab({
       toast.success("Document identified.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not identify the document.",
+        error instanceof Error
+          ? error.message
+          : "Could not identify the document.",
       );
     }
   };
@@ -731,7 +737,9 @@ export function ProjectComplianceTab({
   }));
   const signedCopiesSent = SIGNED_COPIES_SENT.has(engagement.status);
 
-  const checklistDocument = documentsByType.get(ComplianceDocumentType.CHECKLIST);
+  const checklistDocument = documentsByType.get(
+    ComplianceDocumentType.CHECKLIST,
+  );
   // Gates the insurance question. A waved-off line must not hold it shut —
   // that is the whole point of being able to wave one off.
   const allChecklistUploaded =
@@ -835,6 +843,19 @@ export function ProjectComplianceTab({
   const toggleSection = (key: SectionKey) => (open: boolean) =>
     setSections((current) => ({ ...current, [key]: open }));
 
+  // -------------------------------------------------------------------
+  // Which blocks the engagement has not reached.
+  //
+  // These used to be the conditions under which the cards rendered at all,
+  // which meant the tab showed one card on day one and grew a new one each
+  // time the certifier did something — nothing on the page said what the
+  // remaining steps were, or that there were any. Same conditions, read the
+  // other way round: the blocks are always there, and the ones the flow has
+  // not got to yet are shown locked.
+  // -------------------------------------------------------------------
+  const responseLocked = !hasResponse;
+  const checklistLocked = checklistItems.length === 0;
+
   /**
    * How many of these are done with.
    *
@@ -918,7 +939,82 @@ export function ProjectComplianceTab({
           too, for the same reason.
       --------------------------------------------------------------- */}
       <div className="space-y-4 rounded-xl border border-border/70 bg-muted/40 p-4">
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {/* -------------------------------------------------------------
+            Two columns, and the checklist across both.
+
+            The three blocks are not the same size or the same weight. The
+            pack and the certifier's reply are six rows and four, and they
+            answer each other — collected here, came back there — so they sit
+            side by side. The checklist is the long one: twenty items, each
+            with its own requirements and references to open, and squeezed
+            into a third of the width every one of those wrapped to four
+            lines. It gets the full row.
+        ------------------------------------------------------------- */}
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          {/* Unidentified attachments.
+              The one block that is genuinely conditional: it is not a stage
+              the engagement passes through but a queue that is normally
+              empty, so there is nothing here to lock or to look forward to.
+              Full width and first, because nothing after it can be trusted
+              while something is sitting unplaced. */}
+          {unidentified.length > 0 ? (
+            <ComplianceSectionCard
+              title="Needs identifying"
+              description="Arrived from the certifier but could not be placed."
+              icon={HelpCircle}
+              badge={{
+                label: `${unidentified.length} to place`,
+                tone: "warning",
+              }}
+              open={isOpen("unidentified")}
+              onOpenChange={toggleSection("unidentified")}
+              isActive={activeSection === "unidentified"}
+              className="border-warning/40 md:col-span-2"
+            >
+              <ul>
+                {unidentified.map((document) => (
+                  <li
+                    key={document.id}
+                    className="space-y-2 border-b border-border/70 py-3 first:pt-0 last:border-b-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      {document.files.map((file) => (
+                        <button
+                          key={file.id}
+                          type="button"
+                          onClick={() => handlePreviewFile(file.id)}
+                          className="block max-w-full truncate text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          {file.filename}
+                        </button>
+                      ))}
+                    </div>
+                    <Select
+                      disabled={isScopeBusy(scopeOf(document))}
+                      onValueChange={(value) =>
+                        void handleIdentify(
+                          document.id,
+                          value as ComplianceDocumentType,
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-full sm:max-w-xs" size="sm">
+                        <SelectValue placeholder="What is this?" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CERTIFIER_RESPONSE_DOCUMENTS.map((response) => (
+                          <SelectItem key={response.type} value={response.type}>
+                            {response.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </li>
+                ))}
+              </ul>
+            </ComplianceSectionCard>
+          ) : null}
+
           {/* Required documents */}
           <ComplianceSectionCard
             title="Required documents"
@@ -982,12 +1078,8 @@ export function ProjectComplianceTab({
                         documentType: required.type,
                       })
                     }
-                    onApprove={() =>
-                      document && void handleApprove(document)
-                    }
-                    onReject={() =>
-                      document && handleReject(document)
-                    }
+                    onApprove={() => document && void handleApprove(document)}
+                    onReject={() => document && handleReject(document)}
                     onPreviewFile={handlePreviewFile}
                   />
                 );
@@ -995,319 +1087,252 @@ export function ProjectComplianceTab({
             </ul>
           </ComplianceSectionCard>
 
-          {/* Unidentified attachments */}
-          {unidentified.length > 0 ? (
-            <ComplianceSectionCard
-              title="Needs identifying"
-              description="Arrived from the certifier but could not be placed."
-              icon={HelpCircle}
-              badge={{
-                label: `${unidentified.length} to place`,
-                tone: "warning",
-              }}
-              open={isOpen("unidentified")}
-              onOpenChange={toggleSection("unidentified")}
-              isActive={activeSection === "unidentified"}
-              className="border-warning/40"
-            >
-              <ul>
-                {unidentified.map((document) => (
-                  <li
-                    key={document.id}
-                    className="space-y-2 border-b border-border/70 py-3 first:pt-0 last:border-b-0 last:pb-0"
-                  >
-                    <div className="min-w-0">
-                      {document.files.map((file) => (
-                        <button
-                          key={file.id}
-                          type="button"
-                          onClick={() => handlePreviewFile(file.id)}
-                          className="block max-w-full truncate text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                        >
-                          {file.filename}
-                        </button>
-                      ))}
-                    </div>
-                    <Select
-                      disabled={isScopeBusy(scopeOf(document))}
-                      onValueChange={(value) =>
-                        void handleIdentify(
-                          document.id,
-                          value as ComplianceDocumentType,
-                        )
-                      }
-                    >
-                      <SelectTrigger className="w-full" size="sm">
-                        <SelectValue placeholder="What is this?" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CERTIFIER_RESPONSE_DOCUMENTS.map((response) => (
-                          <SelectItem key={response.type} value={response.type}>
-                            {response.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </li>
-                ))}
-              </ul>
-            </ComplianceSectionCard>
-          ) : null}
-
           {/* Certifier response */}
-          {hasResponse ? (
-            <ComplianceSectionCard
-              title="Certifier response"
-              description="Upload the signed copies to unlock the checklist."
-              icon={Inbox}
-              progress={{
-                done: countSupplied(responseDocuments),
-                total: responseDocuments.length,
-              }}
-              open={isOpen("response")}
-              onOpenChange={toggleSection("response")}
-              isActive={activeSection === "response"}
-              footer={
-                // Nothing left to ask for. The extraction has already run —
-                // that is what moved the engagement here — so the button would
-                // re-run it over a checklist that exists, and both notes under
-                // it are about waiting for a reply that has arrived.
-                inChecklistStage ? null : (
-                  <div className="space-y-2">
-                    <Button
-                      type="button"
-                      className="w-full"
-                      disabled={
-                        !signedCopiesSent ||
-                        !checklistDocument ||
-                        checklistRequestBusy
-                      }
-                      onClick={() =>
-                        dispatch(
-                          openModal({
-                            type: "certifierExtract",
-                            payload: {
-                              projectId: project.id,
-                              engagementId: engagement.id,
-                              documentId: checklistDocument?.id,
-                            },
-                          }),
-                        )
-                      }
-                    >
-                      Get Checklist
-                    </Button>
-                    {!signedCopiesSent ? (
-                      <p className="text-xs text-muted-foreground">
-                        Upload both signed copies — they go to the certifier
-                        automatically.
-                      </p>
-                    ) : !checklistDocument ? (
-                      <p className="text-xs text-muted-foreground">
-                        Waiting on the certifier&apos;s checklist.
-                      </p>
-                    ) : null}
-                  </div>
-                )
-              }
-            >
-              <ul>
-                {CERTIFIER_RESPONSE_DOCUMENTS.map((response) => (
-                  <ComplianceDocumentRow
-                    key={response.type}
-                    label={response.label}
-                    document={documentsByType.get(response.type)}
-                    helperText="Not received yet"
-                    mode="frozen"
-                    onPreviewFile={handlePreviewFile}
-                  />
-                ))}
-
-                {signedCopies.map((signed) => (
-                  <ComplianceDocumentRow
-                    key={signed.type}
-                    label={signed.label}
-                    document={signed.document}
-                    helperText="Please upload the signed copy"
-                    mode={rowMode(signed.document)}
-                    // Their own upload, and the send it triggers: the pair goes
-                    // to the certifier as one act, so neither row is editable
-                    // while that is happening.
-                    isBusy={
-                      isScopeBusy(scopeOf(signed.document, signed.type)) ||
-                      isScopeBusy(complianceScope.signedCopies)
+          <ComplianceSectionCard
+            title="Certifier response"
+            description="Upload the signed copies to unlock the checklist."
+            icon={Inbox}
+            progress={{
+              done: countSupplied(responseDocuments),
+              total: responseDocuments.length,
+            }}
+            open={isOpen("response")}
+            onOpenChange={toggleSection("response")}
+            isActive={activeSection === "response"}
+            locked={responseLocked}
+            lockMessage="Send the required pack. The certifier's reply — and the forms to sign — land here."
+            footer={
+              // Nothing left to ask for. The extraction has already run —
+              // that is what moved the engagement here — so the button would
+              // re-run it over a checklist that exists, and both notes under
+              // it are about waiting for a reply that has arrived.
+              inChecklistStage ? null : (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={
+                      !signedCopiesSent ||
+                      !checklistDocument ||
+                      checklistRequestBusy
                     }
-                    onUpload={(file) =>
-                      void attachSignedCopy(
-                        file,
-                        signed.type,
-                        signed.document?.id,
+                    onClick={() =>
+                      dispatch(
+                        openModal({
+                          type: "certifierExtract",
+                          payload: {
+                            projectId: project.id,
+                            engagementId: engagement.id,
+                            documentId: checklistDocument?.id,
+                          },
+                        }),
                       )
                     }
-                    onApprove={() =>
-                      signed.document &&
-                      void handleApprove(signed.document)
-                    }
-                    onReject={() =>
-                      signed.document &&
-                      handleReject(signed.document)
-                    }
-                    onPreviewFile={handlePreviewFile}
-                  />
-                ))}
-              </ul>
-            </ComplianceSectionCard>
-          ) : null}
+                  >
+                    Get Checklist
+                  </Button>
+                  {!signedCopiesSent ? (
+                    <p className="text-xs text-muted-foreground">
+                      Upload both signed copies — they go to the certifier
+                      automatically.
+                    </p>
+                  ) : !checklistDocument ? (
+                    <p className="text-xs text-muted-foreground">
+                      Waiting on the certifier&apos;s checklist.
+                    </p>
+                  ) : null}
+                </div>
+              )
+            }
+          >
+            <ul>
+              {CERTIFIER_RESPONSE_DOCUMENTS.map((response) => (
+                <ComplianceDocumentRow
+                  key={response.type}
+                  label={response.label}
+                  document={documentsByType.get(response.type)}
+                  helperText="Not received yet"
+                  mode="frozen"
+                  onPreviewFile={handlePreviewFile}
+                />
+              ))}
+
+              {signedCopies.map((signed) => (
+                <ComplianceDocumentRow
+                  key={signed.type}
+                  label={signed.label}
+                  document={signed.document}
+                  helperText="Please upload the signed copy"
+                  mode={rowMode(signed.document)}
+                  // Their own upload, and the send it triggers: the pair goes
+                  // to the certifier as one act, so neither row is editable
+                  // while that is happening.
+                  isBusy={
+                    isScopeBusy(scopeOf(signed.document, signed.type)) ||
+                    isScopeBusy(complianceScope.signedCopies)
+                  }
+                  onUpload={(file) =>
+                    void attachSignedCopy(
+                      file,
+                      signed.type,
+                      signed.document?.id,
+                    )
+                  }
+                  onApprove={() =>
+                    signed.document && void handleApprove(signed.document)
+                  }
+                  onReject={() =>
+                    signed.document && handleReject(signed.document)
+                  }
+                  onPreviewFile={handlePreviewFile}
+                />
+              ))}
+            </ul>
+          </ComplianceSectionCard>
 
           {/* Checklist */}
-          {checklistItems.length > 0 ? (
-            <ComplianceSectionCard
-              title="Checklist"
-              description="One document per item the certifier asked for."
-              icon={ClipboardList}
-              progress={{
-                done: countSupplied(checklistItems),
-                total: checklistItems.length,
-              }}
-              open={isOpen("checklist")}
-              onOpenChange={toggleSection("checklist")}
-              isActive={activeSection === "checklist"}
-            >
-              <ul>
-                {checklistItems.map((item) => (
-                  <ComplianceDocumentRow
-                    key={item.id}
-                    label={complianceDocumentLabel(
-                      item.documentType,
-                      item.label,
-                    )}
-                    document={item}
-                    detail={checklistItemDetail(item.detail)}
-                    helperText={
-                      item.files.length ? undefined : "Not supplied yet"
-                    }
-                    mode={rowMode(item)}
-                    isBusy={
-                      isScopeBusy(
-                        scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
-                      ) || submissionClaimed
-                    }
-                    onUpload={(file) =>
-                      void attachEvidence(file, {
-                        documentId: item.id,
-                        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-                      })
-                    }
-                    onApprove={() => void handleApprove(item)}
-                    onReject={() => handleReject(item)}
-                    // Offered to an admin, and only while the file is still
-                    // being assembled. Once it is with the certifier the answer
-                    // to "is this needed" is theirs, and it comes back as an
-                    // approval or a rejection rather than as a row nobody has
-                    // to fill in any more.
-                    onSetNotRequired={
-                      isAdmin && !inReview
-                        ? (notRequired) =>
-                            void handleSetNotRequired(item, notRequired)
-                        : undefined
-                    }
-                    onPreviewFile={handlePreviewFile}
-                  />
-                ))}
-              </ul>
+          <ComplianceSectionCard
+            title="Checklist"
+            description="One document per item the certifier asked for."
+            icon={ClipboardList}
+            progress={{
+              done: countSupplied(checklistItems),
+              total: checklistItems.length,
+            }}
+            open={isOpen("checklist")}
+            onOpenChange={toggleSection("checklist")}
+            isActive={activeSection === "checklist"}
+            locked={checklistLocked}
+            lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
+            // Across both columns. Each row can open its own requirements
+            // and references, and at half the width every one of those
+            // wrapped into a paragraph.
+            className="md:col-span-2"
+          >
+            <ul>
+              {checklistItems.map((item) => (
+                <ComplianceDocumentRow
+                  key={item.id}
+                  label={complianceDocumentLabel(item.documentType, item.label)}
+                  document={item}
+                  detail={checklistItemDetail(item.detail)}
+                  helperText={
+                    item.files.length ? undefined : "Not supplied yet"
+                  }
+                  mode={rowMode(item)}
+                  isBusy={
+                    isScopeBusy(
+                      scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+                    ) || submissionClaimed
+                  }
+                  onUpload={(file) =>
+                    void attachEvidence(file, {
+                      documentId: item.id,
+                      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+                    })
+                  }
+                  onApprove={() => void handleApprove(item)}
+                  onReject={() => handleReject(item)}
+                  // Offered to an admin, and only while the file is still
+                  // being assembled. Once it is with the certifier the answer
+                  // to "is this needed" is theirs, and it comes back as an
+                  // approval or a rejection rather than as a row nobody has
+                  // to fill in any more.
+                  onSetNotRequired={
+                    isAdmin && !inReview
+                      ? (notRequired) =>
+                          void handleSetNotRequired(item, notRequired)
+                      : undefined
+                  }
+                  onPreviewFile={handlePreviewFile}
+                />
+              ))}
+            </ul>
 
-              {/* -------------------------------------------------------
+            {/* -------------------------------------------------------
                 Home insurance
             ------------------------------------------------------- */}
-              {allChecklistUploaded ? (
-                <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-                  {insuranceDocument?.files.length ? (
-                    <ul>
-                      <ComplianceDocumentRow
-                        label="Home Insurance"
-                        document={insuranceDocument}
-                        mode={rowMode(insuranceDocument)}
-                        isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
-                        onUpload={(file) =>
-                          void attachEvidence(file, insuranceUpload)
+            {allChecklistUploaded ? (
+              <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+                {insuranceDocument?.files.length ? (
+                  <ul>
+                    <ComplianceDocumentRow
+                      label="Home Insurance"
+                      document={insuranceDocument}
+                      mode={rowMode(insuranceDocument)}
+                      isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
+                      onUpload={(file) =>
+                        void attachEvidence(file, insuranceUpload)
+                      }
+                      onApprove={() => void handleApprove(insuranceDocument)}
+                      onReject={() => handleReject(insuranceDocument)}
+                      onPreviewFile={handlePreviewFile}
+                    />
+                  </ul>
+                ) : (
+                  <>
+                    <p className="font-medium text-foreground">
+                      Have you raised the home insurance?
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        type="button"
+                        variant={
+                          insuranceAnswer === "yes" ? "default" : "outline"
                         }
-                        onApprove={() =>
-                          void handleApprove(insuranceDocument)
+                        size="sm"
+                        onClick={() => setInsuranceAnswer("yes")}
+                      >
+                        Yes
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={
+                          insuranceAnswer === "no" ? "default" : "outline"
                         }
-                        onReject={() =>
-                          handleReject(insuranceDocument)
-                        }
-                        onPreviewFile={handlePreviewFile}
-                      />
-                    </ul>
-                  ) : (
-                    <>
-                      <p className="font-medium text-foreground">
-                        Have you raised the home insurance?
+                        size="sm"
+                        onClick={() => setInsuranceAnswer("no")}
+                      >
+                        No
+                      </Button>
+                    </div>
+
+                    {insuranceAnswer === "yes" ? (
+                      <ul className="mt-2">
+                        <ComplianceDocumentRow
+                          label="Home Insurance"
+                          helperText="Upload the certificate of insurance"
+                          mode="upload"
+                          isBusy={
+                            isScopeBusy(insuranceScope) || submissionClaimed
+                          }
+                          onUpload={(file) =>
+                            void attachEvidence(file, insuranceUpload)
+                          }
+                        />
+                      </ul>
+                    ) : null}
+
+                    {insuranceAnswer === "no" ? (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        Raise Home Building Compensation Fund cover with icare,
+                        then come back and upload the certificate.{" "}
+                        <a
+                          href={HBCF_INSURANCE_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                        >
+                          icare HBCF
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
                       </p>
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          type="button"
-                          variant={
-                            insuranceAnswer === "yes" ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setInsuranceAnswer("yes")}
-                        >
-                          Yes
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={
-                            insuranceAnswer === "no" ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setInsuranceAnswer("no")}
-                        >
-                          No
-                        </Button>
-                      </div>
-
-                      {insuranceAnswer === "yes" ? (
-                        <ul className="mt-2">
-                          <ComplianceDocumentRow
-                            label="Home Insurance"
-                            helperText="Upload the certificate of insurance"
-                            mode="upload"
-                            isBusy={
-                              isScopeBusy(insuranceScope) || submissionClaimed
-                            }
-                            onUpload={(file) =>
-                              void attachEvidence(file, insuranceUpload)
-                            }
-                          />
-                        </ul>
-                      ) : null}
-
-                      {insuranceAnswer === "no" ? (
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          Raise Home Building Compensation Fund cover with
-                          icare, then come back and upload the certificate.{" "}
-                          <a
-                            href={HBCF_INSURANCE_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                          >
-                            icare HBCF
-                            <ExternalLink
-                              className="size-3"
-                              aria-hidden="true"
-                            />
-                          </a>
-                        </p>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              ) : null}
-            </ComplianceSectionCard>
-          ) : null}
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
+          </ComplianceSectionCard>
         </div>
 
         {/* -------------------------------------------------------------

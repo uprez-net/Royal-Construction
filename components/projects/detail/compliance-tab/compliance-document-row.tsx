@@ -2,9 +2,11 @@
 
 import { ComplianceDocumentStatus } from "@prisma/client";
 import {
+  BookMarked,
   Check,
   ChevronDown,
   FileText,
+  ListChecks,
   Loader2,
   RotateCcw,
   Upload,
@@ -121,14 +123,22 @@ function RequirementDisclosure({
   ].filter(Boolean);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mt-1.5">
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-2">
+      {/* A chip rather than a bare link. Sat next to a filename and a
+          timestamp, an underlined run of text read as one more piece of the
+          row's prose; the reader has to be able to see at a glance that this
+          is the one thing here that opens. */}
       <CollapsibleTrigger
         className={cn(
-          "flex items-center gap-1 rounded text-sm text-primary",
-          "underline-offset-4 hover:underline",
+          "inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background",
+          "px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors",
+          "hover:border-border hover:bg-muted hover:text-foreground",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          open && "border-border bg-muted text-foreground",
         )}
       >
+        <ListChecks className="size-3.5 shrink-0" aria-hidden="true" />
+        {parts.join(" · ")}
         <ChevronDown
           className={cn(
             "size-3.5 shrink-0 transition-transform duration-200",
@@ -136,30 +146,58 @@ function RequirementDisclosure({
           )}
           aria-hidden="true"
         />
-        {parts.join(" · ")}
       </CollapsibleTrigger>
 
-      {/* Indented rather than boxed. The row is deliberately flat (see the
-          component note below) and a bordered panel here would reintroduce
-          exactly the nesting this layout rejected. */}
+      {/* A tinted panel, not a bordered one. The row is deliberately flat (see
+          the component note below), so what separates the certifier's own
+          conditions from the row that carries them is a change of ground, not
+          another rule — a border here would reintroduce exactly the nesting
+          this layout rejected. */}
       <CollapsibleContent className="overflow-hidden data-open:animate-collapsible-down data-closed:animate-collapsible-up">
-        <div className="mt-2 space-y-3 border-l-2 border-border pl-3">
+        <div className="mt-2 space-y-3 rounded-lg bg-muted/60 p-3">
           {requirements.length > 0 ? (
-            <ol className="list-decimal space-y-1.5 pl-4 text-sm text-muted-foreground marker:text-muted-foreground/70">
+            // Numbered in their own gutter rather than by a list marker. The
+            // certifier writes these as amendment 1..9 and refers to them by
+            // number, so the number has to stay legible against a paragraph
+            // that wraps to three lines — which a decimal marker does not.
+            <ol className="space-y-2">
               {requirements.map((requirement, index) => (
-                <li key={index}>{requirement}</li>
+                <li key={index} className="flex gap-2.5">
+                  <span
+                    className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-muted-foreground tabular-nums ring-1 ring-border/70"
+                    aria-hidden="true"
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+                    {requirement}
+                  </span>
+                </li>
               ))}
             </ol>
           ) : null}
 
+          {requirements.length > 0 && references.length > 0 ? (
+            <div className="h-px bg-border/70" aria-hidden="true" />
+          ) : null}
+
           {references.length > 0 ? (
             <div>
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground/80 uppercase">
+                <BookMarked className="size-3 shrink-0" aria-hidden="true" />
                 References
               </p>
-              <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+              {/* Chips, because these are citations — "AS 3959-2018",
+                  "NCC Vol 2 Part 3.7.4" — and a stack of one-line list items
+                  wastes the width while making a set of six look like prose. */}
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
                 {references.map((reference, index) => (
-                  <li key={index}>{reference}</li>
+                  <li
+                    key={index}
+                    className="rounded-md bg-background px-2 py-0.5 text-xs text-muted-foreground ring-1 ring-border/70"
+                  >
+                    {reference}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -233,9 +271,13 @@ export function ComplianceDocumentRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          {/* The one thing on the row that is scanned rather than read. A
+              compliance file is twenty of these stacked up and somebody is
+              looking for one of them by name, so the name carries the weight
+              and everything under it steps back a shade. */}
           <p
             className={cn(
-              "font-medium text-foreground",
+              "text-sm font-semibold text-foreground",
               // Struck, not hidden — the same treatment a superseded file gets
               // below, and for the same reason: it is still part of the record.
               notRequired && "text-muted-foreground line-through",
@@ -295,7 +337,7 @@ export function ComplianceDocumentRow({
                       ) : null}
                     </TooltipContent>
                   </Tooltip>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-xs font-normal text-muted-foreground/70 tabular-nums">
                     {dataTimeFormat.format(new Date(file.createdAt))}
                   </span>
                 </li>
@@ -303,7 +345,7 @@ export function ComplianceDocumentRow({
             </ul>
           </TooltipProvider>
         ) : supportingText ? (
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-1 text-[13px] leading-relaxed font-normal text-muted-foreground/80">
             {supportingText}
           </p>
         ) : null}
