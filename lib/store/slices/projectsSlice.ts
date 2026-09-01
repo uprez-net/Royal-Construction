@@ -36,7 +36,11 @@ import type {
   StartEngagementInput,
 } from "@/utils/validators/compliance";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
-import { createProjectWithLead, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
+import { createProjectWithLeadAction, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
+import {
+  toCreateProjectFailure,
+  type CreateProjectFailure,
+} from "@/lib/projects/create-project-errors";
 import { bulkCreateTradieSchedules } from "@/lib/data/tradieSchedules";
 
 type MutationKey =
@@ -126,16 +130,24 @@ function syncProjectState(state: ProjectsState, project: ProjectDetail) {
   delete state.uploadsByProjectId[project.id];
 }
 
+// Rejects with a structured `CreateProjectFailure` rather than a bare string:
+// the create-project wizard binds each entry in `fieldErrors` to the input
+// that produced it, which a flattened message cannot support.
 export const createProject = createAsyncThunk<
   ProjectDetail,
   CreateProjectWithLeadInput,
-  { rejectValue: string }
+  { rejectValue: CreateProjectFailure }
 >("projects/createProject", async (payload, thunkApi) => {
   try {
-    const newProject = await createProjectWithLead(payload);
-    return newProject;
+    const result = await createProjectWithLeadAction(payload);
+    if (!result.ok) {
+      return thunkApi.rejectWithValue(result.failure);
+    }
+    return result.project;
   } catch (error) {
-    return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to create project");
+    // Only transport-level problems reach here — the action itself returns a
+    // result instead of throwing.
+    return thunkApi.rejectWithValue(toCreateProjectFailure(error));
   }
 });
 
@@ -823,7 +835,13 @@ const projectsSlice = createSlice({
       .addCase(createProject.rejected, (state, action) => {
         state.mutations.createProject = {
           status: "failed",
-          error: action.error.message ?? "Unable to create project",
+          // `action.payload` is the structured failure from rejectWithValue;
+          // `action.error.message` is only "Rejected" on that path, so it is
+          // the fallback for an unexpected thrown error, not the source.
+          error:
+            action.payload?.message ??
+            action.error.message ??
+            "Unable to create project",
         };
       })
       .addCase(createVariation.pending, (state) => {

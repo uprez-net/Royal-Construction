@@ -5,12 +5,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import {
+  AlertCircle,
   AlertTriangle,
+  ArrowRight,
   Calendar,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  RefreshCw,
   Search,
   ShieldCheck,
   UploadCloud,
@@ -62,11 +65,24 @@ import {
   projectExtractionSections,
   type ProjectExtractionData,
 } from "@/types/project-extraction";
+import {
+  createProjectFailure,
+  fieldDisplayLabel,
+  fieldElementId,
+  fieldPathToFormField,
+  sectionIndexForField,
+  toCreateProjectFailure,
+  validateCreateProjectForm,
+  type CreateProjectFailure,
+  type CreateProjectFieldError,
+  type ProjectFormFieldKey,
+} from "@/lib/projects/create-project-errors";
 import { useWorkflowStream } from "@/context/WorkFlowStatusContext";
 import type { TenderExtractionResult } from "@/lib/workflow/project";
 import {
   emptyExtractionState,
   ExtractionSectionCard,
+  FieldErrorBoundaryShell,
   normalizeDateString,
   normalizeString,
   sectionFields,
@@ -141,6 +157,10 @@ export function CreateProjectModal({
     startDate: string;
     state: "start_before_signed" | "signed_far_before_start";
   } | null>(null);
+  // Everything that went wrong with the review form, from either the local
+  // checks or the server action, in one shape so the banner, the inline
+  // messages and the "jump to field" links all read from a single source.
+  const [failure, setFailure] = useState<CreateProjectFailure | null>(null);
 
   const tenderQueue = useUploadQueue({ maxFiles: 1 });
   const contractQueue = useUploadQueue({ maxFiles: 1 });
@@ -153,6 +173,102 @@ export function CreateProjectModal({
   }, [selectedManagerId, siteManagers.items]);
   const { extractingTender, startListening, stopListening } =
     useWorkflowStream();
+
+  /** Field key -> message, for the inline messages under each control. */
+  const fieldErrorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of failure?.fieldErrors ?? []) {
+      // First message wins: validation runs top-down, so the earliest entry is
+      // the most specific cause rather than a downstream symptom.
+      if (!map[entry.field]) {
+        map[entry.field] = entry.message;
+      }
+    }
+    return map;
+  }, [failure]);
+
+  /** Blockers the server reported that no visible field can own. */
+  const generalErrors = useMemo(() => {
+    if (!failure) return [] as string[];
+    return (failure.blockers ?? [])
+      .filter((blocker) => !fieldPathToFormField(blocker.fieldPath))
+      .map((blocker) => blocker.label);
+  }, [failure]);
+
+  const errorCountBySection = useMemo(() => {
+    const counts = projectExtractionSections.map(() => 0);
+    for (const entry of failure?.fieldErrors ?? []) {
+      const index = sectionIndexForField(entry.field);
+      if (index !== null) {
+        counts[index] += 1;
+      }
+    }
+    return counts;
+  }, [failure]);
+
+  /**
+   * Moves the user to the input behind an error: opens the owning review step
+   * first (the field is unmounted until then), then scrolls and focuses it on
+   * the next frame. Fields outside the extraction sections (lead, documents)
+   * live back on the selection step, so those send the wizard there instead.
+   */
+  const goToField = (field: ProjectFormFieldKey) => {
+    if (field === "lead" || field === "documents") {
+      setStage("selection");
+      return;
+    }
+
+    const sectionIndex = sectionIndexForField(field);
+    if (sectionIndex !== null && sectionIndex !== activeSectionIndex) {
+      setActiveSectionIndex(sectionIndex);
+    }
+
+    // Two frames: one for React to commit the section swap, one for the
+    // browser to lay the new nodes out before we measure them.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const element = document.getElementById(fieldElementId(field));
+        if (!element) return;
+
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        const control = element.querySelector<HTMLElement>(
+          "input, textarea, select, button",
+        );
+        control?.focus({ preventScroll: true });
+      });
+    });
+  };
+
+  /** Drops a field's message as soon as the user edits it. */
+  const clearFieldError = (field: ProjectFormFieldKey) => {
+    setFailure((current) => {
+      if (!current) return current;
+      if (!current.fieldErrors.some((entry) => entry.field === field)) {
+        return current;
+      }
+
+      const remaining = current.fieldErrors.filter(
+        (entry) => entry.field !== field,
+      );
+
+      // The banner disappears once nothing is left to fix, rather than
+      // lingering with a stale headline over a clean form.
+      if (remaining.length === 0 && (current.blockers?.length ?? 0) === 0) {
+        return null;
+      }
+
+      return { ...current, fieldErrors: remaining };
+    });
+  };
+
+  const failWith = (nextFailure: CreateProjectFailure) => {
+    setFailure(nextFailure);
+    const firstField = nextFailure.fieldErrors[0]?.field;
+    if (firstField) {
+      goToField(firstField);
+    }
+    toast.error(nextFailure.title, { description: nextFailure.message });
+  };
 
   // Pulled out so both the stream handler and any retry/manual path can reuse it.
   function applyExtractionResult(result: TenderExtractionResult) {
@@ -271,6 +387,7 @@ export function CreateProjectModal({
     setManagerSearch("");
     setSourceDocuments(null);
     setDateConfirmPrompt(null);
+    setFailure(null);
     stopListening();
     tenderQueue.resetQueue();
     contractQueue.resetQueue();
@@ -371,6 +488,7 @@ export function CreateProjectModal({
     setStage("extracting");
     setExtractionError("");
     setExtractionMessage("");
+    setFailure(null);
     setProgressStep(0);
 
     try {
@@ -415,6 +533,23 @@ export function CreateProjectModal({
   };
 
   const runCreate = async (confirmDateBlockers: boolean) => {
+    // Belt-and-braces: handleSubmit already validated, but runCreate is also
+    // reachable from the date-confirm prompt, where state may have moved on.
+    const preflight = collectFormErrors();
+    if (preflight.length > 0) {
+      failWith(
+        createProjectFailure(
+          "VALIDATION",
+          preflight.length === 1
+            ? "One field needs attention"
+            : `${preflight.length} fields need attention`,
+          "Fix the highlighted fields, then create the project.",
+          { fieldErrors: preflight },
+        ),
+      );
+      return;
+    }
+
     if (!selectedLeadId || !selectedLocation || !selectedSiteManager || !sourceDocuments) {
       return;
     }
@@ -423,7 +558,31 @@ export function CreateProjectModal({
     setStage("submitting");
 
     try {
-      const normalizedExtraction = projectExtractionSchema.parse(extraction);
+      // safeParse, not parse: a schema throw here used to surface as the same
+      // generic "Unable to create project" toast as a server outage, with no
+      // indication of which field was wrong.
+      const parsedExtraction = projectExtractionSchema.safeParse(extraction);
+      if (!parsedExtraction.success) {
+        setStage("review");
+        failWith(
+          createProjectFailure(
+            "VALIDATION",
+            "Some extracted fields are not valid",
+            "Review the highlighted fields and create the project again.",
+            {
+              fieldErrors: parsedExtraction.error.issues.flatMap<CreateProjectFieldError>(
+                (issue) => {
+                  const field = fieldPathToFormField(issue.path.join("."));
+                  return field ? [{ field, message: issue.message }] : [];
+                },
+              ),
+            },
+          ),
+        );
+        return;
+      }
+
+      const normalizedExtraction = parsedExtraction.data;
       const normalizedSigingDate = normalizeDateString(
         normalizedExtraction.legalAdministrationSignedDate,
       );
@@ -463,50 +622,54 @@ export function CreateProjectModal({
       ).unwrap();
 
       toast.success(`Project created: ${createdProject.name}`);
+      setFailure(null);
       onSuccess();
       onOpenChange(false);
       router.push(`/projects/${createdProject.id}`);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to create project",
-      );
+      // `unwrap()` rethrows the thunk's rejectWithValue payload verbatim, so
+      // this is the structured failure from the server action in every
+      // expected case; toCreateProjectFailure only kicks in for transport or
+      // serialization problems.
       setStage("review");
+      failWith(toCreateProjectFailure(error));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  /** Runs every local check and returns the errors in display order. */
+  const collectFormErrors = (): CreateProjectFieldError[] =>
+    validateCreateProjectForm({
+      selectedLeadId,
+      hasSourceDocuments: Boolean(sourceDocuments),
+      hasLocation: Boolean(selectedLocation),
+      hasSiteManager: Boolean(selectedSiteManager),
+      startDate,
+      extraction,
+    });
+
   const handleSubmit = async () => {
-    if (!selectedLeadId) {
-      toast.error("Select a lead before continuing.");
-      return;
-    }
+    // One pass over every requirement instead of a chain of early-return
+    // toasts: the user sees all of the problems at once, each one anchored to
+    // the input that owns it, rather than fixing them one round trip at a time.
+    const errors = collectFormErrors();
 
-    if (!selectedLocation) {
-      toast.error("Select a site location before creating the project.");
-      return;
-    }
-
-    if (!selectedSiteManager) {
-      toast.error("Select a site manager before creating the project.");
-      return;
-    }
-
-    if (!sourceDocuments) {
-      toast.error(
-        "Source documents are missing. Please retry the extraction process.",
+    if (errors.length > 0) {
+      failWith(
+        createProjectFailure(
+          "VALIDATION",
+          errors.length === 1
+            ? "One field needs attention"
+            : `${errors.length} fields need attention`,
+          "Fix the highlighted fields, then create the project.",
+          { fieldErrors: errors },
+        ),
       );
       return;
     }
 
-    // The review schema coerces lot size on every keystroke and deliberately
-    // does not throw on a negative number (that crash is what took the page
-    // down). This path calls the server action directly, not the validated
-    // API route, so the sign check has to happen here.
-    if (extraction.lotSize !== null && extraction.lotSize < 0) {
-      toast.error("Lot size cannot be negative.");
-      return;
-    }
+    setFailure(null);
 
     // ── Phase 3: date mismatch gate ──
     // Compare the signed date against the start date before dispatching. If
@@ -564,6 +727,15 @@ export function CreateProjectModal({
 
         {stage === "selection" ? (
           <div className="space-y-5">
+            <CreateProjectErrorBanner
+              failure={failure}
+              generalErrors={generalErrors}
+              isSubmitting={isSubmitting}
+              onGoToField={goToField}
+              onRetry={() => void runCreate(false)}
+              onDismiss={() => setFailure(null)}
+              onClose={() => handleClose(false)}
+            />
             <div className="relative">
               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -676,6 +848,16 @@ export function CreateProjectModal({
 
         {stage === "review" ? (
           <div className="space-y-5">
+            <CreateProjectErrorBanner
+              failure={failure}
+              generalErrors={generalErrors}
+              isSubmitting={isSubmitting}
+              onGoToField={goToField}
+              onRetry={() => void runCreate(false)}
+              onDismiss={() => setFailure(null)}
+              onClose={() => handleClose(false)}
+            />
+
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="rounded-2xl border border-border/70 bg-slate-50/80 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -695,90 +877,116 @@ export function CreateProjectModal({
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
-                    <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                      Project name
-                    </Label>
-                    <Input
-                      className="mt-2"
-                      value={normalizeString(extraction.projectName)}
-                      onChange={(event) =>
-                        setExtraction((current) =>
-                          updateExtractionField(
-                            current,
-                            "projectName",
-                            event.target.value,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
-                    <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                      Site location
-                    </Label>
-                    <SearchableSelect
-                      label=""
-                      placeholder="Select address..."
-                      searchValue={siteAddress}
-                      selectedItem={selectedLocation}
-                      items={locationSuggestions}
-                      onQueryChange={(query) => setSiteAddress(query)}
-                      onSelect={(item) => {
-                        const suggestion = item as AddressSuggestion;
-                        setSelectedLocation(suggestion);
-                        setSiteAddress(suggestion.label);
-                        setExtraction((current) =>
-                          updateExtractionField(
-                            current,
-                            "legalAdministrationSiteAddress",
-                            suggestion.label,
-                          ),
-                        );
-                      }}
-                    />
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
-                    <SearchableSelect
-                      label="Site manager"
-                      placeholder="Assign manager..."
-                      searchValue={managerSearch}
-                      selectedItem={selectedSiteManager}
-                      items={siteManagers.items}
-                      loading={siteManagers.loading}
-                      hasMore={siteManagers.page < siteManagers.totalPages}
-                      onQueryChange={setManagerSearch}
-                      onSelect={(item) => {
-                        setSelectedManagerId(item.id);
-                        setManagerSearch((item as LookupOption).name);
-                      }}
-                      onLoadMore={() => {
-                        void dispatch(
-                          fetchSiteManagers({
-                            page: siteManagers.page + 1,
-                            limit: 10,
-                            query: managerSearch,
-                          }),
-                        );
-                      }}
-                    />
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
-                    <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                      Start date
-                    </Label>
-                    <div className="relative mt-2">
-                      <Calendar className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <FieldErrorBoundaryShell
+                      field="projectName"
+                      error={fieldErrorMap.projectName}
+                    >
+                      <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Project name
+                      </Label>
                       <Input
-                        className="pl-9"
-                        type="date"
-                        value={
-                          normalizeDateString(
-                            extraction.legalAdministrationSignedDate,
-                          ) || startDate
-                        }
-                        onChange={(event) => setStartDate(event.target.value)}
+                        className="mt-2"
+                        value={normalizeString(extraction.projectName)}
+                        onChange={(event) => {
+                          clearFieldError("projectName");
+                          setExtraction((current) =>
+                            updateExtractionField(
+                              current,
+                              "projectName",
+                              event.target.value,
+                            ),
+                          );
+                        }}
                       />
-                    </div>
+                    </FieldErrorBoundaryShell>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <FieldErrorBoundaryShell
+                      field="siteLocation"
+                      error={fieldErrorMap.siteLocation}
+                    >
+                      <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Site location
+                      </Label>
+                      <SearchableSelect
+                        label=""
+                        placeholder="Select address..."
+                        searchValue={siteAddress}
+                        selectedItem={selectedLocation}
+                        items={locationSuggestions}
+                        onQueryChange={(query) => setSiteAddress(query)}
+                        onSelect={(item) => {
+                          const suggestion = item as AddressSuggestion;
+                          clearFieldError("siteLocation");
+                          setSelectedLocation(suggestion);
+                          setSiteAddress(suggestion.label);
+                          setExtraction((current) =>
+                            updateExtractionField(
+                              current,
+                              "legalAdministrationSiteAddress",
+                              suggestion.label,
+                            ),
+                          );
+                        }}
+                      />
+                    </FieldErrorBoundaryShell>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <FieldErrorBoundaryShell
+                      field="siteManager"
+                      error={fieldErrorMap.siteManager}
+                    >
+                      <SearchableSelect
+                        label="Site manager"
+                        placeholder="Assign manager..."
+                        searchValue={managerSearch}
+                        selectedItem={selectedSiteManager}
+                        items={siteManagers.items}
+                        loading={siteManagers.loading}
+                        hasMore={siteManagers.page < siteManagers.totalPages}
+                        onQueryChange={setManagerSearch}
+                        onSelect={(item) => {
+                          clearFieldError("siteManager");
+                          setSelectedManagerId(item.id);
+                          setManagerSearch((item as LookupOption).name);
+                        }}
+                        onLoadMore={() => {
+                          void dispatch(
+                            fetchSiteManagers({
+                              page: siteManagers.page + 1,
+                              limit: 10,
+                              query: managerSearch,
+                            }),
+                          );
+                        }}
+                      />
+                    </FieldErrorBoundaryShell>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-white p-3 md:col-span-3">
+                    <FieldErrorBoundaryShell
+                      field="startDate"
+                      error={fieldErrorMap.startDate}
+                    >
+                      <Label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                        Start date
+                      </Label>
+                      <div className="relative mt-2">
+                        <Calendar className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          className="pl-9"
+                          type="date"
+                          value={
+                            normalizeDateString(
+                              extraction.legalAdministrationSignedDate,
+                            ) || startDate
+                          }
+                          onChange={(event) => {
+                            clearFieldError("startDate");
+                            setStartDate(event.target.value);
+                          }}
+                        />
+                      </div>
+                    </FieldErrorBoundaryShell>
                   </div>
                 </div>
                 <div className="mt-4 rounded-xl border border-border/70 bg-white p-4">
@@ -801,23 +1009,38 @@ export function CreateProjectModal({
                   are rendered as empty strings.
                 </p>
                 <div className="mt-4 space-y-2">
-                  {projectExtractionSections.map((section, index) => (
-                    <button
-                      key={section.key}
-                      type="button"
-                      onClick={() => setActiveSectionIndex(index)}
-                      className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition ${index === activeSectionIndex ? "border-emerald-400 bg-white text-emerald-950" : "border-emerald-200 bg-emerald-50 text-emerald-900/80 hover:bg-white/80"}`}
-                    >
-                      <span>
-                        {index + 1}. {section.title}
-                      </span>
-                      {index === activeSectionIndex ? (
-                        <CheckCircle2 className="size-4" />
-                      ) : (
-                        <ChevronRight className="size-4" />
-                      )}
-                    </button>
-                  ))}
+                  {projectExtractionSections.map((section, index) => {
+                    const sectionErrorCount = errorCountBySection[index];
+
+                    return (
+                      <button
+                        key={section.key}
+                        type="button"
+                        onClick={() => setActiveSectionIndex(index)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm transition ${
+                          sectionErrorCount > 0
+                            ? "border-destructive/50 bg-destructive-light text-destructive-ink hover:bg-destructive-light/80"
+                            : index === activeSectionIndex
+                              ? "border-emerald-400 bg-white text-emerald-950"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-900/80 hover:bg-white/80"
+                        }`}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {index + 1}. {section.title}
+                        </span>
+                        {sectionErrorCount > 0 ? (
+                          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold">
+                            <AlertCircle className="size-3.5" aria-hidden="true" />
+                            {sectionErrorCount}
+                          </span>
+                        ) : index === activeSectionIndex ? (
+                          <CheckCircle2 className="size-4 shrink-0" />
+                        ) : (
+                          <ChevronRight className="size-4 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -828,7 +1051,9 @@ export function CreateProjectModal({
               description={`Edit the fields for ${currentSection.title.toLowerCase()}. Leave unknown values blank.`}
               fields={currentFields}
               values={extraction}
+              errors={fieldErrorMap}
               onChange={(field, value) => {
+                clearFieldError(field as ProjectFormFieldKey);
                 setExtraction((current) =>
                   updateExtractionField(
                     current,
@@ -850,9 +1075,21 @@ export function CreateProjectModal({
                 <ChevronLeft className="mr-2 size-4" />
                 Previous
               </Button>
-              <div className="text-xs text-muted-foreground">
-                {currentSection.title}
-              </div>
+              {failure && failure.fieldErrors.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => goToField(failure.fieldErrors[0].field)}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-destructive-ink transition hover:bg-destructive-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+                >
+                  <AlertCircle className="size-3.5" aria-hidden="true" />
+                  {failure.fieldErrors.length}{" "}
+                  {failure.fieldErrors.length === 1 ? "issue" : "issues"} to fix
+                </button>
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  {currentSection.title}
+                </div>
+              )}
               <Button
                 disabled={isSubmitting}
                 onClick={() => {
@@ -983,5 +1220,134 @@ export function CreateProjectModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+/**
+ * One place where every create-project failure is rendered: the headline, the
+ * per-field list (each row jumps straight to the input that owns it), any
+ * blocker that no visible field can own, and the recovery actions the failure
+ * actually supports. Rendered on both the selection and review steps so an
+ * error is never left behind on a step the user has navigated away from.
+ */
+function CreateProjectErrorBanner({
+  failure,
+  generalErrors,
+  isSubmitting,
+  onGoToField,
+  onRetry,
+  onDismiss,
+  onClose,
+}: {
+  failure: CreateProjectFailure | null;
+  generalErrors: readonly string[];
+  isSubmitting: boolean;
+  onGoToField: (field: ProjectFormFieldKey) => void;
+  onRetry: () => void;
+  onDismiss: () => void;
+  onClose: () => void;
+}) {
+  if (!failure) {
+    return null;
+  }
+
+  const firstField = failure.fieldErrors[0]?.field;
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="rounded-2xl border border-destructive/40 bg-destructive-light p-4"
+    >
+      <div className="flex items-start gap-3">
+        <AlertCircle
+          className="mt-0.5 size-5 shrink-0 text-destructive-ink"
+          aria-hidden="true"
+        />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <p className="text-sm font-semibold text-destructive-ink">
+              {failure.title}
+            </p>
+            <p className="text-sm text-destructive-ink/90">{failure.message}</p>
+          </div>
+
+          {failure.fieldErrors.length > 0 ? (
+            <ul className="space-y-1">
+              {failure.fieldErrors.map((entry) => (
+                <li key={`${entry.field}-${entry.message}`}>
+                  <button
+                    type="button"
+                    onClick={() => onGoToField(entry.field)}
+                    className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive-ink transition hover:bg-white/70 focus-visible:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+                  >
+                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive-ink/70" />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium">
+                        {fieldDisplayLabel(entry.field)}
+                      </span>
+                      <span className="text-destructive-ink/85">
+                        {" \u2014 "}
+                        {entry.message}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 pt-0.5 text-xs font-medium opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                      Fix
+                      <ArrowRight className="size-3" aria-hidden="true" />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {generalErrors.length > 0 ? (
+            <ul className="list-disc space-y-1 pl-5 text-sm text-destructive-ink/90">
+              {generalErrors.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {firstField ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onGoToField(firstField)}
+              >
+                Go to first issue
+              </Button>
+            ) : null}
+            {failure.retryable && failure.fieldErrors.length === 0 ? (
+              <Button size="sm" disabled={isSubmitting} onClick={onRetry}>
+                <RefreshCw className="mr-2 size-3.5" aria-hidden="true" />
+                Try again
+              </Button>
+            ) : null}
+            {!failure.retryable ? (
+              <Button variant="outline" size="sm" onClick={onClose}>
+                Close wizard
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          </div>
+
+          {failure.detail ? (
+            <details className="pt-1">
+              <summary className="cursor-pointer text-xs text-destructive-ink/70">
+                Technical details
+              </summary>
+              <p className="mt-1 break-words font-mono text-[11px] text-destructive-ink/70">
+                {failure.detail}
+              </p>
+            </details>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
