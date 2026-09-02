@@ -182,6 +182,10 @@ export function XeroConnectionPanel({
                   }
                 />
                 <Detail
+                  label="Claims post to account"
+                  value={status.salesAccountCode ?? "Not set"}
+                />
+                <Detail
                   label="Authorisation valid until"
                   value={
                     status.refreshTokenExpiresAt
@@ -192,6 +196,15 @@ export function XeroConnectionPanel({
                   }
                 />
               </dl>
+
+              {!status.salesAccountCode ? (
+                <p className="mt-4 text-sm text-warning-ink">
+                  No revenue account is configured, so Xero will refuse every
+                  claim. Set <code className="font-mono">XERO_SALES_ACCOUNT_CODE</code>{" "}
+                  to the account progress claims should post to — the code from
+                  your Xero chart of accounts, not its name.
+                </p>
+              ) : null}
 
               {isExpiring || hasExpired ? (
                 <p className="mt-4 text-sm text-warning-ink">

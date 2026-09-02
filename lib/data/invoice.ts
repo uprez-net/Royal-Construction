@@ -10,6 +10,7 @@ import { flattenMilestones, stageState } from "@/lib/projects/milestone-ledger";
 import { buildMilestoneTree, groupRootsByStage } from "@/lib/projects/milestone-tree";
 import { resolveStageClaims } from "@/lib/projects/stage-claim";
 import { getXeroContext, XeroNotConnectedError, type XeroContext } from "@/lib/xero/client";
+import { getXeroConfig } from "@/lib/xero/config";
 import { resolveXeroContactId } from "@/lib/xero/contact";
 import { invoiceStatusRank, toInvoiceStatus } from "@/lib/xero/invoice-status";
 import { parseXeroDate } from "@/lib/xero/xero-date";
@@ -203,6 +204,19 @@ export async function createStageInvoice(
     return null;
   }
 
+  // An AUTHORISED invoice has to be complete enough to post to the ledger, so
+  // Xero requires a revenue account on every line — and without one it cannot
+  // derive the tax treatment either, which is why a missing account code shows
+  // up as two errors ("Account code or ID must be specified; The TaxType field
+  // is mandatory"). A DRAFT would have been accepted without it and failed the
+  // moment anyone approved it.
+  const config = getXeroConfig();
+  if (!config.salesAccountCode) {
+    throw new Error(
+      "Xero invoicing is not configured — set XERO_SALES_ACCOUNT_CODE to the revenue account progress claims should post to.",
+    );
+  }
+
   const context = await getXeroContext();
   const contactID = await resolveXeroContactId(context, project.customer);
 
@@ -231,6 +245,10 @@ export async function createStageInvoice(
             description: `${project.name} — ${stageLabel} progress claim`,
             quantity: 1,
             unitAmount: claim,
+            accountCode: config.salesAccountCode,
+            // Omitted unless overridden, so Xero applies the sales account's
+            // own default tax rate — the setting the bookkeeper already chose.
+            ...(config.salesTaxType ? { taxType: config.salesTaxType } : {}),
           },
         ],
       },
@@ -251,7 +269,7 @@ export async function createStageInvoice(
   );
 
   const created = response.body.invoices?.[0];
-  if (!created?.invoiceID) {
+  if (!created?.invoiceID || created.invoiceID === "00000000-0000-0000-0000-000000000000") {
     const reason = created?.validationErrors?.map((e) => e.message).join("; ");
     throw new Error(
       `Xero rejected the ${stageLabel} claim for project ${projectId}${reason ? `: ${reason}` : "."}`,

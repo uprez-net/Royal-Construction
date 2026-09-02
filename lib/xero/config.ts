@@ -18,6 +18,28 @@ export interface XeroConfig {
   /// Null until the webhook is registered. The notification route refuses to
   /// process anything without it in production.
   readonly webhookSecret: string | null;
+  /**
+   * The revenue account in the Xero chart of accounts that progress claims post
+   * to, e.g. "200" in the default AU/NZ chart.
+   *
+   * Required to raise a claim, but nullable here because the webhook route also
+   * reads this config and has no business failing over an invoicing setting.
+   * `createStageInvoice` is where its absence becomes an error.
+   *
+   * Deliberately not defaulted. Xero ships "200" as Sales in its stock chart,
+   * but organisations rename and renumber accounts freely, and guessing means
+   * posting revenue to whatever happens to sit at that code.
+   */
+  readonly salesAccountCode: string | null;
+  /**
+   * Tax treatment for the claim line, e.g. "OUTPUT" for GST on Income in an
+   * Australian organisation.
+   *
+   * Optional: left unset, Xero derives it from the sales account's own default
+   * tax rate, which is the setting the bookkeeper already made deliberately.
+   * Set it only to override that.
+   */
+  readonly salesTaxType: string | null;
 }
 
 /**
@@ -73,6 +95,8 @@ export function getXeroConfig(): XeroConfig {
     clientSecret: clientSecret as string,
     redirectUri: resolveRedirectUri(),
     webhookSecret: process.env.XERO_WEBHOOK_SECRET ?? null,
+    salesAccountCode: process.env.XERO_SALES_ACCOUNT_CODE ?? null,
+    salesTaxType: process.env.XERO_SALES_TAX_TYPE ?? null,
   };
 }
 

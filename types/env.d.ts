@@ -77,5 +77,14 @@ namespace NodeJS {
         // rejects everything, which is also what Xero's Intent To Receive
         // check expects of an unconfigured endpoint.
         XERO_WEBHOOK_SECRET: string;
+        // The revenue account in the Xero chart of accounts that progress
+        // claims post to, e.g. "200" in the stock AU chart. Required to raise
+        // a claim: Xero will not approve an invoice without one. Not defaulted
+        // — organisations renumber accounts, and a guess posts real revenue to
+        // whatever sits at that code.
+        XERO_SALES_ACCOUNT_CODE: string;
+        // Optional override, e.g. "OUTPUT" for GST on Income. Left unset, Xero
+        // applies the sales account's own default tax rate.
+        XERO_SALES_TAX_TYPE: string;
     }
 }

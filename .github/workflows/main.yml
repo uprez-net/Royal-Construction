@@ -57,6 +57,7 @@ env:
   XERO_CLIENT_SECRET: "REPLACE_WITH_XERO_CLIENT_SECRET"
   XERO_REDIRECT_URI: "https://example.invalid/api/xero/connect"
   XERO_WEBHOOK_SECRET: "REPLACE_WITH_XERO_WEBHOOK_SECRET"
+  XERO_SALES_ACCOUNT_CODE: "200"
 
 jobs:
   # ─── Checks ────────────────────────────────────────────────────────────────
