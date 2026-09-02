@@ -19,9 +19,15 @@ const isPublicRoute = createRouteMatcher([
   // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
   "/api/docusign(.*)",
   // Xero webhook — Xero calls it; authenticated by the x-xero-signature HMAC.
-  // Only the notification leg: /api/xero/connect grants an org-wide accounting
-  // connection and stays behind Clerk with an ADMIN check of its own.
   "/api/xero/notification(.*)",
+  // Xero OAuth consent + callback. "Public" here only means the blanket
+  // /api/ JSON-401 below does not apply: both legs are BROWSER navigations
+  // (the admin clicks Connect; Xero redirects back with ?code), and answering
+  // one with a JSON error body strands the operator on a blob of JSON with a
+  // spent authorization code. The handler runs its own Clerk + ADMIN check and
+  // answers with redirects, and `auth()` still resolves inside it because
+  // clerkMiddleware runs for public routes too — it just stops enforcing.
+  "/api/xero/connect(.*)",
   '/.well-known(.*)',
   '/api/mcp(.*)',
   '/api/sse(.*)',

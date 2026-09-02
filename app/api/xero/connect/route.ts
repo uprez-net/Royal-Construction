@@ -25,14 +25,21 @@ const ADMIN_XERO_PATH = "/admin/xero";
  * registering both and keeping them in step. The presence of `?code` says which
  * leg this is.
  *
- * Admin-only, and it stays behind Clerk (unlike the notification route): this
- * one grants an application-wide accounting connection, so it is authenticated
- * as a person, not by a shared secret.
+ * Admin-only, and authenticated as a PERSON rather than by a shared secret —
+ * this grants an application-wide accounting connection. The check lives in
+ * `requireAdmin` below rather than in the middleware, because a browser
+ * navigation needs a redirect where the middleware's /api/ branch would send a
+ * JSON error body.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // Both legs of this route are browser navigations, so a refusal has to be
+  // somewhere to go rather than a status code with a JSON body. The middleware
+  // treats every /api/ path as a fetch client and would answer a lapsed session
+  // with `{"error":"Unauthorized"}` on screen; that is why this route is exempt
+  // there and does the checking here.
   const guard = await requireAdmin();
-  if ("response" in guard) {
-    return guard.response;
+  if (!guard.ok) {
+    return refuseNavigation(request, guard.reason);
   }
 
   const url = request.nextUrl;
@@ -60,9 +67,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * who connected what and when after someone pulls the plug.
  */
 export async function DELETE(): Promise<NextResponse> {
+  // Unlike GET, this one IS a fetch — the admin panel calls it — so the shared
+  // JSON error envelope is the right answer.
   const guard = await requireAdmin();
-  if ("response" in guard) {
-    return guard.response;
+  if (!guard.ok) {
+    return refuseFetch(guard.reason);
   }
 
   const connection = await prisma.xeroConnection.findFirst({
@@ -230,30 +239,77 @@ function grantedScopes(scope: unknown): string[] {
   return [...XERO_SCOPES];
 }
 
+type AdminRefusal = "unauthenticated" | "forbidden" | "lookup_failed";
+
+type AdminGuard =
+  | { ok: true; userId: string }
+  | { ok: false; reason: AdminRefusal };
+
 /**
- * The signed-in ADMIN, or the response to send instead.
+ * The signed-in ADMIN, or why not.
  *
- * Clerk's middleware already answers unauthenticated API requests with a 401,
- * so this is the role check plus a belt-and-braces re-read of the session — the
- * same shape the mutating routes under `app/api/(data)` use.
+ * Returns the reason rather than a response because the two methods on this
+ * route have different audiences — a browser for GET, a fetch for DELETE — and
+ * only the caller knows which shape a refusal should take.
+ *
+ * This route is exempt from the middleware's auth enforcement, so this check is
+ * the only one standing. `auth()` still resolves: clerkMiddleware runs for
+ * public routes too and populates the session either way.
  */
-async function requireAdmin(): Promise<
-  { userId: string } | { response: NextResponse }
-> {
+async function requireAdmin(): Promise<AdminGuard> {
   const { userId: clerkId } = await auth();
   if (!clerkId) {
-    return { response: unauthorizedResponse() };
+    return { ok: false, reason: "unauthenticated" };
   }
 
   try {
     const user = await getUserByClerkId(clerkId);
     if (user?.role !== "ADMIN") {
-      return { response: forbiddenResponse("Only admins can manage the Xero connection.") };
+      return { ok: false, reason: "forbidden" };
     }
-    return { userId: user.id };
+    return { ok: true, userId: user.id };
   } catch (lookupError) {
     console.error("[xero] Admin lookup failed:", lookupError);
-    return { response: errorResponse("Could not verify your account", { status: 500 }) };
+    return { ok: false, reason: "lookup_failed" };
+  }
+}
+
+/** Refuse a browser navigation with somewhere to go. */
+function refuseNavigation(
+  request: NextRequest,
+  reason: AdminRefusal,
+): NextResponse {
+  if (reason === "unauthenticated") {
+    // Deliberately back to the admin page, NOT to this URL. An authorization
+    // code is single-use and short-lived, so replaying it after a sign-in
+    // detour fails in a way nobody could diagnose. Landing on the page they
+    // started from lets them press Connect again against a fresh session.
+    const signIn = new URL(
+      process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in",
+      request.nextUrl.origin,
+    );
+    signIn.searchParams.set("redirect_url", ADMIN_XERO_PATH);
+
+    return NextResponse.redirect(signIn);
+  }
+
+  // A signed-in non-admin, or a role lookup that failed and left us unable to
+  // tell: both get the dashboard, which is what the middleware does to anyone
+  // who wanders onto an /admin page. Failing closed on the lookup error also
+  // avoids bouncing them to /admin/xero, where the same lookup would fail again
+  // and send them here anyway.
+  return NextResponse.redirect(new URL("/dashboard", request.nextUrl.origin));
+}
+
+/** Refuse a fetch with the shared error envelope. */
+function refuseFetch(reason: AdminRefusal): NextResponse {
+  switch (reason) {
+    case "unauthenticated":
+      return unauthorizedResponse();
+    case "forbidden":
+      return forbiddenResponse("Only admins can manage the Xero connection.");
+    default:
+      return errorResponse("Could not verify your account", { status: 500 });
   }
 }
 
