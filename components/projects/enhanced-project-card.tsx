@@ -5,6 +5,7 @@ import { ChevronRight, MapPin } from "lucide-react";
 import type { ProjectWithStats } from "@/types/project";
 import { Badge } from "@/components/ui/badge";
 import { compactCurrency } from "@/utils/formatters";
+import { calcStageProgress } from "@/lib/projects/stage-progress";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { formatStatus, projectStatusConfig } from "./project-status";
 import type { Role as UserRoles } from "@prisma/client";
@@ -14,34 +15,6 @@ interface EnhancedProjectCardProps {
   project: ProjectWithStats;
   onDetailsClick?: (projectId: string) => void;
 }
-
-const calcMilestoneOverviewData = (
-  milestones: ProjectWithStats["milestones"],
-) => {
-  const stageMilestoneMap = new Map<
-    string,
-    { completed: number; total: number }
-  >();
-  for (const milestone of milestones) {
-    const stage = milestone.projectStage;
-    if (!stageMilestoneMap.has(stage)) {
-      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
-    }
-    const stageData = stageMilestoneMap.get(stage)!;
-    stageData.total++;
-    if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
-      stageData.completed++;
-    }
-  }
-  const totalStages = stageMilestoneMap.size;
-  const completedStages = Array.from(stageMilestoneMap.values()).filter(
-    (stageData) => stageData.completed === stageData.total,
-  ).length;
-  return {
-    totalStages,
-    completedStages,
-  };
-};
 
 export function EnhancedProjectCard({
   role,
@@ -58,9 +31,12 @@ export function EnhancedProjectCard({
   const isOverBudget = getBudgetStatus(budget, spent) === "OVER_BUDGET";
   const progress = Math.round(project.progressPercent);
   const progressLabelId = `project-progress-${project.id}`;
-  const { totalStages, completedStages } = calcMilestoneOverviewData(
+  const { totalStages, completedStages } = calcStageProgress(
     project.milestones,
   );
+  // Money in. Every other figure on this row is money out or committed, so the
+  // card said nothing about what the owner has actually paid.
+  const cleared = Number(project.invoiceTotals.paid);
 
   const openQuickView = () => onDetailsClick?.(project.id);
 
@@ -152,11 +128,17 @@ export function EnhancedProjectCard({
         </div>
 
         {isAdmin && (
-          <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-muted/50 px-3 py-3 text-xs">
+          <div className="mb-4 grid grid-cols-4 gap-2 rounded-lg bg-muted/50 px-3 py-3 text-xs">
             <div>
               <p className="font-medium text-muted-foreground">Budget</p>
               <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
                 {hasBudget ? compactCurrency.format(budget) : "—"}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="font-medium text-muted-foreground">Cleared</p>
+              <p className="font-mono text-sm font-semibold tabular-nums text-success-ink">
+                {Number.isFinite(cleared) ? compactCurrency.format(cleared) : "—"}
               </p>
             </div>
             <div className="text-center">

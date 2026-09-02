@@ -65,9 +65,26 @@ namespace NodeJS {
         // Scrapedo (Web Scraping)
         SCRAPEDO_TOKEN: string;
 
-        // Xero
+        // Xero. The connection uses the authorization-code grant, so the
+        // tenant and tokens are discovered at consent and held in
+        // XeroConnection rather than configured here.
         XERO_CLIENT_ID: string;
         XERO_CLIENT_SECRET: string;
-        XERO_TENANT_ID: string;
+        // Must match a redirect URI registered on the Xero app byte for byte.
+        // Falls back to `${NEXT_PUBLIC_APP_URL}/api/xero/connect` when unset.
+        XERO_REDIRECT_URI: string;
+        // Signs every webhook delivery; without it /api/xero/notification
+        // rejects everything, which is also what Xero's Intent To Receive
+        // check expects of an unconfigured endpoint.
+        XERO_WEBHOOK_SECRET: string;
+        // The revenue account in the Xero chart of accounts that progress
+        // claims post to, e.g. "200" in the stock AU chart. Required to raise
+        // a claim: Xero will not approve an invoice without one. Not defaulted
+        // — organisations renumber accounts, and a guess posts real revenue to
+        // whatever sits at that code.
+        XERO_SALES_ACCOUNT_CODE: string;
+        // Optional override, e.g. "OUTPUT" for GST on Income. Left unset, Xero
+        // applies the sales account's own default tax rate.
+        XERO_SALES_TAX_TYPE: string;
     }
 }

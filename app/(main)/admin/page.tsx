@@ -6,6 +6,7 @@ import {
   CheckSquare,
   LucideIcon,
   PenLine,
+  Plug,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -45,7 +46,15 @@ export default function AdminPage() {
       icon: Users,
       href: "/admin/manage-team",
       accent: "green",
-    }
+    },
+    {
+      label: "Xero Accounting",
+      description:
+        "Connect the Xero organisation that progress claims are raised in.",
+      icon: Plug,
+      href: "/admin/xero",
+      accent: "teal",
+    },
   ];
 
   const accentStyles: Record<

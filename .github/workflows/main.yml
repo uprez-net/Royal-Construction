@@ -53,9 +53,12 @@ env:
   # from the `test` job below and cache ~/.cache/puppeteer there instead.
   PUPPETEER_SKIP_DOWNLOAD: "true"
   # PlaceHolder-Keys
-  XERO_CLIENT_ID: "REPLACE_WITH_XERO_CLIENT_ID"
-  XERO_CLIENT_SECRET: "REPLACE_WITH_XERO_CLIENT_SECRET"
-  XERO_TENANT_ID: "REPLACE_WITH_XERO_TENANT_ID"
+  XERO_CLIENT_ID: ${{ secrets.XERO_CLIENT_ID }}
+  XERO_CLIENT_SECRET: ${{ secrets.XERO_CLIENT_SECRET }}
+  XERO_REDIRECT_URI: ${{ secrets.XERO_REDIRECT_URI }}
+  XERO_WEBHOOK_SECRET: ${{ secrets.XERO_WEBHOOK_SECRET }}
+  XERO_SALES_ACCOUNT_CODE: ${{ secrets.XERO_SALES_ACCOUNT_CODE }}
+  XERO_SALES_TAX_TYPE: ${{ secrets.XERO_SALES_TAX_TYPE }}
 
 jobs:
   # ─── Checks ────────────────────────────────────────────────────────────────

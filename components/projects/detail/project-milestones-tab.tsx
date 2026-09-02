@@ -22,21 +22,24 @@ import {
   lastCompleted,
   nextActivity,
   partitionActivities,
-  stageClaimAmount,
   stageRollup,
   stageState,
   type StageState,
 } from "@/lib/projects/milestone-ledger";
 import {
-  matchPaymentStagesToProjectStages,
-} from "@/lib/projects/payment-stages";
+  buildMilestoneTree,
+  groupRootsByStage,
+} from "@/lib/projects/milestone-tree";
+import {
+  contractClaimTotal,
+  resolveStageClaims,
+} from "@/lib/projects/stage-claim";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
 import {
   PROJECT_STAGE_LABELS,
   PROJECT_STAGE_PERCENTAGE,
-  type MilestoneWithFilesTradiesUpdates,
   type ProjectDetail,
   type TradieScheduleListItem,
   type TradieScheduleWithTradieAndMilestone,
@@ -47,48 +50,6 @@ import { MilestoneStatus, ProjectStage } from "@prisma/client";
 
 import { MilestoneCard } from "./milestone-tab/milestone-card";
 
-const convertToVisualMilestone = (
-  milestones: MilestoneWithFilesTradiesUpdates[],
-): UIMilestone[] => {
-  const milestoneMap: Record<string, UIMilestone> = {};
-
-  // First pass: create every milestone so parents can be referenced
-  // regardless of their position in the input array.
-  milestones.forEach((m) => {
-    milestoneMap[m.id] = {
-      ...m,
-      childrenMilestones: [],
-    };
-  });
-
-  const rootMilestones: UIMilestone[] = [];
-
-  // Second pass: build the hierarchy.
-  Object.values(milestoneMap).forEach((milestone) => {
-    if (milestone.parentId) {
-      const parent = milestoneMap[milestone.parentId];
-
-      if (parent) {
-        parent.childrenMilestones.push(milestone);
-      }
-    } else {
-      rootMilestones.push(milestone);
-    }
-  });
-
-  // Sort children recursively and roots by order.
-  const sortMilestones = (items: UIMilestone[]) => {
-    items.sort((a, b) => a.order - b.order);
-
-    items.forEach((milestone) => {
-      sortMilestones(milestone.childrenMilestones);
-    });
-  };
-
-  sortMilestones(rootMilestones);
-
-  return rootMilestones;
-};
 
 interface LedgerStage {
   stage: ProjectStage;
@@ -196,54 +157,39 @@ export function ProjectMilestonesTab({
     project.requirements?.commercialsAndClaims?.paymentStages;
   // The contract's own claim schedule wins over the static stage table: the
   // percentages there are what the owner actually agreed to pay per stage.
-  const contractStages = useMemo(
-    () => matchPaymentStagesToProjectStages(projectStageData),
-    [projectStageData],
+  // Shared with the invoice generator so a stage bills exactly what is shown here.
+  const stageClaims = useMemo(
+    () => resolveStageClaims(projectStageData, Number(project.totalBudget)),
+    [projectStageData, project.totalBudget],
   );
   const visualMilestones = useMemo(
-    () => convertToVisualMilestone(project.milestones),
+    () => buildMilestoneTree(project.milestones),
     [project.milestones],
   );
 
   const ledgerStages = useMemo<LedgerStage[]>(() => {
-    const grouped = visualMilestones.reduce<Record<string, UIMilestone[]>>(
-      (acc, milestone) => {
-        acc[milestone.projectStage] = acc[milestone.projectStage] ?? [];
-        acc[milestone.projectStage].push(milestone);
-        return acc;
-      },
-      {},
-    );
+    const grouped = groupRootsByStage(visualMilestones);
 
     // Milestones arrive sorted by `order`, which need not follow the contract
     // stages, so the ledger is driven by the canonical stage sequence instead.
-    const populated = (
-      Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[]
-    ).filter((stage) => grouped[stage]?.length);
+    // Carrying each stage's milestones alongside its key keeps the array in
+    // hand rather than re-reading a partial record TS cannot prove is populated.
+    const populated = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
+      .map((stage) => ({ stage, milestones: grouped[stage] ?? [] }))
+      .filter((entry) => entry.milestones.length > 0);
 
-    const projectBudget = Number(project.totalBudget);
-    const states = populated.map((stage) => stageState(grouped[stage]));
+    const states = populated.map((entry) => stageState(entry.milestones));
     const workingIndex = findWorkingStageIndex(states);
 
-    const rows: LedgerStage[] = populated.map((stage, index) => {
-      const contractStage = contractStages[stage];
-      const percentage =
-        contractStage?.percentage ??
-        (PROJECT_STAGE_PERCENTAGE[stage] != null
-          ? PROJECT_STAGE_PERCENTAGE[stage] * 100
-          : null);
-      const claim = stageClaimAmount(
-        contractStage?.amount,
-        percentage,
-        projectBudget,
-      );
+    const rows: LedgerStage[] = populated.map(({ stage, milestones }, index) => {
+      const { percentage, claim } = stageClaims[stage];
 
       return {
         stage,
         label: PROJECT_STAGE_LABELS[stage] ?? stage,
         percentage,
         claim,
-        milestones: grouped[stage],
+        milestones,
         state: states[index],
         isWorkable: index === workingIndex,
         blockedBy: null,
@@ -258,7 +204,7 @@ export function ProjectMilestonesTab({
         ? row
         : { ...row, blockedBy: gate },
     );
-  }, [visualMilestones, contractStages, project.totalBudget]);
+  }, [visualMilestones, stageClaims]);
 
   const workingStage = ledgerStages.find((row) => row.isWorkable);
 
@@ -393,32 +339,12 @@ export function ProjectMilestonesTab({
   // "Contract total" means the whole claim schedule. Summing only the stages
   // that currently carry activities would under-report it the moment a stage
   // is emptied, and this figure is money.
-  const contractTotal = useMemo(() => {
-    const projectBudget = Number(project.totalBudget);
-
-    const amounts = (Object.keys(PROJECT_STAGE_PERCENTAGE) as ProjectStage[])
-      .map((stage) => {
-        const contractStage = contractStages[stage];
-        const percentage =
-          contractStage?.percentage ??
-          (PROJECT_STAGE_PERCENTAGE[stage] != null
-            ? PROJECT_STAGE_PERCENTAGE[stage] * 100
-            : null);
-
-        return stageClaimAmount(
-          contractStage?.amount,
-          percentage,
-          projectBudget,
-        );
-      })
-      .filter((amount): amount is number => amount !== null);
-
-    // No stage resolved an amount — the total is unknown, not zero. Printing
-    // $0 as a contract total would be a confident wrong number.
-    return amounts.length === 0
-      ? null
-      : amounts.reduce((total, amount) => total + amount, 0);
-  }, [contractStages, project.totalBudget]);
+  // No stage resolved an amount — the total is unknown, not zero. Printing
+  // $0 as a contract total would be a confident wrong number.
+  const contractTotal = useMemo(
+    () => contractClaimTotal(stageClaims),
+    [stageClaims],
+  );
   // Stage, [Claim], Progress, Status, Next up, disclosure.
   const columnCount = isAdmin ? 6 : 5;
 

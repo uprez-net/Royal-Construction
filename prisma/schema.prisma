@@ -331,6 +331,7 @@ model Project {
   materials           Material[]
   tradies             Tradie[]             @relation("ProjectTradies")
   certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
+  invoices            Invoice[]
 
   @@index([name])
   @@index([customerId])
@@ -341,7 +342,6 @@ model Project {
 model Milestone {
   id              String          @id @default(uuid())
   projectId       String
-  invoiceId       String?
   name            String
   order           Int
   description     String?
@@ -591,14 +591,18 @@ model ActivityLog {
 }
 
 model Customer {
-  id      String  @id @default(uuid())
-  name    String
-  email   String  @unique
-  phone   String  @unique
+  id            String  @id @default(uuid())
+  name          String
+  email         String  @unique
+  phone         String  @unique
   // Primary owner's Current Location (residential/postal address). Populated at
   // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
   // customers have none.
-  address String?
+  address       String?
+  /// The Xero ContactID this customer is billed under. Resolved lazily the
+  /// first time a progress claim is raised (match on email, else create), so
+  /// legacy customers carry null until their first invoice.
+  xeroContactId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -631,6 +635,7 @@ model User {
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
   createdOffers       Offer[]          @relation("OfferCreatedBy")
+  xeroConnections     XeroConnection[] @relation("XeroConnections")
 
   @@index([email])
   @@index([phone])
@@ -1216,4 +1221,100 @@ model CertifierEmail {
 
   @@index([engagementId])
   @@index([engagementId, sentAt(sort: Desc)])
+}
+
+/// Lifecycle of a progress claim, mirroring Xero's own invoice status codes so
+/// the webhook can map one to one without inventing intermediate states.
+enum InvoiceStatus {
+  DRAFT
+  SUBMITTED
+  AUTHORISED
+  PAID
+  VOIDED
+  DELETED
+}
+
+/// The organisation's Xero OAuth2 connection.
+///
+/// A table rather than env vars because the refresh token ROTATES on every
+/// refresh — Xero issues a new one and invalidates the old — so it has to be
+/// written back somewhere durable. It also expires after 60 days without use,
+/// which is why `refreshedAt` is tracked and surfaced on /admin/xero: a silent
+/// expiry would stop every progress claim with no other symptom.
+///
+/// One active row in practice. `isActive` rather than a delete so a disconnect
+/// leaves an audit trail of who connected what and when.
+model XeroConnection {
+  id            String   @id @default(uuid())
+  tenantId      String   @unique
+  tenantName    String?
+  accessToken   String
+  refreshToken  String
+  /// Access token expiry (Xero issues 30-minute tokens).
+  expiresAt     DateTime
+  /// Last successful token refresh — the 60-day refresh-token clock restarts here.
+  refreshedAt   DateTime @default(now())
+  scopes        String[]
+  connectedById String?
+  isActive      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connectedBy User? @relation("XeroConnections", fields: [connectedById], references: [id])
+
+  @@index([isActive])
+  @@index([connectedById])
+}
+
+/// A progress claim raised in Xero against a completed ProjectStage.
+///
+/// `ProjectStage` is an enum, not a table, so a stage has no row to hang this
+/// off — the claim keys on the (project, stage) pair instead, and that pair is
+/// unique: a stage is claimed exactly once. That uniqueness IS the idempotency
+/// guard for generation, which fires from a post-response hook that can run
+/// more than once for the same stage.
+///
+/// Amounts are mirrored from Xero rather than computed here. Xero owns the
+/// ledger; this table exists so the project page can show an invoice history
+/// without a per-render API call, and so payment state has somewhere to land
+/// when the webhook arrives.
+model Invoice {
+  id            String        @id @default(uuid())
+  projectId     String
+  projectStage  ProjectStage
+  xeroInvoiceId String        @unique
+  invoiceNumber String?
+  reference     String?
+  status        InvoiceStatus @default(AUTHORISED)
+  currencyCode  String        @default("AUD")
+
+  subTotal       Decimal @db.Decimal(12, 2)
+  totalTax       Decimal @db.Decimal(12, 2)
+  total          Decimal @db.Decimal(12, 2)
+  amountDue      Decimal @db.Decimal(12, 2)
+  amountPaid     Decimal @default(0) @db.Decimal(12, 2)
+  amountCredited Decimal @default(0) @db.Decimal(12, 2)
+
+  issuedDate      DateTime
+  dueDate         DateTime
+  fullyPaidOnDate DateTime?
+
+  /// Vercel Blob URL of the PDF Xero rendered, archived at creation so the
+  /// invoice opens in our own file viewer instead of sending anyone to Xero.
+  pdfUrl String?
+
+  /// Xero's `updatedDateUTC` for the version this row reflects. The webhook
+  /// refuses to apply an event older than this, so a replayed or out-of-order
+  /// delivery cannot drag a PAID claim back to AUTHORISED.
+  xeroUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, projectStage])
+  @@index([projectId])
+  @@index([status])
 }
