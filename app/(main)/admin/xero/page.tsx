@@ -41,7 +41,7 @@ async function XeroConnectionContent({
 
       <XeroConnectionPanel
         status={status}
-        error={params.error}
+        errorCode={params.error}
         connected={params.connected === "1"}
       />
     </div>

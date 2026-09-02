@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 
 import { auth } from "@clerk/nextjs/server";
-import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getUserByClerkId } from "@/lib/data/user";
@@ -41,7 +40,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (error) {
     // The operator declined consent, or Xero refused. Not our failure to log
     // loudly — send them back with something readable.
-    return redirectToAdmin(request, { error });
+    //
+    // A CODE, never Xero's own text. Everything on this query string is
+    // attacker-controllable through a crafted link and ends up in an alert on
+    // an admin page; the page owns the wording and ignores codes it does not
+    // recognise, so a stranger cannot put words in our UI.
+    return clearState(redirectToAdmin(request, { error: consentErrorCode(error) }));
   }
 
   return url.searchParams.get("code")
@@ -71,6 +75,11 @@ export async function DELETE(): Promise<NextResponse> {
 
   try {
     const xero = buildXeroClient(getXeroConfig());
+    // `revokeToken()` calls straight through to `openIdClient.revoke()` with no
+    // lazy-init guard of its own — unlike `buildConsentUrl` and `apiCallback`,
+    // which initialize on demand. Without this it throws on undefined and the
+    // token is never actually revoked at Xero.
+    await xero.initialize();
     xero.setTokenSet({
       access_token: connection.accessToken,
       refresh_token: connection.refreshToken,
@@ -105,16 +114,23 @@ async function startConnection(): Promise<NextResponse> {
   const xero = buildXeroClient(config, { state });
   const consentUrl = await xero.buildConsentUrl();
 
-  const cookieStore = await cookies();
-  cookieStore.set(STATE_COOKIE, state, {
+  const response = NextResponse.redirect(consentUrl);
+  // Set on the response itself rather than through `cookies()`. Both are
+  // supported in a route handler, but this one cannot be anything other than
+  // the Set-Cookie on the very redirect that starts the flow — and if the
+  // cookie does not survive that hop, the callback has no state to check
+  // against and the connection cannot complete.
+  response.cookies.set(STATE_COOKIE, state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
+    // Lax, not Strict: the browser arrives back from Xero on a cross-site
+    // top-level navigation, which Strict would withhold the cookie from.
     sameSite: "lax",
     path: "/api/xero",
     maxAge: STATE_TTL_SECONDS,
   });
 
-  return NextResponse.redirect(consentUrl);
+  return response;
 }
 
 /** Exchange the code, discover the tenant, and store the token set. */
@@ -122,11 +138,10 @@ async function completeConnection(
   request: NextRequest,
   userId: string,
 ): Promise<NextResponse> {
-  const cookieStore = await cookies();
-  const state = cookieStore.get(STATE_COOKIE)?.value;
+  const state = request.cookies.get(STATE_COOKIE)?.value;
   if (!state) {
     return redirectToAdmin(request, {
-      error: "The connection attempt expired. Start again from this page.",
+      error: "expired",
     });
   }
 
@@ -138,9 +153,11 @@ async function completeConnection(
     if (!tokenSet.access_token || !tokenSet.refresh_token) {
       // No refresh token means `offline_access` was not granted, and the
       // connection would die in 30 minutes with no way to renew it.
-      return redirectToAdmin(request, {
-        error: "Xero returned no refresh token. Check the app's offline_access scope.",
-      });
+      return clearState(
+        redirectToAdmin(request, {
+          error: "no_refresh_token",
+        }),
+      );
     }
 
     // Which organisation was actually consented to — the reason this flow beats
@@ -148,9 +165,11 @@ async function completeConnection(
     const tenants = await xero.updateTenants(false);
     const tenant = tenants[0];
     if (!tenant?.tenantId) {
-      return redirectToAdmin(request, {
-        error: "No Xero organisation was authorised for this app.",
-      });
+      return clearState(
+        redirectToAdmin(request, {
+          error: "no_tenant",
+        }),
+      );
     }
 
     const data = {
@@ -159,7 +178,10 @@ async function completeConnection(
       refreshToken: tokenSet.refresh_token,
       expiresAt: expiryFromTokenSet(tokenSet.expires_at, tokenSet.expires_in),
       refreshedAt: new Date(),
-      scopes: [...XERO_SCOPES],
+      // What Xero actually granted, which can be narrower than what was asked
+      // for. Recording the request would make this field a restatement of a
+      // constant rather than a record of the connection.
+      scopes: grantedScopes(tokenSet.scope),
       connectedById: userId,
       isActive: true,
     };
@@ -180,14 +202,32 @@ async function completeConnection(
     ]);
   } catch (callbackError) {
     console.error("[xero] OAuth callback failed:", callbackError);
-    return redirectToAdmin(request, {
-      error: "Could not complete the Xero connection. Check the server logs.",
-    });
-  } finally {
-    cookieStore.delete(STATE_COOKIE);
+    return clearState(
+      redirectToAdmin(request, {
+        error: "failed",
+      }),
+    );
   }
 
-  return redirectToAdmin(request, { connected: "1" });
+  return clearState(redirectToAdmin(request, { connected: "1" }));
+}
+
+/**
+ * The granted scopes, as a list.
+ *
+ * RFC 6749 puts `scope` on the token response as a space-delimited string, and
+ * that is what Xero sends, but `TokenSet` passes the field through untouched —
+ * so handle both shapes rather than trusting one.
+ */
+function grantedScopes(scope: unknown): string[] {
+  if (Array.isArray(scope)) {
+    return scope.map(String);
+  }
+  if (typeof scope === "string") {
+    return scope.split(" ").filter(Boolean);
+  }
+
+  return [...XERO_SCOPES];
 }
 
 /**
@@ -215,6 +255,21 @@ async function requireAdmin(): Promise<
     console.error("[xero] Admin lookup failed:", lookupError);
     return { response: errorResponse("Could not verify your account", { status: 500 }) };
   }
+}
+
+/**
+ * Xero's consent-redirect error, narrowed to a code the admin page knows.
+ * Anything unfamiliar collapses to `refused` rather than being passed along.
+ */
+function consentErrorCode(error: string): string {
+  return error === "access_denied" || error === "invalid_scope" ? error : "refused";
+}
+
+/** Retire the one-shot state cookie, whichever way the callback ended. */
+function clearState(response: NextResponse): NextResponse {
+  response.cookies.set(STATE_COOKIE, "", { path: "/api/xero", maxAge: 0 });
+
+  return response;
 }
 
 /** Back to the admin page, carrying the outcome for it to render. */

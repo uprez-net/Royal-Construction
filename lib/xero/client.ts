@@ -3,6 +3,7 @@ import { XeroClient } from "xero-node";
 import prisma from "@/lib/prisma";
 
 import { getXeroConfig, XERO_SCOPES, type XeroConfig } from "./config";
+import { isInvalidGrant } from "./token-errors";
 
 /**
  * Thrown when no Xero organisation has been connected, or the stored refresh
@@ -27,6 +28,28 @@ export interface XeroContext {
 // lapses mid-flight.
 const EXPIRY_SKEW_MS = 120_000;
 
+// The SDK defaults to 3.5s, which covers one hop. The consent callback makes
+// three — OpenID discovery, the code exchange, then a JWKS fetch to verify the
+// id_token — and a cold serverless function pays DNS and TLS on each. 3.5s
+// turns an ordinarily slow round-trip into a failed connection.
+//
+// This only reaches calls that go through openid-client. `refreshWithRefreshToken`
+// bypasses it (see REFRESH_TIMEOUT_MS).
+const HTTP_TIMEOUT_MS = 20_000;
+
+// `refreshWithRefreshToken` posts through a bare axios call that sets no
+// timeout, and axios defaults to waiting forever. Refreshes run inside `after()`
+// on the milestone and webhook paths, so a hung socket would silently burn the
+// whole function budget and take the progress claim down with it. Time it out
+// ourselves; a timeout reads as transient, so the claim is simply retried.
+const REFRESH_TIMEOUT_MS = 15_000;
+
+// The SDK defaults to 5s. `apiCallback` validates the id_token's `iat`/`nbf`,
+// so a server clock a few seconds fast rejects a perfectly good token with an
+// error that reads like a Xero fault. 30s is still far tighter than the token's
+// 30-minute life.
+const CLOCK_TOLERANCE_SECONDS = 30;
+
 /**
  * Build a `XeroClient` for one unit of work.
  *
@@ -46,6 +69,12 @@ export function buildXeroClient(
     clientSecret: config.clientSecret,
     redirectUris: [config.redirectUri],
     scopes: [...XERO_SCOPES],
+    httpTimeout: HTTP_TIMEOUT_MS,
+    clockTolerance: CLOCK_TOLERANCE_SECONDS,
+    // `apiCallback` checks the returned state against `config.state`, so the
+    // client handling the callback must be built with the same value the
+    // consent URL was built with. That is why this is a parameter and not a
+    // constant: the callback leg reads it back out of the state cookie.
     ...(options?.state ? { state: options.state } : {}),
   });
 }
@@ -86,15 +115,31 @@ export async function getXeroContext(): Promise<XeroContext> {
   // identity.xero.com, a round-trip this path does not need.
   let tokenSet;
   try {
-    tokenSet = await xero.refreshWithRefreshToken(
-      config.clientId,
-      config.clientSecret,
-      connection.refreshToken,
+    tokenSet = await withTimeout(
+      xero.refreshWithRefreshToken(
+        config.clientId,
+        config.clientSecret,
+        connection.refreshToken,
+      ),
+      REFRESH_TIMEOUT_MS,
+      "Xero token refresh timed out",
     );
   } catch (error) {
-    // A rejected refresh token is terminal: it has been revoked, or it went
-    // 60 days unused and Xero dropped it. Someone has to re-consent.
-    console.error("[xero] Token refresh failed:", error);
+    // Only `invalid_grant` is terminal — the token was revoked, or it went 60
+    // days unused and Xero dropped it, and a person has to re-consent.
+    //
+    // Everything else (a 429, a 5xx, a dropped connection) is transient, and
+    // deactivating on it would be self-inflicted damage: one blip would take
+    // the organisation offline and demand a manual reconnect for a fault that
+    // would have cleared by itself. Xero also keeps a rotated refresh token
+    // usable for 30 minutes, so a concurrent double-refresh resolves on its own
+    // rather than arriving here.
+    if (!isInvalidGrant(error)) {
+      console.error("[xero] Token refresh failed transiently:", error);
+      throw error;
+    }
+
+    console.error("[xero] Refresh token rejected; deactivating connection:", error);
     await prisma.xeroConnection.update({
       where: { id: connection.id },
       data: { isActive: false },
@@ -125,10 +170,37 @@ export async function getXeroContext(): Promise<XeroContext> {
 }
 
 /**
- * Absolute expiry for a token set. `openid-client` normally resolves
- * `expires_at` (epoch seconds) itself, but the direct token request only
- * returns `expires_in`, so fall back to that and finally to Xero's documented
- * 30-minute access-token lifetime.
+ * Reject if a promise has not settled in time.
+ *
+ * Note this does not cancel the underlying request — nothing in the SDK exposes
+ * a signal to cancel it with. It bounds how long we WAIT, which is the part
+ * that matters when the caller is a post-response hook with a budget.
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Absolute expiry for a token set.
+ *
+ * `TokenSet` derives `expires_at` (epoch seconds) from `expires_in` in its
+ * setter, so in practice it is always present. The fallbacks are belt and
+ * braces, ending at Xero's documented 30-minute access-token lifetime rather
+ * than at an already-expired date.
  */
 export function expiryFromTokenSet(
   expiresAt: number | undefined,

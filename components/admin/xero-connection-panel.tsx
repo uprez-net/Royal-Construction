@@ -20,10 +20,29 @@ import { dateFormat } from "@/utils/formatters";
 
 interface XeroConnectionPanelProps {
   status: XeroConnectionStatus;
-  /** Set when the OAuth round-trip came back with a problem to show. */
-  error?: string;
+  /** An error CODE from the connect route, not a message. See `ERROR_COPY`. */
+  errorCode?: string;
   connected?: boolean;
 }
+
+/**
+ * The wording lives here, not in the route.
+ *
+ * The connect route hands back a short code and this maps it. Query strings are
+ * attacker-controllable through a crafted link, so an unrecognised code renders
+ * nothing at all rather than becoming text on an admin page.
+ */
+const ERROR_COPY: Record<string, string> = {
+  access_denied: "The Xero authorisation was declined, so nothing has changed.",
+  invalid_scope:
+    "Xero rejected the requested permissions. Check the app's scopes in the Xero developer portal.",
+  refused: "Xero refused the authorisation request. Check the server logs.",
+  expired: "The connection attempt expired. Start it again from this page.",
+  no_refresh_token:
+    "Xero returned no refresh token. Check that the app requests the offline_access scope.",
+  no_tenant: "No Xero organisation was authorised for this app.",
+  failed: "Could not complete the Xero connection. Check the server logs.",
+};
 
 /** Warn while there is still time to act, rather than on the day it dies. */
 const EXPIRY_WARNING_DAYS = 14;
@@ -45,9 +64,10 @@ const Detail = ({ label, value }: { label: string; value: string }) => (
 
 export function XeroConnectionPanel({
   status,
-  error,
+  errorCode,
   connected,
 }: XeroConnectionPanelProps) {
+  const error = errorCode ? ERROR_COPY[errorCode] : undefined;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
