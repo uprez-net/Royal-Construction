@@ -5,12 +5,8 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { milestoneTemplates } from "@/constants/milestoneTemplate";
 import { v4 as randomUUID } from "uuid";
-import {
-  addDays,
-  // addWeeks 
-} from "date-fns";
-// import { createInvoice } from "./invoice";
-// import { dateFormat } from "@/utils/formatters";
+import { addDays } from "date-fns";
+import { ensureStageInvoice } from "./invoice";
 import { after } from "next/server";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { createNotification } from "@/types/notification";
@@ -282,12 +278,11 @@ const MILESTONE_STATE_MACHINE: Record<MilestoneStatus, MilestoneStatus[]> = {
  * @throws {Error} If the requested status transition is invalid.
  */
 export async function updateMilestone(milestoneId: string, updateData: MilestoneUpdateData) {
-  let normalizedUpdateData = {
+  const normalizedUpdateData = {
     ...updateData,
     targetDate: updateData.targetDate ? new Date(updateData.targetDate) : undefined,
     startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
     actualDate: updateData.actualDate ? new Date(updateData.actualDate) : undefined,
-    invoiceId: null as string | null, // Ensure invoiceId is set to null if not provided
   };
   const milestone = await prisma.milestone.findUnique({ where: { id: milestoneId } });
   if (!milestone) {
@@ -304,22 +299,6 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
     throw new Error(`Invalid status transition from ${milestone.status} to ${updateData.status}.`);
   }
 
-  if (updateData.status === "DONE") {
-    console.log("Creating invoice for milestone:", milestoneId);
-    // Would be handled in future with XERO integration, but for now we will just create a placeholder code
-    // const invoiceId = await createInvoice({
-    //   milestoneId: milestoneId,
-    //   projectId: milestone.projectId,
-    //   milestoneAmount: parseFloat(milestone.budget.toString()),
-    //   date: dateFormat.format(new Date()),
-    //   dueDate: dateFormat.format(addWeeks(new Date(), 2)),
-    //   milestoneName: milestone.name,
-    // });
-    normalizedUpdateData = {
-      ...normalizedUpdateData,
-      invoiceId: null,
-    };
-  }
   const updated = await prisma.milestone.update({ where: { id: milestoneId }, data: normalizedUpdateData });
 
   after(async () => {
@@ -385,6 +364,20 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
         status: pendingMilestones > 0 ? "ACTIVE" : "COMPLETED",
       },
     });
+
+    // A settled milestone can be the one that finishes its stage, which is what
+    // a progress claim is raised against. The milestone id, not its
+    // `projectStage`: a sub-activity can carry a different stage from the root
+    // it hangs off, and the stage it completes is the root's. Guarded and
+    // idempotent inside, and it swallows its own errors — an unreachable Xero
+    // must not surface as a failed milestone update, since the milestone itself
+    // is already committed.
+    if (
+      updateData.status === MilestoneStatus.DONE ||
+      updateData.status === MilestoneStatus.NOT_REQUIRED
+    ) {
+      await ensureStageInvoice(updated.projectId, updated.id);
+    }
 
     const activityPayload = createActivityLogEntry("milestoneStatusChanged", {
       projectId: updated.projectId,

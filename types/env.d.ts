@@ -65,9 +65,17 @@ namespace NodeJS {
         // Scrapedo (Web Scraping)
         SCRAPEDO_TOKEN: string;
 
-        // Xero
+        // Xero. The connection uses the authorization-code grant, so the
+        // tenant and tokens are discovered at consent and held in
+        // XeroConnection rather than configured here.
         XERO_CLIENT_ID: string;
         XERO_CLIENT_SECRET: string;
-        XERO_TENANT_ID: string;
+        // Must match a redirect URI registered on the Xero app byte for byte.
+        // Falls back to `${NEXT_PUBLIC_APP_URL}/api/xero/connect` when unset.
+        XERO_REDIRECT_URI: string;
+        // Signs every webhook delivery; without it /api/xero/notification
+        // rejects everything, which is also what Xero's Intent To Receive
+        // check expects of an unconfigured endpoint.
+        XERO_WEBHOOK_SECRET: string;
     }
 }

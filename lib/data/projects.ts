@@ -3,6 +3,8 @@
 import { Prisma, ProjectStatus } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
+import { serializeInvoice, serializeListInvoice } from "@/lib/data/invoice";
+import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { CACHE_PROFILES } from "@/types/cache";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
@@ -44,6 +46,23 @@ const projectInclude = {
   customer: true,
   siteManager: true,
   variations: true,
+  // A summary row per claim — enough for the quick-view's claims table and the
+  // cleared-money roll-up, without the PDF link and tax breakdown the detail
+  // payload carries. Bounded at one per contract stage by the unique index.
+  invoices: {
+    select: {
+      id: true,
+      invoiceNumber: true,
+      projectStage: true,
+      status: true,
+      total: true,
+      amountPaid: true,
+      amountDue: true,
+      issuedDate: true,
+      dueDate: true,
+    },
+    orderBy: { issuedDate: "desc" },
+  },
   milestones: {
     select: {
       id: true,
@@ -65,6 +84,9 @@ const projectInclude = {
 const projectDetailInclude = {
   customer: true,
   siteManager: true,
+  // Newest first: the Payments tab reads as a claim history, most recent at the
+  // top, and the stage order is already carried on each row.
+  invoices: { orderBy: { issuedDate: "desc" } },
   Lead: {
     select: {
       id: true,
@@ -256,7 +278,7 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
     prisma.project.count({ where }),
   ]);
 
-  const mapped = projects.map(({ variations, ...project }) => {
+  const mapped = projects.map(({ variations, invoices, ...project }) => {
     const milestoneCount = project.milestones.length;
     const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
     const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
@@ -281,6 +303,8 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
       completedMilestoneCount,
       progressPercent,
       approvedVariationSpend: approvedVariationSpend.toString(),
+      invoiceTotals: summarizeInvoices(invoices),
+      invoices: invoices.map(serializeListInvoice),
     };
   });
 
@@ -431,6 +455,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
       lotSize: project.lotSize?.toString() ?? undefined,
       totalBudget: project.totalBudget.toString(),
       spent: project.spent.toString(),
+      invoices: project.invoices.map(serializeInvoice),
       siteUpdates: project.siteUpdates
         .filter((siteUpdate) => siteUpdate.milestone !== null)
         .map((siteUpdate) => ({
@@ -498,7 +523,7 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
       include: projectInclude,
     });
 
-    const mapped = projects.map(({ variations, ...project }) => {
+    const mapped = projects.map(({ variations, invoices, ...project }) => {
       const milestoneCount = project.milestones.length;
       const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
       const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
@@ -523,6 +548,8 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
         completedMilestoneCount,
         progressPercent,
         approvedVariationSpend: approvedVariationSpend.toString(),
+        invoiceTotals: summarizeInvoices(invoices),
+        invoices: invoices.map(serializeListInvoice),
       };
     });
 

@@ -1,5 +1,5 @@
 import type { TradiePriceUnit } from "@prisma/client";
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails, Invoice } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
 
@@ -9,6 +9,68 @@ export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lo
   lotSize?: string;
   requirements?: ProjectRequirementsPayload;
 }
+
+/**
+ * A progress claim across the RSC boundary.
+ *
+ * Every money field is a string: Prisma `Decimal`s are class instances and do
+ * not survive serialization, so consumers do their own `Number(...)` — the same
+ * contract `SafeProject` and `SafeMilestone` follow.
+ */
+export interface SafeInvoice
+  extends Omit<
+    Invoice,
+    | "subTotal"
+    | "totalTax"
+    | "total"
+    | "amountDue"
+    | "amountPaid"
+    | "amountCredited"
+  > {
+  subTotal: string;
+  totalTax: string;
+  total: string;
+  amountDue: string;
+  amountPaid: string;
+  amountCredited: string;
+}
+
+/**
+ * A progress claim as it appears on the project LIST payload.
+ *
+ * A narrower row than `SafeInvoice`: the list feeds a quick-view summary, not
+ * the claim ledger, so it carries only what a summary table shows. The full
+ * rows live on `ProjectDetail`.
+ */
+export type ProjectListInvoice = {
+  id: string;
+  invoiceNumber: string | null;
+  projectStage: ProjectStage;
+  status: Invoice["status"];
+  total: string;
+  amountPaid: string;
+  amountDue: string;
+  issuedDate: Date;
+  dueDate: Date;
+};
+
+/**
+ * A project's invoicing position, rolled up from its claims.
+ *
+ * Carried on the list payload as well as the detail one because the project
+ * card and the financial tab both show cleared money, and neither has the
+ * invoice rows to add up themselves.
+ */
+export type ProjectInvoiceTotals = {
+  /** Raised, whatever its payment state. */
+  invoiced: string;
+  /** Money actually received — the "cleared" figure. */
+  paid: string;
+  /** Still owed on claims that have not been voided. */
+  outstanding: string;
+  /** Claims still awaiting payment, i.e. the Payments tab badge. */
+  pendingCount: number;
+};
 
 /**
  * Shared budget health classification. Derived purely from
@@ -98,6 +160,8 @@ export interface ProjectWithStats extends SafeProject {
   completedMilestoneCount: number;
   progressPercent: number;
   approvedVariationSpend: string;
+  invoiceTotals: ProjectInvoiceTotals;
+  invoices: ProjectListInvoice[];
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {
@@ -123,6 +187,8 @@ export interface ProjectDetail extends SafeProject {
   materials: SafeMaterial[];
   /** Null until someone presses "Connect with Certifier". */
   certifierEngagement: CertifierEngagementDetail | null;
+  /** Progress claims raised against this project, newest first. */
+  invoices: SafeInvoice[];
 }
 
 export type ProjectKPIs = {

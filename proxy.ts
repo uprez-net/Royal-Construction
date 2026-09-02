@@ -18,6 +18,10 @@ const isPublicRoute = createRouteMatcher([
   "/api/graph/subscribe(.*)",
   // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
   "/api/docusign(.*)",
+  // Xero webhook — Xero calls it; authenticated by the x-xero-signature HMAC.
+  // Only the notification leg: /api/xero/connect grants an org-wide accounting
+  // connection and stays behind Clerk with an ADMIN check of its own.
+  "/api/xero/notification(.*)",
   '/.well-known(.*)',
   '/api/mcp(.*)',
   '/api/sse(.*)',

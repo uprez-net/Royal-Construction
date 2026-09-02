@@ -13,6 +13,8 @@ import {
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
 import { cn } from "@/lib/utils";
+import { countPendingInvoices } from "@/lib/projects/invoice-display";
+import { calcStageProgress } from "@/lib/projects/stage-progress";
 import {
   LayoutGrid,
   CalendarCheck,
@@ -111,32 +113,6 @@ const AWAITING_TRADIE_STATUSES = new Set([
   "PENDING_RESPONSE",
   "AWAITING_QUOTE",
 ]);
-
-const calcMilestoneOverviewData = (milestones: ProjectDetail["milestones"]) => {
-  const stageMilestoneMap = new Map<
-    string,
-    { completed: number; total: number }
-  >();
-  for (const milestone of milestones) {
-    const stage = milestone.projectStage;
-    if (!stageMilestoneMap.has(stage)) {
-      stageMilestoneMap.set(stage, { completed: 0, total: 0 });
-    }
-    const stageData = stageMilestoneMap.get(stage)!;
-    stageData.total++;
-    if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
-      stageData.completed++;
-    }
-  }
-  const totalStages = stageMilestoneMap.size;
-  const completedStages = Array.from(stageMilestoneMap.values()).filter(
-    (stageData) => stageData.completed === stageData.total,
-  ).length;
-  return {
-    totalStages,
-    completedStages,
-  };
-};
 
 type ComplianceOverview = {
   outstanding: number;
@@ -285,7 +261,7 @@ const generateProjectDetailTabs = (
   const {
     totalStages: projectStagesCount,
     completedStages: completedStagesCount,
-  } = calcMilestoneOverviewData(project.milestones);
+  } = calcStageProgress(project.milestones);
   const blockedTradies = project.tradieSchedules.filter((schedule) =>
     BLOCKED_TRADIE_STATUSES.has(schedule.status),
   ).length;
@@ -294,6 +270,9 @@ const generateProjectDetailTabs = (
   ).length;
   const tradieAlerts = blockedTradies + awaitingTradies;
   const compliance = calcComplianceOverviewData(project.certifierEngagement);
+  // One reference date for the whole calculation — see `invoice-display`.
+  const { pending: pendingInvoices, overdue: overdueInvoices } =
+    countPendingInvoices(project.invoices, new Date());
 
   return [
     { key: "overview", label: "Overview" },
@@ -310,7 +289,25 @@ const generateProjectDetailTabs = (
           }
         : {}),
     },
-    // { key: "payments", label: "Payments", isAdminOnly: true },
+    {
+      key: "payments",
+      label: "Payments",
+      isAdminOnly: true,
+      ...(pendingInvoices > 0
+        ? {
+            badge: {
+              count: pendingInvoices.toString(),
+              // An unpaid claim is routine; one past its due date is a debt
+              // somebody needs to chase.
+              tone: overdueInvoices > 0 ? "warning" : "primary",
+              description:
+                overdueInvoices > 0
+                  ? `${pendingInvoices} unpaid invoices, ${overdueInvoices} overdue`
+                  : `${pendingInvoices} unpaid invoices`,
+            } satisfies TabBadge,
+          }
+        : {}),
+    },
     {
       key: "tradies",
       label: "Tradies",

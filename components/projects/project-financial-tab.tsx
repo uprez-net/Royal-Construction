@@ -1,9 +1,12 @@
+import type { ProjectStage } from "@prisma/client";
 import { ReceiptText } from "lucide-react";
 
-import { ProjectWithStats } from "@/types/project";
-import { compactCurrency, currency } from "@/utils/formatters";
+import { PROJECT_STAGE_LABELS, ProjectWithStats } from "@/types/project";
+import { compactCurrency, currency, dateFormat, formatStatus } from "@/utils/formatters";
+import { invoiceTone } from "@/lib/projects/invoice-display";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { DataTable } from "../common/data-table";
+import { StatusPill } from "../common/status-pill";
 
 interface FinancialTabProps {
   project: ProjectWithStats;
@@ -45,6 +48,9 @@ function MoneyTile({
 }
 
 export function FinancialTab({ project }: FinancialTabProps) {
+  // One reference date for the whole render, so two claims falling either side
+  // of the same instant cannot disagree about what "overdue" means.
+  const today = new Date();
   const spent = Number(project.spent);
   const budget = Number(project.totalBudget);
   const variation = Number(project.approvedVariationSpend);
@@ -87,10 +93,17 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <MoneyTile label="Total budget" value={budget} />
         <MoneyTile label="Actual spend" value={spent} />
         <MoneyTile label="Approved variations" value={variation} />
+        {/* Money in, as opposed to the three figures beside it, which are all
+            money out or committed. */}
+        <MoneyTile
+          label="Cleared"
+          value={Number(project.invoiceTotals.paid)}
+          tone="success"
+        />
         <MoneyTile
           label={summaryTileLabel}
           value={summaryTileValue}
@@ -146,20 +159,46 @@ export function FinancialTab({ project }: FinancialTabProps) {
       </div>
 
       <section className="space-y-3">
-        <h3 className="text-base font-semibold text-foreground">Invoices</h3>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-base font-semibold text-foreground">Invoices</h3>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-mono tabular-nums">
+              {currency.format(Number(project.invoiceTotals.outstanding))}
+            </span>{" "}
+            outstanding
+          </p>
+        </div>
 
         {/*
-          Invoicing is not wired to this project yet. The previous version of
-          this tab rendered three hardcoded invoices (INV-001…003) plus fake
-          paid/pending/overdue totals, which read as real financial data.
-          The table shell below names the columns that will appear once
-          invoicing is connected, and states plainly that there is nothing yet.
+          A read-only summary. This tab renders inside the quick-view modal and
+          the modal manager holds one modal at a time, so opening a claim's PDF
+          from here would replace the project it belongs to. The Payments tab on
+          the project page is where a claim opens.
         */}
         <DataTable
-          headers={["Invoice", "Description", "Amount", "Date", "Status"]}
-          align={["start", "start", "end", "start", "start"]}
-          caption="Invoices raised against this project"
-          rows={[]}
+          headers={["Invoice", "Stage", "Amount", "Paid", "Due", "Status"]}
+          align={["start", "start", "end", "end", "start", "start"]}
+          caption="Progress claims raised against this project"
+          rows={project.invoices.map((invoice) => [
+            <span
+              key="number"
+              className="font-mono font-medium tabular-nums text-foreground"
+            >
+              {invoice.invoiceNumber ?? "—"}
+            </span>,
+            PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage] ??
+              invoice.projectStage,
+            <span key="total" className="font-mono tabular-nums text-foreground">
+              {currency.format(Number(invoice.total))}
+            </span>,
+            <span key="paid" className="font-mono tabular-nums text-success-ink">
+              {currency.format(Number(invoice.amountPaid))}
+            </span>,
+            dateFormat.format(new Date(invoice.dueDate)),
+            <StatusPill key="status" tone={invoiceTone(invoice, today)}>
+              {formatStatus(invoice.status)}
+            </StatusPill>,
+          ])}
           emptyState={
             <div className="flex flex-col items-center gap-3">
               <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
@@ -171,12 +210,12 @@ export function FinancialTab({ project }: FinancialTabProps) {
 
               <div className="space-y-1">
                 <p className="text-sm font-medium text-foreground">
-                  Invoicing is not connected for this project
+                  No progress claims have been raised yet
                 </p>
 
                 <p className="text-xs text-muted-foreground">
-                  Progress claims and their payment status will appear here once
-                  invoicing is set up.
+                  A claim is raised once every milestone in a contract stage is
+                  finished.
                 </p>
               </div>
             </div>
