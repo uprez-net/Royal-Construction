@@ -280,6 +280,13 @@ export async function createStageInvoice(
         where: { projectId_projectStage: { projectId, projectStage } },
       });
     }
+    // The claim now exists in Xero but not here. Name it in the log: the id is
+    // what anyone reconciling by hand needs, and the generic handler upstream
+    // does not have it.
+    console.error(
+      `[xero] Invoice ${created.invoiceID} was raised in Xero but could not be recorded for project ${projectId} / ${projectStage}:`,
+      error,
+    );
     throw error;
   }
 
@@ -408,7 +415,7 @@ function invoiceFieldsFromXero(invoice: Invoice) {
     issuedDate: parseXeroDate(invoice.date) ?? new Date(),
     dueDate: parseXeroDate(invoice.dueDate) ?? new Date(),
     fullyPaidOnDate: parseXeroDate(invoice.fullyPaidOnDate),
-    xeroUpdatedAt: invoice.updatedDateUTC ? new Date(invoice.updatedDateUTC) : null,
+    xeroUpdatedAt: parseXeroDate(invoice.updatedDateUTC),
   } as const;
 }
 

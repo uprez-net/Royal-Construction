@@ -46,8 +46,10 @@ export interface XeroConfig {
  * `invalid_scope` before the login screen — it does not simply grant less.
  */
 export const XERO_SCOPES = [
+  "openid",
+  "profile",
+  "email",
   "offline_access",
-  "accounting.transactions",
   "accounting.contacts",
   "accounting.invoices"
 ] as const;

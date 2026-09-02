@@ -57,18 +57,36 @@ test("parses a plain Xero calendar date", () => {
   assert.equal(parseXeroDate("2026-09-02")?.toISOString(), "2026-09-02T00:00:00.000Z");
 });
 
-// Some Accounting API fields still come back in the legacy .NET encoding;
-// handing that to `new Date()` yields Invalid Date and a silently null due date.
-test("parses the legacy /Date(...)/ encoding", () => {
+// The shape that broke production. The SDK types every Xero date as `string`,
+// but its deserializer converts the legacy `/Date(...)/` encoding to a Date
+// before handing it over, so the declared type is wrong about half the time.
+test("accepts the Date the SDK hands back despite typing it as a string", () => {
+  const asDate = new Date(1757548800000);
+
+  assert.equal(parseXeroDate(asDate)?.getTime(), 1757548800000);
+});
+
+test("parses the legacy /Date(...)/ encoding when it arrives unconverted", () => {
   assert.equal(
     parseXeroDate("/Date(1642636800000+0000)/")?.getTime(),
     1642636800000,
   );
 });
 
-test("returns null for a missing or unparseable date", () => {
+test("accepts epoch milliseconds", () => {
+  assert.equal(parseXeroDate(1642636800000)?.getTime(), 1642636800000);
+});
+
+// Total by design: this runs after an invoice already exists in Xero, so
+// throwing here would strand a real claim with no record of it on our side.
+test("returns null for anything unusable rather than throwing", () => {
   assert.equal(parseXeroDate(undefined), null);
   assert.equal(parseXeroDate(null), null);
   assert.equal(parseXeroDate(""), null);
   assert.equal(parseXeroDate("not a date"), null);
+  assert.equal(parseXeroDate(new Date("nonsense")), null);
+  assert.equal(parseXeroDate(Number.NaN), null);
+  assert.equal(parseXeroDate({}), null);
+  assert.equal(parseXeroDate([]), null);
+  assert.equal(parseXeroDate(true), null);
 });
