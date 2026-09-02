@@ -24,6 +24,7 @@ import {
   type BudgetSummary,
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
+import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import type { ComplianceDocumentType, File as ProjectFiles } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
@@ -264,7 +265,7 @@ export const addProjectMilestone = createAsyncThunk<
       "Unable to add milestone to project",
     );
 
-    return response.data;
+    return reviveMilestoneDates(response.data);
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to add milestone to project");
   }
@@ -286,7 +287,10 @@ export const updateProjectMilestoneStatus = createAsyncThunk<
       "Unable to update milestone",
     );
 
-    return response.data;
+    // JSON has no date type, so every date on this response is an ISO string
+    // while `SafeMilestone` still calls it a `Date`. Revive here, at the one
+    // point the two representations meet, so the store keeps a single shape.
+    return reviveMilestoneDates(response.data);
   } catch (error) {
     return thunkApi.rejectWithValue(error instanceof Error ? error.message : "Unable to update milestone");
   }
