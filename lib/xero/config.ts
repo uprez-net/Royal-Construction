@@ -21,19 +21,35 @@ export interface XeroConfig {
 }
 
 /**
- * `offline_access` is what earns a refresh token — without it the connection
- * dies in 30 minutes and there is nothing to persist. The accounting scopes are
- * the narrowest set that covers raising a claim: transactions to write the
- * invoice, contacts to resolve the customer, settings to read the organisation.
+ * The narrowest set that covers raising a progress claim.
+ *
+ * - `offline_access` earns the refresh token. Without it the connection dies in
+ *   30 minutes with nothing to renew it from, so it is not optional.
+ * - `accounting.transactions` writes the invoice.
+ * - `accounting.contacts` finds or creates the customer to bill.
+ *
+ * Deliberately no `openid`/`profile`/`email`. Nothing here uses Xero's notion
+ * of who connected — `connectedById` comes from the Clerk session — and asking
+ * for them is not free: with `openid` present the SDK routes the callback
+ * through `openIdClient.callback()`, which fetches Xero's JWKS and validates
+ * the id_token's `iat`/`nbf`. That is a third network hop and a dependency on
+ * server clock accuracy, both on the one path a person is sitting and waiting
+ * on. Without them it takes the plain `oauthCallback()` branch, which still
+ * verifies the CSRF state.
+ *
+ * `accounting.settings` is absent for the same reason: `updateTenants(false)`
+ * reads /connections, which needs no scope, and nothing else asks Xero about
+ * the organisation.
+ *
+ * Every scope here must also be enabled on the app in the Xero developer
+ * portal. One that is not makes Xero fail the consent redirect with
+ * `invalid_scope` before the login screen — it does not simply grant less.
  */
 export const XERO_SCOPES = [
-  "openid",
-  "profile",
-  "email",
   "offline_access",
   "accounting.transactions",
   "accounting.contacts",
-  "accounting.settings",
+  "accounting.invoices"
 ] as const;
 
 export function getXeroConfig(): XeroConfig {

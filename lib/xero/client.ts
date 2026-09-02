@@ -29,9 +29,9 @@ export interface XeroContext {
 const EXPIRY_SKEW_MS = 120_000;
 
 // The SDK defaults to 3.5s, which covers one hop. The consent callback makes
-// three — OpenID discovery, the code exchange, then a JWKS fetch to verify the
-// id_token — and a cold serverless function pays DNS and TLS on each. 3.5s
-// turns an ordinarily slow round-trip into a failed connection.
+// two — OpenID discovery, then the code exchange — and a cold serverless
+// function pays DNS and TLS on each. 3.5s turns an ordinarily slow round-trip
+// into a failed connection.
 //
 // This only reaches calls that go through openid-client. `refreshWithRefreshToken`
 // bypasses it (see REFRESH_TIMEOUT_MS).
@@ -44,10 +44,11 @@ const HTTP_TIMEOUT_MS = 20_000;
 // ourselves; a timeout reads as transient, so the claim is simply retried.
 const REFRESH_TIMEOUT_MS = 15_000;
 
-// The SDK defaults to 5s. `apiCallback` validates the id_token's `iat`/`nbf`,
-// so a server clock a few seconds fast rejects a perfectly good token with an
-// error that reads like a Xero fault. 30s is still far tighter than the token's
-// 30-minute life.
+// The SDK defaults to 5s, which leaves no room for ordinary clock drift on any
+// timestamp openid-client checks. Cheap insurance, and still far tighter than
+// the access token's 30-minute life. (We do not request `openid`, so no
+// id_token is verified — see XERO_SCOPES — but the setting costs nothing and
+// keeps the flow working if that ever changes.)
 const CLOCK_TOLERANCE_SECONDS = 30;
 
 /**
