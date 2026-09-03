@@ -277,6 +277,24 @@ const generateProjectDetailTabs = (
   return [
     { key: "overview", label: "Overview" },
     {
+      key: "compliance",
+      label: "Compliance",
+      ...(compliance.outstanding > 0
+        ? {
+            badge: {
+              count: compliance.outstanding.toString(),
+              // A rejected document is work the certifier has already sent
+              // back, which is a different urgency from one nobody has
+              // supplied yet.
+              tone: compliance.rejected > 0 ? "danger" : "warning",
+              // Written by the counter, because what the number means depends
+              // on which phase it counted.
+              description: compliance.description,
+            } satisfies TabBadge,
+          }
+        : {}),
+    },
+    {
       key: "milestones",
       label: "Milestones",
       ...(projectStagesCount - completedStagesCount > 0
@@ -327,24 +345,6 @@ const generateProjectDetailTabs = (
         : {}),
     },
     { key: "docs", label: "Documents" },
-    {
-      key: "compliance",
-      label: "Compliance",
-      ...(compliance.outstanding > 0
-        ? {
-            badge: {
-              count: compliance.outstanding.toString(),
-              // A rejected document is work the certifier has already sent
-              // back, which is a different urgency from one nobody has
-              // supplied yet.
-              tone: compliance.rejected > 0 ? "danger" : "warning",
-              // Written by the counter, because what the number means depends
-              // on which phase it counted.
-              description: compliance.description,
-            } satisfies TabBadge,
-          }
-        : {}),
-    },
     { key: "history", label: "History" },
     { key: "communications", label: "Communications" },
   ];
