@@ -51,6 +51,8 @@ logs/
 backups/
 *.dump
 
+/tmp
+
 .vercel
 .swc
 .vscode/
