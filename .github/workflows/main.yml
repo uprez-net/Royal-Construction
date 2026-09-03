@@ -47,10 +47,11 @@ env:
   # `puppeteer`'s postinstall downloads a ~170MB Chrome build on every install,
   # in every job. Nothing in CI launches a browser: production PDF rendering
   # uses puppeteer-core + @sparticuz/chromium (see lib/utils/generatePDF.ts, the
-  # full `puppeteer` package is the NODE_ENV=development branch only), and the
-  # one browser test -- tests/offer/offer-document-print-pages.test.ts -- is
-  # excluded from `test:unit`. If that test is ever folded into CI, drop this
-  # from the `test` job below and cache ~/.cache/puppeteer there instead.
+  # full `puppeteer` package is the NODE_ENV=development branch only), and both
+  # browser tests -- tests/offer/offer-document-print-pages.test.ts and
+  # tests/offer/offer-tender-print-parity.test.ts -- are excluded from
+  # `test:unit`. If either is ever folded into CI, drop this from the `test` job
+  # below and cache ~/.cache/puppeteer there instead.
   PUPPETEER_SKIP_DOWNLOAD: "true"
   # PlaceHolder-Keys
   XERO_CLIENT_ID: ${{ secrets.XERO_CLIENT_ID }}
@@ -143,11 +144,16 @@ jobs:
       - name: Setup project
         uses: ./.github/actions/setup
 
-      # `test:unit` is the whole suite minus
-      # tests/offer/offer-document-print-pages.test.ts, which launches real
-      # headless Chromium, takes ~60s and has never executed in CI. Folding that
-      # one in is a deliberate follow-up: it fails rather than skips by design,
-      # so a launch problem here would block unrelated PRs.
+      # `test:unit` is the whole suite minus the two tests that launch real
+      # headless Chromium -- offer-document-print-pages and
+      # offer-tender-print-parity. Neither has ever executed in CI (Chrome is
+      # not installed; see PUPPETEER_SKIP_DOWNLOAD above). Folding them in is a
+      # deliberate follow-up: they fail rather than skip by design, so a launch
+      # problem here would block unrelated PRs.
+      #
+      # Their cheap half still runs: offer-tender-template-parity asserts the
+      # same tender from its HTML alone -- tokens, geometry percentages, the
+      # DocuSign anchors and the injection guard -- and is included here.
       - name: Run unit tests
         run: pnpm test:unit
 
