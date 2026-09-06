@@ -73,12 +73,18 @@ export function OfferCommandBar({
         <Badge variant="secondary" className="shrink-0">
           {OFFER_STATUS_LABEL[status]}
         </Badge>
+        {status === "pending" ? (
+          <Badge variant="secondary" className="shrink-0">
+            Working draft
+          </Badge>
+        ) : null}
         <ExpiryChip expiry={offerExpiry} />
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
         <div className="text-right">
           <p className="font-mono text-sm font-semibold leading-none tabular-nums">
+            <span className="sr-only">Contract value including GST: </span>
             {formatCurrency(customerPrice.selectedContractValueIncGst)}
           </p>
           <div className="mt-1 flex justify-end">
@@ -86,6 +92,7 @@ export function OfferCommandBar({
           </div>
         </div>
         <Button
+          aria-label="Download offer"
           className="h-8"
           size="sm"
           type="button"

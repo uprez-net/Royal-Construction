@@ -53,6 +53,12 @@ const BASE: OfferStepDigestInput = {
   images: EMPTY_OFFER_IMAGES,
   status: "pending",
   sendBlockers: [],
+  phaseUnlocked: {
+    "tender-gate": false,
+    tender: false,
+    contract: false,
+    project: false,
+  },
 };
 
 test("each step reports its own number, not a Complete/Incomplete chip", () => {
@@ -118,6 +124,35 @@ test("money is shortened so a seven-figure value fits a 240px rail", () => {
   assert.equal(compactMoney(2_697_000), "$2.7m");
   assert.equal(compactMoney(3_639_541), "$3.64m");
   assert.equal(compactMoney(1_000_000), "$1m");
+  // The seam: anything that rounds to a thousand thousands must say "m".
+  assert.equal(compactMoney(999_499), "$999k");
+  assert.equal(compactMoney(999_500), "$1m");
+  assert.equal(compactMoney(999_999), "$1m");
+});
+
+test("the margin digest uses the same 1dp format as the summary strip", () => {
+  const d = buildOfferStepDigests({
+    ...BASE,
+    effectiveMargin: { effectiveMarkupPct: 0.175, marginStatus: "at_target" },
+  });
+  // Not "18% margin" beside a strip reading "17.5%".
+  assert.equal(d.pricing, "17.5% margin · $3.64m");
+});
+
+test("a gated phase stops describing its gate once the gate is open", () => {
+  const shut = buildOfferStepDigests(BASE);
+  assert.equal(shut["tender-gate"], "Unlocks once the offer is agreed");
+
+  const agreed = buildOfferStepDigests({
+    ...BASE,
+    status: "agreed",
+    phaseUnlocked: { ...BASE.phaseUnlocked, "tender-gate": true },
+  });
+  // An agreed offer's own current row must not say "unlocks once agreed".
+  assert.notEqual(agreed["tender-gate"], "Unlocks once the offer is agreed");
+  assert.equal(agreed["tender-gate"], "Agreed");
+  // Later phases still shut still describe their gate.
+  assert.equal(agreed.contract, "Unlocks when the tender is signed");
 });
 
 test("every step has a digest, so no rail row can render blank", () => {

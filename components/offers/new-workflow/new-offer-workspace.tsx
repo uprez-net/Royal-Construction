@@ -237,6 +237,10 @@ export function NewOfferWorkspace({
   const [standardPriceInput, setStandardPriceInput] = useState("");
   const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
+  // Flips once the server has told us what this offer actually is. The screen
+  // seeds "pending" until then, so anything derived from status at first render
+  // (which step to open on) is a guess that has to be corrected exactly once.
+  const [hydrated, setHydrated] = useState(false);
   const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
     adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
   );
@@ -996,6 +1000,7 @@ export function NewOfferWorkspace({
                 adoptOffer(loaded.offerId);
                 stateVersionRef.current = loaded.stateVersion;
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+                setHydrated(true);
                 setSignerStatuses(loaded.signerStatuses ?? []);
                 if (loaded.snapshot) {
                   hydrateSnapshot(
@@ -1053,6 +1058,7 @@ export function NewOfferWorkspace({
       adoptOffer(loaded.offerId);
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      setHydrated(true);
       // The loader already re-applied the current admin defaults if this offer
       // was still editable (hydrateSnapshot below picks them up). It only flags
       // `adminContentStale` when the offer is frozen and was deliberately left
@@ -1710,6 +1716,7 @@ export function NewOfferWorkspace({
         allowances={allowances}
         areaCalculator={areaCalculator}
         calcVersion={calcVersion}
+        hydrated={hydrated}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}

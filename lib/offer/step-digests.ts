@@ -1,11 +1,12 @@
 import type { OfferImageMap } from "@/lib/offer/workspace-images";
 import { OFFER_IMAGE_SLOTS } from "@/lib/offer/workspace-images";
 import type { OfferSendBlocker } from "@/lib/offer/offer-readiness";
-import type {
-  OfferWorkspaceCostLine,
-  OfferWorkspaceJob,
-  OfferWorkspaceScopeItem,
-  OfferWorkspaceStatus,
+import {
+  OFFER_STATUS_LABEL,
+  type OfferWorkspaceCostLine,
+  type OfferWorkspaceJob,
+  type OfferWorkspaceScopeItem,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { EffectiveMargin } from "@/lib/offer/workspace-pricing";
 
@@ -43,6 +44,12 @@ export type OfferStepDigestInput = {
   readonly images: OfferImageMap;
   readonly status: OfferWorkspaceStatus;
   readonly sendBlockers: readonly OfferSendBlocker[];
+  // Whether each gated phase has opened. Without this the four later rows were
+  // literal strings, so an AGREED offer's own current row read "Unlocks once
+  // the offer is agreed".
+  readonly phaseUnlocked: Readonly<
+    Record<"tender-gate" | "tender" | "contract" | "project", boolean>
+  >;
 };
 
 // Compact money for a 240px rail: no cents, and thousands shortened past $10k so
@@ -52,13 +59,24 @@ export function compactMoney(value: number): string {
     return "$0";
   }
   const abs = Math.abs(value);
-  if (abs >= 1_000_000) {
+  // 999,500 and up round to a million; below this the k branch would print
+  // "$1000k".
+  if (abs >= 999_500) {
     return `$${(value / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}m`;
   }
   if (abs >= 10_000) {
     return `$${Math.round(value / 1000)}k`;
   }
   return `$${Math.round(value).toLocaleString("en-AU")}`;
+}
+
+// Identical to the summary strip's formatPercent (1dp, en-AU), so the rail and
+// the strip cannot show "18%" beside "17.5%" for the same offer.
+function formatMarginPct(fraction: number): string {
+  return new Intl.NumberFormat("en-AU", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }).format(fraction);
 }
 
 function plural(count: number, one: string, many: string): string {
@@ -119,16 +137,24 @@ export function buildOfferStepDigests(
         : `${plural(includedLines.length, "line", "lines")} · ${compactMoney(input.directTotal)}`,
     pricing:
       input.contractValueIncGst > 0
-        ? `${Math.round(input.effectiveMargin.effectiveMarkupPct * 100)}% margin · ${compactMoney(input.contractValueIncGst)}`
+        ? `${formatMarginPct(input.effectiveMargin.effectiveMarkupPct)} margin · ${compactMoney(input.contractValueIncGst)}`
         : "Not priced",
     scope: `${plural(input.allowances.length, "allowance", "allowances")} · ${input.exclusions.length} excluded`,
     "offer-document": `${imagesSet} of ${OFFER_IMAGE_SLOTS.length} images set`,
     send: sendDigest(input.status, input.sendBlockers),
-    // The gated phases describe their own gate rather than their contents: until
-    // they unlock there is nothing in them to summarise.
-    "tender-gate": "Unlocks once the offer is agreed",
-    tender: "Unlocks after tender access",
-    contract: "Unlocks when the tender is signed",
-    project: "Unlocks when the contract is signed",
+    // A gated phase describes its gate only while the gate is shut. Once open,
+    // the offer's status is the honest one-liner.
+    "tender-gate": input.phaseUnlocked["tender-gate"]
+      ? OFFER_STATUS_LABEL[input.status]
+      : "Unlocks once the offer is agreed",
+    tender: input.phaseUnlocked.tender
+      ? OFFER_STATUS_LABEL[input.status]
+      : "Unlocks after tender access",
+    contract: input.phaseUnlocked.contract
+      ? OFFER_STATUS_LABEL[input.status]
+      : "Unlocks when the tender is signed",
+    project: input.phaseUnlocked.project
+      ? OFFER_STATUS_LABEL[input.status]
+      : "Unlocks when the contract is signed",
   };
 }

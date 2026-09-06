@@ -37,7 +37,14 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
 import { Lock } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentCanvas } from "./offer-document-canvas";
@@ -96,6 +103,10 @@ type OfferWorkspaceScreenProps = {
   // The offer's calculation rules, threaded down to the area calculator so an
   // issued offer keeps showing the figures it was priced with.
   readonly calcVersion: CalcVersion;
+  // True once the server has reported the offer's real status. Until then
+  // `status` is the "pending" seed, and the opening step derived from it is a
+  // guess that must be corrected exactly once.
+  readonly hydrated: boolean;
   readonly areaCalculator: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
@@ -224,6 +235,7 @@ export function OfferWorkspaceScreen({
   allowances,
   areaCalculator,
   calcVersion,
+  hydrated,
   rateConstants,
   customerPrice,
   directTotal,
@@ -377,14 +389,66 @@ export function OfferWorkspaceScreen({
 
   // Open on the step the offer is actually at, rather than on ten collapsed
   // headers with no "you are here".
+  //
+  // The lazy initializer runs on first render, when `status` is still the
+  // "pending" seed, so every agreed/tender/contract offer used to land on a
+  // fully disabled Job setup pane. Correct it exactly once, when the real
+  // status arrives — and only once: the DocuSign poll calls setStatus on its own
+  // schedule and following it would yank the pane out from under a typing user.
   const [activeStepId, setActiveStepId] = useState<OfferStepId>(() =>
     currentOfferStepId(status, tenderGateStatus),
   );
+  const syncedToHydratedStatusRef = useRef(false);
+  useEffect(() => {
+    if (hydrated && !syncedToHydratedStatusRef.current) {
+      syncedToHydratedStatusRef.current = true;
+      setActiveStepId(currentOfferStepId(status, tenderGateStatus));
+    }
+  }, [hydrated, status, tenderGateStatus]);
+
+  // A step change replaces the whole pane. Move focus to it and reset its
+  // scroll, but only for changes the user made: a rail click, or a send blocker
+  // that selected the step which resolves it (that button unmounts itself in the
+  // same commit, which used to drop focus onto <body>). Page load and the
+  // hydration correction above must not steal focus.
+  const paneRef = useRef<HTMLDivElement>(null);
+  const userNavigatedRef = useRef(false);
+  const navigateToStep = useCallback((stepId: OfferStepId) => {
+    userNavigatedRef.current = true;
+    setActiveStepId(stepId);
+  }, []);
+  useEffect(() => {
+    if (!userNavigatedRef.current) {
+      return;
+    }
+    userNavigatedRef.current = false;
+    const pane = paneRef.current;
+    if (!pane) {
+      return;
+    }
+    pane.scrollTop = 0;
+    pane.focus({ preventScroll: true });
+  }, [activeStepId]);
+
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const activeStepIsOfferPhase =
+    OFFER_WORKFLOW_STEPS.find((step) => step.id === activeStepId)?.phase ===
+    "offer";
+
+  const phaseUnlocked = useMemo(
+    () => ({
+      "tender-gate": isOfferPhaseUnlocked(status, "tender"),
+      tender: tenderPanelUnlocked,
+      contract: isOfferPhaseUnlocked(status, "contract"),
+      project: isOfferPhaseUnlocked(status, "handoff"),
+    }),
+    [status, tenderPanelUnlocked],
+  );
 
   const digests = useMemo(
     () =>
       buildOfferStepDigests({
+        phaseUnlocked,
         job,
         totalAreaSqm: getAreaBasisTotalSqm(areaBasis),
         lines,
@@ -409,6 +473,7 @@ export function OfferWorkspaceScreen({
       images,
       status,
       sendBlockers,
+      phaseUnlocked,
     ],
   );
 
@@ -420,18 +485,26 @@ export function OfferWorkspaceScreen({
         .filter((section) => section.status === "complete")
         .map((section) => section.stepId),
     );
-    const phaseUnlocked: Record<string, boolean> = {
-      "tender-gate": isOfferPhaseUnlocked(status, "tender"),
-      tender: tenderPanelUnlocked,
-      contract: isOfferPhaseUnlocked(status, "contract"),
-      project: isOfferPhaseUnlocked(status, "handoff"),
-    };
+    // A gated phase is complete once the offer has moved past it, not merely
+    // once it has opened — and never complete while still shut.
+    const currentIndex = OFFER_WORKFLOW_STEPS.findIndex(
+      (step) => step.id === currentOfferStepId(status, tenderGateStatus),
+    );
     const states = {} as Record<OfferStepId, OfferStepState>;
     for (const step of OFFER_WORKFLOW_STEPS) {
       if (step.id in phaseUnlocked) {
-        states[step.id] = phaseUnlocked[step.id] ? "incomplete" : "locked";
+        const unlocked = phaseUnlocked[step.id as keyof typeof phaseUnlocked];
+        states[step.id] = !unlocked
+          ? "locked"
+          : OFFER_WORKFLOW_STEPS.indexOf(step) < currentIndex
+            ? "complete"
+            : "incomplete";
       } else if (step.id === "send") {
-        states[step.id] = status === "pending" ? "incomplete" : "complete";
+        // Rejected, superseded and declined are outcomes, not completion; the
+        // old page reserved the tick for an accepted or agreed offer.
+        states[step.id] = SEND_COMPLETE_STATUSES.has(status)
+          ? "complete"
+          : "incomplete";
       } else {
         states[step.id] = complete.has(step.sectionId)
           ? "complete"
@@ -439,7 +512,7 @@ export function OfferWorkspaceScreen({
       }
     }
     return states;
-  }, [reviewSections, status, tenderPanelUnlocked]);
+  }, [reviewSections, status, tenderGateStatus, phaseUnlocked]);
 
   return (
     // One app-height frame: the command bar and the summary strip are fixed
@@ -465,15 +538,23 @@ export function OfferWorkspaceScreen({
           collapsed={railCollapsed}
           digests={digests}
           stepStates={stepStates}
-          onSelect={setActiveStepId}
+          onSelect={navigateToStep}
           onToggleCollapsed={() => setRailCollapsed((current) => !current)}
         />
         {/* Not <main>: the app shell already provides the page's single main
             landmark, and nesting one inside another is invalid and gives screen
             readers two "main" regions to choose between. */}
-        <div className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5">
+        <div
+          ref={paneRef}
+          role="region"
+          aria-labelledby="offer-pane-title"
+          tabIndex={-1}
+          className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5 outline-none"
+        >
           <div className="space-y-5">
-          {offerIssued ? (
+          {/* The banner names the offer-build steps; it has no business above
+              Tender, Contract or Project. */}
+          {offerIssued && activeStepIsOfferPhase ? (
             <OfferLockBanner
               canRevise={canRevise}
               revising={revising}
@@ -607,7 +688,7 @@ export function OfferWorkspaceScreen({
               onNavigateToStep={(sectionId) => {
                 const target = stepIdForSectionId(sectionId);
                 if (target) {
-                  setActiveStepId(target);
+                  navigateToStep(target);
                 }
               }}
               status={status}
@@ -747,6 +828,23 @@ export function OfferWorkspaceScreen({
   );
 }
 
+// Statuses at which the Send & negotiate step has actually succeeded. Everything
+// else — including rejected, superseded and acceptance-declined — is an outcome
+// the rail must not draw a tick for.
+const SEND_COMPLETE_STATUSES: ReadonlySet<OfferWorkspaceStatus> = new Set([
+  "offer_signed",
+  "agreed",
+  "tender_draft",
+  "tender_sent",
+  "tender_signed",
+  "tender_declined",
+  "contract_draft",
+  "contract_sent",
+  "contract_signed",
+  "contract_declined",
+  "project",
+]);
+
 // One step's content. Only the selected step mounts, so the page holds one
 // step's controls instead of all 384 at once.
 function StepPane({
@@ -770,14 +868,14 @@ function StepPane({
   // A later-phase step that has not unlocked shows why, not an empty panel.
   if (unlocked === false) {
     return (
-      <section aria-label={title} className="space-y-4">
+      <section aria-labelledby="offer-pane-title" className="space-y-4">
         <PaneHeading locked={false} title={title} />
         <OfferPhaseLockNotice hint={unlockHint ?? ""} />
       </section>
     );
   }
   return (
-    <section aria-label={title} className="space-y-4">
+    <section aria-labelledby="offer-pane-title" className="space-y-4">
       <PaneHeading locked={locked} title={title} />
       <OfferStepBody locked={locked}>{children}</OfferStepBody>
     </section>
@@ -793,7 +891,10 @@ function PaneHeading({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <h2 className="font-heading text-lg font-semibold leading-tight">
+      <h2
+        id="offer-pane-title"
+        className="font-heading text-lg font-semibold leading-tight"
+      >
         {title}
       </h2>
       {locked ? (

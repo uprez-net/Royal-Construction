@@ -40,7 +40,9 @@ export function OfferStepRail({
       aria-label="Offer workflow"
       className={cn(
         "flex shrink-0 flex-col border-r border-border/70 bg-white/60 transition-[width]",
-        collapsed ? "w-14" : "w-60",
+        // Icon-only below lg regardless of the toggle: a 240px rail against a
+        // ~600px pane on a small laptop was a quarter of the width on nav.
+        collapsed ? "w-14" : "w-14 lg:w-60",
       )}
     >
       <ol className="flex-1 overflow-y-auto py-2">
@@ -54,9 +56,12 @@ export function OfferStepRail({
               {collapsed ? (
                 <hr className="mx-3 my-2 border-border/70" />
               ) : (
-                <p className="px-4 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground/80">
-                  {phase.label}
-                </p>
+                <>
+                  <hr className="mx-3 my-2 border-border/70 lg:hidden" />
+                  <p className="hidden px-4 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground/80 lg:block">
+                    {phase.label}
+                  </p>
+                </>
               )}
               <ol>
                 {steps.map((step) => (
@@ -82,14 +87,14 @@ export function OfferStepRail({
         onClick={onToggleCollapsed}
         aria-label={collapsed ? "Expand step rail" : "Collapse step rail"}
         aria-expanded={!collapsed}
-        className="flex items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold/40"
+        className="flex items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold-dark"
       >
         {collapsed ? (
           <ChevronRight className="size-4" aria-hidden="true" />
         ) : (
           <>
             <ChevronLeft className="size-4" aria-hidden="true" />
-            Collapse
+            <span className="hidden lg:inline">Collapse</span>
           </>
         )}
       </button>
@@ -127,10 +132,10 @@ function RailRow({
       onClick={onSelect}
       aria-current={active ? "step" : undefined}
       aria-label={`Step ${index}, ${label}, ${stateWord}. ${digest}`}
-      title={collapsed ? `${label} — ${digest}` : undefined}
+      title={`${label} — ${digest}`}
       className={cn(
         "relative flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold/40",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold-dark",
         active ? "bg-royal-gold-light/70" : "hover:bg-muted/50",
         locked && !active && "opacity-60",
       )}
@@ -143,7 +148,7 @@ function RailRow({
       ) : null}
       <StepGlyph active={active} index={index} state={state} />
       {collapsed ? null : (
-        <span aria-hidden="true" className="min-w-0 flex-1">
+        <span aria-hidden="true" className="hidden min-w-0 flex-1 lg:block">
           <span
             className={cn(
               "block truncate text-sm leading-tight",

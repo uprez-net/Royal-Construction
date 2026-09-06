@@ -68,7 +68,12 @@ export function OfferSummaryStrip({
   ];
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t border-border/70 bg-white px-5 py-2.5">
+    // The old right rail was an <aside>; this is its replacement and keeps the
+    // landmark so the totals are reachable by region navigation.
+    <aside
+      aria-label="Offer totals"
+      className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-2 border-t border-border/70 bg-white px-5 py-2.5"
+    >
       <dl className="flex flex-wrap items-center gap-x-6 gap-y-2">
         {cells.map(([label, value]) => (
           <div key={label} className="flex items-baseline gap-2">
@@ -106,6 +111,6 @@ export function OfferSummaryStrip({
           {formatCurrency(selected)}
         </p>
       </div>
-    </div>
+    </aside>
   );
 }
