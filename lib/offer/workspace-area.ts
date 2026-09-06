@@ -2,8 +2,7 @@ import { roundCurrency } from "@/lib/offer/pricing";
 import {
   CURRENT_CALC_VERSION,
   LEGACY_CALC_VERSION,
-  type CalcVersion,
-} from "@/lib/offer/workspace-persistence";
+} from "@/lib/offer/calc-version";
 import type { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 
 // The floor-area geometry that feeds the Frame calculations. This is NOT
@@ -215,9 +214,10 @@ export function calculateSlab(
 }
 
 // Thrown when an offer names calculation rules this build does not carry — a
-// rollback past a newer version. Deliberately loud and local: callers render the
-// workspace read-only rather than silently falling back to legacy maths, which
-// would reprice the offer.
+// rollback past a newer version. Deliberately loud and local: the alternative is
+// falling back to legacy maths, which reprices an offer under rules it was never
+// quoted on. Callers screen with isSupportedCalcVersion and show the workspace
+// read-only instead of recomputing.
 export class UnsupportedCalcVersionError extends Error {
   constructor(readonly calcVersion: number) {
     super(
@@ -235,7 +235,7 @@ export class UnsupportedCalcVersionError extends Error {
 // associative, so re-deriving it can move a stored figure.
 function frameFirstFloorAreaSqm(
   basis: OfferAreaBasis,
-  calcVersion: CalcVersion,
+  calcVersion: number,
 ): number {
   switch (calcVersion) {
     case LEGACY_CALC_VERSION:
@@ -254,7 +254,7 @@ export function calculateFrame(
   basis: OfferAreaBasis,
   area: Pick<OfferAreaCalculator, "steel" | "installer" | "eaves">,
   rates: Pick<AreaRateConstants, "groundFloorFramePricePerSqm" | "firstFloorFramePricePerSqm">,
-  calcVersion: CalcVersion,
+  calcVersion: number,
 ): {
   readonly totalGroundFloorArea: number;
   readonly totalGroundFloorFrameCost: number;
@@ -345,7 +345,9 @@ export function calculateOfferArea(
   basis: OfferAreaBasis,
   area: OfferAreaCalculator,
   rates: AreaRateConstants,
-  calcVersion: CalcVersion,
+  // Callers must screen this with isSupportedCalcVersion first; an unrecognised
+  // version throws rather than defaulting to rules the offer was not quoted on.
+  calcVersion: number,
 ): OfferAreaCalculation {
   const slab = calculateSlab(basis, area, rates);
   const frame = calculateFrame(basis, area, rates, calcVersion);

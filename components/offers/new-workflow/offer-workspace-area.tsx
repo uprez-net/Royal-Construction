@@ -11,10 +11,11 @@ import {
   calculateOfferArea,
   getAreaBasisTotalSqm,
 } from "@/lib/offer/workspace-area";
-import type { CalcVersion } from "@/lib/offer/workspace-persistence";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Info, Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
+import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
+import { CountField } from "./offer-workspace-fields";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 import { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
@@ -23,7 +24,7 @@ type AreaCalculatorPanelProps = {
   // The offer's own calculation rules. Without this the on-screen frame figures
   // of an already-issued offer would silently change under the corrected maths,
   // which is the exact gap the pin exists to close.
-  readonly calcVersion: CalcVersion;
+  readonly calcVersion: number;
   readonly job: OfferWorkspaceJob;
   readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
@@ -74,30 +75,6 @@ function AreaField({
   );
 }
 
-// Whole-number count entry, matching AreaField's parse rule.
-function CountField({
-  onChange,
-  value,
-}: {
-  readonly onChange: (value: number) => void;
-  readonly value: number;
-}) {
-  return (
-    <Input
-      min="0"
-      step="1"
-      type="number"
-      placeholder="Auto-filled from lead requirements"
-      value={numberInputValue(value)}
-      onChange={(event) => {
-        const parsedValue = parseNonNegativeNumberInput(event.target.value);
-        if (parsedValue !== null) {
-          onChange(parsedValue);
-        }
-      }}
-    />
-  );
-}
 
 export function AreaCalculatorPanel({
   calcVersion,
@@ -108,6 +85,23 @@ export function AreaCalculatorPanel({
   onAreaChange,
   onJobChange,
 }: AreaCalculatorPanelProps) {
+  // An offer minted by a newer build names calculation rules this one does not
+  // carry. Recomputing under ours would show figures the offer was never priced
+  // on, so say so instead. The offer's own stored numbers are untouched.
+  if (!isSupportedCalcVersion(calcVersion)) {
+    return (
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <CardHeader className="border-b border-border/70">
+          <OfferCardHeading
+            description="This offer was priced under newer calculation rules than this version of the app carries, so the estimating aid is unavailable. The offer's own figures are unaffected."
+            icon={<Info className="size-4" aria-hidden="true" />}
+            title="Estimating aid unavailable"
+          />
+        </CardHeader>
+      </Card>
+    );
+  }
+
   const calc = calculateOfferArea(basis, area, rateConstants, calcVersion);
 
   return (

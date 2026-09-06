@@ -26,10 +26,10 @@ import type {
 } from "@/lib/offer/workspace-pricing";
 import {
   getAreaBasisTotalSqm,
+  rawTotalAreaSqm,
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
-import type { CalcVersion } from "@/lib/offer/workspace-persistence";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   deriveTenderGateStatus,
@@ -102,7 +102,9 @@ type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
   // The offer's calculation rules, threaded down to the area calculator so an
   // issued offer keeps showing the figures it was priced with.
-  readonly calcVersion: CalcVersion;
+  // A plain number: an offer minted by a newer build carries a version this one
+  // cannot price, and the panels screen for that themselves.
+  readonly calcVersion: number;
   // True once the server has reported the offer's real status. Until then
   // `status` is the "pending" seed, and the opening step derived from it is a
   // guess that must be corrected exactly once.
@@ -476,7 +478,10 @@ export function OfferWorkspaceScreen({
       buildOfferStepDigests({
         phaseUnlocked,
         job,
-        totalAreaSqm: getAreaBasisTotalSqm(areaBasis),
+        // rawTotalAreaSqm, not getAreaBasisTotalSqm: this is a DISPLAYED area and
+        // must agree with the Job setup card and the printed documents. The
+        // rounded variant stays on the pricing path (PriceBuildupPanel below).
+        totalAreaSqm: rawTotalAreaSqm(areaBasis),
         lines,
         directTotal,
         contractValueIncGst: customerPrice.selectedContractValueIncGst,
@@ -852,7 +857,7 @@ export function OfferWorkspaceScreen({
         customerPrice={customerPrice}
         effectiveMargin={effectiveMargin}
         pricing={pricing}
-        totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
+        totalAreaSqm={rawTotalAreaSqm(areaBasis)}
       />
     </div>
   );

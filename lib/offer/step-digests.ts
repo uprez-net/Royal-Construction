@@ -9,6 +9,7 @@ import {
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { EffectiveMargin } from "@/lib/offer/workspace-pricing";
+import { formatPercent } from "@/lib/offer/format";
 
 // One line per workflow step, answering "what does this step currently say?"
 // without opening it.
@@ -70,14 +71,6 @@ export function compactMoney(value: number): string {
   return `$${Math.round(value).toLocaleString("en-AU")}`;
 }
 
-// Identical to the summary strip's formatPercent (1dp, en-AU), so the rail and
-// the strip cannot show "18%" beside "17.5%" for the same offer.
-function formatMarginPct(fraction: number): string {
-  return new Intl.NumberFormat("en-AU", {
-    style: "percent",
-    maximumFractionDigits: 1,
-  }).format(fraction);
-}
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
@@ -137,7 +130,7 @@ export function buildOfferStepDigests(
         : `${plural(includedLines.length, "line", "lines")} · ${compactMoney(input.directTotal)}`,
     pricing:
       input.contractValueIncGst > 0
-        ? `${formatMarginPct(input.effectiveMargin.effectiveMarkupPct)} margin · ${compactMoney(input.contractValueIncGst)}`
+        ? `${formatPercent(input.effectiveMargin.effectiveMarkupPct)} margin · ${compactMoney(input.contractValueIncGst)}`
         : "Not priced",
     scope: `${plural(input.allowances.length, "allowance", "allowances")} · ${input.exclusions.length} excluded`,
     "offer-document": `${imagesSet} of ${OFFER_IMAGE_SLOTS.length} images set`,

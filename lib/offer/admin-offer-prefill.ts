@@ -26,10 +26,7 @@ import type {
   AreaMeasurementKey,
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
-import type {
-  CalcVersion,
-  OfferWorkspaceSnapshot,
-} from "@/lib/offer/workspace-persistence";
+import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
@@ -272,7 +269,7 @@ export function reevaluateFormulaCostLines(
   // it republishes the area results into the cost-formula scope, and the effect
   // that calls it runs on every open of an editable offer. It must therefore
   // price on the offer's OWN rules, never on today's.
-  calcVersion: CalcVersion,
+  calcVersion: number,
 ): readonly OfferWorkspaceCostLine[] {
   const resolvedRates = resolveAreaRateConstants(rateConstants);
   const basis = offerAreaBasisFromJob(job);

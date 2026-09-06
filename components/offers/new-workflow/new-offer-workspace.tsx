@@ -90,11 +90,11 @@ import type {
   OfferWorkspaceSnapshot,
   TenderGateState,
 } from "@/lib/offer/workspace-persistence";
+import { INITIAL_TENDER_GATE } from "@/lib/offer/workspace-persistence";
 import {
   CURRENT_CALC_VERSION,
-  INITIAL_TENDER_GATE,
-  type CalcVersion,
-} from "@/lib/offer/workspace-persistence";
+  isSupportedCalcVersion,
+} from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   collectOfferSendBlockers,
@@ -271,9 +271,7 @@ export function NewOfferWorkspace({
   // current version; a saved offer overwrites this from its stored pin in
   // hydrateSnapshot. The SERVER stamp is authoritative — this seed only matters
   // for the window before the first save.
-  const [calcVersion, setCalcVersion] = useState<CalcVersion>(
-    CURRENT_CALC_VERSION,
-  );
+  const [calcVersion, setCalcVersion] = useState<number>(CURRENT_CALC_VERSION);
   // Admin content changed after this offer was frozen (agreed/sent), so the
   // server left the snapshot alone. Surfaced as an advisory send blocker.
   const [adminContentStale, setAdminContentStale] = useState(false);
@@ -346,6 +344,12 @@ export function NewOfferWorkspace({
       job.reference === INITIAL_OFFER_JOB.reference ||
       areaCalculator === INITIAL_AREA_CALCULATOR
     ) {
+      return;
+    }
+    // An offer minted by a newer build names rules we do not have. Recomputing
+    // it under ours would reprice a quote the customer already holds, so leave
+    // its stored lines exactly as they are.
+    if (!isSupportedCalcVersion(calcVersion)) {
       return;
     }
     setLines((prev) => {
@@ -697,6 +701,12 @@ export function NewOfferWorkspace({
       alfrescoPorchSqm: result.areaBasis.alfrescoSqm,
       porchSqm: result.areaBasis.porchSqm,
       grannyFlatSqm: result.areaBasis.grannyFlatSqm,
+      // The toggle travels with the area. Without this a v2 offer could import
+      // granny square metres that still reach the slab basis and every printed
+      // total while the field itself is hidden — the exact divergence v2 exists
+      // to close, only harder to see.
+      hasGrannyHome:
+        result.areaBasis.grannyFlatSqm > 0 ? true : current.hasGrannyHome,
     }));
   }
 

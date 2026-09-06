@@ -29,10 +29,7 @@ import {
   offerAreaBasisFromJob,
   rawTotalAreaSqm,
 } from "@/lib/offer/workspace-area";
-import {
-  CURRENT_CALC_VERSION,
-  type CalcVersion,
-} from "@/lib/offer/workspace-persistence";
+import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { cn } from "@/lib/utils";
 import {
@@ -46,11 +43,12 @@ import {
 import { useState, type PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
+import { CountField } from "./offer-workspace-fields";
 
 type JobSetupPanelProps = {
   // v1 offers keep the field exactly where it was; only v2 couples the granny
   // area to the toggle. See CalcVersion in workspace-persistence.ts.
-  readonly calcVersion: CalcVersion;
+  readonly calcVersion: number;
   readonly job: OfferWorkspaceJob;
   readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
   readonly onPrefillFromLead?: () => void;
@@ -406,34 +404,6 @@ function SpecFields({
   );
 }
 
-// A room-count entry. Shares AreaField's parse rule so a negative is rejected
-// rather than stored, and shows the placeholder at 0 instead of a literal "0"
-// that the caret then collides with (typing 4 into a resident 0 gave 40).
-function CountField({
-  onChange,
-  step,
-  value,
-}: {
-  readonly onChange: (value: number) => void;
-  readonly step: "1" | "0.5";
-  readonly value: number;
-}) {
-  return (
-    <Input
-      min="0"
-      step={step}
-      type="number"
-      placeholder="Auto-filled from lead requirements"
-      value={numberInputValue(value)}
-      onChange={(event) => {
-        const parsedValue = parseNonNegativeNumberInput(event.target.value);
-        if (parsedValue !== null) {
-          onChange(parsedValue);
-        }
-      }}
-    />
-  );
-}
 
 // Two-button Yes/No selector, matching the tender gate's YesNoQuestion
 // (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome is a

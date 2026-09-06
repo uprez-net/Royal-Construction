@@ -64,12 +64,12 @@ const TASK_DATALIST_ID = "offer-calculation-task-options";
 const SEQUENCE_STEP_DATALIST_ID = "offer-calculation-sequence-step-options";
 
 const gridCellControlClass =
-  "h-9 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40 focus-visible:ring-inset";
+  "h-9 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset";
 
 // Auto-fits to content (base Textarea sets `field-sizing-content`): one line when
 // short, grows only when the wording is long. No manual resize handle.
 const gridAutoTextCellControlClass =
-  "min-h-9 w-full resize-none rounded-none border-0 bg-transparent px-3 py-2 text-sm leading-5 shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40 focus-visible:ring-inset";
+  "min-h-9 w-full resize-none rounded-none border-0 bg-transparent px-3 py-2 text-sm leading-5 shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset";
 
 function focusEditableCell(element: HTMLElement) {
   element.focus();
@@ -291,7 +291,7 @@ export function CostSchedulePanel({
                             aria-controls={detailRowId}
                             aria-expanded={isExpanded}
                             aria-label={`${isExpanded ? "Collapse" : "Expand"} building sequence for ${rowLabel}`}
-                            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                             onClick={() => onToggleLineExpanded(line.id)}
                             type="button"
                           >
@@ -340,7 +340,7 @@ export function CostSchedulePanel({
                           aria-labelledby={`${rowLabelId} cost-sequence-column`}
                           className={cn(
                             "flex h-9 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold/40",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
                             stepCount > 0
                               ? "text-foreground hover:bg-royal-gold-light/30"
                               : "text-muted-foreground/80 hover:bg-muted/60",
@@ -424,7 +424,7 @@ export function CostSchedulePanel({
                             aria-labelledby={`${rowLabelId} cost-included-column`}
                             aria-keyshortcuts="Enter Shift+Enter"
                             checked={line.includedInContract}
-                            className="size-5 rounded-[5px] focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                            className="size-5 rounded-[5px] focus-visible:ring-2 focus-visible:ring-ring/50"
                             data-cost-grid-cell=""
                             onKeyDown={handleGridCellKeyDown}
                             onCheckedChange={(checked) =>

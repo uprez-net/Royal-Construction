@@ -21,6 +21,7 @@ import {
   CURRENT_CALC_VERSION,
   INITIAL_TENDER_GATE,
   LEGACY_CALC_VERSION,
+  isSupportedCalcVersion,
   deserializeWorkspace,
   parseWorkspaceState,
   serializeWorkspace,
@@ -85,15 +86,21 @@ test("the pin survives a persistence round-trip in both directions", () => {
   }
 });
 
-test("an unrecognised version is read as legacy, never adopted as current", () => {
-  // A row written by a future build, opened by this one. It must not silently
-  // acquire today's rules.
+test("an unrecognised version survives intact and is refused, not downgraded", () => {
+  // A row written by a future build, opened by this one. Reading it as v1 would
+  // have repriced it under rules it was never quoted on, so the version is kept
+  // exactly as stored and rejected at the point of calculation instead.
   const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<string, unknown>;
   persisted.calcVersion = 99;
 
   const restored = deserializeWorkspace(parseWorkspaceState(persisted));
 
-  assert.equal(restored.calcVersion, LEGACY_CALC_VERSION);
+  assert.equal(restored.calcVersion, 99);
+  assert.notEqual(restored.calcVersion, LEGACY_CALC_VERSION);
+  assert.equal(isSupportedCalcVersion(restored.calcVersion), false);
+  // Both versions this build does carry are supported.
+  assert.equal(isSupportedCalcVersion(LEGACY_CALC_VERSION), true);
+  assert.equal(isSupportedCalcVersion(CURRENT_CALC_VERSION), true);
 });
 
 test("the two rule sets disagree only about the void, and only in the frame", () => {

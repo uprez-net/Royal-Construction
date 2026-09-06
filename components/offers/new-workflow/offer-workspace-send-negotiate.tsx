@@ -425,7 +425,7 @@ function ReadinessStrip({
         return (
           <li key={blocker.id}>
             <button
-              className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40 ${toneClass}`}
+              className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${toneClass}`}
               onClick={() => onNavigateToStep(blocker.stepId)}
               type="button"
             >

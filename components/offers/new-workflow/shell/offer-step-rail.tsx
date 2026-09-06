@@ -87,7 +87,7 @@ export function OfferStepRail({
         onClick={onToggleCollapsed}
         aria-label={collapsed ? "Expand step rail" : "Collapse step rail"}
         aria-expanded={!collapsed}
-        className="flex items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold-dark"
+        className="flex items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
       >
         {collapsed ? (
           <ChevronRight className="size-4" aria-hidden="true" />
@@ -134,18 +134,12 @@ function RailRow({
       aria-label={`Step ${index}, ${label}, ${stateWord}. ${digest}`}
       title={`${label} — ${digest}`}
       className={cn(
-        "relative flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold-dark",
+        "flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
         active ? "bg-royal-gold-light/70" : "hover:bg-muted/50",
         locked && !active && "opacity-60",
       )}
     >
-      {active ? (
-        <span
-          aria-hidden="true"
-          className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-royal-gold"
-        />
-      ) : null}
       <StepGlyph active={active} index={index} state={state} />
       {collapsed ? null : (
         <span aria-hidden="true" className="hidden min-w-0 flex-1 lg:block">
