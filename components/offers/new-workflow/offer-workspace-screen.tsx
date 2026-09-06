@@ -431,6 +431,32 @@ export function OfferWorkspaceScreen({
   }, [activeStepId]);
 
   const [railCollapsed, setRailCollapsed] = useState(false);
+
+  // Panel state that must outlive its panel. Only the active step is mounted,
+  // so anything a panel kept in local useState was wiped on every step change.
+  // The screen stays mounted for the life of the page, so it holds these.
+  const [expandedLineIds, setExpandedLineIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleLineExpanded = useCallback((lineId: string) => {
+    setExpandedLineIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(lineId)) {
+        next.delete(lineId);
+      } else {
+        next.add(lineId);
+      }
+      return next;
+    });
+  }, []);
+  const [aiBusy, setAiBusy] = useState<
+    Partial<Record<OfferImageSlotKey, boolean>>
+  >({});
+  const setAiBusyFor = useCallback(
+    (key: OfferImageSlotKey, busy: boolean) =>
+      setAiBusy((current) => ({ ...current, [key]: busy })),
+    [],
+  );
   const activeStepIsOfferPhase =
     OFFER_WORKFLOW_STEPS.find((step) => step.id === activeStepId)?.phase ===
     "offer";
@@ -595,6 +621,8 @@ export function OfferWorkspaceScreen({
               onJobChange={onJobChange}
             />
             <CostSchedulePanel
+              expandedLineIds={expandedLineIds}
+              onToggleLineExpanded={toggleLineExpanded}
               importResult={importResult}
               lines={lines}
               onAddLine={onAddLine}
@@ -668,6 +696,8 @@ export function OfferWorkspaceScreen({
                 checkedClean={checkedClean}
               />
               <OfferWorkspaceImages
+                aiBusy={aiBusy}
+                onAiBusyChange={setAiBusyFor}
                 images={images}
                 onImageChange={onImageChange}
                 leadId={leadId}

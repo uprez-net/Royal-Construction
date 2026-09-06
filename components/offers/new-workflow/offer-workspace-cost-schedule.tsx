@@ -43,6 +43,11 @@ import { numberInputValue } from "./offer-workspace-format";
 import { WorkbookImportControl } from "./offer-workspace-import";
 
 type CostSchedulePanelProps = {
+  // Which rows have their building-sequence editor open. Owned by the screen so
+  // it survives a trip to another step: only the active step is mounted now, so
+  // local state here was wiped every time the estimator went to Pricing.
+  readonly expandedLineIds: ReadonlySet<string>;
+  readonly onToggleLineExpanded: (lineId: string) => void;
   readonly importResult: OfferWorkbookImportResult | null;
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly onImported: (result: OfferWorkbookImportResult) => void;
@@ -98,6 +103,8 @@ function handleGridCellKeyDown(event: KeyboardEvent<HTMLElement>) {
 }
 
 export function CostSchedulePanel({
+  expandedLineIds,
+  onToggleLineExpanded,
   importResult,
   lines,
   onImported,
@@ -111,21 +118,6 @@ export function CostSchedulePanel({
   const importedCount = lines.filter(
     (line) => line.sourceReference !== undefined,
   ).length;
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-
-  const toggleExpanded = (lineId: string) => {
-    setExpandedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(lineId)) {
-        next.delete(lineId);
-      } else {
-        next.add(lineId);
-      }
-      return next;
-    });
-  };
 
   return (
     <Card
@@ -286,7 +278,7 @@ export function CostSchedulePanel({
                 const rowNumber = index + 1;
                 const rowLabelId = `cost-row-${line.id}`;
                 const rowLabel = line.itemName || `Row ${rowNumber}`;
-                const isExpanded = expandedIds.has(line.id);
+                const isExpanded = expandedLineIds.has(line.id);
                 const detailRowId = `cost-sequence-detail-${line.id}`;
                 const stepCount = line.buildingSequenceTasks.length;
 
@@ -300,7 +292,7 @@ export function CostSchedulePanel({
                             aria-expanded={isExpanded}
                             aria-label={`${isExpanded ? "Collapse" : "Expand"} building sequence for ${rowLabel}`}
                             className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
-                            onClick={() => toggleExpanded(line.id)}
+                            onClick={() => onToggleLineExpanded(line.id)}
                             type="button"
                           >
                             {isExpanded ? (
@@ -353,7 +345,7 @@ export function CostSchedulePanel({
                               ? "text-foreground hover:bg-royal-gold-light/30"
                               : "text-muted-foreground/80 hover:bg-muted/60",
                           )}
-                          onClick={() => toggleExpanded(line.id)}
+                          onClick={() => onToggleLineExpanded(line.id)}
                           type="button"
                         >
                           {stepCount > 0 ? (
