@@ -90,7 +90,11 @@ import type {
   OfferWorkspaceSnapshot,
   TenderGateState,
 } from "@/lib/offer/workspace-persistence";
-import { INITIAL_TENDER_GATE } from "@/lib/offer/workspace-persistence";
+import {
+  CURRENT_CALC_VERSION,
+  INITIAL_TENDER_GATE,
+  type CalcVersion,
+} from "@/lib/offer/workspace-persistence";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   collectOfferSendBlockers,
@@ -259,6 +263,13 @@ export function NewOfferWorkspace({
   const [adminContentVersion, setAdminContentVersion] = useState(
     adminPrefill?.adminVersion ?? 0,
   );
+  // The calculation rules this offer prices under. A fresh offer seeds at the
+  // current version; a saved offer overwrites this from its stored pin in
+  // hydrateSnapshot. The SERVER stamp is authoritative — this seed only matters
+  // for the window before the first save.
+  const [calcVersion, setCalcVersion] = useState<CalcVersion>(
+    CURRENT_CALC_VERSION,
+  );
   // Admin content changed after this offer was frozen (agreed/sent), so the
   // server left the snapshot alone. Surfaced as an advisory send blocker.
   const [adminContentStale, setAdminContentStale] = useState(false);
@@ -340,9 +351,10 @@ export function NewOfferWorkspace({
         rateConstantsRef.current,
         job,
         areaCalculator,
+        calcVersion,
       );
     });
-  }, [job, areaCalculator, leadId]);
+  }, [job, areaCalculator, leadId, calcVersion]);
 
   useEffect(() => {
     if (saveState !== "saving") return;
@@ -738,9 +750,14 @@ export function NewOfferWorkspace({
       images,
       tenderGate,
       adminContentVersion,
+      // LAST, matching serializeWorkspace. The autosave dirty check compares
+      // JSON.stringify of this against the loaded snapshot; a different key
+      // order would make every offer look dirty on open and save itself.
+      calcVersion,
     }),
     [
       adminContentVersion,
+      calcVersion,
       job,
       lines,
       allowances,
@@ -911,6 +928,7 @@ export function NewOfferWorkspace({
       setImages(s.images);
       setTenderGate(s.tenderGate);
       setAdminContentVersion(s.adminContentVersion);
+      setCalcVersion(s.calcVersion);
     },
     [adminPrefill?.costLines, adminPrefill?.loadingChargePercentage],
   );
@@ -1691,6 +1709,7 @@ export function NewOfferWorkspace({
       <OfferWorkspaceScreen
         allowances={allowances}
         areaCalculator={areaCalculator}
+        calcVersion={calcVersion}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}

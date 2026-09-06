@@ -21,6 +21,7 @@ import {
   EMPTY_OFFER_IMAGES,
   type OfferImageMap,
 } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 const SNAPSHOT: OfferWorkspaceSnapshot = {
   job: INITIAL_OFFER_JOB,
@@ -35,6 +36,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   rateCardTier: "MID",
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 0,
+  calcVersion: LEGACY_CALC_VERSION,
   overrideReason: "",
   selectedPriceInput: "",
   standardPriceInput: "",

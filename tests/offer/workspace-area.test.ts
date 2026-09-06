@@ -11,6 +11,10 @@ import {
   type OfferAreaCalculator,
   type AreaRateConstants,
 } from "../../lib/offer/workspace-area";
+import {
+  CURRENT_CALC_VERSION,
+  LEGACY_CALC_VERSION,
+} from "@/lib/offer/workspace-persistence";
 
 const basis: OfferAreaBasis = {
   groundFloorSqm: 110,
@@ -88,6 +92,7 @@ assert.deepEqual(
       groundFloorFramePricePerSqm: 137.5,
       firstFloorFramePricePerSqm: 148.5,
     },
+    LEGACY_CALC_VERSION,
   ),
   {
     totalGroundFloorArea: 141,
@@ -107,6 +112,7 @@ assert.deepEqual(
       groundFloorFramePricePerSqm: 137.5,
       firstFloorFramePricePerSqm: 148.5,
     },
+    LEGACY_CALC_VERSION,
   ),
   {
     totalGroundFloorArea: 0,
@@ -193,7 +199,7 @@ const area: OfferAreaCalculator = {
   tilesSteps: 50,
 };
 
-const calc = calculateOfferArea(basis, area, defaultRates);
+const calc = calculateOfferArea(basis, area, defaultRates, LEGACY_CALC_VERSION);
 assert.equal(calc.totalSlabCost, 30600); // 28200 slab + 900 drop edge beam + 1500 trucks
 assert.equal(calc.totalDropEdgeBeamCost, 900);
 assert.equal(calc.totalTruckPrice, 1500);
@@ -209,7 +215,7 @@ assert.equal(calc.totalTilesRequired, 1375);
 
 // ─── All-zero calculator with defaults ───
 
-const zeroCalc = calculateOfferArea(basis, INITIAL_AREA_CALCULATOR, defaultRates);
+const zeroCalc = calculateOfferArea(basis, INITIAL_AREA_CALCULATOR, defaultRates, LEGACY_CALC_VERSION);
 assert.equal(zeroCalc.totalSlabCost, 28200);
 assert.equal(zeroCalc.totalDropEdgeBeamCost, 0);
 assert.equal(zeroCalc.totalTruckPrice, 0);
@@ -239,4 +245,42 @@ assert.equal(
     kitchenSqm: 0,
   }),
   0,
+);
+
+// ─── The calculation pin (v1 vs v2) ───
+//
+// v1 is the historical record for every offer minted before the pin. v2 adds the
+// void to the first-floor frame area. These two assertions are the guarantee the
+// owner was given: an existing offer's frame numbers cannot move.
+
+const pinBasis = { ...basis, firstFloorSqm: 80, balconySqm: 10, voidSqm: 12 };
+const pinRates = {
+  groundFloorFramePricePerSqm: 137.5,
+  firstFloorFramePricePerSqm: 148.5,
+};
+const pinInputs = { steel: 0, installer: 0, eaves: 0 };
+
+const v1 = calculateFrame(pinBasis, pinInputs, pinRates, LEGACY_CALC_VERSION);
+const v2 = calculateFrame(pinBasis, pinInputs, pinRates, CURRENT_CALC_VERSION);
+
+// v1 ignores the void entirely: 80 + 10.
+assert.equal(v1.totalFirstFloorArea, 90);
+assert.equal(v1.totalFirstFloorFrameCost, 13365);
+
+// v2 counts it: 80 + 10 + 12.
+assert.equal(v2.totalFirstFloorArea, 102);
+assert.equal(v2.totalFirstFloorFrameCost, 15147);
+
+// A build with no void prices identically under both rules, which is why only
+// void-bearing offers are affected at all.
+const noVoid = { ...pinBasis, voidSqm: 0 };
+assert.deepEqual(
+  calculateFrame(noVoid, pinInputs, pinRates, LEGACY_CALC_VERSION),
+  calculateFrame(noVoid, pinInputs, pinRates, CURRENT_CALC_VERSION),
+);
+
+// An unknown version must fail loudly rather than fall back to either rule.
+assert.throws(
+  () => calculateFrame(pinBasis, pinInputs, pinRates, 99 as never),
+  /calculation rules v99/,
 );

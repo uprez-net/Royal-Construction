@@ -25,6 +25,7 @@ import {
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
   return {
@@ -45,6 +46,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
   };
 }
 

@@ -22,6 +22,7 @@ import {
   findSignerStatus,
   type OfferSignerStatus,
 } from "../../lib/offer/signing-status";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // ─── fixtures ───
 
@@ -61,6 +62,7 @@ function snapshot(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
   };
 }
 

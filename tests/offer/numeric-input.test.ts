@@ -18,6 +18,7 @@ import {
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // A zero must never render as a literal "0" inside a numeric input: the caret
 // lands beside it, so typing "400" yields "4000" and any value not ending in
@@ -59,6 +60,7 @@ const snapshot: OfferWorkspaceSnapshot = {
   images: EMPTY_OFFER_IMAGES,
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 0,
+  calcVersion: LEGACY_CALC_VERSION,
 };
 
 const blankRoundTrip = deserializeWorkspace(serializeWorkspace(snapshot));

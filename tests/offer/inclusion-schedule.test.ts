@@ -41,6 +41,7 @@ import {
   INCLUSION_SECTION_ORDER,
   OTHER_INCLUSIONS_SECTION,
 } from "../../lib/offer/offer-tender-html";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // REGRESSION: the state schema pinned `schemaVersion: z.literal(2)` while
 // serialize wrote CURRENT_WORKSPACE_SCHEMA_VERSION. Bumping the constant made
@@ -231,6 +232,7 @@ function snapshotWithSchedule(
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
     selectedPriceInput: "",
     standardPriceInput: "",
     overrideReason: "",

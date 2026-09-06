@@ -14,6 +14,7 @@ import {
   INITIAL_AREA_CALCULATOR,
   calculateOfferArea,
   offerAreaBasisFromJob,
+  rawTotalAreaSqm,
   type AreaRateConstants,
   type OfferAreaCalculator,
 } from "@/lib/offer/workspace-area";
@@ -25,7 +26,10 @@ import type {
   AreaMeasurementKey,
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
-import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
+import type {
+  CalcVersion,
+  OfferWorkspaceSnapshot,
+} from "@/lib/offer/workspace-persistence";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
@@ -264,10 +268,15 @@ export function reevaluateFormulaCostLines(
     | "grannyGarageSpaces"
   >,
   area: OfferAreaCalculator,
+  // This function is the bridge from a display calculation to persisted money:
+  // it republishes the area results into the cost-formula scope, and the effect
+  // that calls it runs on every open of an editable offer. It must therefore
+  // price on the offer's OWN rules, never on today's.
+  calcVersion: CalcVersion,
 ): readonly OfferWorkspaceCostLine[] {
   const resolvedRates = resolveAreaRateConstants(rateConstants);
   const basis = offerAreaBasisFromJob(job);
-  const calc = calculateOfferArea(basis, area, resolvedRates);
+  const calc = calculateOfferArea(basis, area, resolvedRates, calcVersion);
 
   const measurements: Partial<Record<AreaMeasurementKey, number>> = {
     TOTAL_SLAB_COST: calc.totalSlabCost,
@@ -288,15 +297,7 @@ export function reevaluateFormulaCostLines(
     TOTAL_FLOORING_AREA:
       basis.firstFloorSqm +
       basis.balconySqm,
-    TOTAL_AREA:
-      basis.groundFloorSqm +
-      basis.firstFloorSqm +
-      basis.garageSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.grannyFlatSqm +
-      basis.balconySqm +
-      basis.voidSqm,
+    TOTAL_AREA: rawTotalAreaSqm(basis),
     TOTAL_SHOWERS: job.showerCount,
     TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,
     TOTAL_LINENS: job.linenCount,

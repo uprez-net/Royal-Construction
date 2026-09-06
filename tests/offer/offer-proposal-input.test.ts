@@ -22,6 +22,7 @@ import {
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // One included $400k direct-cost line → directTotal 400,000.
 const DIRECT_TOTAL = 400000;
@@ -56,6 +57,7 @@ function makeSnapshot(
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
