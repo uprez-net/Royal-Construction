@@ -1,6 +1,8 @@
 "use client";
 
-// PROTOTYPE — throwaway. Not imported by production code.
+// PROTOTYPE — a design surface. Not imported by production code, and the
+// /prototype route 404s outside development and staging. Kept while the
+// dwellings/duplex model and the offer packages are designed.
 //
 // Three executions of the step-rail topology. All three render the same Job
 // setup content so they can be judged on shell and density alone; the other

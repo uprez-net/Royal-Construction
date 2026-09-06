@@ -1,4 +1,6 @@
-// PROTOTYPE — throwaway. Not imported by production code.
+// PROTOTYPE — a design surface. Not imported by production code, and the
+// /prototype route 404s outside development and staging. Kept while the
+// dwellings/duplex model and the offer packages are designed.
 //
 // Mock state for the offer-workspace redesign prototype. Everything here is
 // in-memory: no persistence, no server actions, no validation. The point is to
@@ -102,6 +104,13 @@ export const FACADES = [
 // PROPOSED, not confirmed. These are the things a NSW duplex carries that a
 // single dwelling does not, and that the offer currently has nowhere to put.
 // Flagged in the UI so the estimator can tell us which are real.
+//
+// Note for anyone reviewing the diff: this contradicts nothing. Duplex was
+// deferred out of the PRODUCTION shell, not abandoned — the owner's ruling was
+// "do the shell only, leave duplex for later". This is the "later" being
+// designed, on a route production cannot reach. hbcfPerDwelling in particular
+// is a question to answer, not a decision already taken: the owner has ruled
+// that the two halves of a duplex are never priced separately.
 
 export type PrototypeSubdivision = "none" | "torrens" | "strata";
 

@@ -1,5 +1,10 @@
-// PROTOTYPE — throwaway route. Delete with the branch once the direction is
-// settled. Nothing in production imports it.
+// A design surface, not a feature. Nothing in production imports it, and the
+// route 404s outside development and staging.
+//
+// It was built to choose the offer-workspace shell, which it did. It is kept
+// deliberately rather than deleted, because the dwellings/duplex model and the
+// offer packages are both still to be designed and this is where that happens
+// without touching the live workspace. Delete it when both have shipped.
 //
 // Three executions of the offer-workspace redesign, switchable via ?v=a|b|c
 // and the floating bar at the bottom. State is in memory only.
@@ -19,9 +24,9 @@ export const metadata: Metadata = {
 };
 
 export default function PrototypePage() {
-  // This is throwaway design exploration, not a feature. It is a real route the
-  // moment it exists, so keep it off production: dev and the staging preview
-  // only (APP_ENV=staging, same signal the sandbox banner uses).
+  // A route is real the moment it exists, so keep this one off production: dev
+  // and the staging preview only (APP_ENV=staging, the same signal the sandbox
+  // banner uses). This gate is what makes keeping the prototype safe.
   if (
     process.env.NODE_ENV === "production" &&
     process.env.APP_ENV !== "staging"

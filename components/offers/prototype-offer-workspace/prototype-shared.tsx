@@ -1,6 +1,8 @@
 "use client";
 
-// PROTOTYPE — throwaway. Not imported by production code.
+// PROTOTYPE — a design surface. Not imported by production code, and the
+// /prototype route 404s outside development and staging. Kept while the
+// dwellings/duplex model and the offer packages are designed.
 //
 // Shared pieces across all three variants: labelled fields that are actually
 // associated with their input (today only 3 of 108 labels on the real page

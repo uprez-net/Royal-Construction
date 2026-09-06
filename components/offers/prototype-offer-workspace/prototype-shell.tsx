@@ -1,6 +1,8 @@
 "use client";
 
-// PROTOTYPE — throwaway. Not imported by production code.
+// PROTOTYPE — a design surface. Not imported by production code, and the
+// /prototype route 404s outside development and staging. Kept while the
+// dwellings/duplex model and the offer packages are designed.
 //
 // The chrome the three variants share: a single-row command bar (the real page
 // spends 275px — 34% of a laptop viewport — on a header block plus a ten-node

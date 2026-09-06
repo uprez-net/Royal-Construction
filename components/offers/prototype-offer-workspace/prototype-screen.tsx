@@ -1,6 +1,8 @@
 "use client";
 
-// PROTOTYPE — throwaway. Not imported by production code.
+// PROTOTYPE — a design surface. Not imported by production code, and the
+// /prototype route 404s outside development and staging. Kept while the
+// dwellings/duplex model and the offer packages are designed.
 
 import { useSearchParams } from "next/navigation";
 import { PrototypeVariant } from "./prototype-variants";
