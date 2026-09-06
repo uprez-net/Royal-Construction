@@ -552,9 +552,9 @@ function ContractPreview({
           <p className="font-mono text-xs text-muted-foreground">
             {formatOfferReference(job.reference, job.revision)}
           </p>
-          <h3 className="font-heading text-lg font-semibold">
+          <h4 className="font-heading text-lg font-semibold">
             Building Contract
-          </h3>
+          </h4>
           <p className="text-sm text-muted-foreground">
             Incorporates the executed Tender for {job.siteAddress}.
           </p>

@@ -5,6 +5,10 @@ import type {
   OfferWorkspaceJob,
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
+import {
+  offerAreaBasisFromJob,
+  rawTotalAreaSqm,
+} from "@/lib/offer/workspace-area";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 
@@ -217,16 +221,7 @@ export function getPrintFooterText(
 }
 
 function getTotalAreaSqm(job: OfferWorkspaceJob): number {
-  return (
-    job.groundFloorSqm +
-    job.firstFloorSqm +
-    job.garageSqm +
-    job.alfrescoPorchSqm +
-    job.porchSqm +
-    job.grannyFlatSqm +
-    job.balconySqm +
-    job.voidSqm
-  );
+  return rawTotalAreaSqm(offerAreaBasisFromJob(job));
 }
 
 function getAreaLabel(totalAreaSqm: number): string {

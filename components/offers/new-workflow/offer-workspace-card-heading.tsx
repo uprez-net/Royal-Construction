@@ -22,7 +22,13 @@ export function OfferCardHeading({
         {icon}
       </span>
       <div className="min-w-0">
-        <CardTitle id={titleId}>{title}</CardTitle>
+        {/* h3: the enclosing step section renders the h2 (see
+            offer-workspace-step-section.tsx). Card titles were <div>s, so the
+            outline jumped h2 -> h3 with the card boundary invisible to a screen
+            reader. */}
+        <CardTitle as="h3" id={titleId}>
+          {title}
+        </CardTitle>
         <CardDescription
           className={
             singleLineDescription
