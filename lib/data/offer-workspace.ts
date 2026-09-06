@@ -13,10 +13,13 @@ import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { voidEnvelope } from "@/lib/docusign/void-envelope";
 import {
+  CURRENT_CALC_VERSION,
+  LEGACY_CALC_VERSION,
   deserializeWorkspace,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
+  type PersistedOfferWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
 import {
   applyAdminPrefillToSnapshot,
@@ -464,6 +467,34 @@ export async function pollOfferSigningStatus(input: {
   };
 }
 
+// The ONLY place CURRENT_CALC_VERSION is named on the server. See the CalcVersion
+// notes in lib/offer/workspace-persistence.ts.
+function pinCalcVersion(
+  persisted: PersistedOfferWorkspaceState,
+  storedCalcVersion: number | null,
+): PersistedOfferWorkspaceState {
+  return {
+    ...persisted,
+    calcVersion: storedCalcVersion ?? CURRENT_CALC_VERSION,
+  };
+}
+
+// Reads the pin off a raw stored blob without running the full zod parse — this
+// runs on the save path and must not throw on an offer whose state is otherwise
+// unparseable. A blob with no pin is pre-versioning, hence legacy.
+function readStoredCalcVersion(state: unknown): number | null {
+  if (state === null || state === undefined) {
+    return null;
+  }
+  if (typeof state !== "object") {
+    return LEGACY_CALC_VERSION;
+  }
+  const raw = (state as Record<string, unknown>).calcVersion;
+  return typeof raw === "number" && Number.isInteger(raw) && raw > 0
+    ? raw
+    : LEGACY_CALC_VERSION;
+}
+
 // Debounced autosave with optimistic concurrency (ADR 0002): the write only
 // lands if the caller's stateVersion still matches; otherwise it is rejected so
 // the client can reload rather than silently clobber a newer save.
@@ -486,13 +517,28 @@ export async function saveOfferWorkspace(input: {
     return { ok: false, reason: "superseded" };
   }
 
-  const persisted = serializeWorkspace(input.snapshot);
+  // The offer's calculation rules are stamped by the SERVER, never taken from
+  // the client: saveOfferWorkspace persists the client's serialized snapshot
+  // wholesale, so a stale tab could otherwise up- or down-grade the maths of a
+  // live quote. A row that has never been saved is a brand-new offer and gets
+  // today's rules; anything already saved keeps its stored pin forever.
+  const storedRow = await prisma.offer.findUnique({
+    where: { id: input.offerId },
+    select: { workspaceState: true },
+  });
+  const persisted = pinCalcVersion(
+    serializeWorkspace(input.snapshot),
+    readStoredCalcVersion(storedRow?.workspaceState),
+  );
   // Resolve the price through the same path the Tender/Contract and the project
   // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
   // blank override serialises to 0 cents — so reading it here stamped $0 on every
   // offer priced the normal way, which is what the Versions timeline displayed.
-  const selectedContractValueIncGst =
-    buildProposalInput(input.snapshot).customerPrice.selectedContractValueIncGst;
+  const selectedContractValueIncGst = buildProposalInput(
+    // Deliberately the pinned state, not input.snapshot: the money columns must
+    // agree with what was actually persisted, including its calculation rules.
+    deserializeWorkspace(persisted),
+  ).customerPrice.selectedContractValueIncGst;
   const contractValue = new Prisma.Decimal(selectedContractValueIncGst);
   // The three money columns the Offers list prints (amount / GST / total) were
   // never written after the row was minted at zero, so every offer read $0.00

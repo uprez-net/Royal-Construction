@@ -437,9 +437,9 @@ function TenderPreview({
           <p className="font-mono text-xs text-muted-foreground">
             {formatOfferReference(job.reference, job.revision)}
           </p>
-          <h3 className="font-heading text-lg font-semibold">
+          <h4 className="font-heading text-lg font-semibold">
             Tender — fixed price building works
-          </h3>
+          </h4>
           <p className="text-sm text-muted-foreground">
             {ownerNamesLine} · {job.siteAddress}
           </p>

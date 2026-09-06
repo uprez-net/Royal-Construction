@@ -25,6 +25,11 @@ import {
   type OfferOwnerSignatory,
   type OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
+import {
+  offerAreaBasisFromJob,
+  rawTotalAreaSqm,
+} from "@/lib/offer/workspace-area";
+import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { cn } from "@/lib/utils";
 import {
@@ -38,8 +43,12 @@ import {
 import { useState, type PropsWithChildren } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
+import { CountField } from "./offer-workspace-fields";
 
 type JobSetupPanelProps = {
+  // v1 offers keep the field exactly where it was; only v2 couples the granny
+  // area to the toggle. See CalcVersion in workspace-persistence.ts.
+  readonly calcVersion: number;
   readonly job: OfferWorkspaceJob;
   readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
   readonly onPrefillFromLead?: () => void;
@@ -49,6 +58,7 @@ type JobSetupPanelProps = {
 };
 
 export function JobSetupPanel({
+  calcVersion,
   job,
   onJobChange,
   onPrefillFromLead,
@@ -56,15 +66,11 @@ export function JobSetupPanel({
   prefilling = false,
   prefillResult = null,
 }: JobSetupPanelProps) {
-  const totalArea =
-    job.groundFloorSqm +
-    job.firstFloorSqm +
-    job.garageSqm +
-    job.alfrescoPorchSqm +
-    job.porchSqm +
-    job.grannyFlatSqm +
-    job.balconySqm +
-    job.voidSqm;
+  const totalArea = rawTotalAreaSqm(offerAreaBasisFromJob(job));
+
+  // v2 couples the granny area to the toggle; v1 is left exactly as it was.
+  const couplesGrannyArea = calcVersion === CURRENT_CALC_VERSION;
+  const showGrannyArea = !couplesGrannyArea || job.hasGrannyHome;
 
   const owners = job.owners ?? [];
   // owners[] is the source of truth; emit the derived flat client* projection in
@@ -250,11 +256,19 @@ export function JobSetupPanel({
               value={job.porchSqm}
               onChange={(porchSqm) => onJobChange({ porchSqm })}
             />
-            <AreaField
-              label="Granny flat sqm"
-              value={job.grannyFlatSqm}
-              onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
-            />
+            {/* The area and the "Includes a granny home" toggle used to be
+                independent, so an offer could carry granny square metres — which
+                count toward the slab and the printed total — while every granny
+                section was suppressed. Under v2 the field only exists when the
+                toggle says it should. v1 offers keep the old layout so nothing
+                already quoted changes shape. */}
+            {showGrannyArea ? (
+              <AreaField
+                label="Granny flat sqm"
+                value={job.grannyFlatSqm}
+                onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
+              />
+            ) : null}
             <AreaField
               label="Balcony sqm"
               value={job.balconySqm}
@@ -295,7 +309,16 @@ export function JobSetupPanel({
           <YesNoQuestion
             label="Includes a granny home"
             value={job.hasGrannyHome}
-            onChange={(hasGrannyHome) => onJobChange({ hasGrannyHome })}
+            onChange={(hasGrannyHome) =>
+              onJobChange(
+                // Clearing the area with the toggle is what makes the two
+                // impossible to contradict. Only for v2 — doing it on a legacy
+                // offer would move its slab cost and its printed total.
+                couplesGrannyArea && !hasGrannyHome
+                  ? { hasGrannyHome, grannyFlatSqm: 0 }
+                  : { hasGrannyHome },
+              )
+            }
           />
         </CardContent>
       </Card>
@@ -350,45 +373,37 @@ function SpecFields({
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {/* These three print on the Offer snapshot and the Tender's Project
+          Particulars, so a typo lands on contract text. They previously took
+          `parseFloat(...) || 0`, which accepts a negative (parseFloat("-1") is
+          truthy), and `step="0.1"`, which stepped bedrooms to 3.1. Bathrooms
+          stay decimal on purpose — a powder room is half a bathroom, see
+          workspace-print-template.ts and the "2.5 bathrooms" test. */}
       <Field label="Number of bedrooms">
-        <Input
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="Auto-filled from lead requirements"
+        <CountField
+          step="1"
           value={bedrooms}
-          onChange={(event) =>
-            onBedroomsChange(parseFloat(event.target.value) || 0)
-          }
+          onChange={onBedroomsChange}
         />
       </Field>
       <Field label="Number of bathrooms">
-        <Input
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="Auto-filled from lead requirements"
+        <CountField
+          step="0.5"
           value={bathrooms}
-          onChange={(event) =>
-            onBathroomsChange(parseFloat(event.target.value) || 0)
-          }
+          onChange={onBathroomsChange}
         />
       </Field>
       <Field label="Garage spaces">
-        <Input
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="Auto-filled from lead requirements"
+        <CountField
+          step="1"
           value={garageSpaces}
-          onChange={(event) =>
-            onGarageSpacesChange(parseFloat(event.target.value) || 0)
-          }
+          onChange={onGarageSpacesChange}
         />
       </Field>
     </div>
   );
 }
+
 
 // Two-button Yes/No selector, matching the tender gate's YesNoQuestion
 // (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome is a

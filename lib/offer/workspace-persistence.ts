@@ -1,3 +1,4 @@
+import { LEGACY_CALC_VERSION } from "@/lib/offer/calc-version";
 import { z } from "zod";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
@@ -52,6 +53,11 @@ export type OfferWorkspaceSnapshot = {
   // an agreed/sent offer keeps its frozen snapshot. 0 means "built before
   // versioning existed", which reads as stale against any real version.
   readonly adminContentVersion: number;
+  // The calculation rules this offer was minted under. See CalcVersion above.
+  // A plain number, not CalcVersion: an offer minted by a newer build carries a
+  // version this one does not know, and must keep it. isSupportedCalcVersion
+  // narrows it at the point of use.
+  readonly calcVersion: number;
 };
 
 // Architectural-plan file reference captured at the Tender access gate. Only
@@ -106,6 +112,16 @@ export function deriveTenderGateStatus(
 // v6 (this version): the selling list moves off the schedule rows into
 // draft.inclusionHighlights. See migrateV5ToV6.
 export const CURRENT_WORKSPACE_SCHEMA_VERSION = 6 as const;
+
+// The calculation pin lives in its own module; re-exported here because most
+// callers already import from this one. See lib/offer/calc-version.ts.
+export {
+  CURRENT_CALC_VERSION,
+  LEGACY_CALC_VERSION,
+  isSupportedCalcVersion,
+  type CalcVersion,
+} from "@/lib/offer/calc-version";
+
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -421,6 +437,12 @@ const workspaceStateV1Schema = z.object({
   // parses; 0 sorts below any live admin version, so such an offer is treated
   // as built from unknown content and refreshed on its next editable open.
   adminContentVersion: z.number().int().nonnegative().default(0),
+  // Every row written before the pin existed lacks this key, so the default is
+  // what freezes the existing population on the old rules. Deliberately NOT a
+  // closed union: parseWorkspaceState is a hard .parse(), so a rollback past a
+  // future v3 would otherwise throw here and make the offer unopenable. Narrow
+  // to CalcVersion at the branch instead, where it can fail loudly but locally.
+  calcVersion: z.number().int().positive().default(LEGACY_CALC_VERSION),
 });
 
 // Coerce persisted image values to the {url, source} shape. Older offers stored
@@ -735,6 +757,10 @@ export function serializeWorkspace(
     images: { ...snapshot.images },
     tenderGate: { ...snapshot.tenderGate },
     adminContentVersion: snapshot.adminContentVersion,
+    // Keep calcVersion LAST here and in deserializeWorkspace below. The autosave
+    // dirty check compares JSON.stringify of the two shapes, so a mismatched key
+    // order would make every offer look dirty on open and save itself.
+    calcVersion: snapshot.calcVersion,
   };
 }
 
@@ -800,8 +826,13 @@ export function deserializeWorkspace(
     images: persisted.images as OfferImageMap,
     tenderGate: persisted.tenderGate,
     adminContentVersion: persisted.adminContentVersion,
+    // Preserved as stored, NOT narrowed: a row written by a future build must
+    // keep its own version so the calculation layer can refuse it, rather than
+    // be quietly re-read as v1 and repriced under rules it was never quoted on.
+    calcVersion: persisted.calcVersion,
   };
 }
+
 
 function deserializeScopeItem(
   item: z.infer<typeof scopeItemSchema>,

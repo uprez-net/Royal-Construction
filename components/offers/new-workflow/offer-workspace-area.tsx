@@ -14,11 +14,17 @@ import {
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Info, Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
+import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
+import { CountField } from "./offer-workspace-fields";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 import { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
 
 type AreaCalculatorPanelProps = {
+  // The offer's own calculation rules. Without this the on-screen frame figures
+  // of an already-issued offer would silently change under the corrected maths,
+  // which is the exact gap the pin exists to close.
+  readonly calcVersion: number;
   readonly job: OfferWorkspaceJob;
   readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
@@ -69,7 +75,9 @@ function AreaField({
   );
 }
 
+
 export function AreaCalculatorPanel({
+  calcVersion,
   job,
   basis,
   area,
@@ -77,7 +85,24 @@ export function AreaCalculatorPanel({
   onAreaChange,
   onJobChange,
 }: AreaCalculatorPanelProps) {
-  const calc = calculateOfferArea(basis, area, rateConstants);
+  // An offer minted by a newer build names calculation rules this one does not
+  // carry. Recomputing under ours would show figures the offer was never priced
+  // on, so say so instead. The offer's own stored numbers are untouched.
+  if (!isSupportedCalcVersion(calcVersion)) {
+    return (
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <CardHeader className="border-b border-border/70">
+          <OfferCardHeading
+            description="This offer was priced under newer calculation rules than this version of the app carries, so the estimating aid is unavailable. The offer's own figures are unaffected."
+            icon={<Info className="size-4" aria-hidden="true" />}
+            title="Estimating aid unavailable"
+          />
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const calc = calculateOfferArea(basis, area, rateConstants, calcVersion);
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -98,9 +123,9 @@ export function AreaCalculatorPanel({
       <CardContent className="grid gap-5 pt-4">
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Floor areas · from Job setup
-            </h3>
+            </h4>
             <span className="text-sm font-medium">
               {getAreaBasisTotalSqm(basis)} sqm total
             </span>
@@ -118,34 +143,27 @@ export function AreaCalculatorPanel({
           </dl>
         </section>
         <section className="grid grid-cols-3 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-3">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-3">
             Kitchen & linens & Showers
-          </h3>
+          </h4>
           <AreaField
             label="Kitchen sqm"
             value={job.kitchenSqm}
             onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
           />
+          {/* Whole-build counts. Same parse rule as the room counts in Job
+              setup: parseFloat(...) || 0 accepted a negative, and a stored 0
+              rendered as a literal "0" the caret collided with. */}
           <Field label="Total Linens">
-            <Input
-              min="0"
-              type="number"
-              placeholder="Auto-filled from lead requirements"
+            <CountField
               value={job.linenCount}
-              onChange={(event) =>
-                onJobChange({ linenCount: parseFloat(event.target.value) || 0 })
-              }
+              onChange={(linenCount) => onJobChange({ linenCount })}
             />
           </Field>
           <Field label="Total Number of Showers">
-            <Input
-              min="0"
-              type="number"
-              placeholder="Auto-filled from lead requirements"
+            <CountField
               value={job.showerCount}
-              onChange={(event) =>
-                onJobChange({ showerCount: parseFloat(event.target.value) || 0 })
-              }
+              onChange={(showerCount) => onJobChange({ showerCount })}
             />
           </Field>
         </section>
@@ -348,7 +366,7 @@ function HelperSection({
 }: PropsWithChildren<{ readonly title: string }>) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-background/70 p-3">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h4 className="text-sm font-semibold">{title}</h4>
       {children}
     </section>
   );

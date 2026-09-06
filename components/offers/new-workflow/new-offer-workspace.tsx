@@ -91,6 +91,10 @@ import type {
   TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { INITIAL_TENDER_GATE } from "@/lib/offer/workspace-persistence";
+import {
+  CURRENT_CALC_VERSION,
+  isSupportedCalcVersion,
+} from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   collectOfferSendBlockers,
@@ -233,6 +237,10 @@ export function NewOfferWorkspace({
   const [standardPriceInput, setStandardPriceInput] = useState("");
   const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
+  // Flips once the server has told us what this offer actually is. The screen
+  // seeds "pending" until then, so anything derived from status at first render
+  // (which step to open on) is a guess that has to be corrected exactly once.
+  const [hydrated, setHydrated] = useState(false);
   const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
     adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
   );
@@ -259,6 +267,11 @@ export function NewOfferWorkspace({
   const [adminContentVersion, setAdminContentVersion] = useState(
     adminPrefill?.adminVersion ?? 0,
   );
+  // The calculation rules this offer prices under. A fresh offer seeds at the
+  // current version; a saved offer overwrites this from its stored pin in
+  // hydrateSnapshot. The SERVER stamp is authoritative — this seed only matters
+  // for the window before the first save.
+  const [calcVersion, setCalcVersion] = useState<number>(CURRENT_CALC_VERSION);
   // Admin content changed after this offer was frozen (agreed/sent), so the
   // server left the snapshot alone. Surfaced as an advisory send blocker.
   const [adminContentStale, setAdminContentStale] = useState(false);
@@ -333,6 +346,12 @@ export function NewOfferWorkspace({
     ) {
       return;
     }
+    // An offer minted by a newer build names rules we do not have. Recomputing
+    // it under ours would reprice a quote the customer already holds, so leave
+    // its stored lines exactly as they are.
+    if (!isSupportedCalcVersion(calcVersion)) {
+      return;
+    }
     setLines((prev) => {
       if (!prev.some((l) => l.formula)) return prev;
       return reevaluateFormulaCostLines(
@@ -340,9 +359,10 @@ export function NewOfferWorkspace({
         rateConstantsRef.current,
         job,
         areaCalculator,
+        calcVersion,
       );
     });
-  }, [job, areaCalculator, leadId]);
+  }, [job, areaCalculator, leadId, calcVersion]);
 
   useEffect(() => {
     if (saveState !== "saving") return;
@@ -681,6 +701,12 @@ export function NewOfferWorkspace({
       alfrescoPorchSqm: result.areaBasis.alfrescoSqm,
       porchSqm: result.areaBasis.porchSqm,
       grannyFlatSqm: result.areaBasis.grannyFlatSqm,
+      // The toggle travels with the area. Without this a v2 offer could import
+      // granny square metres that still reach the slab basis and every printed
+      // total while the field itself is hidden — the exact divergence v2 exists
+      // to close, only harder to see.
+      hasGrannyHome:
+        result.areaBasis.grannyFlatSqm > 0 ? true : current.hasGrannyHome,
     }));
   }
 
@@ -738,9 +764,14 @@ export function NewOfferWorkspace({
       images,
       tenderGate,
       adminContentVersion,
+      // LAST, matching serializeWorkspace. The autosave dirty check compares
+      // JSON.stringify of this against the loaded snapshot; a different key
+      // order would make every offer look dirty on open and save itself.
+      calcVersion,
     }),
     [
       adminContentVersion,
+      calcVersion,
       job,
       lines,
       allowances,
@@ -911,6 +942,7 @@ export function NewOfferWorkspace({
       setImages(s.images);
       setTenderGate(s.tenderGate);
       setAdminContentVersion(s.adminContentVersion);
+      setCalcVersion(s.calcVersion);
     },
     [adminPrefill?.costLines, adminPrefill?.loadingChargePercentage],
   );
@@ -978,6 +1010,7 @@ export function NewOfferWorkspace({
                 adoptOffer(loaded.offerId);
                 stateVersionRef.current = loaded.stateVersion;
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+                setHydrated(true);
                 setSignerStatuses(loaded.signerStatuses ?? []);
                 if (loaded.snapshot) {
                   hydrateSnapshot(
@@ -1035,6 +1068,7 @@ export function NewOfferWorkspace({
       adoptOffer(loaded.offerId);
       stateVersionRef.current = loaded.stateVersion;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      setHydrated(true);
       // The loader already re-applied the current admin defaults if this offer
       // was still editable (hydrateSnapshot below picks them up). It only flags
       // `adminContentStale` when the offer is frozen and was deliberately left
@@ -1691,6 +1725,8 @@ export function NewOfferWorkspace({
       <OfferWorkspaceScreen
         allowances={allowances}
         areaCalculator={areaCalculator}
+        calcVersion={calcVersion}
+        hydrated={hydrated}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}

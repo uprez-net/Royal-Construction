@@ -25,6 +25,7 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Admin offer content is versioned (AdminOfferContent.version) and every offer
 // stamps the version it was built from. Opening a STILL-EDITABLE offer whose
@@ -81,6 +82,7 @@ const BASE_SNAPSHOT: OfferWorkspaceSnapshot = {
   images: EMPTY_OFFER_IMAGES,
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 3,
+  calcVersion: LEGACY_CALC_VERSION,
 };
 
 const PREFILL: AdminOfferPrefill = {

@@ -59,12 +59,14 @@ export const offerPrefillSchema = z.object({
     .describe(
       "The number of bedrooms the client has discussed. 0 if none are mentioned.",
     ),
+  // Deliberately NOT .int(): a powder room counts as half a bathroom, and the
+  // documents print the value as entered ("2.5 bathrooms"). With .int() here the
+  // AI could never prefill the value the estimator is expected to type.
   numberOfBathrooms: z
     .number()
-    .int()
     .nonnegative()
     .describe(
-      "The number of bathrooms the client has discussed. 0 if none are mentioned.",
+      "The number of bathrooms the client has discussed. Use .5 for a powder room or half bathroom (e.g. 2.5). 0 if none are mentioned.",
     ),
   numberOfGarageSpaces: z
     .number()

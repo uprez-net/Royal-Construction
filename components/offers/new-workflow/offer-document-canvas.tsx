@@ -111,9 +111,9 @@ export function OfferDocumentCanvas({
             </summary>
             <div className="mt-3">
           <section>
-            <h3 className="font-heading text-lg font-semibold">
+            <h4 className="font-heading text-lg font-semibold">
               Inclusions schedule
-            </h3>
+            </h4>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Printed on the offer and the tender. Star an item to also show it
               beside the price.
@@ -242,9 +242,9 @@ export function OfferDocumentCanvas({
 
           <div className="mt-6 grid gap-x-10 gap-y-6 border-t border-border pt-5 md:grid-cols-2">
             <section>
-              <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h4 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 This price includes
-              </h3>
+              </h4>
               <div className="mt-1">
                 <EditableBulletList
                   addLabel="Add inclusion highlight"
@@ -294,9 +294,9 @@ export function OfferDocumentCanvas({
             </section>
 
             <section>
-              <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h4 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 This price excludes
-              </h3>
+              </h4>
               <div className="mt-1">
                 <EditableBulletList
                   addLabel="Add exclusion"
@@ -357,9 +357,9 @@ export function OfferDocumentCanvas({
 
 
           <section className="mt-7 border-t border-border pt-5">
-            <h3 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h4 className="px-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Validity and terms
-            </h3>
+            </h4>
             <EditableText
               ariaLabel="Terms summary"
               className="text-sm leading-6 text-muted-foreground"

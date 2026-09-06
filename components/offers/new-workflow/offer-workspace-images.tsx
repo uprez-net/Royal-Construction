@@ -27,6 +27,11 @@ type OfferWorkspaceImagesProps = {
   // Per-slot visual descriptors of this build's façade/finishes; woven into
   // the AI image prompt so concepts reflect the actual selections.
   readonly finishContexts?: Partial<Record<OfferImageSlotKey, string>>;
+  // Which slots have an AI render in flight. Owned by the screen so the spinner
+  // survives a trip to another step; only the active step is mounted now, and
+  // a lost spinner invites a second click on a render that is still running.
+  readonly aiBusy: Partial<Record<OfferImageSlotKey, boolean>>;
+  readonly onAiBusyChange: (key: OfferImageSlotKey, busy: boolean) => void;
 };
 
 export function OfferWorkspaceImages({
@@ -35,21 +40,20 @@ export function OfferWorkspaceImages({
   leadId,
   buildType,
   finishContexts,
+  aiBusy,
+  onAiBusyChange,
 }: OfferWorkspaceImagesProps) {
   const [uploading, setUploading] = useState<
     Partial<Record<OfferImageSlotKey, boolean>>
   >({});
   const [error, setError] = useState<string | null>(null);
   const [dropboxBusy, setDropboxBusy] = useState(false);
-  const [aiBusy, setAiBusy] = useState<
-    Partial<Record<OfferImageSlotKey, boolean>>
-  >({});
   const { configured: dropboxConfigured, ready: dropboxReady, choose } =
     useDropboxChooser();
 
   async function handleGenerate(key: OfferImageSlotKey) {
     setError(null);
-    setAiBusy((current) => ({ ...current, [key]: true }));
+    onAiBusyChange(key, true);
     try {
       const result = await generateOfferInspirationImage({
         slotKey: key,
@@ -62,7 +66,7 @@ export function OfferWorkspaceImages({
         setError(result.error);
       }
     } finally {
-      setAiBusy((current) => ({ ...current, [key]: false }));
+      onAiBusyChange(key, false);
     }
   }
 

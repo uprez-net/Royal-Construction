@@ -147,7 +147,7 @@ function ScopeList({
     <section className="rounded-xl border border-border/70 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         {icon}
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
       </div>
 
       <div

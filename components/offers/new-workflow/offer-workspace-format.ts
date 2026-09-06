@@ -33,12 +33,8 @@ export function formatOfferReference(
   return reference.trim().length > 0 ? `${reference}-${revision}` : revision;
 }
 
-export function formatPercent(value: number): string {
-  return new Intl.NumberFormat("en-AU", {
-    style: "percent",
-    maximumFractionDigits: 1,
-  }).format(value);
-}
+// Re-exported so the rail digest and the strip chip cannot drift apart.
+export { formatPercent } from "@/lib/offer/format";
 
 export function getMarginStatusLabel(status: MarginStatus): string {
   switch (status) {
