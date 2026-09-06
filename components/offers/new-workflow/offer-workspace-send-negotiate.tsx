@@ -69,24 +69,18 @@ type SendNegotiatePanelProps = {
   readonly offerSignError?: string | null;
   readonly onRecallOffer: () => void;
   readonly onMarkOfferSigned: () => void;
+  // Select the step that resolves a blocker. Replaces a scrollIntoView that the
+  // step rail made dead: only the active step is mounted now, so the blocker's
+  // target element does not exist until you are already looking at it.
+  readonly onNavigateToStep: (sectionId: string) => void;
 };
 
-// Scroll a blocker's owning step into view so "fix it" is one click. Mirrors the
-// stepper's own scrollIntoView; the section's scroll-margin clears the sticky
-// header.
-function scrollToStep(stepId: string) {
-  const el = document.getElementById(stepId);
-  if (!el) {
-    return;
-  }
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-}
 
 export function SendNegotiatePanel({
   status,
   canRevise,
   revising,
+  onNavigateToStep,
   recipients,
   contractValueIncGst,
   offerReference,
@@ -169,7 +163,10 @@ export function SendNegotiatePanel({
 
         {isPending || isSent ? (
           <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-            <ReadinessStrip blockers={sendBlockers} />
+            <ReadinessStrip
+              blockers={sendBlockers}
+              onNavigateToStep={onNavigateToStep}
+            />
             <p className="text-xs font-medium text-foreground">
               {recipients.length > 1
                 ? `Email the proposal PDF to all ${recipients.length} signatories`
@@ -410,8 +407,10 @@ export function SendNegotiatePanel({
 // replaces the single "one reason at a time" line with a scannable checklist.
 function ReadinessStrip({
   blockers,
+  onNavigateToStep,
 }: {
   readonly blockers: readonly OfferSendBlocker[];
+  readonly onNavigateToStep: (sectionId: string) => void;
 }) {
   if (blockers.length === 0) {
     return null;
@@ -427,7 +426,7 @@ function ReadinessStrip({
           <li key={blocker.id}>
             <button
               className={`flex w-full items-start gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40 ${toneClass}`}
-              onClick={() => scrollToStep(blocker.stepId)}
+              onClick={() => onNavigateToStep(blocker.stepId)}
               type="button"
             >
               <AlertTriangle

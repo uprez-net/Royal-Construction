@@ -54,6 +54,7 @@ import {
 import {
   OFFER_WORKFLOW_STEPS,
   currentOfferStepId,
+  stepIdForSectionId,
 } from "@/lib/offer/workflow-steps";
 import { JobSetupPanel } from "./offer-workspace-job";
 import { PriceBuildupPanel } from "./offer-workspace-price-buildup";
@@ -601,6 +602,14 @@ export function OfferWorkspaceScreen({
             title="Send & negotiate"
           >
             <SendNegotiatePanel
+              // A blocker names the step that fixes it; selecting that step is
+              // the new equivalent of the old scroll-to-section.
+              onNavigateToStep={(sectionId) => {
+                const target = stepIdForSectionId(sectionId);
+                if (target) {
+                  setActiveStepId(target);
+                }
+              }}
               status={status}
               canRevise={canRevise}
               revising={revising}
