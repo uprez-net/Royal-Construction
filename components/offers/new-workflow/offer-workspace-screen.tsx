@@ -29,32 +29,37 @@ import {
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
+import type { CalcVersion } from "@/lib/offer/workspace-persistence";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
   deriveTenderGateStatus,
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { Lock } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentCanvas } from "./offer-document-canvas";
+import { OfferCommandBar } from "./shell/offer-command-bar";
 import {
-  OfferWorkflowSteps,
-  OfferWorkspaceHeader,
-} from "./offer-workspace-header";
+  OfferStepRail,
+  type OfferStepState,
+} from "./shell/offer-step-rail";
+import { OfferSummaryStrip } from "./shell/offer-summary-strip";
+import {
+  buildOfferStepDigests,
+  type OfferStepId,
+} from "@/lib/offer/step-digests";
+import {
+  OFFER_WORKFLOW_STEPS,
+  currentOfferStepId,
+} from "@/lib/offer/workflow-steps";
 import { JobSetupPanel } from "./offer-workspace-job";
 import { PriceBuildupPanel } from "./offer-workspace-price-buildup";
 import { ContractPanel } from "./offer-workspace-contract";
 import { ProjectHandoffPanel } from "./offer-workspace-project-handoff";
 import { TenderPanel } from "./offer-workspace-tender";
-import { PricingSummary } from "./offer-workspace-pricing-summary";
 import { PricingDecisionPanel } from "./offer-workspace-pricing-decision";
 import { ScopePanel } from "./offer-workspace-scope";
 import { OfferWorkspaceImages } from "./offer-workspace-images";
@@ -69,9 +74,8 @@ import { OfferWorkspaceActivity } from "./offer-workspace-activity";
 import { buildOfferReview } from "@/lib/offer/offer-review";
 import {
   OfferLockBanner,
-  OfferPhaseGate,
-  OfferStepSection,
-  type OfferStepStatus,
+  OfferPhaseLockNotice,
+  OfferStepBody,
 } from "./offer-workspace-step-section";
 import { isOfferPhaseUnlocked } from "@/lib/offer/workflow";
 import {
@@ -88,6 +92,9 @@ export type OfferSaveState = "idle" | "saving" | "saved" | "error";
 
 type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
+  // The offer's calculation rules, threaded down to the area calculator so an
+  // issued offer keeps showing the figures it was priced with.
+  readonly calcVersion: CalcVersion;
   readonly areaCalculator: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
@@ -215,6 +222,7 @@ type OfferWorkspaceScreenProps = {
 export function OfferWorkspaceScreen({
   allowances,
   areaCalculator,
+  calcVersion,
   rateConstants,
   customerPrice,
   directTotal,
@@ -335,38 +343,6 @@ export function OfferWorkspaceScreen({
     [job, lines, allowances, exclusions, draft, customerPrice],
   );
 
-  // Per-step completeness badges, keyed by the step section id.
-  const stepStatusById = useMemo(() => {
-    const map = new Map<string, OfferStepStatus>();
-    for (const s of reviewSections) {
-      map.set(
-        s.stepId,
-        s.status === "complete"
-          ? { tone: "complete", label: "Complete" }
-          : { tone: "incomplete", label: "Incomplete" },
-      );
-    }
-    return map;
-  }, [reviewSections]);
-
-  // Send & negotiate is an action step, so its badge reflects the offer's state
-  // rather than data completeness.
-  const sendStatus: OfferStepStatus =
-    status === "pending"
-      ? { tone: "incomplete", label: "Not sent" }
-      : status === "sent"
-        ? { tone: "neutral", label: "Sent" }
-        : status === "offer_sent"
-          ? { tone: "neutral", label: "Acceptance sent" }
-          : status === "offer_signed"
-            ? { tone: "complete", label: "Accepted" }
-            : status === "offer_declined"
-              ? { tone: "neutral", label: "Acceptance declined" }
-              : status === "rejected"
-                ? { tone: "neutral", label: "Rejected" }
-                : status === "superseded"
-                  ? { tone: "neutral", label: "Superseded" }
-                  : { tone: "complete", label: "Agreed" };
 
   // The Offer-build steps do NOT all freeze at once when the offer is issued
   // (#117). The customer-facing content — the Offer document copy and the Scope
@@ -389,14 +365,6 @@ export function OfferWorkspaceScreen({
   // is frozen — the banner explains this partial lock rather than a full one.
   const documentsStillEditable = offerDocumentStillEditableWhileIssued(status);
 
-  // The header + stepper are pinned (sticky top-0) and their height changes with
-  // viewport width as the title/badges/price reflow. Measure it live and expose
-  // it as `--offer-sticky-offset` so the sticky sidebar (its `top`) and every
-  // step section (its `scroll-margin-top`) clear the chrome exactly, instead of
-  // relying on hardcoded guesses that leave content tucked behind the header.
-  const stickyRef = useRef<HTMLDivElement>(null);
-  const [stickyOffset, setStickyOffset] = useState(288);
-
   // Tender access gate (Step 7). The gate only holds the Tender panel while
   // the offer is at AGREED — once a Tender is generated (tender_draft+) the
   // gate is moot and the panel stays reachable.
@@ -405,46 +373,105 @@ export function OfferWorkspaceScreen({
   const tenderPanelUnlocked =
     isOfferPhaseUnlocked(status, "tender") &&
     (status !== "agreed" || gateUnlocked);
-  useEffect(() => {
-    const el = stickyRef.current;
-    if (!el) {
-      return;
+
+  // Open on the step the offer is actually at, rather than on ten collapsed
+  // headers with no "you are here".
+  const [activeStepId, setActiveStepId] = useState<OfferStepId>(() =>
+    currentOfferStepId(status, tenderGateStatus),
+  );
+  const [railCollapsed, setRailCollapsed] = useState(false);
+
+  const digests = useMemo(
+    () =>
+      buildOfferStepDigests({
+        job,
+        totalAreaSqm: getAreaBasisTotalSqm(areaBasis),
+        lines,
+        directTotal,
+        contractValueIncGst: customerPrice.selectedContractValueIncGst,
+        effectiveMargin,
+        allowances,
+        exclusions,
+        images,
+        status,
+        sendBlockers,
+      }),
+    [
+      job,
+      areaBasis,
+      lines,
+      directTotal,
+      customerPrice.selectedContractValueIncGst,
+      effectiveMargin,
+      allowances,
+      exclusions,
+      images,
+      status,
+      sendBlockers,
+    ],
+  );
+
+  // Rail state per step. The Offer steps report completeness from the review the
+  // page already computes; the later phases report whether their gate is open.
+  const stepStates = useMemo(() => {
+    const complete = new Set(
+      reviewSections
+        .filter((section) => section.status === "complete")
+        .map((section) => section.stepId),
+    );
+    const phaseUnlocked: Record<string, boolean> = {
+      "tender-gate": isOfferPhaseUnlocked(status, "tender"),
+      tender: tenderPanelUnlocked,
+      contract: isOfferPhaseUnlocked(status, "contract"),
+      project: isOfferPhaseUnlocked(status, "handoff"),
+    };
+    const states = {} as Record<OfferStepId, OfferStepState>;
+    for (const step of OFFER_WORKFLOW_STEPS) {
+      if (step.id in phaseUnlocked) {
+        states[step.id] = phaseUnlocked[step.id] ? "incomplete" : "locked";
+      } else if (step.id === "send") {
+        states[step.id] = status === "pending" ? "incomplete" : "complete";
+      } else {
+        states[step.id] = complete.has(step.sectionId)
+          ? "complete"
+          : "incomplete";
+      }
     }
-    const measure = () =>
-      setStickyOffset(el.getBoundingClientRect().height + 12);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    return states;
+  }, [reviewSections, status, tenderPanelUnlocked]);
 
   return (
+    // One app-height frame: the command bar and the summary strip are fixed
+    // rows, the rail and the pane share what is left, and only the pane
+    // scrolls. Nothing here scrolls the window, so the old measured
+    // `--offer-sticky-offset` and every `scroll-mt-*` guess are gone.
     <div
-      className="space-y-5 print:hidden"
+      className="flex h-[calc(100dvh-7.5rem)] min-h-125 flex-col overflow-hidden rounded-lg border border-border/70 bg-background shadow-sm print:hidden"
       aria-labelledby="new-offer-workspace-title"
-      style={{ "--offer-sticky-offset": `${stickyOffset}px` } as CSSProperties}
     >
-      <div
-        ref={stickyRef}
-        data-offer-sticky-header
-        className="sticky top-0 z-30 space-y-5 bg-background pb-4 shadow-[0_-28px_0_0_var(--background)]"
-      >
-        <OfferWorkspaceHeader
-          customerPrice={customerPrice}
-          job={job}
-          leadId={leadId}
-          status={status}
-          offerExpiry={offerExpiry}
-          saveState={saveState}
-          onDownloadPreview={onDownloadOffer}
+      <OfferCommandBar
+        customerPrice={customerPrice}
+        job={job}
+        leadId={leadId}
+        status={status}
+        offerExpiry={offerExpiry}
+        saveState={saveState}
+        onDownloadPreview={onDownloadOffer}
+      />
+      <div className="flex min-h-0 flex-1">
+        <OfferStepRail
+          activeStepId={activeStepId}
+          collapsed={railCollapsed}
+          digests={digests}
+          stepStates={stepStates}
+          onSelect={setActiveStepId}
+          onToggleCollapsed={() => setRailCollapsed((current) => !current)}
         />
-        <OfferWorkflowSteps
-          status={status}
-          tenderGateStatus={tenderGateStatus}
-        />
-      </div>
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-8">
+        {/* Not <main>: the app shell already provides the page's single main
+            landmark, and nesting one inside another is invalid and gives screen
+            readers two "main" regions to choose between. */}
+        <div className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="space-y-5">
           {offerIssued ? (
             <OfferLockBanner
               canRevise={canRevise}
@@ -455,15 +482,13 @@ export function OfferWorkspaceScreen({
               onCreateRevision={onCreateRevision}
             />
           ) : null}
-          <OfferStepSection
-            id="offer-step-job-setup"
-            index={1}
-            phase="Offer"
-            title="Job setup"
+          <StepPane
+            active={activeStepId === "job-setup"}
             locked={jobSetupLocked}
-            status={stepStatusById.get("offer-step-job-setup") ?? null}
+            title="Job setup"
           >
             <JobSetupPanel
+              calcVersion={calcVersion}
               job={job}
               onJobChange={onJobChange}
               onPrefillFromLead={onPrefillFromLead}
@@ -471,17 +496,15 @@ export function OfferWorkspaceScreen({
               prefilling={prefilling}
               prefillResult={prefillResult}
             />
-          </OfferStepSection>
+          </StepPane>
 
-          <OfferStepSection
-            id="offer-step-cost-schedule"
-            index={2}
-            phase="Offer"
-            title="Cost schedule"
+          <StepPane
+            active={activeStepId === "cost-schedule"}
             locked={costScheduleLocked}
-            status={stepStatusById.get("offer-step-cost-schedule") ?? null}
+            title="Cost schedule"
           >
             <AreaCalculatorPanel
+              calcVersion={calcVersion}
               job={job}
               basis={areaBasis}
               area={areaCalculator}
@@ -498,15 +521,12 @@ export function OfferWorkspaceScreen({
               onIncludeAll={onIncludeAll}
               onRemoveLine={onRemoveLine}
             />
-          </OfferStepSection>
+          </StepPane>
 
-          <OfferStepSection
-            id="offer-step-pricing"
-            index={3}
-            phase="Offer"
-            title="Pricing"
+          <StepPane
+            active={activeStepId === "pricing"}
             locked={pricingLocked}
-            status={stepStatusById.get("offer-step-pricing") ?? null}
+            title="Pricing"
           >
             <PriceBuildupPanel
               directTotal={directTotal}
@@ -526,15 +546,12 @@ export function OfferWorkspaceScreen({
               onSelectedPriceInputChange={onSelectedPriceInputChange}
               onStandardPriceInputChange={onStandardPriceInputChange}
             />
-          </OfferStepSection>
+          </StepPane>
 
-          <OfferStepSection
-            id="offer-step-scope"
-            index={4}
-            phase="Offer"
-            title="Scope"
+          <StepPane
+            active={activeStepId === "scope"}
             locked={scopeLocked}
-            status={stepStatusById.get("offer-step-scope") ?? null}
+            title="Scope"
           >
             <ScopePanel
               allowances={allowances}
@@ -546,15 +563,12 @@ export function OfferWorkspaceScreen({
               onAddExclusion={onAddExclusion}
               onRemoveExclusion={onRemoveExclusion}
             />
-          </OfferStepSection>
+          </StepPane>
 
-          <OfferStepSection
-            id="offer-step-offer-document"
-            index={5}
-            phase="Offer"
-            title="Offer document"
+          <StepPane
+            active={activeStepId === "offer-document"}
             locked={offerDocumentLocked}
-            status={stepStatusById.get("offer-step-offer-document") ?? null}
+            title="Offer document"
           >
             <div className="space-y-6">
               <OfferDocumentCanvas
@@ -579,14 +593,12 @@ export function OfferWorkspaceScreen({
                 finishContexts={imageFinishContexts}
               />
             </div>
-          </OfferStepSection>
+          </StepPane>
 
-          <OfferStepSection
-            id="offer-step-send"
-            index={6}
-            phase="Offer"
+          <StepPane
+            active={activeStepId === "send"}
+            locked={false}
             title="Send & negotiate"
-            status={sendStatus}
           >
             <SendNegotiatePanel
               status={status}
@@ -625,15 +637,13 @@ export function OfferWorkspaceScreen({
               onMarkOfferSigned={onMarkOfferSigned}
             />
             <OfferWorkspaceActivity leadId={leadId} status={status} />
-          </OfferStepSection>
+          </StepPane>
 
-          <OfferPhaseGate
-            id="offer-step-tender-gate"
-            index={7}
-            phase="Tender"
-            title="Tender access"
+          <StepPane
+            active={activeStepId === "tender-gate"}
             unlocked={isOfferPhaseUnlocked(status, "tender")}
-            unlockHint="Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."
+            unlockHint={"Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."}
+            title="Tender access"
           >
             <TenderGatePanel
               status={status}
@@ -644,19 +654,17 @@ export function OfferWorkspaceScreen({
               canRevise={canRevise}
               revising={revising}
             />
-          </OfferPhaseGate>
+          </StepPane>
 
-          <OfferPhaseGate
-            id="offer-step-tender"
-            index={8}
-            phase="Tender"
-            title="Tender"
+          <StepPane
+            active={activeStepId === "tender"}
             unlocked={tenderPanelUnlocked}
             unlockHint={
               gateUnlocked
                 ? "Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
-                : "Complete the Tender access step above to unlock the Tender."
+                : "Complete the Tender access step to unlock the Tender."
             }
+            title="Tender"
           >
             <TenderPanel
               signerStatuses={signerStatuses}
@@ -674,15 +682,13 @@ export function OfferWorkspaceScreen({
               tenderSending={tenderSending}
               tenderSendError={tenderSendError}
             />
-          </OfferPhaseGate>
+          </StepPane>
 
-          <OfferPhaseGate
-            id="offer-step-contract"
-            index={9}
-            phase="Contract"
-            title="Contract"
+          <StepPane
+            active={activeStepId === "contract"}
             unlocked={isOfferPhaseUnlocked(status, "contract")}
             unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
+            title="Contract"
           >
             <ContractPanel
               signerStatuses={signerStatuses}
@@ -700,15 +706,13 @@ export function OfferWorkspaceScreen({
               contractSending={contractSending}
               contractSendError={contractSendError}
             />
-          </OfferPhaseGate>
+          </StepPane>
 
-          <OfferPhaseGate
-            id="offer-step-project"
-            index={10}
-            phase="Handoff"
-            title="Project"
+          <StepPane
+            active={activeStepId === "project"}
             unlocked={isOfferPhaseUnlocked(status, "handoff")}
-            unlockHint="Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."
+            unlockHint={"Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."}
+            title="Project"
           >
             <ProjectHandoffPanel
               customerPrice={customerPrice}
@@ -720,12 +724,75 @@ export function OfferWorkspaceScreen({
               projectCreating={projectCreating}
               projectResult={projectResult}
             />
-          </OfferPhaseGate>
+          </StepPane>
+          </div>
         </div>
-        <aside className="min-w-0 space-y-5 xl:sticky xl:top-(--offer-sticky-offset,18rem) xl:self-start">
-          <PricingSummary effectiveMargin={effectiveMargin} pricing={pricing} />
-        </aside>
       </div>
+      <OfferSummaryStrip
+        customerPrice={customerPrice}
+        effectiveMargin={effectiveMargin}
+        pricing={pricing}
+        totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
+      />
+    </div>
+  );
+}
+
+// One step's content. Only the selected step mounts, so the page holds one
+// step's controls instead of all 384 at once.
+function StepPane({
+  active,
+  locked = false,
+  unlocked,
+  unlockHint,
+  title,
+  children,
+}: {
+  readonly active: boolean;
+  readonly locked?: boolean;
+  readonly unlocked?: boolean;
+  readonly unlockHint?: string;
+  readonly title: string;
+  readonly children: ReactNode;
+}) {
+  if (!active) {
+    return null;
+  }
+  // A later-phase step that has not unlocked shows why, not an empty panel.
+  if (unlocked === false) {
+    return (
+      <section aria-label={title} className="space-y-4">
+        <PaneHeading locked={false} title={title} />
+        <OfferPhaseLockNotice hint={unlockHint ?? ""} />
+      </section>
+    );
+  }
+  return (
+    <section aria-label={title} className="space-y-4">
+      <PaneHeading locked={locked} title={title} />
+      <OfferStepBody locked={locked}>{children}</OfferStepBody>
+    </section>
+  );
+}
+
+function PaneHeading({
+  locked,
+  title,
+}: {
+  readonly locked: boolean;
+  readonly title: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <h2 className="font-heading text-lg font-semibold leading-tight">
+        {title}
+      </h2>
+      {locked ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          <Lock className="size-3" aria-hidden="true" />
+          Issued
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -192,7 +192,7 @@ export function OfferWorkspaceHeader({
 // Offer-validity chip. Silent until a date is set; escalates muted → warning →
 // destructive as the fixed price approaches and passes its validity date, so an
 // expired offer can never be emailed unnoticed.
-function ExpiryChip({ expiry }: { readonly expiry: OfferExpiry | null }) {
+export function ExpiryChip({ expiry }: { readonly expiry: OfferExpiry | null }) {
   if (!expiry || expiry.state === "none") {
     return null;
   }
@@ -216,7 +216,7 @@ function ExpiryChip({ expiry }: { readonly expiry: OfferExpiry | null }) {
 
 // Autosave chrome: makes the debounced persistence legible and flags a failed
 // save instead of leaving the operator to assume their edits are safe.
-function SaveIndicator({ state }: { readonly state: OfferSaveState }) {
+export function SaveIndicator({ state }: { readonly state: OfferSaveState }) {
   if (state === "idle") {
     return null;
   }

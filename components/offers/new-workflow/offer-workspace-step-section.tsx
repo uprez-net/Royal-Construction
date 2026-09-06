@@ -244,6 +244,48 @@ export function OfferStepSection({
   );
 }
 
+// The body semantics of a step, without the collapsible header — the step rail
+// owns naming and navigation now. Extracted rather than reimplemented so the
+// disabled-fieldset rules below have exactly one definition: an issued offer
+// must stay readable at full contrast while every control is inert.
+export function OfferStepBody({
+  locked,
+  children,
+}: {
+  readonly locked: boolean;
+  readonly children: ReactNode;
+}) {
+  if (!locked) {
+    return <div className="space-y-5">{children}</div>;
+  }
+  return (
+    // A disabled fieldset natively blocks every descendant control (inputs,
+    // selects, textareas, buttons) so the issued record can be read but not
+    // edited. Opacity is kept at 100% on fields (this is a record to review,
+    // not a temporarily-unavailable form); only action buttons dim.
+    <fieldset
+      disabled
+      className="m-0 min-w-0 space-y-5 border-0 p-0 [&_:disabled]:cursor-default [&_input:disabled]:opacity-100 [&_textarea:disabled]:opacity-100 [&_[data-slot=select-trigger]]:opacity-100 [&_[data-slot=checkbox]]:opacity-100 [&_button:disabled]:opacity-50"
+    >
+      {children}
+    </fieldset>
+  );
+}
+
+// Shown in the pane when a later-phase step has not unlocked yet.
+export function OfferPhaseLockNotice({
+  hint,
+}: {
+  readonly hint: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
+      <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span>{hint}</span>
+    </div>
+  );
+}
+
 // A later-phase step (Tender / Contract / Project) that stays locked until the
 // Offer status reaches it. See @/lib/offer/workflow (isOfferPhaseUnlocked).
 export function OfferPhaseGate({
