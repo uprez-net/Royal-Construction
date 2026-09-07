@@ -18,6 +18,7 @@ import {
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { cn } from "@/lib/utils";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // The one-off architectural-plan fee the gate waits on. Manual checkbox only —
 // no payment integration is in scope (see plan §7).
@@ -111,7 +112,7 @@ export function TenderGatePanel({
 
                 {feeCollected ? (
                   <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className={GROUP_HEADING_CLASS}>
                       Upload the architectural plan
                     </p>
                     <UploadButton

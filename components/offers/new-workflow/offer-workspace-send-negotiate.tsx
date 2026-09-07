@@ -26,6 +26,7 @@ import {
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
 import { formatCurrency } from "./offer-workspace-format";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 type SendNegotiatePanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -74,7 +75,6 @@ type SendNegotiatePanelProps = {
   // target element does not exist until you are already looking at it.
   readonly onNavigateToStep: (sectionId: string) => void;
 };
-
 
 export function SendNegotiatePanel({
   status,
@@ -239,7 +239,7 @@ export function SendNegotiatePanel({
 
         {showAcceptanceSigning ? (
           <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className={GROUP_HEADING_CLASS}>
               Customer acceptance (DocuSign)
             </p>
 
