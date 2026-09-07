@@ -1,0 +1,140 @@
+"use client";
+
+import { ComplianceAlertStatus, ComplianceAlertType } from "@prisma/client";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { StatusPill } from "@/components/common/status-pill";
+import { PARTY_LABEL } from "@/constants/complianceDocuments";
+import { cn } from "@/lib/utils";
+import type { ComplianceAlertRecord } from "@/types/compliance";
+import { dataTimeFormat } from "@/utils/formatters";
+
+/**
+ * What each alert is called, and what closing it actually requires.
+ *
+ * The guidance is the load-bearing half. An alert nobody knows how to close is
+ * an alert that sits open forever, and in the DA case it would sit there
+ * suppressing the planning certificate while everyone waited for something to
+ * happen on its own.
+ */
+export const COMPLIANCE_ALERT_COPY: Readonly<
+  Record<ComplianceAlertType, { title: string; guidance: string }>
+> = {
+  [ComplianceAlertType.STALE_TITLE_SEARCH]: {
+    title: "Title search predates the transfer",
+    guidance:
+      "The search on file still shows the previous owner. Ask the surveyor to re-order it once the land registry has updated, and close this once the replacement is on the file and names the current owners.",
+  },
+  [ComplianceAlertType.DA_APPROVAL_REQUIRED]: {
+    title: "Development approval required",
+    guidance:
+      "This job cannot go through as a CDC. The planning certificate is no longer required while this is open. Close it once development consent has been granted — or if it turns out a CDC is viable after all.",
+  },
+};
+
+type ComplianceAlertsPanelProps = {
+  alerts: ComplianceAlertRecord[];
+  onResolve: (alert: ComplianceAlertRecord) => void;
+  isBusy: (alertId: string) => boolean;
+};
+
+/**
+ * The conditions raised on this file, open ones first.
+ *
+ * Above the document blocks rather than inside one, because that is the shape
+ * of what they do: a stale title search is about the surveyor's section and a
+ * DA requirement removes a row from the council's, so filing either under a
+ * single block would hide it from the section it actually changes.
+ *
+ * Resolved alerts stay listed, quietly. What was raised and settled on a job is
+ * exactly what somebody auditing it later is looking for, and a list that
+ * empties itself as things are fixed leaves no trace that anything was.
+ */
+export function ComplianceAlertsPanel({
+  alerts,
+  onResolve,
+  isBusy,
+}: ComplianceAlertsPanelProps) {
+  if (alerts.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className="space-y-2">
+      {alerts.map((alert) => {
+        const copy = COMPLIANCE_ALERT_COPY[alert.type];
+        const isOpen = alert.status === ComplianceAlertStatus.OPEN;
+
+        return (
+          <li
+            key={alert.id}
+            className={cn(
+              "flex flex-wrap items-start gap-3 rounded-lg border px-4 py-3",
+              isOpen
+                ? "border-warning/40 bg-warning-light"
+                : "border-border/70 bg-muted/40",
+            )}
+          >
+            {isOpen ? (
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0 text-warning-ink"
+                aria-hidden="true"
+              />
+            ) : (
+              <CheckCircle2
+                className="mt-0.5 size-4 shrink-0 text-success-ink"
+                aria-hidden="true"
+              />
+            )}
+
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium text-foreground">{copy.title}</p>
+                {alert.raisedByParty ? (
+                  <StatusPill tone="neutral">
+                    from the {PARTY_LABEL[alert.raisedByParty].toLowerCase()}
+                  </StatusPill>
+                ) : null}
+                {!isOpen ? (
+                  <StatusPill tone="success">Resolved</StatusPill>
+                ) : null}
+              </div>
+
+              {/* The raiser's own sentence, where the message carried one. It
+                  is quoted rather than summarised — "we'll re-pull the title
+                  once the registry updates" is the whole instruction. */}
+              {alert.detail ? (
+                <p className="text-sm text-muted-foreground italic">
+                  &ldquo;{alert.detail}&rdquo;
+                </p>
+              ) : null}
+
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {isOpen
+                  ? copy.guidance
+                  : `${alert.resolutionNote ?? "Resolved"}${
+                      alert.resolvedAt
+                        ? ` — ${dataTimeFormat.format(new Date(alert.resolvedAt))}`
+                        : ""
+                    }`}
+              </p>
+            </div>
+
+            {isOpen ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isBusy(alert.id)}
+                onClick={() => onResolve(alert)}
+              >
+                Resolve
+              </Button>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}

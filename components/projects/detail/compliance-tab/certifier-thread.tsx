@@ -31,6 +31,23 @@ type CertifierThreadProps = {
   }) => Promise<void>;
   /** Set by the modal that hosts this, so the transcript uses the extra room. */
   isFullScreen?: boolean;
+  /**
+   * Who the other end of this thread is, in the placeholder and the empty
+   * state. The compliance file now runs several of these side by side and a
+   * composer that says "message to the certifier" on the surveyor's tab is
+   * how somebody sends the wrong firm the wrong thing.
+   */
+  counterpartyLabel?: string;
+  /**
+   * No composer.
+   *
+   * For a thread there is nothing to reply to: a party whose documents the
+   * client supplied has no address, and the planning portal is not a
+   * correspondent. The transcript still renders -- there may be inbound mail on
+   * it -- but offering a Send that would have nowhere to go is worse than
+   * offering nothing.
+   */
+  readOnly?: boolean;
 };
 
 /**
@@ -60,6 +77,8 @@ export function CertifierThread({
   isSending,
   onSend,
   isFullScreen = false,
+  counterpartyLabel = "certifier",
+  readOnly = false,
 }: CertifierThreadProps) {
   const dispatch = useAppDispatch();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -231,13 +250,14 @@ export function CertifierThread({
         )}
       </div>
 
+      {readOnly ? null : (
       <div className="mt-3 shrink-0 border-t border-border/70 pt-3">
         <Textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          placeholder="Write a message to the certifier…"
+          placeholder={`Write a message to the ${counterpartyLabel}…`}
           rows={3}
-          aria-label="Message to the certifier"
+          aria-label={`Message to the ${counterpartyLabel}`}
         />
 
         {pending.length > 0 ? (
@@ -294,6 +314,7 @@ export function CertifierThread({
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }

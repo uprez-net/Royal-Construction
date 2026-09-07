@@ -9,9 +9,9 @@ import {
 import {
   isNotRequired,
   isOutstandingEvidence,
-  REQUIRED_COMPLIANCE_DOCUMENTS,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
+import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import { cn } from "@/lib/utils";
 import { countPendingInvoices } from "@/lib/projects/invoice-display";
 import { calcStageProgress } from "@/lib/projects/stage-progress";
@@ -180,8 +180,11 @@ const calcComplianceOverviewData = (
     // Assembling the pack that opens the engagement.
     case CertifierEngagementStatus.NOT_STARTED:
     case CertifierEngagementStatus.COLLECTING_DOCS: {
+      // The applicable set, not all six. An open DA alert takes the 10.7
+      // certificate out of the pack, and counting it here left a badge on the
+      // tab over a document the tab itself no longer asks for.
       const outstanding = stillMissing(
-        REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+        applicableRequiredDocuments(engagement).map((doc) => doc.type),
       );
       return {
         outstanding,

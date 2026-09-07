@@ -26,7 +26,7 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import { MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus } from "@prisma/client";
+import { MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus, type CompliancePartyType } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
@@ -56,6 +56,8 @@ import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
 import FilePreviewCanvas from "../shared/file-preview-canvas";
 import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
+import { ConnectPartyModal } from "./compliance/connect-party-modal";
+import { ResolveAlertModal } from "./compliance/resolve-alert-modal";
 import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
 import { CertifierExtractModal } from "./certifier-extract-modal";
 import { CertifierPackReadyModal } from "./certifier-pack-ready-modal";
@@ -609,6 +611,56 @@ export function ModalManager() {
         <StartCertifierEngagementModal
           projectId={id}
           defaultAddress={defaultAddress}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "connectComplianceParty": {
+      const {
+        projectId: id,
+        party,
+        subjectAddress,
+        prefilled,
+      } = modal.payload as {
+        projectId: string;
+        party: CompliancePartyType;
+        subjectAddress: string;
+        prefilled: { name: string; url: string }[];
+      };
+      return (
+        <ConnectPartyModal
+          projectId={id}
+          party={party}
+          subjectAddress={subjectAddress}
+          prefilled={prefilled}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "resolveComplianceAlert": {
+      const {
+        projectId: id,
+        alertId,
+        alertTitle,
+        guidance,
+      } = modal.payload as {
+        projectId: string;
+        alertId: string;
+        alertTitle: string;
+        guidance: string;
+      };
+      return (
+        <ResolveAlertModal
+          projectId={id}
+          alertId={alertId}
+          alertTitle={alertTitle}
+          guidance={guidance}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

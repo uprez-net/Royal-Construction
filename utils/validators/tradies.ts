@@ -27,6 +27,18 @@ export const tradieSearchQuerySchema = z.object({
     .trim()
     .default(""),
 
+  /**
+   * Restrict to one trade, by its label -- "Surveying", "Certifier".
+   *
+   * An exact match rather than the `search` field's substring sweep across
+   * name/ABN/trade, which is why it is separate: a compliance picker asking for
+   * surveyors must not be handed a plumber whose name contains "survey".
+   */
+  trade: z
+    .string()
+    .trim()
+    .default(""),
+
   limit: z.coerce
     .number()
     .int()

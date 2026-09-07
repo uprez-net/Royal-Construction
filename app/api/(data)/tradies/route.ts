@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const search = params.data.search || params.data.q || "";
     const limit = params.data.limit;
 
-    const tradies = await getTradiesForLookup(limit, search);
+    const tradies = await getTradiesForLookup(limit, search, params.data.trade);
 
     return successResponse(tradies);
   } catch (error) {

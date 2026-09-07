@@ -4,11 +4,11 @@ import {
   CertifierEngagementStatus,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  CompliancePartyType,
 } from "@prisma/client";
 import {
   ClipboardList,
   ExternalLink,
-  FileText,
   HelpCircle,
   Inbox,
   Loader2,
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import {
   CERTIFIER_RESPONSE_DOCUMENTS,
+  COMPLIANCE_PARTY_SECTIONS,
   complianceDocumentLabel,
   HBCF_INSURANCE_URL,
   isApprovableDocumentType,
@@ -44,10 +45,13 @@ import {
   isRequiredDocumentType,
   isReviewSubmissionType,
   isSignedCopyType,
-  REQUIRED_COMPLIANCE_DOCUMENTS,
+  PARTY_LABEL,
+  PARTY_OUTREACH_ATTACHMENTS,
+  PARTY_PREREQUISITES,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
 import {
+  applicableRequiredDocuments,
   canSendRequiredPack,
   hasReachedChecklistStage,
   hasSentRequiredPack,
@@ -62,7 +66,9 @@ import {
   identifyComplianceDocument,
   resolveComplianceDocument,
   selectComplianceMutations,
+  recordPartySelfSupplied,
   sendCertifierReply,
+  sendPartyReply,
   setComplianceDocumentNotRequired,
   uploadComplianceDocument,
   type ComplianceScope,
@@ -70,12 +76,22 @@ import {
 import type { ProjectDetail } from "@/types/project";
 import {
   checklistItemDetail,
+  isPartyEngaged,
+  outreachForParty,
+  requiresPlanningCertificate,
   type CertifierEngagementDetail,
+  type ComplianceAlertRecord,
   type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
-import { CertifierThreadModal } from "./certifier-thread-modal";
+import {
+  COMPLIANCE_ALERT_COPY,
+  ComplianceAlertsPanel,
+} from "./compliance-alerts-panel";
+import { ComplianceThreadsModal } from "./compliance-threads-modal";
+import { DaApprovalSection } from "./da-approval-section";
+import { PartyDocumentSection } from "./party-document-section";
 import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
@@ -156,9 +172,15 @@ function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
   return hasChecklist && !submission.some(isOutstandingEvidence);
 }
 
-/** The collapsible blocks the tab is built from, in flow order. */
+/**
+ * The collapsible blocks the tab is built from, in flow order.
+ *
+ * "required" is gone: what was one card is now one per supplier, keyed by the
+ * party, because they open and close independently and the flow moves through
+ * them one at a time.
+ */
 type SectionKey =
-  | "required"
+  | CompliancePartyType
   | "unidentified"
   | "response"
   | "checklist"
@@ -387,7 +409,7 @@ export function ProjectComplianceTab({
         type: "certifierPackReady",
         payload: {
           projectId: project.id,
-          documentCount: REQUIRED_COMPLIANCE_DOCUMENTS.length,
+          documentCount: applicableRequiredDocuments(next).length,
           updatedCount: outstanding.length,
           isResend: hasSentRequiredPack(next),
         },
@@ -552,6 +574,91 @@ export function ProjectComplianceTab({
     toast.success("Sent to the certifier.");
   };
 
+  const handlePartyReply = async (
+    outreachId: string,
+    input: { body: string; attachments: CertifierReplyAttachment[] },
+  ) => {
+    await dispatch(
+      sendPartyReply({ projectId: project.id, outreachId, ...input }),
+    ).unwrap();
+    toast.success("Message sent.");
+  };
+
+  /**
+   * Opens the connect modal for one party.
+   *
+   * The attachments the send will carry are resolved here rather than in the
+   * modal, off the same document rows the server reads. The modal lists them so
+   * whoever is sending can see what an architect is about to receive, and it
+   * cannot choose them — by the time an architect can be engaged the surveyor's
+   * three documents are on the file by definition, and a checkbox there would
+   * only be an invitation to send a site with no survey on it.
+   */
+  const handleConnectParty = (party: CompliancePartyType) => {
+    const attachmentTypes = new Set<ComplianceDocumentType>(
+      PARTY_OUTREACH_ATTACHMENTS[party],
+    );
+    const prefilled = (engagement?.documents ?? [])
+      .filter((document) => attachmentTypes.has(document.documentType))
+      .flatMap((document) =>
+        document.files.map((file) => ({
+          name: file.filename,
+          url: file.url,
+        })),
+      );
+
+    dispatch(
+      openModal({
+        type: "connectComplianceParty",
+        payload: {
+          projectId: project.id,
+          party,
+          subjectAddress: engagement?.subjectAddress ?? project.location,
+          prefilled,
+        },
+      }),
+    );
+  };
+
+  /**
+   * Records that the client turned up with this party's documents.
+   *
+   * No confirmation dialog, unlike engaging a firm. Nothing is sent, nothing
+   * leaves the building, and the only consequence is that the rows below become
+   * uploadable — which is what the reader just asked for.
+   */
+  const handleSelfSupplied = async (party: CompliancePartyType) => {
+    try {
+      await dispatch(
+        recordPartySelfSupplied({ projectId: project.id, party }),
+      ).unwrap();
+      toast.success(
+        `${PARTY_LABEL[party]} documents marked as supplied by the client.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not record these as client supplied.",
+      );
+    }
+  };
+
+  const handleResolveAlert = (alert: ComplianceAlertRecord) => {
+    const copy = COMPLIANCE_ALERT_COPY[alert.type];
+    dispatch(
+      openModal({
+        type: "resolveComplianceAlert",
+        payload: {
+          projectId: project.id,
+          alertId: alert.id,
+          alertTitle: copy.title,
+          guidance: copy.guidance,
+        },
+      }),
+    );
+  };
+
   const handleApprove = async (document: ComplianceDocumentWithFiles) => {
     try {
       await dispatch(
@@ -714,6 +821,15 @@ export function ProjectComplianceTab({
     engagement.status === CertifierEngagementStatus.NOT_STARTED ||
     engagement.status === CertifierEngagementStatus.COLLECTING_DOCS;
 
+  // Every conversation on the file, not just the certifier's. The badge is a
+  // count of what is behind the button, and the button now opens four threads.
+  const threadMessageCount =
+    engagement.emails.length +
+    engagement.outreaches.reduce(
+      (total, outreach) => total + outreach.emails.length,
+      0,
+    );
+
   // The line the collection half of the tab ends at: past it every control for
   // assembling and sending the pack is describing a step that has happened.
   const inChecklistStage = hasReachedChecklistStage(engagement);
@@ -767,6 +883,72 @@ export function ProjectComplianceTab({
   const insuranceScope = complianceScope.document(insuranceUpload);
 
   // -------------------------------------------------------------------
+  // The three supplier blocks.
+  //
+  // Everything each one needs to render, worked out once here rather than
+  // inside the map below: whether its party has been dealt with, what it is
+  // still waiting on, and what is blocking it. The blocking rule is the reason
+  // this is not three independent cards — the architect and the council both
+  // wait on the surveyor's documents rather than on the surveyor's mail, so a
+  // surveyor who has been written to but has sent nothing back leaves both
+  // still shut. It mirrors `partyPrerequisiteFailure` on the server, which is
+  // what actually refuses the send.
+  // -------------------------------------------------------------------
+  const requiredTypesInPlay = new Set(
+    applicableRequiredDocuments(engagement).map((required) => required.type),
+  );
+
+  const partySections = COMPLIANCE_PARTY_SECTIONS.map((section) => {
+    // A DA takes the 10.7 certificate out of the pack, which empties the
+    // council's section entirely. It stays on screen — its heading is how the
+    // reader learns the certificate is no longer wanted — but it is complete
+    // by having nothing left to want.
+    const types = section.types.filter((type) => requiredTypesInPlay.has(type));
+    const documents = types.map((type) => documentsByType.get(type));
+    const outstanding = types.filter(
+      (type) => !documentsByType.get(type)?.files.length,
+    );
+
+    return {
+      section,
+      party: section.party,
+      types,
+      documents,
+      outreach: outreachForParty(engagement, section.party),
+      isComplete: outstanding.length === 0,
+      outstanding,
+    };
+  });
+
+  const partyState = new Map(
+    partySections.map((entry) => [entry.party, entry] as const),
+  );
+
+  /**
+   * Why a section cannot be opened yet, in the reader's terms, or null.
+   *
+   * A sentence rather than a boolean because the two reasons are different
+   * moves: nobody has engaged the surveyor (go and do it) versus the surveyor
+   * owes us two documents (wait, or chase them on the thread).
+   */
+  const blockedReason = (party: CompliancePartyType): string | null => {
+    for (const prerequisite of PARTY_PREREQUISITES[party]) {
+      const upstream = partyState.get(prerequisite);
+      const upstreamLabel = PARTY_LABEL[prerequisite].toLowerCase();
+
+      if (!isPartyEngaged(engagement, prerequisite)) {
+        return `Engage the ${upstreamLabel} first — this unlocks once their documents are in.`;
+      }
+      if (upstream && !upstream.isComplete) {
+        return `Waiting on ${upstream.outstanding
+          .map((type) => complianceDocumentLabel(type))
+          .join(" and ")} from the ${upstreamLabel}.`;
+      }
+    }
+    return null;
+  };
+
+  // -------------------------------------------------------------------
   // What each send is blocked by.
   //
   // A send is not just its own request: it carries a set of documents, and
@@ -775,8 +957,8 @@ export function ProjectComplianceTab({
   // own scope plus the scopes of everything it carries — and on nothing else,
   // which is the point. Work in one block no longer stops work in another.
   // -------------------------------------------------------------------
-  const requiredScopes = REQUIRED_COMPLIANCE_DOCUMENTS.map((required) =>
-    scopeOf(documentsByType.get(required.type), required.type),
+  const requiredScopes = applicableRequiredDocuments(engagement).map(
+    (required) => scopeOf(documentsByType.get(required.type), required.type),
   );
   const signedCopyScopes = signedCopies.map((signed) =>
     scopeOf(signed.document, signed.type),
@@ -837,7 +1019,12 @@ export function ProjectComplianceTab({
         ? "checklist"
         : hasResponse
           ? "response"
-          : "required";
+          // The collection half now has three blocks rather than one, so
+          // "where the engagement starts" is the first party that still owes
+          // something. Falls back to the surveyor, which is where a file with
+          // nothing outstanding began and where a finished one reads fine.
+          : (partySections.find((section) => !section.isComplete)?.party ??
+            CompliancePartyType.SURVEYOR);
 
   const isOpen = (key: SectionKey) => sections[key] ?? key === activeSection;
   const toggleSection = (key: SectionKey) => (open: boolean) =>
@@ -856,6 +1043,12 @@ export function ProjectComplianceTab({
   const responseLocked = !hasResponse;
   const checklistLocked = checklistItems.length === 0;
 
+  // Resolved alerts stay listed: what was raised and settled on a job is
+  // exactly what somebody auditing it later is looking for, and a list that
+  // empties itself as things are fixed leaves no trace that anything was.
+  const alerts = engagement.alerts;
+  const hasDaAlert = !requiresPlanningCertificate(engagement);
+
   /**
    * How many of these are done with.
    *
@@ -872,10 +1065,6 @@ export function ProjectComplianceTab({
         document &&
         (document.files.length > 0 || isNotRequired(document.status)),
     ).length;
-
-  const requiredDocuments = REQUIRED_COMPLIANCE_DOCUMENTS.map((required) =>
-    documentsByType.get(required.type),
-  );
 
   /**
    * Whether the send has to come back after the engagement left collection.
@@ -923,12 +1112,27 @@ export function ProjectComplianceTab({
           onClick={() => setIsThreadOpen(true)}
         >
           <MessagesSquare className="size-4" aria-hidden="true" />
-          Show certifier thread
-          {engagement.emails.length > 0 ? (
-            <Badge variant="secondary">{engagement.emails.length}</Badge>
+          Show threads
+          {threadMessageCount > 0 ? (
+            <Badge variant="secondary">{threadMessageCount}</Badge>
           ) : null}
         </Button>
       </div>
+
+      {/* ---------------------------------------------------------------
+          What has been raised on this file.
+
+          Above the blocks rather than inside one, because that is the shape of
+          what these do: a stale title search is about the surveyor's section
+          and a DA requirement removes a row from the council's, so filing
+          either under a single block would hide it from the section it
+          actually changes.
+      --------------------------------------------------------------- */}
+      <ComplianceAlertsPanel
+        alerts={alerts}
+        onResolve={handleResolveAlert}
+        isBusy={(alertId) => isScopeBusy(complianceScope.alert(alertId))}
+      />
 
       {/* ---------------------------------------------------------------
           The document blocks, on a recessed panel.
@@ -1015,77 +1219,85 @@ export function ProjectComplianceTab({
             </ComplianceSectionCard>
           ) : null}
 
-          {/* Required documents */}
-          <ComplianceSectionCard
-            title="Required documents"
-            description="The pack that goes to the certifier."
-            icon={FileText}
-            progress={{
-              done: countSupplied(requiredDocuments),
-              total: REQUIRED_COMPLIANCE_DOCUMENTS.length,
-            }}
-            open={isOpen("required")}
-            onOpenChange={toggleSection("required")}
-            isActive={activeSection === "required"}
-            footer={
-              collecting || hasUnsentRequired ? (
-                <div className="space-y-2">
-                  <Button
-                    type="button"
-                    className="w-full"
-                    onClick={() =>
-                      dispatch(
-                        openModal({
-                          type: "certifierDiscovery",
-                          payload: { projectId: project.id },
-                        }),
-                      )
-                    }
-                    disabled={requiredPackBusy}
-                  >
-                    {collecting
-                      ? "Find and send documents"
-                      : "Send updated documents"}
-                  </Button>
-                  {/* The one thing the row itself cannot say: the file on it
-                      is current, and the certifier's copy is not. */}
-                  {!collecting ? (
-                    <p className="text-xs text-muted-foreground">
-                      A document has been replaced since the pack was sent — the
-                      certifier still has the old copy.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null
-            }
-          >
-            <ul>
-              {REQUIRED_COMPLIANCE_DOCUMENTS.map((required) => {
-                const document = documentsByType.get(required.type);
-                return (
-                  <ComplianceDocumentRow
-                    key={required.type}
-                    label={required.label}
-                    document={document}
-                    helperText={
-                      document?.files.length ? undefined : "Not collected yet"
-                    }
-                    mode={rowMode(document)}
-                    isBusy={isScopeBusy(scopeOf(document, required.type))}
-                    onUpload={(file) =>
-                      void attachEvidence(file, {
-                        documentId: document?.id,
-                        documentType: required.type,
-                      })
-                    }
-                    onApprove={() => document && void handleApprove(document)}
-                    onReject={() => document && handleReject(document)}
-                    onPreviewFile={handlePreviewFile}
-                  />
-                );
-              })}
-            </ul>
-          </ComplianceSectionCard>
+          {/* -----------------------------------------------------------
+              The required pack, one block per supplier.
+
+              Across both columns and stacked three-up, because they are a
+              sequence rather than a set: the surveyor's block feeds the two
+              beside it, and reading them left to right is reading the order
+              the job is actually assembled in.
+          ----------------------------------------------------------- */}
+          <div className="grid gap-4 md:col-span-2 lg:grid-cols-3">
+            {partySections.map((entry) => (
+              <PartyDocumentSection
+                key={entry.party}
+                section={entry.section}
+                outreach={entry.outreach}
+                documents={entry.documents}
+                blockedReason={blockedReason(entry.party)}
+                isActive={activeSection === entry.party}
+                open={isOpen(entry.party)}
+                onOpenChange={toggleSection(entry.party)}
+                progress={{
+                  done: countSupplied(entry.documents),
+                  total: entry.types.length,
+                }}
+                isBusy={isScopeBusy(complianceScope.party(entry.party))}
+                rowMode={rowMode}
+                isRowBusy={(document, documentType) =>
+                  isScopeBusy(scopeOf(document, documentType))
+                }
+                onConnect={() => handleConnectParty(entry.party)}
+                onSelfSupplied={() => void handleSelfSupplied(entry.party)}
+                onUpload={(file, target) => void attachEvidence(file, target)}
+                onPreviewFile={handlePreviewFile}
+              />
+            ))}
+          </div>
+
+          {/* The development-application block, once the architect has said
+              the job needs one. Full width and immediately under the pack,
+              because it is a branch off it rather than a later stage. */}
+          {hasDaAlert ? <DaApprovalSection className="md:col-span-2" /> : null}
+
+          {/* -----------------------------------------------------------
+              Sending the pack.
+
+              Its own bar rather than a footer on one of the three blocks
+              above: the send carries all six documents, so hanging it off
+              the surveyor's card would have made it look like the
+              surveyor's, and repeating it on each would have offered the
+              same send three times.
+          ----------------------------------------------------------- */}
+          {collecting || hasUnsentRequired ? (
+            <div className="space-y-2 rounded-lg border border-border/70 bg-background px-4 py-3 md:col-span-2">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() =>
+                  dispatch(
+                    openModal({
+                      type: "certifierDiscovery",
+                      payload: { projectId: project.id },
+                    }),
+                  )
+                }
+                disabled={requiredPackBusy}
+              >
+                {collecting
+                  ? "Find and send documents"
+                  : "Send updated documents"}
+              </Button>
+              {/* The one thing the rows themselves cannot say: the file on
+                  them is current, and the certifier's copy is not. */}
+              {!collecting ? (
+                <p className="text-xs text-muted-foreground">
+                  A document has been replaced since the pack was sent — the
+                  certifier still has the old copy.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* Certifier response */}
           <ComplianceSectionCard
@@ -1386,13 +1598,18 @@ export function ProjectComplianceTab({
         />
       </div>
 
-      <CertifierThreadModal
+      <ComplianceThreadsModal
         open={isThreadOpen}
         onClose={() => setIsThreadOpen(false)}
         projectId={project.id}
-        emails={engagement.emails}
-        isSending={isScopeBusy(complianceScope.reply)}
-        onSend={handleReply}
+        certifierEmails={engagement.emails}
+        isSendingToCertifier={isScopeBusy(complianceScope.reply)}
+        onSendToCertifier={handleReply}
+        outreaches={engagement.outreaches}
+        isSendingToParty={(outreachId) =>
+          isScopeBusy(complianceScope.partyReply(outreachId))
+        }
+        onSendToParty={handlePartyReply}
       />
     </div>
   );

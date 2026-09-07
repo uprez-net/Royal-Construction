@@ -2,7 +2,6 @@
 
 import {
   CertifierEmailDirection,
-  ComplianceDocumentStatus,
   ComplianceDocumentType,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -486,41 +485,4 @@ export async function sendPartyReply(
   after(() => revalidateEngagement(projectId));
 
   return requireEngagement(projectId);
-}
-
-/**
- * Seeds the land deed row so the modal has something to upload against.
- *
- * The required documents are seeded when the engagement opens because the tab
- * renders all six from the start. The deed is not one of them and has no row
- * until someone engages a surveyor, so the upload names a type and this creates
- * the row -- the same shape `attachComplianceDocumentFile` already handles for
- * the signed copies and the insurance certificate.
- */
-export async function ensureLandDeedDocument(
-  engagementId: string,
-): Promise<string> {
-  const existing = await prisma.complianceDocument.findFirst({
-    where: {
-      engagementId,
-      documentType: ComplianceDocumentType.LAND_DEED,
-    },
-    select: { id: true },
-  });
-  if (existing) {
-    return existing.id;
-  }
-
-  const created = await prisma.complianceDocument.create({
-    data: {
-      engagementId,
-      documentType: ComplianceDocumentType.LAND_DEED,
-      status: ComplianceDocumentStatus.PENDING,
-      // Behind the six required rows, which hold orders 0-5. The deed is an
-      // input to the file rather than part of the pack, so it sorts after them.
-      order: 100,
-    },
-    select: { id: true },
-  });
-  return created.id;
 }
