@@ -22,11 +22,17 @@ import { logAction } from "./actionLog";
  * Conditions raised on a compliance file, and closing them out.
  *
  * The two that exist today came from the same observation: the flow is not a
- * pipeline that only ever moves forward. A surveyor sends a title search off an
- * un-updated register and it has to be asked for again; an architect looks at
- * the proposal and says it cannot go through as a CDC at all. Both arrive
- * mid-flow, both change what the file needs from that moment, and both are
- * settled by a person rather than by a status transition.
+ * pipeline that only ever moves forward. A title search arrives off a register
+ * that has not caught up with settlement and has to be asked for again; an
+ * architect looks at the proposal and says it cannot go through as a CDC at
+ * all. Both arrive mid-flow and both change what the file needs from that
+ * moment.
+ *
+ * They are found differently, which is the more interesting half. The architect
+ * tells us, so that one is read off their reply. Nobody tells us about the title
+ * search -- the surveyor who ordered it never knew who bought the place -- so
+ * that one is checked against the document itself, on both the inbound and the
+ * manual upload path.
  *
  * Modelled as rows rather than as engagement flags because each one has a
  * lifetime, a raiser and a resolution, and because there is nothing to stop the
@@ -41,7 +47,7 @@ function revalidateEngagement(projectId: string) {
 /** How each alert reads in a notification and in the audit trail. */
 const ALERT_TITLE: Readonly<Record<ComplianceAlertType, string>> = {
   [ComplianceAlertType.STALE_TITLE_SEARCH]:
-    "Title search predates the transfer",
+    "Title search does not name the owners",
   [ComplianceAlertType.DA_APPROVAL_REQUIRED]:
     "Development approval required",
 };
@@ -126,6 +132,61 @@ export async function raiseComplianceAlert(params: {
   });
 
   return { alertId: alert.id, created: true };
+}
+
+/**
+ * Closes an open alert of one type, on the system's own authority.
+ *
+ * For the case where the thing the alert was waiting for is something we can
+ * check rather than something a person has to judge: a replacement title search
+ * lands, the owner comparison passes, and the condition is answered. Leaving it
+ * open would ask an admin to confirm what has already been verified, which is
+ * asking them to rubber-stamp it -- and an alert that outlives its cause is how
+ * a screen full of alerts stops being read.
+ *
+ * `resolvedById` stays null, which is what distinguishes this from a person
+ * closing it; the note says what was checked. Returns whether it closed one, so
+ * the caller can log the difference between "fixed" and "was never flagged".
+ */
+export async function resolveComplianceAlertBySystem(params: {
+  projectId: string;
+  engagementId: string;
+  type: ComplianceAlertType;
+  resolutionNote: string;
+}): Promise<boolean> {
+  const claim = await prisma.complianceAlert.updateMany({
+    where: {
+      engagementId: params.engagementId,
+      type: params.type,
+      status: ComplianceAlertStatus.OPEN,
+    },
+    data: {
+      status: ComplianceAlertStatus.RESOLVED,
+      resolvedAt: new Date(),
+      resolutionNote: params.resolutionNote,
+    },
+  });
+
+  if (claim.count === 0) {
+    return false;
+  }
+
+  after(async () => {
+    revalidateEngagement(params.projectId);
+    await logAction(
+      createActivityLogEntry("complianceAlertResolved", {
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        // updateMany does not hand back ids. The type identifies the condition
+        // and at most one of them is ever open, so the trail loses nothing.
+        alertId: params.type,
+        alertType: params.type,
+        resolvedBy: "the system",
+      }),
+    );
+  });
+
+  return true;
 }
 
 /**

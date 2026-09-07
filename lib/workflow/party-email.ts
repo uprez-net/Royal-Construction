@@ -19,6 +19,7 @@ import {
   placeInboundDocument,
 } from "@/lib/compliance/document-replacement";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
+import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import {
@@ -351,13 +352,17 @@ async function classifyStoredDocuments(
   engagementId: string,
   party: CompliancePartyType,
   stored: { documentId: string; name: string; url: string }[],
-): Promise<number> {
+): Promise<{ labelled: number; titleSearches: { url: string; name: string }[] }> {
   "use step";
 
   const allowed = new Set<ComplianceDocumentType>(
     PARTY_INBOUND_DOCUMENT_TYPES[party],
   );
   let labelled = 0;
+  // Reported back rather than checked here: the owner comparison is a model
+  // call of its own and belongs in its own retryable step, so a timeout reading
+  // proprietors off a scan cannot cost the classification that already ran.
+  const titleSearches: { url: string; name: string }[] = [];
 
   for (const item of stored) {
     try {
@@ -384,12 +389,49 @@ async function classifyStoredDocuments(
       // attachment on an earlier message, and that bubble still has to open it.
       await discardSupersededFiles(engagementId, placed.superseded);
       labelled += 1;
+
+      if (
+        result.documentType ===
+        ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
+      ) {
+        titleSearches.push({ url: item.url, name: item.name });
+      }
     } catch (error) {
       console.error(`  Failed to classify "${item.name}":`, error);
     }
   }
 
-  return labelled;
+  return { labelled, titleSearches };
+}
+
+/**
+ * Checks any title search that just arrived names the right owners.
+ *
+ * Its own step, after the documents are placed: the register lags settlement,
+ * so a surveyor can send a search naming the vendors in complete good faith --
+ * they never knew who bought the place. Only we hold the contract that says
+ * whose job this is, so nobody is going to tell us; the check has to run.
+ */
+async function checkTitleSearchOwners(
+  params: {
+    projectId: string;
+    engagementId: string;
+    party: CompliancePartyType;
+  },
+  titleSearches: { url: string; name: string }[],
+): Promise<void> {
+  "use step";
+
+  for (const document of titleSearches) {
+    await verifyTitleSearchOwners({
+      projectId: params.projectId,
+      engagementId: params.engagementId,
+      file: { url: document.url, filename: document.name },
+      // Who to go back to for a fresh search, which is the action the alert
+      // asks for -- not blame for a document they could not have checked.
+      raisedByParty: params.party,
+    });
+  }
 }
 
 /**
@@ -542,14 +584,25 @@ export const processInboundPartyEmail = async (
   );
 
   if (stored.length > 0) {
-    const labelled = await classifyStoredDocuments(
+    const classification = await classifyStoredDocuments(
       outreach.engagementId,
       outreach.party,
       stored,
     );
     console.log(
-      `  Classified ${labelled} of ${stored.length} ${outreach.party.toLowerCase()} document(s).`,
+      `  Classified ${classification.labelled} of ${stored.length} ${outreach.party.toLowerCase()} document(s).`,
     );
+
+    if (classification.titleSearches.length > 0) {
+      await checkTitleSearchOwners(
+        {
+          projectId,
+          engagementId: outreach.engagementId,
+          party: outreach.party,
+        },
+        classification.titleSearches,
+      );
+    }
   }
 
   const alerts = await raiseAlertsFromMessage(

@@ -22,9 +22,9 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
   Record<ComplianceAlertType, { title: string; guidance: string }>
 > = {
   [ComplianceAlertType.STALE_TITLE_SEARCH]: {
-    title: "Title search predates the transfer",
+    title: "Title search does not name the owners",
     guidance:
-      "The search on file still shows the previous owner. Ask the surveyor to re-order it once the land registry has updated, and close this once the replacement is on the file and names the current owners.",
+      "The proprietors on this search do not match the owners recorded on the project — the land registry has most likely not updated since settlement. Ask for a fresh search; it closes itself once a replacement is uploaded and the names check out.",
   },
   [ComplianceAlertType.DA_APPROVAL_REQUIRED]: {
     title: "Development approval required",
@@ -92,8 +92,13 @@ export function ComplianceAlertsPanel({
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-medium text-foreground">{copy.title}</p>
                 {alert.raisedByParty ? (
+                  // Who supplied the document, not who reported the problem.
+                  // On a stale title search nobody reported it — the surveyor
+                  // could not have known — so "from the surveyor" would be an
+                  // accusation rather than a fact. "via" is the honest word,
+                  // and it is also the answer to who to go back to.
                   <StatusPill tone="neutral">
-                    from the {PARTY_LABEL[alert.raisedByParty].toLowerCase()}
+                    via the {PARTY_LABEL[alert.raisedByParty].toLowerCase()}
                   </StatusPill>
                 ) : null}
                 {!isOpen ? (

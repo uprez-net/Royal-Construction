@@ -40,6 +40,7 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
+import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -732,6 +733,24 @@ export async function attachComplianceDocumentFile(params: {
       await recordHomeInsuranceOnProject({
         projectId: params.projectId,
         fileId: file.id,
+      });
+    });
+  }
+
+  // The register lags settlement, so a title search can name the vendors --
+  // and whoever supplied it has no way of knowing, because they never knew who
+  // bought the place. Only we hold the contract that says whose job this is, so
+  // the check runs here rather than waiting to be told. Fires on an admin's own
+  // upload as well as on the inbound path: an admin dragging in the copy the
+  // surveyor emailed them is the same document with the same problem.
+  if (
+    document.documentType === ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
+  ) {
+    after(async () => {
+      await verifyTitleSearchOwners({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        file: { url: file.url, filename: file.filename },
       });
     });
   }
