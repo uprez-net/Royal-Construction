@@ -252,6 +252,11 @@ enum ComplianceDocumentType {
   PRELIMINARY_ARCHITECTURAL_PLANS
   PLANNING_CERTIFICATE_10_7
   FULL_ARCHITECTURAL_DESIGN
+  /// What the builder holds and the surveyor is sent to start work: the deed
+  /// proving who owns the land. It is an input to the required pack rather
+  /// than part of it, which is why it is not in REQUIRED_COMPLIANCE_DOCUMENTS
+  /// -- the certifier is never sent one.
+  LAND_DEED
   INVOICE
   FEE_PROPOSAL
   CDC_FORM
@@ -418,6 +423,8 @@ model Tradie {
   incidents  TradieIncident[]
   approvals  TradieApproval[]
   ratings    TradieRating[]
+
+  complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
 
   @@index([name])
   @@index([trade])
@@ -636,6 +643,8 @@ model User {
   approvalRequests    TradieApproval[]
   createdOffers       Offer[]          @relation("OfferCreatedBy")
   xeroConnections     XeroConnection[] @relation("XeroConnections")
+
+  resolvedComplianceAlerts ComplianceAlert[] @relation("UserResolvedComplianceAlerts")
 
   @@index([email])
   @@index([phone])
@@ -1150,9 +1159,11 @@ model CertifierEngagement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project   Project              @relation("ProjectCertifierEngagement", fields: [projectId], references: [id], onDelete: Cascade)
-  documents ComplianceDocument[]
-  emails    CertifierEmail[]
+  project    Project              @relation("ProjectCertifierEngagement", fields: [projectId], references: [id], onDelete: Cascade)
+  documents  ComplianceDocument[]
+  emails     CertifierEmail[]
+  outreaches ComplianceOutreach[]
+  alerts     ComplianceAlert[]
 
   @@index([status])
 }
@@ -1215,12 +1226,174 @@ model CertifierEmail {
   attachments  Json                    @default("[]")
   sentAt       DateTime
 
+  /// Which thread this message belongs to. Null is the certifier's own thread,
+  /// which is the only one that existed when this table was written and the
+  /// only one every existing row can be. A set value files the message under
+  /// one of the other parties -- surveyor, architect, council -- whose threads
+  /// are the same shape and are read by the same components, so they share the
+  /// table rather than growing a near-identical one per party.
+  outreachId String?
+
   createdAt DateTime @default(now())
 
   engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  outreach   ComplianceOutreach? @relation(fields: [outreachId], references: [id], onDelete: Cascade)
 
   @@index([engagementId])
   @@index([engagementId, sentAt(sort: Desc)])
+  @@index([outreachId, sentAt(sort: Desc)])
+}
+
+/// The third parties a compliance file talks to besides the certifier.
+///
+/// The certifier is deliberately absent. It is not a party in this sense -- it
+/// owns the engagement row itself, holds the document set, and every existing
+/// certifier read and write goes through CertifierEngagement. Adding it here
+/// would mean two places claiming to know who the certifier is.
+enum CompliancePartyType {
+  SURVEYOR
+  ARCHITECT
+  /// The NSW Planning Portal, for the 10.7(2) & (5) certificate. Never sent to
+  /// from here today -- the row exists so the certificate has a thread to be
+  /// filed against when one arrives at the watched address.
+  COUNCIL
+}
+
+/// How a party's documents are being obtained.
+///
+/// SELF_SUPPLIED is the client turning up with their own surveyor's plans or
+/// their architect's drawings, which happens often enough that treating it as
+/// an absence stranded the whole file: the section stayed locked, and with it
+/// everything gated behind that party. It is a row rather than a null so it
+/// still answers "is this stage settled" for the sections downstream, and so
+/// the tab can say the documents came from the client rather than from us.
+enum ComplianceOutreachMode {
+  OUTREACH
+  SELF_SUPPLIED
+}
+
+/// Where one party's outreach has got to.
+///
+/// Deliberately coarser than CertifierEngagementStatus. The certifier drives a
+/// multi-stage flow of its own -- fee proposal, signing, checklist, review --
+/// while a surveyor or an architect is asked once for a fixed set of documents
+/// and either has sent them or has not.
+enum ComplianceOutreachStatus {
+  /// A SELF_SUPPLIED row, or one created before its mail went out.
+  NOT_SENT
+  SENT
+  RESPONSE_RECEIVED
+  COMPLETE
+}
+
+/// Something that has come back from a party that changes what the rest of the
+/// file needs, and that a person has to close out.
+///
+/// Append-only, like CertifierEngagementStatus: a retired value keeps its slot.
+enum ComplianceAlertType {
+  /// The surveyor's title search predates the transfer, so it still shows the
+  /// previous owner. Resolved only when a replacement search naming the current
+  /// owners has been supplied and checked.
+  STALE_TITLE_SEARCH
+  /// The architect says the proposal cannot go through as a CDC and needs
+  /// development approval. While this is open the 10.7 certificate stops being
+  /// required and the DA section opens; it closes when the DA is granted.
+  DA_APPROVAL_REQUIRED
+}
+
+enum ComplianceAlertStatus {
+  OPEN
+  RESOLVED
+}
+
+/// One party's engagement on a compliance file.
+///
+/// The same shape as CertifierEngagement's own correlation fields -- a minted
+/// refToken carried in the subject, a denormalised contact snapshot, and the
+/// Graph id of the last inbound message to reply against -- because the mail
+/// loop is identical. What differs is that there can be several of these per
+/// file and the certifier is only ever one, which is why the certifier keeps
+/// its columns on the engagement rather than moving here.
+///
+/// tradieId is a soft link. The party is picked from the tradie directory, but
+/// the name and address are snapshotted the way EnvelopeSignature does: a
+/// tradie who is later deleted or has their email corrected must not silently
+/// change who a finished thread was addressed to.
+model ComplianceOutreach {
+  id           String              @id @default(uuid())
+  engagementId String
+  party        CompliancePartyType
+
+  /// Minted here and carried in every subject on this thread -- "[RCSURV-...]",
+  /// "[RCARCH-...]". Unique across parties, so one lookup resolves any of them.
+  refToken String @unique
+
+  mode   ComplianceOutreachMode   @default(OUTREACH)
+  status ComplianceOutreachStatus @default(NOT_SENT)
+
+  tradieId     String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+
+  /// See CertifierEngagement.lastInboundMessageId -- Graph will not set
+  /// In-Reply-To through internetMessageHeaders, so a reply has to be built
+  /// with createReply against the message it answers.
+  lastInboundMessageId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  tradie     Tradie?             @relation("TradieComplianceOutreaches", fields: [tradieId], references: [id], onDelete: SetNull)
+  emails     CertifierEmail[]
+
+  /// One outreach per party per file. A second "Connect with Surveyor" on a
+  /// file that already has one is the same act repeated, not a new thread.
+  @@unique([engagementId, party])
+  @@index([engagementId])
+  @@index([status])
+}
+
+/// A condition raised on a compliance file that blocks or reshapes what comes
+/// after it, held open until someone closes it.
+///
+/// A table rather than a flag on the engagement because these arrive from
+/// outside, arrive more than once, and each carries its own resolution --
+/// a replacement document, a granted approval. A flag would record that
+/// something was wrong without recording what, when, or whether it was fixed.
+model ComplianceAlert {
+  id           String                @id @default(uuid())
+  engagementId String
+  type         ComplianceAlertType
+  status       ComplianceAlertStatus @default(OPEN)
+
+  /// Which party's message raised it, where one did. Null for an alert an
+  /// admin raised by hand.
+  raisedByParty CompliancePartyType?
+
+  /// The alert in the raiser's own words where there are any -- the sentence
+  /// from the architect's email, the note on the surveyor's covering letter.
+  /// Display only; nothing keys on it.
+  detail String? @db.Text
+
+  /// Who closed it and when. Null while open.
+  resolvedById   String?
+  resolvedAt     DateTime?
+  /// What closing it was justified by -- "replacement title search verified".
+  resolutionNote String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  resolvedBy User?               @relation("UserResolvedComplianceAlerts", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  /// At most one open alert of a type per file. The architect saying "this
+  /// needs a DA" twice is one condition, not two, and the partial index is
+  /// what keeps a resolved one from blocking a genuine recurrence later.
+  @@index([engagementId])
+  @@index([engagementId, status])
 }
 
 /// Lifecycle of a progress claim, mirroring Xero's own invoice status codes so

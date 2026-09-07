@@ -165,6 +165,55 @@ export const activityLogSchemas = {
         attachmentCount: z.number(),
     }),
 
+    // --- Other parties on the compliance file -----------------------------
+    // Same shape as the certifier entries above, plus the party, because the
+    // one thing a reader of this trail needs that the certifier entries never
+    // had to say is which of three concurrent threads a line is about.
+
+    complianceOutreachSent: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        party: z.string(),
+        contactEmail: z.string(),
+        refToken: z.string(),
+        attachmentCount: z.number(),
+    }),
+
+    complianceOutreachSelfSupplied: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        party: z.string(),
+        recordedBy: z.string(),
+    }),
+
+    complianceOutreachResponseReceived: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        party: z.string(),
+        emailFrom: z.string(),
+        subject: z.string(),
+        attachmentCount: z.number(),
+    }),
+
+    complianceAlertRaised: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        alertId: z.string(),
+        alertType: z.string(),
+        raisedBy: z.string(),
+    }),
+
+    complianceAlertResolved: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        alertId: z.string(),
+        alertType: z.string(),
+        resolvedBy: z.string(),
+    }),
+
     complianceDocumentUploaded: z.object({
         projectId: z.string(),
         engagementId: z.string(),

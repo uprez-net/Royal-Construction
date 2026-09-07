@@ -24,6 +24,7 @@ import {
   Droplets,
   Construction,
   BadgeCheck,
+  PencilRuler,
 } from "lucide-react";
 
 export const TRADIE_TYPES = {
@@ -57,6 +58,7 @@ export const TRADIE_TYPES = {
   GYPROCK_INSTALLER: "Gyprock",
   METAL_ROOFER: "Metal Roofing",
   CERTIFIER: "Certifier",
+  ARCHITECT: "Architecture",
 } as const;
 
 export const TRADIE_TYPE_ICONS: Record<
@@ -93,4 +95,5 @@ export const TRADIE_TYPE_ICONS: Record<
   GYPROCK_INSTALLER: PanelTop,
   METAL_ROOFER: Warehouse,
   CERTIFIER: BadgeCheck,
+  ARCHITECT: PencilRuler,
 };

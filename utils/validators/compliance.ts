@@ -1,4 +1,8 @@
-import { ComplianceDocumentType } from "@prisma/client";
+import {
+  ComplianceAlertType,
+  ComplianceDocumentType,
+  CompliancePartyType,
+} from "@prisma/client";
 import { z } from "zod";
 
 import { idSchema, normalizedStringSchema } from "./common";
@@ -38,6 +42,88 @@ export const startEngagementSchema = z.object({
 });
 
 export type StartEngagementInput = z.infer<typeof startEngagementSchema>;
+
+// ============================================================================
+// Party outreach
+// ============================================================================
+
+/**
+ * Engaging a surveyor or an architect.
+ *
+ * `tradieId` is where the contact was picked from and the three snapshot fields
+ * are what was picked — both are sent, and both are stored, for the reason
+ * EnvelopeSignature snapshots its signers: the directory row can be edited or
+ * deleted later, and a finished thread must not change who it was addressed to.
+ *
+ * The address is not taken from the tradie row on the server instead, because
+ * a tradie may carry several (`additionalEmails`) and the person engaging them
+ * is the one who knows which desk this job should land on.
+ */
+export const startPartyOutreachSchema = z.object({
+  party: z.enum(CompliancePartyType),
+  tradieId: idSchema.optional(),
+  contactName: normalizedStringSchema.optional(),
+  contactEmail: z.email().trim().toLowerCase(),
+  contactPhone: normalizedStringSchema.optional(),
+  /** An extra line on the outreach — "we need this by Friday". */
+  note: normalizedStringSchema.optional(),
+});
+
+export type StartPartyOutreachInput = z.infer<typeof startPartyOutreachSchema>;
+
+/**
+ * Recording that the client already had this party's documents.
+ *
+ * Carries the party and nothing else. There is no contact, no address and no
+ * mail — that is the whole distinction — and anything more here would be a
+ * field with nowhere true to come from.
+ */
+export const partySelfSuppliedSchema = z.object({
+  party: z.enum(CompliancePartyType),
+});
+
+export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
+
+// ============================================================================
+// Alerts
+// ============================================================================
+
+/**
+ * Raising an alert by hand.
+ *
+ * Both types can also be raised off an inbound message, but an admin reading a
+ * reply the classifier did not act on has to be able to raise the same
+ * condition — otherwise the flow depends on the extraction being right, and the
+ * one case that matters most is the one it missed.
+ */
+export const raiseComplianceAlertSchema = z.object({
+  type: z.enum(ComplianceAlertType),
+  raisedByParty: z.enum(CompliancePartyType).optional(),
+  detail: normalizedStringSchema.optional(),
+});
+
+export type RaiseComplianceAlertInput = z.infer<
+  typeof raiseComplianceAlertSchema
+>;
+
+/**
+ * Closing an alert.
+ *
+ * The note is required, not optional. What closed a condition is the only part
+ * of it worth reading back later, and these two in particular are closed by a
+ * judgement rather than by an event: somebody looked at the replacement title
+ * search and decided it names the right owners.
+ */
+export const resolveComplianceAlertSchema = z.object({
+  resolutionNote: z
+    .string()
+    .trim()
+    .min(1, "Say what resolved this before closing it"),
+});
+
+export type ResolveComplianceAlertInput = z.infer<
+  typeof resolveComplianceAlertSchema
+>;
 
 // ============================================================================
 // Documents
@@ -165,6 +251,22 @@ export const certifierReplySchema = z.object({
 });
 
 export type CertifierReplyInput = z.infer<typeof certifierReplySchema>;
+
+/**
+ * A message on one party's thread.
+ *
+ * Same shape as the certifier composer's plus the thread it goes on, because
+ * the compliance file now has several and the composer is the same component
+ * rendered once per tab. Declared here rather than beside the other party
+ * schemas above so it sits after the attachment schema it is built from.
+ */
+export const partyReplySchema = z.object({
+  outreachId: idSchema,
+  body: z.string().trim().min(1, "A message is required"),
+  attachments: z.array(certifierReplyAttachmentSchema).default([]),
+});
+
+export type PartyReplyInput = z.infer<typeof partyReplySchema>;
 
 // ============================================================================
 // Checklist extraction

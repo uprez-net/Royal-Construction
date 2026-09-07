@@ -1,14 +1,17 @@
 import {
   CertifierEmailDirection,
   CertifierEngagementStatus,
+  ComplianceDocumentType,
 } from "@prisma/client";
 
 import {
   isRequiredDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
+  type RequiredComplianceDocument,
 } from "@/constants/complianceDocuments";
 import {
   certifierEmailAttachments,
+  requiresPlanningCertificate,
   type CertifierEngagementDetail,
   type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
@@ -44,11 +47,36 @@ export function sentToCertifierUrls(
   );
 }
 
+/**
+ * The required documents this particular file still has to produce.
+ *
+ * Normally all six. An open DA_APPROVAL_REQUIRED alert drops the 10.7 planning
+ * certificate: once the architect says the proposal needs development approval
+ * the job is no longer a CDC, and a certificate ordered to hand to a certifier
+ * is not part of the path any more. Asking for it anyway left the pack
+ * permanently one document short and the outreach permanently refused.
+ *
+ * Read by everything that counts the pack — the progress pill, the completion
+ * prompt, the send, and the server-side guard on the send — so that none of
+ * them can hold the file to a document the others have written off.
+ */
+export function applicableRequiredDocuments(
+  engagement: Pick<CertifierEngagementDetail, "alerts">,
+): readonly RequiredComplianceDocument[] {
+  if (requiresPlanningCertificate(engagement)) {
+    return REQUIRED_COMPLIANCE_DOCUMENTS;
+  }
+  return REQUIRED_COMPLIANCE_DOCUMENTS.filter(
+    (required) =>
+      required.type !== ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  );
+}
+
 /** Whether every required document now has a file behind it. */
 export function isRequiredPackComplete(
   engagement: CertifierEngagementDetail,
 ): boolean {
-  return REQUIRED_COMPLIANCE_DOCUMENTS.every((required) =>
+  return applicableRequiredDocuments(engagement).every((required) =>
     engagement.documents.some(
       (document) =>
         document.documentType === required.type && document.files.length > 0,

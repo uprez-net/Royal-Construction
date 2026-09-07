@@ -246,6 +246,51 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    complianceOutreachSent: (data) => ({
+        id: uuidv4(),
+        type: "complianceOutreachSent",
+        message: `Engaged the ${data.party.toLowerCase()} at ${data.contactEmail} with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"} (${data.refToken})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceOutreachSelfSupplied: (data) => ({
+        id: uuidv4(),
+        type: "complianceOutreachSelfSupplied",
+        message: `${data.recordedBy} recorded the ${data.party.toLowerCase()} documents as supplied by the client`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceOutreachResponseReceived: (data) => ({
+        id: uuidv4(),
+        type: "complianceOutreachResponseReceived",
+        message: `The ${data.party.toLowerCase()} replied from ${data.emailFrom}: "${data.subject}" with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceAlertRaised: (data) => ({
+        id: uuidv4(),
+        type: "complianceAlertRaised",
+        message: `Compliance alert raised by ${data.raisedBy}: ${data.alertType}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceAlertResolved: (data) => ({
+        id: uuidv4(),
+        type: "complianceAlertResolved",
+        message: `Compliance alert ${data.alertType} resolved by ${data.resolvedBy}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceDocumentUploaded: (data) => ({
         id: uuidv4(),
         type: "complianceDocumentUploaded",

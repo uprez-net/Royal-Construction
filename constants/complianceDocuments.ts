@@ -1,4 +1,5 @@
 import {
+  CompliancePartyType,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
 } from "@prisma/client";
@@ -41,6 +42,207 @@ export type RequiredComplianceDocument =
 
 export type RequiredComplianceDocumentType =
   RequiredComplianceDocument["type"];
+
+/**
+ * The required pack, split by who actually supplies it.
+ *
+ * The list above is one flat set because that is what the certifier is sent and
+ * what the classifier, the outreach and the final page all read. But nothing
+ * assembles it in one go: three of the six come from a surveyor, two from an
+ * architect, and one from the council — and the second and third cannot start
+ * until the first has landed. An architect cannot draw against a site with no
+ * survey, and a 10.7 certificate is ordered off the deposited plan.
+ *
+ * So the tab groups by supplier and gates each group on the one before it. The
+ * types are taken from REQUIRED_COMPLIANCE_DOCUMENTS rather than restated, and
+ * the exhaustiveness check below is what stops a seventh required document
+ * being added to that list and quietly appearing in no section at all.
+ */
+export const COMPLIANCE_PARTY_SECTIONS = [
+  {
+    party: CompliancePartyType.SURVEYOR,
+    heading: "Surveyor documents",
+    description: "Ordered from the surveyor. Everything else waits on these.",
+    types: [
+      ComplianceDocumentType.DEPOSITED_PLAN,
+      ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL,
+      ComplianceDocumentType.SURVEY,
+    ],
+  },
+  {
+    party: CompliancePartyType.ARCHITECT,
+    heading: "Architect documents",
+    description: "Drawn against the survey, preliminary through to full.",
+    types: [
+      ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+      ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    ],
+  },
+  {
+    party: CompliancePartyType.COUNCIL,
+    heading: "Council certificate",
+    description: "The planning certificate for the lot, from the NSW portal.",
+    types: [ComplianceDocumentType.PLANNING_CERTIFICATE_10_7],
+  },
+] as const satisfies readonly {
+  party: CompliancePartyType;
+  heading: string;
+  description: string;
+  types: readonly RequiredComplianceDocumentType[];
+}[];
+
+export type CompliancePartySection = (typeof COMPLIANCE_PARTY_SECTIONS)[number];
+
+/**
+ * Every required document sits in exactly one section.
+ *
+ * A compile-time check rather than a test, because the failure it guards
+ * against is silent: a required document in no section renders nowhere, is
+ * chased by nobody, and still blocks the outreach that demands all six.
+ */
+type UnsectionedRequiredDocument = Exclude<
+  RequiredComplianceDocumentType,
+  CompliancePartySection["types"][number]
+>;
+type _EveryRequiredDocumentIsSectioned =
+  UnsectionedRequiredDocument extends never
+    ? true
+    : ["Required document in no party section:", UnsectionedRequiredDocument];
+// Referenced so the check is not dropped as unused. The assignment is what
+// fails to compile when a required document has no section.
+export const REQUIRED_DOCUMENTS_ARE_SECTIONED: _EveryRequiredDocumentIsSectioned =
+  true;
+
+/** Which party supplies a given required document, if any. */
+const PARTY_BY_DOCUMENT_TYPE = new Map<
+  ComplianceDocumentType,
+  CompliancePartyType
+>(
+  COMPLIANCE_PARTY_SECTIONS.flatMap((section) =>
+    section.types.map(
+      (type) =>
+        [type, section.party] as [ComplianceDocumentType, CompliancePartyType],
+    ),
+  ),
+);
+
+export function partyForDocumentType(
+  documentType: ComplianceDocumentType,
+): CompliancePartyType | null {
+  return PARTY_BY_DOCUMENT_TYPE.get(documentType) ?? null;
+}
+
+/** The required documents one party is responsible for. */
+export function documentTypesForParty(
+  party: CompliancePartyType,
+): readonly RequiredComplianceDocumentType[] {
+  return (
+    COMPLIANCE_PARTY_SECTIONS.find((section) => section.party === party)
+      ?.types ?? []
+  );
+}
+
+/**
+ * The parties a stage waits on.
+ *
+ * One table rather than a chain of conditions at each call site: the architect
+ * and the council both wait on the surveyor and on nothing else, and if that
+ * ever grows a second dependency it grows here.
+ */
+export const PARTY_PREREQUISITES: Readonly<
+  Record<CompliancePartyType, readonly CompliancePartyType[]>
+> = {
+  [CompliancePartyType.SURVEYOR]: [],
+  [CompliancePartyType.ARCHITECT]: [CompliancePartyType.SURVEYOR],
+  [CompliancePartyType.COUNCIL]: [CompliancePartyType.SURVEYOR],
+};
+
+/**
+ * The trade each party is picked from in the tradie directory.
+ *
+ * Labels, not keys: `Tradie.trade` stores "Surveying", not "SURVEYOR", which is
+ * what TradeTypeCombobox writes.
+ */
+export const PARTY_TRADE_LABEL: Readonly<
+  Record<CompliancePartyType, string | null>
+> = {
+  [CompliancePartyType.SURVEYOR]: "Surveying",
+  [CompliancePartyType.ARCHITECT]: "Architecture",
+  // Not picked from the directory. Nothing is sent to the council from here —
+  // the certificate is ordered on the NSW Planning Portal by hand.
+  [CompliancePartyType.COUNCIL]: null,
+};
+
+/** How each party is named in headings, buttons and thread tabs. */
+export const PARTY_LABEL: Readonly<Record<CompliancePartyType, string>> = {
+  [CompliancePartyType.SURVEYOR]: "Surveyor",
+  [CompliancePartyType.ARCHITECT]: "Architect",
+  [CompliancePartyType.COUNCIL]: "NSW Planning",
+};
+
+/**
+ * What the builder sends the surveyor to start work.
+ *
+ * Not part of the required pack — the certifier is never sent a land deed — but
+ * it is collected on the same file, so it gets a document type and sits in the
+ * vault with everything else.
+ */
+export const LAND_DEED_DOCUMENT = {
+  type: ComplianceDocumentType.LAND_DEED,
+  label: "Land Deed",
+} as const;
+
+/**
+ * The attachments each party's outreach carries.
+ *
+ * The surveyor gets the deed, which is the input to their work. The architect
+ * gets everything the surveyor produced, because that is what they draw
+ * against — prefilled rather than asked for, since by the time an architect can
+ * be engaged those three documents are on the file by definition. The council
+ * is never sent anything.
+ */
+export const PARTY_OUTREACH_ATTACHMENTS: Readonly<
+  Record<CompliancePartyType, readonly ComplianceDocumentType[]>
+> = {
+  [CompliancePartyType.SURVEYOR]: [ComplianceDocumentType.LAND_DEED],
+  [CompliancePartyType.ARCHITECT]: documentTypesForParty(
+    CompliancePartyType.SURVEYOR,
+  ),
+  [CompliancePartyType.COUNCIL]: [],
+};
+
+/**
+ * What an inbound message from each party may be identified as.
+ *
+ * Narrowed per party rather than once, for the same reason the certifier's
+ * inbound set is narrower than the classifier's vocabulary: a surveyor does not
+ * send architectural plans, and letting their covering email be read as one
+ * would overwrite a document that has to come from somewhere else. The land
+ * deed is in the surveyor's set because they routinely quote it back.
+ */
+export const PARTY_INBOUND_DOCUMENT_TYPES: Readonly<
+  Record<CompliancePartyType, readonly ComplianceDocumentType[]>
+> = {
+  [CompliancePartyType.SURVEYOR]: [
+    ...documentTypesForParty(CompliancePartyType.SURVEYOR),
+    ComplianceDocumentType.LAND_DEED,
+  ],
+  [CompliancePartyType.ARCHITECT]: documentTypesForParty(
+    CompliancePartyType.ARCHITECT,
+  ),
+  [CompliancePartyType.COUNCIL]: documentTypesForParty(
+    CompliancePartyType.COUNCIL,
+  ),
+};
+
+/**
+ * Where an admin orders the planning certificate.
+ *
+ * NSW only, for the same reason HBCF_INSURANCE_URL is: every project in the
+ * system is a Sydney-council build today.
+ */
+export const NSW_PLANNING_PORTAL_URL =
+  "https://www.planningportal.nsw.gov.au/planning-certificates";
 
 const REQUIRED_TYPES: ReadonlySet<ComplianceDocumentType> = new Set(
   REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
@@ -147,6 +349,7 @@ const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
       (doc) => [doc.type, doc.label],
     ),
   ),
+  [LAND_DEED_DOCUMENT.type]: LAND_DEED_DOCUMENT.label,
   [ComplianceDocumentType.SIGNED_FEE_PROPOSAL]: "Signed Fee Proposal",
   [ComplianceDocumentType.SIGNED_CDC_FORM]: "Signed CDC Application Form",
   [ComplianceDocumentType.HOME_INSURANCE]: "Home Insurance",
@@ -255,6 +458,11 @@ export const COMPLIANCE_DOCUMENT_SECTIONS: readonly {
     heading: "Required documents",
     description: "The pack sent to the certifier to open the engagement.",
     types: REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
+  },
+  {
+    heading: "Supplied to the surveyor",
+    description: "What the surveyor was given to start work.",
+    types: [LAND_DEED_DOCUMENT.type],
   },
   {
     heading: "Certifier response",

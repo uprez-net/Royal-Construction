@@ -202,6 +202,11 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
     ["architectural", "design", "working drawing"],
     ["full", "final", "complete", "design", "for construction"],
   ],
+  // Not part of the required pack, and never found by discovery -- the deed is
+  // uploaded by hand when a surveyor is engaged. Listed so the record stays
+  // exhaustive over the enum, which is what makes a new document type a
+  // compile error here rather than a silently unmatchable one.
+  [ComplianceDocumentType.LAND_DEED]: [["land deed", "certificate of title", "deed"]],
   [ComplianceDocumentType.INVOICE]: [["invoice", "tax invoice"]],
   [ComplianceDocumentType.FEE_PROPOSAL]: [["fee proposal", "quotation", "quote"]],
   [ComplianceDocumentType.CDC_FORM]: [["cdc"], ["form", "application"]],

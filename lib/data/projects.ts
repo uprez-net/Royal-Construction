@@ -151,7 +151,20 @@ const projectDetailInclude = {
         include: { files: true },
         orderBy: { order: "asc" as const },
       },
-      emails: { orderBy: { sentAt: "asc" as const } },
+      // The certifier's own thread only. The surveyor, architect and council
+      // threads share this table and are told apart by `outreachId`; without
+      // the filter every message on the file landed in the certifier
+      // transcript. Mirrors certifierEngagementInclude in types/compliance.ts,
+      // which this payload has to stay assignable to.
+      emails: {
+        where: { outreachId: null },
+        orderBy: { sentAt: "asc" as const },
+      },
+      outreaches: {
+        include: { emails: { orderBy: { sentAt: "asc" as const } } },
+        orderBy: { createdAt: "asc" as const },
+      },
+      alerts: { orderBy: { createdAt: "desc" as const } },
     },
   },
 } as const;
