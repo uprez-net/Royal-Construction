@@ -237,6 +237,27 @@ export const notificationTemplates: NotificationTemplateFactory = {
       : `/projects/${data.projectId}?activeTab=compliance`,
   }),
 
+  complianceOutreachSent: (data) => ({
+    title: `${data.party} Engaged: ${data.projectName}`,
+    message: `Sent to ${data.contactEmail} with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}. The next move is theirs.`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceOutreachResponseReceived: (data) => ({
+    title: `${data.party} Replied: ${data.projectName}`,
+    message: `${data.attachmentCount} document${data.attachmentCount === 1 ? "" : "s"} received from the ${data.party.toLowerCase()}`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceAlertRaised: (data) => ({
+    title: `Compliance Alert: ${data.projectName}`,
+    // The detail is the raiser's own sentence, which is the whole value of the
+    // notification: "this needs a DA" is actionable, "an alert was raised" is
+    // only a reason to go and look.
+    message: data.detail ? `${data.alertTitle}. ${data.detail}` : data.alertTitle,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
   complianceChecklistExtracted: (data) => ({
     title: `Checklist Ready: ${data.projectName}`,
     message: `The certifier's checklist came to ${data.itemCount} item${data.itemCount === 1 ? "" : "s"}, each now waiting on a document`,

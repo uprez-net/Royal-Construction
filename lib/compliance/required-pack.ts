@@ -1,14 +1,18 @@
 import {
   CertifierEmailDirection,
   CertifierEngagementStatus,
+  ComplianceDocumentType,
 } from "@prisma/client";
 
 import {
+  isOptionalForOutreach,
   isRequiredDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
+  type RequiredComplianceDocument,
 } from "@/constants/complianceDocuments";
 import {
   certifierEmailAttachments,
+  requiresPlanningCertificate,
   type CertifierEngagementDetail,
   type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
@@ -44,16 +48,82 @@ export function sentToCertifierUrls(
   );
 }
 
-/** Whether every required document now has a file behind it. */
+/**
+ * The required documents this particular file still has to produce.
+ *
+ * Normally all six. An open DA_APPROVAL_REQUIRED alert drops the 10.7 planning
+ * certificate: once the architect says the proposal needs development approval
+ * the job is no longer a CDC, and a certificate ordered to hand to a certifier
+ * is not part of the path any more. Asking for it anyway left the pack
+ * permanently one document short and the outreach permanently refused.
+ *
+ * Read by everything that counts the pack — the progress pill, the completion
+ * prompt, the send, and the server-side guard on the send — so that none of
+ * them can hold the file to a document the others have written off.
+ */
+export function applicableRequiredDocuments(
+  engagement: Pick<CertifierEngagementDetail, "alerts">,
+): readonly RequiredComplianceDocument[] {
+  if (requiresPlanningCertificate(engagement)) {
+    return REQUIRED_COMPLIANCE_DOCUMENTS;
+  }
+  return REQUIRED_COMPLIANCE_DOCUMENTS.filter(
+    (required) =>
+      required.type !== ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  );
+}
+
+/**
+ * The documents the first outreach actually waits for.
+ *
+ * The applicable set minus the ones the certifier does not need in order to
+ * start — today that is the full architectural design, which is what the job is
+ * built from rather than what it is assessed on. See OPTIONAL_FOR_OUTREACH.
+ *
+ * Separate from `applicableRequiredDocuments` because the two answer different
+ * questions. That one is "what does this file owe" — which still includes the
+ * full design, and still chases it. This one is "can the certifier be asked
+ * yet".
+ */
+export function outreachRequiredDocuments(
+  engagement: Pick<CertifierEngagementDetail, "alerts">,
+): readonly RequiredComplianceDocument[] {
+  return applicableRequiredDocuments(engagement).filter(
+    (required) => !isOptionalForOutreach(required.type),
+  );
+}
+
+/**
+ * Required documents the outreach is still waiting on.
+ *
+ * The one reading the send guard and the button both take, so a button offering
+ * a send the server then refuses — or refusing one the button offers — cannot
+ * happen.
+ */
+export function missingOutreachDocuments(
+  engagement: CertifierEngagementDetail,
+): readonly RequiredComplianceDocument[] {
+  return outreachRequiredDocuments(engagement).filter(
+    (required) =>
+      !engagement.documents.some(
+        (document) =>
+          document.documentType === required.type && document.files.length > 0,
+      ),
+  );
+}
+
+/**
+ * Whether the pack has everything the certifier needs to be asked.
+ *
+ * Measured against the outreach set, not the whole pack: a file waiting only on
+ * the full architectural design is ready to send, and reading it the other way
+ * left the send unreachable and the completion prompt silent over a document
+ * the certifier was never going to wait for.
+ */
 export function isRequiredPackComplete(
   engagement: CertifierEngagementDetail,
 ): boolean {
-  return REQUIRED_COMPLIANCE_DOCUMENTS.every((required) =>
-    engagement.documents.some(
-      (document) =>
-        document.documentType === required.type && document.files.length > 0,
-    ),
-  );
+  return missingOutreachDocuments(engagement).length === 0;
 }
 
 /**

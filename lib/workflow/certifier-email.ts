@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   CertifierEmailDirection,
   CertifierEngagementStatus,
+  ComplianceAlertSource,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   Prisma,
@@ -10,7 +11,9 @@ import {
 import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
+import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
+import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
 import {
   discardSupersededFiles,
   placeInboundDocument,
@@ -50,7 +53,13 @@ export interface InboundCertifierMessage {
 }
 
 export type InboundCertifierOutcome =
-  | { status: "recorded"; engagementId: string; documents: number }
+  | {
+      status: "recorded";
+      engagementId: string;
+      documents: number;
+      /** Conditions the reply raised — a DA requirement, today. */
+      alerts: number;
+    }
   | { status: "no-matching-engagement" };
 
 /**
@@ -412,6 +421,49 @@ async function classifyStoredDocuments(
 }
 
 /**
+ * Reads the certifier's reply for conditions that reshape the file.
+ *
+ * One today, and it is the certifier's to raise as much as the architect's: a
+ * proposal that falls outside complying development needs a DA, and the
+ * certifier is who actually decides that. Very often they are the first to say
+ * it, because the architect did not spot it — which is exactly the case worth
+ * catching automatically, since nothing else in this workflow reads the body at
+ * all and it would otherwise sit in the thread until somebody opened it.
+ *
+ * Its own step so a model failure retries on its own and cannot cost the
+ * documents, which are already stored and classified by the time this runs.
+ */
+async function raiseAlertsFromCertifierMessage(
+  engagement: { id: string; projectId: string },
+  message: InboundCertifierMessage,
+): Promise<number> {
+  "use step";
+
+  const detected = await detectComplianceAlerts({
+    source: ComplianceAlertSource.CERTIFIER,
+    subject: message.subject,
+    body: message.body,
+  });
+
+  let raised = 0;
+  for (const alert of detected) {
+    const result = await raiseComplianceAlert({
+      projectId: engagement.projectId,
+      engagementId: engagement.id,
+      type: alert.type,
+      raisedBySource: ComplianceAlertSource.CERTIFIER,
+      detail: alert.detail,
+    });
+    // Only a new one counts. The architect may already have said the same
+    // thing, and `raiseComplianceAlert` collapses both onto the row that is
+    // open — one condition, however many people report it.
+    if (result.created) raised += 1;
+  }
+
+  return raised;
+}
+
+/**
  * Moves the engagement to RESPONSE_RECEIVED, writes the audit entry and tells
  * the admins.
  *
@@ -529,6 +581,8 @@ export const processInboundCertifierEmail = async (
     );
   }
 
+  const alerts = await raiseAlertsFromCertifierMessage(engagement, message);
+
   await advanceAndNotify(
     engagement,
     message,
@@ -540,5 +594,6 @@ export const processInboundCertifierEmail = async (
     status: "recorded",
     engagementId: engagement.id,
     documents: stored.length,
+    alerts,
   };
 };

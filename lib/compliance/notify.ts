@@ -101,6 +101,9 @@ type ComplianceNotificationPayloads = Pick<
   NotificationDataMap,
   | "certifierOutreachSent"
   | "certifierResponseReceived"
+  | "complianceOutreachSent"
+  | "complianceOutreachResponseReceived"
+  | "complianceAlertRaised"
   | "complianceChecklistExtracted"
   | "complianceDocumentRejected"
   | "complianceReviewSent"

@@ -4,6 +4,10 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ContactPicker,
+  type ContactOption,
+} from "@/components/modals/compliance/contact-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TRADIE_TYPES } from "@/constants/tradieTypes";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -32,11 +37,18 @@ type StartCertifierEngagementModalProps = {
 /**
  * Opens the engagement.
  *
- * The certifier's email is the one field with no sensible default — everything
- * afterwards is a thread with that address, and there is nowhere else in the
- * system it can be read from today. The address is prefilled from the project
- * because it is what goes in every subject line, and getting it wrong is
- * awkward to correct once the thread is running.
+ * The certifier is picked from the tradie directory rather than typed in. Every
+ * message on this job goes to that address and every reply is correlated back
+ * through it, so a typo is not a typo — it is a thread that silently never
+ * answers, discovered weeks later when a document that was supposed to arrive
+ * has not. The directory already holds the address, checked, and the same
+ * picker engages the surveyor and the architect.
+ *
+ * The site address stays a free-text field, prefilled from the project. It is
+ * the human half of every subject line and the fallback the inbound
+ * correlation runs on when a certifier's office retypes the subject, so it has
+ * to be exactly what they will call the job — which is not always what the
+ * project record calls it.
  */
 export function StartCertifierEngagementModal({
   projectId,
@@ -53,22 +65,21 @@ export function StartCertifierEngagementModal({
   );
   const isPending = mutation.status === "pending";
 
-  const [certifierName, setCertifierName] = useState("");
-  const [certifierEmail, setCertifierEmail] = useState("");
-  const [certifierPhone, setCertifierPhone] = useState("");
+  const [certifier, setCertifier] = useState<ContactOption | null>(null);
   const [subjectAddress, setSubjectAddress] = useState(defaultAddress ?? "");
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!certifier) return;
 
     try {
       await dispatch(
         startCertifierEngagement({
           projectId,
           subjectAddress: subjectAddress.trim(),
-          certifierEmail: certifierEmail.trim().toLowerCase(),
-          certifierName: certifierName.trim() || undefined,
-          certifierPhone: certifierPhone.trim() || undefined,
+          certifierEmail: certifier.email.trim().toLowerCase(),
+          certifierName: certifier.name || undefined,
+          certifierPhone: certifier.phone ?? undefined,
         }),
       ).unwrap();
       toast.success("Certifier engagement started.");
@@ -96,34 +107,13 @@ export function StartCertifierEngagementModal({
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="certifier-email">Certifier email</Label>
-              <Input
-                id="certifier-email"
-                type="email"
-                required
-                value={certifierEmail}
-                onChange={(event) => setCertifierEmail(event.target.value)}
-                placeholder="certifier@example.com.au"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="certifier-name">Certifier name</Label>
-              <Input
-                id="certifier-name"
-                value={certifierName}
-                onChange={(event) => setCertifierName(event.target.value)}
-                placeholder="Optional"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="certifier-phone">Certifier phone</Label>
-              <Input
-                id="certifier-phone"
-                value={certifierPhone}
-                onChange={(event) => setCertifierPhone(event.target.value)}
-                placeholder="Optional"
+              <Label htmlFor="certifier-contact">Certifier</Label>
+              <ContactPicker
+                trade={TRADIE_TYPES.CERTIFIER}
+                label="Certifier"
+                value={certifier}
+                onChange={setCertifier}
+                disabled={isPending}
               />
             </div>
 
@@ -134,6 +124,7 @@ export function StartCertifierEngagementModal({
                 required
                 value={subjectAddress}
                 onChange={(event) => setSubjectAddress(event.target.value)}
+                disabled={isPending}
               />
               <p className="text-xs text-muted-foreground">
                 Appears in the subject line so the certifier can tell this job
@@ -153,7 +144,7 @@ export function StartCertifierEngagementModal({
             </Button>
             <Button
               type="submit"
-              disabled={isPending || !certifierEmail.trim() || !subjectAddress.trim()}
+              disabled={isPending || !certifier || !subjectAddress.trim()}
             >
               {isPending ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />

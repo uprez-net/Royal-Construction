@@ -1,4 +1,12 @@
-import { ComplianceDocumentType, type Prisma } from "@prisma/client";
+import {
+  ComplianceAlertStatus,
+  ComplianceAlertType,
+  ComplianceDocumentType,
+  ComplianceOutreachMode,
+  ComplianceOutreachStatus,
+  CompliancePartyType,
+  type Prisma,
+} from "@prisma/client";
 
 /**
  * What a compliance read pulls in.
@@ -13,7 +21,28 @@ export const certifierEngagementInclude = {
     include: { files: true },
     orderBy: [{ order: "asc" }, { createdAt: "asc" }],
   },
-  emails: { orderBy: { sentAt: "asc" } },
+  /**
+   * The certifier's own thread, and only it.
+   *
+   * The surveyor, architect and council threads share this table — same shape,
+   * same components render them — and are told apart by `outreachId`. Without
+   * the filter every message on the file landed in the certifier transcript,
+   * which is both wrong and, on a job with three live threads, unreadable.
+   */
+  emails: { where: { outreachId: null }, orderBy: { sentAt: "asc" } },
+  outreaches: {
+    include: { emails: { orderBy: { sentAt: "asc" } } },
+    orderBy: { createdAt: "asc" },
+  },
+  /**
+   * Open first, then newest.
+   *
+   * Resolved alerts stay on the read rather than being filtered out here: the
+   * tab shows what was raised and settled as well as what is outstanding, and
+   * a second query to find that out would be a second query on every render of
+   * the project page.
+   */
+  alerts: { orderBy: [{ status: "asc" }, { createdAt: "desc" }] },
 } satisfies Prisma.CertifierEngagementInclude;
 
 /** The engagement plus everything the Compliance tab renders, in one read. */
@@ -25,6 +54,95 @@ export type ComplianceDocumentWithFiles =
   CertifierEngagementDetail["documents"][number];
 
 export type CertifierEmailRecord = CertifierEngagementDetail["emails"][number];
+
+/** One party's engagement plus its own mail trail. */
+export type ComplianceOutreachDetail =
+  CertifierEngagementDetail["outreaches"][number];
+
+export type ComplianceAlertRecord =
+  CertifierEngagementDetail["alerts"][number];
+
+/**
+ * The outreach for one party, or undefined.
+ *
+ * There is at most one per party per file — the unique index says so — but
+ * every caller was writing the same `.find` and the same enum comparison, and
+ * a caller that forgets the file may have none at all is the caller that
+ * crashes the tab.
+ */
+export function outreachForParty(
+  engagement: Pick<CertifierEngagementDetail, "outreaches"> | null | undefined,
+  party: CompliancePartyType,
+): ComplianceOutreachDetail | undefined {
+  return engagement?.outreaches.find((outreach) => outreach.party === party);
+}
+
+/**
+ * Whether a party has been dealt with, one way or the other.
+ *
+ * Deliberately not "did the mail go out". A file where the client arrived with
+ * their own survey has no mail and is nonetheless finished with the surveyor,
+ * which is the whole point of SELF_SUPPLIED.
+ *
+ * Equally deliberately not "is there a row". An OUTREACH row still sitting at
+ * NOT_SENT is what a send that threw after writing its row leaves behind, and
+ * counting that as engaged unlocked the section, hid the button that would have
+ * retried it, and told the architect the surveyor was under way — over a
+ * surveyor who had never been written to at all.
+ */
+export function isPartyEngaged(
+  engagement: Pick<CertifierEngagementDetail, "outreaches"> | null | undefined,
+  party: CompliancePartyType,
+): boolean {
+  const outreach = outreachForParty(engagement, party);
+  if (!outreach) return false;
+  return (
+    outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
+    outreach.status !== ComplianceOutreachStatus.NOT_SENT
+  );
+}
+
+/** Alerts still waiting on somebody. */
+export function openAlerts(
+  engagement: Pick<CertifierEngagementDetail, "alerts"> | null | undefined,
+): ComplianceAlertRecord[] {
+  return (engagement?.alerts ?? []).filter(
+    (alert) => alert.status === ComplianceAlertStatus.OPEN,
+  );
+}
+
+/**
+ * Whether an alert of this type is open on the file.
+ *
+ * The shape most callers want, because an alert's effect on the flow lasts
+ * exactly as long as it is open: a DA_APPROVAL_REQUIRED that has been resolved
+ * is history, and history must not still be suppressing the 10.7 certificate.
+ */
+export function hasOpenAlert(
+  engagement: Pick<CertifierEngagementDetail, "alerts"> | null | undefined,
+  type: ComplianceAlertType,
+): boolean {
+  return openAlerts(engagement).some((alert) => alert.type === type);
+}
+
+/**
+ * Whether the planning certificate is still part of this file.
+ *
+ * An open DA_APPROVAL_REQUIRED takes it out: a development application is
+ * assessed by the council itself, so ordering a 10.7 certificate to hand to a
+ * certifier is no longer the path this job is on. It comes back if the alert
+ * is resolved as not applying after all.
+ *
+ * One predicate rather than the condition repeated, because it is read by the
+ * section that renders the row, the progress count beside it, and the outreach
+ * that refuses to send an incomplete pack — and any two of those disagreeing
+ * strands the engagement.
+ */
+export function requiresPlanningCertificate(
+  engagement: Pick<CertifierEngagementDetail, "alerts"> | null | undefined,
+): boolean {
+  return !hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED);
+}
 
 /**
  * One attachment as stored on `CertifierEmail.attachments`.

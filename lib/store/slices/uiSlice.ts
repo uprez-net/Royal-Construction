@@ -40,6 +40,8 @@ export type ModalType =
   | "certifierSendSignedCopies"
   | "complianceComplete"
   | "complianceReject"
+  | "connectComplianceParty"
+  | "resolveComplianceAlert"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

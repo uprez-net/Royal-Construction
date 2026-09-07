@@ -26,16 +26,24 @@ import {
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
-import type { ComplianceDocumentType, File as ProjectFiles } from "@prisma/client"
+import type {
+  ComplianceDocumentType,
+  CompliancePartyType,
+  File as ProjectFiles,
+} from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
 import type { CertifierEngagementDetail } from "@/types/compliance";
 import type {
   CertifierReplyInput,
   ClassifyReceivedDocumentInput,
   ComplianceDocumentUploadInput,
+  PartyReplyInput,
+  PartySelfSuppliedInput,
+  ResolveComplianceAlertInput,
   ResolveComplianceDocumentInput,
   SetComplianceDocumentNotRequiredInput,
   StartEngagementInput,
+  StartPartyOutreachInput,
 } from "@/utils/validators/compliance";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
 import { createProjectWithLeadAction, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
@@ -359,6 +367,20 @@ export const complianceScope = {
   /** A plain re-read. Writes nothing, so nothing should block on it. */
   refresh: "refresh" as ComplianceScope,
   /**
+   * One party's engagement — the outreach that opens it, or the note that the
+   * client supplied their documents instead.
+   *
+   * Keyed by party rather than shared, because the three sections are on screen
+   * together: engaging a surveyor must not freeze the architect panel beside
+   * it, and the two writes cannot collide anyway.
+   */
+  party: (party: CompliancePartyType): ComplianceScope => `party:${party}`,
+  /** One message on one party's thread. */
+  partyReply: (outreachId: string): ComplianceScope =>
+    `party-reply:${outreachId}`,
+  /** Closing one alert. */
+  alert: (alertId: string): ComplianceScope => `alert:${alertId}`,
+  /**
    * One document row.
    *
    * Keyed by id where the row has one and by type where it does not, because
@@ -621,6 +643,136 @@ export const refreshCertifierEngagement = createAsyncThunk<
   }
 });
 
+// ---------------------------------------------------------------------------
+// The other parties on the compliance file
+// ---------------------------------------------------------------------------
+
+/**
+ * Engages a surveyor or an architect, and sends their opening email.
+ *
+ * `mode` rides in the body rather than in the path: the route is one decision
+ * made at one moment from one panel — write to a surveyor, or record that the
+ * client brought their own survey — and two endpoints that must never both
+ * succeed on the same file is a race with nothing but ordering to stop it.
+ */
+export const startPartyOutreach = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & StartPartyOutreachInput,
+  { rejectValue: string }
+>("projects/startPartyOutreach", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/parties",
+      jsonPost({ mode: "OUTREACH", ...payload }),
+      "Unable to engage this party",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to engage this party",
+    );
+  }
+});
+
+/** Records that the client already had this party's documents. */
+export const recordPartySelfSupplied = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & PartySelfSuppliedInput,
+  { rejectValue: string }
+>(
+  "projects/recordPartySelfSupplied",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/parties",
+        jsonPost({ mode: "SELF_SUPPLIED", ...payload }),
+        "Unable to record these as client supplied",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record these as client supplied",
+      );
+    }
+  },
+);
+
+/** One message on one party's thread. */
+export const sendPartyReply = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & PartyReplyInput,
+  { rejectValue: string }
+>("projects/sendPartyReply", async ({ projectId, ...payload }, thunkApi) => {
+  try {
+    return await replaceEngagement(
+      projectId,
+      "/parties/reply",
+      jsonPost(payload),
+      "Unable to send the message",
+    );
+  } catch (error) {
+    return thunkApi.rejectWithValue(
+      error instanceof Error ? error.message : "Unable to send the message",
+    );
+  }
+});
+
+/** Closes an alert, with the note that says what closed it. */
+export const resolveComplianceAlert = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string; alertId: string } & ResolveComplianceAlertInput,
+  { rejectValue: string }
+>(
+  "projects/resolveComplianceAlert",
+  async ({ projectId, alertId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/alerts/${alertId}`,
+        jsonPost(payload),
+        "Unable to resolve the alert",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to resolve the alert",
+      );
+    }
+  },
+);
+
+/**
+ * Asks the surveyor for a fresh title search.
+ *
+ * Filed under the alert's own scope, like the resolve: the two are the pair of
+ * things you can do to one alert, and a chase in flight has to disable the
+ * resolve beside it.
+ */
+export const requestUpdatedTitleSearch = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string; alertId: string },
+  { rejectValue: string }
+>(
+  "projects/requestUpdatedTitleSearch",
+  async ({ projectId, alertId }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/alerts/${alertId}/request-update`,
+        { method: "POST" },
+        "Unable to send the request to the surveyor",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the request to the surveyor",
+      );
+    }
+  },
+);
+
 /** What every compliance thunk resolves to: the engagement, wholesale. */
 type ComplianceResult = {
   projectId: string;
@@ -658,6 +810,21 @@ const complianceOperations = [
   complianceOperation(identifyComplianceDocument, complianceScope.document),
   complianceOperation(sendComplianceForReview, () => complianceScope.review),
   complianceOperation(refreshCertifierEngagement, () => complianceScope.refresh),
+  complianceOperation(startPartyOutreach, (arg) =>
+    complianceScope.party(arg.party),
+  ),
+  complianceOperation(recordPartySelfSupplied, (arg) =>
+    complianceScope.party(arg.party),
+  ),
+  complianceOperation(sendPartyReply, (arg) =>
+    complianceScope.partyReply(arg.outreachId),
+  ),
+  complianceOperation(resolveComplianceAlert, (arg) =>
+    complianceScope.alert(arg.alertId),
+  ),
+  complianceOperation(requestUpdatedTitleSearch, (arg) =>
+    complianceScope.alert(arg.alertId),
+  ),
 ];
 
 const complianceThunks = complianceOperations.map((operation) => operation.thunk);

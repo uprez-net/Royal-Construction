@@ -212,9 +212,9 @@ export async function getCachedTradieCoordinationDashboard(
   return getTradieCoordinationDashboard(query);
 }
 
-export async function getTradiesForLookup(limit = 20, search = "") {
+export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
   try {
-    const where = search
+    const search_ = search
       ? {
         OR: [
           { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
@@ -224,11 +224,29 @@ export async function getTradiesForLookup(limit = 20, search = "") {
       }
       : undefined;
 
+    // ANDed with the search rather than replacing it, so a compliance picker
+    // can narrow to surveyors and still let the user type a name. Exact,
+    // because `trade` stores the label the combobox wrote.
+    const where =
+      trade
+        ? { ...(search_ ?? {}), trade: { equals: trade, mode: Prisma.QueryMode.insensitive } }
+        : search_;
+
     const tradies = await prisma.tradie.findMany({
       where,
       take: limit,
       orderBy: { name: "asc" },
-      select: { id: true, name: true, abn: true, phone: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        abn: true,
+        phone: true,
+        email: true,
+        trade: true,
+        // The picker offers these alongside the primary address: a firm's job
+        // inbox is routinely not the address on their directory row.
+        additionalEmails: true,
+      },
     });
 
     return tradies;

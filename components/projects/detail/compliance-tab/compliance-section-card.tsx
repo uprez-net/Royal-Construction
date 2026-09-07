@@ -49,6 +49,17 @@ type ComplianceSectionCardProps = {
   locked?: boolean;
   /** What has to happen before the block opens. Shown under the lock. */
   lockMessage?: string;
+  /**
+   * Controls offered on the lock itself.
+   *
+   * A locked block is normally something to wait for — the certifier's reply
+   * lands there or it does not. The party sections are the exception: they are
+   * locked because nobody has been engaged yet, and engaging them is the
+   * reader's move to make. Putting that button anywhere but on the panel it
+   * unlocks meant looking at a blurred block with no indication that the thing
+   * which opens it was a scroll away.
+   */
+  lockActions?: ReactNode;
   className?: string;
   /**
    * Pinned under the scrolling body — the block's own action, such as "Find
@@ -103,6 +114,7 @@ export function ComplianceSectionCard({
   isActive = false,
   locked = false,
   lockMessage,
+  lockActions,
   className,
   footer,
   children,
@@ -208,16 +220,26 @@ export function ComplianceSectionCard({
           <LockedPlaceholder />
 
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/30 px-6 text-center backdrop-blur-[3px]">
-            <span className="flex size-9 items-center justify-center rounded-full border border-border bg-background/90 shadow-sm">
-              <Lock
-                className="size-4 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </span>
+            {/* The padlock is dropped when there are controls here. It says
+                "wait", and a panel offering the button that opens it is saying
+                the opposite. */}
+            {lockActions ? null : (
+              <span className="flex size-9 items-center justify-center rounded-full border border-border bg-background/90 shadow-sm">
+                <Lock
+                  className="size-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </span>
+            )}
             {lockMessage ? (
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {lockMessage}
               </p>
+            ) : null}
+            {lockActions ? (
+              <div className="flex flex-col items-center gap-1.5">
+                {lockActions}
+              </div>
             ) : null}
           </div>
         </div>

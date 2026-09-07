@@ -12,10 +12,12 @@ import {
   isPublicMailDomain,
   subjectMentionsSiteAddress,
 } from '@/lib/graph/certifier-subject';
+import { extractPartyRefToken } from '@/lib/graph/party-subject';
 import { isMachineGenerated } from '@/lib/graph/offer-reply-classify';
 import { normalizeEmailAddress } from '@/utils/formatters';
-import { CertifierEmailDirection } from '@prisma/client';
+import { CertifierEmailDirection, CompliancePartyType } from '@prisma/client';
 import { processInboundCertifierEmail } from '@/lib/workflow/certifier-email';
+import { processInboundPartyEmail } from '@/lib/workflow/party-email';
 import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
 import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
 import { processInboundLead } from '@/lib/workflow/lead-extraction';
@@ -88,6 +90,108 @@ interface CertifierMatch {
   /** Null only for a token with no engagement behind it. */
   engagement: { id: string } | null;
   matchedOn: 'token' | 'address';
+}
+
+interface PartyMatch {
+  refToken: string;
+  /** Null only for a token with no outreach behind it. */
+  outreach: { id: string; party: CompliancePartyType } | null;
+  matchedOn: 'token' | 'address';
+}
+
+/**
+ * The compliance outreach an inbound message belongs to, if any.
+ *
+ * The same two correlations the certifier lookup makes, in the same order and
+ * for the same reasons — our own token where it survived the round trip, the
+ * site address in the subject where it did not — because a surveyor's office
+ * mangles a subject exactly the way a certifier's does.
+ *
+ * Two things differ. The address route matches against the party's own
+ * contactEmail rather than a certifier's, and it also considers the NSW
+ * Planning Portal address: the council outreach is never written to, so it has
+ * no outbound message to prove the address was ever told to anybody, and the
+ * "we have talked to them" guard the certifier route uses would exclude it
+ * permanently. The portal address is configured rather than picked, which is
+ * what makes that safe — the sender is not being inferred, it is known.
+ */
+async function matchPartyOutreach(
+  subject: string | undefined | null,
+  fromEmail: string | undefined | null,
+): Promise<PartyMatch | null> {
+  const token = extractPartyRefToken(subject);
+  if (token) {
+    const outreach = await prisma.complianceOutreach.findUnique({
+      where: { refToken: token },
+      select: { id: true, party: true },
+    });
+    return { refToken: token, outreach, matchedOn: 'token' };
+  }
+
+  const sender = normalizeEmailAddress(fromEmail ?? '');
+  const domain = sender.slice(sender.indexOf('@') + 1);
+  if (!domain) {
+    return null;
+  }
+
+  const planningPortalAddress = normalizeEmailAddress(
+    process.env.NSW_PLANNING_PORTAL_EMAIL ?? '',
+  );
+  const isPlanningPortal =
+    planningPortalAddress.length > 0 && sender === planningPortalAddress;
+
+  const candidates = await prisma.complianceOutreach.findMany({
+    where: isPlanningPortal
+      ? // The portal writes to us without ever having been written to, so the
+        // only thing correlating its mail is the address in the subject. Held
+        // to council rows so a portal notification cannot be filed against a
+        // surveyor thread on the same job.
+        { party: CompliancePartyType.COUNCIL }
+      : {
+          contactEmail: isPublicMailDomain(domain)
+            ? // Nothing about "@gmail.com" says this is the surveyor rather
+              // than the homeowner writing about the same site, so the whole
+              // address has to match. Same trade the certifier route makes: a
+              // missed correlation is a message in the lead queue, a wrong one
+              // files a client's enquiry as compliance.
+              { equals: sender, mode: 'insensitive' }
+            : { endsWith: `@${domain}`, mode: 'insensitive' },
+          // An outreach whose mail has never gone out has not told this party
+          // the address, so a message quoting it cannot be a reply to it.
+          emails: { some: { direction: CertifierEmailDirection.OUTBOUND } },
+        },
+    select: {
+      id: true,
+      party: true,
+      refToken: true,
+      engagement: { select: { subjectAddress: true } },
+    },
+  });
+
+  const matches = candidates.filter((candidate) =>
+    subjectMentionsSiteAddress(subject, candidate.engagement.subjectAddress),
+  );
+
+  if (matches.length !== 1) {
+    if (matches.length > 1) {
+      // One surveyor, two of our jobs, and a subject that reads as both — two
+      // units of the same address, most likely. Picking one files documents
+      // against the wrong project, which is worse than filing them nowhere.
+      console.log(
+        `  Compliance party address match ambiguous for "${subject ?? ''}": ${matches
+          .map((match) => match.refToken)
+          .join(', ')}`,
+      );
+    }
+    return null;
+  }
+
+  const [match] = matches;
+  return {
+    refToken: match.refToken,
+    outreach: { id: match.id, party: match.party },
+    matchedOn: 'address',
+  };
 }
 
 /**
@@ -288,6 +392,64 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 contentType: message.headers.contentType ?? null,
               }),
             );
+            continue;
+          }
+
+          // Compliance party thread: the surveyor, the architect, or the NSW
+          // Planning Portal. Checked before the certifier because the two
+          // lookups are exclusive by construction — a subject carries at most
+          // one of our tokens, and an address match is held to rows of one
+          // kind — so the order is about cost rather than precedence: this one
+          // is the cheaper miss, a single indexed lookup on a token that is
+          // absent from almost every message.
+          const partyMatch = await matchPartyOutreach(
+            message.subject,
+            message.from,
+          );
+          if (partyMatch) {
+            const { refToken: partyToken, outreach } = partyMatch;
+
+            if (!outreach) {
+              console.log(`  Compliance party ${partyToken}: no matching outreach`);
+            } else if (isMachineGenerated(message.headers)) {
+              // A bounce quotes the original subject, so "Undeliverable: …
+              // [RCSURV-…]" correlates perfectly and is not the surveyor
+              // replying. Logged rather than dropped silently: it is the only
+              // trace of a failed delivery today.
+              console.log(
+                `  Compliance party ${partyToken}: auto-generated`,
+                JSON.stringify({
+                  from: message.from,
+                  subject: message.subject,
+                  autoSubmitted: message.headers.autoSubmitted ?? null,
+                  returnPath: message.headers.returnPath ?? null,
+                  contentType: message.headers.contentType ?? null,
+                }),
+              );
+            } else {
+              // Same reasoning as the certifier branch below: downloading a
+              // survey set, OCR, the classification call and the alert read are
+              // the slow, failure-prone half, and Graph has already been told
+              // 202. `start` only enqueues, so nothing here waits on it.
+              const run = await start(processInboundPartyEmail, [
+                {
+                  messageId: message.id,
+                  refToken: partyToken,
+                  subject: message.subject ?? '',
+                  body: content,
+                  from: message.from,
+                  to:
+                    message.to?.[0] ??
+                    process.env.BUSINESS_EMAIL ??
+                    'info@royalconstructions.com.au',
+                  receivedDateTime: message.receivedDateTime,
+                },
+              ]);
+              console.log(
+                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} ` +
+                  `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
+              );
+            }
             continue;
           }
 

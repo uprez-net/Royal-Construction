@@ -272,6 +272,31 @@ export const notificationSchemas = {
         checklistDocumentId: z.string().optional(),
     }),
 
+    complianceOutreachSent: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        /** "Surveyor", "Architect" -- already in reading form. */
+        party: z.string(),
+        contactEmail: z.string(),
+        attachmentCount: z.number(),
+    }),
+
+    complianceOutreachResponseReceived: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        party: z.string(),
+        attachmentCount: z.number(),
+    }),
+
+    complianceAlertRaised: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        alertId: z.string(),
+        alertTitle: z.string(),
+        /** The raiser's own words, where the message carried any. */
+        detail: z.string(),
+    }),
+
     complianceChecklistExtracted: z.object({
         projectId: z.string(),
         projectName: z.string(),
