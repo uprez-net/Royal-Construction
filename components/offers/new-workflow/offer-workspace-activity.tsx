@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 import {
   CheckCircle2,
   Clock,
@@ -129,7 +130,7 @@ export function OfferWorkspaceActivity({
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className={GROUP_HEADING_CLASS}>
           Negotiation activity
         </p>
         <Button

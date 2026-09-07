@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { SignerState } from "@/lib/offer/signing-status";
 import { formatCurrency } from "./offer-workspace-format";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // Per-signer state. Now sourced from real per-recipient DocuSign status written
 // by the Connect webhook (#121/#123) rather than hard-coded: "awaiting" is the
@@ -57,7 +58,7 @@ export function SigningTracker({
 }) {
   return (
     <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className={GROUP_HEADING_CLASS}>
         DocuSign envelope
       </p>
       {recipients.map((recipient) => {
