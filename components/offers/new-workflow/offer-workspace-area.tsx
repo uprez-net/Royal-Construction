@@ -15,10 +15,16 @@ import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Info, Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
-import { CountField } from "./offer-workspace-fields";
+import {
+  CountField,
+  Field,
+  FieldLabel,
+  GROUP_HEADING_CLASS,
+} from "./offer-workspace-fields";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 import { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
+import { cn } from "@/lib/utils";
 
 type AreaCalculatorPanelProps = {
   // The offer's own calculation rules. Without this the on-screen frame figures
@@ -32,21 +38,6 @@ type AreaCalculatorPanelProps = {
   readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
 };
-
-function Field({
-  children,
-  className,
-  label,
-}: PropsWithChildren<{ readonly className?: string; readonly label: string }>) {
-  return (
-    <label className={className}>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
 
 function AreaField({
   label,
@@ -74,7 +65,6 @@ function AreaField({
     </Field>
   );
 }
-
 
 export function AreaCalculatorPanel({
   calcVersion,
@@ -123,7 +113,7 @@ export function AreaCalculatorPanel({
       <CardContent className="grid gap-5 pt-4">
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h4 className={GROUP_HEADING_CLASS}>
               Floor areas · from Job setup
             </h4>
             <span className="text-sm font-medium">
@@ -143,7 +133,7 @@ export function AreaCalculatorPanel({
           </dl>
         </section>
         <section className="grid grid-cols-3 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-3">
+          <h4 className={cn("col-span-3", GROUP_HEADING_CLASS)}>
             Kitchen & linens & Showers
           </h4>
           <AreaField
@@ -383,9 +373,7 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+      <FieldLabel>{label}</FieldLabel>
       <Input
         min="0"
         placeholder="0"

@@ -40,10 +40,15 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useState, type PropsWithChildren } from "react";
+import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
-import { CountField } from "./offer-workspace-fields";
+import {
+  CountField,
+  FIELD_LABEL_CLASS,
+  Field,
+  GROUP_HEADING_CLASS,
+} from "./offer-workspace-fields";
 
 type JobSetupPanelProps = {
   // v1 offers keep the field exactly where it was; only v2 couples the granny
@@ -275,7 +280,7 @@ export function JobSetupPanel({
               onChange={(balconySqm) => onJobChange({ balconySqm })}
             />
             <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <p className={FIELD_LABEL_CLASS}>
                 Total building area
               </p>
               <p className="font-mono text-lg font-semibold">{totalArea} sqm</p>
@@ -404,7 +409,6 @@ function SpecFields({
   );
 }
 
-
 // Two-button Yes/No selector, matching the tender gate's YesNoQuestion
 // (deliberately not RadioGroup, so both surfaces read alike). hasGrannyHome is a
 // plain boolean rather than tri-state, so "No" is the initial selection.
@@ -421,7 +425,9 @@ function YesNoQuestion({
     "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark";
   return (
     <div className="grid gap-2">
-      <p className="text-sm font-medium text-foreground">{label}</p>
+      {/* A yes/no question labels its control exactly as Field does, so it
+          reads at the field level rather than a step above it. */}
+      <p className={FIELD_LABEL_CLASS}>{label}</p>
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
@@ -664,7 +670,7 @@ function OwnersSection({
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className={GROUP_HEADING_CLASS}>
           Owners
         </span>
         <Button
@@ -813,7 +819,7 @@ function OwnersSection({
               </div>
               <div className="grid gap-2 rounded-md border border-border/60 bg-background/60 p-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className={GROUP_HEADING_CLASS}>
                     Director signatories
                   </span>
                   <Button
@@ -930,21 +936,6 @@ function PrefillBanner({
         </p>
       ) : null}
     </div>
-  );
-}
-
-function Field({
-  children,
-  className,
-  label,
-}: PropsWithChildren<{ readonly className?: string; readonly label: string }>) {
-  return (
-    <label className={className}>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }
 

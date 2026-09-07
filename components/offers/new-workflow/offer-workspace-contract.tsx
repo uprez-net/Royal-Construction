@@ -42,6 +42,8 @@ import {
   type OfferSignerStatus,
 } from "@/lib/offer/signing-status";
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
+import { cn } from "@/lib/utils";
 
 type ContractPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -239,7 +241,7 @@ function ContractParticularsForm({
     );
     return (
       <section className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-4">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <h4 className={GROUP_HEADING_CLASS}>
           Contract particulars
         </h4>
         {filled.length === 0 ? (
@@ -288,7 +290,7 @@ function ContractParticularsForm({
         }
         return (
           <div key={group} className="grid gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className={GROUP_HEADING_CLASS}>
               {title}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -584,7 +586,7 @@ function ContractPreview({
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
           Progress payments
         </p>
         <div className="overflow-hidden rounded-lg border border-border/70">

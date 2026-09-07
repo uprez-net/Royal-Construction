@@ -41,6 +41,7 @@ import {
 } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
 import { WorkbookImportControl } from "./offer-workspace-import";
+import { FIELD_LABEL_CLASS } from "./offer-workspace-fields";
 
 type CostSchedulePanelProps = {
   // Which rows have their building-sequence editor open. Owned by the screen so
@@ -517,7 +518,7 @@ function SequenceStepEditor({
   return (
     <div className="grid gap-3 px-4 py-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className={FIELD_LABEL_CLASS}>
           Building sequence · {count} {count === 1 ? "step" : "steps"}
         </p>
         <p className="text-xs text-muted-foreground/80">

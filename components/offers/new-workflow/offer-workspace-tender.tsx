@@ -33,6 +33,8 @@ import {
   type OfferSignerStatus,
 } from "@/lib/offer/signing-status";
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
+import { cn } from "@/lib/utils";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -474,7 +476,7 @@ function TenderPreview({
       />
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
           Payment schedule
         </p>
         <div className="overflow-hidden rounded-lg border border-border/70">
@@ -544,7 +546,7 @@ function TenderList({
 }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
         {title}
       </p>
       {items.length === 0 ? (
