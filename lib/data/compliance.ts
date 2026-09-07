@@ -32,8 +32,10 @@ import {
   placeInboundDocument,
 } from "@/lib/compliance/document-replacement";
 import {
+  applicableRequiredDocuments,
   canSendRequiredPack,
   hasSentRequiredPack,
+  missingOutreachDocuments,
   sentToCertifierUrls,
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
@@ -248,15 +250,29 @@ async function recordOutboundEmail(params: {
 function outreachBody(
   certifierName: string | null,
   subjectAddress: string,
+  /**
+   * Documents the pack is going out without.
+   *
+   * Only ever the ones the send does not wait for. Named in the mail rather
+   * than left out silently: a certifier who can see the full design is coming
+   * assesses the CDC pathway off what is attached and says so, while one who
+   * simply finds it absent assumes the pack is incomplete and waits for it.
+   */
+  pending: readonly string[],
 ): string {
   const greeting = certifierName ? `Hi ${certifierName},` : "Hi,";
   return [
     `<p>${greeting}</p>`,
     `<p>Please find attached the documentation for <strong>${subjectAddress}</strong>.</p>`,
+    pending.length > 0
+      ? `<p>${listSentence(pending)} ${pending.length === 1 ? "is" : "are"} still being finalised. Could you confirm whether the proposal can proceed as a CDC on what is attached, and let us know anything further you need?</p>`
+      : "",
     "<p>Could you send through your fee proposal, the CDC application form and your document checklist when you have a moment?</p>",
     "<p>Please keep the reference in the subject line on any reply, so it stays with this job.</p>",
     "<p>Kind regards,<br/>Royal Constructions</p>",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /**
@@ -280,17 +296,32 @@ export async function sendCertifierOutreach(engagementId: string) {
     throw new Error("This engagement has no certifier email address.");
   }
 
-  const missing = REQUIRED_COMPLIANCE_DOCUMENTS.filter((required) => {
-    const doc = engagement.documents.find(
-      (candidate) => candidate.documentType === required.type,
-    );
-    return !doc || doc.files.length === 0;
-  });
+  // Measured against the outreach set rather than the whole pack. The full
+  // architectural design is what the job is built from, not what it is assessed
+  // on, so a certifier can be asked whether the proposal qualifies as complying
+  // development without it -- and holding the send until it existed meant the
+  // one question worth asking early was the last one asked. The same reading
+  // the tab's send button takes, so the two cannot disagree about what is
+  // missing.
+  const missing = missingOutreachDocuments(engagement);
   if (missing.length > 0) {
     throw new Error(
       `Still missing ${missing.map((doc) => doc.label).join(", ")}.`,
     );
   }
+
+  // Wanted on the file, not attached to this send. Named in the mail so the
+  // certifier reads the pack as deliberately partial rather than incomplete.
+  const pending = applicableRequiredDocuments(engagement)
+    .filter(
+      (required) =>
+        !engagement.documents.some(
+          (document) =>
+            document.documentType === required.type &&
+            document.files.length > 0,
+        ),
+    )
+    .map((required) => required.label);
 
   const requiredTypes = new Set<ComplianceDocumentType>(
     REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
@@ -316,7 +347,11 @@ export async function sendCertifierOutreach(engagementId: string) {
     engagement.refToken,
     engagement.subjectAddress,
   );
-  const body = outreachBody(engagement.certifierName, engagement.subjectAddress);
+  const body = outreachBody(
+    engagement.certifierName,
+    engagement.subjectAddress,
+    pending,
+  );
   const attachments = await Promise.all(files.map(toEmailAttachment));
 
   await client.sendMail({

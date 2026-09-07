@@ -68,7 +68,7 @@ export function StartCertifierEngagementModal({
   const [certifier, setCertifier] = useState<ContactOption | null>(null);
   const [subjectAddress, setSubjectAddress] = useState(defaultAddress ?? "");
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!certifier) return;
 

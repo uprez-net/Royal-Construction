@@ -13,6 +13,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   complianceDocumentLabel,
+  isOptionalForOutreach,
   NSW_PLANNING_PORTAL_URL,
   PARTY_LABEL,
   type CompliancePartySection,
@@ -157,7 +158,14 @@ export function PartyDocumentSection({
             label={complianceDocumentLabel(type)}
             document={document}
             helperText={
-              document?.files.length ? undefined : "Not collected yet"
+              document?.files.length
+                ? undefined
+                : isOptionalForOutreach(type)
+                  ? // The pack goes without this one. Said on the row, because
+                    // otherwise the section reads as blocked by it and somebody
+                    // waits for an architect who is not holding anything up.
+                    "Not collected yet — the certifier can be sent the pack without it"
+                  : "Not collected yet"
             }
             mode={rowMode(document)}
             isBusy={isRowBusy(document, type)}

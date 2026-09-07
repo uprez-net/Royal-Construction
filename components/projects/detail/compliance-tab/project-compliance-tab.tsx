@@ -44,6 +44,7 @@ import {
   isOutstandingEvidence,
   isRequiredDocumentType,
   isReviewSubmissionType,
+  isOptionalForOutreach,
   isSignedCopyType,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
@@ -915,8 +916,13 @@ export function ProjectComplianceTab({
       types,
       documents,
       outreach: outreachForParty(engagement, section.party),
-      isComplete: outstanding.length === 0,
-      outstanding,
+      // Only what the outreach actually waits for. The full architectural
+      // design is still outstanding on the progress pill and still chased on
+      // the row, but a section held open by it kept the "Now" marker on the
+      // architect for the rest of the job -- over the one document the
+      // certifier was never going to wait for.
+      isComplete: outstanding.every(isOptionalForOutreach),
+      outstanding: outstanding.filter((type) => !isOptionalForOutreach(type)),
     };
   });
 

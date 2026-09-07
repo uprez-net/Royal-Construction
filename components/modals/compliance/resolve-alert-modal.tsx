@@ -56,7 +56,7 @@ export function ResolveAlertModal({
   const isPending = mutation.status === "pending";
   const [note, setNote] = useState("");
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!note.trim()) return;
 

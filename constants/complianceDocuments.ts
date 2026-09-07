@@ -256,6 +256,42 @@ export function isRequiredDocumentType(
 }
 
 /**
+ * Required documents the outreach does not wait for.
+ *
+ * The full architectural design is wanted on the file and is not a precondition
+ * for asking a certifier to look at the job. A certifier can assess whether the
+ * proposal qualifies as complying development off the preliminary set and the
+ * title documents, and issue the CDC pathway on that basis — the full set is
+ * what gets built from, not what gets assessed. Holding the outreach until it
+ * existed meant the certifier was engaged weeks after they could have been, and
+ * the one question worth asking early — can this go CDC at all — was the last
+ * one asked.
+ *
+ * It stays a required document. It is still on the pack, still shown, still
+ * chased, and still sent as an update the moment it lands; what changes is only
+ * that its absence does not block the first send.
+ *
+ * Deliberately a set of its own rather than a flag on the entries above: that
+ * list is ordered and read by four other places, and none of them cares about
+ * this distinction.
+ */
+export const OPTIONAL_FOR_OUTREACH: ReadonlySet<ComplianceDocumentType> =
+  new Set([ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN]);
+
+/**
+ * Whether the outreach can go without this document.
+ *
+ * Read by the send, by everything that counts the pack as ready, and by the row
+ * that says so on the tab — because a button offering a send the server then
+ * refuses, or refusing one the button offers, is the same bug either way round.
+ */
+export function isOptionalForOutreach(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return OPTIONAL_FOR_OUTREACH.has(documentType);
+}
+
+/**
  * What the certifier sends back, which is the second half of the classifier's
  * job. Kept separate from the required list because the two are never confused
  * in the UI — these arrive as email attachments, those are collected up front.

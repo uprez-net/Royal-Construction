@@ -5,6 +5,7 @@ import {
 } from "@prisma/client";
 
 import {
+  isOptionalForOutreach,
   isRequiredDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
   type RequiredComplianceDocument,
@@ -72,16 +73,57 @@ export function applicableRequiredDocuments(
   );
 }
 
-/** Whether every required document now has a file behind it. */
+/**
+ * The documents the first outreach actually waits for.
+ *
+ * The applicable set minus the ones the certifier does not need in order to
+ * start — today that is the full architectural design, which is what the job is
+ * built from rather than what it is assessed on. See OPTIONAL_FOR_OUTREACH.
+ *
+ * Separate from `applicableRequiredDocuments` because the two answer different
+ * questions. That one is "what does this file owe" — which still includes the
+ * full design, and still chases it. This one is "can the certifier be asked
+ * yet".
+ */
+export function outreachRequiredDocuments(
+  engagement: Pick<CertifierEngagementDetail, "alerts">,
+): readonly RequiredComplianceDocument[] {
+  return applicableRequiredDocuments(engagement).filter(
+    (required) => !isOptionalForOutreach(required.type),
+  );
+}
+
+/**
+ * Required documents the outreach is still waiting on.
+ *
+ * The one reading the send guard and the button both take, so a button offering
+ * a send the server then refuses — or refusing one the button offers — cannot
+ * happen.
+ */
+export function missingOutreachDocuments(
+  engagement: CertifierEngagementDetail,
+): readonly RequiredComplianceDocument[] {
+  return outreachRequiredDocuments(engagement).filter(
+    (required) =>
+      !engagement.documents.some(
+        (document) =>
+          document.documentType === required.type && document.files.length > 0,
+      ),
+  );
+}
+
+/**
+ * Whether the pack has everything the certifier needs to be asked.
+ *
+ * Measured against the outreach set, not the whole pack: a file waiting only on
+ * the full architectural design is ready to send, and reading it the other way
+ * left the send unreachable and the completion prompt silent over a document
+ * the certifier was never going to wait for.
+ */
 export function isRequiredPackComplete(
   engagement: CertifierEngagementDetail,
 ): boolean {
-  return applicableRequiredDocuments(engagement).every((required) =>
-    engagement.documents.some(
-      (document) =>
-        document.documentType === required.type && document.files.length > 0,
-    ),
-  );
+  return missingOutreachDocuments(engagement).length === 0;
 }
 
 /**

@@ -15,11 +15,16 @@ import {
   documentTypesForParty,
   PARTY_INBOUND_DOCUMENT_TYPES,
   PARTY_OUTREACH_ATTACHMENTS,
+  isOptionalForOutreach,
+  isRequiredDocumentType,
   PARTY_PREREQUISITES,
   partyForDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
 } from "../../constants/complianceDocuments";
-import { applicableRequiredDocuments } from "../../lib/compliance/required-pack";
+import {
+  applicableRequiredDocuments,
+  outreachRequiredDocuments,
+} from "../../lib/compliance/required-pack";
 import {
   extractPartyRefToken,
   generatePartyRefToken,
@@ -262,6 +267,76 @@ test("a resolved DA alert puts the planning certificate back", () => {
     applicableRequiredDocuments(engagement).length,
     REQUIRED_COMPLIANCE_DOCUMENTS.length,
   );
+});
+
+// ---------------------------------------------------------------------------
+// What the outreach waits for
+// ---------------------------------------------------------------------------
+
+// A certifier assesses whether a proposal qualifies as complying development
+// off the preliminary set and the title documents. The full design is what the
+// job is built from, not what it is assessed on, so holding the outreach for it
+// delayed the one question worth asking early.
+test("the full architectural design is not a precondition for the outreach", () => {
+  const engagement = withAlerts([]);
+  const waited = outreachRequiredDocuments(engagement).map((doc) => doc.type);
+
+  assert.equal(
+    waited.includes(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN),
+    false,
+  );
+  assert.equal(
+    isOptionalForOutreach(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN),
+    true,
+  );
+});
+
+// It is optional for the send and nothing else: still on the pack, still shown,
+// still chased, still sent as an update the moment it lands.
+test("the full design stays a required document on the file", () => {
+  assert.equal(
+    applicableRequiredDocuments(withAlerts([])).some(
+      (doc) => doc.type === ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    ),
+    true,
+  );
+  assert.equal(
+    isRequiredDocumentType(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN),
+    true,
+  );
+});
+
+test("every other required document still blocks the outreach", () => {
+  const waited = new Set(
+    outreachRequiredDocuments(withAlerts([])).map((doc) => doc.type),
+  );
+
+  for (const doc of REQUIRED_COMPLIANCE_DOCUMENTS) {
+    assert.equal(
+      waited.has(doc.type),
+      !isOptionalForOutreach(doc.type),
+      doc.type,
+    );
+  }
+});
+
+// The two exclusions compose: a DA job waiting only on the full design is ready
+// to send, and reading either the wrong way left the send permanently refused.
+test("a DA job waiting only on the full design can still be sent", () => {
+  const engagement = withAlerts([
+    alert(ComplianceAlertType.DA_APPROVAL_REQUIRED, ComplianceAlertStatus.OPEN),
+  ]);
+  const waited = outreachRequiredDocuments(engagement).map((doc) => doc.type);
+
+  assert.equal(
+    waited.includes(ComplianceDocumentType.PLANNING_CERTIFICATE_10_7),
+    false,
+  );
+  assert.equal(
+    waited.includes(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN),
+    false,
+  );
+  assert.equal(waited.length, REQUIRED_COMPLIANCE_DOCUMENTS.length - 2);
 });
 
 test("a stale title search does not touch the planning certificate", () => {
