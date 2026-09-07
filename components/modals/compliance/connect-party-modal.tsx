@@ -83,12 +83,34 @@ export function ConnectPartyModal({
   const deedScope = complianceScope.document({
     documentType: LAND_DEED_DOCUMENT.type,
   });
-  const isUploadingDeed = isUploading(deedScope);
+  const deedMutation = useAppSelector(selectComplianceMutation(deedScope));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [contact, setContact] = useState<ContactOption | null>(null);
   const [note, setNote] = useState("");
   const [deed, setDeed] = useState<PrefilledAttachment | null>(null);
+  /**
+   * The deed upload, from the first byte to the row being linked.
+   *
+   * Held locally rather than read off the hook or the store, because neither
+   * covers the whole operation and the gaps are where this went wrong. The
+   * hook's flag ends when the transfer does; the store's begins when the
+   * attach request is dispatched; between them sits the settle the File row
+   * needs to become visible. The control was live across both gaps, so a
+   * second click during the settle started a parallel upload against the same
+   * document, and Send became clickable for an outreach whose only attachment
+   * did not exist yet.
+   */
+  const [isAttachingDeed, setIsAttachingDeed] = useState(false);
+
+  // OR-ed with the two narrower signals rather than replacing them. This one is
+  // the authority for work this modal started; the others still catch a write
+  // to the same document from somewhere else, which is the case the scope key
+  // exists to serialise.
+  const isDeedBusy =
+    isAttachingDeed ||
+    isUploading(deedScope) ||
+    deedMutation.status === "pending";
 
   const label = PARTY_LABEL[party];
   const trade = PARTY_TRADE_LABEL[party];
@@ -103,6 +125,11 @@ export function ConnectPartyModal({
    * the file, and the retry finds it already there.
    */
   const handleDeed = async (file: File) => {
+    // Claimed before the first await, so the control is disabled on the same
+    // tick the picker closes rather than one render later.
+    if (isDeedBusy) return;
+    setIsAttachingDeed(true);
+
     try {
       const uploaded = await uploadFile(file, deedScope);
       // The same settle the tab's own uploads wait out: the File row is written
@@ -121,6 +148,10 @@ export function ConnectPartyModal({
       toast.error(
         error instanceof Error ? error.message : `Could not upload ${file.name}.`,
       );
+    } finally {
+      // In a finally, so a failed transfer or a rejected attach releases the
+      // control instead of stranding the modal on a deed that never landed.
+      setIsAttachingDeed(false);
     }
   };
 
@@ -151,7 +182,7 @@ export function ConnectPartyModal({
 
   const attachments = needsDeed ? (deed ? [deed] : []) : prefilled;
   const canSubmit =
-    Boolean(contact) && !isPending && !isUploadingDeed && (!needsDeed || Boolean(deed));
+    Boolean(contact) && !isPending && !isDeedBusy && (!needsDeed || Boolean(deed));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -209,9 +240,12 @@ export function ConnectPartyModal({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      disabled={isPending || isUploadingDeed}
+                      disabled={isPending || isDeedBusy}
                       onClick={() => fileInputRef.current?.click()}
                     >
+                      {isDeedBusy ? (
+                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                      ) : null}
                       Replace
                     </Button>
                   </div>
@@ -220,15 +254,19 @@ export function ConnectPartyModal({
                     type="button"
                     variant="outline"
                     className="w-full"
-                    disabled={isPending || isUploadingDeed}
+                    disabled={isPending || isDeedBusy}
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    {isUploadingDeed ? (
+                    {isDeedBusy ? (
                       <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                     ) : (
                       <Upload className="size-4" aria-hidden="true" />
                     )}
-                    Upload the land deed
+                    {/* The label follows the operation rather than staying put,
+                        because the slow half is the part after the bytes have
+                        gone: a spinner still reading "Upload the land deed"
+                        looks stuck rather than busy. */}
+                    {isDeedBusy ? "Attaching…" : "Upload the land deed"}
                   </Button>
                 )}
                 <p className="text-xs text-muted-foreground">

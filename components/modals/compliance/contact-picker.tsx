@@ -162,7 +162,7 @@ export function ContactPicker({
               )}
               <span className="truncate">
                 {value
-                  ? `${value.name} — ${value.email}`
+                  ? `${value.name}`
                   : isLoading
                     ? "Loading…"
                     : `Select ${label.toLowerCase()}`}
