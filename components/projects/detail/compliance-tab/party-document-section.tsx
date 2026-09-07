@@ -3,6 +3,7 @@
 import {
   ComplianceDocumentType,
   ComplianceOutreachMode,
+  ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
 import { Compass, ExternalLink, PencilRuler, Landmark } from "lucide-react";
@@ -33,7 +34,16 @@ const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
 type PartyDocumentSectionProps = {
   section: CompliancePartySection;
   outreach: ComplianceOutreachDetail | undefined;
-  /** The rows for this section's types, in section order; undefined where none. */
+  /**
+   * The types this file actually still wants from this party.
+   *
+   * Not `section.types`. An open DA alert takes the 10.7 certificate out of the
+   * pack, which empties the council's section entirely, and rendering the
+   * section's own list would keep asking for a document the rest of the tab has
+   * written off.
+   */
+  types: readonly ComplianceDocumentType[];
+  /** The rows for `types`, in the same order; undefined where none exists yet. */
   documents: (ComplianceDocumentWithFiles | undefined)[];
   /** Why the section cannot be opened yet, or null when it can. */
   blockedReason: string | null;
@@ -81,6 +91,7 @@ type PartyDocumentSectionProps = {
 export function PartyDocumentSection({
   section,
   outreach,
+  types,
   documents,
   blockedReason,
   isActive,
@@ -111,16 +122,34 @@ export function PartyDocumentSection({
    */
   const [councilAnswer, setCouncilAnswer] = useState<"yes" | "no" | null>(null);
 
+  /**
+   * Whether this party has been dealt with.
+   *
+   * The same reading `isPartyEngaged` makes on the server side of this, and not
+   * simply "is there a row": an OUTREACH row still at NOT_SENT is what a send
+   * that failed after writing its row leaves behind, and treating it as engaged
+   * would unlock the section and hide the button that retries it.
+   */
+  const isEngaged =
+    outreach !== undefined &&
+    (outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
+      outreach.status !== ComplianceOutreachStatus.NOT_SENT);
+
   // The council has nobody to engage. Its section opens as soon as the surveyor
   // is settled, because ordering a certificate needs the deposited plan and
   // nothing else.
   const locked = isCouncil
     ? blockedReason !== null
-    : blockedReason !== null || !outreach;
+    : blockedReason !== null || !isEngaged;
+
+  // Nothing left to want. The block stays on screen — its heading is how the
+  // reader learns the certificate is no longer part of this job — but it says
+  // so rather than offering an upload for it.
+  const isMoot = types.length === 0;
 
   const rows = (
     <ul>
-      {section.types.map((type, index) => {
+      {types.map((type, index) => {
         const document = documents[index];
         return (
           <ComplianceDocumentRow
@@ -162,7 +191,11 @@ export function PartyDocumentSection({
         blockedReason ??
         (isCouncil
           ? undefined
-          : `Nobody has been engaged yet. Send the request, or record that the client already has these.`)
+          : outreach
+            ? // A row with no mail behind it. Said plainly, because the button
+              // below reads as a first attempt and this is a second one.
+              `The request to ${outreach.contactEmail ?? "this party"} did not go out. Try again.`
+            : "Nobody has been engaged yet. Send the request, or record that the client already has these.")
       }
       lockActions={
         // Only when the block is waiting on the reader. A section blocked
@@ -187,7 +220,11 @@ export function PartyDocumentSection({
       }
       className={className}
     >
-      {isCouncil ? (
+      {isMoot ? (
+        <p className="text-sm text-muted-foreground">
+          Not needed on this job — the development application replaces it.
+        </p>
+      ) : isCouncil ? (
         <>
           {/* -----------------------------------------------------------
               The council certificate is ordered, not requested.

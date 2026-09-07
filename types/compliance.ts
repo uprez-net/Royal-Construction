@@ -2,6 +2,8 @@ import {
   ComplianceAlertStatus,
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceOutreachMode,
+  ComplianceOutreachStatus,
   CompliancePartyType,
   type Prisma,
 } from "@prisma/client";
@@ -76,20 +78,28 @@ export function outreachForParty(
 }
 
 /**
- * Whether a party's stage is settled enough for what comes after it.
+ * Whether a party has been dealt with, one way or the other.
  *
  * Deliberately not "did the mail go out". A file where the client arrived with
  * their own survey has no mail and is nonetheless finished with the surveyor,
- * which is the whole point of SELF_SUPPLIED — and a file where the mail went
- * out but nothing came back is not finished at all. So this asks the question
- * the downstream sections actually care about: has this party been dealt with,
- * one way or the other.
+ * which is the whole point of SELF_SUPPLIED.
+ *
+ * Equally deliberately not "is there a row". An OUTREACH row still sitting at
+ * NOT_SENT is what a send that threw after writing its row leaves behind, and
+ * counting that as engaged unlocked the section, hid the button that would have
+ * retried it, and told the architect the surveyor was under way — over a
+ * surveyor who had never been written to at all.
  */
 export function isPartyEngaged(
   engagement: Pick<CertifierEngagementDetail, "outreaches"> | null | undefined,
   party: CompliancePartyType,
 ): boolean {
-  return Boolean(outreachForParty(engagement, party));
+  const outreach = outreachForParty(engagement, party);
+  if (!outreach) return false;
+  return (
+    outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
+    outreach.status !== ComplianceOutreachStatus.NOT_SENT
+  );
 }
 
 /** Alerts still waiting on somebody. */

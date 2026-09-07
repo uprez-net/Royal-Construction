@@ -1233,6 +1233,7 @@ export function ProjectComplianceTab({
                 key={entry.party}
                 section={entry.section}
                 outreach={entry.outreach}
+                types={entry.types}
                 documents={entry.documents}
                 blockedReason={blockedReason(entry.party)}
                 isActive={activeSection === entry.party}

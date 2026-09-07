@@ -5,6 +5,8 @@ import {
   ComplianceAlertStatus,
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceOutreachMode,
+  ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
 
@@ -298,16 +300,28 @@ test("openAlerts ignores resolved rows and a missing engagement", () => {
 // Whether a party has been dealt with
 // ---------------------------------------------------------------------------
 
-const withOutreaches = (parties: CompliancePartyType[]) =>
+type TestOutreach = {
+  party: CompliancePartyType;
+  mode: ComplianceOutreachMode;
+  status: ComplianceOutreachStatus;
+};
+
+const outreach = (
+  party: CompliancePartyType,
+  mode: ComplianceOutreachMode = ComplianceOutreachMode.OUTREACH,
+  status: ComplianceOutreachStatus = ComplianceOutreachStatus.SENT,
+): TestOutreach => ({ party, mode, status });
+
+const withOutreaches = (outreaches: TestOutreach[]) =>
   ({
-    outreaches: parties.map((party) => ({ party, id: `o:${party}` })),
+    outreaches: outreaches.map((row, index) => ({ ...row, id: `o${index}` })),
   }) as unknown as NonNullable<Parameters<typeof isPartyEngaged>[0]>;
 
 // The gate downstream sections read is "has this party been dealt with", not
 // "did we email anybody" — a client who arrived with their own survey has no
 // thread and is nonetheless finished with the surveyor.
-test("a party is engaged once an outreach exists, however it was made", () => {
-  const engagement = withOutreaches([CompliancePartyType.SURVEYOR]);
+test("a sent outreach engages its party and nobody else's", () => {
+  const engagement = withOutreaches([outreach(CompliancePartyType.SURVEYOR)]);
 
   assert.equal(isPartyEngaged(engagement, CompliancePartyType.SURVEYOR), true);
   assert.equal(
@@ -317,10 +331,63 @@ test("a party is engaged once an outreach exists, however it was made", () => {
   assert.equal(isPartyEngaged(null, CompliancePartyType.SURVEYOR), false);
 });
 
+test("client-supplied documents engage the party with no mail at all", () => {
+  const engagement = withOutreaches([
+    outreach(
+      CompliancePartyType.SURVEYOR,
+      ComplianceOutreachMode.SELF_SUPPLIED,
+      ComplianceOutreachStatus.NOT_SENT,
+    ),
+  ]);
+
+  assert.equal(isPartyEngaged(engagement, CompliancePartyType.SURVEYOR), true);
+});
+
+// What a send that threw after writing its row leaves behind. Counting it as
+// engaged unlocked the section, hid the button that would retry it, and told
+// the architect the surveyor was under way — over a surveyor never written to.
+test("an outreach whose mail never went out does not engage its party", () => {
+  const engagement = withOutreaches([
+    outreach(
+      CompliancePartyType.SURVEYOR,
+      ComplianceOutreachMode.OUTREACH,
+      ComplianceOutreachStatus.NOT_SENT,
+    ),
+  ]);
+
+  assert.equal(isPartyEngaged(engagement, CompliancePartyType.SURVEYOR), false);
+  // The row is still there to be found and retried against.
+  assert.notEqual(
+    outreachForParty(engagement, CompliancePartyType.SURVEYOR),
+    undefined,
+  );
+});
+
+test("a party stays engaged once the thread is live", () => {
+  for (const status of [
+    ComplianceOutreachStatus.SENT,
+    ComplianceOutreachStatus.RESPONSE_RECEIVED,
+    ComplianceOutreachStatus.COMPLETE,
+  ]) {
+    const engagement = withOutreaches([
+      outreach(
+        CompliancePartyType.ARCHITECT,
+        ComplianceOutreachMode.OUTREACH,
+        status,
+      ),
+    ]);
+    assert.equal(
+      isPartyEngaged(engagement, CompliancePartyType.ARCHITECT),
+      true,
+      status,
+    );
+  }
+});
+
 test("outreachForParty finds the row, or nothing", () => {
   const engagement = withOutreaches([
-    CompliancePartyType.SURVEYOR,
-    CompliancePartyType.COUNCIL,
+    outreach(CompliancePartyType.SURVEYOR),
+    outreach(CompliancePartyType.COUNCIL),
   ]);
 
   assert.equal(

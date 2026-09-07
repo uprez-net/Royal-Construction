@@ -251,7 +251,20 @@ export async function startPartyOutreach(
   const { party } = input;
 
   const existing = outreachForParty(engagement, party);
-  if (existing) {
+
+  // Already engaged, and the mail has gone. A second submission is the same act
+  // repeated, not a new thread.
+  if (existing && existing.status !== ComplianceOutreachStatus.NOT_SENT) {
+    return engagement;
+  }
+
+  // A row with no mail behind it. That is what a send that threw after the row
+  // was written leaves, and returning early on it -- as this used to -- left
+  // the section unlocked, the party never actually written to, and no way to
+  // try again: the unique index refused a second row and the early return
+  // refused a second send. So the retry rides the row that is already there,
+  // re-pointing it at whoever was picked this time.
+  if (existing && existing.mode === ComplianceOutreachMode.SELF_SUPPLIED) {
     return engagement;
   }
 
@@ -261,19 +274,31 @@ export async function startPartyOutreach(
   }
 
   const contactEmail = normalizeEmailAddress(input.contactEmail);
-  const outreach = await prisma.complianceOutreach.create({
-    data: {
-      engagementId: engagement.id,
-      party,
-      refToken: generatePartyRefToken(party),
-      mode: ComplianceOutreachMode.OUTREACH,
-      status: ComplianceOutreachStatus.NOT_SENT,
-      tradieId: input.tradieId ?? null,
-      contactName: input.contactName ?? null,
-      contactEmail,
-      contactPhone: input.contactPhone ?? null,
-    },
-  });
+  const contact = {
+    tradieId: input.tradieId ?? null,
+    contactName: input.contactName ?? null,
+    contactEmail,
+    contactPhone: input.contactPhone ?? null,
+  };
+
+  const outreach = existing
+    ? await prisma.complianceOutreach.update({
+        where: { id: existing.id },
+        // The token is deliberately not reminted. Nothing was sent under it, so
+        // it carries no history -- but keeping it means a row can only ever
+        // have had one token, which is what makes the reverse lookup safe.
+        data: contact,
+      })
+    : await prisma.complianceOutreach.create({
+        data: {
+          engagementId: engagement.id,
+          party,
+          refToken: generatePartyRefToken(party),
+          mode: ComplianceOutreachMode.OUTREACH,
+          status: ComplianceOutreachStatus.NOT_SENT,
+          ...contact,
+        },
+      });
 
   // What this party is given to work from. The surveyor's deed was uploaded in
   // the modal moments ago and the architect's set is whatever the surveyor
