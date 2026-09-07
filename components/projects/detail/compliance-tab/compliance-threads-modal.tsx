@@ -1,6 +1,10 @@
 "use client";
 
-import { ComplianceOutreachMode, CompliancePartyType } from "@prisma/client";
+import {
+  ComplianceOutreachMode,
+  ComplianceOutreachStatus,
+  CompliancePartyType,
+} from "@prisma/client";
 import { useMemo, useState } from "react";
 
 import { ModalShell } from "@/components/common/modal-shell";
@@ -58,9 +62,12 @@ type ComplianceThreadsModalProps = {
  * thing viewed one at a time, and the reader is usually here to check one and
  * then glance at another.
  *
- * A party with no thread still gets a tab. An empty transcript that says so is
- * the answer to "did we ever hear back from the surveyor"; a missing tab looks
- * like the feature is not there.
+ * Only parties there is actually a conversation with. A tab is a promise that
+ * something is behind it, and a client-supplied surveyor has no address and an
+ * outreach whose mail never went out has no thread — both opened onto an empty
+ * transcript with no composer, which reads as a conversation that went nowhere
+ * rather than one that was never started. Whether those parties are dealt with
+ * is a question the sections on the tab already answer, and answer better.
  */
 export function ComplianceThreadsModal({
   open,
@@ -78,6 +85,17 @@ export function ComplianceThreadsModal({
 
   const tabs = useMemo<ThreadTab[]>(() => {
     const partyTabs = outreaches
+      .filter(
+        (outreach) =>
+          // Something was said. Covers the council, which is written to by
+          // nobody but can still receive a certificate from the portal.
+          outreach.emails.length > 0 ||
+          // Or there is somewhere to say it. An OUTREACH row still at NOT_SENT
+          // is a send that failed before it left, which the section says
+          // better than an empty transcript would.
+          (outreach.mode === ComplianceOutreachMode.OUTREACH &&
+            outreach.status !== ComplianceOutreachStatus.NOT_SENT),
+      )
       // Stable, and in flow order rather than in creation order: the surveyor
       // comes before the architect on the page, and the tabs re-ordering
       // themselves because somebody was engaged out of sequence is a set of

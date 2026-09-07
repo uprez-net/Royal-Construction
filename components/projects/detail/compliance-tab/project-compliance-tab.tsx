@@ -1262,11 +1262,6 @@ export function ProjectComplianceTab({
             ))}
           </div>
 
-          {/* The development-application block, once the architect has said
-              the job needs one. Full width and immediately under the pack,
-              because it is a branch off it rather than a later stage. */}
-          {hasDaAlert ? <DaApprovalSection className="md:col-span-2" /> : null}
-
           {/* -----------------------------------------------------------
               Sending the pack.
 
@@ -1306,8 +1301,14 @@ export function ProjectComplianceTab({
             </div>
           ) : null}
 
-          {/* Certifier response */}
+          {/* Certifier response.
+
+              Full width, like everything else on this panel. It sat in one
+              column of a two-column grid whose other half nothing ever filled,
+              so the card rendered at half the width of the blocks above and
+              below it with a column of empty space beside it. */}
           <ComplianceSectionCard
+            className="md:col-span-2"
             title="Certifier response"
             description="Upload the signed copies to unlock the checklist."
             icon={Inbox}
@@ -1409,149 +1410,162 @@ export function ProjectComplianceTab({
             </ul>
           </ComplianceSectionCard>
 
-          {/* Checklist */}
-          <ComplianceSectionCard
-            title="Checklist"
-            description="One document per item the certifier asked for."
-            icon={ClipboardList}
-            progress={{
-              done: countSupplied(checklistItems),
-              total: checklistItems.length,
-            }}
-            open={isOpen("checklist")}
-            onOpenChange={toggleSection("checklist")}
-            isActive={activeSection === "checklist"}
-            locked={checklistLocked}
-            lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
-            // Across both columns. Each row can open its own requirements
-            // and references, and at half the width every one of those
-            // wrapped into a paragraph.
-            className="md:col-span-2"
-          >
-            <ul>
-              {checklistItems.map((item) => (
-                <ComplianceDocumentRow
-                  key={item.id}
-                  label={complianceDocumentLabel(item.documentType, item.label)}
-                  document={item}
-                  detail={checklistItemDetail(item.detail)}
-                  helperText={
-                    item.files.length ? undefined : "Not supplied yet"
-                  }
-                  mode={rowMode(item)}
-                  isBusy={
-                    isScopeBusy(
-                      scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
-                    ) || submissionClaimed
-                  }
-                  onUpload={(file) =>
-                    void attachEvidence(file, {
-                      documentId: item.id,
-                      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-                    })
-                  }
-                  onApprove={() => void handleApprove(item)}
-                  onReject={() => handleReject(item)}
-                  // Offered to an admin, and only while the file is still
-                  // being assembled. Once it is with the certifier the answer
-                  // to "is this needed" is theirs, and it comes back as an
-                  // approval or a rejection rather than as a row nobody has
-                  // to fill in any more.
-                  onSetNotRequired={
-                    isAdmin && !inReview
-                      ? (notRequired) =>
-                          void handleSetNotRequired(item, notRequired)
-                      : undefined
-                  }
-                  onPreviewFile={handlePreviewFile}
-                />
-              ))}
-            </ul>
+          {/* -----------------------------------------------------------
+              The checklist, or the DA that replaces it.
 
-            {/* -------------------------------------------------------
-                Home insurance
-            ------------------------------------------------------- */}
-            {allChecklistUploaded ? (
-              <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-                {insuranceDocument?.files.length ? (
-                  <ul>
-                    <ComplianceDocumentRow
-                      label="Home Insurance"
-                      document={insuranceDocument}
-                      mode={rowMode(insuranceDocument)}
-                      isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
-                      onUpload={(file) =>
-                        void attachEvidence(file, insuranceUpload)
-                      }
-                      onApprove={() => void handleApprove(insuranceDocument)}
-                      onReject={() => handleReject(insuranceDocument)}
-                      onPreviewFile={handlePreviewFile}
-                    />
-                  </ul>
-                ) : (
-                  <>
-                    <p className="font-medium text-foreground">
-                      Have you raised the home insurance?
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        type="button"
-                        variant={
-                          insuranceAnswer === "yes" ? "default" : "outline"
+              Never both. Once the architect says the job needs development
+              approval it is not going through as a CDC, so the certifier
+              has no checklist to issue and the one on screen would be a
+              block that can never fill. The DA list takes the same slot
+              rather than sitting somewhere else on the page, because it is
+              the same step of the job reached by the other route.
+          ----------------------------------------------------------- */}
+          {hasDaAlert ? (
+            <DaApprovalSection className="md:col-span-2" />
+          ) : (
+            <ComplianceSectionCard
+              title="Checklist"
+              description="One document per item the certifier asked for."
+              icon={ClipboardList}
+              progress={{
+                done: countSupplied(checklistItems),
+                total: checklistItems.length,
+              }}
+              open={isOpen("checklist")}
+              onOpenChange={toggleSection("checklist")}
+              isActive={activeSection === "checklist"}
+              locked={checklistLocked}
+              lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
+              // Across both columns. Each row can open its own requirements
+              // and references, and at half the width every one of those
+              // wrapped into a paragraph.
+              className="md:col-span-2"
+            >
+              <ul>
+                {checklistItems.map((item) => (
+                  <ComplianceDocumentRow
+                    key={item.id}
+                    label={complianceDocumentLabel(item.documentType, item.label)}
+                    document={item}
+                    detail={checklistItemDetail(item.detail)}
+                    helperText={
+                      item.files.length ? undefined : "Not supplied yet"
+                    }
+                    mode={rowMode(item)}
+                    isBusy={
+                      isScopeBusy(
+                        scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+                      ) || submissionClaimed
+                    }
+                    onUpload={(file) =>
+                      void attachEvidence(file, {
+                        documentId: item.id,
+                        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+                      })
+                    }
+                    onApprove={() => void handleApprove(item)}
+                    onReject={() => handleReject(item)}
+                    // Offered to an admin, and only while the file is still
+                    // being assembled. Once it is with the certifier the answer
+                    // to "is this needed" is theirs, and it comes back as an
+                    // approval or a rejection rather than as a row nobody has
+                    // to fill in any more.
+                    onSetNotRequired={
+                      isAdmin && !inReview
+                        ? (notRequired) =>
+                            void handleSetNotRequired(item, notRequired)
+                        : undefined
+                    }
+                    onPreviewFile={handlePreviewFile}
+                  />
+                ))}
+              </ul>
+
+              {/* -------------------------------------------------------
+                  Home insurance
+              ------------------------------------------------------- */}
+              {allChecklistUploaded ? (
+                <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+                  {insuranceDocument?.files.length ? (
+                    <ul>
+                      <ComplianceDocumentRow
+                        label="Home Insurance"
+                        document={insuranceDocument}
+                        mode={rowMode(insuranceDocument)}
+                        isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
+                        onUpload={(file) =>
+                          void attachEvidence(file, insuranceUpload)
                         }
-                        size="sm"
-                        onClick={() => setInsuranceAnswer("yes")}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={
-                          insuranceAnswer === "no" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setInsuranceAnswer("no")}
-                      >
-                        No
-                      </Button>
-                    </div>
-
-                    {insuranceAnswer === "yes" ? (
-                      <ul className="mt-2">
-                        <ComplianceDocumentRow
-                          label="Home Insurance"
-                          helperText="Upload the certificate of insurance"
-                          mode="upload"
-                          isBusy={
-                            isScopeBusy(insuranceScope) || submissionClaimed
-                          }
-                          onUpload={(file) =>
-                            void attachEvidence(file, insuranceUpload)
-                          }
-                        />
-                      </ul>
-                    ) : null}
-
-                    {insuranceAnswer === "no" ? (
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        Raise Home Building Compensation Fund cover with icare,
-                        then come back and upload the certificate.{" "}
-                        <a
-                          href={HBCF_INSURANCE_URL}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                        >
-                          icare HBCF
-                          <ExternalLink className="size-3" aria-hidden="true" />
-                        </a>
+                        onApprove={() => void handleApprove(insuranceDocument)}
+                        onReject={() => handleReject(insuranceDocument)}
+                        onPreviewFile={handlePreviewFile}
+                      />
+                    </ul>
+                  ) : (
+                    <>
+                      <p className="font-medium text-foreground">
+                        Have you raised the home insurance?
                       </p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            ) : null}
-          </ComplianceSectionCard>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          type="button"
+                          variant={
+                            insuranceAnswer === "yes" ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setInsuranceAnswer("yes")}
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={
+                            insuranceAnswer === "no" ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setInsuranceAnswer("no")}
+                        >
+                          No
+                        </Button>
+                      </div>
+
+                      {insuranceAnswer === "yes" ? (
+                        <ul className="mt-2">
+                          <ComplianceDocumentRow
+                            label="Home Insurance"
+                            helperText="Upload the certificate of insurance"
+                            mode="upload"
+                            isBusy={
+                              isScopeBusy(insuranceScope) || submissionClaimed
+                            }
+                            onUpload={(file) =>
+                              void attachEvidence(file, insuranceUpload)
+                            }
+                          />
+                        </ul>
+                      ) : null}
+
+                      {insuranceAnswer === "no" ? (
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          Raise Home Building Compensation Fund cover with icare,
+                          then come back and upload the certificate.{" "}
+                          <a
+                            href={HBCF_INSURANCE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                          >
+                            icare HBCF
+                            <ExternalLink className="size-3" aria-hidden="true" />
+                          </a>
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </ComplianceSectionCard>
+          )}
         </div>
 
         {/* -------------------------------------------------------------
