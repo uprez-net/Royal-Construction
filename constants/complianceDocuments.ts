@@ -318,6 +318,10 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   ...REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
   ...CERTIFIER_RESPONSE_DOCUMENTS.map((doc) => doc.type),
   ComplianceDocumentType.HOME_INSURANCE,
+  // Not part of the pack, but a surveyor routinely quotes the deed back on
+  // their reply, and a copy the classifier cannot name lands in the
+  // needs-identifying queue for somebody to place by hand.
+  LAND_DEED_DOCUMENT.type,
   ComplianceDocumentType.UNKNOWN,
 ] as const;
 
