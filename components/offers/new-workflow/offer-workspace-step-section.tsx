@@ -43,12 +43,16 @@ export function OfferLockBanner({
   return (
     <div className="grid gap-2 rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="flex items-start gap-2 text-sm text-foreground">
+        {/* flex-1, and a measure well past DESIGN.md's 68ch body rule: that
+            rule is for sustained reading, and this is a two-sentence notice in
+            a horizontal bar. Held at max-w-prose it wrapped to three lines
+            while ~500px of the row sat empty before the button. */}
+        <p className="flex min-w-0 flex-1 items-start gap-2 text-sm text-foreground">
           <Lock
             className="mt-0.5 size-4 shrink-0 text-royal-gold-dark"
             aria-hidden="true"
           />
-          <span className="max-w-prose">{message}</span>
+          <span className="max-w-5xl">{message}</span>
         </p>
         {executed ? null : (
           <Button
