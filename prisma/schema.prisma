@@ -1306,6 +1306,22 @@ enum ComplianceAlertStatus {
   RESOLVED
 }
 
+/// Who an alert came from.
+///
+/// A superset of CompliancePartyType, and a separate enum rather than an
+/// extension of it, because the certifier belongs in exactly one of the two.
+/// They can tell us a job needs a DA -- often catching what the architect
+/// missed, which is the whole reason this exists -- but they are not an
+/// outreach party: they own the engagement row, and a CERTIFIER value on
+/// ComplianceOutreach.party would be a row nothing in the flow can render or
+/// gate on.
+enum ComplianceAlertSource {
+  SURVEYOR
+  ARCHITECT
+  COUNCIL
+  CERTIFIER
+}
+
 /// One party's engagement on a compliance file.
 ///
 /// The same shape as CertifierEngagement's own correlation fields -- a minted
@@ -1368,9 +1384,10 @@ model ComplianceAlert {
   type         ComplianceAlertType
   status       ComplianceAlertStatus @default(OPEN)
 
-  /// Which party's message raised it, where one did. Null for an alert an
-  /// admin raised by hand.
-  raisedByParty CompliancePartyType?
+  /// Whose message raised it, where one did. Null for an alert an admin raised
+  /// by hand, and for one the system found on its own -- a title search whose
+  /// proprietors do not match the owners we hold is nobody's report.
+  raisedBySource ComplianceAlertSource?
 
   /// The alert in the raiser's own words where there are any -- the sentence
   /// from the architect's email, the note on the surveyor's covering letter.

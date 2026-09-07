@@ -2,6 +2,8 @@
 
 import {
   CertifierEmailDirection,
+  ComplianceAlertStatus,
+  ComplianceAlertType,
   ComplianceDocumentType,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -505,6 +507,102 @@ export async function sendPartyReply(
     subject,
     body,
     attachments: input.attachments,
+  });
+
+  after(() => revalidateEngagement(projectId));
+
+  return requireEngagement(projectId);
+}
+
+/**
+ * Asks the surveyor for a fresh title search.
+ *
+ * The one-click answer to a STALE_TITLE_SEARCH alert. It exists because the
+ * chase is otherwise a message somebody has to compose from scratch, quoting
+ * two lists of names off a screen — and the thing being asked for is entirely
+ * mechanical, so the mail can say it better than a hurried paraphrase will.
+ *
+ * Deliberately not a `resolve`. Asking is not fixing: the alert stays open
+ * until a replacement lands and the owner check passes, which closes it on its
+ * own. What this does is send the request and record it on the thread.
+ *
+ * Rides the surveyor's existing thread, so the reply carries the token and
+ * files itself back against this job.
+ */
+export async function requestUpdatedTitleSearch(
+  projectId: string,
+  alertId: string,
+): Promise<CertifierEngagementDetail> {
+  const engagement = await requireEngagement(projectId);
+
+  const alert = engagement.alerts.find(
+    (candidate) => candidate.id === alertId,
+  );
+  if (!alert || alert.type !== ComplianceAlertType.STALE_TITLE_SEARCH) {
+    throw new Error("No open title search alert on this compliance file.");
+  }
+  if (alert.status !== ComplianceAlertStatus.OPEN) {
+    throw new Error("That alert has already been closed.");
+  }
+
+  const outreach = outreachForParty(engagement, CompliancePartyType.SURVEYOR);
+  if (!outreach?.contactEmail) {
+    // A client-supplied file has no surveyor to write to. Refused with the
+    // reason rather than silently doing nothing, because the fix is a person
+    // going to whoever actually supplied the document.
+    throw new Error(
+      "No surveyor has been engaged on this job — the title search will have to be re-ordered by hand.",
+    );
+  }
+
+  const greeting = outreach.contactName ? `Hi ${outreach.contactName},` : "Hi,";
+  const body = [
+    `<p>${greeting}</p>`,
+    `<p>The title search on file for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> does not name the current owners.</p>`,
+    // The alert's own detail, which is the comparison that produced it: what
+    // the register says against what we hold. Quoted rather than restated, so
+    // the surveyor is looking at exactly what we are.
+    alert.detail ? `<p>${escapeEmailHtml(alert.detail)}</p>` : "",
+    "<p>Could you re-order the search and send the updated copy through? The land registry has most likely not been updated since settlement.</p>",
+    "<p>Please keep the reference in the subject line on any reply, so it stays with this job.</p>",
+    "<p>Kind regards,<br/>Royal Constructions</p>",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const config = getGraphConfig();
+  const client = await createGraphContext(config);
+  const subject = buildPartySubject(
+    outreach.refToken,
+    engagement.subjectAddress,
+  );
+
+  if (outreach.lastInboundMessageId) {
+    await client.replyToMessage({
+      messageId: outreach.lastInboundMessageId,
+      body,
+      attachments: [],
+      to: outreach.contactEmail,
+      cc: config.cc,
+    });
+  } else {
+    await client.sendMail({
+      to: outreach.contactEmail,
+      subject,
+      body,
+      cc: config.cc,
+      attachments: [],
+    });
+  }
+
+  await recordOutboundEmail({
+    engagementId: engagement.id,
+    outreachId: outreach.id,
+    emailFrom: config.senderUpn ?? "",
+    emailTo: outreach.contactEmail,
+    subject,
+    body,
+    attachments: [],
   });
 
   after(() => revalidateEngagement(projectId));

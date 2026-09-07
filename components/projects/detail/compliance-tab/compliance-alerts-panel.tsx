@@ -1,11 +1,15 @@
 "use client";
 
-import { ComplianceAlertStatus, ComplianceAlertType } from "@prisma/client";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  ComplianceAlertSource,
+  ComplianceAlertStatus,
+  ComplianceAlertType,
+} from "@prisma/client";
+import { AlertTriangle, CheckCircle2, Loader2, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/common/status-pill";
-import { PARTY_LABEL } from "@/constants/complianceDocuments";
+
 import { cn } from "@/lib/utils";
 import type { ComplianceAlertRecord } from "@/types/compliance";
 import { dataTimeFormat } from "@/utils/formatters";
@@ -19,12 +23,29 @@ import { dataTimeFormat } from "@/utils/formatters";
  * happen on its own.
  */
 export const COMPLIANCE_ALERT_COPY: Readonly<
-  Record<ComplianceAlertType, { title: string; guidance: string }>
+  Record<
+    ComplianceAlertType,
+    {
+      title: string;
+      guidance: string;
+      /**
+       * The one-click chase, where the alert has one.
+       *
+       * Only the title search does today, because it is the only condition
+       * whose remedy is a request we can compose ourselves — the mail says
+       * which names are on the register and which we hold, which is exactly
+       * what a person would otherwise retype off this screen. A DA is not a
+       * thing anybody can be asked for in one line.
+       */
+      followUp?: string;
+    }
+  >
 > = {
   [ComplianceAlertType.STALE_TITLE_SEARCH]: {
     title: "Title search does not name the owners",
     guidance:
       "The proprietors on this search do not match the owners recorded on the project — the land registry has most likely not updated since settlement. Ask for a fresh search; it closes itself once a replacement is uploaded and the names check out.",
+    followUp: "Request updated title search",
   },
   [ComplianceAlertType.DA_APPROVAL_REQUIRED]: {
     title: "Development approval required",
@@ -33,9 +54,29 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
   },
 };
 
+/**
+ * How each source reads on the pill.
+ *
+ * Its own map rather than PARTY_LABEL, because the certifier is a source and
+ * not an outreach party — and because the pill wording is "via the X", which
+ * wants the lower-case form.
+ */
+const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
+  [ComplianceAlertSource.SURVEYOR]: "surveyor",
+  [ComplianceAlertSource.ARCHITECT]: "architect",
+  [ComplianceAlertSource.COUNCIL]: "NSW Planning",
+  [ComplianceAlertSource.CERTIFIER]: "certifier",
+};
+
 type ComplianceAlertsPanelProps = {
   alerts: ComplianceAlertRecord[];
   onResolve: (alert: ComplianceAlertRecord) => void;
+  /**
+   * Sends the alert's follow-up request. Absent when there is nobody to send it
+   * to — a file whose surveyor documents the client supplied has no thread, and
+   * offering a button that can only fail is worse than not offering one.
+   */
+  onFollowUp?: (alert: ComplianceAlertRecord) => void;
   isBusy: (alertId: string) => boolean;
 };
 
@@ -54,6 +95,7 @@ type ComplianceAlertsPanelProps = {
 export function ComplianceAlertsPanel({
   alerts,
   onResolve,
+  onFollowUp,
   isBusy,
 }: ComplianceAlertsPanelProps) {
   if (alerts.length === 0) {
@@ -91,14 +133,14 @@ export function ComplianceAlertsPanel({
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-medium text-foreground">{copy.title}</p>
-                {alert.raisedByParty ? (
+                {alert.raisedBySource ? (
                   // Who supplied the document, not who reported the problem.
                   // On a stale title search nobody reported it — the surveyor
                   // could not have known — so "from the surveyor" would be an
                   // accusation rather than a fact. "via" is the honest word,
                   // and it is also the answer to who to go back to.
                   <StatusPill tone="neutral">
-                    via the {PARTY_LABEL[alert.raisedByParty].toLowerCase()}
+                    via the {ALERT_SOURCE_LABEL[alert.raisedBySource]}
                   </StatusPill>
                 ) : null}
                 {!isOpen ? (
@@ -127,15 +169,38 @@ export function ComplianceAlertsPanel({
             </div>
 
             {isOpen ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={isBusy(alert.id)}
-                onClick={() => onResolve(alert)}
-              >
-                Resolve
-              </Button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {/* The chase comes first and carries the weight: on a freshly
+                    raised alert it is what someone is here to do, and Resolve
+                    is what they come back for once the replacement lands. */}
+                {copy.followUp && onFollowUp ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isBusy(alert.id)}
+                    onClick={() => onFollowUp(alert)}
+                  >
+                    {isBusy(alert.id) ? (
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Send className="size-4" aria-hidden="true" />
+                    )}
+                    {copy.followUp}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isBusy(alert.id)}
+                  onClick={() => onResolve(alert)}
+                >
+                  Resolve
+                </Button>
+              </div>
             ) : null}
           </li>
         );

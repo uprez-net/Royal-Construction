@@ -44,7 +44,7 @@ export async function POST(
       projectId,
       engagementId: engagement!.id,
       type: body.data.type,
-      raisedByParty: body.data.raisedByParty ?? null,
+      raisedBySource: body.data.raisedBySource ?? null,
       detail: body.data.detail ?? null,
     });
     return successResponse(await getCertifierEngagement(projectId), {

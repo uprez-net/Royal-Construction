@@ -1,4 +1,4 @@
-import { ComplianceAlertType, CompliancePartyType } from "@prisma/client";
+import { ComplianceAlertSource, ComplianceAlertType } from "@prisma/client";
 
 import { readTitleSearchOwners } from "@/lib/agent/titleSearchOwnerAgent";
 import {
@@ -37,7 +37,7 @@ export async function verifyTitleSearchOwners(params: {
   engagementId: string;
   file: { url: string; filename: string };
   /** Set when the document arrived on a party's thread rather than by upload. */
-  raisedByParty?: CompliancePartyType | null;
+  raisedBySource?: ComplianceAlertSource | null;
 }): Promise<void> {
   try {
     const project = await prisma.project.findUnique({
@@ -98,7 +98,7 @@ export async function verifyTitleSearchOwners(params: {
         type: ComplianceAlertType.STALE_TITLE_SEARCH,
         // Whoever supplied it, where we know. Not blame — it is who to go back
         // to for a fresh search, which is the whole action the alert asks for.
-        raisedByParty: params.raisedByParty ?? null,
+        raisedBySource: params.raisedBySource ?? null,
         detail,
       });
       console.log(

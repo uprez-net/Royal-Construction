@@ -4,6 +4,7 @@ import {
   CertifierEngagementStatus,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceOutreachMode,
   CompliancePartyType,
 } from "@prisma/client";
 import {
@@ -68,6 +69,7 @@ import {
   resolveComplianceDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
+  requestUpdatedTitleSearch,
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
@@ -645,6 +647,30 @@ export function ProjectComplianceTab({
     }
   };
 
+  /**
+   * Asks the surveyor for a fresh title search.
+   *
+   * No confirmation dialog. The mail composes itself out of the alert — which
+   * names are on the register, which we hold — so there is nothing to collect,
+   * and the whole point of the button is that it saves someone retyping that
+   * off the screen. It does not resolve anything: asking is not fixing, and the
+   * alert closes itself when a replacement lands and the names check out.
+   */
+  const handleRequestTitleSearch = async (alert: ComplianceAlertRecord) => {
+    try {
+      await dispatch(
+        requestUpdatedTitleSearch({ projectId: project.id, alertId: alert.id }),
+      ).unwrap();
+      toast.success("Asked the surveyor for an updated title search.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not send the request to the surveyor.",
+      );
+    }
+  };
+
   const handleResolveAlert = (alert: ComplianceAlertRecord) => {
     const copy = COMPLIANCE_ALERT_COPY[alert.type];
     dispatch(
@@ -1055,6 +1081,18 @@ export function ProjectComplianceTab({
   const alerts = engagement.alerts;
   const hasDaAlert = !requiresPlanningCertificate(engagement);
 
+  // Whether the surveyor can be written to at all. The same reading the server
+  // takes before it refuses the send, so the button and the request cannot
+  // disagree about whether there is a thread.
+  const surveyorOutreach = outreachForParty(
+    engagement,
+    CompliancePartyType.SURVEYOR,
+  );
+  const canChaseSurveyor = Boolean(
+    surveyorOutreach?.contactEmail &&
+      surveyorOutreach.mode === ComplianceOutreachMode.OUTREACH,
+  );
+
   /**
    * How many of these are done with.
    *
@@ -1137,6 +1175,10 @@ export function ProjectComplianceTab({
       <ComplianceAlertsPanel
         alerts={alerts}
         onResolve={handleResolveAlert}
+        // Only when there is a surveyor thread to send it down. A file whose
+        // surveyor documents the client supplied has nobody to chase, and a
+        // button that can only fail is worse than no button.
+        onFollowUp={canChaseSurveyor ? handleRequestTitleSearch : undefined}
         isBusy={(alertId) => isScopeBusy(complianceScope.alert(alertId))}
       />
 

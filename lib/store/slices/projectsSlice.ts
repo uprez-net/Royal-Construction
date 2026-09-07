@@ -742,6 +742,37 @@ export const resolveComplianceAlert = createAsyncThunk<
   },
 );
 
+/**
+ * Asks the surveyor for a fresh title search.
+ *
+ * Filed under the alert's own scope, like the resolve: the two are the pair of
+ * things you can do to one alert, and a chase in flight has to disable the
+ * resolve beside it.
+ */
+export const requestUpdatedTitleSearch = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string; alertId: string },
+  { rejectValue: string }
+>(
+  "projects/requestUpdatedTitleSearch",
+  async ({ projectId, alertId }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/alerts/${alertId}/request-update`,
+        { method: "POST" },
+        "Unable to send the request to the surveyor",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the request to the surveyor",
+      );
+    }
+  },
+);
+
 /** What every compliance thunk resolves to: the engagement, wholesale. */
 type ComplianceResult = {
   projectId: string;
@@ -789,6 +820,9 @@ const complianceOperations = [
     complianceScope.partyReply(arg.outreachId),
   ),
   complianceOperation(resolveComplianceAlert, (arg) =>
+    complianceScope.alert(arg.alertId),
+  ),
+  complianceOperation(requestUpdatedTitleSearch, (arg) =>
     complianceScope.alert(arg.alertId),
   ),
 ];

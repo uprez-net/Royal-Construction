@@ -1,9 +1,9 @@
 "use server";
 
 import {
+  ComplianceAlertSource,
   ComplianceAlertStatus,
   ComplianceAlertType,
-  CompliancePartyType,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
@@ -88,7 +88,7 @@ export async function raiseComplianceAlert(params: {
   projectId: string;
   engagementId: string;
   type: ComplianceAlertType;
-  raisedByParty?: CompliancePartyType | null;
+  raisedBySource?: ComplianceAlertSource | null;
   detail?: string | null;
 }): Promise<{ alertId: string; created: boolean }> {
   const open = await prisma.complianceAlert.findFirst({
@@ -107,7 +107,7 @@ export async function raiseComplianceAlert(params: {
     data: {
       engagementId: params.engagementId,
       type: params.type,
-      raisedByParty: params.raisedByParty ?? null,
+      raisedBySource: params.raisedBySource ?? null,
       detail: params.detail ?? null,
     },
     select: { id: true },
@@ -121,7 +121,7 @@ export async function raiseComplianceAlert(params: {
         engagementId: params.engagementId,
         alertId: alert.id,
         alertType: params.type,
-        raisedBy: params.raisedByParty ?? "an admin",
+        raisedBy: params.raisedBySource ?? "an admin",
       }),
     );
     await notifyCompliance("complianceAlertRaised", params.projectId, {

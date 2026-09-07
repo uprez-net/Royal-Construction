@@ -429,7 +429,7 @@ async function checkTitleSearchOwners(
       file: { url: document.url, filename: document.name },
       // Who to go back to for a fresh search, which is the action the alert
       // asks for -- not blame for a document they could not have checked.
-      raisedByParty: params.party,
+      raisedBySource: params.party,
     });
   }
 }
@@ -451,7 +451,7 @@ async function raiseAlertsFromMessage(
   "use step";
 
   const detected = await detectComplianceAlerts({
-    party: params.party,
+    source: params.party,
     subject: message.subject,
     body: message.body,
   });
@@ -462,7 +462,7 @@ async function raiseAlertsFromMessage(
       projectId: params.projectId,
       engagementId: params.engagementId,
       type: alert.type,
-      raisedByParty: params.party,
+      raisedBySource: params.party,
       detail: alert.detail,
     });
     // Only a new one counts. The same sentence quoted on three consecutive

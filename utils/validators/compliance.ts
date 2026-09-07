@@ -1,4 +1,5 @@
 import {
+  ComplianceAlertSource,
   ComplianceAlertType,
   ComplianceDocumentType,
   CompliancePartyType,
@@ -98,7 +99,7 @@ export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
  */
 export const raiseComplianceAlertSchema = z.object({
   type: z.enum(ComplianceAlertType),
-  raisedByParty: z.enum(CompliancePartyType).optional(),
+  raisedBySource: z.enum(ComplianceAlertSource).optional(),
   detail: normalizedStringSchema.optional(),
 });
 

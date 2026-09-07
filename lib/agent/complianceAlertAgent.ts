@@ -1,4 +1,4 @@
-import { ComplianceAlertType, CompliancePartyType } from "@prisma/client";
+import { ComplianceAlertSource, ComplianceAlertType } from "@prisma/client";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
@@ -8,10 +8,16 @@ import { stripEmailThread, stripHtml } from "@/utils/formatters";
 /**
  * Reads a party's reply for conditions that change the rest of the file.
  *
- * One of them today: an architect saying the proposal cannot go through as a
- * CDC. It arrives as a sentence rather than as a document — "on these setbacks
- * you'll need a DA" — so nothing in the document pipeline would ever notice it,
- * and it changes what the file needs from that moment on.
+ * One of them today: the proposal cannot go through as a CDC and needs a DA. It
+ * arrives as a sentence rather than as a document — "on these setbacks you'll
+ * need a DA" — so nothing in the document pipeline would ever notice it, and it
+ * changes what the file needs from that moment on.
+ *
+ * Read on two threads, not one. The architect is who normally says it, but the
+ * certifier is who decides it — and a certifier telling us the proposal falls
+ * outside complying development is very often the first anyone hears of it,
+ * because the architect did not spot it. Missing that until somebody read the
+ * email by hand is the case this is really for.
  *
  * A stale title search is deliberately NOT read here, though it looks like the
  * same kind of thing. The register lags settlement, so a surveyor orders a
@@ -51,9 +57,15 @@ export type DetectedComplianceAlert = z.infer<
   typeof alertDetectionSchema
 >["alerts"][number];
 
-const INSTRUCTION = `You read one email from an architect working on an Australian residential building job, and decide whether it raises exactly one condition. Most emails raise none. Returning an empty list is the correct and most common answer.
+/** Who is in a position to say a job needs a DA. */
+const ALERT_SOURCES: ReadonlySet<ComplianceAlertSource> = new Set([
+  ComplianceAlertSource.ARCHITECT,
+  ComplianceAlertSource.CERTIFIER,
+]);
 
-DA_APPROVAL_REQUIRED — the architect says the proposal cannot proceed as complying development / a CDC, and needs a Development Application or development consent from the council. Phrases include "won't meet the CDC criteria", "will need a DA", "requires development consent", "falls outside complying development". Do NOT raise this for a general mention of council, of a DA that has already been obtained, or of a DA as a hypothetical the sender is ruling out.
+const INSTRUCTION = `You read one email from the architect or the principal certifier working on an Australian residential building job, and decide whether it raises exactly one condition. Most emails raise none. Returning an empty list is the correct and most common answer.
+
+DA_APPROVAL_REQUIRED — the sender says the proposal cannot proceed as complying development / a CDC, and needs a Development Application or development consent from the council. Phrases include "won't meet the CDC criteria", "will need a DA", "requires development consent", "falls outside complying development". Do NOT raise this for a general mention of council, of a DA that has already been obtained, or of a DA as a hypothetical the sender is ruling out.
 
 Rules:
 - Raise the condition only when the sender states it about THIS job. A general remark, a question, or a condition the sender is explicitly discounting is not a statement.
@@ -68,15 +80,14 @@ Rules:
  * call timed out would lose the documents to report a missed flag.
  */
 export async function detectComplianceAlerts(params: {
-  party: CompliancePartyType;
+  source: ComplianceAlertSource;
   subject: string;
   body: string;
 }): Promise<DetectedComplianceAlert[]> {
-  // Only an architect can raise the one condition this reads for. A surveyor's
-  // covering note and a portal notification have nothing in them to find, and
-  // skipping before the model call rather than filtering after it means neither
-  // costs a round trip.
-  if (params.party !== CompliancePartyType.ARCHITECT) {
+  // Only these two are in a position to say it. A surveyor's covering note and
+  // a portal notification have nothing in them to find, and skipping before the
+  // model call rather than filtering after it means neither costs a round trip.
+  if (!ALERT_SOURCES.has(params.source)) {
     return [];
   }
 
@@ -94,7 +105,7 @@ export async function detectComplianceAlerts(params: {
       system: INSTRUCTION,
       temperature: 0,
       prompt: [
-        `The sender is the ${params.party.toLowerCase()} on this job.`,
+        `The sender is the ${params.source.toLowerCase()} on this job.`,
         `Subject: ${params.subject}`,
         `Email body:\n${clean}`,
       ].join("\n\n"),
