@@ -21,6 +21,7 @@ import {
   formatSiteParticulars,
   getPrintFooterText,
   PROPOSAL_TAGLINE,
+  type OfferPrintScopeRow,
 } from "@/lib/offer/workspace-print-template";
 import {
   buildWelcomeParagraphs,
@@ -246,6 +247,17 @@ export function OfferWorkspacePrintTemplate(
             />
           ),
     ),
+    ...(data.scopeRows.length > 0
+      ? [
+          (n: number, total: number) => (
+            <PrintAllowancesPage
+              key="allowances"
+              rows={data.scopeRows}
+              footer={foot(data, n, total)}
+            />
+          ),
+        ]
+      : []),
     (n, total) => (
       <PrintTermsPage
         key="terms"
@@ -611,6 +623,70 @@ function PrintInclusionsPage({
               </td>
               <td className="px-4 py-3 align-top text-muted-foreground">
                 {entry.spec}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </PrintPage>
+  );
+}
+
+// The prime-cost and provisional sums the estimator ticked "Show on Offer
+// document" on the Scope step.
+//
+// buildOfferPrintTemplateData has always computed `scopeRows`, and until now
+// nothing rendered them: a fixed-price proposal went out with no statement of
+// which sums were allowances, what they were worth, or what happens when the
+// real cost differs — while the estimator saw a ticked checkbox saying it would.
+//
+// Its own page, and only when there is something to disclose, so an offer with
+// no allowances keeps exactly the page count it had before.
+function PrintAllowancesPage({
+  rows,
+  footer,
+}: {
+  readonly rows: readonly OfferPrintScopeRow[];
+  readonly footer: string;
+}) {
+  return (
+    <PrintPage footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection eyebrow="Allowances" title="Prime cost & provisional sums">
+        <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+          The amounts below are allowances held within your fixed contract
+          price, not fixed costs. Where your final selection costs more or less
+          than the allowance, the difference is adjusted by written variation as
+          set out against each item.
+        </p>
+      </PrintSection>
+      <table className="mt-6 w-full border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="w-[42mm] py-3 pr-4 font-semibold">Item</th>
+            <th className="px-4 py-3 font-semibold">What it covers</th>
+            <th className="w-[28mm] px-4 py-3 text-right font-semibold">
+              Allowance
+            </th>
+            <th className="w-[45mm] px-4 py-3 font-semibold">
+              If the actual cost differs
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr className="border-b border-border" key={row.id}>
+              <td className="py-3 pr-4 align-top font-semibold text-sidebar">
+                {row.label}
+              </td>
+              <td className="px-4 py-3 align-top text-muted-foreground">
+                {row.description || "\u2014"}
+              </td>
+              <td className="px-4 py-3 text-right align-top font-mono tabular-nums">
+                {row.amountLabel}
+              </td>
+              <td className="px-4 py-3 align-top text-muted-foreground">
+                {row.variationRule || "\u2014"}
               </td>
             </tr>
           ))}
