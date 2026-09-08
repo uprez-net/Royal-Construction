@@ -56,6 +56,7 @@ import {
   pollOfferSigningStatus,
   saveOfferWorkspace,
   transitionOfferStatus,
+  recallOfferEnvelope,
   createOfferRevision,
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
@@ -1301,8 +1302,16 @@ export function NewOfferWorkspace({
 
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
+  // `recallScope` turns a status step into a genuine recall: the live DocuSign
+  // envelope for that document is voided BEFORE the status moves, so an
+  // estimator who sees "Draft" can trust that the customer's signing link is
+  // dead. Without it these controls only ever flipped our own status while the
+  // superseded document stayed signable.
   const transition = useCallback(
-    (next: OfferWorkspaceStatus) => {
+    (
+      next: OfferWorkspaceStatus,
+      recallScope?: "offer" | "tender" | "contract",
+    ) => {
       const offerId = offerIdRef.current;
       if (leadId === undefined || offerId === null) {
         return;
@@ -1325,10 +1334,24 @@ export function NewOfferWorkspace({
             );
             return;
           }
-          await transitionOfferStatus({
-            offerId,
-            toStatus: next.toUpperCase() as OfferStatus,
-          });
+          if (recallScope) {
+            const recalled = await recallOfferEnvelope({
+              offerId,
+              scope: recallScope,
+              toStatus: next.toUpperCase() as OfferStatus,
+            });
+            // A recall that could not reach DocuSign still moved our status, so
+            // this is not an error — but the envelope may still be live and the
+            // estimator is the only one who can finish the job by hand.
+            if (recalled.voidWarnings.length > 0) {
+              setTransitionError(recalled.voidWarnings.join(" "));
+            }
+          } else {
+            await transitionOfferStatus({
+              offerId,
+              toStatus: next.toUpperCase() as OfferStatus,
+            });
+          }
           if (next === "contract_draft") {
             setContractParticulars((current) =>
               reconcileContractParticularDefaults(
@@ -1809,7 +1832,7 @@ export function NewOfferWorkspace({
         onSendOfferForSignature={sendOfferAccept}
         offerSignSending={offerSignSending}
         offerSignError={offerSignError}
-        onRecallOffer={() => transition("sent")}
+        onRecallOffer={() => transition("sent", "offer")}
         // Dev-only simulate (guarded server-side): the real OFFER_SIGNED comes
         // from the DocuSign completion webhook.
         onMarkOfferSigned={() => transition("offer_signed")}
@@ -1817,7 +1840,7 @@ export function NewOfferWorkspace({
         onSendTender={sendTender}
         tenderSending={tenderSending}
         tenderSendError={tenderSendError}
-        onRecallTender={() => transition("tender_draft")}
+        onRecallTender={() => transition("tender_draft", "tender")}
         onMarkTenderSigned={() => transition("tender_signed")}
         onGenerateContract={() => transition("contract_draft")}
         onSendContract={sendContract}
@@ -1825,7 +1848,7 @@ export function NewOfferWorkspace({
         contractSendError={contractSendError}
         contractParticulars={contractParticulars}
         onContractParticularsChange={updateContractParticulars}
-        onRecallContract={() => transition("contract_draft")}
+        onRecallContract={() => transition("contract_draft", "contract")}
         onMarkContractSigned={() => transition("contract_signed")}
         onCreateProject={createProject}
         projectCreating={projectCreating}
