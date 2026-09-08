@@ -2,6 +2,7 @@ import { getAdminOfferContent } from "@/lib/data/admin-offer-content";
 import {
   inferOfferStageCode,
   type OfferDocumentDraft,
+  type OfferInclusionEntry,
   type OfferWorkspaceCostLine,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceJob,
@@ -27,7 +28,10 @@ import type {
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
-import type { AdminOfferContent } from "@/types/admin-offer-content";
+import type {
+  AdminOfferContent,
+  InclusionScheduleRow,
+} from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
   STANDARD_INCLUSION_ENTRIES,
@@ -162,48 +166,65 @@ function resolveExclusions(
   })) satisfies OfferWorkspaceScopeItem[];
 }
 
-function resolveDraft(
+// The admin's configured list IS the list; the hardcoded constants are the
+// fallback for an install whose admin content has never been populated.
+//
+// This used to spread the constants FIRST and then append only those admin
+// lines that did not already match one. Because the seed writes those same
+// constants into the admin row (scripts/seed-admin-offer-content.ts:88-96 via
+// INITIAL_OFFER_DRAFT), every line an admin could see was one the constants
+// re-added unconditionally. Deleting a line was a silent no-op, and correcting
+// a line's wording printed BOTH the old and the new version on the customer's
+// fixed-price contract, because the edited line no longer matched the constant
+// and was appended alongside it.
+//
+// The empty-list fallback is kept deliberately, for the same reason
+// resolveCostLines keeps its own: a missing or unseeded admin row must never
+// silently drop every exclusion from every offer. The difference is that the
+// fallback is now per-LIST, not per-LINE, so a populated list is honoured
+// exactly as the admin left it.
+function adminLinesOrDefault(
+  lines: readonly string[],
+  fallback: readonly string[],
+): readonly string[] {
+  const configured = lines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return configured.length > 0 ? configured : fallback;
+}
+
+function adminScheduleOrDefault(
+  rows: readonly InclusionScheduleRow[],
+  fallback: readonly OfferInclusionEntry[],
+): readonly OfferInclusionEntry[] {
+  const configured = rows
+    .map((row) => ({ spec: row.spec.trim(), category: row.category }))
+    .filter((row) => row.spec.length > 0);
+  return configured.length > 0 ? configured : fallback;
+}
+
+// Exported for tests: the admin-vs-constants precedence is the whole point of
+// this function and it is not reachable through buildAdminOfferPrefill without a
+// database.
+export function resolveDraft(
   adminContent: AdminOfferContent,
 ): OfferDocumentDraft {
   const c = adminContent.offerContent;
   return {
     headline: c.headline,
     introText: c.introText,
-    exclusionBullets: [
-      ...OFFER_EXCLUDES_BULLETS,
-      ...c.exclusions
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !OFFER_EXCLUDES_BULLETS.includes(line)),
-    ],
+    exclusionBullets: adminLinesOrDefault(c.exclusions, OFFER_EXCLUDES_BULLETS),
     // Admin-configured inclusion copy IS the selling list — short lines for the
     // page beside the price. It is not schedule wording, so it no longer gets
     // turned into contract rows.
-    inclusionHighlights: [
-      ...STANDARD_INCLUSION_HIGHLIGHTS,
-      ...c.inclusions
-        .map((line) => line.trim())
-        .filter(
-          (line) =>
-            line.length > 0 && !STANDARD_INCLUSION_HIGHLIGHTS.includes(line),
-        ),
-    ],
-    inclusionSchedule: [
-      ...STANDARD_INCLUSION_ENTRIES,
-      ...c.inclusionSchedule
-        .map((row) => ({
-          spec: row.spec,
-          category: row.category,
-        }))
-        .filter(
-          (row) =>
-            row.spec.trim().length > 0 &&
-            !STANDARD_INCLUSION_ENTRIES.some(
-              (standard) =>
-                standard.spec === row.spec &&
-                standard.category === row.category,
-            ),
-        ),
-    ],
+    inclusionHighlights: adminLinesOrDefault(
+      c.inclusions,
+      STANDARD_INCLUSION_HIGHLIGHTS,
+    ),
+    inclusionSchedule: adminScheduleOrDefault(
+      c.inclusionSchedule,
+      STANDARD_INCLUSION_ENTRIES,
+    ),
     termsSummary: c.termsAndConditions,
   };
 }
