@@ -30,7 +30,11 @@ import { Button } from "@/components/ui/button";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { resetProjects, setProjects } from "@/lib/store/slices/projectsSlice";
-import { clearProjectFilters, openModal } from "@/lib/store/slices/uiSlice";
+import {
+  clearProjectFilters,
+  DEFAULT_PROJECT_STATUS_FILTER,
+  openModal,
+} from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
@@ -103,7 +107,11 @@ export function ProjectsClient({
   const [reloadNonce, setReloadNonce] = useState(0);
 
   const querySignature = `${statusFilter ?? "all"}|${searchQuery.trim()}|${sortBy}|${sortOrder}`;
-  const hasActiveFilters = Boolean(statusFilter) || searchQuery.trim() !== "";
+  // Measured against the default, not against "no filter at all": the list
+  // opens on ACTIVE, so treating that as a filter would offer "Clear filters"
+  // on an untouched page and never show the "No projects yet" empty state.
+  const hasActiveFilters =
+    statusFilter !== DEFAULT_PROJECT_STATUS_FILTER || searchQuery.trim() !== "";
 
   const visibleProjects = useMemo(() => {
     return projectsInStore.map((project) => {
