@@ -165,6 +165,16 @@ export function clientHasApprovedPlans(
 export function packSendBlockedReason(
   engagement: CertifierEngagementDetail,
 ): string | null {
+  if (hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED)) {
+    // First, because it is the one that says the send is not merely premature
+    // but pointless. The pack asks a certifier to assess the job as complying
+    // development; an open DA alert is somebody who has looked at the proposal
+    // saying it cannot go through that way. Sending it anyway buys an
+    // assessment whose answer is already known and delays the path the job is
+    // actually on.
+    return "The architect says this job needs development approval, so it cannot go to the certifier as a CDC. Close that alert if a CDC turns out to be viable after all.";
+  }
+
   if (hasOpenAlert(engagement, ComplianceAlertType.STALE_TITLE_SEARCH)) {
     // The strongest of the three. A title search naming the previous owners is
     // not a document with a problem, it is the wrong document: sending it opens
