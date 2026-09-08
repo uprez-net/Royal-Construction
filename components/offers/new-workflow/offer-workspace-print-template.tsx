@@ -663,12 +663,11 @@ function PrintAllowancesPage({
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>
           <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="w-[42mm] py-3 pr-4 font-semibold">Item</th>
-            <th className="px-4 py-3 font-semibold">What it covers</th>
-            <th className="w-[28mm] px-4 py-3 text-right font-semibold">
+            <th className="py-3 pr-4 font-semibold">Item</th>
+            <th className="w-[30mm] px-4 py-3 text-right font-semibold">
               Allowance
             </th>
-            <th className="w-[45mm] px-4 py-3 font-semibold">
+            <th className="w-[70mm] px-4 py-3 font-semibold">
               If the actual cost differs
             </th>
           </tr>
@@ -676,11 +675,13 @@ function PrintAllowancesPage({
         <tbody>
           {rows.map((row) => (
             <tr className="border-b border-border" key={row.id}>
-              <td className="py-3 pr-4 align-top font-semibold text-sidebar">
-                {row.label}
-              </td>
-              <td className="px-4 py-3 align-top text-muted-foreground">
-                {row.description || "\u2014"}
+              <td className="py-3 pr-4 align-top">
+                <span className="font-semibold text-sidebar">{row.label}</span>
+                {row.description ? (
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    {row.description}
+                  </span>
+                ) : null}
               </td>
               <td className="px-4 py-3 text-right align-top font-mono tabular-nums">
                 {row.amountLabel}

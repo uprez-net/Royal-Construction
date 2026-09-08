@@ -133,6 +133,44 @@ test("the disclosure states the variation rule, not just the amount", () => {
   assert.match(html, /adjusted by written variation/);
 });
 
+test("an allowance whose description repeats its variation rule prints it once", () => {
+  // Found by rendering real staging offers: 72% of live allowance rows carry the
+  // SAME sentence in description and variationRule, and the seeded fixtures do
+  // not. A four-column table printed it twice side by side on the customer's
+  // proposal. The duplicate is dropped in the shared template data so the
+  // printed and emailed documents cannot diverge on it.
+  const repeated = "Selections above the allowance become a variation.";
+  const items = [
+    {
+      ...INITIAL_ALLOWANCES[0],
+      description: repeated,
+      variationRule: repeated,
+      includedInOfferDocument: true,
+    },
+  ];
+  const data = buildOfferPrintTemplateData(buildProposalInput(snapshotWith(items)));
+  assert.equal(data.scopeRows[0].description, "");
+  assert.equal(data.scopeRows[0].variationRule, repeated);
+
+  const html = reactMarkup(snapshotWith(items));
+  const body = html.slice(html.indexOf("Prime cost"));
+  const occurrences = body.split(repeated).length - 1;
+  assert.equal(occurrences, 1, `the same sentence printed ${occurrences} times in one row`);
+});
+
+test("a genuinely distinct description is still printed", () => {
+  const data = buildOfferPrintTemplateData(
+    buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)),
+  );
+  const withDescription = data.scopeRows.find((row) => row.description !== "");
+  assert.ok(withDescription, "the dedupe swallowed every description");
+  assert.ok(
+    reactMarkup(snapshotWith(INITIAL_ALLOWANCES)).includes(
+      withDescription.description,
+    ),
+  );
+});
+
 test("an offer with no ticked allowances adds no page to either renderer", () => {
   // Offers that disclose nothing must keep exactly the document they had before.
   const withNone = reactMarkup(snapshotWith(hidden));

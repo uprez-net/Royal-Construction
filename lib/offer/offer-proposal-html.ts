@@ -297,7 +297,10 @@ export function buildProposalHtml(
   .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .inc td { border-bottom: 1px solid ${BORDER}; padding: 10px; vertical-align: top; }
   .inc td.cat { font-weight: 700; color: ${NAVY}; width: 45mm; }
-  .inc th.amt, .inc td.amt { text-align: right; width: 28mm; white-space: nowrap; }
+  .inc th.amt, .inc td.amt { text-align: right; width: 30mm; white-space: nowrap; }
+  .inc .sub { font-weight: 400; color: ${MUTED}; font-size: 11px; margin-top: 3px; line-height: 1.45; }
+  .inc.alw td.cat { width: auto; }
+  .inc.alw th:last-child, .inc.alw td:last-child { width: 70mm; }
   .inc td.amt { font-family: monospace; color: ${NAVY}; }
   .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
@@ -551,7 +554,7 @@ function allowancesPage(
   const body = data.scopeRows
     .map(
       (row) =>
-        `<tr><td class="cat">${esc(row.label)}</td><td class="muted">${esc(row.description) || "&mdash;"}</td><td class="amt">${esc(row.amountLabel)}</td><td class="muted">${esc(row.variationRule) || "&mdash;"}</td></tr>`,
+        `<tr><td class="cat">${esc(row.label)}${row.description ? `<div class="sub">${esc(row.description)}</div>` : ""}</td><td class="amt">${esc(row.amountLabel)}</td><td class="muted">${esc(row.variationRule) || "&mdash;"}</td></tr>`,
     )
     .join("");
   return `<div class="page">
@@ -559,7 +562,7 @@ function allowancesPage(
     <div class="eyebrow">Allowances</div>
     <h1 class="title">Prime cost &amp; provisional sums</h1>
     <p class="muted" style="margin-top:12px;max-width:155mm;">The amounts below are allowances held within your fixed contract price, not fixed costs. Where your final selection costs more or less than the allowance, the difference is adjusted by written variation as set out against each item.</p>
-    <table class="inc"><thead><tr><th>Item</th><th>What it covers</th><th class="amt">Allowance</th><th>If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>
+    <table class="inc alw"><thead><tr><th>Item</th><th class="amt">Allowance</th><th>If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>
     ${foot}
   </div>`;
 }

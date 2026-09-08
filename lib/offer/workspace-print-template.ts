@@ -113,7 +113,16 @@ export function buildOfferPrintTemplateData({
       .filter((item) => item.includedInOfferDocument)
       .map((item) => ({
         amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
-        description: item.description,
+        // Estimators routinely put the same sentence in both fields — across
+        // real offers most rows have description === variationRule, and many
+        // leave the description blank. Printing it twice side by side on a
+        // fixed-price proposal reads as a rendering fault, so the duplicate is
+        // dropped HERE rather than in each renderer: the offer and the emailed
+        // PDF must not diverge on this.
+        description:
+          item.description.trim() === item.variationRule.trim()
+            ? ""
+            : item.description,
         id: item.id,
         label: item.label,
         variationRule: item.variationRule,
