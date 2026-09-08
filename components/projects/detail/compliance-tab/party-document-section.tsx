@@ -6,7 +6,14 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
-import { Compass, ExternalLink, PencilRuler, Landmark } from "lucide-react";
+import {
+  Compass,
+  ExternalLink,
+  Flame,
+  Landmark,
+  Leaf,
+  PencilRuler,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -26,10 +33,17 @@ import type {
 import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceSectionCard } from "./compliance-section-card";
 
-const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
+/**
+ * One icon per party, exported because the consultant controls on the checklist
+ * rows use the same ones. A BASIX consultant offered under a leaf here and a
+ * different mark three cards down would read as two different kinds of thing.
+ */
+export const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
   [CompliancePartyType.SURVEYOR]: Compass,
   [CompliancePartyType.ARCHITECT]: PencilRuler,
   [CompliancePartyType.COUNCIL]: Landmark,
+  [CompliancePartyType.BASIX_CONSULTANT]: Leaf,
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: Flame,
 };
 
 type PartyDocumentSectionProps = {

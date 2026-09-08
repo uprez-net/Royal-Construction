@@ -44,12 +44,31 @@ function revalidateEngagement(projectId: string) {
   revalidateTag(`certifier-engagement-${projectId}`, CACHE_PROFILES.SHORT);
 }
 
-/** How each alert reads in a notification and in the audit trail. */
+/**
+ * How each alert reads in a notification and in the audit trail.
+ *
+ * Deliberately duplicated from `COMPLIANCE_ALERT_COPY` on the tab rather than
+ * imported from it: that module is a client component carrying icons and
+ * buttons, and pulling it in here would drag React into a `"use server"` module
+ * that the cron sweep also runs. The titles are asserted equal in
+ * tests/compliance/alert-copy.test.ts, which is the cheaper half of the trade.
+ */
 const ALERT_TITLE: Readonly<Record<ComplianceAlertType, string>> = {
   [ComplianceAlertType.STALE_TITLE_SEARCH]:
     "Title search does not name the owners",
-  [ComplianceAlertType.DA_APPROVAL_REQUIRED]:
-    "Development approval required",
+  [ComplianceAlertType.DA_APPROVAL_REQUIRED]: "Development approval required",
+  [ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED]:
+    "Planning certificate taking longer than usual",
+  [ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE]:
+    "Surveyor response pending — send a follow up",
+  [ComplianceAlertType.ARCHITECT_PLANS_OVERDUE]:
+    "Preliminary plans pending — follow up with the architect",
+  [ComplianceAlertType.ARCHITECT_REVISION_OVERDUE]:
+    "Client revisions pending — follow up with the architect",
+  [ComplianceAlertType.BASIX_RESPONSE_OVERDUE]:
+    "BASIX certificate pending — send a follow up",
+  [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]:
+    "Bushfire assessment pending — send a follow up",
 };
 
 export async function complianceAlertTitle(

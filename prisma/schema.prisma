@@ -265,6 +265,16 @@ enum ComplianceDocumentType {
   SIGNED_CDC_FORM
   CHECKLIST_ITEM
   HOME_INSURANCE
+  /// A BASIX certificate, and a bushfire attack level assessment.
+  ///
+  /// Neither is part of the required pack and neither comes back from the
+  /// certifier -- they are what a checklist line asks for, produced by a
+  /// consultant nobody has engaged yet. They exist as types so an extracted
+  /// line can say which consultant it needs (ChecklistItemDetail.mapsToType),
+  /// which is what puts a "Connect with…" control on that row rather than
+  /// leaving an admin to work out who to ring.
+  BASIX_CERTIFICATE
+  BUSHFIRE_REPORT
   UNKNOWN
 }
 
@@ -1159,11 +1169,12 @@ model CertifierEngagement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project    Project              @relation("ProjectCertifierEngagement", fields: [projectId], references: [id], onDelete: Cascade)
-  documents  ComplianceDocument[]
-  emails     CertifierEmail[]
-  outreaches ComplianceOutreach[]
-  alerts     ComplianceAlert[]
+  project             Project                         @relation("ProjectCertifierEngagement", fields: [projectId], references: [id], onDelete: Cascade)
+  documents           ComplianceDocument[]
+  emails              CertifierEmail[]
+  outreaches          ComplianceOutreach[]
+  alerts              ComplianceAlert[]
+  planningCertificate PlanningCertificateApplication?
 
   @@index([status])
 }
@@ -1198,8 +1209,12 @@ model ComplianceDocument {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  files      File[]              @relation("ComplianceDocumentFiles")
+  engagement CertifierEngagement  @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  files      File[]               @relation("ComplianceDocumentFiles")
+  /// The consultants engaged off this line, where it is a checklist item that
+  /// asked for one. Zero or one in practice -- the unique index on
+  /// [engagementId, party] is what actually holds that.
+  outreaches ComplianceOutreach[] @relation("ChecklistDocumentOutreaches")
 
   @@index([engagementId])
   @@index([engagementId, order])
@@ -1254,9 +1269,18 @@ enum CompliancePartyType {
   SURVEYOR
   ARCHITECT
   /// The NSW Planning Portal, for the 10.7(2) & (5) certificate. Never sent to
-  /// from here today -- the row exists so the certificate has a thread to be
-  /// filed against when one arrives at the watched address.
+  /// from here today -- the row is written when the certificate application is
+  /// recorded, so the certificate has a thread to be filed against when one
+  /// arrives at the watched address.
   COUNCIL
+  /// The two consultants a certifier's checklist routinely calls for.
+  ///
+  /// Unlike the three above they are not part of the required pack and are not
+  /// known when the file opens: they are engaged mid-checklist, off a line that
+  /// asks for a BASIX certificate or a bushfire assessment. Same outreach, same
+  /// thread, same inbound correlation -- what differs is only when they enter.
+  BASIX_CONSULTANT
+  BUSHFIRE_CONSULTANT
 }
 
 /// How a party's documents are being obtained.
@@ -1299,6 +1323,36 @@ enum ComplianceAlertType {
   /// development approval. While this is open the 10.7 certificate stops being
   /// required and the DA section opens; it closes when the DA is granted.
   DA_APPROVAL_REQUIRED
+
+  // ---------------------------------------------------------------------
+  // Overdue conditions.
+  //
+  // Every one of these is raised by the daily sweep in
+  // /api/cron/compliance-alerts rather than by anything a party sends, which
+  // is what makes them a different kind of alert from the two above: nothing
+  // arrives to raise them, so the absence has to be looked for. Each one has a
+  // clock, a threshold and a chase, and each closes itself the moment the
+  // thing it is waiting for lands.
+  //
+  // Deliberately one type per party rather than a single PARTY_RESPONSE_OVERDUE
+  // carrying the party in raisedBySource. At most one alert of a type is open
+  // per file, so a shared type would mean a job waiting on both the surveyor
+  // and a BASIX consultant could only ever say one of those out loud.
+  // ---------------------------------------------------------------------
+
+  /// The planning certificate application has been lodged and the portal has
+  /// not answered inside its own quoted turnaround.
+  PLANNING_CERTIFICATE_DELAYED
+  /// The surveyor was written to and has sent nothing back.
+  SURVEYOR_RESPONSE_OVERDUE
+  /// The client and architect met, and no preliminary plans have followed.
+  ARCHITECT_PLANS_OVERDUE
+  /// The client asked for revisions and the architect has not re-issued.
+  ARCHITECT_REVISION_OVERDUE
+  /// The BASIX consultant was engaged and has sent no certificate back.
+  BASIX_RESPONSE_OVERDUE
+  /// The bushfire consultant was engaged and has sent no assessment back.
+  BUSHFIRE_RESPONSE_OVERDUE
 }
 
 enum ComplianceAlertStatus {
@@ -1320,6 +1374,8 @@ enum ComplianceAlertSource {
   ARCHITECT
   COUNCIL
   CERTIFIER
+  BASIX_CONSULTANT
+  BUSHFIRE_CONSULTANT
 }
 
 /// One party's engagement on a compliance file.
@@ -1357,18 +1413,167 @@ model ComplianceOutreach {
   /// with createReply against the message it answers.
   lastInboundMessageId String?
 
+  /// When the opening mail actually went out.
+  ///
+  /// The clock every overdue alert on this party is measured from, and
+  /// deliberately not updatedAt: that moves on a follow-up, on a reply landing,
+  /// on a meeting being booked, and an SLA measured from it would reset itself
+  /// every time somebody touched the row. Null on a SELF_SUPPLIED row and on
+  /// one whose send never completed -- neither of which is waiting on anybody.
+  sentAt DateTime?
+
+  /// When this party was last chased, from the alert panel or by the sweep.
+  ///
+  /// Read only to keep the daily sweep from re-raising a condition somebody has
+  /// already acted on. It is not a resolution: chasing is not answering, and
+  /// the alert closes when the documents arrive.
+  lastFollowUpAt DateTime?
+
+  /// When the client signed off on the preliminary plans. Architect rows only.
+  ///
+  /// The gate on sending the pack to the certifier. Held here rather than as a
+  /// status because it is one irreversible fact about one party's work, and
+  /// because the revision rounds that precede it are their own rows below.
+  clientPlansApprovedAt DateTime?
+
+  /// The checklist line this outreach was raised off, for the consultants.
+  ///
+  /// A BASIX or bushfire consultant is engaged mid-checklist against one item,
+  /// and what they send back satisfies that item rather than becoming a
+  /// document of its own -- so the row that asked has to be recorded when the
+  /// outreach opens, not guessed at when the reply arrives. Null for the three
+  /// parties that are engaged off the required pack instead.
+  checklistDocumentId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  tradie     Tradie?             @relation("TradieComplianceOutreaches", fields: [tradieId], references: [id], onDelete: SetNull)
-  emails     CertifierEmail[]
+  engagement        CertifierEngagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  tradie            Tradie?                  @relation("TradieComplianceOutreaches", fields: [tradieId], references: [id], onDelete: SetNull)
+  emails            CertifierEmail[]
+  checklistDocument ComplianceDocument?      @relation("ChecklistDocumentOutreaches", fields: [checklistDocumentId], references: [id], onDelete: SetNull)
+  meetings          ComplianceMeeting[]
+  revisions         CompliancePlanRevision[]
 
   /// One outreach per party per file. A second "Connect with Surveyor" on a
   /// file that already has one is the same act repeated, not a new thread.
   @@unique([engagementId, party])
   @@index([engagementId])
   @@index([status])
+  @@index([checklistDocumentId])
+}
+
+/// Where one client/architect meeting got to.
+///
+/// RESCHEDULED is terminal on the row it is set on rather than pending:
+/// rescheduling closes this row and writes a new SCHEDULED one for the new
+/// time, so the trail says what moved and when. HELD is what starts the clock
+/// on the preliminary plans.
+enum ComplianceMeetingStatus {
+  SCHEDULED
+  HELD
+  RESCHEDULED
+}
+
+/// One meeting between the client and the architect.
+///
+/// A table rather than a pair of columns on the outreach, because the whole
+/// point of the resolution step is that a meeting can move: a job routinely
+/// books one, moves it, and then holds it, and two columns would remember only
+/// the last of those. What is being tracked is the date the plans clock starts
+/// from, and it has to be defensible against the two reschedules before it.
+model ComplianceMeeting {
+  id         String @id @default(uuid())
+  outreachId String
+
+  /// The time it is booked for. Stored as an instant and rendered in Sydney.
+  scheduledFor DateTime
+
+  status ComplianceMeetingStatus @default(SCHEDULED)
+
+  /// When it actually happened. Taken from scheduledFor when somebody records
+  /// that it took place, so the plans clock runs off the meeting rather than
+  /// off the click that reported it days later.
+  heldAt DateTime?
+
+  /// Anything the admin added -- for a reschedule, why it moved.
+  note String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreach ComplianceOutreach @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+
+  @@index([outreachId])
+  @@index([outreachId, status])
+}
+
+/// One round of client feedback on the architect's preliminary plans.
+///
+/// Written when the client says no, closed when a replacement set arrives. The
+/// gap between the two is what ARCHITECT_REVISION_OVERDUE measures, which is
+/// why respondedAt is a column rather than being inferred from the plans' own
+/// upload time -- a file replaced for an unrelated reason must not silently
+/// answer a revision nobody addressed.
+model CompliancePlanRevision {
+  id         String @id @default(uuid())
+  outreachId String
+
+  /// The client's words, sent to the architect verbatim.
+  feedback String @db.Text
+
+  requestedAt DateTime  @default(now())
+  /// When revised plans landed against this round. Null while outstanding.
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreach ComplianceOutreach @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+
+  @@index([outreachId])
+  @@index([outreachId, respondedAt])
+}
+
+/// The 10.7(2) & (5) certificate, as a thing being obtained rather than a file.
+///
+/// The council block used to ask "do you already have the planning
+/// certificate?" and hold the answer in component state. That was honest while
+/// the only two outcomes were "upload it" and "go and buy one" -- but buying
+/// one takes the portal three to five days, and nothing on the file recorded
+/// that an application existed at all, so a job could sit for a fortnight with
+/// an unanswered question on screen and nobody able to tell whether anybody had
+/// acted on it.
+///
+/// One row per engagement, created the moment the question is answered. Every
+/// field after alreadyHeld is null until the step that fills it, and the block
+/// renders whichever step that leaves it on.
+model PlanningCertificateApplication {
+  id           String @id @default(uuid())
+  engagementId String @unique
+
+  /// The answer to "do you already have the planning certificate?".
+  /// Null means nobody has been asked yet.
+  alreadyHeld Boolean?
+
+  /// When the application was lodged, as the admin reports it -- not when they
+  /// typed it in. The portal's turnaround is measured from lodgement.
+  appliedAt      DateTime?
+  /// The portal's own application number, for chasing it by phone.
+  applicationRef String?
+  /// Which council or portal it went to. Deliberately not prefilled from the
+  /// project's council: the two are usually the same and occasionally are not,
+  /// and a wrong prefilled answer is worse than an empty one.
+  lodgedWith     String?
+
+  /// When the certificate came back. Set by hand from the block, and by the
+  /// upload that supplies the certificate if nobody ticked it first.
+  receivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
 }
 
 /// A condition raised on a compliance file that blocks or reshapes what comes

@@ -49,7 +49,6 @@ import {
   isSignedCopyType,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
-  PARTY_PREREQUISITES,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
 import {
@@ -60,6 +59,10 @@ import {
   isRequiredPackComplete,
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
+import {
+  packSendBlockedReason,
+  partyBlockedReason,
+} from "@/lib/compliance/prerequisites";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -79,7 +82,6 @@ import {
 import type { ProjectDetail } from "@/types/project";
 import {
   checklistItemDetail,
-  isPartyEngaged,
   outreachForParty,
   requiresPlanningCertificate,
   type CertifierEngagementDetail,
@@ -952,33 +954,17 @@ export function ProjectComplianceTab({
     };
   });
 
-  const partyState = new Map(
-    partySections.map((entry) => [entry.party, entry] as const),
-  );
-
   /**
    * Why a section cannot be opened yet, in the reader's terms, or null.
    *
-   * A sentence rather than a boolean because the two reasons are different
-   * moves: nobody has engaged the surveyor (go and do it) versus the surveyor
-   * owes us two documents (wait, or chase them on the thread).
+   * Read out of `lib/compliance/prerequisites.ts`, which is the same function
+   * the server refuses the send with. This used to be its own near-copy of that
+   * logic, and the two drifted the moment the architect grew a second
+   * prerequisite: the section unlocked, the send was refused, and the two
+   * sentences explaining why did not agree.
    */
-  const blockedReason = (party: CompliancePartyType): string | null => {
-    for (const prerequisite of PARTY_PREREQUISITES[party]) {
-      const upstream = partyState.get(prerequisite);
-      const upstreamLabel = PARTY_LABEL[prerequisite].toLowerCase();
-
-      if (!isPartyEngaged(engagement, prerequisite)) {
-        return `Engage the ${upstreamLabel} first — this unlocks once their documents are in.`;
-      }
-      if (upstream && !upstream.isComplete) {
-        return `Waiting on ${upstream.outstanding
-          .map((type) => complianceDocumentLabel(type))
-          .join(" and ")} from the ${upstreamLabel}.`;
-      }
-    }
-    return null;
-  };
+  const blockedReason = (party: CompliancePartyType): string | null =>
+    partyBlockedReason(engagement, party);
 
   // -------------------------------------------------------------------
   // What each send is blocked by.
@@ -1126,6 +1112,20 @@ export function ProjectComplianceTab({
    */
   const hasUnsentRequired =
     !collecting && canSendRequiredPack(engagement) && unsentRequired.length > 0;
+
+  /**
+   * Why the pack must not go, though every row on it is full.
+   *
+   * Two conditions, and neither is about a missing document — the rows already
+   * say what is missing. A title search naming the previous owners is the wrong
+   * document rather than a late one, and plans the client has not signed off on
+   * are a design that is about to change. Sending on either costs a certifier's
+   * assessment of something that is not the job.
+   *
+   * The same function the send route refuses with, so the sentence under the
+   * button is the sentence the server would have thrown.
+   */
+  const packBlocked = packSendBlockedReason(engagement);
   const responseDocuments = [
     ...CERTIFIER_RESPONSE_DOCUMENTS.map((response) =>
       documentsByType.get(response.type),
@@ -1326,12 +1326,22 @@ export function ProjectComplianceTab({
                     }),
                   )
                 }
-                disabled={requiredPackBusy}
+                disabled={requiredPackBusy || packBlocked !== null}
               >
                 {collecting
                   ? "Find and send documents"
                   : "Send updated documents"}
               </Button>
+              {/* Why the send is refused, where it is. Above the replacement
+                  note because it is the stronger condition: a pack that must
+                  not go at all is not usefully described as out of date.
+
+                  The same sentence the server would throw, read off the same
+                  function, so a button that refuses and a request that refuses
+                  cannot give two accounts of one condition. */}
+              {packBlocked ? (
+                <p className="text-xs text-warning-ink">{packBlocked}</p>
+              ) : null}
               {/* The one thing the rows themselves cannot say: the file on
                   them is current, and the certifier's copy is not. */}
               {!collecting ? (

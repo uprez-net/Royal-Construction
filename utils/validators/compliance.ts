@@ -68,6 +68,15 @@ export const startPartyOutreachSchema = z.object({
   contactPhone: normalizedStringSchema.optional(),
   /** An extra line on the outreach — "we need this by Friday". */
   note: normalizedStringSchema.optional(),
+  /**
+   * The checklist line a consultant is being engaged against.
+   *
+   * Only meaningful for the two consultant parties, and ignored by the data
+   * layer for the other three. A surveyor is engaged against the job; a BASIX
+   * consultant is engaged against item 7, and what they send back answers that
+   * item rather than becoming a document of its own.
+   */
+  checklistDocumentId: idSchema.optional(),
 });
 
 export type StartPartyOutreachInput = z.infer<typeof startPartyOutreachSchema>;

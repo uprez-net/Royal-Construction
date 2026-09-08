@@ -52,6 +52,52 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
     guidance:
       "This job cannot go through as a CDC. The planning certificate is no longer required while this is open. Close it once development consent has been granted — or if it turns out a CDC is viable after all.",
   },
+
+  // -------------------------------------------------------------------
+  // The overdue conditions, raised by the daily sweep.
+  //
+  // All six read the same way and all six close themselves: the thing being
+  // waited for lands, and the sweep resolves the alert on its next pass. So
+  // the guidance says what is late and what the button does, and never asks
+  // anybody to come back and tick it off — a person resolving one by hand is
+  // saying the wait no longer applies, not that it ended.
+  // -------------------------------------------------------------------
+
+  [ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED]: {
+    title: "Planning certificate taking longer than usual",
+    guidance:
+      "The 10.7(2) & (5) application has been with the portal past the three to five working days it normally takes. Chase it with the council using the application number on the council block, and tick it received once the certificate lands. This closes itself when the certificate is on the file.",
+  },
+  [ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE]: {
+    title: "Surveyor response pending",
+    guidance:
+      "The surveyor was engaged more than eleven working days ago and has not sent their documents through. The follow-up asks for an update on the thread they are already reading; it closes itself when the documents arrive.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.ARCHITECT_PLANS_OVERDUE]: {
+    title: "Preliminary plans pending",
+    guidance:
+      "The client and the architect met more than eleven working days ago and no preliminary plans have come back. The follow-up asks for an update on the architect's thread; it closes itself when the plans land.",
+    followUp: "Follow up with the architect",
+  },
+  [ComplianceAlertType.ARCHITECT_REVISION_OVERDUE]: {
+    title: "Client revisions pending",
+    guidance:
+      "The client's revisions went to the architect more than eleven working days ago and no revised set has come back. The follow-up re-sends the feedback and asks where the redraw is up to; it closes itself when the revised plans arrive.",
+    followUp: "Send a revision reminder",
+  },
+  [ComplianceAlertType.BASIX_RESPONSE_OVERDUE]: {
+    title: "BASIX certificate pending",
+    guidance:
+      "The BASIX consultant was engaged more than eleven working days ago and has not sent the certificate through. The follow-up asks for an update on their thread; it closes itself when the certificate arrives.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]: {
+    title: "Bushfire assessment pending",
+    guidance:
+      "The bushfire consultant was engaged more than eleven working days ago and has not sent their assessment through. The follow-up asks for an update on their thread; it closes itself when the report arrives.",
+    followUp: "Send a follow up",
+  },
 };
 
 /**
@@ -66,6 +112,8 @@ const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
   [ComplianceAlertSource.ARCHITECT]: "architect",
   [ComplianceAlertSource.COUNCIL]: "NSW Planning",
   [ComplianceAlertSource.CERTIFIER]: "certifier",
+  [ComplianceAlertSource.BASIX_CONSULTANT]: "BASIX consultant",
+  [ComplianceAlertSource.BUSHFIRE_CONSULTANT]: "bushfire consultant",
 };
 
 type ComplianceAlertsPanelProps = {

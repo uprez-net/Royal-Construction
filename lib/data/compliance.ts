@@ -39,6 +39,7 @@ import {
   sentToCertifierUrls,
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
+import { packSendBlockedReason } from "@/lib/compliance/prerequisites";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -309,6 +310,17 @@ export async function sendCertifierOutreach(engagementId: string) {
     throw new Error(
       `Still missing ${missing.map((doc) => doc.label).join(", ")}.`,
     );
+  }
+
+  // Checked after the missing-document test and before anything is read out of
+  // storage. These are the conditions where every row is full and the pack must
+  // still not go -- a title search naming the previous owners, or plans the
+  // client has not approved. Same function the tab disables the button with, so
+  // the refusal here is the sentence already on screen rather than a second
+  // account of it.
+  const blocked = packSendBlockedReason(engagement);
+  if (blocked) {
+    throw new Error(blocked);
   }
 
   // Wanted on the file, not attached to this send. Named in the mail so the

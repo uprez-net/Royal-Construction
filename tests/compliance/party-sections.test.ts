@@ -75,10 +75,17 @@ test("partyForDocumentType agrees with the sections it was built from", () => {
   assert.equal(partyForDocumentType(ComplianceDocumentType.CHECKLIST), null);
 });
 
-test("the architect is sent exactly what the surveyor produces", () => {
+test("the architect is sent the surveyor's set and the planning certificate", () => {
+  // Everything the surveyor produced, plus the 10.7. The certificate joined
+  // this list when it became a prerequisite for engaging an architect at all:
+  // it is what says what the lot is allowed to carry, so an architect sent the
+  // survey without it draws once and then redraws.
   assert.deepEqual(
     [...PARTY_OUTREACH_ATTACHMENTS[CompliancePartyType.ARCHITECT]],
-    [...documentTypesForParty(CompliancePartyType.SURVEYOR)],
+    [
+      ...documentTypesForParty(CompliancePartyType.SURVEYOR),
+      ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+    ],
   );
   // The deed is the surveyor's input and nobody else's.
   assert.deepEqual(
@@ -113,15 +120,29 @@ test("no party may be the source of another party's documents", () => {
   }
 });
 
-test("the surveyor waits on nobody; the others wait on the surveyor", () => {
+test("the surveyor waits on nobody; the architect waits on both the others", () => {
   assert.deepEqual([...PARTY_PREREQUISITES[CompliancePartyType.SURVEYOR]], []);
+  // The council joined the architect's list rather than replacing the surveyor.
+  // Both are genuine: an architect cannot draw against a site with no survey,
+  // and cannot draw the right thing without the certificate that says what the
+  // lot may carry.
   assert.deepEqual(
     [...PARTY_PREREQUISITES[CompliancePartyType.ARCHITECT]],
-    [CompliancePartyType.SURVEYOR],
+    [CompliancePartyType.SURVEYOR, CompliancePartyType.COUNCIL],
   );
   assert.deepEqual(
     [...PARTY_PREREQUISITES[CompliancePartyType.COUNCIL]],
     [CompliancePartyType.SURVEYOR],
+  );
+  // The consultants are gated by a checklist line existing rather than by
+  // another party, so they wait on nobody in this table.
+  assert.deepEqual(
+    [...PARTY_PREREQUISITES[CompliancePartyType.BASIX_CONSULTANT]],
+    [],
+  );
+  assert.deepEqual(
+    [...PARTY_PREREQUISITES[CompliancePartyType.BUSHFIRE_CONSULTANT]],
+    [],
   );
 });
 

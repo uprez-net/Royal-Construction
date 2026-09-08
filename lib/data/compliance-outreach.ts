@@ -15,11 +15,12 @@ import { after } from "next/server";
 
 import {
   complianceDocumentLabel,
-  documentTypesForParty,
+  isConsultantParty,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
-  PARTY_PREREQUISITES,
+  partyDeliverables,
 } from "@/constants/complianceDocuments";
+import { partyBlockedReason } from "@/lib/compliance/prerequisites";
 import {
   buildPartySubject,
   generatePartyRefToken,
@@ -32,7 +33,6 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   certifierEngagementInclude,
-  isPartyEngaged,
   outreachForParty,
   type CertifierEmailAttachment,
   type CertifierEngagementDetail,
@@ -150,38 +150,21 @@ async function recordOutboundEmail(params: {
 /**
  * Whether a party can be engaged yet.
  *
- * The architect and the council both wait on the surveyor, and they wait on the
- * documents rather than on the mail: a surveyor who has been written to but has
- * sent nothing back leaves an architect with nothing to draw against. The one
- * exception is the outreach existing at all in SELF_SUPPLIED mode, which is
- * already the documents being present -- the client brought them.
+ * A thin wrapper over `partyBlockedReason`, which is the same reading the tab
+ * takes. This used to be its own implementation, with a near-copy on the tab,
+ * and near-identical is exactly the problem: the two drifted the moment the
+ * architect grew a second prerequisite, and the result was a section the tab
+ * unlocked and the server then refused, with two different sentences saying so.
  *
- * Returns the reason rather than a boolean so the caller can say what is
- * missing instead of refusing without explanation.
+ * Kept as a function of its own rather than inlined at the call sites, because
+ * it is the refusal boundary — everything below treats a non-null return as
+ * "throw this at the user".
  */
 export async function partyPrerequisiteFailure(
   engagement: CertifierEngagementDetail,
   party: CompliancePartyType,
 ): Promise<string | null> {
-  for (const prerequisite of PARTY_PREREQUISITES[party]) {
-    if (!isPartyEngaged(engagement, prerequisite)) {
-      return `The ${PARTY_LABEL[prerequisite].toLowerCase()} has not been engaged yet.`;
-    }
-
-    const outstanding = documentTypesForParty(prerequisite).filter(
-      (type) =>
-        !engagement.documents.some(
-          (document) =>
-            document.documentType === type && document.files.length > 0,
-        ),
-    );
-    if (outstanding.length > 0) {
-      return `Still waiting on ${outstanding
-        .map((type) => complianceDocumentLabel(type))
-        .join(", ")} from the ${PARTY_LABEL[prerequisite].toLowerCase()}.`;
-    }
-  }
-  return null;
+  return partyBlockedReason(engagement, party);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,9 +188,19 @@ function partyOutreachBody(
   contactName: string | null,
   subjectAddress: string,
   note: string | null,
+  /**
+   * Who the client is, for the parties that have to deal with them directly.
+   *
+   * Null for everybody but the architect today. It is withheld from the others
+   * for relevance rather than caution: a surveyor is sent to a lot and measures
+   * it, and a homeowner's mobile number on that email is noise. An architect
+   * cannot start at all without talking to the people who will live in the
+   * house.
+   */
+  client: OutreachClientDetails | null,
 ): string {
   const greeting = contactName ? `Hi ${contactName},` : "Hi,";
-  const wanted = documentTypesForParty(party).map((type) =>
+  const wanted = partyDeliverables(party).map((type) =>
     complianceDocumentLabel(type),
   );
 
@@ -216,6 +209,7 @@ function partyOutreachBody(
     `<p>We are starting work at <strong>${escapeEmailHtml(subjectAddress)}</strong> and would like to engage you on it.</p>`,
     "<p>Could you prepare and send through:</p>",
     `<ul>${wanted.map((label) => `<li>${escapeEmailHtml(label)}</li>`).join("")}</ul>`,
+    client ? clientDetailsBlock(client) : "",
     note ? `<p>${escapeEmailHtml(note)}</p>` : "",
     "<p>Anything you need to work from is attached.</p>",
     "<p>Please keep the reference in the subject line on any reply, so it stays with this job.</p>",
@@ -223,6 +217,87 @@ function partyOutreachBody(
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** The client's contact details, as an outreach carries them. */
+export type OutreachClientDetails = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+};
+
+/**
+ * Which parties are told who the client is.
+ *
+ * The architect, and only the architect. Their first job is to sit down with
+ * the owners and find out what they actually want, and an outreach that asked
+ * for plans without saying whose produced exactly what you would expect: a
+ * generic house, drawn against a survey, and a client seeing it for the first
+ * time at the preliminary stage with a fortnight of drawing to undo.
+ */
+const PARTIES_TOLD_ABOUT_THE_CLIENT: ReadonlySet<CompliancePartyType> = new Set(
+  [CompliancePartyType.ARCHITECT],
+);
+
+/**
+ * The client's details, and the instruction to go and use them.
+ *
+ * One block rather than a detail list plus a line somewhere else, because an
+ * architect skimming this needs to read "arrange a time" next to the number.
+ */
+function clientDetailsBlock(client: OutreachClientDetails): string {
+  const rows: [string, string][] = [
+    ["Name", client.name],
+    ["Email", client.email ?? ""],
+    ["Phone", client.phone ?? ""],
+    ["Address", client.address ?? ""],
+  ].filter((row): row is [string, string] => Boolean(row[1]));
+
+  return [
+    "<p>Please arrange a time to sit down with the owners and work through what they are after before you start drawing. Their details:</p>",
+    `<ul>${rows
+      .map(
+        ([label, value]) =>
+          `<li><strong>${escapeEmailHtml(label)}:</strong> ${escapeEmailHtml(value)}</li>`,
+      )
+      .join("")}</ul>`,
+    "<p>We can set that meeting up from our end if it is easier — say the word and we will send an invitation to you both.</p>",
+  ].join("\n");
+}
+
+/**
+ * The client on a project, as the outreach mail needs them.
+ *
+ * Read here rather than passed in from the route: who the client is is a fact
+ * about the project, not about whoever happened to press the button, and a
+ * caller free to supply it is a caller free to supply the wrong one.
+ */
+async function outreachClientDetails(
+  projectId: string,
+  party: CompliancePartyType,
+): Promise<OutreachClientDetails | null> {
+  if (!PARTIES_TOLD_ABOUT_THE_CLIENT.has(party)) {
+    return null;
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      customer: {
+        select: { name: true, email: true, phone: true, address: true },
+      },
+    },
+  });
+  const customer = project?.customer;
+  if (!customer) return null;
+
+  return {
+    name: customer.name,
+    email: customer.email,
+    phone: customer.phone,
+    address: customer.address,
+  };
 }
 
 /** Escapes a value for the plain HTML bodies above. */
@@ -281,6 +356,13 @@ export async function startPartyOutreach(
     contactName: input.contactName ?? null,
     contactEmail,
     contactPhone: input.contactPhone ?? null,
+    // The checklist line this was raised off, for a consultant. Recorded when
+    // the outreach opens rather than matched when the reply lands: what a BASIX
+    // consultant sends back satisfies the item that asked for it, and by then
+    // there may be three items mentioning BASIX.
+    checklistDocumentId: isConsultantParty(party)
+      ? (input.checklistDocumentId ?? null)
+      : null,
   };
 
   const outreach = existing
@@ -325,6 +407,7 @@ export async function startPartyOutreach(
     outreach.contactName,
     engagement.subjectAddress,
     input.note ?? null,
+    await outreachClientDetails(projectId, party),
   );
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
@@ -352,7 +435,12 @@ export async function startPartyOutreach(
 
   await prisma.complianceOutreach.update({
     where: { id: outreach.id },
-    data: { status: ComplianceOutreachStatus.SENT },
+    // sentAt is the clock every overdue alert on this party is measured from,
+    // and it is stamped here rather than taken from updatedAt for the reason
+    // the column exists: updatedAt moves on a follow-up, on a reply landing and
+    // on a meeting being booked, so an SLA read off it would reset itself every
+    // time anybody touched the row.
+    data: { status: ComplianceOutreachStatus.SENT, sentAt: new Date() },
   });
 
   after(async () => {

@@ -215,6 +215,10 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
   [ComplianceDocumentType.SIGNED_CDC_FORM]: [["signed"], ["cdc"]],
   [ComplianceDocumentType.CHECKLIST_ITEM]: [],
   [ComplianceDocumentType.HOME_INSURANCE]: [["hbcf", "home warranty", "home building compensation"]],
+  [ComplianceDocumentType.BASIX_CERTIFICATE]: [["basix"]],
+  [ComplianceDocumentType.BUSHFIRE_REPORT]: [
+    ["bushfire", "bush fire", "bal ", "bal-"],
+  ],
   [ComplianceDocumentType.UNKNOWN]: [],
 };
 

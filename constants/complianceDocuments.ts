@@ -143,19 +143,123 @@ export function documentTypesForParty(
 }
 
 /**
+ * Everything one party is asked to produce, pack or not.
+ *
+ * The superset of the above. `documentTypesForParty` answers a question about
+ * the required pack and is what the prerequisite gates read; this answers "what
+ * does the mail to this party ask for", which for a consultant is a document
+ * that is not in the pack at all. Keeping them apart is what stops a BASIX
+ * certificate becoming something the certifier outreach waits on.
+ */
+export function partyDeliverables(
+  party: CompliancePartyType,
+): readonly ComplianceDocumentType[] {
+  const consultantDeliverable = CONSULTANT_DELIVERABLE[party];
+  if (consultantDeliverable) {
+    return [consultantDeliverable];
+  }
+  return documentTypesForParty(party);
+}
+
+/**
  * The parties a stage waits on.
  *
- * One table rather than a chain of conditions at each call site: the architect
- * and the council both wait on the surveyor and on nothing else, and if that
- * ever grows a second dependency it grows here.
+ * One table rather than a chain of conditions at each call site, which is what
+ * let the architect grow a second dependency without every gate having to be
+ * found and edited.
+ *
+ * The architect waits on the council as well as the surveyor, and that is the
+ * substantive change here rather than a tidy-up. An architect drawing before
+ * the 10.7 certificate is in hand is drawing without knowing what the lot is
+ * actually allowed to carry -- the zoning, the overlays, the bushfire and flood
+ * designations are all on that certificate -- and the plans that come back get
+ * redrawn once it arrives. The certificate is three to five days; a redraw is
+ * three weeks.
+ *
+ * The council's own row is the exception to how this table is read. There is
+ * nobody to engage there and no mail to send, so "has the council been dealt
+ * with" is answered by the certificate being on the file rather than by an
+ * outreach existing -- see `lib/compliance/prerequisites.ts`, which is the one
+ * place that reads this.
+ *
+ * The consultants have no prerequisites of their own. They are not part of the
+ * required pack at all: what gates them is a checklist line existing that asks
+ * for what they produce, which is a fact about the checklist rather than about
+ * another party.
  */
 export const PARTY_PREREQUISITES: Readonly<
   Record<CompliancePartyType, readonly CompliancePartyType[]>
 > = {
   [CompliancePartyType.SURVEYOR]: [],
-  [CompliancePartyType.ARCHITECT]: [CompliancePartyType.SURVEYOR],
+  [CompliancePartyType.ARCHITECT]: [
+    CompliancePartyType.SURVEYOR,
+    CompliancePartyType.COUNCIL,
+  ],
   [CompliancePartyType.COUNCIL]: [CompliancePartyType.SURVEYOR],
+  [CompliancePartyType.BASIX_CONSULTANT]: [],
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: [],
 };
+
+/**
+ * The consultants engaged off a checklist line rather than off the pack.
+ *
+ * They differ from the three above in every way that matters to the flow: they
+ * enter halfway through, against one item of a checklist the certifier issued,
+ * and what they produce satisfies that item rather than becoming a document of
+ * its own. Everything else -- the outreach, the token, the thread, the inbound
+ * correlation, the overdue sweep -- is identical, which is why they are the
+ * same enum and not a second one.
+ */
+export const CONSULTANT_PARTIES: readonly CompliancePartyType[] = [
+  CompliancePartyType.BASIX_CONSULTANT,
+  CompliancePartyType.BUSHFIRE_CONSULTANT,
+];
+
+export function isConsultantParty(party: CompliancePartyType): boolean {
+  return CONSULTANT_PARTIES.includes(party);
+}
+
+/**
+ * What each consultant produces.
+ *
+ * The link that makes the whole arrangement work: an extracted checklist line
+ * carries `mapsToType`, and if that type is one of these then the row knows
+ * which consultant to offer, the outreach knows what to ask for, and the reply
+ * knows which line it answers.
+ */
+export const CONSULTANT_DELIVERABLE: Readonly<
+  Partial<Record<CompliancePartyType, ComplianceDocumentType>>
+> = {
+  [CompliancePartyType.BASIX_CONSULTANT]: ComplianceDocumentType.BASIX_CERTIFICATE,
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: ComplianceDocumentType.BUSHFIRE_REPORT,
+};
+
+const CONSULTANT_BY_DELIVERABLE = new Map<
+  ComplianceDocumentType,
+  CompliancePartyType
+>(
+  Object.entries(CONSULTANT_DELIVERABLE).map(
+    ([party, type]) =>
+      [type, party as CompliancePartyType] as [
+        ComplianceDocumentType,
+        CompliancePartyType,
+      ],
+  ),
+);
+
+/**
+ * Which consultant a checklist line needs, if any.
+ *
+ * Null is the overwhelmingly common answer: most checklist lines ask for
+ * something already on the file or something the builder produces, and only a
+ * BASIX certificate and a bushfire assessment need somebody outside engaged.
+ */
+export function consultantForDocumentType(
+  documentType: ComplianceDocumentType | undefined | null,
+): CompliancePartyType | null {
+  if (!documentType) return null;
+  return CONSULTANT_BY_DELIVERABLE.get(documentType) ?? null;
+}
 
 /**
  * The trade each party is picked from in the tradie directory.
@@ -171,6 +275,8 @@ export const PARTY_TRADE_LABEL: Readonly<
   // Not picked from the directory. Nothing is sent to the council from here —
   // the certificate is ordered on the NSW Planning Portal by hand.
   [CompliancePartyType.COUNCIL]: null,
+  [CompliancePartyType.BASIX_CONSULTANT]: "BASIX Assessment",
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: "Bushfire Assessment",
 };
 
 /** How each party is named in headings, buttons and thread tabs. */
@@ -178,7 +284,44 @@ export const PARTY_LABEL: Readonly<Record<CompliancePartyType, string>> = {
   [CompliancePartyType.SURVEYOR]: "Surveyor",
   [CompliancePartyType.ARCHITECT]: "Architect",
   [CompliancePartyType.COUNCIL]: "NSW Planning",
+  [CompliancePartyType.BASIX_CONSULTANT]: "BASIX consultant",
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: "Bushfire consultant",
 };
+
+/**
+ * How long each party has before anybody is chased, in NSW business days.
+ *
+ * Quoted turnarounds rather than targets of ours: the portal says three to five
+ * working days for a 10.7 certificate, and a surveyor, an architect or a
+ * consultant says ten to eleven for a set of drawings or a report. The sweep
+ * raises nothing until the upper bound has passed, so a firm delivering inside
+ * its own quote is never called late.
+ *
+ * One table, read by the daily sweep and by the copy on the alert it raises, so
+ * the screen cannot claim a threshold the sweep does not use.
+ */
+export const PARTY_RESPONSE_BUSINESS_DAYS: Readonly<
+  Record<CompliancePartyType, number>
+> = {
+  [CompliancePartyType.SURVEYOR]: 11,
+  [CompliancePartyType.ARCHITECT]: 11,
+  [CompliancePartyType.COUNCIL]: 5,
+  [CompliancePartyType.BASIX_CONSULTANT]: 11,
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: 11,
+};
+
+/**
+ * How long the architect has to produce preliminary plans after meeting the
+ * client, and to re-issue them after a round of revisions.
+ *
+ * Both measured from an event rather than from the outreach: the plans clock
+ * starts at the meeting, because an architect who has not sat with the client
+ * has nothing to draw yet, and the revision clock starts when the feedback is
+ * sent. Same figure as the response SLA above, and separate from it because the
+ * three clocks run at different times on the same outreach.
+ */
+export const ARCHITECT_PLANS_BUSINESS_DAYS = 11;
+export const ARCHITECT_REVISION_BUSINESS_DAYS = 11;
 
 /**
  * What the builder sends the surveyor to start work.
@@ -205,10 +348,30 @@ export const PARTY_OUTREACH_ATTACHMENTS: Readonly<
   Record<CompliancePartyType, readonly ComplianceDocumentType[]>
 > = {
   [CompliancePartyType.SURVEYOR]: [ComplianceDocumentType.LAND_DEED],
-  [CompliancePartyType.ARCHITECT]: documentTypesForParty(
-    CompliancePartyType.SURVEYOR,
-  ),
+  // The surveyor's set plus the planning certificate, which by the time an
+  // architect can be engaged is on the file by definition -- the certificate is
+  // now a prerequisite for engaging them. It is the document that says what the
+  // lot is allowed to carry, so an architect sent the survey without it is
+  // being asked to draw and then redraw.
+  [CompliancePartyType.ARCHITECT]: [
+    ...documentTypesForParty(CompliancePartyType.SURVEYOR),
+    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  ],
   [CompliancePartyType.COUNCIL]: [],
+  // Both consultants assess a design against a site, so both are sent the same
+  // thing: the plans as they stand, the survey they were drawn against, and the
+  // certificate carrying the overlays. The bushfire assessor in particular is
+  // reading the certificate's bushfire-prone designation before anything else.
+  [CompliancePartyType.BASIX_CONSULTANT]: [
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ComplianceDocumentType.SURVEY,
+    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  ],
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: [
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ComplianceDocumentType.SURVEY,
+    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  ],
 };
 
 /**
@@ -233,6 +396,16 @@ export const PARTY_INBOUND_DOCUMENT_TYPES: Readonly<
   [CompliancePartyType.COUNCIL]: documentTypesForParty(
     CompliancePartyType.COUNCIL,
   ),
+  // Narrower than any of the above: a consultant sends back one thing. A BASIX
+  // assessor routinely attaches the plans they were sent as a courtesy, and
+  // reading those as the architect's preliminary set would overwrite the
+  // authoritative copy with a forwarded one.
+  [CompliancePartyType.BASIX_CONSULTANT]: [
+    ComplianceDocumentType.BASIX_CERTIFICATE,
+  ],
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: [
+    ComplianceDocumentType.BUSHFIRE_REPORT,
+  ],
 };
 
 /**
@@ -354,6 +527,12 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   ...REQUIRED_COMPLIANCE_DOCUMENTS.map((doc) => doc.type),
   ...CERTIFIER_RESPONSE_DOCUMENTS.map((doc) => doc.type),
   ComplianceDocumentType.HOME_INSURANCE,
+  // The consultants' deliverables. Classifiable because they arrive as
+  // attachments like everything else -- what keeps a BASIX certificate from
+  // being read off a surveyor's email is the per-party narrowing above, not
+  // this list.
+  ComplianceDocumentType.BASIX_CERTIFICATE,
+  ComplianceDocumentType.BUSHFIRE_REPORT,
   // Not part of the pack, but a surveyor routinely quotes the deed back on
   // their reply, and a copy the classifier cannot name lands in the
   // needs-identifying queue for somebody to place by hand.
@@ -393,6 +572,8 @@ const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
   [ComplianceDocumentType.SIGNED_FEE_PROPOSAL]: "Signed Fee Proposal",
   [ComplianceDocumentType.SIGNED_CDC_FORM]: "Signed CDC Application Form",
   [ComplianceDocumentType.HOME_INSURANCE]: "Home Insurance",
+  [ComplianceDocumentType.BASIX_CERTIFICATE]: "BASIX Certificate",
+  [ComplianceDocumentType.BUSHFIRE_REPORT]: "Bushfire Assessment Report",
   [ComplianceDocumentType.CHECKLIST_ITEM]: "Checklist item",
   [ComplianceDocumentType.UNKNOWN]: "Unidentified document",
 };
@@ -518,6 +699,14 @@ export const COMPLIANCE_DOCUMENT_SECTIONS: readonly {
     heading: "Checklist evidence",
     description: "One document per item the certifier asked for.",
     types: [ComplianceDocumentType.CHECKLIST_ITEM],
+  },
+  {
+    heading: "Consultant reports",
+    description: "Commissioned against a checklist item the certifier raised.",
+    types: [
+      ComplianceDocumentType.BASIX_CERTIFICATE,
+      ComplianceDocumentType.BUSHFIRE_REPORT,
+    ],
   },
   {
     heading: "Home insurance",
