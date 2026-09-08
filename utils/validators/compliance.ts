@@ -194,6 +194,11 @@ export type ScheduleComplianceMeetingInput = z.infer<
   typeof scheduleComplianceMeetingSchema
 >;
 
+/** The browser's half — see `PlanningCertificateRequest`. */
+export type ScheduleComplianceMeetingRequest = z.input<
+  typeof scheduleComplianceMeetingSchema
+>;
+
 /**
  * What became of the meeting.
  *
@@ -223,6 +228,11 @@ export const resolveComplianceMeetingSchema = z.discriminatedUnion("outcome", [
 ]);
 
 export type ResolveComplianceMeetingInput = z.infer<
+  typeof resolveComplianceMeetingSchema
+>;
+
+/** The browser's half — see `PlanningCertificateRequest`. */
+export type ResolveComplianceMeetingRequest = z.input<
   typeof resolveComplianceMeetingSchema
 >;
 

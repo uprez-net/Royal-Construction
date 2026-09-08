@@ -41,7 +41,10 @@ import type {
   PartySelfSuppliedInput,
   PlanningCertificateRequest,
   ResolveComplianceAlertInput,
+  ResolveComplianceMeetingRequest,
   ResolveComplianceDocumentInput,
+  ReviewArchitectPlansInput,
+  ScheduleComplianceMeetingRequest,
   SetComplianceDocumentNotRequiredInput,
   StartEngagementInput,
   StartPartyOutreachInput,
@@ -765,6 +768,85 @@ export const recordPlanningCertificate = createAsyncThunk<
   },
 );
 
+// ---------------------------------------------------------------------------
+// The architect's workflow beyond their two documents
+// ---------------------------------------------------------------------------
+
+/** Books the client and architect in, and mails them both. */
+export const scheduleClientMeeting = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & ScheduleComplianceMeetingRequest,
+  { rejectValue: string }
+>(
+  "projects/scheduleClientMeeting",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/meeting",
+        jsonPost(payload),
+        "Unable to schedule the meeting",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to schedule the meeting",
+      );
+    }
+  },
+);
+
+/** Records that the meeting happened, or moves it. */
+export const resolveClientMeeting = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & ResolveComplianceMeetingRequest,
+  { rejectValue: string }
+>(
+  "projects/resolveClientMeeting",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/meeting",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        "Unable to update the meeting",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to update the meeting",
+      );
+    }
+  },
+);
+
+/** Records whether the client signed off on the preliminary plans. */
+export const reviewArchitectPlans = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & ReviewArchitectPlansInput,
+  { rejectValue: string }
+>(
+  "projects/reviewArchitectPlans",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/plan-review",
+        jsonPost(payload),
+        "Unable to record the client's answer",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the client's answer",
+      );
+    }
+  },
+);
+
 /** Closes an alert, with the note that says what closed it. */
 export const resolveComplianceAlert = createAsyncThunk<
   ComplianceResult,
@@ -869,6 +951,9 @@ const complianceOperations = [
     recordPlanningCertificate,
     () => complianceScope.planningCertificate,
   ),
+  complianceOperation(scheduleClientMeeting, () => complianceScope.meeting),
+  complianceOperation(resolveClientMeeting, () => complianceScope.meeting),
+  complianceOperation(reviewArchitectPlans, () => complianceScope.planReview),
   complianceOperation(resolveComplianceAlert, (arg) =>
     complianceScope.alert(arg.alertId),
   ),

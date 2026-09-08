@@ -42,6 +42,9 @@ export type ModalType =
   | "complianceReject"
   | "connectComplianceParty"
   | "resolveComplianceAlert"
+  | "scheduleComplianceMeeting"
+  | "resolveComplianceMeeting"
+  | "reviewArchitectPlans"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;

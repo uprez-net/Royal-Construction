@@ -40,6 +40,7 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
 import { packSendBlockedReason } from "@/lib/compliance/prerequisites";
+import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
 import { recordPlanningCertificateArrival } from "@/lib/data/compliance-council";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
@@ -746,6 +747,24 @@ export async function attachComplianceDocumentFile(params: {
       await recordHomeInsuranceOnProject({
         projectId: params.projectId,
         fileId: file.id,
+      });
+    });
+  }
+
+  // A revised set of plans answers the round of client revisions that asked for
+  // it, and closes the two architect alerts. Fires on an admin's own upload as
+  // well as on the inbound path, because an admin dragging in the set the
+  // architect emailed them is the same event by a different route — and the
+  // alert has to close either way, or the panel keeps chasing a redraw that is
+  // sitting on the row underneath it.
+  if (
+    document.documentType ===
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
+  ) {
+    after(async () => {
+      await recordPreliminaryPlansArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
       });
     });
   }

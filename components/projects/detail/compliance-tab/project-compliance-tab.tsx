@@ -94,6 +94,7 @@ import {
   COMPLIANCE_ALERT_COPY,
   ComplianceAlertsPanel,
 } from "./compliance-alerts-panel";
+import { ArchitectWorkflow } from "./architect-workflow";
 import { ComplianceThreadsModal } from "./compliance-threads-modal";
 import { DaApprovalSection } from "./da-approval-section";
 import { PartyDocumentSection } from "./party-document-section";
@@ -1302,6 +1303,19 @@ export function ProjectComplianceTab({
                 onPreviewFile={handlePreviewFile}
                 projectId={project.id}
                 planningCertificate={engagement.planningCertificate}
+                architectWorkflow={
+                  entry.party === CompliancePartyType.ARCHITECT ? (
+                    <ArchitectWorkflow
+                      projectId={project.id}
+                      outreach={entry.outreach}
+                      hasPreliminaryPlans={Boolean(
+                        documentsByType.get(
+                          ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+                        )?.files.length,
+                      )}
+                    />
+                  ) : null
+                }
               />
             ))}
           </div>
