@@ -29,13 +29,19 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
       title: string;
       guidance: string;
       /**
-       * The one-click chase, where the alert has one.
+       * The label on the one-click chase, where the alert has one.
        *
-       * Only the title search does today, because it is the only condition
-       * whose remedy is a request we can compose ourselves — the mail says
-       * which names are on the register and which we hold, which is exactly
-       * what a person would otherwise retype off this screen. A DA is not a
-       * thing anybody can be asked for in one line.
+       * Six of the eight do. What they have in common is that the remedy is a
+       * request we can compose ourselves out of what is already on this screen
+       * — which names are on the register against which we hold, what was asked
+       * for and when, the revisions that went across a fortnight ago. The two
+       * that have none are the two nobody can be asked: the planning portal
+       * does not read email, and a development application is a decision about
+       * the whole job rather than a document to be reminded about.
+       *
+       * A label here is necessary but not sufficient. Whether the button
+       * actually appears also depends on that party having a live thread on
+       * this file, which is `canFollowUp` below.
        */
       followUp?: string;
     }
@@ -119,12 +125,18 @@ const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
 type ComplianceAlertsPanelProps = {
   alerts: ComplianceAlertRecord[];
   onResolve: (alert: ComplianceAlertRecord) => void;
-  /**
-   * Sends the alert's follow-up request. Absent when there is nobody to send it
-   * to — a file whose surveyor documents the client supplied has no thread, and
-   * offering a button that can only fail is worse than not offering one.
-   */
+  /** Sends the alert's follow-up request, on the thread it belongs to. */
   onFollowUp?: (alert: ComplianceAlertRecord) => void;
+  /**
+   * Whether this particular alert has anybody to chase.
+   *
+   * Per alert rather than per panel, which is the correction. One flag for the
+   * whole list got it wrong in both directions: a file whose surveyor documents
+   * the client supplied has nobody to write to about a title search, and may at
+   * the same moment have a live architect thread with a redraw overdue on it.
+   * Absent means every alert with copy for a chase gets the button.
+   */
+  canFollowUp?: (alert: ComplianceAlertRecord) => boolean;
   isBusy: (alertId: string) => boolean;
 };
 
@@ -144,6 +156,7 @@ export function ComplianceAlertsPanel({
   alerts,
   onResolve,
   onFollowUp,
+  canFollowUp,
   isBusy,
 }: ComplianceAlertsPanelProps) {
   if (alerts.length === 0) {
@@ -221,7 +234,9 @@ export function ComplianceAlertsPanel({
                 {/* The chase comes first and carries the weight: on a freshly
                     raised alert it is what someone is here to do, and Resolve
                     is what they come back for once the replacement lands. */}
-                {copy.followUp && onFollowUp ? (
+                {copy.followUp &&
+                onFollowUp &&
+                (canFollowUp?.(alert) ?? true) ? (
                   <Button
                     type="button"
                     size="sm"

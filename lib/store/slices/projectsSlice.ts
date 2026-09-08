@@ -871,31 +871,33 @@ export const resolveComplianceAlert = createAsyncThunk<
 );
 
 /**
- * Asks the surveyor for a fresh title search.
+ * Chases whoever an open alert is waiting on.
  *
  * Filed under the alert's own scope, like the resolve: the two are the pair of
  * things you can do to one alert, and a chase in flight has to disable the
  * resolve beside it.
+ *
+ * Was `requestUpdatedTitleSearch`, which chased the one party the one alert
+ * type of the day was about. The server now holds the table of which party each
+ * condition belongs to, so the client only has to name the alert.
  */
-export const requestUpdatedTitleSearch = createAsyncThunk<
+export const sendComplianceFollowUp = createAsyncThunk<
   ComplianceResult,
   { projectId: string; alertId: string },
   { rejectValue: string }
 >(
-  "projects/requestUpdatedTitleSearch",
+  "projects/sendComplianceFollowUp",
   async ({ projectId, alertId }, thunkApi) => {
     try {
       return await replaceEngagement(
         projectId,
-        `/alerts/${alertId}/request-update`,
+        `/alerts/${alertId}/follow-up`,
         { method: "POST" },
-        "Unable to send the request to the surveyor",
+        "Unable to send the follow-up",
       );
     } catch (error) {
       return thunkApi.rejectWithValue(
-        error instanceof Error
-          ? error.message
-          : "Unable to send the request to the surveyor",
+        error instanceof Error ? error.message : "Unable to send the follow-up",
       );
     }
   },
@@ -957,7 +959,7 @@ const complianceOperations = [
   complianceOperation(resolveComplianceAlert, (arg) =>
     complianceScope.alert(arg.alertId),
   ),
-  complianceOperation(requestUpdatedTitleSearch, (arg) =>
+  complianceOperation(sendComplianceFollowUp, (arg) =>
     complianceScope.alert(arg.alertId),
   ),
 ];

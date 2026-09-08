@@ -64,6 +64,7 @@ import {
   packSendBlockedReason,
   partyBlockedReason,
 } from "@/lib/compliance/prerequisites";
+import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -73,7 +74,7 @@ import {
   resolveComplianceDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
-  requestUpdatedTitleSearch,
+  sendComplianceFollowUp,
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
@@ -665,25 +666,24 @@ export function ProjectComplianceTab({
   };
 
   /**
-   * Asks the surveyor for a fresh title search.
+   * Chases whoever an open alert is waiting on.
    *
    * No confirmation dialog. The mail composes itself out of the alert — which
-   * names are on the register, which we hold — so there is nothing to collect,
-   * and the whole point of the button is that it saves someone retyping that
-   * off the screen. It does not resolve anything: asking is not fixing, and the
-   * alert closes itself when a replacement lands and the names check out.
+   * names are on the register, what was asked for and when, the revisions that
+   * went across a fortnight ago — so there is nothing to collect, and the whole
+   * point of the button is that it saves somebody retyping what is already on
+   * this screen. It does not resolve anything: asking is not fixing, and every
+   * one of these closes itself when the thing it is waiting for arrives.
    */
-  const handleRequestTitleSearch = async (alert: ComplianceAlertRecord) => {
+  const handleFollowUp = async (alert: ComplianceAlertRecord) => {
     try {
       await dispatch(
-        requestUpdatedTitleSearch({ projectId: project.id, alertId: alert.id }),
+        sendComplianceFollowUp({ projectId: project.id, alertId: alert.id }),
       ).unwrap();
-      toast.success("Asked the surveyor for an updated title search.");
+      toast.success("Follow-up sent.");
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not send the request to the surveyor.",
+        error instanceof Error ? error.message : "Could not send the follow-up.",
       );
     }
   };
@@ -1114,17 +1114,23 @@ export function ProjectComplianceTab({
   const alerts = engagement.alerts;
   const hasDaAlert = !requiresPlanningCertificate(engagement);
 
-  // Whether the surveyor can be written to at all. The same reading the server
-  // takes before it refuses the send, so the button and the request cannot
-  // disagree about whether there is a thread.
-  const surveyorOutreach = outreachForParty(
-    engagement,
-    CompliancePartyType.SURVEYOR,
-  );
-  const canChaseSurveyor = Boolean(
-    surveyorOutreach?.contactEmail &&
-      surveyorOutreach.mode === ComplianceOutreachMode.OUTREACH,
-  );
+  /**
+   * Whether one alert has anybody to chase.
+   *
+   * The same reading the server takes before it refuses the send — which party
+   * the condition belongs to, and whether that party has a live thread — so a
+   * button that offers a chase and a request that refuses one cannot disagree.
+   * A button that can only fail is worse than no button.
+   */
+  const canChaseAlert = (alert: ComplianceAlertRecord) => {
+    const party = COMPLIANCE_ALERT_PARTY[alert.type];
+    if (!party) return false;
+    const outreach = outreachForParty(engagement, party);
+    return Boolean(
+      outreach?.contactEmail &&
+        outreach.mode === ComplianceOutreachMode.OUTREACH,
+    );
+  };
 
   /**
    * How many of these are done with.
@@ -1222,10 +1228,13 @@ export function ProjectComplianceTab({
       <ComplianceAlertsPanel
         alerts={alerts}
         onResolve={handleResolveAlert}
-        // Only when there is a surveyor thread to send it down. A file whose
-        // surveyor documents the client supplied has nobody to chase, and a
-        // button that can only fail is worse than no button.
-        onFollowUp={canChaseSurveyor ? handleRequestTitleSearch : undefined}
+        onFollowUp={handleFollowUp}
+        // Which alerts have somebody to chase, decided per alert rather than
+        // once. A file whose surveyor documents the client supplied has nobody
+        // to write to about a title search, and may at the same time have a
+        // live architect thread with a redraw overdue on it — one flag for the
+        // whole panel got that wrong in both directions.
+        canFollowUp={canChaseAlert}
         isBusy={(alertId) => isScopeBusy(complianceScope.alert(alertId))}
       />
 
