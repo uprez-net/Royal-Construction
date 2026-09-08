@@ -39,6 +39,7 @@ import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   COMPLIANCE_PARTY_SECTIONS,
   complianceDocumentLabel,
+  consultantForDocumentType,
   HBCF_INSURANCE_URL,
   isApprovableDocumentType,
   isNotRequired,
@@ -95,6 +96,7 @@ import {
   ComplianceAlertsPanel,
 } from "./compliance-alerts-panel";
 import { ArchitectWorkflow } from "./architect-workflow";
+import { ChecklistConsultantAction } from "./checklist-consultant-action";
 import { ComplianceThreadsModal } from "./compliance-threads-modal";
 import { DaApprovalSection } from "./da-approval-section";
 import { PartyDocumentSection } from "./party-document-section";
@@ -600,7 +602,18 @@ export function ProjectComplianceTab({
    * three documents are on the file by definition, and a checkbox there would
    * only be an invitation to send a site with no survey on it.
    */
-  const handleConnectParty = (party: CompliancePartyType) => {
+  const handleConnectParty = (
+    party: CompliancePartyType,
+    /**
+     * The checklist line this is being raised off, for a consultant.
+     *
+     * Carried through to the outreach row so that what the consultant sends
+     * back can answer the item that asked for it. Absent for the three parties
+     * engaged off the required pack, who are engaged against the job rather
+     * than against one line of a checklist.
+     */
+    checklistDocumentId?: string,
+  ) => {
     const attachmentTypes = new Set<ComplianceDocumentType>(
       PARTY_OUTREACH_ATTACHMENTS[party],
     );
@@ -621,6 +634,7 @@ export function ProjectComplianceTab({
           party,
           subjectAddress: engagement?.subjectAddress ?? project.location,
           prefilled,
+          checklistDocumentId,
         },
       }),
     );
@@ -672,6 +686,38 @@ export function ProjectComplianceTab({
           : "Could not send the request to the surveyor.",
       );
     }
+  };
+
+  /**
+   * The consultant control on one checklist line, or nothing.
+   *
+   * Nothing is the answer for almost every row: most checklist lines ask for
+   * something already on the file or something the builder produces, and only a
+   * BASIX certificate and a bushfire assessment need somebody outside engaged.
+   * Which line is which comes off `detail.mapsToType`, which the extraction
+   * sets — a line it could not label is an ordinary row, which is the right
+   * failure to have.
+   *
+   * The outreach is passed down rather than looked up inside the control, so a
+   * consultant engaged against item 7 shows as engaged on item 12 as well when
+   * that line asks for the same thing. There is one BASIX consultant on a job,
+   * not one per line that mentions BASIX.
+   */
+  const renderConsultantAction = (item: ComplianceDocumentWithFiles) => {
+    const party = consultantForDocumentType(
+      checklistItemDetail(item.detail)?.mapsToType,
+    );
+    if (!party) return null;
+
+    return (
+      <ChecklistConsultantAction
+        party={party}
+        outreach={outreachForParty(engagement, party)}
+        isSupplied={item.files.length > 0 || isNotRequired(item.status)}
+        isBusy={isScopeBusy(complianceScope.party(party))}
+        onConnect={() => handleConnectParty(party, item.id)}
+      />
+    );
   };
 
   const handleResolveAlert = (alert: ComplianceAlertRecord) => {
@@ -1545,6 +1591,7 @@ export function ProjectComplianceTab({
                         : undefined
                     }
                     onPreviewFile={handlePreviewFile}
+                    consultantAction={renderConsultantAction(item)}
                   />
                 ))}
               </ul>

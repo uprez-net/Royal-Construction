@@ -627,11 +627,13 @@ export function ModalManager() {
         party,
         subjectAddress,
         prefilled,
+        checklistDocumentId,
       } = modal.payload as {
         projectId: string;
         party: CompliancePartyType;
         subjectAddress: string;
         prefilled: { name: string; url: string }[];
+        checklistDocumentId?: string;
       };
       return (
         <ConnectPartyModal
@@ -639,6 +641,7 @@ export function ModalManager() {
           party={party}
           subjectAddress={subjectAddress}
           prefilled={prefilled}
+          checklistDocumentId={checklistDocumentId}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

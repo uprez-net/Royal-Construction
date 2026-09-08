@@ -16,9 +16,11 @@ import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import { PARTY_INBOUND_DOCUMENT_TYPES, PARTY_LABEL } from "@/constants/complianceDocuments";
 import {
   discardSupersededFiles,
+  placeConsultantDeliverable,
   placeInboundDocument,
 } from "@/lib/compliance/document-replacement";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
+import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
@@ -116,6 +118,9 @@ async function findOutreach(refToken: string) {
       id: true,
       party: true,
       engagementId: true,
+      // The checklist line a consultant was engaged against, so what they send
+      // back can answer it rather than becoming a document of its own.
+      checklistDocumentId: true,
       engagement: { select: { projectId: true } },
     },
   });
@@ -352,7 +357,22 @@ async function classifyStoredDocuments(
   engagementId: string,
   party: CompliancePartyType,
   stored: { documentId: string; name: string; url: string }[],
-): Promise<{ labelled: number; titleSearches: { url: string; name: string }[] }> {
+  /**
+   * The checklist line a consultant's reply answers, where there is one.
+   *
+   * Present only for the two consultant parties. What a BASIX consultant sends
+   * back is not a document on the file in its own right — it exists because a
+   * checklist item asked for it, and the certifier is going to tick that item
+   * when they see it. Filing it as a BASIX_CERTIFICATE row beside a checklist
+   * line still reading "Not supplied yet" is the document being on the file
+   * and the file still being incomplete.
+   */
+  checklistDocumentId: string | null,
+): Promise<{
+  labelled: number;
+  titleSearches: { url: string; name: string }[];
+  preliminaryPlans: number;
+}> {
   "use step";
 
   const allowed = new Set<ComplianceDocumentType>(
@@ -363,6 +383,10 @@ async function classifyStoredDocuments(
   // call of its own and belongs in its own retryable step, so a timeout reading
   // proprietors off a scan cannot cost the classification that already ran.
   const titleSearches: { url: string; name: string }[] = [];
+  // Counted so the workflow knows to close the revision round and the two
+  // architect alerts. Read off what was actually placed rather than off the
+  // party, because an architect's covering email carries other things too.
+  let preliminaryPlans = 0;
 
   for (const item of stored) {
     try {
@@ -375,20 +399,42 @@ async function classifyStoredDocuments(
         continue;
       }
 
-      const placed = await placeInboundDocument({
-        engagementId,
-        documentId: item.documentId,
-        documentType: result.documentType,
-      });
-      if (!placed.documentId) {
+      // A consultant's deliverable goes onto the line that commissioned it;
+      // everything else is filed under its own type. Falls back to the type
+      // when the checklist row has gone, which is what a checklist re-extracted
+      // between the outreach and the reply leaves behind — worse than the
+      // checklist row, and much better than dropping the certificate.
+      const placed = checklistDocumentId
+        ? ((await placeConsultantDeliverable({
+            engagementId,
+            arrivalDocumentId: item.documentId,
+            checklistDocumentId,
+          })) ?? null)
+        : null;
+      const outcome =
+        placed && placed.documentId
+          ? placed
+          : await placeInboundDocument({
+              engagementId,
+              documentId: item.documentId,
+              documentType: result.documentType,
+            });
+      if (!outcome.documentId) {
         // A retry that has already been through this one.
         continue;
       }
 
       // Only the blobs no email links at — the copy this replaced arrived as an
       // attachment on an earlier message, and that bubble still has to open it.
-      await discardSupersededFiles(engagementId, placed.superseded);
+      await discardSupersededFiles(engagementId, outcome.superseded);
       labelled += 1;
+
+      if (
+        result.documentType ===
+        ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
+      ) {
+        preliminaryPlans += 1;
+      }
 
       if (
         result.documentType ===
@@ -401,7 +447,7 @@ async function classifyStoredDocuments(
     }
   }
 
-  return { labelled, titleSearches };
+  return { labelled, titleSearches, preliminaryPlans };
 }
 
 /**
@@ -432,6 +478,20 @@ async function checkTitleSearchOwners(
       raisedBySource: params.party,
     });
   }
+}
+
+/**
+ * Closes the loop when preliminary plans arrive on the architect's thread.
+ *
+ * The same call the manual upload path makes, in a step of its own so a
+ * database hiccup here retries without re-running the classification above.
+ */
+async function closePlansLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordPreliminaryPlansArrival(params);
 }
 
 /**
@@ -588,6 +648,7 @@ export const processInboundPartyEmail = async (
       outreach.engagementId,
       outreach.party,
       stored,
+      outreach.checklistDocumentId,
     );
     console.log(
       `  Classified ${classification.labelled} of ${stored.length} ${outreach.party.toLowerCase()} document(s).`,
@@ -602,6 +663,14 @@ export const processInboundPartyEmail = async (
         },
         classification.titleSearches,
       );
+    }
+
+    // A revised set answers the round of client revisions that asked for it and
+    // closes the two architect alerts. Its own step, after the documents are
+    // placed: it is a write against rows this run has just changed, and it must
+    // not be able to cost the classification that produced them.
+    if (classification.preliminaryPlans > 0) {
+      await closePlansLoop({ projectId, engagementId: outreach.engagementId });
     }
   }
 
