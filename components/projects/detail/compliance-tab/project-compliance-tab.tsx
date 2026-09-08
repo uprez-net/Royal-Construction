@@ -1300,6 +1300,8 @@ export function ProjectComplianceTab({
                 onSelfSupplied={() => void handleSelfSupplied(entry.party)}
                 onUpload={(file, target) => void attachEvidence(file, target)}
                 onPreviewFile={handlePreviewFile}
+                projectId={project.id}
+                planningCertificate={engagement.planningCertificate}
               />
             ))}
           </div>

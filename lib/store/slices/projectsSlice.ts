@@ -39,6 +39,7 @@ import type {
   ComplianceDocumentUploadInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
+  PlanningCertificateRequest,
   ResolveComplianceAlertInput,
   ResolveComplianceDocumentInput,
   SetComplianceDocumentNotRequiredInput,
@@ -381,6 +382,19 @@ export const complianceScope = {
   /** Closing one alert. */
   alert: (alertId: string): ComplianceScope => `alert:${alertId}`,
   /**
+   * The council block's own state — the question, the application, the tick.
+   *
+   * Its own scope rather than `party(COUNCIL)`, because that key covers
+   * engaging a party and there is nobody to engage here. Keeping them apart
+   * means the certificate upload, which files under the document scope, and
+   * the answer, which files under this one, do not freeze each other.
+   */
+  planningCertificate: "planning-certificate" as ComplianceScope,
+  /** Booking, moving or resolving the client and architect meeting. */
+  meeting: "meeting" as ComplianceScope,
+  /** Recording the client's verdict on the preliminary plans. */
+  planReview: "plan-review" as ComplianceScope,
+  /**
    * One document row.
    *
    * Keyed by id where the row has one and by type where it does not, because
@@ -719,6 +733,38 @@ export const sendPartyReply = createAsyncThunk<
   }
 });
 
+/**
+ * Records where the 10.7 certificate has got to.
+ *
+ * Filed under a scope of its own rather than under the council party, because
+ * the council has no outreach to be busy on and the two things the block does —
+ * answering the question and uploading the certificate — are separate writes
+ * that must not freeze each other.
+ */
+export const recordPlanningCertificate = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & PlanningCertificateRequest,
+  { rejectValue: string }
+>(
+  "projects/recordPlanningCertificate",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/planning-certificate",
+        jsonPost(payload),
+        "Unable to record the planning certificate",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the planning certificate",
+      );
+    }
+  },
+);
+
 /** Closes an alert, with the note that says what closed it. */
 export const resolveComplianceAlert = createAsyncThunk<
   ComplianceResult,
@@ -818,6 +864,10 @@ const complianceOperations = [
   ),
   complianceOperation(sendPartyReply, (arg) =>
     complianceScope.partyReply(arg.outreachId),
+  ),
+  complianceOperation(
+    recordPlanningCertificate,
+    () => complianceScope.planningCertificate,
   ),
   complianceOperation(resolveComplianceAlert, (arg) =>
     complianceScope.alert(arg.alertId),

@@ -40,6 +40,7 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
 import { packSendBlockedReason } from "@/lib/compliance/prerequisites";
+import { recordPlanningCertificateArrival } from "@/lib/data/compliance-council";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -745,6 +746,22 @@ export async function attachComplianceDocumentFile(params: {
       await recordHomeInsuranceOnProject({
         projectId: params.projectId,
         fileId: file.id,
+      });
+    });
+  }
+
+  // The certificate arriving is what the council block's whole state machine is
+  // waiting for, and an upload says so more strongly than the tick box does:
+  // one is somebody reporting it, the other is somebody proving it. Without
+  // this a certificate could sit on the file with an overdue alert still open
+  // underneath it, because nobody went back to tick the box.
+  if (
+    document.documentType === ComplianceDocumentType.PLANNING_CERTIFICATE_10_7
+  ) {
+    after(async () => {
+      await recordPlanningCertificateArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
       });
     });
   }
