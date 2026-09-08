@@ -291,6 +291,53 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    compliancePlanningCertificateUpdated: (data) => ({
+        id: uuidv4(),
+        type: "compliancePlanningCertificateUpdated",
+        message: `${data.recordedBy} updated the planning certificate (${data.step})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceMeetingScheduled: (data) => ({
+        id: uuidv4(),
+        type: "complianceMeetingScheduled",
+        message: `${data.recordedBy} ${data.isReschedule ? "rescheduled" : "scheduled"} the client and architect meeting for ${data.scheduledFor}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceMeetingHeld: (data) => ({
+        id: uuidv4(),
+        type: "complianceMeetingHeld",
+        message: `${data.recordedBy} recorded the client and architect meeting as held on ${data.heldAt}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    compliancePlansReviewed: (data) => ({
+        id: uuidv4(),
+        type: "compliancePlansReviewed",
+        message: data.approved
+            ? `${data.recordedBy} recorded that the client approved the preliminary plans`
+            : `${data.recordedBy} sent the client's revisions to the architect`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceFollowUpSent: (data) => ({
+        id: uuidv4(),
+        type: "complianceFollowUpSent",
+        message: `${data.sentBy} chased the ${data.party.toLowerCase()} at ${data.contactEmail} about ${data.alertType}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceDocumentUploaded: (data) => ({
         id: uuidv4(),
         type: "complianceDocumentUploaded",

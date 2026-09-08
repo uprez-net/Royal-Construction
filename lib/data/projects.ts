@@ -8,6 +8,7 @@ import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { CACHE_PROFILES } from "@/types/cache";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
+import { certifierEngagementInclude } from "@/types/compliance";
 
 export type ProjectListSortBy = "name" | "progress" | "budget" | "startDate" | "spent";
 
@@ -142,31 +143,16 @@ const projectDetailInclude = {
   // Carried on the detail payload rather than fetched by the tab, so the tab
   // badge, the tab body and the compliance alert all read one consistent
   // snapshot instead of three that can disagree mid-render.
-  certifierEngagement: {
-    include: {
-      // Single-key sort: the surrounding `as const` would otherwise make a
-      // tuple Prisma will not accept. `order` is assigned densely per
-      // engagement, so a tie-break is not needed.
-      documents: {
-        include: { files: true },
-        orderBy: { order: "asc" as const },
-      },
-      // The certifier's own thread only. The surveyor, architect and council
-      // threads share this table and are told apart by `outreachId`; without
-      // the filter every message on the file landed in the certifier
-      // transcript. Mirrors certifierEngagementInclude in types/compliance.ts,
-      // which this payload has to stay assignable to.
-      emails: {
-        where: { outreachId: null },
-        orderBy: { sentAt: "asc" as const },
-      },
-      outreaches: {
-        include: { emails: { orderBy: { sentAt: "asc" as const } } },
-        orderBy: { createdAt: "asc" as const },
-      },
-      alerts: { orderBy: { createdAt: "desc" as const } },
-    },
-  },
+  // The canonical shape, not a copy of it.
+  //
+  // This used to restate every relation on the engagement, with a comment on
+  // each saying it mirrored `certifierEngagementInclude`. It did not: the two
+  // sorted alerts differently, and every relation added to the canonical include
+  // had to be found and added here too, or the payload stopped being assignable
+  // to `ProjectDetail` — which is how the drift announced itself, several
+  // relations later. Reusing it means "the compliance tab needs this on the
+  // read" is stated once.
+  certifierEngagement: { include: certifierEngagementInclude },
 } as const;
 
 const defaultPageSize = 12;

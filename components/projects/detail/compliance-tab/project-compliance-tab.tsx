@@ -39,6 +39,7 @@ import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   COMPLIANCE_PARTY_SECTIONS,
   complianceDocumentLabel,
+  consultantForDocumentType,
   HBCF_INSURANCE_URL,
   isApprovableDocumentType,
   isNotRequired,
@@ -49,7 +50,6 @@ import {
   isSignedCopyType,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
-  PARTY_PREREQUISITES,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
 import {
@@ -60,6 +60,11 @@ import {
   isRequiredPackComplete,
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
+import {
+  packSendBlockedReason,
+  partyBlockedReason,
+} from "@/lib/compliance/prerequisites";
+import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -69,7 +74,7 @@ import {
   resolveComplianceDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
-  requestUpdatedTitleSearch,
+  sendComplianceFollowUp,
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
@@ -79,7 +84,6 @@ import {
 import type { ProjectDetail } from "@/types/project";
 import {
   checklistItemDetail,
-  isPartyEngaged,
   outreachForParty,
   requiresPlanningCertificate,
   type CertifierEngagementDetail,
@@ -92,6 +96,8 @@ import {
   COMPLIANCE_ALERT_COPY,
   ComplianceAlertsPanel,
 } from "./compliance-alerts-panel";
+import { ArchitectWorkflow } from "./architect-workflow";
+import { ChecklistConsultantAction } from "./checklist-consultant-action";
 import { ComplianceThreadsModal } from "./compliance-threads-modal";
 import { DaApprovalSection } from "./da-approval-section";
 import { PartyDocumentSection } from "./party-document-section";
@@ -597,7 +603,18 @@ export function ProjectComplianceTab({
    * three documents are on the file by definition, and a checkbox there would
    * only be an invitation to send a site with no survey on it.
    */
-  const handleConnectParty = (party: CompliancePartyType) => {
+  const handleConnectParty = (
+    party: CompliancePartyType,
+    /**
+     * The checklist line this is being raised off, for a consultant.
+     *
+     * Carried through to the outreach row so that what the consultant sends
+     * back can answer the item that asked for it. Absent for the three parties
+     * engaged off the required pack, who are engaged against the job rather
+     * than against one line of a checklist.
+     */
+    checklistDocumentId?: string,
+  ) => {
     const attachmentTypes = new Set<ComplianceDocumentType>(
       PARTY_OUTREACH_ATTACHMENTS[party],
     );
@@ -618,6 +635,7 @@ export function ProjectComplianceTab({
           party,
           subjectAddress: engagement?.subjectAddress ?? project.location,
           prefilled,
+          checklistDocumentId,
         },
       }),
     );
@@ -648,27 +666,58 @@ export function ProjectComplianceTab({
   };
 
   /**
-   * Asks the surveyor for a fresh title search.
+   * Chases whoever an open alert is waiting on.
    *
    * No confirmation dialog. The mail composes itself out of the alert — which
-   * names are on the register, which we hold — so there is nothing to collect,
-   * and the whole point of the button is that it saves someone retyping that
-   * off the screen. It does not resolve anything: asking is not fixing, and the
-   * alert closes itself when a replacement lands and the names check out.
+   * names are on the register, what was asked for and when, the revisions that
+   * went across a fortnight ago — so there is nothing to collect, and the whole
+   * point of the button is that it saves somebody retyping what is already on
+   * this screen. It does not resolve anything: asking is not fixing, and every
+   * one of these closes itself when the thing it is waiting for arrives.
    */
-  const handleRequestTitleSearch = async (alert: ComplianceAlertRecord) => {
+  const handleFollowUp = async (alert: ComplianceAlertRecord) => {
     try {
       await dispatch(
-        requestUpdatedTitleSearch({ projectId: project.id, alertId: alert.id }),
+        sendComplianceFollowUp({ projectId: project.id, alertId: alert.id }),
       ).unwrap();
-      toast.success("Asked the surveyor for an updated title search.");
+      toast.success("Follow-up sent.");
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not send the request to the surveyor.",
+        error instanceof Error ? error.message : "Could not send the follow-up.",
       );
     }
+  };
+
+  /**
+   * The consultant control on one checklist line, or nothing.
+   *
+   * Nothing is the answer for almost every row: most checklist lines ask for
+   * something already on the file or something the builder produces, and only a
+   * BASIX certificate and a bushfire assessment need somebody outside engaged.
+   * Which line is which comes off `detail.mapsToType`, which the extraction
+   * sets — a line it could not label is an ordinary row, which is the right
+   * failure to have.
+   *
+   * The outreach is passed down rather than looked up inside the control, so a
+   * consultant engaged against item 7 shows as engaged on item 12 as well when
+   * that line asks for the same thing. There is one BASIX consultant on a job,
+   * not one per line that mentions BASIX.
+   */
+  const renderConsultantAction = (item: ComplianceDocumentWithFiles) => {
+    const party = consultantForDocumentType(
+      checklistItemDetail(item.detail)?.mapsToType,
+    );
+    if (!party) return null;
+
+    return (
+      <ChecklistConsultantAction
+        party={party}
+        outreach={outreachForParty(engagement, party)}
+        isSupplied={item.files.length > 0 || isNotRequired(item.status)}
+        isBusy={isScopeBusy(complianceScope.party(party))}
+        onConnect={() => handleConnectParty(party, item.id)}
+      />
+    );
   };
 
   const handleResolveAlert = (alert: ComplianceAlertRecord) => {
@@ -952,33 +1001,17 @@ export function ProjectComplianceTab({
     };
   });
 
-  const partyState = new Map(
-    partySections.map((entry) => [entry.party, entry] as const),
-  );
-
   /**
    * Why a section cannot be opened yet, in the reader's terms, or null.
    *
-   * A sentence rather than a boolean because the two reasons are different
-   * moves: nobody has engaged the surveyor (go and do it) versus the surveyor
-   * owes us two documents (wait, or chase them on the thread).
+   * Read out of `lib/compliance/prerequisites.ts`, which is the same function
+   * the server refuses the send with. This used to be its own near-copy of that
+   * logic, and the two drifted the moment the architect grew a second
+   * prerequisite: the section unlocked, the send was refused, and the two
+   * sentences explaining why did not agree.
    */
-  const blockedReason = (party: CompliancePartyType): string | null => {
-    for (const prerequisite of PARTY_PREREQUISITES[party]) {
-      const upstream = partyState.get(prerequisite);
-      const upstreamLabel = PARTY_LABEL[prerequisite].toLowerCase();
-
-      if (!isPartyEngaged(engagement, prerequisite)) {
-        return `Engage the ${upstreamLabel} first — this unlocks once their documents are in.`;
-      }
-      if (upstream && !upstream.isComplete) {
-        return `Waiting on ${upstream.outstanding
-          .map((type) => complianceDocumentLabel(type))
-          .join(" and ")} from the ${upstreamLabel}.`;
-      }
-    }
-    return null;
-  };
+  const blockedReason = (party: CompliancePartyType): string | null =>
+    partyBlockedReason(engagement, party);
 
   // -------------------------------------------------------------------
   // What each send is blocked by.
@@ -1081,17 +1114,23 @@ export function ProjectComplianceTab({
   const alerts = engagement.alerts;
   const hasDaAlert = !requiresPlanningCertificate(engagement);
 
-  // Whether the surveyor can be written to at all. The same reading the server
-  // takes before it refuses the send, so the button and the request cannot
-  // disagree about whether there is a thread.
-  const surveyorOutreach = outreachForParty(
-    engagement,
-    CompliancePartyType.SURVEYOR,
-  );
-  const canChaseSurveyor = Boolean(
-    surveyorOutreach?.contactEmail &&
-      surveyorOutreach.mode === ComplianceOutreachMode.OUTREACH,
-  );
+  /**
+   * Whether one alert has anybody to chase.
+   *
+   * The same reading the server takes before it refuses the send — which party
+   * the condition belongs to, and whether that party has a live thread — so a
+   * button that offers a chase and a request that refuses one cannot disagree.
+   * A button that can only fail is worse than no button.
+   */
+  const canChaseAlert = (alert: ComplianceAlertRecord) => {
+    const party = COMPLIANCE_ALERT_PARTY[alert.type];
+    if (!party) return false;
+    const outreach = outreachForParty(engagement, party);
+    return Boolean(
+      outreach?.contactEmail &&
+        outreach.mode === ComplianceOutreachMode.OUTREACH,
+    );
+  };
 
   /**
    * How many of these are done with.
@@ -1126,6 +1165,20 @@ export function ProjectComplianceTab({
    */
   const hasUnsentRequired =
     !collecting && canSendRequiredPack(engagement) && unsentRequired.length > 0;
+
+  /**
+   * Why the pack must not go, though every row on it is full.
+   *
+   * Two conditions, and neither is about a missing document — the rows already
+   * say what is missing. A title search naming the previous owners is the wrong
+   * document rather than a late one, and plans the client has not signed off on
+   * are a design that is about to change. Sending on either costs a certifier's
+   * assessment of something that is not the job.
+   *
+   * The same function the send route refuses with, so the sentence under the
+   * button is the sentence the server would have thrown.
+   */
+  const packBlocked = packSendBlockedReason(engagement);
   const responseDocuments = [
     ...CERTIFIER_RESPONSE_DOCUMENTS.map((response) =>
       documentsByType.get(response.type),
@@ -1175,10 +1228,13 @@ export function ProjectComplianceTab({
       <ComplianceAlertsPanel
         alerts={alerts}
         onResolve={handleResolveAlert}
-        // Only when there is a surveyor thread to send it down. A file whose
-        // surveyor documents the client supplied has nobody to chase, and a
-        // button that can only fail is worse than no button.
-        onFollowUp={canChaseSurveyor ? handleRequestTitleSearch : undefined}
+        onFollowUp={handleFollowUp}
+        // Which alerts have somebody to chase, decided per alert rather than
+        // once. A file whose surveyor documents the client supplied has nobody
+        // to write to about a title search, and may at the same time have a
+        // live architect thread with a redraw overdue on it — one flag for the
+        // whole panel got that wrong in both directions.
+        canFollowUp={canChaseAlert}
         isBusy={(alertId) => isScopeBusy(complianceScope.alert(alertId))}
       />
 
@@ -1300,6 +1356,21 @@ export function ProjectComplianceTab({
                 onSelfSupplied={() => void handleSelfSupplied(entry.party)}
                 onUpload={(file, target) => void attachEvidence(file, target)}
                 onPreviewFile={handlePreviewFile}
+                projectId={project.id}
+                planningCertificate={engagement.planningCertificate}
+                architectWorkflow={
+                  entry.party === CompliancePartyType.ARCHITECT ? (
+                    <ArchitectWorkflow
+                      projectId={project.id}
+                      outreach={entry.outreach}
+                      hasPreliminaryPlans={Boolean(
+                        documentsByType.get(
+                          ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+                        )?.files.length,
+                      )}
+                    />
+                  ) : null
+                }
               />
             ))}
           </div>
@@ -1326,12 +1397,22 @@ export function ProjectComplianceTab({
                     }),
                   )
                 }
-                disabled={requiredPackBusy}
+                disabled={requiredPackBusy || packBlocked !== null}
               >
                 {collecting
                   ? "Find and send documents"
                   : "Send updated documents"}
               </Button>
+              {/* Why the send is refused, where it is. Above the replacement
+                  note because it is the stronger condition: a pack that must
+                  not go at all is not usefully described as out of date.
+
+                  The same sentence the server would throw, read off the same
+                  function, so a button that refuses and a request that refuses
+                  cannot give two accounts of one condition. */}
+              {packBlocked ? (
+                <p className="text-xs text-warning-ink">{packBlocked}</p>
+              ) : null}
               {/* The one thing the rows themselves cannot say: the file on
                   them is current, and the certifier's copy is not. */}
               {!collecting ? (
@@ -1519,6 +1600,7 @@ export function ProjectComplianceTab({
                         : undefined
                     }
                     onPreviewFile={handlePreviewFile}
+                    consultantAction={renderConsultantAction(item)}
                   />
                 ))}
               </ul>

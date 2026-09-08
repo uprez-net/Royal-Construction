@@ -61,7 +61,7 @@ ${CHECKLIST_EXTRACTION_CONTRACT}
   <field name="description">The certifier's own explanation of what the item is, where the label alone is not enough. "Long Service Levy" followed by "Provide receipt of payments made to the Long Service Payments Corporation for 0.25% of the construction cost" — the first is the label, the second is the description. Omit it when the label already says everything; never restate the label.</field>
   <field name="requirements">The conditions, amendments and corrections attached to this item, verbatim and in order.</field>
   <field name="references">Standards, code clauses and named external documents the item cites — an Australian Standard, an NCC or BCA clause, a restriction under section 88B, a named consultant's report, a council guideline. Copy the citation as written, including report numbers and dates.</field>
-  <field name="mapsToType">The kind of document the item is asking for, when it is one of the listed types. Omit when it asks for something not on the list. Do not force a match.</field>
+  <field name="mapsToType">The kind of document the item is asking for, when it is one of the listed types. Omit when it asks for something not on the list. Do not force a match. Two of the listed types matter more than the rest, because naming them is what lets us engage the consultant who produces them: BASIX_CERTIFICATE for a line asking for a BASIX certificate, BASIX commitments, or a NatHERS/thermal-performance assessment, and BUSHFIRE_REPORT for a line asking for a bushfire assessment, a BAL rating, or a bushfire attack level report. Set these whenever the line asks for one, even where the wording is abbreviated.</field>
 </field_guide>
 
 <document_level>

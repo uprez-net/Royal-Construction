@@ -207,9 +207,22 @@ export function ComplianceThreadsModal({
   );
 }
 
-/** Flow order, which is also the order the sections appear in on the tab. */
+/**
+ * Flow order, which is also the order the sections appear in on the tab.
+ *
+ * The consultants come last because that is when they enter: they are engaged
+ * off a checklist line, well after the three above have finished. A tab order
+ * that sorted them anywhere else would put a thread that starts in week six
+ * ahead of one that starts in week one.
+ *
+ * A party missing from this list sorts to the front, so it stays exhaustive by
+ * habit rather than by the compiler — which is why it is worth checking here
+ * when a party is added.
+ */
 const PARTY_ORDER: readonly CompliancePartyType[] = [
   CompliancePartyType.SURVEYOR,
   CompliancePartyType.ARCHITECT,
   CompliancePartyType.COUNCIL,
+  CompliancePartyType.BASIX_CONSULTANT,
+  CompliancePartyType.BUSHFIRE_CONSULTANT,
 ];

@@ -58,6 +58,9 @@ import FilePreviewCanvas from "../shared/file-preview-canvas";
 import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
 import { ConnectPartyModal } from "./compliance/connect-party-modal";
 import { ResolveAlertModal } from "./compliance/resolve-alert-modal";
+import { ResolveMeetingModal } from "./compliance/resolve-meeting-modal";
+import { ReviewPlansModal } from "./compliance/review-plans-modal";
+import { ScheduleMeetingModal } from "./compliance/schedule-meeting-modal";
 import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
 import { CertifierExtractModal } from "./certifier-extract-modal";
 import { CertifierPackReadyModal } from "./certifier-pack-ready-modal";
@@ -624,11 +627,13 @@ export function ModalManager() {
         party,
         subjectAddress,
         prefilled,
+        checklistDocumentId,
       } = modal.payload as {
         projectId: string;
         party: CompliancePartyType;
         subjectAddress: string;
         prefilled: { name: string; url: string }[];
+        checklistDocumentId?: string;
       };
       return (
         <ConnectPartyModal
@@ -636,6 +641,47 @@ export function ModalManager() {
           party={party}
           subjectAddress={subjectAddress}
           prefilled={prefilled}
+          checklistDocumentId={checklistDocumentId}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "scheduleComplianceMeeting": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <ScheduleMeetingModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "resolveComplianceMeeting": {
+      const { projectId: id, scheduledFor } = modal.payload as {
+        projectId: string;
+        scheduledFor: string;
+      };
+      return (
+        <ResolveMeetingModal
+          projectId={id}
+          scheduledFor={scheduledFor}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "reviewArchitectPlans": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <ReviewPlansModal
+          projectId={id}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

@@ -39,6 +39,9 @@ import {
   sentToCertifierUrls,
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
+import { packSendBlockedReason } from "@/lib/compliance/prerequisites";
+import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
+import { recordPlanningCertificateArrival } from "@/lib/data/compliance-council";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -309,6 +312,17 @@ export async function sendCertifierOutreach(engagementId: string) {
     throw new Error(
       `Still missing ${missing.map((doc) => doc.label).join(", ")}.`,
     );
+  }
+
+  // Checked after the missing-document test and before anything is read out of
+  // storage. These are the conditions where every row is full and the pack must
+  // still not go -- a title search naming the previous owners, or plans the
+  // client has not approved. Same function the tab disables the button with, so
+  // the refusal here is the sentence already on screen rather than a second
+  // account of it.
+  const blocked = packSendBlockedReason(engagement);
+  if (blocked) {
+    throw new Error(blocked);
   }
 
   // Wanted on the file, not attached to this send. Named in the mail so the
@@ -733,6 +747,40 @@ export async function attachComplianceDocumentFile(params: {
       await recordHomeInsuranceOnProject({
         projectId: params.projectId,
         fileId: file.id,
+      });
+    });
+  }
+
+  // A revised set of plans answers the round of client revisions that asked for
+  // it, and closes the two architect alerts. Fires on an admin's own upload as
+  // well as on the inbound path, because an admin dragging in the set the
+  // architect emailed them is the same event by a different route — and the
+  // alert has to close either way, or the panel keeps chasing a redraw that is
+  // sitting on the row underneath it.
+  if (
+    document.documentType ===
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS
+  ) {
+    after(async () => {
+      await recordPreliminaryPlansArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
+    });
+  }
+
+  // The certificate arriving is what the council block's whole state machine is
+  // waiting for, and an upload says so more strongly than the tick box does:
+  // one is somebody reporting it, the other is somebody proving it. Without
+  // this a certificate could sit on the file with an overdue alert still open
+  // underneath it, because nobody went back to tick the box.
+  if (
+    document.documentType === ComplianceDocumentType.PLANNING_CERTIFICATE_10_7
+  ) {
+    after(async () => {
+      await recordPlanningCertificateArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
       });
     });
   }

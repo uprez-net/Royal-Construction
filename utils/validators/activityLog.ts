@@ -214,6 +214,66 @@ export const activityLogSchemas = {
         resolvedBy: z.string(),
     }),
 
+    /**
+     * The four steps of getting a 10.7 certificate, under one entry.
+     *
+     * `step` rather than four entry types: the trail is read as a story about
+     * one document, and four kinds of line for one row's four states makes it
+     * harder to follow rather than easier.
+     */
+    compliancePlanningCertificateUpdated: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        step: z.string(),
+        recordedBy: z.string(),
+    }),
+
+    complianceMeetingScheduled: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        meetingId: z.string(),
+        scheduledFor: z.string(),
+        /** Whether this replaced a meeting that had to move. */
+        isReschedule: z.boolean(),
+        recordedBy: z.string(),
+    }),
+
+    complianceMeetingHeld: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        meetingId: z.string(),
+        heldAt: z.string(),
+        recordedBy: z.string(),
+    }),
+
+    /**
+     * The client's verdict on the preliminary plans, either way.
+     *
+     * One entry rather than two, because approval and a revision request are
+     * the same decision with two outcomes and the trail should read as one
+     * sequence of them. `feedback` is present only on a rejection.
+     */
+    compliancePlansReviewed: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        approved: z.boolean(),
+        feedback: z.string().optional(),
+        recordedBy: z.string(),
+    }),
+
+    complianceFollowUpSent: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        alertId: z.string(),
+        alertType: z.string(),
+        party: z.string(),
+        contactEmail: z.string(),
+        sentBy: z.string(),
+    }),
+
     complianceDocumentUploaded: z.object({
         projectId: z.string(),
         engagementId: z.string(),

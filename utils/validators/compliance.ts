@@ -68,6 +68,15 @@ export const startPartyOutreachSchema = z.object({
   contactPhone: normalizedStringSchema.optional(),
   /** An extra line on the outreach — "we need this by Friday". */
   note: normalizedStringSchema.optional(),
+  /**
+   * The checklist line a consultant is being engaged against.
+   *
+   * Only meaningful for the two consultant parties, and ignored by the data
+   * layer for the other three. A surveyor is engaged against the job; a BASIX
+   * consultant is engaged against item 7, and what they send back answers that
+   * item rather than becoming a document of its own.
+   */
+  checklistDocumentId: idSchema.optional(),
 });
 
 export type StartPartyOutreachInput = z.infer<typeof startPartyOutreachSchema>;
@@ -84,6 +93,181 @@ export const partySelfSuppliedSchema = z.object({
 });
 
 export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
+
+// ============================================================================
+// Planning certificate
+// ============================================================================
+
+/**
+ * A date the client sends as an ISO string and the server stores as an instant.
+ *
+ * `z.coerce.date()` would accept "banana" as an Invalid Date and hand it to
+ * Prisma, which stores it as null and loses the field silently. This refuses
+ * anything that does not parse, which is the difference between a 400 and a
+ * clock that never starts.
+ */
+const isoDateSchema = z
+  .string()
+  .trim()
+  .min(1, "A date is required")
+  .transform((value, ctx) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      ctx.addIssue({ code: "custom", message: "That is not a valid date." });
+      return z.NEVER;
+    }
+    return parsed;
+  });
+
+/**
+ * Where the planning certificate has got to.
+ *
+ * A discriminated union rather than one object of optional fields, because the
+ * three steps are three different acts against the same row and inferring which
+ * one from the fields present got it wrong in the case that matters: an admin
+ * correcting a typo in the application number looked identical to one lodging a
+ * fresh application, and only the second is allowed to move the clock.
+ */
+export const planningCertificateSchema = z.discriminatedUnion("step", [
+  /** "Do you already have the planning certificate?" — yes or no. */
+  z.object({
+    step: z.literal("answer"),
+    alreadyHeld: z.boolean(),
+  }),
+  /**
+   * An application is with the portal.
+   *
+   * The lodgement date is required and the other two are not, deliberately.
+   * The date is the clock — without it there is nothing to measure and the
+   * whole step records nothing useful — while the application number and the
+   * council are what somebody needs to chase it, and are routinely not to hand
+   * at the moment the application goes in.
+   */
+  z.object({
+    step: z.literal("applied"),
+    appliedAt: isoDateSchema,
+    applicationRef: normalizedStringSchema.optional(),
+    lodgedWith: normalizedStringSchema.optional(),
+  }),
+  /** It came back — or it did not, and somebody is un-ticking a mistake. */
+  z.object({
+    step: z.literal("received"),
+    received: z.boolean(),
+  }),
+]);
+
+/** What the data layer receives — dates already parsed into instants. */
+export type PlanningCertificateInput = z.infer<
+  typeof planningCertificateSchema
+>;
+
+/**
+ * What the browser sends — dates still ISO strings.
+ *
+ * The two differ because `isoDateSchema` transforms, and the client half has to
+ * be the pre-transform shape: a component typed against the output would be
+ * asked for a `Date` and would send one that `JSON.stringify` turns back into
+ * the string this parses. Same schema, both ends, neither pretending.
+ */
+export type PlanningCertificateRequest = z.input<
+  typeof planningCertificateSchema
+>;
+
+// ============================================================================
+// Client and architect meetings
+// ============================================================================
+
+/**
+ * Booking the meeting, or moving it.
+ *
+ * One schema for both, because a reschedule is a booking that knows what it
+ * replaces — and the thing it replaces is found on the server off the outreach
+ * rather than named here, so a stale tab cannot close the wrong meeting.
+ */
+export const scheduleComplianceMeetingSchema = z.object({
+  scheduledFor: isoDateSchema,
+  /** Why it moved, on a reschedule. Sent to both sides on the invitation. */
+  note: normalizedStringSchema.optional(),
+});
+
+export type ScheduleComplianceMeetingInput = z.infer<
+  typeof scheduleComplianceMeetingSchema
+>;
+
+/** The browser's half — see `PlanningCertificateRequest`. */
+export type ScheduleComplianceMeetingRequest = z.input<
+  typeof scheduleComplianceMeetingSchema
+>;
+
+/**
+ * What became of the meeting.
+ *
+ * "Took place" and "was rescheduled" are the two answers the resolution modal
+ * offers, and the second carries the new time — which is what makes this a
+ * union rather than a status plus an optional date nobody validates.
+ */
+export const resolveComplianceMeetingSchema = z.discriminatedUnion("outcome", [
+  z.object({
+    outcome: z.literal("held"),
+    /**
+     * When it actually happened, where that is not when it was booked.
+     *
+     * Optional, and the server falls back to the booked time. It matters
+     * because the preliminary-plans clock runs from here: a meeting booked for
+     * the 3rd and held on the 10th gives the architect a week that a fallback
+     * to the booking would take away from them.
+     */
+    heldAt: isoDateSchema.optional(),
+    note: normalizedStringSchema.optional(),
+  }),
+  z.object({
+    outcome: z.literal("rescheduled"),
+    scheduledFor: isoDateSchema,
+    note: normalizedStringSchema.optional(),
+  }),
+]);
+
+export type ResolveComplianceMeetingInput = z.infer<
+  typeof resolveComplianceMeetingSchema
+>;
+
+/** The browser's half — see `PlanningCertificateRequest`. */
+export type ResolveComplianceMeetingRequest = z.input<
+  typeof resolveComplianceMeetingSchema
+>;
+
+// ============================================================================
+// Client review of the preliminary plans
+// ============================================================================
+
+/**
+ * The client's verdict on the architect's preliminary plans.
+ *
+ * Feedback is required on a rejection and refused on an approval. Required
+ * because it is the entire content of the mail the architect receives — a
+ * revision request saying only "the client wants changes" is a phone call
+ * somebody has to make anyway — and refused on approval because there is
+ * nothing to say and nowhere it would be read.
+ */
+export const reviewArchitectPlansSchema = z
+  .object({
+    approved: z.boolean(),
+    feedback: z.string().trim().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.approved && !data.feedback) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["feedback"],
+        message:
+          "Say what the client wants changed — it goes to the architect as written.",
+      });
+    }
+  });
+
+export type ReviewArchitectPlansInput = z.infer<
+  typeof reviewArchitectPlansSchema
+>;
 
 // ============================================================================
 // Alerts

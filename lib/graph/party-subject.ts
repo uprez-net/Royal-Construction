@@ -20,6 +20,8 @@ const PARTY_TOKEN_PREFIX: Readonly<Record<CompliancePartyType, string>> = {
   [CompliancePartyType.SURVEYOR]: "RCSURV",
   [CompliancePartyType.ARCHITECT]: "RCARCH",
   [CompliancePartyType.COUNCIL]: "RCCOUN",
+  [CompliancePartyType.BASIX_CONSULTANT]: "RCBSIX",
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: "RCBUSH",
 };
 
 const PARTY_BY_PREFIX: ReadonlyMap<string, CompliancePartyType> = new Map(
@@ -38,7 +40,8 @@ const PARTY_BY_PREFIX: ReadonlyMap<string, CompliancePartyType> = new Map(
  * case, so a case-sensitive prefix would orphan a whole thread over a cosmetic
  * change.
  */
-const PARTY_TOKEN_RE = /\[((?:RCSURV|RCARCH|RCCOUN)-[0-9A-F]{12})\]/i;
+const PARTY_TOKEN_RE =
+  /\[((?:RCSURV|RCARCH|RCCOUN|RCBSIX|RCBUSH)-[0-9A-F]{12})\]/i;
 
 /**
  * The party token in a subject, upper-cased, or null.

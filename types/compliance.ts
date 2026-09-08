@@ -2,6 +2,7 @@ import {
   ComplianceAlertStatus,
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceMeetingStatus,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
   CompliancePartyType,
@@ -31,9 +32,39 @@ export const certifierEngagementInclude = {
    */
   emails: { where: { outreachId: null }, orderBy: { sentAt: "asc" } },
   outreaches: {
-    include: { emails: { orderBy: { sentAt: "asc" } } },
+    include: {
+      emails: { orderBy: { sentAt: "asc" } },
+      /**
+       * The architect's client meetings, newest first.
+       *
+       * Every one of them, including the reschedules. The tab only ever renders
+       * the latest, but "what is this meeting up to" is answered by the row
+       * before it as often as by the row itself — a meeting that has moved twice
+       * is a different conversation with the architect from one booked for next
+       * Tuesday, and the sweep reads the held one to start the plans clock.
+       */
+      meetings: { orderBy: { scheduledFor: "desc" } },
+      /**
+       * Rounds of client feedback on the plans, newest first.
+       *
+       * Loaded whole rather than filtered to the outstanding one. The card
+       * shows how many rounds this set has been through, which is the honest
+       * answer to "why are we still waiting", and the outstanding round is
+       * found off the same array.
+       */
+      revisions: { orderBy: { requestedAt: "desc" } },
+    },
     orderBy: { createdAt: "asc" },
   },
+  /**
+   * The 10.7 certificate as a thing being obtained.
+   *
+   * Null until somebody answers "do you already have it?". Included on the main
+   * read rather than fetched by the council block on its own: it decides which
+   * of four states that block renders, and a card that has to fetch before it
+   * can decide what it is flickers through all four.
+   */
+  planningCertificate: true,
   /**
    * Open first, then newest.
    *
@@ -55,9 +86,19 @@ export type ComplianceDocumentWithFiles =
 
 export type CertifierEmailRecord = CertifierEngagementDetail["emails"][number];
 
-/** One party's engagement plus its own mail trail. */
+/** One party's engagement plus its own mail trail, meetings and revisions. */
 export type ComplianceOutreachDetail =
   CertifierEngagementDetail["outreaches"][number];
+
+export type ComplianceMeetingRecord =
+  ComplianceOutreachDetail["meetings"][number];
+
+export type CompliancePlanRevisionRecord =
+  ComplianceOutreachDetail["revisions"][number];
+
+/** The 10.7 certificate application, or null before the question is answered. */
+export type PlanningCertificateRecord =
+  CertifierEngagementDetail["planningCertificate"];
 
 export type ComplianceAlertRecord =
   CertifierEngagementDetail["alerts"][number];
@@ -142,6 +183,100 @@ export function requiresPlanningCertificate(
   engagement: Pick<CertifierEngagementDetail, "alerts"> | null | undefined,
 ): boolean {
   return !hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED);
+}
+
+/**
+ * Which step the planning certificate block is on.
+ *
+ * A derived value rather than a stored column, because every one of these is
+ * already implied by the fields underneath it and a second, stored account of
+ * the same thing is a second thing to get out of step. The order is the order
+ * the block walks through, and each step is the previous one plus one fact.
+ *
+ * - `unanswered` — nobody has said whether the builder already holds one.
+ * - `held` — they do; the row is just waiting for the file.
+ * - `to-order` — they do not, and nothing has been lodged. This is the portal
+ *   link.
+ * - `lodged` — an application is with the portal. This is where the three-to-
+ *   five-day clock runs.
+ * - `received` — it has come back, whether or not the file is on the row yet.
+ */
+export type PlanningCertificateStep =
+  | "unanswered"
+  | "held"
+  | "to-order"
+  | "lodged"
+  | "received";
+
+export function planningCertificateStep(
+  application: PlanningCertificateRecord,
+): PlanningCertificateStep {
+  if (!application || application.alreadyHeld === null) return "unanswered";
+  if (application.receivedAt) return "received";
+  if (application.alreadyHeld) return "held";
+  return application.appliedAt ? "lodged" : "to-order";
+}
+
+/**
+ * The meeting the architect card is currently about, or null.
+ *
+ * The newest one that has not been superseded, which is either a booking still
+ * to happen or the one that took place. A RESCHEDULED row is deliberately never
+ * it: rescheduling writes the replacement, so the moved row is history the
+ * moment its successor exists.
+ */
+export function currentMeeting(
+  outreach: Pick<ComplianceOutreachDetail, "meetings"> | null | undefined,
+): ComplianceMeetingRecord | null {
+  return (
+    outreach?.meetings.find(
+      (meeting) =>
+        meeting.status === ComplianceMeetingStatus.SCHEDULED ||
+        meeting.status === ComplianceMeetingStatus.HELD,
+    ) ?? null
+  );
+}
+
+/**
+ * When the client and the architect actually sat down, or null.
+ *
+ * The start of the preliminary-plans clock. Read off the meetings rather than
+ * off the outreach, and off `heldAt` rather than off the booking, because a
+ * meeting booked for a date and then held on another is common and the clock
+ * has to run from the second.
+ */
+export function meetingHeldAt(
+  outreach: Pick<ComplianceOutreachDetail, "meetings"> | null | undefined,
+): Date | null {
+  const held = (outreach?.meetings ?? []).filter(
+    (meeting) => meeting.status === ComplianceMeetingStatus.HELD,
+  );
+  if (held.length === 0) return null;
+
+  // The earliest one. A second meeting after the plans have been through a
+  // round of revisions must not restart a clock that the first meeting began.
+  return held.reduce<Date>(
+    (earliest, meeting) => {
+      const at = meeting.heldAt ?? meeting.scheduledFor;
+      return at < earliest ? at : earliest;
+    },
+    held[0].heldAt ?? held[0].scheduledFor,
+  );
+}
+
+/**
+ * The round of client revisions still waiting on the architect, or null.
+ *
+ * Null is the common case and means one of two very different things — no
+ * revisions were ever asked for, or the last round was answered — which is why
+ * callers testing this always test something else alongside it.
+ */
+export function outstandingRevision(
+  outreach: Pick<ComplianceOutreachDetail, "revisions"> | null | undefined,
+): CompliancePlanRevisionRecord | null {
+  return (
+    (outreach?.revisions ?? []).find((revision) => !revision.respondedAt) ?? null
+  );
 }
 
 /**

@@ -63,6 +63,83 @@ export async function discardSupersededFiles(
 }
 
 /**
+ * Files a consultant's deliverable onto the checklist line that asked for it.
+ *
+ * The other placement below files an arrival under its document type, which is
+ * right for everything the certifier or the surveyor sends: those are documents
+ * on the compliance file in their own right. A BASIX certificate is not. It
+ * exists because item 7 of the certifier's checklist asked for one, the
+ * certifier is going to tick item 7 when they see it, and a BASIX_CERTIFICATE
+ * row sitting beside an item 7 that still reads "Not supplied yet" is the
+ * document being on the file and the file still being incomplete.
+ *
+ * So the file moves onto the checklist row and the arrival's now-empty row is
+ * dropped. Which row that is was decided when the consultant was engaged
+ * (`ComplianceOutreach.checklistDocumentId`) rather than matched now, because by
+ * the time a reply lands there may be three items mentioning BASIX and no way
+ * to tell which one this answers.
+ *
+ * Falls back to null when the checklist row has gone — a checklist re-extracted
+ * between the outreach and the reply rewrites its items. The caller then places
+ * it by type, which is worse than the checklist row but much better than
+ * dropping the certificate on the floor.
+ */
+export async function placeConsultantDeliverable(params: {
+  engagementId: string;
+  /** The row the attachment landed on when it was archived. */
+  arrivalDocumentId: string;
+  /** The checklist item the consultant was engaged against. */
+  checklistDocumentId: string;
+}): Promise<{ documentId: string | null; superseded: StoredFile[] }> {
+  return prisma.$transaction(async (tx) => {
+    const [arrival, target] = await Promise.all([
+      tx.complianceDocument.findFirst({
+        where: { id: params.arrivalDocumentId, engagementId: params.engagementId },
+      }),
+      tx.complianceDocument.findFirst({
+        where: { id: params.checklistDocumentId, engagementId: params.engagementId },
+        include: { files: { select: { id: true, url: true } } },
+      }),
+    ]);
+
+    if (!arrival || !target) {
+      return { documentId: null, superseded: [] };
+    }
+
+    // A revised certificate replaces the one before it, exactly as a re-upload
+    // on that row would. The checklist line holds one document, not a pile of
+    // attempts at it.
+    const superseded = target.files;
+
+    await tx.file.updateMany({
+      where: { complianceDocumentId: arrival.id },
+      data: { complianceDocumentId: target.id },
+    });
+    if (superseded.length > 0) {
+      await tx.file.deleteMany({
+        where: { id: { in: superseded.map((file) => file.id) } },
+      });
+    }
+
+    await tx.complianceDocument.update({
+      where: { id: target.id },
+      data: {
+        // The row keeps its type, its label and its order: it is still the
+        // certifier's checklist line, now with the document it asked for on it.
+        // Only the status moves, and to RECEIVED rather than UPLOADED, because
+        // this arrived on an email rather than being put there by an admin.
+        status: arrival.status,
+        rejectionReason: null,
+      },
+    });
+
+    await tx.complianceDocument.delete({ where: { id: arrival.id } });
+
+    return { documentId: target.id, superseded };
+  });
+}
+
+/**
  * Files a just-arrived attachment under its type, replacing what was there.
  *
  * Called at the one moment an inbound document stops being anonymous: the

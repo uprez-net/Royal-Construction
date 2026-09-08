@@ -39,8 +39,12 @@ import type {
   ComplianceDocumentUploadInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
+  PlanningCertificateRequest,
   ResolveComplianceAlertInput,
+  ResolveComplianceMeetingRequest,
   ResolveComplianceDocumentInput,
+  ReviewArchitectPlansInput,
+  ScheduleComplianceMeetingRequest,
   SetComplianceDocumentNotRequiredInput,
   StartEngagementInput,
   StartPartyOutreachInput,
@@ -381,6 +385,19 @@ export const complianceScope = {
   /** Closing one alert. */
   alert: (alertId: string): ComplianceScope => `alert:${alertId}`,
   /**
+   * The council block's own state — the question, the application, the tick.
+   *
+   * Its own scope rather than `party(COUNCIL)`, because that key covers
+   * engaging a party and there is nobody to engage here. Keeping them apart
+   * means the certificate upload, which files under the document scope, and
+   * the answer, which files under this one, do not freeze each other.
+   */
+  planningCertificate: "planning-certificate" as ComplianceScope,
+  /** Booking, moving or resolving the client and architect meeting. */
+  meeting: "meeting" as ComplianceScope,
+  /** Recording the client's verdict on the preliminary plans. */
+  planReview: "plan-review" as ComplianceScope,
+  /**
    * One document row.
    *
    * Keyed by id where the row has one and by type where it does not, because
@@ -719,6 +736,117 @@ export const sendPartyReply = createAsyncThunk<
   }
 });
 
+/**
+ * Records where the 10.7 certificate has got to.
+ *
+ * Filed under a scope of its own rather than under the council party, because
+ * the council has no outreach to be busy on and the two things the block does —
+ * answering the question and uploading the certificate — are separate writes
+ * that must not freeze each other.
+ */
+export const recordPlanningCertificate = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & PlanningCertificateRequest,
+  { rejectValue: string }
+>(
+  "projects/recordPlanningCertificate",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/planning-certificate",
+        jsonPost(payload),
+        "Unable to record the planning certificate",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the planning certificate",
+      );
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// The architect's workflow beyond their two documents
+// ---------------------------------------------------------------------------
+
+/** Books the client and architect in, and mails them both. */
+export const scheduleClientMeeting = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & ScheduleComplianceMeetingRequest,
+  { rejectValue: string }
+>(
+  "projects/scheduleClientMeeting",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/meeting",
+        jsonPost(payload),
+        "Unable to schedule the meeting",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to schedule the meeting",
+      );
+    }
+  },
+);
+
+/** Records that the meeting happened, or moves it. */
+export const resolveClientMeeting = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & ResolveComplianceMeetingRequest,
+  { rejectValue: string }
+>(
+  "projects/resolveClientMeeting",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/meeting",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        "Unable to update the meeting",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to update the meeting",
+      );
+    }
+  },
+);
+
+/** Records whether the client signed off on the preliminary plans. */
+export const reviewArchitectPlans = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & ReviewArchitectPlansInput,
+  { rejectValue: string }
+>(
+  "projects/reviewArchitectPlans",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/plan-review",
+        jsonPost(payload),
+        "Unable to record the client's answer",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the client's answer",
+      );
+    }
+  },
+);
+
 /** Closes an alert, with the note that says what closed it. */
 export const resolveComplianceAlert = createAsyncThunk<
   ComplianceResult,
@@ -743,31 +871,33 @@ export const resolveComplianceAlert = createAsyncThunk<
 );
 
 /**
- * Asks the surveyor for a fresh title search.
+ * Chases whoever an open alert is waiting on.
  *
  * Filed under the alert's own scope, like the resolve: the two are the pair of
  * things you can do to one alert, and a chase in flight has to disable the
  * resolve beside it.
+ *
+ * Was `requestUpdatedTitleSearch`, which chased the one party the one alert
+ * type of the day was about. The server now holds the table of which party each
+ * condition belongs to, so the client only has to name the alert.
  */
-export const requestUpdatedTitleSearch = createAsyncThunk<
+export const sendComplianceFollowUp = createAsyncThunk<
   ComplianceResult,
   { projectId: string; alertId: string },
   { rejectValue: string }
 >(
-  "projects/requestUpdatedTitleSearch",
+  "projects/sendComplianceFollowUp",
   async ({ projectId, alertId }, thunkApi) => {
     try {
       return await replaceEngagement(
         projectId,
-        `/alerts/${alertId}/request-update`,
+        `/alerts/${alertId}/follow-up`,
         { method: "POST" },
-        "Unable to send the request to the surveyor",
+        "Unable to send the follow-up",
       );
     } catch (error) {
       return thunkApi.rejectWithValue(
-        error instanceof Error
-          ? error.message
-          : "Unable to send the request to the surveyor",
+        error instanceof Error ? error.message : "Unable to send the follow-up",
       );
     }
   },
@@ -819,10 +949,17 @@ const complianceOperations = [
   complianceOperation(sendPartyReply, (arg) =>
     complianceScope.partyReply(arg.outreachId),
   ),
+  complianceOperation(
+    recordPlanningCertificate,
+    () => complianceScope.planningCertificate,
+  ),
+  complianceOperation(scheduleClientMeeting, () => complianceScope.meeting),
+  complianceOperation(resolveClientMeeting, () => complianceScope.meeting),
+  complianceOperation(reviewArchitectPlans, () => complianceScope.planReview),
   complianceOperation(resolveComplianceAlert, (arg) =>
     complianceScope.alert(arg.alertId),
   ),
-  complianceOperation(requestUpdatedTitleSearch, (arg) =>
+  complianceOperation(sendComplianceFollowUp, (arg) =>
     complianceScope.alert(arg.alertId),
   ),
 ];

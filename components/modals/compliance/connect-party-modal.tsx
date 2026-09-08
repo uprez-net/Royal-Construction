@@ -22,9 +22,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  complianceDocumentLabel,
+  isConsultantParty,
   LAND_DEED_DOCUMENT,
   PARTY_LABEL,
   PARTY_TRADE_LABEL,
+  partyDeliverables,
 } from "@/constants/complianceDocuments";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
@@ -52,6 +55,15 @@ type ConnectPartyModalProps = {
    * uploaded, which is the one attachment this modal collects.
    */
   prefilled: PrefilledAttachment[];
+  /**
+   * The checklist line this consultant is being engaged against.
+   *
+   * Only set for the two consultant parties, and carried straight through to
+   * the outreach so what they send back can answer the item that asked for it.
+   * A surveyor is engaged against the job; a bushfire consultant is engaged
+   * against item 9.
+   */
+  checklistDocumentId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -70,6 +82,7 @@ export function ConnectPartyModal({
   party,
   subjectAddress,
   prefilled,
+  checklistDocumentId,
   open,
   onOpenChange,
 }: ConnectPartyModalProps) {
@@ -115,6 +128,11 @@ export function ConnectPartyModal({
   const label = PARTY_LABEL[party];
   const trade = PARTY_TRADE_LABEL[party];
   const needsDeed = party === CompliancePartyType.SURVEYOR;
+  const isConsultant = isConsultantParty(party);
+  /** What this party is being asked to produce, in the reader's words. */
+  const wanted = partyDeliverables(party)
+    .map((type) => complianceDocumentLabel(type).toLowerCase())
+    .join(" and ");
 
   /**
    * The deed is attached to the file before the outreach is sent, not with it.
@@ -169,6 +187,7 @@ export function ConnectPartyModal({
           contactEmail: contact.email.trim().toLowerCase(),
           contactPhone: contact.phone ?? undefined,
           note: note.trim() || undefined,
+          checklistDocumentId,
         }),
       ).unwrap();
       toast.success(`${label} engaged.`);
@@ -191,9 +210,17 @@ export function ConnectPartyModal({
           <DialogHeader>
             <DialogTitle>Connect with {label}</DialogTitle>
             <DialogDescription>
+              {/* Said in terms of what actually goes out, because that is the
+                  thing somebody is deciding about when they pick a firm. The
+                  consultant line names the checklist item rather than the
+                  documents: they are being commissioned for one deliverable,
+                  and what is attached is only the material to assess it
+                  against. */}
               {needsDeed
                 ? "They are sent the land deed and asked for the deposited plan, title search and survey. Their reply is matched back by the reference in the subject line."
-                : "They are sent everything the surveyor produced and asked for the plans. Their reply is matched back by the reference in the subject line."}
+                : isConsultant
+                  ? `They are sent the plans, the survey and the planning certificate, and asked for the ${wanted}. What they send back answers the checklist item this was raised from.`
+                  : "They are sent the surveyor's set and the planning certificate, the client's details so they can sit down with the owners, and asked for the plans. Their reply is matched back by the reference in the subject line."}
             </DialogDescription>
           </DialogHeader>
 

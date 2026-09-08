@@ -12,7 +12,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,16 @@ type ComplianceDocumentRowProps = {
    * just the one or two attached to this row.
    */
   onPreviewFile?: (fileId: string) => void;
+  /**
+   * The "engage a consultant" control for this line, where it needs one.
+   *
+   * Passed in rather than built here. A checklist line asking for a BASIX
+   * certificate needs a BASIX consultant commissioned, and knowing that means
+   * knowing which parties exist, which one is already engaged, and how to open
+   * the connect modal — none of which is a document row's business. It renders
+   * where the control belongs and leaves what it is to the caller.
+   */
+  consultantAction?: ReactNode;
 };
 
 /**
@@ -226,6 +236,7 @@ export function ComplianceDocumentRow({
   onApprove,
   onReject,
   onSetNotRequired,
+  consultantAction,
   onPreviewFile,
 }: ComplianceDocumentRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -367,6 +378,14 @@ export function ComplianceDocumentRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        {/* The consultant control, where this line needs somebody engaged.
+            First in the group because it is the answer to the row rather than
+            an alternative to it: on a line asking for a BASIX certificate,
+            uploading one by hand is the exception and commissioning one is the
+            normal move. Rendered by the caller — the row knows what a document
+            is and nothing about who produces one. */}
+        {consultantAction}
+
         {/* Offered before the upload control and kept beside it, because the
             two are the same decision from opposite ends: supply this, or say it
             is not needed. A row already set aside offers only the way back. */}

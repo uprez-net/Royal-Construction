@@ -6,30 +6,38 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
-import { Compass, ExternalLink, PencilRuler, Landmark } from "lucide-react";
+import { Compass, Flame, Landmark, Leaf, PencilRuler } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
   complianceDocumentLabel,
   isOptionalForOutreach,
-  NSW_PLANNING_PORTAL_URL,
   PARTY_LABEL,
   type CompliancePartySection,
 } from "@/constants/complianceDocuments";
 import type {
   ComplianceDocumentWithFiles,
   ComplianceOutreachDetail,
+  PlanningCertificateRecord,
 } from "@/types/compliance";
 
 import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceSectionCard } from "./compliance-section-card";
+import { CouncilCertificateBlock } from "./council-certificate-block";
 
-const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
+/**
+ * One icon per party, exported because the consultant controls on the checklist
+ * rows use the same ones. A BASIX consultant offered under a leaf here and a
+ * different mark three cards down would read as two different kinds of thing.
+ */
+export const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
   [CompliancePartyType.SURVEYOR]: Compass,
   [CompliancePartyType.ARCHITECT]: PencilRuler,
   [CompliancePartyType.COUNCIL]: Landmark,
+  [CompliancePartyType.BASIX_CONSULTANT]: Leaf,
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: Flame,
 };
 
 type PartyDocumentSectionProps = {
@@ -69,6 +77,25 @@ type PartyDocumentSectionProps = {
   ) => void;
   onPreviewFile: (fileId: string) => void;
   className?: string;
+  /** The project this file belongs to — the council block writes against it. */
+  projectId: string;
+  /**
+   * The 10.7 application, for the council block's state machine.
+   *
+   * Passed down rather than read from the store here, because the section is
+   * rendered once per party and four of the five have no use for it. Null until
+   * somebody answers the first question.
+   */
+  planningCertificate: PlanningCertificateRecord;
+  /**
+   * The meeting and plan-approval controls, for the architect.
+   *
+   * Passed in as a node rather than built here, for the same reason the rows
+   * are built from props: this component knows how to render a party's block
+   * and nothing about what any particular party's workflow involves. Null for
+   * everybody but the architect.
+   */
+  architectWorkflow?: ReactNode;
 };
 
 /**
@@ -107,21 +134,13 @@ export function PartyDocumentSection({
   onUpload,
   onPreviewFile,
   className,
+  projectId,
+  planningCertificate,
+  architectWorkflow,
 }: PartyDocumentSectionProps) {
   const { party } = section;
   const label = PARTY_LABEL[party];
   const isCouncil = party === CompliancePartyType.COUNCIL;
-
-  /**
-   * The council's yes/no, held in the component rather than persisted.
-   *
-   * It is a question about where the reader is going next, not a fact about the
-   * file: answering "no" sends them to the portal and answering "yes" opens the
-   * upload. The document landing is what actually records the answer, and it is
-   * the same document either way — so persisting the click would be storing a
-   * second, weaker account of something the row already says.
-   */
-  const [councilAnswer, setCouncilAnswer] = useState<"yes" | "no" | null>(null);
 
   /**
    * Whether this party has been dealt with.
@@ -233,62 +252,40 @@ export function PartyDocumentSection({
           Not needed on this job — the development application replaces it.
         </p>
       ) : isCouncil ? (
-        <>
-          {/* -----------------------------------------------------------
-              The council certificate is ordered, not requested.
-              There is nobody to write to and nothing to attach: either the
-              builder already holds a current 10.7, or somebody buys one on
-              the portal and uploads it when it comes back.
-          ----------------------------------------------------------- */}
-          {documents[0]?.files.length ? (
-            rows
-          ) : (
-            <>
-              <p className="font-medium text-foreground">
-                Do you already have the planning certificate?
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  type="button"
-                  variant={councilAnswer === "yes" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCouncilAnswer("yes")}
-                >
-                  Yes
-                </Button>
-                <Button
-                  type="button"
-                  variant={councilAnswer === "no" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCouncilAnswer("no")}
-                >
-                  No
-                </Button>
-              </div>
+        /* -----------------------------------------------------------
+           The council certificate is ordered, not requested.
 
-              {councilAnswer === "yes" ? <div className="mt-2">{rows}</div> : null}
+           There is nobody to write to and nothing to attach: either the
+           builder already holds a current 10.7, or somebody buys one on the
+           portal and it comes back three to five working days later. That
+           wait is the whole reason this is its own component now — the
+           question used to be answered into component state, so the wait
+           existed but nothing on the file could see it elapsing.
 
-              {councilAnswer === "no" ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Order the Section 10.7(2) &amp; (5) certificate for this lot on
-                  the NSW Planning Portal, then upload it here when it arrives.{" "}
-                  <a
-                    href={NSW_PLANNING_PORTAL_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                  >
-                    NSW Planning Portal
-                    <ExternalLink className="size-3" aria-hidden="true" />
-                  </a>
-                </p>
-              ) : null}
-            </>
-          )}
-        </>
+           The certificate already being on the row short-circuits all of it.
+           A file that arrived through the inbound classifier, or was dragged
+           in before anybody answered anything, has answered the question by
+           existing.
+        ----------------------------------------------------------- */
+        documents[0]?.files.length ? (
+          rows
+        ) : (
+          <CouncilCertificateBlock
+            projectId={projectId}
+            application={planningCertificate}
+            documentRows={rows}
+          />
+        )
       ) : (
         rows
       )}
+
+      {/* Everything the architect card carries beyond its two document rows:
+          the client meeting, and the client's verdict on the plans. Rendered
+          under the rows rather than beside them because it is the same story
+          continued — the plans on those rows are what the meeting produced and
+          what the verdict is about. */}
+      {architectWorkflow}
     </ComplianceSectionCard>
   );
 }

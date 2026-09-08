@@ -29,13 +29,19 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
       title: string;
       guidance: string;
       /**
-       * The one-click chase, where the alert has one.
+       * The label on the one-click chase, where the alert has one.
        *
-       * Only the title search does today, because it is the only condition
-       * whose remedy is a request we can compose ourselves — the mail says
-       * which names are on the register and which we hold, which is exactly
-       * what a person would otherwise retype off this screen. A DA is not a
-       * thing anybody can be asked for in one line.
+       * Six of the eight do. What they have in common is that the remedy is a
+       * request we can compose ourselves out of what is already on this screen
+       * — which names are on the register against which we hold, what was asked
+       * for and when, the revisions that went across a fortnight ago. The two
+       * that have none are the two nobody can be asked: the planning portal
+       * does not read email, and a development application is a decision about
+       * the whole job rather than a document to be reminded about.
+       *
+       * A label here is necessary but not sufficient. Whether the button
+       * actually appears also depends on that party having a live thread on
+       * this file, which is `canFollowUp` below.
        */
       followUp?: string;
     }
@@ -52,6 +58,52 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
     guidance:
       "This job cannot go through as a CDC. The planning certificate is no longer required while this is open. Close it once development consent has been granted — or if it turns out a CDC is viable after all.",
   },
+
+  // -------------------------------------------------------------------
+  // The overdue conditions, raised by the daily sweep.
+  //
+  // All six read the same way and all six close themselves: the thing being
+  // waited for lands, and the sweep resolves the alert on its next pass. So
+  // the guidance says what is late and what the button does, and never asks
+  // anybody to come back and tick it off — a person resolving one by hand is
+  // saying the wait no longer applies, not that it ended.
+  // -------------------------------------------------------------------
+
+  [ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED]: {
+    title: "Planning certificate taking longer than usual",
+    guidance:
+      "The 10.7(2) & (5) application has been with the portal past the three to five working days it normally takes. Chase it with the council using the application number on the council block, and tick it received once the certificate lands. This closes itself when the certificate is on the file.",
+  },
+  [ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE]: {
+    title: "Surveyor response pending",
+    guidance:
+      "The surveyor was engaged more than eleven working days ago and has not sent their documents through. The follow-up asks for an update on the thread they are already reading; it closes itself when the documents arrive.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.ARCHITECT_PLANS_OVERDUE]: {
+    title: "Preliminary plans pending",
+    guidance:
+      "The client and the architect met more than eleven working days ago and no preliminary plans have come back. The follow-up asks for an update on the architect's thread; it closes itself when the plans land.",
+    followUp: "Follow up with the architect",
+  },
+  [ComplianceAlertType.ARCHITECT_REVISION_OVERDUE]: {
+    title: "Client revisions pending",
+    guidance:
+      "The client's revisions went to the architect more than eleven working days ago and no revised set has come back. The follow-up re-sends the feedback and asks where the redraw is up to; it closes itself when the revised plans arrive.",
+    followUp: "Send a revision reminder",
+  },
+  [ComplianceAlertType.BASIX_RESPONSE_OVERDUE]: {
+    title: "BASIX certificate pending",
+    guidance:
+      "The BASIX consultant was engaged more than eleven working days ago and has not sent the certificate through. The follow-up asks for an update on their thread; it closes itself when the certificate arrives.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]: {
+    title: "Bushfire assessment pending",
+    guidance:
+      "The bushfire consultant was engaged more than eleven working days ago and has not sent their assessment through. The follow-up asks for an update on their thread; it closes itself when the report arrives.",
+    followUp: "Send a follow up",
+  },
 };
 
 /**
@@ -66,17 +118,25 @@ const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
   [ComplianceAlertSource.ARCHITECT]: "architect",
   [ComplianceAlertSource.COUNCIL]: "NSW Planning",
   [ComplianceAlertSource.CERTIFIER]: "certifier",
+  [ComplianceAlertSource.BASIX_CONSULTANT]: "BASIX consultant",
+  [ComplianceAlertSource.BUSHFIRE_CONSULTANT]: "bushfire consultant",
 };
 
 type ComplianceAlertsPanelProps = {
   alerts: ComplianceAlertRecord[];
   onResolve: (alert: ComplianceAlertRecord) => void;
-  /**
-   * Sends the alert's follow-up request. Absent when there is nobody to send it
-   * to — a file whose surveyor documents the client supplied has no thread, and
-   * offering a button that can only fail is worse than not offering one.
-   */
+  /** Sends the alert's follow-up request, on the thread it belongs to. */
   onFollowUp?: (alert: ComplianceAlertRecord) => void;
+  /**
+   * Whether this particular alert has anybody to chase.
+   *
+   * Per alert rather than per panel, which is the correction. One flag for the
+   * whole list got it wrong in both directions: a file whose surveyor documents
+   * the client supplied has nobody to write to about a title search, and may at
+   * the same moment have a live architect thread with a redraw overdue on it.
+   * Absent means every alert with copy for a chase gets the button.
+   */
+  canFollowUp?: (alert: ComplianceAlertRecord) => boolean;
   isBusy: (alertId: string) => boolean;
 };
 
@@ -96,6 +156,7 @@ export function ComplianceAlertsPanel({
   alerts,
   onResolve,
   onFollowUp,
+  canFollowUp,
   isBusy,
 }: ComplianceAlertsPanelProps) {
   if (alerts.length === 0) {
@@ -173,7 +234,9 @@ export function ComplianceAlertsPanel({
                 {/* The chase comes first and carries the weight: on a freshly
                     raised alert it is what someone is here to do, and Resolve
                     is what they come back for once the replacement lands. */}
-                {copy.followUp && onFollowUp ? (
+                {copy.followUp &&
+                onFollowUp &&
+                (canFollowUp?.(alert) ?? true) ? (
                   <Button
                     type="button"
                     size="sm"
