@@ -49,6 +49,16 @@ export type ModalType =
 
 export type UIModalPayload = Record<string, unknown> | null;
 
+/**
+ * The status the project list opens on. Delivery works out of the in-flight
+ * projects, so a completed one is noise until someone asks for it by pressing
+ * the "Completed" chip.
+ *
+ * Anything that resets the filters has to come back here rather than to `null`,
+ * or the default would only ever apply to a freshly created store.
+ */
+export const DEFAULT_PROJECT_STATUS_FILTER = "ACTIVE";
+
 export interface UIState {
   modal: {
     type: ModalType;
@@ -86,7 +96,7 @@ const initialState: UIState = {
   },
   leadTasksVersion: 0,
   projectFilters: {
-    status: null,
+    status: DEFAULT_PROJECT_STATUS_FILTER,
     view: "list",
     searchQuery: "",
     sortBy: "name",
@@ -133,7 +143,7 @@ const uiSlice = createSlice({
     },
     clearProjectFilters(state) {
       state.projectFilters.searchQuery = "";
-      state.projectFilters.status = null;
+      state.projectFilters.status = DEFAULT_PROJECT_STATUS_FILTER;
       state.projectFilters.sortBy = "name";
       state.projectFilters.sortOrder = "asc";
     },

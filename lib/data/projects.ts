@@ -561,9 +561,11 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
 
 type ProjectKPIResult = {
   total_active: bigint;
+  active: bigint;
   on_track: bigint;
   needs_attention: bigint;
   delayed: bigint;
+  completed: bigint;
 };
 
 /**
@@ -590,6 +592,10 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
                 ) AS total_active,
 
                 COUNT(*) FILTER (
+                    WHERE status = 'ACTIVE'
+                ) AS active,
+
+                COUNT(*) FILTER (
                     WHERE status = 'ON_TRACK'
                 ) AS on_track,
 
@@ -599,24 +605,32 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
 
                 COUNT(*) FILTER (
                     WHERE status = 'DELAYED'
-                ) AS delayed
+                ) AS delayed,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'COMPLETED'
+                ) AS completed
             FROM "Project"
         `;
 
     return {
       totalActive: Number(result.total_active),
+      active: Number(result.active),
       onTrack: Number(result.on_track),
       needsAttention: Number(result.needs_attention),
       delayed: Number(result.delayed),
+      completed: Number(result.completed),
     };
   } catch (error) {
     console.error("Error fetching project KPIs:", error);
 
     return {
       totalActive: 0,
+      active: 0,
       onTrack: 0,
       needsAttention: 0,
       delayed: 0,
+      completed: 0,
     };
   }
 }

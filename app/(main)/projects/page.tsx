@@ -21,7 +21,10 @@ export default async function ProjectPage() {
   // Mirrors app/(main)/dashboard/page.tsx, which already builds without a DB.
   await connection();
   const [projectsPage, kpis, user] = await Promise.all([
-    getProjects({ page: 1, limit: projectPageSize }),
+    // Matches the client's default status chip so the first paint is already
+    // the filtered list, instead of every project flashing up and narrowing
+    // when the client's own fetch lands.
+    getProjects({ page: 1, limit: projectPageSize, status: "ACTIVE" }),
     getProjectKPIs(),
     auth().then(({ userId }) => userId ? getUserByClerkIdCached(userId) : null),
   ]);

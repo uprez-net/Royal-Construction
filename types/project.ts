@@ -193,9 +193,11 @@ export interface ProjectDetail extends SafeProject {
 
 export type ProjectKPIs = {
   totalActive: number;
+  active: number;
   onTrack: number;
   needsAttention: number;
   delayed: number;
+  completed: number;
 };
 
 export type TradieKPIs = {

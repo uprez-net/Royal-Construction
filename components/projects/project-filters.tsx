@@ -20,7 +20,8 @@ export function ProjectFilters({
   const dispatch = useAppDispatch();
 
   const filters: { label: string; value: string | null; count: number }[] = [
-    { label: "All", value: null, count: kpis.totalActive },
+    { label: "All", value: null, count: kpis.totalActive + kpis.completed },
+    { label: "Active", value: "ACTIVE", count: kpis.active },
     { label: "On track", value: "ON_TRACK", count: kpis.onTrack },
     {
       label: "Needs attention",
@@ -28,6 +29,7 @@ export function ProjectFilters({
       count: kpis.needsAttention,
     },
     { label: "Delayed", value: "DELAYED", count: kpis.delayed },
+    { label: "Completed", value: "COMPLETED", count: kpis.completed },
   ];
 
   return (
