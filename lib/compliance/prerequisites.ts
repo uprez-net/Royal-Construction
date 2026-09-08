@@ -1,6 +1,7 @@
 import {
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceOutreachMode,
   CompliancePartyType,
 } from "@prisma/client";
 
@@ -131,14 +132,19 @@ export function partyBlockedReason(
 /**
  * Whether the client has signed off on the architect's preliminary plans.
  *
- * The gate on sending anything to the certifier. A pack built on plans the
- * client has not seen is a pack that comes back — the certifier assesses it,
- * the client then asks for a change, and the assessment was of a design that no
- * longer exists.
+ * The gate on sending anything to the certifier — where there is anybody to ask.
+ * A pack built on plans the client has not seen is a pack that comes back: the
+ * certifier assesses it, the client then asks for a change, and the assessment
+ * was of a design that no longer exists.
  *
- * True where there is no architect outreach at all, which is the client having
- * arrived with their own drawings: they are the client, they have approved them
- * by supplying them, and there is nobody to have asked.
+ * Two cases answer it without anybody clicking anything, and they are the same
+ * case twice over. A file with no architect outreach, and one where the outreach
+ * is SELF_SUPPLIED, are both the client having arrived with their own drawings —
+ * their own architect's, or their own. They are the client; supplying the plans
+ * is approving them, and there is nobody left to ask. Gating on those held the
+ * send shut behind a button the tab does not even offer, because the approval
+ * control lives on an architect card that a self-supplied file has no thread
+ * for.
  */
 export function clientHasApprovedPlans(
   engagement: CertifierEngagementDetail,
@@ -148,6 +154,7 @@ export function clientHasApprovedPlans(
     CompliancePartyType.ARCHITECT,
   );
   if (!architect) return true;
+  if (architect.mode === ComplianceOutreachMode.SELF_SUPPLIED) return true;
   return architect.clientPlansApprovedAt !== null;
 }
 

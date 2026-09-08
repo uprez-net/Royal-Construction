@@ -47,6 +47,16 @@ import type { PlanningCertificateRequest } from "@/utils/validators/compliance";
 /** The turnaround the portal quotes, and what the copy on this block says. */
 const PORTAL_BUSINESS_DAYS = 5;
 
+/**
+ * The controls on this block that write, named so a spinner can find its own.
+ *
+ * Four, and no two of them are ever on screen together — but which one is
+ * showing depends on the step, and the block re-renders into a different step
+ * the moment a save lands, so a single "busy" flag has no way of saying what it
+ * was busy with.
+ */
+type PendingControl = "yes" | "no" | "applied" | "received";
+
 type CouncilCertificateBlockProps = {
   projectId: string;
   application: PlanningCertificateRecord;
@@ -76,12 +86,30 @@ export function CouncilCertificateBlock({
    */
   const [isLodgementOpen, setIsLodgementOpen] = useState(false);
 
+  /**
+   * Which control is mid-request, rather than merely that one is.
+   *
+   * The store's scope tells us the block is busy; it cannot tell us which of
+   * the four things on it was clicked. Reading only that put the spinner on
+   * "Yes" whichever button was pressed — so answering "No" greyed both out and
+   * animated the wrong one, which reads as the click having gone somewhere
+   * unintended. The same gap left the two checkboxes with no feedback at all:
+   * they disabled themselves and sat there unticked until the round trip came
+   * back.
+   *
+   * Set before the dispatch and cleared in a `finally`, so a rejected save
+   * releases the control rather than stranding the block on a spinner.
+   */
+  const [pending, setPending] = useState<PendingControl | null>(null);
+
   const step = planningCertificateStep(application);
 
   const save = async (
+    control: PendingControl,
     payload: PlanningCertificateRequest,
     success: string,
   ) => {
+    setPending(control);
     try {
       await dispatch(
         recordPlanningCertificate({ projectId, ...payload }),
@@ -95,6 +123,8 @@ export function CouncilCertificateBlock({
           : "Could not save that against the planning certificate.",
       );
       return false;
+    } finally {
+      setPending(null);
     }
   };
 
@@ -107,6 +137,10 @@ export function CouncilCertificateBlock({
         <p className="font-medium text-foreground">
           Do you already have the planning certificate?
         </p>
+        {/* Both disabled while either is in flight — this is one question with
+            two answers, and a second click on the other one mid-save would
+            write the opposite of what the first said. Only the one that was
+            actually pressed spins. */}
         <div className="mt-3 flex gap-2">
           <Button
             type="button"
@@ -115,12 +149,13 @@ export function CouncilCertificateBlock({
             disabled={isBusy}
             onClick={() =>
               void save(
+                "yes",
                 { step: "answer", alreadyHeld: true },
                 "Noted — upload the certificate below.",
               )
             }
           >
-            {isBusy ? (
+            {pending === "yes" ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             ) : null}
             Yes
@@ -132,11 +167,15 @@ export function CouncilCertificateBlock({
             disabled={isBusy}
             onClick={() =>
               void save(
+                "no",
                 { step: "answer", alreadyHeld: false },
                 "Noted — order it on the portal when you can.",
               )
             }
           >
+            {pending === "no" ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : null}
             No
           </Button>
         </div>
@@ -187,6 +226,11 @@ export function CouncilCertificateBlock({
           </a>
         </p>
 
+        {/* This one writes nothing on its own — it opens the form below, and
+            the form's Save is what records the application. So there is no
+            request for it to spin against; it stays ticked because the form it
+            revealed is still on screen. It is disabled during a save so it
+            cannot be untoggled out from under a submit that is in flight. */}
         <label className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Checkbox
             checked={isLodgementOpen}
@@ -199,9 +243,11 @@ export function CouncilCertificateBlock({
         {isLodgementOpen ? (
           <LodgementForm
             isBusy={isBusy}
+            isSaving={pending === "applied"}
             application={application}
             onSubmit={async (values) => {
               const saved = await save(
+                "applied",
                 { step: "applied", ...values },
                 "Application recorded — we will flag it if the portal takes too long.",
               );
@@ -263,19 +309,32 @@ export function CouncilCertificateBlock({
             : `${elapsed} working day${elapsed === 1 ? "" : "s"} with the portal, of the three to five it usually takes.`}
       </p>
 
+      {/* Ticked the moment it is clicked, and held ticked until the save comes
+          back. A checkbox that springs back to unticked while its request is in
+          flight reads as a click that missed — and this one is a round trip, so
+          that gap is long enough to notice. The spinner beside the label is
+          what says the tick has not landed yet; the block re-renders into the
+          upload step when it has. */}
       <label className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Checkbox
-          checked={false}
+          checked={pending === "received"}
           disabled={isBusy}
           onCheckedChange={(checked) => {
             if (checked !== true) return;
             void save(
+              "received",
               { step: "received", received: true },
               "Marked as received — upload the certificate below.",
             );
           }}
         />
         Received the planning certificate
+        {pending === "received" ? (
+          <Loader2
+            className="size-4 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+        ) : null}
       </label>
 
       <button
@@ -290,9 +349,11 @@ export function CouncilCertificateBlock({
       {isLodgementOpen ? (
         <LodgementForm
           isBusy={isBusy}
+          isSaving={pending === "applied"}
           application={application}
           onSubmit={async (values) => {
             const saved = await save(
+              "applied",
               { step: "applied", ...values },
               "Application details updated.",
             );
@@ -327,10 +388,21 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 function LodgementForm({
   application,
   isBusy,
+  isSaving,
   onSubmit,
 }: {
   application: PlanningCertificateRecord;
+  /** Anything on the block is writing — every field is frozen. */
   isBusy: boolean;
+  /**
+   * This form in particular is writing.
+   *
+   * Separate from `isBusy` because the two are not the same while the form sits
+   * open on the lodged step: ticking "Received the planning certificate" makes
+   * the block busy, and a Save button spinning underneath that would claim the
+   * form had been submitted when it had not.
+   */
+  isSaving: boolean;
   onSubmit: (values: {
     appliedAt: string;
     applicationRef?: string;
@@ -413,7 +485,7 @@ function LodgementForm({
       </div>
 
       <Button type="submit" size="sm" disabled={isBusy || !appliedAt}>
-        {isBusy ? (
+        {isSaving ? (
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
         ) : null}
         Save application
