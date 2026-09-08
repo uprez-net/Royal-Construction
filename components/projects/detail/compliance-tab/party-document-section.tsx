@@ -274,7 +274,6 @@ export function PartyDocumentSection({
             projectId={projectId}
             application={planningCertificate}
             documentRows={rows}
-            hasCertificate={false}
           />
         )
       ) : (

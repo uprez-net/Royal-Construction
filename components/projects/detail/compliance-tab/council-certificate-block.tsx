@@ -52,15 +52,12 @@ type CouncilCertificateBlockProps = {
   application: PlanningCertificateRecord;
   /** The certificate's own document row, rendered once it can be uploaded. */
   documentRows: ReactNode;
-  /** Whether a file has actually landed on that row. */
-  hasCertificate: boolean;
 };
 
 export function CouncilCertificateBlock({
   projectId,
   application,
   documentRows,
-  hasCertificate,
 }: CouncilCertificateBlockProps) {
   const dispatch = useAppDispatch();
   const mutation = useAppSelector(
@@ -157,13 +154,14 @@ export function CouncilCertificateBlock({
   if (step === "held" || step === "received") {
     return (
       <>
-        {!hasCertificate ? (
-          <p className="mb-2 text-sm text-muted-foreground">
-            {step === "received"
-              ? "Marked as received. Upload the certificate to put it on the file."
-              : "Upload the certificate you are holding."}
-          </p>
-        ) : null}
+        {/* The caller renders the rows on their own once a file has landed, so
+            this branch only ever runs while the row is still empty — which is
+            why the line above it always asks for one. */}
+        <p className="mb-2 text-sm text-muted-foreground">
+          {step === "received"
+            ? "Marked as received. Upload the certificate to put it on the file."
+            : "Upload the certificate you are holding."}
+        </p>
         {documentRows}
       </>
     );

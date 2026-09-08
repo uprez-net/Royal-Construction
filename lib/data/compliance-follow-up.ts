@@ -56,13 +56,6 @@ function revalidateEngagement(projectId: string) {
   revalidateTag(`certifier-engagement-${projectId}`, CACHE_PROFILES.SHORT);
 }
 
-/** Whether the alert panel should offer a chase for this condition. */
-export async function alertHasFollowUp(
-  type: ComplianceAlertType,
-): Promise<boolean> {
-  return COMPLIANCE_ALERT_PARTY[type] !== null;
-}
-
 /**
  * The body for one chase.
  *
