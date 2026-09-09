@@ -318,6 +318,59 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    complianceDeveloperDecision: (data) => ({
+        id: uuidv4(),
+        type: "complianceDeveloperDecision",
+        message: `${data.estate ?? "The estate developer"} ${
+            data.decision === "APPROVED" ? "approved" : "rejected"
+        } the bushfire report${
+            data.channel === "ADMIN"
+                ? ` — recorded by ${data.decidedBy ?? "an admin"}`
+                : " — read off their reply"
+        }${data.reason ? `: "${data.reason}"` : ""}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceBushfireRevisionRequested: (data) => ({
+        id: uuidv4(),
+        type: "complianceBushfireRevisionRequested",
+        message: `Sent the developer's reasons to the bushfire consultant and asked for a revised report: "${data.reason}"`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceBushfireRevisionReceived: (data) => ({
+        id: uuidv4(),
+        type: "complianceBushfireRevisionReceived",
+        message: "A revised bushfire report came back from the consultant",
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDeveloperResent: (data) => ({
+        id: uuidv4(),
+        type: "complianceDeveloperResent",
+        message: `${data.requestedBy ?? "An admin"} sent the bushfire report back to the developer with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDeveloperApprovalRequirementSet: (data) => ({
+        id: uuidv4(),
+        type: "complianceDeveloperApprovalRequirementSet",
+        message: `${data.answeredBy ?? "An admin"} recorded that this lot ${
+            data.required ? "needs" : "does not need"
+        } the estate developer's approval on the bushfire report`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceMeetingScheduled: (data) => ({
         id: uuidv4(),
         type: "complianceMeetingScheduled",

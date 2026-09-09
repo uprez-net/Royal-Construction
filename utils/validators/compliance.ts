@@ -61,6 +61,24 @@ export type StartEngagementInput = z.infer<typeof startEngagementSchema>;
  * a tradie may carry several (`additionalEmails`) and the person engaging them
  * is the one who knows which desk this job should land on.
  */
+/**
+ * Files the sender attached by hand, on top of what the party's table carries.
+ *
+ * Ids rather than urls, and that is the whole security argument: a caller who
+ * could name a blob url could attach anything on the storage account to an
+ * outbound email. An id is resolved against the File table by the data layer,
+ * which is also what makes the name on the mail the stored name rather than one
+ * the client chose.
+ *
+ * Every party outreach and every party mail accepts these. What
+ * PARTY_OUTREACH_ATTACHMENTS holds is what a party always needs, worked out
+ * from the document rows; this is the covenant schedule, the neighbour's
+ * consent, the photograph of the pegs -- the things nobody could have listed in
+ * advance, which turned out to be a normal part of every one of these
+ * conversations rather than an edge case.
+ */
+export const extraAttachmentsSchema = z.array(idSchema).max(20).default([]);
+
 export const startPartyOutreachSchema = z.object({
   party: z.enum(CompliancePartyType),
   tradieId: idSchema.optional(),
@@ -105,6 +123,17 @@ export const startPartyOutreachSchema = z.object({
       }),
     )
     .default([]),
+  /** Anything the sender attached by hand. See `extraAttachmentsSchema`. */
+  extraAttachmentIds: extraAttachmentsSchema,
+  /**
+   * Which entry of AREA_DEVELOPERS this is, for a DEVELOPER outreach.
+   *
+   * Ignored for every other party. It is not the contact -- the address is
+   * `contactEmail` above, like everybody else's, because the picker prefills it
+   * and lets it be corrected. This is which estate was chosen, so the thread
+   * can say so afterwards.
+   */
+  developerKey: normalizedStringSchema.optional(),
 });
 
 export type StartPartyOutreachInput = z.infer<typeof startPartyOutreachSchema>;

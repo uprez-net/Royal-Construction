@@ -264,6 +264,69 @@ export const activityLogSchemas = {
         requestedBy: z.string(),
     }),
 
+    // --- The estate developer's sign-off ---------------------------------
+    //
+    // Four entries for one loop, because the loop can go round more than once
+    // and the trail has to say which lap it is on. A file that reads "rejected"
+    // then "revision requested" then "sent again" then "approved" is legible;
+    // one that reads "approved" with no account of the fortnight before it is
+    // not, and that fortnight is the part anybody asks about later.
+
+    /**
+     * The developer's answer.
+     *
+     * `channel` is the field that earns this entry its keep. An approval read
+     * off an email by a model and one a person recorded after reading the same
+     * email are the same fact with very different provenance, and the only
+     * place that distinction survives is here.
+     */
+    complianceDeveloperDecision: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        decision: z.string(),
+        channel: z.string(),
+        reason: z.string().nullable(),
+        decidedBy: z.string().nullable(),
+        estate: z.string().nullable(),
+    }),
+
+    complianceBushfireRevisionRequested: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        revisionId: z.string(),
+        reason: z.string(),
+    }),
+
+    complianceBushfireRevisionReceived: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+    }),
+
+    complianceDeveloperResent: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        attachmentCount: z.number(),
+        requestedBy: z.string().nullable(),
+    }),
+
+    /**
+     * Whether this estate needs a developer's approval at all.
+     *
+     * Logged because a "no" here opens the development application gate, and it
+     * is answered by one person from memory of a contract of sale. If a pack
+     * later comes back for want of an approval, this is the line that says who
+     * said it was not needed and when.
+     */
+    complianceDeveloperApprovalRequirementSet: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        required: z.boolean(),
+        answeredBy: z.string().nullable(),
+    }),
+
     complianceMeetingScheduled: z.object({
         projectId: z.string(),
         engagementId: z.string(),

@@ -7,7 +7,9 @@ import {
 
 import {
   complianceDocumentLabel,
+  DEVELOPER_APPROVAL_DOCUMENT,
   documentTypesForParty,
+  isApprovalParty,
   isConsultantParty,
   PARTY_LABEL,
   PARTY_PREREQUISITES,
@@ -101,6 +103,12 @@ export function partyBlockedReason(
     return null;
   }
 
+  // The developer is gated on a document rather than on a party, which is why
+  // their PARTY_PREREQUISITES entry is empty and this is a branch instead.
+  if (isApprovalParty(party)) {
+    return developerBlockedReason(engagement);
+  }
+
   for (const prerequisite of PARTY_PREREQUISITES[party]) {
     const upstreamLabel = PARTY_LABEL[prerequisite].toLowerCase();
 
@@ -124,6 +132,36 @@ export function partyBlockedReason(
         .map((type) => complianceDocumentLabel(type))
         .join(" and ")} from the ${upstreamLabel}.`;
     }
+  }
+
+  return null;
+}
+
+/**
+ * Why the estate developer cannot be asked yet, or null.
+ *
+ * One condition, and it is a document rather than a party: there is nothing to
+ * approve until the bushfire assessment exists. That is deliberately not
+ * expressed as "engage the bushfire consultant first", because the report can
+ * arrive three ways — commissioned from a consultant we engaged, produced by a
+ * consultant the client engaged, or handed over with the client's own paperwork
+ * — and only the first of those is an outreach. Gating on the outreach would
+ * block the two jobs in ten that turn up holding the report already.
+ *
+ * Read from the same place the DA gate reads it, so the two cannot disagree
+ * about whether the file holds an assessment.
+ */
+export function developerBlockedReason(
+  engagement: Pick<CertifierEngagementDetail, "documents">,
+): string | null {
+  const report = engagement.documents.find(
+    (document) => document.documentType === DEVELOPER_APPROVAL_DOCUMENT,
+  );
+
+  if (!report || report.files.length === 0) {
+    return `Upload or commission the ${complianceDocumentLabel(
+      DEVELOPER_APPROVAL_DOCUMENT,
+    ).toLowerCase()} first — there is nothing for the developer to approve yet.`;
   }
 
   return null;
