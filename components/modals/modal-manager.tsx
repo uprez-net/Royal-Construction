@@ -64,6 +64,7 @@ import { ApplicationModal } from "./compliance/application-modal";
 import { ConnectPartyModal } from "./compliance/connect-party-modal";
 import { DeveloperDecisionModal } from "./compliance/developer-decision-modal";
 import { DeveloperResendModal } from "./compliance/developer-resend-modal";
+import { ResubmitApplicationModal } from "./compliance/resubmit-application-modal";
 import { WasteManagementModal } from "./compliance/waste-management-modal";
 import { ResolveAlertModal } from "./compliance/resolve-alert-modal";
 import { ResolveMeetingModal } from "./compliance/resolve-meeting-modal";
@@ -742,6 +743,31 @@ export function ModalManager() {
           projectId={id}
           decision={decision}
           estate={estate}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "resubmitApplication": {
+      const {
+        projectId: id,
+        kind,
+        nextRound,
+        applicationRef,
+      } = modal.payload as {
+        projectId: string;
+        kind: ComplianceExternalApplicationKind;
+        nextRound: number;
+        applicationRef?: string | null;
+      };
+      return (
+        <ResubmitApplicationModal
+          projectId={id}
+          kind={kind}
+          nextRound={nextRound}
+          applicationRef={applicationRef}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

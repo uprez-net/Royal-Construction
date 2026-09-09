@@ -327,6 +327,22 @@ export const activityLogSchemas = {
         answeredBy: z.string().nullable(),
     }),
 
+    /**
+     * What a council came back with on a development application.
+     *
+     * `unmatched` is the field worth having. A rejection we could not land on a
+     * row is not a failure worth throwing on — the message is on the thread and
+     * a person can place it — but it is the one thing here nobody would
+     * otherwise know had happened.
+     */
+    complianceDaItemsRecorded: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        requestedCount: z.number(),
+        rejectedCount: z.number(),
+        unmatched: z.array(z.string()),
+    }),
+
     complianceMeetingScheduled: z.object({
         projectId: z.string(),
         engagementId: z.string(),

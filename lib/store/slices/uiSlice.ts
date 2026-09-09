@@ -43,6 +43,7 @@ export type ModalType =
   | "connectComplianceParty"
   | "developerDecision"
   | "developerResend"
+  | "resubmitApplication"
   | "resolveComplianceAlert"
   | "scheduleComplianceMeeting"
   | "resolveComplianceMeeting"

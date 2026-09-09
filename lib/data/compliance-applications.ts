@@ -181,7 +181,7 @@ export async function recordExternalApplication(
     }
 
     case "applied": {
-      await prisma.complianceExternalApplication.upsert({
+      const application = await prisma.complianceExternalApplication.upsert({
         where,
         create: {
           engagementId: engagement.id,
@@ -201,9 +201,86 @@ export async function recordExternalApplication(
         },
       });
 
+      // Round one. Written here as well as on the row above, so the rounds
+      // table is the complete account from the first lodgement rather than
+      // starting at whatever round somebody first resubmitted — which would
+      // make "round 2" the first thing the trail ever said.
+      //
+      // Idempotent through the unique index: an admin correcting the lodgement
+      // date is the same round reported again, so the existing row is updated
+      // rather than a second one written.
+      await prisma.complianceApplicationSubmission.upsert({
+        where: {
+          applicationId_round: { applicationId: application.id, round: 1 },
+        },
+        create: {
+          applicationId: application.id,
+          round: 1,
+          submittedAt: input.appliedAt,
+          applicationRef: input.applicationRef ?? null,
+        },
+        update: {
+          submittedAt: input.appliedAt,
+          applicationRef: input.applicationRef ?? null,
+        },
+      });
+
       if (APPLICATIONS_WITH_A_COUNCIL_THREAD.has(input.kind)) {
         await ensureCouncilThread(engagement, input.appliedAt);
       }
+      break;
+    }
+
+    case "resubmitted": {
+      const application = await prisma.complianceExternalApplication.findUnique({
+        where,
+        select: {
+          id: true,
+          applicationRef: true,
+          submissions: { orderBy: { round: "desc" }, take: 1 },
+        },
+      });
+
+      if (!application) {
+        // Nothing to resubmit. Refused rather than quietly promoted to a first
+        // lodgement, because the two are different facts and the difference is
+        // the whole reason this step exists: a "resubmission" of an application
+        // nobody recorded lodging is somebody on the wrong row.
+        throw new Error(
+          "There is no application on this file to resubmit — record the first lodgement instead.",
+        );
+      }
+
+      const round = (application.submissions[0]?.round ?? 0) + 1;
+      // Carried forward when this round does not supply one. Usually the same
+      // number, and the round that changes it is the exception a council makes
+      // when it closes an application and asks for it to be relodged.
+      const applicationRef =
+        input.applicationRef ??
+        application.submissions[0]?.applicationRef ??
+        application.applicationRef ??
+        null;
+
+      await prisma.complianceApplicationSubmission.create({
+        data: {
+          applicationId: application.id,
+          round,
+          submittedAt: input.submittedAt,
+          applicationRef,
+          note: input.note ?? null,
+        },
+      });
+
+      // The row's own reference follows the latest round, because that is what
+      // every chase quotes and what the inbound correlation matches a council's
+      // mail against. `receivedAt` is cleared for the same reason: an
+      // application that has gone back in is under assessment again, and
+      // leaving it marked determined would close the clock on a wait that has
+      // just restarted.
+      await prisma.complianceExternalApplication.update({
+        where: { id: application.id },
+        data: { applicationRef, receivedAt: null },
+      });
       break;
     }
 

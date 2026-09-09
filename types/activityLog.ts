@@ -371,6 +371,27 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    complianceDaItemsRecorded: (data) => ({
+        id: uuidv4(),
+        type: "complianceDaItemsRecorded",
+        message: [
+            data.requestedCount > 0
+                ? `The council asked for ${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"}`
+                : null,
+            data.rejectedCount > 0
+                ? `sent back ${data.rejectedCount}`
+                : null,
+            data.unmatched.length > 0
+                ? `and refused ${data.unmatched.join(", ")}, which could not be matched to a row on the file`
+                : null,
+        ]
+            .filter(Boolean)
+            .join(", "),
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceMeetingScheduled: (data) => ({
         id: uuidv4(),
         type: "complianceMeetingScheduled",

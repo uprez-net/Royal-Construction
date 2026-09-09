@@ -714,3 +714,81 @@ test("a file with no developer raises neither of their alerts", () => {
     false,
   );
 });
+
+// ---------------------------------------------------------------------------
+// Resubmission rounds
+//
+// The reason the rounds are a table. An application that was sent back and
+// lodged again is under assessment from the day it went back in, and measuring
+// from the original lodgement had every resubmitted DA permanently overdue from
+// the moment somebody acted on the council's request.
+// ---------------------------------------------------------------------------
+
+test("an application with no rounds still measures from its lodgement date", () => {
+  // Every application already on the system. The rounds table did not exist
+  // when they were lodged, so the fallback is what keeps their clocks running
+  // at all.
+  const file = engagement({
+    externalApplications: [
+      application({ appliedAt: MONDAY, submissions: [] }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    ),
+  );
+});
+
+test("the clock restarts from the round the application was last lodged in", () => {
+  // Lodged on the Monday and resubmitted twelve working days later. The
+  // certificate is one day into round two and is not late, however long ago
+  // round one went in.
+  const file = engagement({
+    externalApplications: [
+      application({
+        appliedAt: MONDAY,
+        submissions: [
+          { round: 2, submittedAt: TWELVE_WORKING_DAYS_LATER, applicationRef: null },
+          { round: 1, submittedAt: MONDAY, applicationRef: null },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, sydney("2026-06-19T09:00:00"));
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    ),
+    false,
+  );
+});
+
+test("a late round says which round it is", () => {
+  // So the chase reads as "round 2 is late" rather than implying the council
+  // has sat on one application since March.
+  const file = engagement({
+    externalApplications: [
+      application({
+        appliedAt: sydney("2026-01-05T09:00:00"),
+        submissions: [
+          { round: 2, submittedAt: MONDAY, applicationRef: "PC-2026/778" },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  const alert = result.raise.find(
+    (entry) => entry.type === ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+  );
+  assert.ok(alert);
+  assert.match(alert.detail, /Resubmitted \(round 2\)/);
+  assert.match(alert.detail, /PC-2026\/778/);
+});

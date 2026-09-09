@@ -694,6 +694,18 @@ export function ProjectComplianceTab({
     );
   };
 
+  /**
+   * What the council has asked for since the application was lodged.
+   *
+   * Ordered the way they were asked for rather than by wording, which is the
+   * order somebody works through them in: round three sits under round two.
+   */
+  const daItems = (engagement?.documents ?? [])
+    .filter(
+      (document) => document.documentType === ComplianceDocumentType.DA_ITEM,
+    )
+    .sort((a, b) => a.order - b.order);
+
   // -------------------------------------------------------------------
   // The estate developer.
   //
@@ -1984,6 +1996,26 @@ export function ProjectComplianceTab({
               isActive={activeSection === "development-application"}
               open={isOpen("development-application")}
               onOpenChange={toggleSection("development-application")}
+              daItems={daItems}
+              onApproveItem={(item) => void handleApprove(item)}
+              onRejectItem={(item) => handleReject(item)}
+              onResubmit={() => {
+                const da = developmentApplication(engagement);
+                dispatch(
+                  openModal({
+                    type: "resubmitApplication",
+                    payload: {
+                      projectId: project.id,
+                      kind: ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+                      // The round this will be, worked out here because the
+                      // dialog only needs to say it and the server assigns the
+                      // real one off what is already recorded.
+                      nextRound: (da?.submissions?.length ?? 1) + 1,
+                      applicationRef: da?.applicationRef ?? null,
+                    },
+                  }),
+                );
+              }}
               developerBlock={
                 // Only where a bushfire report is wanted. On a lot that is not
                 // bushfire prone there is nothing for a covenant to be about,

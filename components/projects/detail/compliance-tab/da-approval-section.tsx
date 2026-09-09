@@ -1,10 +1,11 @@
 "use client";
 
 import {
+  ComplianceAlertSource,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
 } from "@prisma/client";
-import { ExternalLink, FileStack } from "lucide-react";
+import { ExternalLink, FileStack, Send } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { StatusPill } from "@/components/common/status-pill";
@@ -18,10 +19,12 @@ import {
   type DaDocument,
 } from "@/constants/complianceDocuments";
 import {
+  checklistItemDetail,
   externalApplicationStep,
   type ComplianceDocumentWithFiles,
   type ComplianceExternalApplicationRecord,
 } from "@/types/compliance";
+import { dateFormat } from "@/utils/formatters";
 
 import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceSectionCard } from "./compliance-section-card";
@@ -105,6 +108,23 @@ type DaApprovalSectionProps = {
    */
   developerBlock?: ReactNode;
   /**
+   * What the council has asked for since the application was lodged.
+   *
+   * Its own list rather than more rows in the groups above, because it is a
+   * different kind of thing and behaves differently. The groups are what a DA
+   * always needs, known before anything is sent; these are what this council
+   * asked this job for afterwards, in their own words, and the list grows every
+   * time they write. Folding them together would mean a fixed list whose length
+   * changed, and a reader could no longer tell what was standard from what was
+   * this council's own.
+   */
+  daItems?: readonly ComplianceDocumentWithFiles[];
+  /** Sends one back — the council refused it, or an admin is recording that. */
+  onRejectItem?: (document: ComplianceDocumentWithFiles) => void;
+  onApproveItem?: (document: ComplianceDocumentWithFiles) => void;
+  /** Where somebody records that the pack went back in. */
+  onResubmit?: () => void;
+  /**
    * Why the application cannot be lodged yet, beyond outstanding documents.
    *
    * Null when the only thing missing is rows, which the block already says for
@@ -132,6 +152,10 @@ export function DaApprovalSection({
   className,
   developerBlock,
   blockedReason,
+  daItems = [],
+  onRejectItem,
+  onApproveItem,
+  onResubmit,
 }: DaApprovalSectionProps) {
   /**
    * Whether a row is answered.
@@ -253,6 +277,57 @@ export function DaApprovalSection({
       ))}
 
       {/* -------------------------------------------------------------
+          What the council has come back and asked for.
+
+          Below the fixed groups and above the lodgement, which is where it
+          belongs in both senses: it exists only after the application has gone
+          in, and every one of these has to be answered before it can go in
+          again. Rendered only when there are any — on a job the council has
+          not written to, an empty "further requests" heading is a question a
+          reader has to answer for themselves.
+      ------------------------------------------------------------- */}
+      {daItems.length > 0 ? (
+        <section className="mt-4">
+          <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Requested by the council
+          </h4>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Read off their emails as they arrive. Each one is worded the way
+            they worded it.
+          </p>
+
+          <ul>
+            {daItems.map((item) => (
+              <ComplianceDocumentRow
+                key={item.id}
+                label={complianceDocumentLabel(item.documentType, item.label)}
+                document={item}
+                detail={checklistItemDetail(item.detail)}
+                helperText="Not supplied yet"
+                mode={rowMode(item)}
+                isBusy={isRowBusy(item, item.documentType)}
+                onUpload={(file) =>
+                  onUpload(file, {
+                    documentId: item.id,
+                    documentType: item.documentType,
+                  })
+                }
+                onApprove={onApproveItem ? () => onApproveItem(item) : undefined}
+                onReject={onRejectItem ? () => onRejectItem(item) : undefined}
+                onSetNotRequired={
+                  onSetNotRequired
+                    ? (notRequired) => onSetNotRequired(item, notRequired)
+                    : undefined
+                }
+                onPreviewFile={onPreviewFile}
+                rejectedBy={rejectedByLabel(item)}
+              />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* -------------------------------------------------------------
           Lodging it.
 
           Below every group and outside them, because it is the one action that
@@ -277,6 +352,14 @@ export function DaApprovalSection({
                 </StatusPill>
               )}
             </div>
+            <SubmissionRounds
+              application={application}
+              onResubmit={onResubmit}
+              // Offered only once something has actually been lodged. A
+              // resubmission of an application nobody recorded lodging is
+              // somebody on the wrong control, and the server refuses it.
+              canResubmit={Boolean(application?.appliedAt) && step !== "received"}
+            />
             <ExternalApplicationBlock
               projectId={projectId}
               kind={ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION}
@@ -353,6 +436,103 @@ export function DaApprovalSection({
         )}
       />
     </ComplianceSectionCard>
+  );
+}
+
+/**
+ * Who sent a row back, as a sentence fragment the row can print.
+ *
+ * Null where nothing was rejected, and null where the source was never recorded
+ * — which is every rejection made before the column existed, all of them the
+ * certifier's. The row's own default covers that case, and returning null here
+ * rather than guessing keeps the fallback in one place.
+ */
+function rejectedByLabel(
+  document: ComplianceDocumentWithFiles,
+): string | null {
+  if (!document.rejectionReason) return null;
+  switch (document.rejectedBySource) {
+    case ComplianceAlertSource.COUNCIL:
+      return "the council";
+    case ComplianceAlertSource.CERTIFIER:
+      return "the certifier";
+    case ComplianceAlertSource.DEVELOPER:
+      return "the estate developer";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Every round this application has been lodged in.
+ *
+ * A DA that went in once needs none of this and shows none of it: one round is
+ * what the lodgement block above already says. It earns its place from round
+ * two, when the honest answer to "why is this still not determined" stops being
+ * a date and becomes a count — and when the clock everybody is reading has
+ * silently restarted from a different day.
+ */
+function SubmissionRounds({
+  application,
+  canResubmit,
+  onResubmit,
+}: {
+  application: ComplianceExternalApplicationRecord | null;
+  canResubmit: boolean;
+  onResubmit?: () => void;
+}) {
+  const rounds = application?.submissions ?? [];
+
+  if (!canResubmit && rounds.length <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 rounded-lg border border-border/70 bg-muted/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          {rounds.length > 1
+            ? `Lodged ${rounds.length} times`
+            : "Lodgement history"}
+        </p>
+        {canResubmit && onResubmit ? (
+          <Button type="button" variant="outline" size="sm" onClick={onResubmit}>
+            <Send className="size-3.5" aria-hidden="true" />
+            Record a resubmission
+          </Button>
+        ) : null}
+      </div>
+
+      {rounds.length > 0 ? (
+        <ul className="mt-2 space-y-1.5">
+          {rounds.map((round) => (
+            <li key={round.id} className="flex flex-wrap gap-x-2 text-sm">
+              <span className="font-medium text-foreground tabular-nums">
+                #{round.round}
+              </span>
+              <span className="text-muted-foreground">
+                {dateFormat.format(new Date(round.submittedAt))}
+              </span>
+              {round.applicationRef ? (
+                <span className="text-muted-foreground">
+                  · {round.applicationRef}
+                </span>
+              ) : null}
+              {round.note ? (
+                <span className="w-full text-[13px] text-muted-foreground/80">
+                  {round.note}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Record it here each time the pack goes back in — the council&apos;s
+          clock restarts from the latest round, not from the first.
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -279,6 +279,28 @@ export const externalApplicationSchema = z.discriminatedUnion("step", [
     applicationRef: normalizedStringSchema.optional(),
     lodgedWith: normalizedStringSchema.optional(),
   }),
+  /**
+   * It went in again, after the body sent it back.
+   *
+   * Its own step rather than a second "applied", because the two mean different
+   * things to the clock and to the trail. "applied" is the first lodgement and
+   * sets the row up; this adds a round to it, and the round is what the overdue
+   * sweep measures from — a DA resubmitted in April is not sixty working days
+   * late for having first gone in in March.
+   *
+   * The reference is optional and carried forward when it is absent, because it
+   * is usually the same number and occasionally is not: a council that closes an
+   * application and asks for it to be relodged issues a new one, and chasing
+   * round three by quoting round one's gets nowhere.
+   */
+  z.object({
+    step: z.literal("resubmitted"),
+    kind: applicationKindSchema,
+    submittedAt: isoDateSchema,
+    applicationRef: normalizedStringSchema.optional(),
+    /** What this round carried — "revised A03 and A04, shadow diagram added". */
+    note: normalizedStringSchema.optional(),
+  }),
   /** It came back — or it did not, and somebody is un-ticking a mistake. */
   z.object({
     step: z.literal("received"),

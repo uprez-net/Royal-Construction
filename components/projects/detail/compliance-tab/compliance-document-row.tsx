@@ -109,6 +109,20 @@ type ComplianceDocumentRowProps = {
    * say.
    */
   mappedFrom?: string | null;
+  /**
+   * Who sent this row back, where somebody did.
+   *
+   * "the certifier" was hard-coded here while they were the only body that
+   * rejected anything. A council rejects individual drawings on a development
+   * application, and telling a reader that the certifier refused their
+   * stormwater plan sends them to the wrong thread to find out why.
+   *
+   * Defaults to the certifier rather than to nothing, because every rejection
+   * recorded before the column existed is theirs by definition — and a row
+   * reading "Sent back:" with no author is worse than one that names the right
+   * body for every case but the historical ones.
+   */
+  rejectedBy?: string | null;
 };
 
 /**
@@ -249,6 +263,7 @@ export function ComplianceDocumentRow({
   onSetNotRequired,
   consultantAction,
   mappedFrom,
+  rejectedBy,
   onPreviewFile,
 }: ComplianceDocumentRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -275,6 +290,7 @@ export function ComplianceDocumentRow({
    * without a marker of their own.
    */
   const sentBack = Boolean(document?.rejectionReason);
+  const sentBackBy = rejectedBy?.trim() || "the certifier";
 
   const requirements = detail?.requirements ?? [];
   const references = detail?.references ?? [];
@@ -355,7 +371,8 @@ export function ComplianceDocumentRow({
                       <p className="break-all">{file.filename}</p>
                       {sentBack ? (
                         <p className="border-t border-background/25 pt-1 text-background/80">
-                          Sent back: {document?.rejectionReason}
+                          Sent back by {sentBackBy}:{" "}
+                          {document?.rejectionReason}
                         </p>
                       ) : null}
                     </TooltipContent>
@@ -393,7 +410,7 @@ export function ComplianceDocumentRow({
             only thing telling the admin what to change before re-uploading. */}
         {document?.rejectionReason ? (
           <p className="mt-1 text-sm text-destructive-ink">
-            Sent back by the certifier: {document.rejectionReason}
+            Sent back by {sentBackBy}: {document.rejectionReason}
           </p>
         ) : null}
       </div>

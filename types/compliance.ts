@@ -75,7 +75,19 @@ export const certifierEngagementInclude = {
    * five states its block renders, and a card that has to fetch before it can
    * decide what it is flickers through all five.
    */
-  externalApplications: true,
+  externalApplications: {
+    include: {
+      /**
+       * Every round this application has been lodged in, newest first.
+       *
+       * Loaded whole rather than filtered to the latest. The block shows how
+       * many rounds a DA has been through, which is the honest answer to "why
+       * is this still not determined", and the sweep reads the newest off the
+       * same array — the same trade `revisions` above makes.
+       */
+      submissions: { orderBy: { round: "desc" } },
+    },
+  },
   /**
    * Open first, then newest.
    *
@@ -178,6 +190,43 @@ export type CompliancePlanRevisionRecord =
   ComplianceOutreachDetail["revisions"][number];
 
 /** One application to an outside body, as the tab reads it. */
+/**
+ * The round an application's clock currently runs from.
+ *
+ * The newest submission, falling back to `appliedAt` for a row written before
+ * the rounds table existed and never resubmitted since. Both are needed: the
+ * fallback is what keeps every application already on the system measuring
+ * against something, and the round is what stops a resubmitted DA reading as
+ * late because of when it first went in.
+ */
+export function latestSubmission(
+  application: ComplianceExternalApplicationRecord | null | undefined,
+): { submittedAt: Date; round: number; applicationRef: string | null } | null {
+  if (!application) return null;
+
+  // Ordered newest-first by the include above, so the first is the latest. Not
+  // re-sorted here: a caller that has ordered them differently is a bug worth
+  // finding rather than one worth papering over.
+  const newest = application.submissions?.[0];
+  if (newest) {
+    return {
+      submittedAt: newest.submittedAt,
+      round: newest.round,
+      applicationRef: newest.applicationRef ?? application.applicationRef,
+    };
+  }
+
+  if (application.appliedAt) {
+    return {
+      submittedAt: application.appliedAt,
+      round: 1,
+      applicationRef: application.applicationRef,
+    };
+  }
+
+  return null;
+}
+
 export type ComplianceExternalApplicationRecord =
   CertifierEngagementDetail["externalApplications"][number];
 

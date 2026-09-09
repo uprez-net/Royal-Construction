@@ -13,6 +13,7 @@ import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
+import { readDaCorrespondence } from "@/lib/agent/daCorrespondenceAgent";
 import { detectDeveloperVerdict } from "@/lib/agent/developerApprovalAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import {
@@ -30,6 +31,7 @@ import {
   recordPreliminaryPlansArrival,
   recordWasteManagementPlanArrival,
 } from "@/lib/data/compliance-architect";
+import { applyDaCorrespondence } from "@/lib/data/compliance-da-items";
 import {
   recordBushfireRevisionArrival,
   recordDeveloperDecision,
@@ -636,6 +638,63 @@ async function recordDeveloperVerdict(
 }
 
 /**
+ * Reads a council's message for what they are asking for, and records it.
+ *
+ * The council's counterpart to the developer verdict above, and it exists for
+ * the same reason: what arrives is prose rather than a document, so the
+ * classification pipeline sees nothing. A council writes asking for a shadow
+ * diagram and rejecting two of the drawings, and before this the only record
+ * that it had done so was the email itself.
+ *
+ * Its own step so a model failure retries alone. Everything it writes is
+ * idempotent — a request already on the list is not written twice, and a
+ * rejection already on the row it names changes nothing — so a retry after a
+ * partial run finishes the job rather than duplicating it.
+ *
+ * Runs on every council message, not only ones about the development
+ * application. The 10.7 certificate rides the same thread, and a council
+ * acknowledging a certificate request asks for nothing — which is the answer
+ * the extraction is built to give and gives most of the time.
+ */
+async function recordCouncilRequests(
+  params: { projectId: string; engagementId: string },
+  message: InboundPartyMessage,
+): Promise<{ created: number; rejected: number }> {
+  "use step";
+
+  const correspondence = await readDaCorrespondence({
+    subject: message.subject,
+    body: message.body,
+  });
+
+  if (
+    correspondence.requested.length === 0 &&
+    correspondence.rejected.length === 0
+  ) {
+    return { created: 0, rejected: 0 };
+  }
+
+  const outcome = await applyDaCorrespondence({
+    projectId: params.projectId,
+    engagementId: params.engagementId,
+    requested: correspondence.requested,
+    rejected: correspondence.rejected,
+  });
+
+  if (outcome.unmatched.length > 0) {
+    // Logged rather than guessed at. A rejection landed on the wrong row sends
+    // a row that was accepted back to outstanding and leaves the one that was
+    // actually refused reading as fine; the message is on the thread, and the
+    // activity entry says which objection could not be placed.
+    console.log(
+      `  Council rejection(s) with no matching row: ${outcome.unmatched.join(", ")}`,
+    );
+  }
+
+  return { created: outcome.created, rejected: outcome.rejected };
+}
+
+/**
  * Reads the message for conditions that change the rest of the file.
  *
  * Its own step so a model failure retries on its own and cannot cost the
@@ -887,6 +946,22 @@ export const processInboundPartyEmail = async (
         projectId,
         engagementId: outreach.engagementId,
       });
+    }
+  }
+
+  // What the council is asking for, where this is their thread. After the
+  // documents for the same reason the verdict is: a determination arrives as a
+  // notice of determination attached to the message, and the rows this writes
+  // should be written against a file that already holds it.
+  if (outreach.party === CompliancePartyType.COUNCIL) {
+    const requests = await recordCouncilRequests(
+      { projectId, engagementId: outreach.engagementId },
+      message,
+    );
+    if (requests.created > 0 || requests.rejected > 0) {
+      console.log(
+        `  Council asked for ${requests.created} more document(s) and sent back ${requests.rejected}.`,
+      );
     }
   }
 

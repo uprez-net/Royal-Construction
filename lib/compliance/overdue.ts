@@ -23,6 +23,7 @@ import { businessDaysSince } from "@/lib/dates/business-days";
 import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import {
   externalApplication,
+  latestSubmission,
   meetingHeldAt,
   outreachForParty,
   outstandingRevision,
@@ -293,22 +294,30 @@ export function assessOverdueConditions(
       continue;
     }
 
-    if (!application?.appliedAt) {
+    // The latest round rather than the first lodgement. A DA resubmitted in
+    // April is not sixty working days late for having first gone in in March,
+    // and measuring from `appliedAt` had every application that was ever sent
+    // back permanently overdue from the moment it went back in.
+    const submission = latestSubmission(application);
+
+    if (!submission) {
       // Nothing lodged means no clock. Not resolved either: an alert raised on
       // a previous run stays open, because the clock only moves forward and an
       // admin clearing a lodgement date is not the wait ending.
       continue;
     }
 
-    const elapsed = businessDaysSince(application.appliedAt, now);
+    const elapsed = businessDaysSince(submission.submittedAt, now);
     if (elapsed > copy.businessDays) {
       raise.push({
         type: copy.alertType,
         source: ComplianceAlertSource.COUNCIL,
-        detail: `Lodged ${workingDays(elapsed)} ago${
-          application.applicationRef
-            ? ` under ${application.applicationRef}`
-            : ""
+        detail: `${
+          submission.round > 1
+            ? `Resubmitted (round ${submission.round})`
+            : "Lodged"
+        } ${workingDays(elapsed)} ago${
+          submission.applicationRef ? ` under ${submission.applicationRef}` : ""
         }, against a quoted ${copy.turnaround}.`,
       });
     }

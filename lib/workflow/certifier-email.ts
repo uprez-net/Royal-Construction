@@ -75,6 +75,11 @@ const INBOUND_CLASSIFIABLE: ReadonlySet<ComplianceDocumentType> = new Set([
   ComplianceDocumentType.FEE_PROPOSAL,
   ComplianceDocumentType.CDC_FORM,
   ComplianceDocumentType.CHECKLIST,
+  // The last thing they send. It arrives on this thread like everything else
+  // above, and it is the document that ends the compliance file -- so leaving
+  // it unclassified would strand a finished job one step from done with the
+  // certificate sitting in the needs-identifying queue.
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
 ]);
 
 // ---------------------------------------------------------------------------

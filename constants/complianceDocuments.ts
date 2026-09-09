@@ -582,9 +582,15 @@ export const PARTY_INBOUND_DOCUMENT_TYPES: Readonly<
     ...documentTypesForParty(CompliancePartyType.ARCHITECT),
     ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
   ],
-  [CompliancePartyType.COUNCIL]: documentTypesForParty(
-    CompliancePartyType.COUNCIL,
-  ),
+  // The certificate they were applied to for, plus the notice of determination
+  // -- which arrives on this same thread and is the document the whole rest of
+  // the tab is waiting on. Reading it as anything else, or leaving it
+  // unidentified, holds a certifier's checklist frozen behind a consent that is
+  // sitting on the file.
+  [CompliancePartyType.COUNCIL]: [
+    ...documentTypesForParty(CompliancePartyType.COUNCIL),
+    ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  ],
   // Narrower than any of the above: a consultant sends back one thing. A BASIX
   // assessor routinely attaches the plans they were sent as a courtesy, and
   // reading those as the architect's preliminary set would overwrite the
