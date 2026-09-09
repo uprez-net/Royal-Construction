@@ -373,7 +373,7 @@ async function classifyStoredDocuments(
   party: CompliancePartyType,
   stored: { documentId: string; name: string; url: string }[],
   /**
-   * Which checklist line each of this party's documents answers.
+   * What this party was asked for, and which checklist line asked for each.
    *
    * Present only for a consultant party. What a BASIX consultant sends back is
    * not a document on the file in its own right — it exists because a checklist
@@ -382,14 +382,18 @@ async function classifyStoredDocuments(
    * reading "Not supplied yet" is the document being on the file and the file
    * still being incomplete.
    *
-   * Keyed by document type rather than a single id, which is what lets one
-   * engagement answer several lines: the classifier says which of the three
-   * things a structural engineer produces this attachment is, and that answer
-   * picks the line.
+   * Passed as rows rather than as the resolver built from them, which is not a
+   * stylistic choice: step arguments are serialized into the event log so they
+   * can be replayed, and a function is not serializable. It is also what keeps
+   * `partyDeliverables` — and through it the whole Prisma client — out of the
+   * workflow sandbox; see `checklistLineResolver`.
    */
-  checklistLineFor: (
-    documentType: ComplianceDocumentType,
-  ) => string | null,
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId: string | null;
+  }[],
+  /** The single-line fallback, for outreaches written before the table above. */
+  fallbackChecklistDocumentId: string | null,
 ): Promise<{
   labelled: number;
   titleSearches: { url: string; name: string }[];
@@ -401,6 +405,11 @@ async function classifyStoredDocuments(
   const allowed = new Set<ComplianceDocumentType>(
     PARTY_INBOUND_DOCUMENT_TYPES[party],
   );
+  const checklistLineFor = checklistLineResolver({
+    party,
+    checklistDocumentId: fallbackChecklistDocumentId,
+    deliverables,
+  });
   let labelled = 0;
   // Reported back rather than checked here: the owner comparison is a model
   // call of its own and belongs in its own retryable step, so a timeout reading
@@ -644,13 +653,23 @@ async function advanceAndNotify(
 /**
  * Which checklist line a given document type from this party answers.
  *
- * A closure rather than a map passed in, because the fallback matters and is
- * easy to get wrong. Deliverables are the answer wherever they exist; where
- * they do not — a consultant engaged before the table existed, or one the
- * backfill could not reach — the single `checklistDocumentId` column is used,
- * but only for the party's own deliverable. Without that narrowing, a BASIX
- * consultant who attached the survey they were sent would have had the survey
- * filed onto the checklist line asking for a BASIX certificate.
+ * Deliverables are the answer wherever they exist; where they do not — a
+ * consultant engaged before that table existed, or one the backfill could not
+ * reach — the single `checklistDocumentId` column is used, but only for the
+ * party's own deliverable. Without that narrowing, a BASIX consultant who
+ * attached the survey they were sent would have had the survey filed onto the
+ * checklist line asking for a BASIX certificate.
+ *
+ * Called from inside `classifyStoredDocuments`, and it has to stay that way.
+ * This function reads `partyDeliverables` out of constants/complianceDocuments,
+ * which imports `@prisma/client` for its enums — and in workflow mode the
+ * compiler guts step bodies but keeps everything the orchestrator can reach, so
+ * a plain helper called from the workflow body drags that module into the
+ * sandbox. The sandbox is a `vm` context with no `require`, and Prisma's
+ * generated client is CommonJS, so the whole flow bundle dies on evaluation
+ * with "require is not defined" before any workflow runs at all. Called from a
+ * step instead, it is tree-shaken out of the sandbox bundle entirely, which is
+ * how `graphClient` and `deterministicFileId` above stay legal.
  */
 function checklistLineResolver(outreach: {
   party: CompliancePartyType;
@@ -736,7 +755,8 @@ export const processInboundPartyEmail = async (
       outreach.engagementId,
       outreach.party,
       stored,
-      checklistLineResolver(outreach),
+      outreach.deliverables,
+      outreach.checklistDocumentId,
     );
     console.log(
       `  Classified ${classification.labelled} of ${stored.length} ${outreach.party.toLowerCase()} document(s).`,
