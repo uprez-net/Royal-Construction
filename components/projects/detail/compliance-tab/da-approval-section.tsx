@@ -126,6 +126,17 @@ export function DaApprovalSection({
   const outstanding = DA_DOCUMENTS_FLAT.filter(
     (document) => !isSettled(document),
   );
+
+  /**
+   * The council's answer, where it has come.
+   *
+   * Deliberately not one of the rows above. Those are what the application
+   * needs; this is what it produced, and counting it among them would mean the
+   * list could never be complete until after it had been submitted.
+   */
+  const consent = documentsByType.get(
+    ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  );
   const done = DA_DOCUMENTS_FLAT.length - outstanding.length;
   const step = externalApplicationStep(application);
 
@@ -246,7 +257,40 @@ export function DaApprovalSection({
               projectId={projectId}
               kind={ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION}
               application={application}
-              documentRows={null}
+              // The one application whose document row is rendered inside its
+              // own block rather than on the list above. The consent is not a
+              // requirement of the DA, it is the answer to it — and it is the
+              // document the whole rest of the tab is waiting on, so it belongs
+              // where the lodgement it answers is recorded rather than filed
+              // among the twenty things that had to go in first.
+              documentRows={
+                <ul>
+                  <ComplianceDocumentRow
+                    label={complianceDocumentLabel(
+                      ComplianceDocumentType.DEVELOPMENT_CONSENT,
+                    )}
+                    document={consent}
+                    helperText={
+                      consent?.files.length
+                        ? undefined
+                        : "The council's notice of determination. Uploading it reopens the certifier's checklist."
+                    }
+                    mode={rowMode(consent)}
+                    isBusy={isRowBusy(
+                      consent,
+                      ComplianceDocumentType.DEVELOPMENT_CONSENT,
+                    )}
+                    onUpload={(file) =>
+                      onUpload(file, {
+                        documentId: consent?.id,
+                        documentType:
+                          ComplianceDocumentType.DEVELOPMENT_CONSENT,
+                      })
+                    }
+                    onPreviewFile={onPreviewFile}
+                  />
+                </ul>
+              }
             />
           </>
         ) : (

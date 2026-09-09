@@ -89,8 +89,10 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
 import {
+  checklistBlockedReason,
   checklistItemDetail,
   developmentApplication,
+  hasDevelopmentApplication,
   externalApplication,
   outreachForParty,
   planningCertificate,
@@ -176,6 +178,14 @@ const reviewSubmission = (engagement: CertifierEngagementDetail) =>
  */
 function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
   if (!READY_FOR_REVIEW_STATUSES.has(engagement.status)) {
+    return false;
+  }
+
+  // There is nothing for the certifier to assess while the job is waiting on
+  // development approval, and `sendComplianceForReview` refuses on the same
+  // reading — so the prompt that opens when the last document lands must not
+  // offer a send the server would throw out.
+  if (checklistBlockedReason(engagement)) {
     return false;
   }
 
@@ -365,6 +375,19 @@ export function ProjectComplianceTab({
     document?: ComplianceDocumentWithFiles,
   ): "upload" | "resolve" | "frozen" => {
     if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
+
+    // Nothing on the checklist moves while the job is waiting on development
+    // approval. Every row is evidence for an assessment that cannot start, and
+    // the council routinely grants consent with conditions that change the
+    // design — so a report collected now is a report that may be redone. The
+    // documents the DA itself needs are still collected, on the DA list, and
+    // those of them the certifier also asked for fill these rows as they land.
+    if (
+      checklistBlocked &&
+      document?.documentType === ComplianceDocumentType.CHECKLIST_ITEM
+    ) {
+      return "frozen";
+    }
 
     // Settled without a document behind it. The row keeps the control that puts
     // it back, which the row renders itself; it offers nothing else.
@@ -732,9 +755,7 @@ export function ProjectComplianceTab({
    * state machine is a list nobody can scan. The same block either way — see
    * `ApplicationModal`.
    */
-  const handleRecordApplication = (
-    kind: ComplianceExternalApplicationKind,
-  ) => {
+  const handleRecordApplication = (kind: ComplianceExternalApplicationKind) => {
     dispatch(
       openModal({
         type: "complianceApplication",
@@ -828,7 +849,9 @@ export function ProjectComplianceTab({
       toast.success("Follow-up sent.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not send the follow-up.",
+        error instanceof Error
+          ? error.message
+          : "Could not send the follow-up.",
       );
     }
   };
@@ -849,6 +872,12 @@ export function ProjectComplianceTab({
    * not one per line that mentions BASIX.
    */
   const renderChecklistAction = (item: ComplianceDocumentWithFiles) => {
+    // Frozen means frozen. The same control is on the development application
+    // list, which is where these documents are commissioned while the DA is
+    // outstanding — offering it in both places would open two threads with the
+    // same firm about the same report.
+    if (checklistBlocked) return null;
+
     const isSupplied = item.files.length > 0 || isNotRequired(item.status);
     return renderActionForType(checklistLineType(item), isSupplied, item.id);
   };
@@ -1197,6 +1226,26 @@ export function ProjectComplianceTab({
   const orderedFromDa = !requiresPlanningCertificate(engagement);
 
   /**
+   * Whether the file has a development application on it at all.
+   *
+   * Not the same question as `orderedFromDa`, which asks whether the 10.7 has
+   * moved and goes back to false the moment consent is granted. This one stays
+   * true afterwards, so a job whose DA came through last month keeps its DA
+   * block, its lodgement date and its reference number instead of reverting to
+   * a tab that never mentions the council.
+   */
+  const hasDa = hasDevelopmentApplication(engagement);
+
+  /**
+   * Why the checklist is frozen, or null.
+   *
+   * The same sentence `sendComplianceForReview` refuses with, read off the same
+   * function — a card that explains one thing while the server says another is
+   * the bug this codebase keeps writing a shared predicate to avoid.
+   */
+  const checklistBlocked = checklistBlockedReason(engagement);
+
+  /**
    * Where this project's council takes a road opening application.
    *
    * Resolved once here and threaded down, because there is no NSW-wide road
@@ -1323,22 +1372,22 @@ export function ProjectComplianceTab({
   const activeSection: SectionKey =
     unidentified.length > 0
       ? "unidentified"
-      // A job on the DA path has no certifier checklist coming, so the
-      // development application is where the work is. Ahead of the checklist in
-      // this list because a file that has been through both — a CDC that turned
-      // out to need a DA — still has the old checklist rows on it.
-      : orderedFromDa
+      : // A job waiting on development approval has a checklist it cannot work
+        // on, so the DA is where the work is — and only while that is true. Once
+        // the consent lands the checklist unfreezes and takes the marker back,
+        // which is the order the job is actually done in.
+        checklistBlocked
         ? "development-application"
         : checklistItems.length > 0
-        ? "checklist"
-        : hasResponse
-          ? "response"
-          // The collection half now has three blocks rather than one, so
-          // "where the engagement starts" is the first party that still owes
-          // something. Falls back to the surveyor, which is where a file with
-          // nothing outstanding began and where a finished one reads fine.
-          : (partySections.find((section) => !section.isComplete)?.party ??
-            CompliancePartyType.SURVEYOR);
+          ? "checklist"
+          : hasResponse
+            ? "response"
+            : // The collection half now has three blocks rather than one, so
+              // "where the engagement starts" is the first party that still owes
+              // something. Falls back to the surveyor, which is where a file with
+              // nothing outstanding began and where a finished one reads fine.
+              (partySections.find((section) => !section.isComplete)?.party ??
+              CompliancePartyType.SURVEYOR);
 
   const isOpen = (key: SectionKey) => sections[key] ?? key === activeSection;
   const toggleSection = (key: SectionKey) => (open: boolean) =>
@@ -1376,7 +1425,7 @@ export function ProjectComplianceTab({
     const outreach = outreachForParty(engagement, party);
     return Boolean(
       outreach?.contactEmail &&
-        outreach.mode === ComplianceOutreachMode.OUTREACH,
+      outreach.mode === ComplianceOutreachMode.OUTREACH,
     );
   };
 
@@ -1792,7 +1841,23 @@ export function ProjectComplianceTab({
               rather than sitting somewhere else on the page, because it is
               the same step of the job reached by the other route.
           ----------------------------------------------------------- */}
-          {orderedFromDa ? (
+          {/* -----------------------------------------------------------
+              The development application, beside the checklist rather than
+              instead of it.
+
+              These were exclusive for one release, on the reading that a job is
+              either a CDC or a DA. It is both: a certifier says the proposal
+              needs development approval *on the checklist they have just
+              issued*, so the checklist exists, its rows are real, and most of
+              what the DA needs is on it. Rendering one or the other meant a job
+              that changed path lost a twenty-item list nobody had finished, and
+              a job that had not yet changed path had nowhere to start the DA.
+
+              So both are on screen and the DA leads: its documents feed the
+              checklist as they land, and the checklist itself is frozen until
+              the consent arrives.
+          ----------------------------------------------------------- */}
+          {hasDa ? (
             <DaApprovalSection
               className="md:col-span-2"
               projectId={project.id}
@@ -1827,152 +1892,162 @@ export function ProjectComplianceTab({
               open={isOpen("development-application")}
               onOpenChange={toggleSection("development-application")}
             />
-          ) : (
-            <ComplianceSectionCard
-              title="Checklist"
-              description="One document per item the certifier asked for."
-              icon={ClipboardList}
-              progress={{
-                done: countSupplied(checklistItems),
-                total: checklistItems.length,
-              }}
-              open={isOpen("checklist")}
-              onOpenChange={toggleSection("checklist")}
-              isActive={activeSection === "checklist"}
-              locked={checklistLocked}
-              lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
-              // Across both columns. Each row can open its own requirements
-              // and references, and at half the width every one of those
-              // wrapped into a paragraph.
-              className="md:col-span-2"
-            >
-              <ul>
-                {checklistItems.map((item) => (
-                  <ComplianceDocumentRow
-                    key={item.id}
-                    label={complianceDocumentLabel(item.documentType, item.label)}
-                    document={item}
-                    detail={checklistItemDetail(item.detail)}
-                    helperText={
-                      item.files.length ? undefined : "Not supplied yet"
-                    }
-                    mode={rowMode(item)}
-                    isBusy={
-                      isScopeBusy(
-                        scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
-                      ) || submissionClaimed
-                    }
-                    onUpload={(file) =>
-                      void attachEvidence(file, {
-                        documentId: item.id,
-                        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-                      })
-                    }
-                    onApprove={() => void handleApprove(item)}
-                    onReject={() => handleReject(item)}
-                    // Offered to an admin, and only while the file is still
-                    // being assembled. Once it is with the certifier the answer
-                    // to "is this needed" is theirs, and it comes back as an
-                    // approval or a rejection rather than as a row nobody has
-                    // to fill in any more.
-                    onSetNotRequired={
-                      isAdmin && !inReview
-                        ? (notRequired) =>
-                            void handleSetNotRequired(item, notRequired)
-                        : undefined
-                    }
-                    onPreviewFile={handlePreviewFile}
-                    consultantAction={renderChecklistAction(item)}
-                    mappedFrom={mappedSourceFor(item)}
-                  />
-                ))}
-              </ul>
+          ) : null}
 
-              {/* -------------------------------------------------------
+          <ComplianceSectionCard
+            title="Checklist"
+            description="One document per item the certifier asked for."
+            icon={ClipboardList}
+            progress={{
+              done: countSupplied(checklistItems),
+              total: checklistItems.length,
+            }}
+            open={isOpen("checklist")}
+            onOpenChange={toggleSection("checklist")}
+            isActive={activeSection === "checklist"}
+            locked={checklistLocked}
+            lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
+            // Across both columns. Each row can open its own requirements
+            // and references, and at half the width every one of those
+            // wrapped into a paragraph.
+            className="md:col-span-2"
+          >
+            {/* Said above the rows rather than in place of them. The list is
+                the certifier's own wording and is worth reading while the DA
+                runs — half of it is what the council wants too — so it stays
+                legible and stops being editable. */}
+            {checklistBlocked ? (
+              <p className="mb-3 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-sm text-foreground">
+                {checklistBlocked}
+              </p>
+            ) : null}
+
+            <ul>
+              {checklistItems.map((item) => (
+                <ComplianceDocumentRow
+                  key={item.id}
+                  label={complianceDocumentLabel(item.documentType, item.label)}
+                  document={item}
+                  detail={checklistItemDetail(item.detail)}
+                  helperText={
+                    item.files.length ? undefined : "Not supplied yet"
+                  }
+                  mode={rowMode(item)}
+                  isBusy={
+                    isScopeBusy(
+                      scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+                    ) || submissionClaimed
+                  }
+                  onUpload={(file) =>
+                    void attachEvidence(file, {
+                      documentId: item.id,
+                      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+                    })
+                  }
+                  onApprove={() => void handleApprove(item)}
+                  onReject={() => handleReject(item)}
+                  // Offered to an admin, and only while the file is still
+                  // being assembled. Once it is with the certifier the answer
+                  // to "is this needed" is theirs, and it comes back as an
+                  // approval or a rejection rather than as a row nobody has
+                  // to fill in any more.
+                  onSetNotRequired={
+                    isAdmin && !inReview && !checklistBlocked
+                      ? (notRequired) =>
+                          void handleSetNotRequired(item, notRequired)
+                      : undefined
+                  }
+                  onPreviewFile={handlePreviewFile}
+                  consultantAction={renderChecklistAction(item)}
+                  mappedFrom={mappedSourceFor(item)}
+                />
+              ))}
+            </ul>
+
+            {/* -------------------------------------------------------
                   Home insurance
               ------------------------------------------------------- */}
-              {allChecklistUploaded ? (
-                <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-                  {insuranceDocument?.files.length ? (
-                    <ul>
-                      <ComplianceDocumentRow
-                        label="Home Insurance"
-                        document={insuranceDocument}
-                        mode={rowMode(insuranceDocument)}
-                        isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
-                        onUpload={(file) =>
-                          void attachEvidence(file, insuranceUpload)
+            {allChecklistUploaded && !checklistBlocked ? (
+              <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
+                {insuranceDocument?.files.length ? (
+                  <ul>
+                    <ComplianceDocumentRow
+                      label="Home Insurance"
+                      document={insuranceDocument}
+                      mode={rowMode(insuranceDocument)}
+                      isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
+                      onUpload={(file) =>
+                        void attachEvidence(file, insuranceUpload)
+                      }
+                      onApprove={() => void handleApprove(insuranceDocument)}
+                      onReject={() => handleReject(insuranceDocument)}
+                      onPreviewFile={handlePreviewFile}
+                    />
+                  </ul>
+                ) : (
+                  <>
+                    <p className="font-medium text-foreground">
+                      Have you raised the home insurance?
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        type="button"
+                        variant={
+                          insuranceAnswer === "yes" ? "default" : "outline"
                         }
-                        onApprove={() => void handleApprove(insuranceDocument)}
-                        onReject={() => handleReject(insuranceDocument)}
-                        onPreviewFile={handlePreviewFile}
-                      />
-                    </ul>
-                  ) : (
-                    <>
-                      <p className="font-medium text-foreground">
-                        Have you raised the home insurance?
+                        size="sm"
+                        onClick={() => setInsuranceAnswer("yes")}
+                      >
+                        Yes
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={
+                          insuranceAnswer === "no" ? "default" : "outline"
+                        }
+                        size="sm"
+                        onClick={() => setInsuranceAnswer("no")}
+                      >
+                        No
+                      </Button>
+                    </div>
+
+                    {insuranceAnswer === "yes" ? (
+                      <ul className="mt-2">
+                        <ComplianceDocumentRow
+                          label="Home Insurance"
+                          helperText="Upload the certificate of insurance"
+                          mode="upload"
+                          isBusy={
+                            isScopeBusy(insuranceScope) || submissionClaimed
+                          }
+                          onUpload={(file) =>
+                            void attachEvidence(file, insuranceUpload)
+                          }
+                        />
+                      </ul>
+                    ) : null}
+
+                    {insuranceAnswer === "no" ? (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        Raise Home Building Compensation Fund cover with icare,
+                        then come back and upload the certificate.{" "}
+                        <a
+                          href={HBCF_INSURANCE_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                        >
+                          icare HBCF
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
                       </p>
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          type="button"
-                          variant={
-                            insuranceAnswer === "yes" ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setInsuranceAnswer("yes")}
-                        >
-                          Yes
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={
-                            insuranceAnswer === "no" ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setInsuranceAnswer("no")}
-                        >
-                          No
-                        </Button>
-                      </div>
-
-                      {insuranceAnswer === "yes" ? (
-                        <ul className="mt-2">
-                          <ComplianceDocumentRow
-                            label="Home Insurance"
-                            helperText="Upload the certificate of insurance"
-                            mode="upload"
-                            isBusy={
-                              isScopeBusy(insuranceScope) || submissionClaimed
-                            }
-                            onUpload={(file) =>
-                              void attachEvidence(file, insuranceUpload)
-                            }
-                          />
-                        </ul>
-                      ) : null}
-
-                      {insuranceAnswer === "no" ? (
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          Raise Home Building Compensation Fund cover with icare,
-                          then come back and upload the certificate.{" "}
-                          <a
-                            href={HBCF_INSURANCE_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                          >
-                            icare HBCF
-                            <ExternalLink className="size-3" aria-hidden="true" />
-                          </a>
-                        </p>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              ) : null}
-            </ComplianceSectionCard>
-          )}
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
+          </ComplianceSectionCard>
         </div>
 
         {/* -------------------------------------------------------------

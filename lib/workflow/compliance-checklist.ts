@@ -1,5 +1,6 @@
 import {
   CertifierEngagementStatus,
+  ComplianceAlertSource,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   Prisma,
@@ -14,6 +15,8 @@ import {
   runChecklistExtraction,
   type ExtractedChecklistItem,
 } from "@/lib/agent/checklistExtractionAgent";
+import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
+import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import {
   mapExistingDocumentsOntoChecklist,
@@ -382,6 +385,61 @@ async function mapCollectedDocuments(
   return result;
 }
 
+/**
+ * Reads the checklist itself for a job that cannot go through as a CDC.
+ *
+ * The certifier is the one who decides this, and the checklist is very often
+ * where they say it first — they look at the plans, conclude the proposal
+ * misses a complying-development standard, and write so at the top of the
+ * document they were producing anyway. Until now nothing read that: the
+ * condition was only ever picked up off a reply on the thread, so a job whose
+ * certifier said it in the checklist collected twenty documents for an
+ * assessment that was never going to start.
+ *
+ * The same agent that reads the mail threads, told it is reading a document.
+ * One set of rules for one condition, rather than a second prompt that could
+ * come to disagree with the first about what "needs a DA" sounds like.
+ *
+ * Never throws. It runs after the checklist has been written, and a model call
+ * that times out must not cost the twenty rows that already landed — the
+ * condition is still readable on the document itself, and an admin can raise
+ * the alert by hand.
+ */
+async function detectDevelopmentApproval(
+  input: ChecklistExtractionInput,
+  markdown: string,
+): Promise<number> {
+  "use step";
+
+  try {
+    const detected = await detectComplianceAlerts({
+      source: ComplianceAlertSource.CERTIFIER,
+      subject: "Certifier checklist",
+      body: markdown,
+      kind: "document",
+    });
+
+    let raised = 0;
+    for (const alert of detected) {
+      const result = await raiseComplianceAlert({
+        projectId: input.projectId,
+        engagementId: input.engagementId,
+        type: alert.type,
+        raisedBySource: ComplianceAlertSource.CERTIFIER,
+        detail: alert.detail,
+      });
+      // Only a new one counts. A re-extraction of the same checklist says the
+      // same thing, and `raiseComplianceAlert` collapses it onto the row that
+      // is already open.
+      if (result.created) raised += 1;
+    }
+    return raised;
+  } catch (error) {
+    console.error("  Failed to read the checklist for a DA requirement:", error);
+    return 0;
+  }
+}
+
 async function failWorkflow(message: string) {
   "use step";
   try {
@@ -472,6 +530,13 @@ export const extractComplianceChecklist = async (
       extraction.items,
       extraction.document,
     );
+
+    // Before the mapping, because it changes what the file is for. A checklist
+    // that says the job needs development approval freezes the very rows the
+    // mapping is about to fill — they are still worth filling, since the DA
+    // wants most of them too, but the reader has to see the condition first
+    // rather than discover it under a list that has gone read-only.
+    await detectDevelopmentApproval(input, markdown);
 
     await emitStage("Matching what we already hold");
     const mapping = await mapCollectedDocuments(input);

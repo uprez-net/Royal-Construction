@@ -323,6 +323,16 @@ enum ComplianceDocumentType {
   BUILD_COST_SUMMARY
   OWNER_CONSENT_FORM
 
+  /// What the council sends back when it approves the development application:
+  /// the notice of determination, carrying the consent and its conditions.
+  ///
+  /// The one document on this file that unblocks another stage rather than
+  /// satisfying a line. A certifier who has said the job needs a DA cannot
+  /// assess anything until this exists, so the checklist is frozen until it
+  /// lands -- and it then answers the checklist line asking for it, like any
+  /// other document the file already holds.
+  DEVELOPMENT_CONSENT
+
   UNKNOWN
 }
 

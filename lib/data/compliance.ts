@@ -45,6 +45,7 @@ import {
   recordWasteManagementPlanArrival,
 } from "@/lib/data/compliance-architect";
 import { recordExternalApplicationArrival } from "@/lib/data/compliance-applications";
+import { fillChecklistLinesFor } from "@/lib/compliance/checklist-mapping";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -53,6 +54,7 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   certifierEngagementInclude,
+  checklistBlockedReason,
   type CertifierEmailAttachment,
   type CertifierEngagementDetail,
 } from "@/types/compliance";
@@ -791,6 +793,23 @@ export async function attachComplianceDocumentFile(params: {
     });
   });
 
+  // The checklist lines asking for what just landed.
+  //
+  // Runs on every upload rather than behind a type check, because the set it
+  // covers is a question for the mapper and a condition here would be a second
+  // place to remember. The case it is really for is the development
+  // application: a DA is assessed on very nearly the same evidence as a CDC, so
+  // a structural drawing supplied on the DA list is the same drawing the
+  // certifier asked for on their checklist, and collecting it twice is what
+  // this stops. It also catches the ordinary case the extraction cannot — a
+  // document that arrives weeks after the checklist was read.
+  after(async () => {
+    await fillChecklistLinesFor({
+      engagementId: params.engagementId,
+      documentType: document.documentType,
+    });
+  });
+
   // The waste management plan is the architect's, on their existing thread, and
   // its clock is its own — so its alert closes on its own too. Nothing else the
   // architect sends answers it, and it answers nothing else of theirs.
@@ -1192,6 +1211,15 @@ export async function sendComplianceForReview(engagementId: string) {
   // builder supplied is already on this thread — the required pack came with
   // the outreach, the signed copies with their own send — so the review is the
   // one message that carries what the certifier has not seen.
+  // Nothing to assess. A certifier who has said the job needs development
+  // approval cannot start until the council has granted it, so the file must
+  // not go over — the tab freezes the checklist for the same reason, and this
+  // is the same sentence read from the other end so the two cannot disagree.
+  const blocked = checklistBlockedReason(engagement);
+  if (blocked) {
+    throw new Error(blocked);
+  }
+
   const evidence = engagement.documents.filter((doc) =>
     isReviewSubmissionType(doc.documentType),
   );

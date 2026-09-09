@@ -56,7 +56,10 @@ import { checklistItemDetail } from "@/types/compliance";
  * would mean a second File row against the same blob on the same checklist line
  * every time the step ran again.
  */
-function copiedFileId(checklistDocumentId: string, sourceFileId: string): string {
+function copiedFileId(
+  checklistDocumentId: string,
+  sourceFileId: string,
+): string {
   const digest = createHash("sha256")
     .update(`checklist-map:${checklistDocumentId}:file:${sourceFileId}`)
     .digest("hex");
@@ -97,7 +100,15 @@ const LABEL_HINTS: Partial<Record<ComplianceDocumentType, string[][]>> = {
   ],
   [ComplianceDocumentType.SURVEY]: [
     ["survey"],
-    ["signed", "identification", "detail", "contour", "report", "plan", "level"],
+    [
+      "signed",
+      "identification",
+      "detail",
+      "contour",
+      "report",
+      "plan",
+      "level",
+    ],
   ],
   [ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN]: [
     ["architectural", "architect"],
@@ -123,26 +134,59 @@ const LABEL_HINTS: Partial<Record<ComplianceDocumentType, string[][]>> = {
   // should have offered to ring a bushfire assessor offered an Upload button
   // and nothing else.
   [ComplianceDocumentType.BUSHFIRE_REPORT]: [
-    ["bushfire", "bush fire", "bal risk", "bal rating", "bal report", "bal assessment", "attack level"],
+    [
+      "bushfire",
+      "bush fire",
+      "bal risk",
+      "bal rating",
+      "bal report",
+      "bal assessment",
+      "attack level",
+    ],
   ],
   [ComplianceDocumentType.STRUCTURAL_DRAWINGS]: [
     ["structural"],
     ["drawing", "plan", "design", "certificate", "detail", "engineer"],
   ],
   [ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS]: [
-    ["hydraulic", "stormwater", "storm water", "drainage", "on-site detention", "osd"],
+    [
+      "hydraulic",
+      "stormwater",
+      "storm water",
+      "drainage",
+      "on-site detention",
+      "osd",
+    ],
   ],
   [ComplianceDocumentType.GEOTECH_REPORT]: [
-    ["geotech", "geotechnical", "soil classification", "soil report", "site classification"],
+    [
+      "geotech",
+      "geotechnical",
+      "soil classification",
+      "soil report",
+      "site classification",
+    ],
   ],
   [ComplianceDocumentType.WATER_SERVICING_APPROVAL]: [
-    ["tap in", "tap-in", "water servicing", "servicing coordinator", "sydney water approval"],
+    [
+      "tap in",
+      "tap-in",
+      "water servicing",
+      "servicing coordinator",
+      "sydney water approval",
+    ],
   ],
   [ComplianceDocumentType.SECTION_73_NOTICE]: [
     ["section 73", "s73", "notice of requirements"],
   ],
   [ComplianceDocumentType.ROAD_OPENING_PERMIT]: [
-    ["road opening", "vehicle crossing", "driveway crossing", "kerb and gutter", "footpath crossing"],
+    [
+      "road opening",
+      "vehicle crossing",
+      "driveway crossing",
+      "kerb and gutter",
+      "footpath crossing",
+    ],
   ],
   [ComplianceDocumentType.LONG_SERVICE_LEVY]: [["long service"]],
   [ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL]: [
@@ -197,7 +241,11 @@ export function checklistDocumentType(item: {
   for (const type of MAPPABLE_DOCUMENT_TYPES) {
     const groups = LABEL_HINTS[type];
     if (!groups?.length) continue;
-    if (groups.every((alternatives) => alternatives.some((term) => text.includes(term)))) {
+    if (
+      groups.every((alternatives) =>
+        alternatives.some((term) => text.includes(term)),
+      )
+    ) {
       return type;
     }
   }
@@ -249,6 +297,113 @@ async function projectHbcfFile(projectId: string) {
   });
 }
 
+/**
+ * A document to copy from, reduced to what copying needs.
+ *
+ * Structural rather than the Prisma row, because one of the sources is not a
+ * compliance document at all: the HBCF certificate can be sitting on the
+ * project with no engagement row behind it, and a type that insisted on a
+ * document id could not describe it.
+ */
+type SourceFile = {
+  id: string;
+  url: string;
+  filename: string;
+  fileType: string;
+  filesize: number;
+  uploadedBy: string;
+  projectId: string | null;
+};
+type SourceDocument = { id: string | null; files: SourceFile[] };
+
+/** A checklist row, reduced to what deciding about it needs. */
+type TargetLine = {
+  id: string;
+  files: { id: string; url: string }[];
+  mappedFromDocumentId: string | null;
+};
+
+/**
+ * Puts one document's files onto one checklist line, or leaves it alone.
+ *
+ * Returns whether anything was written, which is what the caller counts.
+ *
+ * Three cases, and the third is the one that earns this its own function. A
+ * line with nothing on it is filled. A line already carrying a copy of these
+ * exact files is left alone, which is what a replayed step and a re-extraction
+ * both look like. A line carrying a copy of a document that has since been
+ * *replaced* — somebody uploaded a corrected survey onto the pack row — is
+ * refreshed, because the old copy points at a blob the replacement deleted and
+ * the certifier would otherwise be sent a dead link to last month's survey.
+ */
+async function copyOntoChecklistLine(
+  line: TargetLine,
+  source: SourceDocument,
+): Promise<boolean> {
+  const wanted = source.files.map((file) => copiedFileId(line.id, file.id));
+  const held = new Set(line.files.map((file) => file.id));
+
+  // Already holds exactly this. Compared by the derived id rather than by the
+  // source document, so a replacement — which produces different file ids — is
+  // correctly read as something new even though it came from the same row.
+  if (wanted.length === held.size && wanted.every((id) => held.has(id))) {
+    return false;
+  }
+
+  const stale = line.files.filter((file) => !wanted.includes(file.id));
+
+  await prisma.$transaction(async (tx) => {
+    // The copies this line used to hold. Deleted rather than left beside the
+    // new ones, because a checklist line holds one document rather than a pile
+    // of attempts at it — the same rule `placeConsultantDeliverable` follows.
+    //
+    // Only the File rows go. The blobs behind them are shared with the pack row
+    // this was copied from, and `discardSupersededFiles` is what decides when
+    // one is genuinely unreferenced.
+    if (stale.length > 0) {
+      await tx.file.deleteMany({
+        where: { id: { in: stale.map((file) => file.id) } },
+      });
+    }
+
+    await tx.file.createMany({
+      data: source.files.map((file) => ({
+        id: copiedFileId(line.id, file.id),
+        // The blob is shared, and everything else about the row is a copy.
+        // `uploadedBy` in particular: the person who put the survey on the file
+        // is the person this document came from, and attributing the copy to
+        // whoever happened to run the extraction would be a worse answer than
+        // the true one.
+        uploadedBy: file.uploadedBy,
+        projectId: file.projectId,
+        complianceDocumentId: line.id,
+        url: file.url,
+        filename: file.filename,
+        fileType: file.fileType,
+        filesize: file.filesize,
+      })),
+      // The replay guard. A step that ran, wrote its rows and then lost its
+      // result finds them already here.
+      skipDuplicates: true,
+    });
+
+    await tx.complianceDocument.update({
+      where: { id: line.id },
+      data: {
+        // UPLOADED rather than RECEIVED: this document is on the file because a
+        // person put it there, which is what UPLOADED means. That it was a
+        // person weeks ago rather than a person just now is what
+        // `mappedFromDocumentId` records.
+        status: ComplianceDocumentStatus.UPLOADED,
+        rejectionReason: null,
+        mappedFromDocumentId: source.id,
+      },
+    });
+  });
+
+  return true;
+}
+
 /** What one pass of the mapper did, for the log entry and the modal's copy. */
 export type ChecklistMappingResult = {
   mapped: number;
@@ -298,25 +453,6 @@ export async function mapExistingDocumentsOntoChecklist(params: {
      * `placeInboundDocument` exists to prevent, and reading the first here
      * keeps this agreeing with the rest of the tab if one ever slips through.
      */
-    /**
-     * A document to copy from, reduced to what copying needs.
-     *
-     * Structural rather than the Prisma row, because one of the sources is not
-     * a compliance document at all: the HBCF certificate can be sitting on the
-     * project with no engagement row behind it, and a type that insisted on a
-     * document id could not describe it.
-     */
-    type SourceFile = {
-      id: string;
-      url: string;
-      filename: string;
-      fileType: string;
-      filesize: number;
-      uploadedBy: string;
-      projectId: string | null;
-    };
-    type SourceDocument = { id: string | null; files: SourceFile[] };
-
     const sources = new Map<ComplianceDocumentType, SourceDocument>();
     for (const document of documents) {
       if (!isChecklistMappableType(document.documentType)) continue;
@@ -352,66 +488,110 @@ export async function mapExistingDocumentsOntoChecklist(params: {
     const mapped: ComplianceDocumentType[] = [];
 
     for (const item of checklistItems) {
-      // Already answered, one way or another. A line carrying a file is not
-      // improved by a second opinion, and a line somebody has already mapped
-      // is what a replay of this step looks like.
-      if (item.files.length > 0) continue;
+      // A line somebody filled in by hand is not improved by a second opinion.
+      // A line carrying a *mapped* copy is a different matter and is handled in
+      // `copyOntoChecklistLine`, because the document it copied may since have
+      // been replaced.
+      if (item.files.length > 0 && !item.mappedFromDocumentId) continue;
 
       const wanted = checklistDocumentType(item);
       if (!isChecklistMappableType(wanted)) continue;
 
       const source = sources.get(wanted!);
       if (!source || source.id === item.id) continue;
-      // Already mapped from this document. Null-safe on both sides: the HBCF
-      // certificate read off the project has no source row, so a row mapped
-      // from it is caught by the files check above rather than by this one.
-      if (source.id !== null && item.mappedFromDocumentId === source.id) {
-        continue;
-      }
 
-      await prisma.$transaction(async (tx) => {
-        await tx.file.createMany({
-          data: source.files.map((file) => ({
-            id: copiedFileId(item.id, file.id),
-            // The blob is shared, and everything else about the row is a copy.
-            // `uploadedBy` in particular: the person who put the survey on the
-            // file is the person this document came from, and attributing the
-            // copy to whoever happened to run the extraction would be a worse
-            // answer than the true one.
-            uploadedBy: file.uploadedBy,
-            projectId: file.projectId,
-            complianceDocumentId: item.id,
-            url: file.url,
-            filename: file.filename,
-            fileType: file.fileType,
-            filesize: file.filesize,
-          })),
-          // The replay guard. A step that ran, wrote its rows and then lost its
-          // result finds them already here.
-          skipDuplicates: true,
-        });
-
-        await tx.complianceDocument.update({
-          where: { id: item.id },
-          data: {
-            // UPLOADED rather than RECEIVED: this document is on the file
-            // because a person put it there, which is what UPLOADED means. That
-            // it was a person weeks ago rather than a person just now is what
-            // `mappedFromDocumentId` records.
-            status: ComplianceDocumentStatus.UPLOADED,
-            rejectionReason: null,
-            mappedFromDocumentId: source.id,
-          },
-        });
-      });
-
-      mapped.push(wanted!);
+      const copied = await copyOntoChecklistLine(item, source);
+      if (copied) mapped.push(wanted!);
     }
 
     return { mapped: mapped.length, documentTypes: [...new Set(mapped)] };
   } catch (error) {
     console.error(
       `Could not map existing documents onto the checklist for engagement ${params.engagementId}`,
+      error,
+    );
+    return empty;
+  }
+}
+
+/**
+ * Fills the checklist lines asking for one document that has just landed.
+ *
+ * The same copy as the extraction-time pass, triggered by an upload instead of
+ * by a checklist being read. Two things made it necessary.
+ *
+ * The first is ordering. The extraction maps what the file holds *at that
+ * moment*, and half of what a checklist asks for arrives afterwards — a
+ * geotechnical report three weeks later, a levy receipt the day it is paid.
+ * Without this, every one of those had to be uploaded a second time against its
+ * checklist row, which is the problem the mapping exists to solve, arriving a
+ * fortnight late.
+ *
+ * The second is the development application. A DA and a CDC are assessed on
+ * very nearly the same evidence, so most of the DA list is also a line on the
+ * certifier's checklist — and the two run side by side rather than one after
+ * the other. A structural drawing supplied for the DA is the same drawing the
+ * certifier asked for, and asking for it twice is asking the same question
+ * twice.
+ *
+ * Deliberately one-directional. A document filed under its type fills the
+ * checklist lines asking for it; a document uploaded onto a checklist line does
+ * not create a typed row. The checklist is the certifier's own wording and its
+ * rows exist because they asked — a line answered by hand is evidence for that
+ * assessment and nothing more, and inventing a typed document from it would put
+ * a row on the DA list that nobody chose to collect there.
+ *
+ * Never throws, for the reason the whole module does not: it runs behind an
+ * upload that has already succeeded, and a line left unmapped is a line
+ * somebody fills in the way they did last week.
+ */
+export async function fillChecklistLinesFor(params: {
+  engagementId: string;
+  documentType: ComplianceDocumentType;
+}): Promise<ChecklistMappingResult> {
+  const empty: ChecklistMappingResult = { mapped: 0, documentTypes: [] };
+  if (!isChecklistMappableType(params.documentType)) return empty;
+
+  try {
+    const documents = await prisma.complianceDocument.findMany({
+      where: {
+        engagementId: params.engagementId,
+        documentType: {
+          in: [params.documentType, ComplianceDocumentType.CHECKLIST_ITEM],
+        },
+      },
+      include: { files: { orderBy: { createdAt: "asc" } } },
+      orderBy: { order: "asc" },
+    });
+
+    // The row every other part of the tab reads this category by: the first of
+    // its type in `order`. A category holding two rows is what
+    // `placeInboundDocument` exists to prevent, and reading the first here
+    // keeps this agreeing with the rest of the tab if one ever slips through.
+    const source = documents.find(
+      (document) =>
+        document.documentType === params.documentType &&
+        document.files.length > 0,
+    );
+    if (!source) return empty;
+
+    let mapped = 0;
+    for (const item of documents) {
+      if (item.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) continue;
+      // Filled in by hand. Only a mapped copy is ours to refresh.
+      if (item.files.length > 0 && !item.mappedFromDocumentId) continue;
+      if (checklistDocumentType(item) !== params.documentType) continue;
+
+      if (await copyOntoChecklistLine(item, source)) mapped += 1;
+    }
+
+    return {
+      mapped,
+      documentTypes: mapped > 0 ? [params.documentType] : [],
+    };
+  } catch (error) {
+    console.error(
+      `Could not fill checklist lines for ${params.documentType} on engagement ${params.engagementId}`,
       error,
     );
     return empty;

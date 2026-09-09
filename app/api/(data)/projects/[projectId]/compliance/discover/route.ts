@@ -265,6 +265,9 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
     ["owner", "owners"],
     ["consent"],
   ],
+  [ComplianceDocumentType.DEVELOPMENT_CONSENT]: [
+    ["development consent", "notice of determination", "da approval", "da consent"],
+  ],
   [ComplianceDocumentType.UNKNOWN]: [],
 };
 

@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  ComplianceAlertType,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   ComplianceOutreachMode,
@@ -307,6 +308,24 @@ export async function recordExternalApplicationArrival(params: {
       type: EXTERNAL_APPLICATION_COPY[kind].alertType,
       resolutionNote: `${EXTERNAL_APPLICATION_COPY[kind].label} was uploaded to the file.`,
     });
+
+    // The consent arriving is what ends the development approval condition, and
+    // ending it is what unfreezes the checklist so the builder can go back to
+    // collecting for the certifier.
+    //
+    // Keyed on the document rather than on somebody ticking the application as
+    // received, which is the weaker of the two statements: a tick is a report
+    // and the notice of determination is proof. A certifier asked to resume
+    // assessing on the strength of a ticked box has nothing to read.
+    if (kind === ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION) {
+      await resolveComplianceAlertBySystem({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        type: ComplianceAlertType.DA_APPROVAL_REQUIRED,
+        resolutionNote:
+          "The council granted development consent, and it is on the file.",
+      });
+    }
   } catch (error) {
     console.error(
       `  Failed to record the arrival of the ${kind} application:`,

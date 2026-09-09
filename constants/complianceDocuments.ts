@@ -42,8 +42,7 @@ export const REQUIRED_COMPLIANCE_DOCUMENTS = [
 export type RequiredComplianceDocument =
   (typeof REQUIRED_COMPLIANCE_DOCUMENTS)[number];
 
-export type RequiredComplianceDocumentType =
-  RequiredComplianceDocument["type"];
+export type RequiredComplianceDocumentType = RequiredComplianceDocument["type"];
 
 /**
  * The required pack, split by who actually supplies it.
@@ -112,8 +111,7 @@ type _EveryRequiredDocumentIsSectioned =
     : ["Required document in no party section:", UnsectionedRequiredDocument];
 // Referenced so the check is not dropped as unused. The assignment is what
 // fails to compile when a required document has no section.
-export const REQUIRED_DOCUMENTS_ARE_SECTIONED: _EveryRequiredDocumentIsSectioned =
-  true;
+export const REQUIRED_DOCUMENTS_ARE_SECTIONED: _EveryRequiredDocumentIsSectioned = true;
 
 /** Which party supplies a given required document, if any. */
 const PARTY_BY_DOCUMENT_TYPE = new Map<
@@ -676,6 +674,7 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
   ComplianceDocumentType.BUILD_COST_SUMMARY,
   ComplianceDocumentType.OWNER_CONSENT_FORM,
+  ComplianceDocumentType.DEVELOPMENT_CONSENT,
   // Not part of the pack, but a surveyor routinely quotes the deed back on
   // their reply, and a copy the classifier cannot name lands in the
   // needs-identifying queue for somebody to place by hand.
@@ -736,12 +735,13 @@ const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
   [ComplianceDocumentType.ROAD_OPENING_PERMIT]:
     "Road opening & vehicle crossing approval",
   [ComplianceDocumentType.LONG_SERVICE_LEVY]: "Long Service Levy receipt",
-  [ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL]:
-    "Mine subsidence approval",
+  [ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL]: "Mine subsidence approval",
   [ComplianceDocumentType.WASTE_MANAGEMENT_PLAN]: "Waste management plan",
   [ComplianceDocumentType.TRAFFIC_CONTROL_PLAN]: "Traffic control plan",
   [ComplianceDocumentType.BUILD_COST_SUMMARY]: "Build cost summary",
   [ComplianceDocumentType.OWNER_CONSENT_FORM]: "Owner consent form",
+  [ComplianceDocumentType.DEVELOPMENT_CONSENT]:
+    "Development consent (DA approval)",
 };
 
 /**
@@ -935,11 +935,15 @@ export const HBCF_INSURANCE_URL =
 // ===========================================================================
 
 /**
- * The document each application ends up producing, where it produces one.
+ * The document each application ends up producing.
  *
- * Null for the development application: what comes back from a DA is a consent
- * for the whole job rather than a row on the document list, and the approval is
- * recorded on the application itself.
+ * The development application produces the council's notice of determination,
+ * and that document does more work than any other on this file: while a
+ * certifier has said the job needs development approval there is nothing they
+ * can assess, so the checklist is frozen until it arrives. It used to be null
+ * here on the reasoning that a DA comes back as a consent for the whole job
+ * rather than as a row on a list — true, and beside the point, because the
+ * consent is a PDF somebody has to hold and the certifier asks for it by name.
  */
 export const EXTERNAL_APPLICATION_DOCUMENT_TYPE: Readonly<
   Record<ComplianceExternalApplicationKind, ComplianceDocumentType | null>
@@ -952,7 +956,8 @@ export const EXTERNAL_APPLICATION_DOCUMENT_TYPE: Readonly<
     ComplianceDocumentType.LONG_SERVICE_LEVY,
   [ComplianceExternalApplicationKind.MINE_SUBSIDENCE]:
     ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL,
-  [ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION]: null,
+  [ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION]:
+    ComplianceDocumentType.DEVELOPMENT_CONSENT,
 };
 
 const EXTERNAL_APPLICATION_BY_DOCUMENT_TYPE = new Map<
@@ -1163,15 +1168,54 @@ export const OWNER_CONSENT_FORM_URL =
  * back their fee proposal as evidence against their own checklist is not
  * evidence of anything.
  */
+const NOT_CHECKLIST_MAPPABLE: ReadonlySet<ComplianceDocumentType> = new Set([
+  // A superseded set must not answer a line asking for the current one. A
+  // certifier asking for architectural drawings means the drawings the job is
+  // assessed on, and filling that line with the sketch set the architect
+  // produced first looks answered and is not — which is worse than empty.
+  ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+
+  // The certifier's own documents. Handing their fee proposal back as evidence
+  // against their own checklist is not evidence of anything.
+  ComplianceDocumentType.INVOICE,
+  ComplianceDocumentType.FEE_PROPOSAL,
+  ComplianceDocumentType.CDC_FORM,
+  ComplianceDocumentType.CHECKLIST,
+
+  // An input to the surveyor rather than an output of anybody. Nothing on a
+  // checklist asks for it, and a line about a certificate of title means the
+  // title search.
+  ComplianceDocumentType.LAND_DEED,
+
+  // A line cannot be answered by a line, and "we could not tell" answers
+  // nothing.
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.UNKNOWN,
+]);
+
+/**
+ * The types a checklist line can be answered from without anybody uploading
+ * anything.
+ *
+ * An exclusion rather than a list, and that is the change the development
+ * application forced. It began as the six the required pack collects, because
+ * those were the only documents a checklist could ask for that the file already
+ * held. A DA is assessed against very nearly the same evidence as a CDC, so
+ * every consultant report and every permit on the DA list is now also a line on
+ * the certifier's checklist — and collecting one twice is the thing this whole
+ * mechanism exists to stop.
+ *
+ * Written as "everything except" so that a document type added later is
+ * mappable by default. That is the right default: new types on this file are
+ * consultant deliverables and permits, which are exactly the shared ones. The
+ * exclusions above are the arguable cases, and each says why.
+ */
 export const CHECKLIST_MAPPABLE_TYPES: ReadonlySet<ComplianceDocumentType> =
-  new Set([
-    ComplianceDocumentType.DEPOSITED_PLAN,
-    ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL,
-    ComplianceDocumentType.SURVEY,
-    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
-    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
-    ComplianceDocumentType.HOME_INSURANCE,
-  ]);
+  new Set(
+    Object.values(ComplianceDocumentType).filter(
+      (type) => !NOT_CHECKLIST_MAPPABLE.has(type),
+    ),
+  );
 
 /**
  * Whether a checklist line asking for this type can be answered from the file.
@@ -1209,7 +1253,25 @@ export function mappedDocumentSource(
   if (documentType === ComplianceDocumentType.HOME_INSURANCE) {
     return "the project's HBCF cover";
   }
-  return "the required pack";
+  if (documentType === ComplianceDocumentType.DEVELOPMENT_CONSENT) {
+    return "the development approval";
+  }
+
+  // Commissioned from somebody, or bought. Named by who produces it rather than
+  // by the list it appears on, because "from the development application" would
+  // be true of a dozen rows and useful about none of them — what the reader
+  // wants to know is whether the right person supplied it.
+  const consultant = consultantForDocumentType(documentType);
+  if (consultant) {
+    return `the ${PARTY_LABEL[consultant].toLowerCase()}`;
+  }
+  if (externalApplicationForDocumentType(documentType)) {
+    return "the permits already applied for";
+  }
+  if (isSignedCopyType(documentType)) {
+    return "the signed forms";
+  }
+  return "the documents already collected";
 }
 
 // ===========================================================================

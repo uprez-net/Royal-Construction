@@ -157,8 +157,7 @@ export function developmentApplication(
   );
 }
 
-export type ComplianceAlertRecord =
-  CertifierEngagementDetail["alerts"][number];
+export type ComplianceAlertRecord = CertifierEngagementDetail["alerts"][number];
 
 /**
  * The outreach for one party, or undefined.
@@ -221,6 +220,94 @@ export function hasOpenAlert(
   type: ComplianceAlertType,
 ): boolean {
   return openAlerts(engagement).some((alert) => alert.type === type);
+}
+
+/**
+ * Whether this job is going through as a development application.
+ *
+ * True from the moment somebody says so — the architect on a reply, the
+ * certifier on their checklist, an admin by hand — and true afterwards for as
+ * long as there is anything to show. The alert answers the first half and
+ * closes when the consent lands; the application row answers the second, so a
+ * job whose DA came through last month still has its DA block, its lodgement
+ * date and its reference number on the tab rather than reverting to a screen
+ * that never mentions the council.
+ *
+ * Deliberately not the same question as `requiresPlanningCertificate` below,
+ * though they were one predicate for a while. That one asks whether the
+ * certifier's pack still wants the 10.7 and goes back to true when the consent
+ * arrives; this one asks whether the file has a development application on it
+ * at all, and never goes back.
+ */
+export function hasDevelopmentApplication(
+  engagement:
+    | Pick<CertifierEngagementDetail, "alerts" | "externalApplications">
+    | null
+    | undefined,
+): boolean {
+  return (
+    hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED) ||
+    developmentApplication(engagement) !== null
+  );
+}
+
+/**
+ * Whether the development consent is on the file.
+ *
+ * The document, not the tick. Somebody marking the application received is
+ * reporting it; the notice of determination being on the row is proving it —
+ * and this is what unfreezes a checklist, so the stronger evidence is the one
+ * that counts. A certifier asked to assess a job on the strength of a ticked
+ * box has nothing to read.
+ */
+export function hasDevelopmentConsent(
+  engagement: Pick<CertifierEngagementDetail, "documents"> | null | undefined,
+): boolean {
+  return (engagement?.documents ?? []).some(
+    (document) =>
+      document.documentType === ComplianceDocumentType.DEVELOPMENT_CONSENT &&
+      document.files.length > 0,
+  );
+}
+
+/**
+ * Why the checklist cannot be worked on yet, or null.
+ *
+ * One condition today, and it is absolute rather than partial: a certifier who
+ * has said the job needs development approval has nothing to assess until the
+ * council has approved it. Every document on the checklist is evidence for an
+ * assessment that cannot start, so collecting it now is work that may be thrown
+ * away — the council routinely grants consent with conditions that change the
+ * design, and every consultant report drawn against the old one is redone.
+ *
+ * The two halves of the file are not exclusive, which is the point. The DA runs
+ * beside the checklist rather than instead of it: the DA list stays live so its
+ * documents can be collected, and those of them the checklist also asks for
+ * fill its rows as they land. What is frozen is only the checklist's own
+ * controls and the send that would put the file in front of the certifier.
+ *
+ * Returns the sentence rather than a boolean, in the shape `partyBlockedReason`
+ * and `packSendBlockedReason` already use, so the banner on the card and the
+ * refusal from the review send are the same words.
+ */
+export function checklistBlockedReason(
+  engagement:
+    | Pick<CertifierEngagementDetail, "alerts" | "documents">
+    | null
+    | undefined,
+): string | null {
+  if (!hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED)) {
+    return null;
+  }
+  if (hasDevelopmentConsent(engagement)) {
+    // Belt and braces. The consent arriving resolves the alert on its own, so
+    // reaching here means the resolve has not landed yet — a sweep that has not
+    // run, or an upload whose after() is still in flight. Reading the document
+    // as well means the checklist unfreezes on the upload rather than on the
+    // bookkeeping that follows it.
+    return null;
+  }
+  return "This job needs development approval before the certifier can assess anything. Collect the development application below; the checklist opens when the consent is on the file.";
 }
 
 /**
@@ -325,13 +412,10 @@ export function meetingHeldAt(
 
   // The earliest one. A second meeting after the plans have been through a
   // round of revisions must not restart a clock that the first meeting began.
-  return held.reduce<Date>(
-    (earliest, meeting) => {
-      const at = meeting.heldAt ?? meeting.scheduledFor;
-      return at < earliest ? at : earliest;
-    },
-    held[0].heldAt ?? held[0].scheduledFor,
-  );
+  return held.reduce<Date>((earliest, meeting) => {
+    const at = meeting.heldAt ?? meeting.scheduledFor;
+    return at < earliest ? at : earliest;
+  }, held[0].heldAt ?? held[0].scheduledFor);
 }
 
 /**
@@ -345,7 +429,8 @@ export function outstandingRevision(
   outreach: Pick<ComplianceOutreachDetail, "revisions"> | null | undefined,
 ): CompliancePlanRevisionRecord | null {
   return (
-    (outreach?.revisions ?? []).find((revision) => !revision.respondedAt) ?? null
+    (outreach?.revisions ?? []).find((revision) => !revision.respondedAt) ??
+    null
   );
 }
 
@@ -495,7 +580,9 @@ function stringList(value: unknown): string[] {
  * Returns null when there is nothing worth showing, so a caller can test the
  * result rather than testing each field.
  */
-export function checklistItemDetail(value: unknown): ChecklistItemDetail | null {
+export function checklistItemDetail(
+  value: unknown,
+): ChecklistItemDetail | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
