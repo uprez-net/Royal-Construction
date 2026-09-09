@@ -7,6 +7,7 @@ import {
   CompliancePartyType,
 } from "@prisma/client";
 
+import { BUSHFIRE_REVISION_BUSINESS_DAYS } from "@/constants/complianceDevelopers";
 import {
   ARCHITECT_PLANS_BUSINESS_DAYS,
   ARCHITECT_REVISION_BUSINESS_DAYS,
@@ -22,6 +23,7 @@ import { businessDaysSince } from "@/lib/dates/business-days";
 import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import {
   externalApplication,
+  latestSubmission,
   meetingHeldAt,
   outreachForParty,
   outstandingRevision,
@@ -176,6 +178,11 @@ const CONSULTANT_ALERT: Readonly<
   [CompliancePartyType.ARCHITECT]: ComplianceAlertType.ARCHITECT_PLANS_OVERDUE,
   [CompliancePartyType.COUNCIL]:
     ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+  // Not a consultant either, and for a different reason: they produce nothing,
+  // so "have they answered" is a verdict on the row rather than a document on
+  // the file. Their clock is its own block below.
+  [CompliancePartyType.DEVELOPER]:
+    ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
 };
 
 const CONSULTANT_ALERT_SOURCE: Readonly<
@@ -189,6 +196,7 @@ const CONSULTANT_ALERT_SOURCE: Readonly<
   [CompliancePartyType.WATER_AUTHORITY]: ComplianceAlertSource.WATER_AUTHORITY,
   [CompliancePartyType.TRAFFIC_CONSULTANT]:
     ComplianceAlertSource.TRAFFIC_CONSULTANT,
+  [CompliancePartyType.DEVELOPER]: ComplianceAlertSource.DEVELOPER,
   [CompliancePartyType.SURVEYOR]: ComplianceAlertSource.SURVEYOR,
   [CompliancePartyType.ARCHITECT]: ComplianceAlertSource.ARCHITECT,
   [CompliancePartyType.COUNCIL]: ComplianceAlertSource.COUNCIL,
@@ -286,22 +294,30 @@ export function assessOverdueConditions(
       continue;
     }
 
-    if (!application?.appliedAt) {
+    // The latest round rather than the first lodgement. A DA resubmitted in
+    // April is not sixty working days late for having first gone in in March,
+    // and measuring from `appliedAt` had every application that was ever sent
+    // back permanently overdue from the moment it went back in.
+    const submission = latestSubmission(application);
+
+    if (!submission) {
       // Nothing lodged means no clock. Not resolved either: an alert raised on
       // a previous run stays open, because the clock only moves forward and an
       // admin clearing a lodgement date is not the wait ending.
       continue;
     }
 
-    const elapsed = businessDaysSince(application.appliedAt, now);
+    const elapsed = businessDaysSince(submission.submittedAt, now);
     if (elapsed > copy.businessDays) {
       raise.push({
         type: copy.alertType,
         source: ComplianceAlertSource.COUNCIL,
-        detail: `Lodged ${workingDays(elapsed)} ago${
-          application.applicationRef
-            ? ` under ${application.applicationRef}`
-            : ""
+        detail: `${
+          submission.round > 1
+            ? `Resubmitted (round ${submission.round})`
+            : "Lodged"
+        } ${workingDays(elapsed)} ago${
+          submission.applicationRef ? ` under ${submission.applicationRef}` : ""
         }, against a quoted ${copy.turnaround}.`,
       });
     }
@@ -421,6 +437,61 @@ export function assessOverdueConditions(
         now,
       ),
     );
+  }
+
+  // -------------------------------------------------------------------
+  // The estate developer, and the rework a refusal from them causes.
+  //
+  // Two clocks on one report, and they are never both running: the first is the
+  // wait on a verdict, the second is the wait on a consultant to answer it.
+  // Separate types because at most one alert of a type is open per file, and
+  // "waiting on the developer" and "waiting on the consultant to redo it" want
+  // different chases sent to different people.
+  // -------------------------------------------------------------------
+  const developer = outreachForParty(engagement, CompliancePartyType.DEVELOPER);
+
+  if (!developer || !developer.sentAt || developer.approvalDecision) {
+    // Nobody asked, or they have answered. A rejection counts as answered: the
+    // wait has moved to the consultant, and chasing a developer who has already
+    // told us no is the alert pointing at the wrong party.
+    resolve.push({
+      type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+      note: developer?.approvalDecision
+        ? "The developer has given their answer."
+        : "Nobody is waiting on a developer approval.",
+    });
+  } else {
+    const elapsed = businessDaysSince(developer.sentAt, now);
+    if (elapsed > PARTY_RESPONSE_BUSINESS_DAYS[CompliancePartyType.DEVELOPER]) {
+      raise.push({
+        type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+        source: ComplianceAlertSource.DEVELOPER,
+        detail: `The bushfire report went to them ${workingDays(elapsed)} ago and no decision has come back.`,
+      });
+    }
+  }
+
+  // The rework, measured off the revision round the refusal opened rather than
+  // off the consultant's original engagement — which was months earlier, and
+  // would have this past its threshold on the day the developer said no.
+  const bushfireRevision = outstandingRevision(
+    outreachForParty(engagement, CompliancePartyType.BUSHFIRE_CONSULTANT),
+  );
+
+  if (!bushfireRevision) {
+    resolve.push({
+      type: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+      note: "There is no bushfire report outstanding for revision.",
+    });
+  } else {
+    const elapsed = businessDaysSince(bushfireRevision.requestedAt, now);
+    if (elapsed > BUSHFIRE_REVISION_BUSINESS_DAYS) {
+      raise.push({
+        type: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+        source: ComplianceAlertSource.DEVELOPER,
+        detail: `The developer's reasons went to the consultant ${workingDays(elapsed)} ago and no revised report has come back.`,
+      });
+    }
   }
 
   // -------------------------------------------------------------------

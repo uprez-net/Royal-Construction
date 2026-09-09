@@ -15,6 +15,7 @@ import {
   Leaf,
   PencilRuler,
   Ruler,
+  Stamp,
   TrafficCone,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -51,6 +52,10 @@ export const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
   [CompliancePartyType.STRUCTURAL_ENGINEER]: Ruler,
   [CompliancePartyType.WATER_AUTHORITY]: Droplets,
   [CompliancePartyType.TRAFFIC_CONSULTANT]: TrafficCone,
+  // A stamp rather than a building: what a developer contributes to this file
+  // is an endorsement, and every other mark in this set says what its party
+  // makes.
+  [CompliancePartyType.DEVELOPER]: Stamp,
 };
 
 type PartyDocumentSectionProps = {

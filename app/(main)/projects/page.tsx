@@ -22,9 +22,11 @@ export default async function ProjectPage() {
   await connection();
   const [projectsPage, kpis, user] = await Promise.all([
     // Matches the client's default status chip so the first paint is already
-    // the filtered list, instead of every project flashing up and narrowing
-    // when the client's own fetch lands.
-    getProjects({ page: 1, limit: projectPageSize, status: "ACTIVE" }),
+    // the list the reader will see, instead of one that narrows when the
+    // client's own fetch lands. Unfiltered since the project ladder arrived --
+    // see DEFAULT_PROJECT_STATUS_FILTER, which explains why "Active" stopped
+    // meaning "in flight".
+    getProjects({ page: 1, limit: projectPageSize }),
     getProjectKPIs(),
     auth().then(({ userId }) => userId ? getUserByClerkIdCached(userId) : null),
   ]);

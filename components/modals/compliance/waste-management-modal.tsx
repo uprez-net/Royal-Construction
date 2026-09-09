@@ -5,6 +5,11 @@ import { Loader2, Paperclip, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -38,6 +44,11 @@ type WasteManagementModalProps = {
   attachments: { name: string; url: string }[];
   /** The checklist line this answers, where it came off one. */
   checklistDocumentId?: string;
+  /**
+   * What is on the file already, for the attach control's "From the file"
+   * picker. Resolved by the caller with `vaultAttachmentOptions`.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -62,6 +73,7 @@ export function WasteManagementModal({
   contactEmail,
   attachments,
   checklistDocumentId,
+  vaultOptions,
   open,
   onOpenChange,
 }: WasteManagementModalProps) {
@@ -73,6 +85,7 @@ export function WasteManagementModal({
   );
   const isPending = mutation.status === "pending";
   const [note, setNote] = useState("");
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
 
   const recipient = contactName ?? contactEmail ?? "the architect";
 
@@ -84,6 +97,7 @@ export function WasteManagementModal({
           projectId,
           note: note.trim() || undefined,
           checklistDocumentId,
+          extraAttachmentIds: extraAttachmentIds(extras),
         }),
       ).unwrap();
       toast.success("Request sent to the architect.");
@@ -151,6 +165,15 @@ export function WasteManagementModal({
               />
             </div>
           </div>
+
+          <ExtraAttachmentsField
+            projectId={projectId}
+            value={extras}
+            onChange={setExtras}
+            vaultOptions={vaultOptions}
+            disabled={isPending}
+            hint="The certifier's own wording on the line that asked for it, most usefully — it saves the architect being told second-hand what this council wants."
+          />
 
           <DialogFooter>
             <Button

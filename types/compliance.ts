@@ -75,7 +75,19 @@ export const certifierEngagementInclude = {
    * five states its block renders, and a card that has to fetch before it can
    * decide what it is flickers through all five.
    */
-  externalApplications: true,
+  externalApplications: {
+    include: {
+      /**
+       * Every round this application has been lodged in, newest first.
+       *
+       * Loaded whole rather than filtered to the latest. The block shows how
+       * many rounds a DA has been through, which is the honest answer to "why
+       * is this still not determined", and the sweep reads the newest off the
+       * same array — the same trade `revisions` above makes.
+       */
+      submissions: { orderBy: { round: "desc" } },
+    },
+  },
   /**
    * Open first, then newest.
    *
@@ -97,6 +109,76 @@ export type ComplianceDocumentWithFiles =
 
 export type CertifierEmailRecord = CertifierEngagementDetail["emails"][number];
 
+/**
+ * One file on the engagement, offered as something a message could carry.
+ *
+ * `documentLabel` first and the filename second, which is the order somebody
+ * looking for one of these thinks in: a compliance file holds thirty documents
+ * with names like "scan_0043.pdf" and "WhatsApp Image 2026-03-02 at
+ * 11.14.02.jpeg", and picking by filename alone is guesswork. What the reader
+ * knows is that they want the survey.
+ */
+export type VaultAttachmentOption = {
+  fileId: string;
+  filename: string;
+  documentType: ComplianceDocumentType;
+  documentLabel: string;
+};
+
+/**
+ * The types that are never worth offering as an attachment.
+ *
+ * The two issued-item types are lines rather than documents -- what hangs off
+ * a checklist item is whatever answered it, and it is already on the file under
+ * its own type as well, so offering both puts the same PDF in the list twice
+ * under a name the recipient would not recognise. UNKNOWN is worse: it is by
+ * definition a document nobody has identified, and attaching one to an outbound
+ * email means sending a third party something we cannot describe.
+ */
+const NOT_ATTACHABLE_FROM_VAULT: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.UNKNOWN,
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
+]);
+
+/**
+ * Everything on the file that a message could sensibly carry.
+ *
+ * One helper rather than each modal filtering the document rows itself, because
+ * the exclusions above are a judgement rather than a detail and four copies of
+ * it would not stay in step. Sorted by label so the list reads alphabetically
+ * by what a document *is*, which is the only ordering anybody can predict --
+ * `order` is the pack's assembly order and means nothing to a person hunting
+ * for the title search.
+ *
+ * `label` is passed through for the row that has one, so a mapped or extracted
+ * row shows the wording it was given rather than a generic type name.
+ */
+export function vaultAttachmentOptions(
+  engagement: Pick<CertifierEngagementDetail, "documents"> | null | undefined,
+  labelFor: (
+    documentType: ComplianceDocumentType,
+    label?: string | null,
+  ) => string,
+): VaultAttachmentOption[] {
+  const options = (engagement?.documents ?? [])
+    .filter((document) => !NOT_ATTACHABLE_FROM_VAULT.has(document.documentType))
+    .flatMap((document) =>
+      document.files.map((file) => ({
+        fileId: file.id,
+        filename: file.filename,
+        documentType: document.documentType,
+        documentLabel: labelFor(document.documentType, document.label),
+      })),
+    );
+
+  return options.sort(
+    (a, b) =>
+      a.documentLabel.localeCompare(b.documentLabel) ||
+      a.filename.localeCompare(b.filename),
+  );
+}
+
 /** One party's engagement plus its own mail trail, meetings and revisions. */
 export type ComplianceOutreachDetail =
   CertifierEngagementDetail["outreaches"][number];
@@ -108,6 +190,43 @@ export type CompliancePlanRevisionRecord =
   ComplianceOutreachDetail["revisions"][number];
 
 /** One application to an outside body, as the tab reads it. */
+/**
+ * The round an application's clock currently runs from.
+ *
+ * The newest submission, falling back to `appliedAt` for a row written before
+ * the rounds table existed and never resubmitted since. Both are needed: the
+ * fallback is what keeps every application already on the system measuring
+ * against something, and the round is what stops a resubmitted DA reading as
+ * late because of when it first went in.
+ */
+export function latestSubmission(
+  application: ComplianceExternalApplicationRecord | null | undefined,
+): { submittedAt: Date; round: number; applicationRef: string | null } | null {
+  if (!application) return null;
+
+  // Ordered newest-first by the include above, so the first is the latest. Not
+  // re-sorted here: a caller that has ordered them differently is a bug worth
+  // finding rather than one worth papering over.
+  const newest = application.submissions?.[0];
+  if (newest) {
+    return {
+      submittedAt: newest.submittedAt,
+      round: newest.round,
+      applicationRef: newest.applicationRef ?? application.applicationRef,
+    };
+  }
+
+  if (application.appliedAt) {
+    return {
+      submittedAt: application.appliedAt,
+      round: 1,
+      applicationRef: application.applicationRef,
+    };
+  }
+
+  return null;
+}
+
 export type ComplianceExternalApplicationRecord =
   CertifierEngagementDetail["externalApplications"][number];
 

@@ -108,4 +108,9 @@ type ComplianceNotificationPayloads = Pick<
   | "complianceDocumentRejected"
   | "complianceReviewSent"
   | "complianceApproved"
+  | "complianceDeveloperDecision"
+  | "complianceDeveloperResent"
+  | "complianceCertificateIssued"
+  | "complianceCompleted"
+  | "complianceDaItemsRequested"
 >;

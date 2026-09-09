@@ -1,0 +1,19 @@
+-- New projects start as DRAFT.
+--
+-- Its own migration, and it has to be: Postgres will not let a value added to
+-- an enum be read in the same transaction that added it, and 'DRAFT' arrives in
+-- the migration before this one. Splitting them is the whole reason this file
+-- exists.
+--
+-- ACTIVE was never true on the day it was set. A project is created by the
+-- handoff from a won offer, which writes the row, the milestones and the
+-- requirements -- none of which is work anybody has started, and the project
+-- list opening on "Active" therefore showed every job ever created as in
+-- flight. It becomes COMPLIANCE_STARTED when the certifier is engaged,
+-- COMPLIANCE_COMPLETED when the construction certificate and the HBCF cover are
+-- both on the file, and ACTIVE when the first milestone actually starts.
+--
+-- Existing rows keep whatever they have. Every project already in the system is
+-- one somebody is genuinely working on, and rewriting them to DRAFT would empty
+-- the list this default exists to make honest.
+ALTER TABLE "Project" ALTER COLUMN "status" SET DEFAULT 'DRAFT';

@@ -1,6 +1,7 @@
 import {
   ComplianceAlertSource,
   ComplianceAlertType,
+  ComplianceApprovalDecision,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   CompliancePartyType,
@@ -61,6 +62,24 @@ export type StartEngagementInput = z.infer<typeof startEngagementSchema>;
  * a tradie may carry several (`additionalEmails`) and the person engaging them
  * is the one who knows which desk this job should land on.
  */
+/**
+ * Files the sender attached by hand, on top of what the party's table carries.
+ *
+ * Ids rather than urls, and that is the whole security argument: a caller who
+ * could name a blob url could attach anything on the storage account to an
+ * outbound email. An id is resolved against the File table by the data layer,
+ * which is also what makes the name on the mail the stored name rather than one
+ * the client chose.
+ *
+ * Every party outreach and every party mail accepts these. What
+ * PARTY_OUTREACH_ATTACHMENTS holds is what a party always needs, worked out
+ * from the document rows; this is the covenant schedule, the neighbour's
+ * consent, the photograph of the pegs -- the things nobody could have listed in
+ * advance, which turned out to be a normal part of every one of these
+ * conversations rather than an edge case.
+ */
+export const extraAttachmentsSchema = z.array(idSchema).max(20).default([]);
+
 export const startPartyOutreachSchema = z.object({
   party: z.enum(CompliancePartyType),
   tradieId: idSchema.optional(),
@@ -105,6 +124,17 @@ export const startPartyOutreachSchema = z.object({
       }),
     )
     .default([]),
+  /** Anything the sender attached by hand. See `extraAttachmentsSchema`. */
+  extraAttachmentIds: extraAttachmentsSchema,
+  /**
+   * Which entry of AREA_DEVELOPERS this is, for a DEVELOPER outreach.
+   *
+   * Ignored for every other party. It is not the contact -- the address is
+   * `contactEmail` above, like everybody else's, because the picker prefills it
+   * and lets it be corrected. This is which estate was chosen, so the thread
+   * can say so afterwards.
+   */
+  developerKey: normalizedStringSchema.optional(),
 });
 
 export type StartPartyOutreachInput = z.infer<typeof startPartyOutreachSchema>;
@@ -121,6 +151,68 @@ export const partySelfSuppliedSchema = z.object({
 });
 
 export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
+
+// ============================================================================
+// The estate developer's approval
+// ============================================================================
+
+/**
+ * The developer's verdict on the bushfire report, as an admin records it.
+ *
+ * `reason` is required on a rejection and ignored on an approval, which is a
+ * refinement rather than two schemas because it is one form with one submit and
+ * the reader is answering one question. A rejection with no reasons is the case
+ * this exists to prevent: those words are quoted verbatim to the bushfire
+ * consultant who has to redo the report, and "the developer said no" costs
+ * another eleven working days.
+ */
+export const developerDecisionSchema = z
+  .object({
+    decision: z.enum(ComplianceApprovalDecision),
+    reason: normalizedStringSchema.optional(),
+  })
+  .refine(
+    (input) =>
+      input.decision !== ComplianceApprovalDecision.REJECTED ||
+      Boolean(input.reason?.trim()),
+    {
+      message:
+        "Say why they rejected it — the bushfire consultant is sent this word for word.",
+      path: ["reason"],
+    },
+  );
+
+export type DeveloperDecisionInput = z.infer<typeof developerDecisionSchema>;
+
+/**
+ * Putting a revised report back in front of the developer.
+ *
+ * No contact and no estate: the outreach already exists and this rides its
+ * thread. What it carries beyond the report is a note and whatever the sender
+ * attached, which is the same pair every other send here takes.
+ */
+export const developerResendSchema = z.object({
+  note: normalizedStringSchema.optional(),
+  extraAttachmentIds: extraAttachmentsSchema,
+});
+
+export type DeveloperResendInput = z.infer<typeof developerResendSchema>;
+
+/**
+ * Whether this lot needs a developer's approval at all.
+ *
+ * A bare boolean, and it is worth being clear that both values are answers.
+ * `false` is not "we do not know" -- it is somebody saying this estate carries
+ * no covenant, which is what opens the development application gate. Nobody
+ * having been asked is the column being null, which no request can set.
+ */
+export const developerRequirementSchema = z.object({
+  required: z.boolean(),
+});
+
+export type DeveloperRequirementInput = z.infer<
+  typeof developerRequirementSchema
+>;
 
 // ============================================================================
 // Applications to outside bodies
@@ -187,6 +279,28 @@ export const externalApplicationSchema = z.discriminatedUnion("step", [
     applicationRef: normalizedStringSchema.optional(),
     lodgedWith: normalizedStringSchema.optional(),
   }),
+  /**
+   * It went in again, after the body sent it back.
+   *
+   * Its own step rather than a second "applied", because the two mean different
+   * things to the clock and to the trail. "applied" is the first lodgement and
+   * sets the row up; this adds a round to it, and the round is what the overdue
+   * sweep measures from — a DA resubmitted in April is not sixty working days
+   * late for having first gone in in March.
+   *
+   * The reference is optional and carried forward when it is absent, because it
+   * is usually the same number and occasionally is not: a council that closes an
+   * application and asks for it to be relodged issues a new one, and chasing
+   * round three by quoting round one's gets nowhere.
+   */
+  z.object({
+    step: z.literal("resubmitted"),
+    kind: applicationKindSchema,
+    submittedAt: isoDateSchema,
+    applicationRef: normalizedStringSchema.optional(),
+    /** What this round carried — "revised A03 and A04, shadow diagram added". */
+    note: normalizedStringSchema.optional(),
+  }),
   /** It came back — or it did not, and somebody is un-ticking a mistake. */
   z.object({
     step: z.literal("received"),
@@ -227,6 +341,14 @@ export const scheduleComplianceMeetingSchema = z.object({
   scheduledFor: isoDateSchema,
   /** Why it moved, on a reschedule. Sent to both sides on the invitation. */
   note: normalizedStringSchema.optional(),
+  /**
+   * Anything the sender attached by hand.
+   *
+   * The one invitation on this file that both the client and the architect
+   * receive, so it is also the one place an agenda, a mood board or the
+   * client's own sketches can reach both of them at once.
+   */
+  extraAttachmentIds: extraAttachmentsSchema,
 });
 
 export type ScheduleComplianceMeetingInput = z.infer<
@@ -263,6 +385,15 @@ export const resolveComplianceMeetingSchema = z.discriminatedUnion("outcome", [
     outcome: z.literal("rescheduled"),
     scheduledFor: isoDateSchema,
     note: normalizedStringSchema.optional(),
+    /**
+     * Anything the sender attached by hand.
+     *
+     * Only on the reschedule branch, because only the reschedule sends a
+     * message: recording a meeting as held is a note to ourselves about
+     * something that already happened, and there is nobody to attach anything
+     * to.
+     */
+    extraAttachmentIds: extraAttachmentsSchema,
   }),
 ]);
 
@@ -298,6 +429,8 @@ export const wasteManagementRequestSchema = z.object({
   note: normalizedStringSchema.optional(),
   /** The checklist line this answers, where it came off one. */
   checklistDocumentId: idSchema.optional(),
+  /** Anything the sender attached by hand. See `extraAttachmentsSchema`. */
+  extraAttachmentIds: extraAttachmentsSchema,
 });
 
 export type WasteManagementInput = z.infer<typeof wasteManagementRequestSchema>;
@@ -324,6 +457,15 @@ export const reviewArchitectPlansSchema = z
   .object({
     approved: z.boolean(),
     feedback: z.string().trim().optional(),
+    /**
+     * Anything the sender attached by hand.
+     *
+     * Carried on both outcomes and useful on one. A client rejecting a set of
+     * plans routinely marks them up — a photograph of the printout, a sketch on
+     * the back of an envelope — and the words alone lose exactly the part the
+     * architect needs most.
+     */
+    extraAttachmentIds: extraAttachmentsSchema,
   })
   .superRefine((data, ctx) => {
     if (!data.approved && !data.feedback) {

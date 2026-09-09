@@ -214,8 +214,19 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
   [ComplianceDocumentType.SIGNED_FEE_PROPOSAL]: [["signed"], ["fee", "proposal"]],
   [ComplianceDocumentType.SIGNED_CDC_FORM]: [["signed"], ["cdc"]],
   [ComplianceDocumentType.CHECKLIST_ITEM]: [],
+  // A line of a council's request for more information, written by the DA
+  // extraction rather than found on disk -- the same reason CHECKLIST_ITEM
+  // above matches nothing.
+  [ComplianceDocumentType.DA_ITEM]: [],
   [ComplianceDocumentType.HOME_INSURANCE]: [["hbcf", "home warranty", "home building compensation"]],
   [ComplianceDocumentType.BASIX_CERTIFICATE]: [["basix"]],
+  // Deliberately demanding two hits. "Certificate" alone appears in the
+  // filename of half the documents on a compliance file, and reading a BASIX
+  // certificate as the construction certificate would mark the job finished.
+  [ComplianceDocumentType.CONSTRUCTION_CERTIFICATE]: [
+    ["construction"],
+    ["certificate", "cc "],
+  ],
   [ComplianceDocumentType.BUSHFIRE_REPORT]: [
     ["bushfire", "bush fire", "bal ", "bal-", "bal report", "bal rating"],
   ],

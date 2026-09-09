@@ -87,6 +87,58 @@ export async function toEmailAttachment(file: {
 }
 
 /**
+ * The stored files behind a list of ids the sender picked by hand.
+ *
+ * The gate on the "attach something else" control every party modal now has.
+ * Ids come in and File rows go out, which is the whole of the check: a caller
+ * who could name a url could put anything on the storage account onto an
+ * outbound email, and a caller who could name a filename could make a covenant
+ * schedule arrive called "survey.pdf".
+ *
+ * Scoped to the project the engagement belongs to, so an id lifted from another
+ * job resolves to nothing rather than to somebody else's document. A file that
+ * has been attached to a compliance document on this engagement counts as the
+ * project's too -- that is where every uploaded compliance document lives.
+ *
+ * Missing ids are dropped rather than thrown on. A file deleted between the
+ * modal opening and the send is a mail one attachment short, which is visible
+ * on the thread and can be sent again; refusing the whole send would lose the
+ * message as well.
+ */
+export async function resolveExtraAttachments(
+  projectId: string,
+  fileIds: readonly string[],
+): Promise<ResolvedAttachment[]> {
+  if (fileIds.length === 0) return [];
+
+  const files = await prisma.file.findMany({
+    where: {
+      id: { in: [...fileIds] },
+      OR: [
+        { projectId },
+        { complianceDocument: { engagement: { projectId } } },
+      ],
+    },
+    select: { id: true, filename: true, url: true, fileType: true },
+  });
+
+  // Back into the order they were picked in, so the mail lists them the way the
+  // sender arranged them rather than the way Postgres returned them.
+  const byId = new Map(files.map((file) => [file.id, file]));
+  return fileIds
+    .map((id) => byId.get(id))
+    .filter((file): file is ResolvedAttachment => Boolean(file));
+}
+
+/** Exactly what a send needs off a File row, and nothing else. */
+export type ResolvedAttachment = {
+  id: string;
+  filename: string;
+  url: string;
+  fileType: string;
+};
+
+/**
  * Records a message this system sent on a party thread.
  *
  * The checksum is the dedup key every other path into this table uses, so an

@@ -18,6 +18,7 @@ import {
   meetingHeldAt,
   outstandingRevision,
   type ComplianceOutreachDetail,
+  type VaultAttachmentOption,
 } from "@/types/compliance";
 import { dataTimeFormat, dateFormat } from "@/utils/formatters";
 
@@ -48,12 +49,22 @@ type ArchitectWorkflowProps = {
   outreach: ComplianceOutreachDetail | undefined;
   /** Whether a set of preliminary plans is on the file. */
   hasPreliminaryPlans: boolean;
+  /**
+   * What is on the file already, carried straight through to the two dialogs
+   * this card opens.
+   *
+   * Passed down rather than derived, for the reason everything else here is:
+   * this card holds one outreach and knows nothing about the rest of the
+   * engagement. Built with `vaultAttachmentOptions`.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
 };
 
 export function ArchitectWorkflow({
   projectId,
   outreach,
   hasPreliminaryPlans,
+  vaultOptions,
 }: ArchitectWorkflowProps) {
   const dispatch = useAppDispatch();
   const mutations = useAppSelector(selectComplianceMutations);
@@ -171,7 +182,7 @@ export function ArchitectWorkflow({
               dispatch(
                 openModal({
                   type: "scheduleComplianceMeeting",
-                  payload: { projectId },
+                  payload: { projectId, vaultOptions },
                 }),
               )
             }
@@ -198,6 +209,7 @@ export function ArchitectWorkflow({
                   payload: {
                     projectId,
                     scheduledFor: new Date(meeting.scheduledFor).toISOString(),
+                    vaultOptions,
                   },
                 }),
               )
@@ -223,7 +235,7 @@ export function ArchitectWorkflow({
               dispatch(
                 openModal({
                   type: "reviewArchitectPlans",
-                  payload: { projectId },
+                  payload: { projectId, vaultOptions },
                 }),
               )
             }

@@ -77,6 +77,10 @@ const ALERT_TITLE: Readonly<Record<ComplianceAlertType, string>> = {
     "Traffic control plan pending — send a follow up",
   [ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE]:
     "Waste management plan pending — follow up with the architect",
+  [ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE]:
+    "Developer approval pending — send a follow up",
+  [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]:
+    "Revised bushfire report pending — follow up with the consultant",
   [ComplianceAlertType.ROAD_OPENING_DELAYED]:
     "Road opening approval taking longer than usual",
   [ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED]:
