@@ -192,7 +192,7 @@ export function ExtraAttachmentsField({
 
         <div className="flex items-center gap-2">
           {vaultOptions.length > 0 ? (
-            <Popover open={isVaultOpen} onOpenChange={setIsVaultOpen}>
+            <Popover open={isVaultOpen} onOpenChange={setIsVaultOpen} modal>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
