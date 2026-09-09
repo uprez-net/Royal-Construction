@@ -98,6 +98,17 @@ type ComplianceDocumentRowProps = {
    * where the control belongs and leaves what it is to the caller.
    */
   consultantAction?: ReactNode;
+  /**
+   * Where this row's document came from, when nobody uploaded it here.
+   *
+   * Set only on a checklist line the extraction answered from a document the
+   * file already held — "the surveyor", "the planning certificate". The row
+   * looks otherwise identical to one somebody filled in by hand, and that is
+   * the problem it solves: the first question anybody asks about a line that
+   * answered itself is where it got that from, and a filename alone does not
+   * say.
+   */
+  mappedFrom?: string | null;
 };
 
 /**
@@ -237,6 +248,7 @@ export function ComplianceDocumentRow({
   onReject,
   onSetNotRequired,
   consultantAction,
+  mappedFrom,
   onPreviewFile,
 }: ComplianceDocumentRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -358,6 +370,15 @@ export function ComplianceDocumentRow({
         ) : supportingText ? (
           <p className="mt-1 text-[13px] leading-relaxed font-normal text-muted-foreground/80">
             {supportingText}
+          </p>
+        ) : null}
+
+        {/* Under the filename rather than beside the label, because it is a
+            fact about the file and not about the line: the certifier asked for
+            a survey, and this is which survey answered them. */}
+        {mappedFrom && files.length > 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Already on the file, from {mappedFrom}.
           </p>
         ) : null}
 

@@ -6,6 +6,7 @@ import {
   ComplianceAlertType,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceMeetingStatus,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -54,9 +55,28 @@ function engagement(overrides: Overrides = {}): CertifierEngagementDetail {
     outreaches: [],
     alerts: [],
     emails: [],
-    planningCertificate: null,
+    externalApplications: [],
     ...overrides,
   } as unknown as CertifierEngagementDetail;
+}
+
+/**
+ * One application to an outside body.
+ *
+ * The 10.7 certificate by default, because it is the one four of these tests
+ * are about and naming it in each of them would bury what they vary.
+ */
+function application(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "application-1",
+    kind: ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
+    alreadyHeld: false,
+    appliedAt: null,
+    applicationRef: null,
+    lodgedWith: null,
+    receivedAt: null,
+    ...overrides,
+  };
 }
 
 function outreach(
@@ -74,9 +94,11 @@ function outreach(
     checklistDocumentId: null,
     clientPlansApprovedAt: null,
     lastFollowUpAt: null,
+    wasteManagementRequestedAt: null,
     emails: [],
     meetings: [],
     revisions: [],
+    deliverables: [],
     ...overrides,
   };
 }
@@ -189,12 +211,9 @@ test("documents the client supplied leave nobody to chase", () => {
 
 test("a lodged application past the portal's turnaround is flagged", () => {
   const file = engagement({
-    planningCertificate: {
-      alreadyHeld: false,
-      appliedAt: MONDAY,
-      applicationRef: "PC-123",
-      receivedAt: null,
-    } as never,
+    externalApplications: [
+      application({ appliedAt: MONDAY, applicationRef: "PC-123" }),
+    ] as never,
   });
 
   // Six working days: the portal quotes three to five.
@@ -219,11 +238,7 @@ test("a lodged application past the portal's turnaround is flagged", () => {
 
 test("a certificate on the file closes the wait even if nobody ticked it", () => {
   const file = engagement({
-    planningCertificate: {
-      alreadyHeld: false,
-      appliedAt: MONDAY,
-      receivedAt: null,
-    } as never,
+    externalApplications: [application({ appliedAt: MONDAY })] as never,
     documents: [
       document(ComplianceDocumentType.PLANNING_CERTIFICATE_10_7),
     ] as never,
@@ -238,21 +253,16 @@ test("a certificate on the file closes the wait even if nobody ticked it", () =>
   );
 });
 
-test("a DA takes the certificate out of the pack, so it cannot be late", () => {
-  const file = engagement({
-    planningCertificate: {
-      alreadyHeld: false,
-      appliedAt: MONDAY,
-      receivedAt: null,
-    } as never,
-    alerts: [
-      {
-        id: "alert-da",
-        type: ComplianceAlertType.DA_APPROVAL_REQUIRED,
-        status: ComplianceAlertStatus.OPEN,
-      },
-    ] as never,
-  });
+const daAlert = [
+  {
+    id: "alert-da",
+    type: ComplianceAlertType.DA_APPROVAL_REQUIRED,
+    status: ComplianceAlertStatus.OPEN,
+  },
+];
+
+test("a DA with no certificate ordered has nothing to chase", () => {
+  const file = engagement({ alerts: daAlert as never });
 
   const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
 
@@ -260,6 +270,79 @@ test("a DA takes the certificate out of the pack, so it cannot be late", () => {
     resolvedTypes(result).includes(
       ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
     ),
+  );
+});
+
+test("a certificate lodged for a DA is still chased when it runs late", () => {
+  // The correction the DA work made. The certificate leaves the certifier's
+  // pack when a job changes path, and it used to leave the file with it — so a
+  // 10.7 lodged for the development application itself sat with the portal for
+  // a month with nothing anywhere saying so. The council assesses a DA against
+  // the same zoning and the same overlays; the certificate moved, it did not go.
+  const file = engagement({
+    alerts: daAlert as never,
+    externalApplications: [application({ appliedAt: MONDAY })] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The other three portals, and the development application itself
+// ---------------------------------------------------------------------------
+
+test("each portal application is chased against its own turnaround", () => {
+  // Ten working days. Past the levy's five and inside the road opening's ten,
+  // which is the pair worth pinning: a shared threshold would have flagged both
+  // or neither, and the whole point of the table is that they differ.
+  const file = engagement({
+    externalApplications: [
+      application({
+        kind: ComplianceExternalApplicationKind.LONG_SERVICE_LEVY,
+        appliedAt: MONDAY,
+      }),
+      application({
+        kind: ComplianceExternalApplicationKind.ROAD_OPENING,
+        appliedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, sydney("2026-06-16T09:00:00"));
+
+  assert.ok(
+    raisedTypes(result).includes(ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED),
+  );
+  assert.equal(
+    raisedTypes(result).includes(ComplianceAlertType.ROAD_OPENING_DELAYED),
+    false,
+  );
+});
+
+test("a development application is not late at eleven working days", () => {
+  // The threshold that keeps the panel readable. Every other wait on this file
+  // is eleven days or fewer; a DA runs weeks to months, and an alert on the
+  // consultants' threshold would be open on every application ever lodged.
+  const file = engagement({
+    externalApplications: [
+      application({
+        kind: ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+        appliedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.equal(
+    raisedTypes(result).includes(ComplianceAlertType.DA_DETERMINATION_OVERDUE),
+    false,
   );
 });
 

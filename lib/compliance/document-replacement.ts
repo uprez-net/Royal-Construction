@@ -21,13 +21,22 @@ type StoredFile = { id: string; url: string };
 /**
  * Reclaims the storage behind files a replacement pushed out.
  *
- * Two things it deliberately does not do. It never throws: the write it
+ * Three things it deliberately does not do. It never throws: the write it
  * follows is already committed, and an unreachable blob store is not a reason
- * to fail work that succeeded. And it leaves alone any blob the mail trail
- * links at — a thread bubble points straight at the object rather than at a
- * File row, so reclaiming one that was emailed, in either direction, would turn
- * that copy of the conversation into a dead link. Those are left for the
- * storage cleanup to age out.
+ * to fail work that succeeded. It leaves alone any blob the mail trail links
+ * at — a thread bubble points straight at the object rather than at a File row,
+ * so reclaiming one that was emailed, in either direction, would turn that copy
+ * of the conversation into a dead link.
+ *
+ * And it leaves alone any blob another File row still points at. That case did
+ * not exist until the checklist mapper started answering a line from a document
+ * the pack already held: the copy shares the original's url, so reclaiming one
+ * side's storage would empty the other's row while leaving it looking supplied.
+ * A shared blob goes only when the last row referring to it does.
+ *
+ * Both exclusions leave objects behind on purpose. They are aged out by the
+ * storage cleanup, which is the right place for a decision that needs to look
+ * at the whole project rather than at one replacement.
  */
 export async function discardSupersededFiles(
   engagementId: string,
@@ -48,9 +57,23 @@ export async function discardSupersededFiles(
       ),
     );
 
-    const urls = files
+    const candidates = files
       .map((file) => file.url)
       .filter((url) => !onThread.has(url));
+    if (candidates.length === 0) {
+      return;
+    }
+
+    // Rows that survived this replacement and still point at one of these
+    // blobs. Read after the caller's own delete has committed, so a row this
+    // replacement removed is already gone and cannot vote to keep its own blob.
+    const stillReferenced = await prisma.file.findMany({
+      where: { url: { in: candidates } },
+      select: { url: true },
+    });
+    const shared = new Set(stillReferenced.map((file) => file.url));
+
+    const urls = candidates.filter((url) => !shared.has(url));
     if (urls.length > 0) {
       await del(urls);
     }

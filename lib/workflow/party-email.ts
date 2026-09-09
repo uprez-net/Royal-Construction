@@ -13,14 +13,21 @@ import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
-import { PARTY_INBOUND_DOCUMENT_TYPES, PARTY_LABEL } from "@/constants/complianceDocuments";
+import {
+  PARTY_INBOUND_DOCUMENT_TYPES,
+  PARTY_LABEL,
+  partyDeliverables,
+} from "@/constants/complianceDocuments";
 import {
   discardSupersededFiles,
   placeConsultantDeliverable,
   placeInboundDocument,
 } from "@/lib/compliance/document-replacement";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
-import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
+import {
+  recordPreliminaryPlansArrival,
+  recordWasteManagementPlanArrival,
+} from "@/lib/data/compliance-architect";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
@@ -119,8 +126,16 @@ async function findOutreach(refToken: string) {
       party: true,
       engagementId: true,
       // The checklist line a consultant was engaged against, so what they send
-      // back can answer it rather than becoming a document of its own.
+      // back can answer it rather than becoming a document of its own. Read
+      // only as a fallback for the rows written before deliverables existed --
+      // see `checklistLineFor` below.
       checklistDocumentId: true,
+      // Which line each of this party's documents answers. A structural
+      // engineer answers three, and the reply that carries two PDFs has to file
+      // each of them against the line that asked for that one.
+      deliverables: {
+        select: { documentType: true, checklistDocumentId: true },
+      },
       engagement: { select: { projectId: true } },
     },
   });
@@ -358,26 +373,43 @@ async function classifyStoredDocuments(
   party: CompliancePartyType,
   stored: { documentId: string; name: string; url: string }[],
   /**
-   * The checklist line a consultant's reply answers, where there is one.
+   * What this party was asked for, and which checklist line asked for each.
    *
-   * Present only for the two consultant parties. What a BASIX consultant sends
-   * back is not a document on the file in its own right — it exists because a
-   * checklist item asked for it, and the certifier is going to tick that item
-   * when they see it. Filing it as a BASIX_CERTIFICATE row beside a checklist
-   * line still reading "Not supplied yet" is the document being on the file
-   * and the file still being incomplete.
+   * Present only for a consultant party. What a BASIX consultant sends back is
+   * not a document on the file in its own right — it exists because a checklist
+   * item asked for it, and the certifier is going to tick that item when they
+   * see it. Filing it as a BASIX_CERTIFICATE row beside a checklist line still
+   * reading "Not supplied yet" is the document being on the file and the file
+   * still being incomplete.
+   *
+   * Passed as rows rather than as the resolver built from them, which is not a
+   * stylistic choice: step arguments are serialized into the event log so they
+   * can be replayed, and a function is not serializable. It is also what keeps
+   * `partyDeliverables` — and through it the whole Prisma client — out of the
+   * workflow sandbox; see `checklistLineResolver`.
    */
-  checklistDocumentId: string | null,
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId: string | null;
+  }[],
+  /** The single-line fallback, for outreaches written before the table above. */
+  fallbackChecklistDocumentId: string | null,
 ): Promise<{
   labelled: number;
   titleSearches: { url: string; name: string }[];
   preliminaryPlans: number;
+  wasteManagementPlans: number;
 }> {
   "use step";
 
   const allowed = new Set<ComplianceDocumentType>(
     PARTY_INBOUND_DOCUMENT_TYPES[party],
   );
+  const checklistLineFor = checklistLineResolver({
+    party,
+    checklistDocumentId: fallbackChecklistDocumentId,
+    deliverables,
+  });
   let labelled = 0;
   // Reported back rather than checked here: the owner comparison is a model
   // call of its own and belongs in its own retryable step, so a timeout reading
@@ -387,6 +419,11 @@ async function classifyStoredDocuments(
   // architect alerts. Read off what was actually placed rather than off the
   // party, because an architect's covering email carries other things too.
   let preliminaryPlans = 0;
+  // Counted separately from the plans above, because the two are different
+  // waits on the same party: a redraw of the elevations does not answer a
+  // request for a waste management plan, and either closing the other's alert
+  // would credit the architect with work they have not started.
+  let wasteManagementPlans = 0;
 
   for (const item of stored) {
     try {
@@ -404,6 +441,7 @@ async function classifyStoredDocuments(
       // when the checklist row has gone, which is what a checklist re-extracted
       // between the outreach and the reply leaves behind — worse than the
       // checklist row, and much better than dropping the certificate.
+      const checklistDocumentId = checklistLineFor(result.documentType);
       const placed = checklistDocumentId
         ? ((await placeConsultantDeliverable({
             engagementId,
@@ -437,6 +475,12 @@ async function classifyStoredDocuments(
       }
 
       if (
+        result.documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
+      ) {
+        wasteManagementPlans += 1;
+      }
+
+      if (
         result.documentType ===
         ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
       ) {
@@ -447,7 +491,7 @@ async function classifyStoredDocuments(
     }
   }
 
-  return { labelled, titleSearches, preliminaryPlans };
+  return { labelled, titleSearches, preliminaryPlans, wasteManagementPlans };
 }
 
 /**
@@ -492,6 +536,21 @@ async function closePlansLoop(params: {
 }): Promise<void> {
   "use step";
   await recordPreliminaryPlansArrival(params);
+}
+
+/**
+ * Closes the waste management wait when the plan arrives on the thread.
+ *
+ * Its own step beside `closePlansLoop` rather than folded into it, because they
+ * close different alerts off different clocks and only one of them ever fires
+ * on a given reply.
+ */
+async function closeWasteManagementLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordWasteManagementPlanArrival(params);
 }
 
 /**
@@ -591,6 +650,54 @@ async function advanceAndNotify(
   );
 }
 
+/**
+ * Which checklist line a given document type from this party answers.
+ *
+ * Deliverables are the answer wherever they exist; where they do not — a
+ * consultant engaged before that table existed, or one the backfill could not
+ * reach — the single `checklistDocumentId` column is used, but only for the
+ * party's own deliverable. Without that narrowing, a BASIX consultant who
+ * attached the survey they were sent would have had the survey filed onto the
+ * checklist line asking for a BASIX certificate.
+ *
+ * Called from inside `classifyStoredDocuments`, and it has to stay that way.
+ * This function reads `partyDeliverables` out of constants/complianceDocuments,
+ * which imports `@prisma/client` for its enums — and in workflow mode the
+ * compiler guts step bodies but keeps everything the orchestrator can reach, so
+ * a plain helper called from the workflow body drags that module into the
+ * sandbox. The sandbox is a `vm` context with no `require`, and Prisma's
+ * generated client is CommonJS, so the whole flow bundle dies on evaluation
+ * with "require is not defined" before any workflow runs at all. Called from a
+ * step instead, it is tree-shaken out of the sandbox bundle entirely, which is
+ * how `graphClient` and `deterministicFileId` above stay legal.
+ */
+function checklistLineResolver(outreach: {
+  party: CompliancePartyType;
+  checklistDocumentId: string | null;
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId: string | null;
+  }[];
+}): (documentType: ComplianceDocumentType) => string | null {
+  const byType = new Map(
+    outreach.deliverables.map((deliverable) => [
+      deliverable.documentType,
+      deliverable.checklistDocumentId,
+    ]),
+  );
+
+  const ownDeliverables = new Set(partyDeliverables(outreach.party));
+
+  return (documentType) => {
+    if (byType.has(documentType)) {
+      return byType.get(documentType) ?? null;
+    }
+    return ownDeliverables.has(documentType)
+      ? outreach.checklistDocumentId
+      : null;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -648,6 +755,7 @@ export const processInboundPartyEmail = async (
       outreach.engagementId,
       outreach.party,
       stored,
+      outreach.deliverables,
       outreach.checklistDocumentId,
     );
     console.log(
@@ -671,6 +779,13 @@ export const processInboundPartyEmail = async (
     // not be able to cost the classification that produced them.
     if (classification.preliminaryPlans > 0) {
       await closePlansLoop({ projectId, engagementId: outreach.engagementId });
+    }
+
+    if (classification.wasteManagementPlans > 0) {
+      await closeWasteManagementLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
     }
   }
 

@@ -26,9 +26,12 @@ import {
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
+// A value import, not a type one: `complianceScope.party` names the architect
+// at runtime when the waste management request is filed under their thread.
+import { CompliancePartyType } from "@prisma/client";
 import type {
   ComplianceDocumentType,
-  CompliancePartyType,
+  ComplianceExternalApplicationKind,
   File as ProjectFiles,
 } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
@@ -39,7 +42,8 @@ import type {
   ComplianceDocumentUploadInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
-  PlanningCertificateRequest,
+  ExternalApplicationRequest,
+  WasteManagementRequest,
   ResolveComplianceAlertInput,
   ResolveComplianceMeetingRequest,
   ResolveComplianceDocumentInput,
@@ -385,14 +389,20 @@ export const complianceScope = {
   /** Closing one alert. */
   alert: (alertId: string): ComplianceScope => `alert:${alertId}`,
   /**
-   * The council block's own state — the question, the application, the tick.
+   * One application block's own state — the question, the lodgement, the tick.
    *
    * Its own scope rather than `party(COUNCIL)`, because that key covers
    * engaging a party and there is nobody to engage here. Keeping them apart
    * means the certificate upload, which files under the document scope, and
    * the answer, which files under this one, do not freeze each other.
+   *
+   * Keyed by kind rather than shared across all five, for the same reason the
+   * party scope is keyed by party: the road opening permit and the long service
+   * levy sit on the same list, and recording a lodgement on one must not grey
+   * out the other.
    */
-  planningCertificate: "planning-certificate" as ComplianceScope,
+  application: (kind: ComplianceExternalApplicationKind): ComplianceScope =>
+    `application:${kind}`,
   /** Booking, moving or resolving the client and architect meeting. */
   meeting: "meeting" as ComplianceScope,
   /** Recording the client's verdict on the preliminary plans. */
@@ -737,32 +747,62 @@ export const sendPartyReply = createAsyncThunk<
 });
 
 /**
- * Records where the 10.7 certificate has got to.
+ * Records where one application to an outside body has got to.
  *
  * Filed under a scope of its own rather than under the council party, because
- * the council has no outreach to be busy on and the two things the block does —
- * answering the question and uploading the certificate — are separate writes
- * that must not freeze each other.
+ * the council has no outreach to be busy on and the two things a block does —
+ * answering the question and uploading the document — are separate writes that
+ * must not freeze each other.
  */
-export const recordPlanningCertificate = createAsyncThunk<
+export const recordExternalApplication = createAsyncThunk<
   ComplianceResult,
-  { projectId: string } & PlanningCertificateRequest,
+  { projectId: string } & ExternalApplicationRequest,
   { rejectValue: string }
 >(
-  "projects/recordPlanningCertificate",
+  "projects/recordExternalApplication",
   async ({ projectId, ...payload }, thunkApi) => {
     try {
       return await replaceEngagement(
         projectId,
-        "/planning-certificate",
+        "/applications",
         jsonPost(payload),
-        "Unable to record the planning certificate",
+        "Unable to record the application",
       );
     } catch (error) {
       return thunkApi.rejectWithValue(
         error instanceof Error
           ? error.message
-          : "Unable to record the planning certificate",
+          : "Unable to record the application",
+      );
+    }
+  },
+);
+
+/**
+ * Asks the architect for the waste management plan.
+ *
+ * Filed under the architect's party scope rather than a scope of its own,
+ * because it is a send on their thread: the same thread the connect control
+ * and the meeting invitation write to, and two of those in flight at once is
+ * two messages nobody meant to send.
+ */
+export const requestWasteManagementPlan = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & WasteManagementRequest,
+  { rejectValue: string }
+>(
+  "projects/requestWasteManagementPlan",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/architect/waste-management",
+        jsonPost(payload),
+        "Unable to send the request",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to send the request",
       );
     }
   },
@@ -949,9 +989,11 @@ const complianceOperations = [
   complianceOperation(sendPartyReply, (arg) =>
     complianceScope.partyReply(arg.outreachId),
   ),
-  complianceOperation(
-    recordPlanningCertificate,
-    () => complianceScope.planningCertificate,
+  complianceOperation(recordExternalApplication, (arg) =>
+    complianceScope.application(arg.kind),
+  ),
+  complianceOperation(requestWasteManagementPlan, () =>
+    complianceScope.party(CompliancePartyType.ARCHITECT),
   ),
   complianceOperation(scheduleClientMeeting, () => complianceScope.meeting),
   complianceOperation(resolveClientMeeting, () => complianceScope.meeting),

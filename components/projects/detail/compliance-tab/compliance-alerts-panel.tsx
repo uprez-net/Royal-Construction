@@ -31,13 +31,13 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
       /**
        * The label on the one-click chase, where the alert has one.
        *
-       * Six of the eight do. What they have in common is that the remedy is a
+       * Ten of the sixteen do. What they have in common is that the remedy is a
        * request we can compose ourselves out of what is already on this screen
        * — which names are on the register against which we hold, what was asked
        * for and when, the revisions that went across a fortnight ago. The two
-       * that have none are the two nobody can be asked: the planning portal
-       * does not read email, and a development application is a decision about
-       * the whole job rather than a document to be reminded about.
+       * six that have none are the ones nobody can be asked: a portal does not
+       * read email, and a development application is a decision about the whole
+       * job rather than a document to be reminded about.
        *
        * A label here is necessary but not sufficient. Whether the button
        * actually appears also depends on that party having a live thread on
@@ -104,7 +104,63 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
       "The bushfire consultant was engaged more than eleven working days ago and has not sent their assessment through. The follow-up asks for an update on their thread; it closes itself when the report arrives.",
     followUp: "Send a follow up",
   },
+  [ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE]: {
+    title: "Structural engineer response pending",
+    guidance:
+      "The structural engineer was engaged more than eleven working days ago and at least one of their three documents has not come back. The follow-up lists whichever are still outstanding and asks for an update on their thread; it closes itself when the last of them arrives.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.WATER_AUTHORITY_RESPONSE_OVERDUE]: {
+    title: "Water servicing approval pending",
+    guidance:
+      "The water servicing coordinator was engaged more than eleven working days ago and has not sent the tap-in approval or the section 73 notice through. The follow-up asks for an update on their thread; it closes itself when they arrive.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE]: {
+    title: "Traffic control plan pending",
+    guidance:
+      "The traffic control consultant was engaged more than eleven working days ago and has not sent their plan through. The follow-up asks for an update on their thread; it closes itself when the plan arrives.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE]: {
+    title: "Waste management plan pending",
+    guidance:
+      "The architect was asked for the waste management plan more than eleven working days ago and has not sent it. The follow-up goes on the thread they are already on; it closes itself when the plan arrives.",
+    followUp: "Follow up with the architect",
+  },
+
+  // -------------------------------------------------------------------
+  // The portal waits.
+  //
+  // None of these has a chase, and for the same reason the planning
+  // certificate above has none: there is nobody at the other end reading
+  // email about this job. Each one is chased by ringing the body with the
+  // reference number the block itself shows, which is why the guidance names
+  // where to find that number rather than offering a button.
+  // -------------------------------------------------------------------
+
+  [ComplianceAlertType.ROAD_OPENING_DELAYED]: {
+    title: "Road opening approval taking longer than usual",
+    guidance:
+      "The road opening and vehicle crossing application has been with the council past the fortnight it normally takes. Chase it with the council using the application number on the permit block, and tick it received once the approval lands. This closes itself when the approval is on the file.",
+  },
+  [ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED]: {
+    title: "Long service levy receipt outstanding",
+    guidance:
+      "The levy payment was recorded more than a working week ago and no receipt has been uploaded. Download it from the Long Service Corporation portal using the payment reference on the block. This closes itself when the receipt is on the file.",
+  },
+  [ComplianceAlertType.MINE_SUBSIDENCE_DELAYED]: {
+    title: "Mine subsidence approval taking longer than usual",
+    guidance:
+      "Subsidence Advisory NSW has had the application past the three weeks it normally takes. Chase it using the application number on the block, and tick it received once the approval lands. This closes itself when the approval is on the file.",
+  },
+  [ComplianceAlertType.DA_DETERMINATION_OVERDUE]: {
+    title: "Development application still undetermined",
+    guidance:
+      "The DA has been with the council for more than sixty working days, which is well past what a residential application normally takes. Ring the assessing officer using the DA number on the block. This closes itself when the determination is recorded.",
+  },
 };
+
 
 /**
  * How each source reads on the pill.
@@ -120,6 +176,9 @@ const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
   [ComplianceAlertSource.CERTIFIER]: "certifier",
   [ComplianceAlertSource.BASIX_CONSULTANT]: "BASIX consultant",
   [ComplianceAlertSource.BUSHFIRE_CONSULTANT]: "bushfire consultant",
+  [ComplianceAlertSource.STRUCTURAL_ENGINEER]: "structural engineer",
+  [ComplianceAlertSource.WATER_AUTHORITY]: "water servicing coordinator",
+  [ComplianceAlertSource.TRAFFIC_CONSULTANT]: "traffic control consultant",
 };
 
 type ComplianceAlertsPanelProps = {

@@ -69,6 +69,22 @@ const ALERT_TITLE: Readonly<Record<ComplianceAlertType, string>> = {
     "BASIX certificate pending — send a follow up",
   [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]:
     "Bushfire assessment pending — send a follow up",
+  [ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE]:
+    "Structural engineer response pending — send a follow up",
+  [ComplianceAlertType.WATER_AUTHORITY_RESPONSE_OVERDUE]:
+    "Water servicing approval pending — send a follow up",
+  [ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE]:
+    "Traffic control plan pending — send a follow up",
+  [ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE]:
+    "Waste management plan pending — follow up with the architect",
+  [ComplianceAlertType.ROAD_OPENING_DELAYED]:
+    "Road opening approval taking longer than usual",
+  [ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED]:
+    "Long service levy receipt outstanding",
+  [ComplianceAlertType.MINE_SUBSIDENCE_DELAYED]:
+    "Mine subsidence approval taking longer than usual",
+  [ComplianceAlertType.DA_DETERMINATION_OVERDUE]:
+    "Development application still undetermined",
 };
 
 export async function complianceAlertTitle(

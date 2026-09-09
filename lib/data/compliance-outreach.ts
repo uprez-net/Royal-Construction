@@ -358,9 +358,16 @@ export async function startPartyOutreach(
     // the outreach opens rather than matched when the reply lands: what a BASIX
     // consultant sends back satisfies the item that asked for it, and by then
     // there may be three items mentioning BASIX.
-    checklistDocumentId: isConsultantParty(party)
-      ? (input.checklistDocumentId ?? null)
-      : null,
+    //
+    // Superseded by the deliverables written below and kept for the consultants
+    // that produce exactly one thing, which is every row this system wrote
+    // before the deliverables table existed. A structural engineer answers
+    // three lines and this column can only name one, so it is left null for
+    // them rather than made to pick a favourite.
+    checklistDocumentId:
+      isConsultantParty(party) && input.deliverables.length <= 1
+        ? (input.checklistDocumentId ?? null)
+        : null,
   };
 
   const outreach = existing
@@ -381,6 +388,32 @@ export async function startPartyOutreach(
           ...contact,
         },
       });
+
+  // Which checklist lines this engagement answers.
+  //
+  // Written before the mail rather than after it, for the same reason the row
+  // itself is: a send that succeeds against a row with no deliverables on it is
+  // a reply nobody can file, while deliverables with no mail behind them are
+  // visible, obviously incomplete, and retryable.
+  //
+  // Replaced rather than merged, because the request carries the whole set. A
+  // retry of a send that failed halfway is the same engagement described again,
+  // not a second set of things to ask for.
+  if (input.deliverables.length > 0) {
+    await prisma.$transaction([
+      prisma.complianceOutreachDeliverable.deleteMany({
+        where: { outreachId: outreach.id },
+      }),
+      prisma.complianceOutreachDeliverable.createMany({
+        data: input.deliverables.map((deliverable) => ({
+          outreachId: outreach.id,
+          documentType: deliverable.documentType,
+          checklistDocumentId: deliverable.checklistDocumentId ?? null,
+        })),
+        skipDuplicates: true,
+      }),
+    ]);
+  }
 
   // What this party is given to work from. The surveyor's deed was uploaded in
   // the modal moments ago and the architect's set is whatever the surveyor

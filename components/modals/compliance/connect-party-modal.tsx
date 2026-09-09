@@ -1,6 +1,6 @@
 "use client";
 
-import { CompliancePartyType } from "@prisma/client";
+import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
 import { FileText, Loader2, Paperclip, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -41,6 +41,19 @@ import {
 /** A file already on the compliance file that this outreach will carry. */
 export type PrefilledAttachment = { name: string; url: string };
 
+/**
+ * "a, b and c" — the list as a sentence reads it.
+ *
+ * A join with " and " was right while every consultant produced one thing and
+ * the surveyor produced three. A structural engineer produces three, and
+ * "structural drawings and hydraulic drawings and a geotechnical report" reads
+ * like a transcription error.
+ */
+function listSentence(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
 type ConnectPartyModalProps = {
   projectId: string;
   party: CompliancePartyType;
@@ -58,12 +71,28 @@ type ConnectPartyModalProps = {
   /**
    * The checklist line this consultant is being engaged against.
    *
-   * Only set for the two consultant parties, and carried straight through to
-   * the outreach so what they send back can answer the item that asked for it.
-   * A surveyor is engaged against the job; a bushfire consultant is engaged
+   * Only set for a consultant party, and carried straight through to the
+   * outreach so what they send back can answer the item that asked for it. A
+   * surveyor is engaged against the job; a bushfire consultant is engaged
    * against item 9.
    */
   checklistDocumentId?: string;
+  /**
+   * Every line this engagement is meant to answer, one per document.
+   *
+   * The reason `checklistDocumentId` alone stopped being enough. A bushfire
+   * assessor answers one line and a structural engineer answers three — the
+   * drawings, the hydraulic set and the geotechnical report — off a single
+   * engagement, and the reply that carries two PDFs has to file each against
+   * the line that asked for it.
+   *
+   * Resolved by the caller off the checklist rather than here, because only the
+   * tab can see which of the certifier's lines ask for which of the three.
+   */
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId?: string;
+  }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -83,6 +112,7 @@ export function ConnectPartyModal({
   subjectAddress,
   prefilled,
   checklistDocumentId,
+  deliverables,
   open,
   onOpenChange,
 }: ConnectPartyModalProps) {
@@ -130,9 +160,11 @@ export function ConnectPartyModal({
   const needsDeed = party === CompliancePartyType.SURVEYOR;
   const isConsultant = isConsultantParty(party);
   /** What this party is being asked to produce, in the reader's words. */
-  const wanted = partyDeliverables(party)
-    .map((type) => complianceDocumentLabel(type).toLowerCase())
-    .join(" and ");
+  const wanted = listSentence(
+    partyDeliverables(party).map((type) =>
+      complianceDocumentLabel(type).toLowerCase(),
+    ),
+  );
 
   /**
    * The deed is attached to the file before the outreach is sent, not with it.
@@ -188,6 +220,7 @@ export function ConnectPartyModal({
           contactPhone: contact.phone ?? undefined,
           note: note.trim() || undefined,
           checklistDocumentId,
+          deliverables,
         }),
       ).unwrap();
       toast.success(`${label} engaged.`);
@@ -219,7 +252,14 @@ export function ConnectPartyModal({
               {needsDeed
                 ? "They are sent the land deed and asked for the deposited plan, title search and survey. Their reply is matched back by the reference in the subject line."
                 : isConsultant
-                  ? `They are sent the plans, the survey and the planning certificate, and asked for the ${wanted}. What they send back answers the checklist item this was raised from.`
+                  ? // What they are sent is listed below rather than described
+                    // here, because it now differs per consultant: a bushfire
+                    // assessor reads the certificate, a structural engineer
+                    // reads the full design, and a sentence naming one of those
+                    // sets would be wrong for the other.
+                    `They are asked for the ${wanted}, with what they need to work from attached. What they send back answers the checklist ${
+                      deliverables.length > 1 ? "items" : "item"
+                    } this was raised from.`
                   : "They are sent the surveyor's set and the planning certificate, the client's details so they can sit down with the owners, and asked for the plans. Their reply is matched back by the reference in the subject line."}
             </DialogDescription>
           </DialogHeader>

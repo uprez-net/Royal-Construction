@@ -61,8 +61,47 @@ ${CHECKLIST_EXTRACTION_CONTRACT}
   <field name="description">The certifier's own explanation of what the item is, where the label alone is not enough. "Long Service Levy" followed by "Provide receipt of payments made to the Long Service Payments Corporation for 0.25% of the construction cost" — the first is the label, the second is the description. Omit it when the label already says everything; never restate the label.</field>
   <field name="requirements">The conditions, amendments and corrections attached to this item, verbatim and in order.</field>
   <field name="references">Standards, code clauses and named external documents the item cites — an Australian Standard, an NCC or BCA clause, a restriction under section 88B, a named consultant's report, a council guideline. Copy the citation as written, including report numbers and dates.</field>
-  <field name="mapsToType">The kind of document the item is asking for, when it is one of the listed types. Omit when it asks for something not on the list. Do not force a match. Two of the listed types matter more than the rest, because naming them is what lets us engage the consultant who produces them: BASIX_CERTIFICATE for a line asking for a BASIX certificate, BASIX commitments, or a NatHERS/thermal-performance assessment, and BUSHFIRE_REPORT for a line asking for a bushfire assessment, a BAL rating, or a bushfire attack level report. Set these whenever the line asks for one, even where the wording is abbreviated.</field>
+  <field name="mapsToType">The kind of document the item is asking for, when it is one of the listed types. Omit when it asks for something not on the list. Do not force a match. Naming the type is what decides which control the item gets — whether we already hold the document, who to commission it from, or which website it is bought on — so the guide below is worth working through before deciding to omit it.</field>
 </field_guide>
+
+<maps_to_type>
+  <group name="already collected">
+    <rule>These six are routinely already on the job, and naming the type is what stops somebody supplying the same document a second time.</rule>
+    <type name="DEPOSITED_PLAN">A deposited plan, or a plan of subdivision identified by its DP number.</type>
+    <type name="TITLE_SEARCH_DETAIL_AND_LEVEL">A title search, a certificate of title, a folio, or a search of the register.</type>
+    <type name="SURVEY">A survey, a signed survey, a detail and level survey, a contour survey, or a surveyor's identification report.</type>
+    <type name="FULL_ARCHITECTURAL_DESIGN">Architectural drawings, architectural plans, the architectural set, or design documentation. Use this even where the line says only "architectural plans" — a certifier asking for plans on a checklist means the set the job is assessed on.</type>
+    <type name="PLANNING_CERTIFICATE_10_7">A section 10.7 planning certificate, a 10.7(2) and (5), or the older section 149 certificate.</type>
+    <type name="HOME_INSURANCE">HBCF, home warranty insurance, or Home Building Compensation Fund cover.</type>
+  </group>
+
+  <group name="commissioned from a consultant">
+    <rule critical="true">Naming these is what lets us engage the firm who produces them. Set them whenever the line asks for one, even where the wording is abbreviated or trade shorthand.</rule>
+    <type name="BASIX_CERTIFICATE">A BASIX certificate, BASIX commitments, or a NatHERS or thermal-performance assessment.</type>
+    <type name="BUSHFIRE_REPORT">A bushfire assessment, a bushfire report, a BAL rating, a bushfire attack level report — and, most commonly of all on a NSW checklist, a "BAL Risk Assessment Certificate" or a "Bushfire Certificate". All of these are the same document and all of them are this type.</type>
+    <type name="STRUCTURAL_DRAWINGS">Structural drawings, structural plans, structural details, or an engineer's structural design certificate.</type>
+    <type name="HYDRAULIC_STORMWATER_DRAWINGS">Hydraulic drawings, stormwater drawings, a drainage plan, on-site detention details, or their design certificate.</type>
+    <type name="GEOTECH_REPORT">A geotechnical report, a soil report, or a site or soil classification.</type>
+    <type name="WATER_SERVICING_APPROVAL">A tap-in approval, a Water Servicing Coordinator approval, or a Sydney Water building plan approval.</type>
+    <type name="SECTION_73_NOTICE">A section 73 certificate, or a section 73 notice of requirements.</type>
+    <type name="WASTE_MANAGEMENT_PLAN">A waste management plan, or a waste minimisation plan.</type>
+    <type name="TRAFFIC_CONTROL_PLAN">A traffic control plan or a traffic management plan.</type>
+  </group>
+
+  <group name="bought from a portal">
+    <type name="ROAD_OPENING_PERMIT">A road opening permit, a vehicle or driveway crossing approval, or a kerb and gutter or footpath crossing approval.</type>
+    <type name="LONG_SERVICE_LEVY">The long service levy, or a receipt of payment to the Long Service Payments Corporation.</type>
+    <type name="MINE_SUBSIDENCE_APPROVAL">A mine subsidence approval, or approval from Subsidence Advisory NSW.</type>
+  </group>
+
+  <group name="produced for the application">
+    <type name="BUILD_COST_SUMMARY">A cost summary, a cost estimate, a genuine estimate of cost, or a cost of works breakdown.</type>
+    <type name="OWNER_CONSENT_FORM">The owner's consent, or the owners' consent form.</type>
+  </group>
+
+  <rule>Setting the type is a claim about what the item is asking for, never about whether it has been supplied. An item marked "received" on the checklist still gets its type.</rule>
+  <rule>Where a line asks for two documents at once and the checklist lists it as one item, keep it as one item and set the type of the first thing named. Do not split it.</rule>
+</maps_to_type>
 
 <document_level>
   <item>The header block — project number, reference, site address, scope of works, who the memo is from and when — goes in document.header as label/value pairs. It is not a checklist item.</item>

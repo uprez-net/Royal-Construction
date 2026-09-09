@@ -10,9 +10,14 @@ import {
   CompliancePartyType,
 } from "@prisma/client";
 
+import { TRADIE_TYPES } from "../../constants/tradieTypes";
 import {
   COMPLIANCE_PARTY_SECTIONS,
+  consultantForDocumentType,
+  CONSULTANT_DELIVERABLES,
+  CONSULTANT_PARTIES,
   documentTypesForParty,
+  PARTY_TRADE_LABEL,
   PARTY_INBOUND_DOCUMENT_TYPES,
   PARTY_OUTREACH_ATTACHMENTS,
   isOptionalForOutreach,
@@ -498,4 +503,58 @@ test("outreachForParty finds the row, or nothing", () => {
     outreachForParty(undefined, CompliancePartyType.SURVEYOR),
     undefined,
   );
+});
+
+
+// ---------------------------------------------------------------------------
+// The trade each party is picked from
+// ---------------------------------------------------------------------------
+
+test("every party pickable from the directory names a trade that exists", () => {
+  // `PARTY_TRADE_LABEL` writes these labels out rather than importing
+  // TRADIE_TYPES, because that module carries a lucide icon per trade and
+  // constants/complianceDocuments.ts is read by the nightly overdue sweep — a
+  // cron job has no business pulling in a React icon library. This is the
+  // cheaper half of that trade, and the failure it guards against is silent: a
+  // party whose trade label matches nothing in the directory gets a contact
+  // picker that comes back empty however many firms are on the books.
+  const trades = new Set<string>(Object.values(TRADIE_TYPES));
+
+  for (const party of Object.values(CompliancePartyType)) {
+    const trade = PARTY_TRADE_LABEL[party];
+    // Null is a decision, not an omission: nothing is sent to the council from
+    // here, so there is nobody in the directory to pick.
+    if (trade === null) continue;
+
+    assert.ok(
+      trades.has(trade),
+      `${party} is picked from "${trade}", which is not a trade in the directory`,
+    );
+  }
+});
+
+test("every consultant produces something, and every deliverable has a producer", () => {
+  // The pair of failures the two tables can drift into. A consultant with no
+  // deliverables is a party the outreach asks for nothing; a deliverable
+  // claimed by two parties is a checklist row that offers to ring whichever of
+  // them the map happened to visit last.
+  const claimed = new Map<string, CompliancePartyType>();
+
+  for (const party of CONSULTANT_PARTIES) {
+    const produces = CONSULTANT_DELIVERABLES[party] ?? [];
+    assert.ok(
+      produces.length > 0,
+      `${party} is a consultant party that produces nothing`,
+    );
+
+    for (const type of produces) {
+      assert.equal(
+        claimed.get(type),
+        undefined,
+        `${type} is produced by both ${claimed.get(type)} and ${party}`,
+      );
+      claimed.set(type, party);
+      assert.equal(consultantForDocumentType(type), party);
+    }
+  }
 });

@@ -26,7 +26,7 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import { MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus, type CompliancePartyType } from "@prisma/client";
+import { MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus, type ComplianceDocumentType, type ComplianceExternalApplicationKind, type CompliancePartyType } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
@@ -56,7 +56,10 @@ import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
 import FilePreviewCanvas from "../shared/file-preview-canvas";
 import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
+import type { ComplianceExternalApplicationRecord } from "@/types/compliance";
+import { ApplicationModal } from "./compliance/application-modal";
 import { ConnectPartyModal } from "./compliance/connect-party-modal";
+import { WasteManagementModal } from "./compliance/waste-management-modal";
 import { ResolveAlertModal } from "./compliance/resolve-alert-modal";
 import { ResolveMeetingModal } from "./compliance/resolve-meeting-modal";
 import { ReviewPlansModal } from "./compliance/review-plans-modal";
@@ -621,6 +624,61 @@ export function ModalManager() {
         />
       );
     }
+    case "complianceApplication": {
+      const {
+        projectId: id,
+        kind,
+        application,
+        portalUrl,
+      } = modal.payload as {
+        projectId: string;
+        kind: ComplianceExternalApplicationKind;
+        application: ComplianceExternalApplicationRecord | null;
+        portalUrl?: string | null;
+      };
+      return (
+        <ApplicationModal
+          projectId={id}
+          kind={kind}
+          application={application}
+          portalUrl={portalUrl}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+
+    case "requestWasteManagementPlan": {
+      const {
+        projectId: id,
+        contactName,
+        contactEmail,
+        attachments,
+        checklistDocumentId,
+      } = modal.payload as {
+        projectId: string;
+        contactName: string | null;
+        contactEmail: string | null;
+        attachments: { name: string; url: string }[];
+        checklistDocumentId?: string;
+      };
+      return (
+        <WasteManagementModal
+          projectId={id}
+          contactName={contactName}
+          contactEmail={contactEmail}
+          attachments={attachments}
+          checklistDocumentId={checklistDocumentId}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+
     case "connectComplianceParty": {
       const {
         projectId: id,
@@ -628,12 +686,17 @@ export function ModalManager() {
         subjectAddress,
         prefilled,
         checklistDocumentId,
+        deliverables,
       } = modal.payload as {
         projectId: string;
         party: CompliancePartyType;
         subjectAddress: string;
         prefilled: { name: string; url: string }[];
         checklistDocumentId?: string;
+        deliverables?: {
+          documentType: ComplianceDocumentType;
+          checklistDocumentId?: string;
+        }[];
       };
       return (
         <ConnectPartyModal
@@ -642,6 +705,7 @@ export function ModalManager() {
           subjectAddress={subjectAddress}
           prefilled={prefilled}
           checklistDocumentId={checklistDocumentId}
+          deliverables={deliverables ?? []}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

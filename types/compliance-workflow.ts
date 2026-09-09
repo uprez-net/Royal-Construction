@@ -23,6 +23,11 @@ export const CHECKLIST_EXTRACTION_PROGRESS = [
   "Reading checklist",
   "Extracting items",
   "Saving checklist",
+  // The last stage is short and is named anyway, because it is the one that
+  // surprises people: a checklist that comes back with a third of its lines
+  // already answered needs the progress bar to have said, a second earlier,
+  // that it was going to look.
+  "Matching what we already hold",
 ] as const;
 
 export type ChecklistStage = (typeof CHECKLIST_EXTRACTION_PROGRESS)[number];
