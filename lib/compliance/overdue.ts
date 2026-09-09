@@ -176,6 +176,11 @@ const CONSULTANT_ALERT: Readonly<
   [CompliancePartyType.ARCHITECT]: ComplianceAlertType.ARCHITECT_PLANS_OVERDUE,
   [CompliancePartyType.COUNCIL]:
     ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+  // Not a consultant either, and for a different reason: they produce nothing,
+  // so "have they answered" is a verdict on the row rather than a document on
+  // the file. Their clock is its own block below.
+  [CompliancePartyType.DEVELOPER]:
+    ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
 };
 
 const CONSULTANT_ALERT_SOURCE: Readonly<
@@ -189,6 +194,7 @@ const CONSULTANT_ALERT_SOURCE: Readonly<
   [CompliancePartyType.WATER_AUTHORITY]: ComplianceAlertSource.WATER_AUTHORITY,
   [CompliancePartyType.TRAFFIC_CONSULTANT]:
     ComplianceAlertSource.TRAFFIC_CONSULTANT,
+  [CompliancePartyType.DEVELOPER]: ComplianceAlertSource.DEVELOPER,
   [CompliancePartyType.SURVEYOR]: ComplianceAlertSource.SURVEYOR,
   [CompliancePartyType.ARCHITECT]: ComplianceAlertSource.ARCHITECT,
   [CompliancePartyType.COUNCIL]: ComplianceAlertSource.COUNCIL,

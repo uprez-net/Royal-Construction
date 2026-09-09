@@ -41,6 +41,16 @@ export const COMPLIANCE_ALERT_PARTY: Readonly<
   [ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE]:
     CompliancePartyType.ARCHITECT,
 
+  // Two alerts about one report, chased on two different threads. The
+  // developer is chased on theirs; the consultant re-issuing what that
+  // developer rejected is chased on theirs. Sending either follow-up to the
+  // other party is a fortnight lost on a job that was already late, which is
+  // the whole reason these are separate types.
+  [ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE]:
+    CompliancePartyType.DEVELOPER,
+  [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]:
+    CompliancePartyType.BUSHFIRE_CONSULTANT,
+
   // Nothing to chase. Every one of these is a website or a decision about the
   // whole job rather than a correspondent -- the road opening permit is chased
   // by ringing the council with the application number the block shows, and a

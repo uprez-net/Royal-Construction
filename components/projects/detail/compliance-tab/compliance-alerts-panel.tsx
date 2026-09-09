@@ -129,6 +129,23 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
     followUp: "Follow up with the architect",
   },
 
+  // The two halves of the developer approval, which is the one loop on this
+  // file that can go round twice. Each closes itself on a different event --
+  // the verdict landing, and the replacement report landing -- so they are
+  // worded to say which one the reader is waiting on.
+  [ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE]: {
+    title: "Developer approval pending",
+    guidance:
+      "The bushfire report went to the estate developer more than eleven working days ago and no decision has come back. The follow-up asks for one on their thread; it closes itself when they approve or reject the report, whether that arrives by email or somebody records it here.",
+    followUp: "Send a follow up",
+  },
+  [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]: {
+    title: "Revised bushfire report pending",
+    guidance:
+      "The developer rejected the report and the bushfire consultant was sent their reasons more than eleven working days ago. Nothing has come back. The follow-up goes on the consultant's thread; it closes itself when the revised report arrives, which is what goes back to the developer.",
+    followUp: "Follow up with the consultant",
+  },
+
   // -------------------------------------------------------------------
   // The portal waits.
   //
@@ -178,6 +195,7 @@ const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
   [ComplianceAlertSource.BUSHFIRE_CONSULTANT]: "bushfire consultant",
   [ComplianceAlertSource.STRUCTURAL_ENGINEER]: "structural engineer",
   [ComplianceAlertSource.WATER_AUTHORITY]: "water servicing coordinator",
+  [ComplianceAlertSource.DEVELOPER]: "estate developer",
   [ComplianceAlertSource.TRAFFIC_CONSULTANT]: "traffic control consultant",
 };
 

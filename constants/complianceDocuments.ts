@@ -6,6 +6,11 @@ import {
   ComplianceExternalApplicationKind,
 } from "@prisma/client";
 
+// Safe to import from here, unlike constants/tradieTypes: the developer list is
+// plain data with no icons behind it, so it does not drag a React icon library
+// into the nightly sweep or into the `"use server"` modules that read this one.
+import { DEVELOPER_RESPONSE_BUSINESS_DAYS } from "@/constants/complianceDevelopers";
+
 /**
  * The documents the certifier is sent before anything else can happen.
  *
@@ -197,6 +202,14 @@ export const PARTY_PREREQUISITES: Readonly<
   [CompliancePartyType.STRUCTURAL_ENGINEER]: [],
   [CompliancePartyType.WATER_AUTHORITY]: [],
   [CompliancePartyType.TRAFFIC_CONSULTANT]: [],
+  // The developer waits on a document rather than on a party, which is why
+  // there is nothing to put here. There is no point asking them to approve a
+  // bushfire assessment that does not exist yet, but the assessment can arrive
+  // from a consultant we engaged, from a consultant the client engaged, or on
+  // the client's own paperwork -- and only the first of those is a party. The
+  // gate is `developerBlockedReason` in lib/compliance/prerequisites.ts, which
+  // reads the document.
+  [CompliancePartyType.DEVELOPER]: [],
 };
 
 /**
@@ -219,6 +232,31 @@ export const CONSULTANT_PARTIES: readonly CompliancePartyType[] = [
 
 export function isConsultantParty(party: CompliancePartyType): boolean {
   return CONSULTANT_PARTIES.includes(party);
+}
+
+/**
+ * The parties picked from a list in the codebase rather than from the tradie
+ * directory.
+ *
+ * One today. A developer is not engaged, not paid and not scheduled -- they are
+ * asked once for a yes or a no on somebody else's report -- so putting them in
+ * the directory would put them in every trade picker on the system to serve one
+ * dropdown. See constants/complianceDevelopers.ts.
+ */
+export function isDirectoryParty(party: CompliancePartyType): boolean {
+  return PARTY_TRADE_LABEL[party] !== null;
+}
+
+/**
+ * The parties who are asked to approve something rather than to produce it.
+ *
+ * Again one. It is a predicate rather than an equality check at the four call
+ * sites that need it, because what each of them actually means is "does a reply
+ * from this party carry a verdict" -- and that is the question a second
+ * approving party would also answer yes to.
+ */
+export function isApprovalParty(party: CompliancePartyType): boolean {
+  return party === CompliancePartyType.DEVELOPER;
 }
 
 /**
@@ -319,6 +357,17 @@ export const WASTE_MANAGEMENT_PLAN_PARTY = CompliancePartyType.ARCHITECT;
 export const WASTE_MANAGEMENT_BUSINESS_DAYS = 11;
 
 /**
+ * The document a developer's approval is sought on.
+ *
+ * One type, and named rather than inlined at the six places that gate on it.
+ * The developer step exists because of a covenant about bushfire construction
+ * standards specifically -- it is not a general "somebody senior signs off the
+ * pack" step, and writing it as one would invite it to grow into one.
+ */
+export const DEVELOPER_APPROVAL_DOCUMENT =
+  ComplianceDocumentType.BUSHFIRE_REPORT;
+
+/**
  * The trade each party is picked from in the tradie directory.
  *
  * Labels, not keys: `Tradie.trade` stores "Surveying", not "SURVEYOR", which is
@@ -345,6 +394,12 @@ export const PARTY_TRADE_LABEL: Readonly<
   [CompliancePartyType.STRUCTURAL_ENGINEER]: "Structural Engineering",
   [CompliancePartyType.WATER_AUTHORITY]: "Sydney Water",
   [CompliancePartyType.TRAFFIC_CONSULTANT]: "Traffic Control",
+  // Not picked from the directory either, and for a different reason from the
+  // council's. There is somebody to write to here, but they are an estate
+  // developer rather than a trade -- picked from AREA_DEVELOPERS in
+  // constants/complianceDevelopers.ts, which is keyed by the estate the lot
+  // sits in rather than by what the firm does.
+  [CompliancePartyType.DEVELOPER]: null,
 };
 
 /** How each party is named in headings, buttons and thread tabs. */
@@ -361,6 +416,10 @@ export const PARTY_LABEL: Readonly<Record<CompliancePartyType, string>> = {
   // looking for a utility's switchboard.
   [CompliancePartyType.WATER_AUTHORITY]: "Water servicing coordinator",
   [CompliancePartyType.TRAFFIC_CONSULTANT]: "Traffic control consultant",
+  // Named for the role rather than for the estate. Which estate it is appears
+  // beside the thread, off the outreach's own snapshot -- the heading has to
+  // read the same on every job.
+  [CompliancePartyType.DEVELOPER]: "Estate developer",
 };
 
 /**
@@ -386,6 +445,12 @@ export const PARTY_RESPONSE_BUSINESS_DAYS: Readonly<
   [CompliancePartyType.STRUCTURAL_ENGINEER]: 11,
   [CompliancePartyType.WATER_AUTHORITY]: 11,
   [CompliancePartyType.TRAFFIC_CONSULTANT]: 11,
+  // The same figure as the consultants and not the same number: a developer's
+  // approval goes out to a consultant of theirs and comes back through their
+  // customer service desk, which is the ten to eleven working days they quote.
+  // It lives beside the list it belongs to and is re-exported here so the sweep
+  // can read one table -- see DEVELOPER_RESPONSE_BUSINESS_DAYS.
+  [CompliancePartyType.DEVELOPER]: DEVELOPER_RESPONSE_BUSINESS_DAYS,
 };
 
 /**
@@ -476,6 +541,21 @@ export const PARTY_OUTREACH_ATTACHMENTS: Readonly<
     ComplianceDocumentType.SURVEY,
     ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
   ],
+  // The one party sent something to pass judgement on rather than to work from.
+  // The report is the thing being approved; the plans and the survey are what
+  // make it assessable, because a developer's consultant is checking the
+  // construction standard against where the building actually sits on the lot.
+  //
+  // Deliberately a short list. Everything else on the file is available through
+  // the modal's own attach control, which exists because an estate that wants
+  // its covenant schedule or the contract of sale quoted back is a request
+  // nobody can anticipate here.
+  [CompliancePartyType.DEVELOPER]: [
+    ComplianceDocumentType.BUSHFIRE_REPORT,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ComplianceDocumentType.SURVEY,
+  ],
 };
 
 /**
@@ -526,6 +606,13 @@ export const PARTY_INBOUND_DOCUMENT_TYPES: Readonly<
     CONSULTANT_DELIVERABLES[CompliancePartyType.WATER_AUTHORITY] ?? [],
   [CompliancePartyType.TRAFFIC_CONSULTANT]:
     CONSULTANT_DELIVERABLES[CompliancePartyType.TRAFFIC_CONSULTANT] ?? [],
+  // A developer sends back a verdict, not a document -- which is read off the
+  // message body rather than off an attachment. The one exception is the report
+  // itself: an approving developer routinely returns it stamped or endorsed,
+  // and that copy is the one that should go to the council, so it is allowed to
+  // replace what is on the row. Everything else they attach stays UNKNOWN for
+  // somebody to place, which is the right answer for a covenant schedule.
+  [CompliancePartyType.DEVELOPER]: [ComplianceDocumentType.BUSHFIRE_REPORT],
 };
 
 /**
@@ -634,7 +721,41 @@ export function isReviewSubmissionType(
 export function isApprovableDocumentType(
   documentType: ComplianceDocumentType,
 ): boolean {
-  return documentType === ComplianceDocumentType.CHECKLIST_ITEM;
+  return APPROVABLE_TYPES.has(documentType);
+}
+
+/**
+ * The two kinds of line an outside body sits in judgement on.
+ *
+ * A checklist item is the certifier's; a DA item is the council's. They are the
+ * same act by two different bodies -- somebody outside asked for a specific
+ * piece of evidence, we supplied it, and they said yes or no -- and everything
+ * that reads this treats them identically: both get a decision pair on the row,
+ * both keep a rejection reason, and both are counted as outstanding while the
+ * body has not passed them.
+ *
+ * Still deliberately narrower than "the builder supplied it". The required pack
+ * went to the certifier to open the engagement and the signed copies are their
+ * own forms come back signed; neither is something anybody was ever going to
+ * sit in judgement on, and a decision pair on one of those rows is a way to
+ * freeze a document nobody can then re-upload.
+ */
+const APPROVABLE_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
+]);
+
+/**
+ * Whether a row is one line of a list an outside body issued.
+ *
+ * The counterpart to the above, for the places that need to know a row carries
+ * its own wording rather than a fixed label -- the two extractions write these,
+ * and only these, with a `label` and a `detail`.
+ */
+export function isIssuedItemType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return APPROVABLE_TYPES.has(documentType);
 }
 
 /**
@@ -675,6 +796,11 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   ComplianceDocumentType.BUILD_COST_SUMMARY,
   ComplianceDocumentType.OWNER_CONSENT_FORM,
   ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  // What the certifier issues at the end. Classifiable because it arrives the
+  // same way their checklist does -- as an attachment on the thread we already
+  // hold -- and misreading it as anything else would leave the file one
+  // document short of finished with nothing saying which.
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
   // Not part of the pack, but a surveyor routinely quotes the deed back on
   // their reply, and a copy the classifier cannot name lands in the
   // needs-identifying queue for somebody to place by hand.
@@ -701,6 +827,10 @@ export const MAPPABLE_DOCUMENT_TYPES = Object.values(
 ).filter(
   (type) =>
     type !== ComplianceDocumentType.CHECKLIST_ITEM &&
+    // A council's request for more information is a line of its own list, the
+    // same way a checklist item is, and neither can be what another line is
+    // asking for.
+    type !== ComplianceDocumentType.DA_ITEM &&
     type !== ComplianceDocumentType.UNKNOWN,
 ) as [ComplianceDocumentType, ...ComplianceDocumentType[]];
 
@@ -742,6 +872,12 @@ const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
   [ComplianceDocumentType.OWNER_CONSENT_FORM]: "Owner consent form",
   [ComplianceDocumentType.DEVELOPMENT_CONSENT]:
     "Development consent (DA approval)",
+  // Both of these carry the issuing body's own wording in `label` and reach
+  // this fallback only on a row written before one was captured. Worded as the
+  // body would word it, for the same reason as the block above.
+  [ComplianceDocumentType.DA_ITEM]: "Development application item",
+  [ComplianceDocumentType.CONSTRUCTION_CERTIFICATE]:
+    "Construction Certificate",
 };
 
 /**
@@ -1190,7 +1326,13 @@ const NOT_CHECKLIST_MAPPABLE: ReadonlySet<ComplianceDocumentType> = new Set([
   // A line cannot be answered by a line, and "we could not tell" answers
   // nothing.
   ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
   ComplianceDocumentType.UNKNOWN,
+
+  // What the certifier issues after the checklist has passed. A line on that
+  // checklist cannot be answered by the document the checklist itself has to be
+  // finished before anybody will issue.
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
 ]);
 
 /**

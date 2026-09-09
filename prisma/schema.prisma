@@ -13,12 +13,40 @@ enum Role {
   SITE_MANAGER
 }
 
+/// Where a project is up to, as the list filters and the header chip read it.
+///
+/// Append-only, and deliberately not two enums. The three values at the bottom
+/// are the compliance ladder and the rest are the build -- but a project is
+/// only ever on one of them, because the build does not start until compliance
+/// is finished, and a second column would be a second thing to keep in step
+/// with the first.
+///
+/// DRAFT -> COMPLIANCE_STARTED -> COMPLIANCE_COMPLETED -> ACTIVE -> COMPLETED
+/// is the whole path. NEEDS_ATTENTION and DELAYED sit outside it: either can be
+/// set at any point and neither says anything about which stage the job is on,
+/// which is why the ladder is not modelled as an ordering.
 enum ProjectStatus {
   ACTIVE
   ON_TRACK
   NEEDS_ATTENTION
   DELAYED
   COMPLETED
+
+  /// Created, and nobody has started on it. The status a project is born on.
+  ///
+  /// It replaced ACTIVE as the default, which was never true on the day it was
+  /// set: a project with no certifier, no compliance file and no milestone
+  /// underway is not active in any sense a site manager would recognise, and a
+  /// list opening on "Active" showed every job ever created as in flight.
+  DRAFT
+  /// The certifier has been engaged. Set once and never unset -- the compliance
+  /// file exists from that moment, and a job does not go back to DRAFT because
+  /// somebody is slow answering.
+  COMPLIANCE_STARTED
+  /// The construction certificate is on the file and the HBCF cover with it.
+  /// Everything the build is not allowed to start without is done, and nothing
+  /// on site has begun.
+  COMPLIANCE_COMPLETED
 }
 
 enum MilestoneStatus {
@@ -235,6 +263,18 @@ enum CertifierEngagementStatus {
   INSURANCE
   IN_REVIEW
   APPROVED
+
+  /// The certifier has issued the construction certificate.
+  ///
+  /// After APPROVED rather than instead of it: APPROVED is every checklist line
+  /// passing, which is what the certifier needs before they will issue
+  /// anything, and this is the document that follows. The gap between the two
+  /// is days, and it is entirely the certifier's, so it is a stage of its own
+  /// rather than a flag on the last one.
+  CERTIFICATE_ISSUED
+  /// The certificate is on the file and so is the HBCF cover. Nothing on the
+  /// compliance file is outstanding and the build can start.
+  COMPLETED
 }
 
 /// What a ComplianceDocument row holds. The first six are the documents the
@@ -333,6 +373,30 @@ enum ComplianceDocumentType {
   /// other document the file already holds.
   DEVELOPMENT_CONSENT
 
+  /// One thing the consent authority asked for after the application was
+  /// lodged, tracked as its own row the way CHECKLIST_ITEM is.
+  ///
+  /// A development application is not assessed off the pack alone. The council
+  /// comes back asking for a shadow diagram, a revised waste plan, a survey of
+  /// the neighbouring wall -- named in an email, in their own words, weeks
+  /// after lodgement. Before this there was nowhere to put one: the DA list is
+  /// a fixed set of types, so a request for anything outside it had to be
+  /// remembered by whoever read the email.
+  ///
+  /// Its own type rather than CHECKLIST_ITEM because the two answer different
+  /// bodies at different stages and are counted separately. A job can be
+  /// waiting on four DA items while its checklist reads complete, and folding
+  /// them together made the checklist look unfinished for a reason the
+  /// certifier had never raised.
+  DA_ITEM
+
+  /// What the certifier issues once every checklist line has passed.
+  ///
+  /// The end of the compliance file. Like DEVELOPMENT_CONSENT it unblocks a
+  /// stage rather than satisfying a line: the HBCF block opens when this lands,
+  /// and the project is compliance-complete once both are on the file.
+  CONSTRUCTION_CERTIFICATE
+
   UNKNOWN
 }
 
@@ -388,7 +452,11 @@ model Project {
   // this JSON preserves the co-owners the single Customer can't hold.
   parties          Json?
 
-  status    ProjectStatus @default(ACTIVE)
+  /// Defaults to DRAFT rather than ACTIVE. A project is created by the handoff
+  /// from a won offer, which writes the row, the milestones and the
+  /// requirements -- none of which is work anybody has started. See
+  /// ProjectStatus for the ladder from here.
+  status    ProjectStatus @default(DRAFT)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -712,7 +780,8 @@ model User {
   createdOffers       Offer[]          @relation("OfferCreatedBy")
   xeroConnections     XeroConnection[] @relation("XeroConnections")
 
-  resolvedComplianceAlerts ComplianceAlert[] @relation("UserResolvedComplianceAlerts")
+  resolvedComplianceAlerts   ComplianceAlert[]    @relation("UserResolvedComplianceAlerts")
+  decidedComplianceApprovals ComplianceOutreach[] @relation("UserDecidedComplianceApprovals")
 
   @@index([email])
   @@index([phone])
@@ -1224,6 +1293,25 @@ model CertifierEngagement {
 
   status CertifierEngagementStatus @default(NOT_STARTED)
 
+  /// Whether the lot sits in an estate whose developer has to approve the
+  /// bushfire report before it is lodged.
+  ///
+  /// Null means nobody has been asked yet, which is what holds the development
+  /// application shut: a pack lodged without a covenanted approval comes
+  /// straight back, and there is nothing on a title search or a 10.7 that says
+  /// reliably whether the covenant exists. Somebody who knows the estate has to
+  /// answer it, once.
+  ///
+  /// A column rather than an alert, because it is a standing fact about the
+  /// land rather than a condition anybody closes out, and because the answer is
+  /// needed while it is still false -- "no developer approval needed here" is
+  /// an answer the gate has to be able to read, and a resolved alert would be
+  /// indistinguishable from one that was never raised.
+  ///
+  /// Only ever consulted where a bushfire report is actually required. A job
+  /// whose bushfire row is NOT_REQUIRED is never asked.
+  developerApprovalRequired Boolean?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1257,6 +1345,20 @@ model ComplianceDocument {
   label           String?
   order           Int                      @default(0)
   rejectionReason String?
+
+  /// Who sent this row back, where somebody did.
+  ///
+  /// The reason alone was enough while the certifier was the only body that
+  /// ever rejected anything, and the row said so in as many words. A
+  /// development application is assessed by the council, who reject individual
+  /// drawings by name in an email -- so a row can now carry a refusal from
+  /// either, and "Sent back by the certifier" on a council's objection is
+  /// wrong in the one place a reader is relying on it.
+  ///
+  /// Null on a row nobody has rejected, and on the rejections recorded before
+  /// this column existed, which are all the certifier's by definition -- the
+  /// UI falls back to that reading rather than backfilling a guess.
+  rejectedBySource ComplianceAlertSource?
   /// What the extraction read about this line beyond its name -- the clarifying
   /// description, the conditions the file has to satisfy, the standards and
   /// instruments it cites. Display-only and optional everywhere: null on every
@@ -1265,7 +1367,7 @@ model ComplianceDocument {
   ///
   /// Shape depends on documentType and is parsed defensively at the boundary
   /// (types/compliance.ts), the way CertifierEmail.attachments already is.
-  detail          Json?
+  detail           Json?
 
   /// The document already on the file that this row was answered from.
   ///
@@ -1382,6 +1484,45 @@ enum CompliancePartyType {
   STRUCTURAL_ENGINEER
   WATER_AUTHORITY
   TRAFFIC_CONSULTANT
+
+  /// The developer of the estate the lot sits in, where it sits in one.
+  ///
+  /// The one party here who is not asked to produce anything. Land released by
+  /// a developer routinely carries a covenant that their own consultant signs
+  /// off the bushfire assessment before it goes anywhere near a council -- so
+  /// the report is commissioned from the bushfire consultant as normal, and
+  /// then has to be put in front of the developer and come back approved.
+  ///
+  /// Same outreach, same token, same thread and same inbound correlation as
+  /// everybody above. What differs is that the reply is a verdict rather than a
+  /// document, which is what `approvalDecision` on the row records, and that
+  /// they are picked from a fixed list per area rather than from the tradie
+  /// directory -- see AREA_DEVELOPERS in constants/complianceDevelopers.ts.
+  DEVELOPER
+}
+
+/// A yes or a no from a party who was asked to approve somebody else's work.
+///
+/// The developer, and only the developer. Every other party on a compliance
+/// file is asked to produce a document, and "have they answered" is settled by
+/// the document being there -- there is nothing to record beyond the file
+/// itself. A developer sends back a verdict on a report that is already on the
+/// file, so the verdict has to be the thing that is stored.
+enum ComplianceApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+/// How an approval decision reached us.
+///
+/// Recorded because the two are trusted differently and the screen has to be
+/// able to say which it was. INBOUND_EMAIL is a model reading a verdict out of
+/// a reply, and is right nearly always; ADMIN is a person who read the same
+/// email and pressed the button. An admin decision overwrites a parsed one and
+/// never the other way round -- see `recordDeveloperDecision`.
+enum ComplianceApprovalChannel {
+  INBOUND_EMAIL
+  ADMIN
 }
 
 /// How a party's documents are being obtained.
@@ -1460,6 +1601,17 @@ enum ComplianceAlertType {
   WATER_AUTHORITY_RESPONSE_OVERDUE
   /// The traffic control consultant was engaged and has sent no plan back.
   TRAFFIC_RESPONSE_OVERDUE
+  /// The bushfire report is with the estate's developer for approval and they
+  /// have not answered.
+  DEVELOPER_RESPONSE_OVERDUE
+  /// The developer rejected the report and the bushfire consultant has not
+  /// re-issued it.
+  ///
+  /// Its own type beside BUSHFIRE_RESPONSE_OVERDUE for the reason every pair
+  /// here is separate: at most one alert of a type is open per file, and a job
+  /// waiting on a first assessment is not the same job as one waiting on a
+  /// rework the developer asked for.
+  BUSHFIRE_REVISION_OVERDUE
   /// The architect was asked for a waste management plan and has not sent one.
   ///
   /// Its own type rather than ARCHITECT_PLANS_OVERDUE, because at most one
@@ -1517,6 +1669,7 @@ enum ComplianceAlertSource {
   STRUCTURAL_ENGINEER
   WATER_AUTHORITY
   TRAFFIC_CONSULTANT
+  DEVELOPER
 }
 
 /// One party's engagement on a compliance file.
@@ -1592,6 +1745,45 @@ model ComplianceOutreach {
   /// engineer answers three lines and one column can only name one of them.
   checklistDocumentId String?
 
+  /// Which entry of the area developer list this row was opened against.
+  ///
+  /// DEVELOPER rows only, and a snapshot in the same sense `contactName` is:
+  /// the list is a constant in the codebase and an estate changing hands, or a
+  /// contact address being corrected, must not silently rewrite who a finished
+  /// approval was sought from. The name and address on the row stay the record
+  /// of who was actually written to; this is only what was picked, so the tab
+  /// can show the estate beside the thread.
+  developerKey String?
+
+  /// The developer's verdict on the bushfire report. DEVELOPER rows only.
+  ///
+  /// Null while the report is with them, which is the state the overdue clock
+  /// runs against. It is a decision rather than a status because the outreach
+  /// status already says whether they have replied at all, and the two are
+  /// genuinely different facts: a developer who writes back asking a question
+  /// has responded and has not decided.
+  ///
+  /// REJECTED is not terminal. The report goes back to the bushfire consultant
+  /// with `approvalReason` attached, and the replacement is put to the same
+  /// developer on the same thread -- which clears these four columns rather
+  /// than writing a second row, because it is the same approval being sought
+  /// again and the rounds are recorded as CompliancePlanRevision entries.
+  approvalDecision  ComplianceApprovalDecision?
+  approvalDecidedAt DateTime?
+  approvalChannel   ComplianceApprovalChannel?
+
+  /// Why they rejected it, in their words where the reply carried them.
+  ///
+  /// Load-bearing rather than display-only, which is what separates it from
+  /// `ComplianceAlert.detail`: this is quoted verbatim into the mail that goes
+  /// back to the bushfire consultant, because "the developer said no" is not
+  /// something anybody can act on. Null on an approval.
+  approvalReason String? @db.Text
+
+  /// The admin who recorded the decision by hand. Null when it was read off an
+  /// inbound reply -- see `approvalChannel`.
+  approvalDecidedById String?
+
   /// When the architect was asked for a waste management plan.
   ///
   /// Architect rows only, and a column rather than a deliverable timestamp
@@ -1606,6 +1798,7 @@ model ComplianceOutreach {
 
   engagement        CertifierEngagement             @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   tradie            Tradie?                         @relation("TradieComplianceOutreaches", fields: [tradieId], references: [id], onDelete: SetNull)
+  approvalDecidedBy User?                           @relation("UserDecidedComplianceApprovals", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
   emails            CertifierEmail[]
   checklistDocument ComplianceDocument?             @relation("ChecklistDocumentOutreaches", fields: [checklistDocumentId], references: [id], onDelete: SetNull)
   meetings          ComplianceMeeting[]
@@ -1708,18 +1901,29 @@ model ComplianceMeeting {
   @@index([outreachId, status])
 }
 
-/// One round of client feedback on the architect's preliminary plans.
+/// One round of somebody being asked to redo work they had already sent.
 ///
-/// Written when the client says no, closed when a replacement set arrives. The
-/// gap between the two is what ARCHITECT_REVISION_OVERDUE measures, which is
-/// why respondedAt is a column rather than being inferred from the plans' own
+/// Written when the answer is no, closed when a replacement arrives. The gap
+/// between the two is what the revision alerts measure, which is why
+/// respondedAt is a column rather than being inferred from the document's own
 /// upload time -- a file replaced for an unrelated reason must not silently
 /// answer a revision nobody addressed.
+///
+/// Two parties use it and the shape is identical for both. The architect is
+/// asked to redraw preliminary plans the client did not approve
+/// (ARCHITECT_REVISION_OVERDUE); the bushfire consultant is asked to re-issue
+/// an assessment the estate's developer rejected
+/// (BUSHFIRE_REVISION_OVERDUE). In both cases somebody outside said no in
+/// their own words, those words are what the party is sent, and the round is
+/// open until they answer it.
 model CompliancePlanRevision {
   id         String @id @default(uuid())
   outreachId String
 
-  /// The client's words, sent to the architect verbatim.
+  /// The rejecting party's words, sent on to whoever has to act on them
+  /// verbatim -- the client's for a redraw, the developer's for a re-issued
+  /// bushfire assessment. Never paraphrased: a consultant redoing a report
+  /// needs the objection as it was written, not a summary of it.
   feedback String @db.Text
 
   requestedAt DateTime  @default(now())
@@ -1807,10 +2011,67 @@ model ComplianceExternalApplication {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  engagement  CertifierEngagement               @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  submissions ComplianceApplicationSubmission[]
 
   @@unique([engagementId, kind])
   @@index([engagementId])
+}
+
+/// One time an application was put in front of the body assessing it.
+///
+/// `appliedAt` above records that an application exists and when the clock
+/// started. It cannot record that it was sent back and lodged again, and a
+/// development application routinely is: the council asks for a shadow diagram
+/// and rejects two of the drawings, the builder revises them off-system and
+/// resubmits, and that is round two of an application that may run to four.
+/// Overwriting `appliedAt` each time was the alternative, and it loses the only
+/// thing anybody actually wants to know afterwards -- how many rounds it took
+/// and what each one carried.
+///
+/// The submission is reported rather than performed. Lodging with the portal
+/// happens outside this system entirely; what is tracked here is the date, the
+/// reference the body gave it and what the round covered, which is everything
+/// needed to chase it by phone and everything the overdue clock reads.
+///
+/// The clock runs off the latest round rather than the first, which is the
+/// whole reason this is a table: a DA resubmitted in April is not sixty working
+/// days late because it was first lodged in March.
+model ComplianceApplicationSubmission {
+  id            String @id @default(uuid())
+  applicationId String
+
+  /// 1-based and gapless, assigned on write from the rounds already recorded.
+  /// Stored rather than derived so the number in an activity log entry, in a
+  /// notification and on the screen is the same number for good, even if an
+  /// earlier round is later corrected.
+  round Int
+
+  /// When it was lodged, as the admin reports it -- not when they typed it in.
+  submittedAt DateTime
+
+  /// The body's own reference for this round.
+  ///
+  /// Usually the same on every round and occasionally not: a council that
+  /// closes an application and asks for it to be relodged issues a new number,
+  /// and chasing round three by quoting round one's reference gets nowhere. It
+  /// is carried forward from the previous round when nobody supplies one.
+  applicationRef String?
+
+  /// What this round carried, as the admin describes it -- "revised drawings
+  /// A03 and A04, shadow diagram added". Display only; nothing keys on it.
+  note String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application ComplianceExternalApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// One row per round. A double-submitted form is the same round reported
+  /// twice, not a second lodgement.
+  @@unique([applicationId, round])
+  @@index([applicationId])
+  @@index([applicationId, submittedAt(sort: Desc)])
 }
 
 /// A condition raised on a compliance file that blocks or reshapes what comes
