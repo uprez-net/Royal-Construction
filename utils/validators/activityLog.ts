@@ -215,17 +215,53 @@ export const activityLogSchemas = {
     }),
 
     /**
-     * The four steps of getting a 10.7 certificate, under one entry.
+     * Every step of every application to an outside body, under one entry.
      *
-     * `step` rather than four entry types: the trail is read as a story about
-     * one document, and four kinds of line for one row's four states makes it
-     * harder to follow rather than easier.
+     * `kind` and `step` rather than an entry type per application per state:
+     * the trail is read as a story about one document, and fifteen kinds of
+     * line for five rows' three states makes it harder to follow rather than
+     * easier.
      */
-    compliancePlanningCertificateUpdated: z.object({
+    complianceExternalApplicationUpdated: z.object({
         projectId: z.string(),
         engagementId: z.string(),
+        kind: z.string(),
         step: z.string(),
         recordedBy: z.string(),
+    }),
+
+    /**
+     * A consultant, or a portal, satisfying a checklist line from what the file
+     * already held.
+     *
+     * Logged because it is the one thing on this tab that happens without
+     * anybody clicking anything. An admin who opens the checklist and finds six
+     * lines already answered is owed a record of what did that and where each
+     * document came from — otherwise the only honest response to "why is item 4
+     * ticked" is to go and read the code.
+     */
+    complianceChecklistMapped: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        mappedCount: z.number(),
+        documentTypes: z.array(z.string()),
+    }),
+
+    /**
+     * The architect being asked for the waste management plan.
+     *
+     * Its own entry rather than a party outreach, because nobody is engaged:
+     * the request goes on a thread that has been open since the plans were
+     * commissioned, and reading it as a new engagement would put a second
+     * architect on the file.
+     */
+    complianceWasteManagementRequested: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        contactEmail: z.string(),
+        attachmentCount: z.number(),
+        requestedBy: z.string(),
     }),
 
     complianceMeetingScheduled: z.object({

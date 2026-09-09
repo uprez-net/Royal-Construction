@@ -25,6 +25,9 @@ import {
   Construction,
   BadgeCheck,
   PencilRuler,
+  Leaf,
+  Flame,
+  TrafficCone,
 } from "lucide-react";
 
 export const TRADIE_TYPES = {
@@ -59,6 +62,16 @@ export const TRADIE_TYPES = {
   METAL_ROOFER: "Metal Roofing",
   CERTIFIER: "Certifier",
   ARCHITECT: "Architecture",
+
+  // The compliance file's consultants.
+  //
+  // Every one of these is picked from this directory by the Compliance tab
+  // (PARTY_TRADE_LABEL in constants/complianceDocuments.ts keys straight off
+  // these labels), so a party with no trade here is a party whose contact
+  // picker comes back empty however many firms are on the books.
+  BASIX_ASSESSOR: "BASIX Assessment",
+  BUSHFIRE_ASSESSOR: "Bushfire Assessment",
+  TRAFFIC_CONTROLLER: "Traffic Control",
 } as const;
 
 export const TRADIE_TYPE_ICONS: Record<
@@ -96,4 +109,7 @@ export const TRADIE_TYPE_ICONS: Record<
   METAL_ROOFER: Warehouse,
   CERTIFIER: BadgeCheck,
   ARCHITECT: PencilRuler,
+  BASIX_ASSESSOR: Leaf,
+  BUSHFIRE_ASSESSOR: Flame,
+  TRAFFIC_CONTROLLER: TrafficCone,
 };

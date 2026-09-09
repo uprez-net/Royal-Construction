@@ -2,6 +2,7 @@ import {
   ComplianceAlertSource,
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceOutreachMode,
   CompliancePartyType,
 } from "@prisma/client";
@@ -11,17 +12,23 @@ import {
   ARCHITECT_REVISION_BUSINESS_DAYS,
   CONSULTANT_PARTIES,
   documentTypesForParty,
+  EXTERNAL_APPLICATION_COPY,
+  EXTERNAL_APPLICATION_DOCUMENT_TYPE,
   isNotRequired,
   PARTY_RESPONSE_BUSINESS_DAYS,
+  WASTE_MANAGEMENT_BUSINESS_DAYS,
 } from "@/constants/complianceDocuments";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import {
+  externalApplication,
   meetingHeldAt,
   outreachForParty,
   outstandingRevision,
   requiresPlanningCertificate,
   type CertifierEngagementDetail,
+  type ComplianceDocumentWithFiles,
+  type ComplianceOutreachDetail,
 } from "@/types/compliance";
 
 /**
@@ -140,6 +147,87 @@ function assessPartyResponse(
   };
 }
 
+/**
+ * The alert and the source each consultant's silence is reported under.
+ *
+ * A table rather than the pair of ternaries this was when there were two
+ * consultants. At five they stop being readable, and the failure mode of
+ * getting one wrong is quiet: a bushfire assessor going overdue under the
+ * BASIX alert, which the panel then describes as a certificate nobody ordered.
+ */
+const CONSULTANT_ALERT: Readonly<
+  Record<CompliancePartyType, ComplianceAlertType>
+> = {
+  [CompliancePartyType.BASIX_CONSULTANT]:
+    ComplianceAlertType.BASIX_RESPONSE_OVERDUE,
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]:
+    ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE,
+  [CompliancePartyType.STRUCTURAL_ENGINEER]:
+    ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE,
+  [CompliancePartyType.WATER_AUTHORITY]:
+    ComplianceAlertType.WATER_AUTHORITY_RESPONSE_OVERDUE,
+  [CompliancePartyType.TRAFFIC_CONSULTANT]:
+    ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE,
+  // The three engaged off the required pack have their own clocks above, and a
+  // consultant loop never reaches them. Listed so the record stays exhaustive
+  // over the enum, which is what makes a sixth consultant a compile error here
+  // rather than one that silently raises nothing.
+  [CompliancePartyType.SURVEYOR]: ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE,
+  [CompliancePartyType.ARCHITECT]: ComplianceAlertType.ARCHITECT_PLANS_OVERDUE,
+  [CompliancePartyType.COUNCIL]:
+    ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+};
+
+const CONSULTANT_ALERT_SOURCE: Readonly<
+  Record<CompliancePartyType, ComplianceAlertSource>
+> = {
+  [CompliancePartyType.BASIX_CONSULTANT]: ComplianceAlertSource.BASIX_CONSULTANT,
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]:
+    ComplianceAlertSource.BUSHFIRE_CONSULTANT,
+  [CompliancePartyType.STRUCTURAL_ENGINEER]:
+    ComplianceAlertSource.STRUCTURAL_ENGINEER,
+  [CompliancePartyType.WATER_AUTHORITY]: ComplianceAlertSource.WATER_AUTHORITY,
+  [CompliancePartyType.TRAFFIC_CONSULTANT]:
+    ComplianceAlertSource.TRAFFIC_CONSULTANT,
+  [CompliancePartyType.SURVEYOR]: ComplianceAlertSource.SURVEYOR,
+  [CompliancePartyType.ARCHITECT]: ComplianceAlertSource.ARCHITECT,
+  [CompliancePartyType.COUNCIL]: ComplianceAlertSource.COUNCIL,
+};
+
+/**
+ * The checklist lines one outreach was raised against, as rows on the file.
+ *
+ * Read off the deliverables table, which is the whole reason that table exists:
+ * a structural engineer answers three lines off one engagement, and the single
+ * `checklistDocumentId` column it replaced could only ever name one of them. A
+ * job holding the structural drawings and three weeks overdue on the
+ * geotechnical report read, through that column, as finished with them.
+ *
+ * Falls back to the column for the consultants engaged before the table
+ * existed, and for the rows the backfill could not reach.
+ *
+ * Rows that have gone are dropped rather than counted as outstanding — a
+ * checklist re-extracted since the outreach rewrites its items, and an alert
+ * against a line nobody can see is an alert pointing nowhere.
+ */
+function deliverableTargets(
+  engagement: CertifierEngagementDetail,
+  outreach: ComplianceOutreachDetail | undefined,
+): ComplianceDocumentWithFiles[] {
+  if (!outreach) return [];
+
+  const ids = new Set(
+    outreach.deliverables
+      .map((deliverable) => deliverable.checklistDocumentId)
+      .filter((id): id is string => id !== null),
+  );
+  if (ids.size === 0 && outreach.checklistDocumentId) {
+    ids.add(outreach.checklistDocumentId);
+  }
+
+  return engagement.documents.filter((document) => ids.has(document.id));
+}
+
 export function assessOverdueConditions(
   engagement: CertifierEngagementDetail,
   now: Date = new Date(),
@@ -155,42 +243,66 @@ export function assessOverdueConditions(
   };
 
   // -------------------------------------------------------------------
-  // The planning certificate.
+  // The applications to outside bodies.
   //
-  // The only one of these with no thread behind it: the portal is a website,
-  // not a correspondent, so this alert says "go and ring the council" rather
-  // than offering a one-click chase.
+  // The five with no thread behind them: a portal is a website, not a
+  // correspondent, so each of these alerts says "ring them with the reference
+  // number" rather than offering a one-click chase.
+  //
+  // One loop over the kinds rather than five blocks, because they differ only
+  // in their threshold and their document. The 10.7 certificate used to be the
+  // whole of this section and is now one row of the table it turned into.
   // -------------------------------------------------------------------
-  const application = engagement.planningCertificate;
-  const certificateIn = isSettled(
-    engagement,
-    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
-  );
+  for (const kind of Object.values(ComplianceExternalApplicationKind)) {
+    const copy = EXTERNAL_APPLICATION_COPY[kind];
+    const application = externalApplication(engagement, kind);
+    const documentType = EXTERNAL_APPLICATION_DOCUMENT_TYPE[kind];
+    const documentIn = documentType
+      ? isSettled(engagement, documentType)
+      : false;
 
-  if (
-    !requiresPlanningCertificate(engagement) ||
-    certificateIn ||
-    application?.receivedAt
-  ) {
-    resolve.push({
-      type: ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
-      note: certificateIn
-        ? "The planning certificate is on the file."
-        : application?.receivedAt
-          ? "The planning certificate came back."
-          : "A development application replaced the planning certificate.",
-    });
-  } else if (application?.appliedAt) {
+    // Whether this file wants the thing at all.
+    //
+    // Only the 10.7 has an answer other than yes, and only in one direction:
+    // once a development application is under way the certifier is no longer
+    // being asked to assess a CDC, so the certificate is not part of the pack.
+    // It is still wanted for the DA itself -- see `requiresPlanningCertificate`
+    // -- which is why an application actually lodged keeps its clock running.
+    // What stops is chasing a certificate nobody ever ordered.
+    const wanted =
+      kind !== ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7 ||
+      requiresPlanningCertificate(engagement) ||
+      Boolean(application?.appliedAt);
+
+    if (!wanted || documentIn || application?.receivedAt) {
+      resolve.push({
+        type: copy.alertType,
+        note: documentIn
+          ? `${copy.label} is on the file.`
+          : application?.receivedAt
+            ? `${copy.label} came back.`
+            : `${copy.label} is not part of this job.`,
+      });
+      continue;
+    }
+
+    if (!application?.appliedAt) {
+      // Nothing lodged means no clock. Not resolved either: an alert raised on
+      // a previous run stays open, because the clock only moves forward and an
+      // admin clearing a lodgement date is not the wait ending.
+      continue;
+    }
+
     const elapsed = businessDaysSince(application.appliedAt, now);
-    if (elapsed > PARTY_RESPONSE_BUSINESS_DAYS[CompliancePartyType.COUNCIL]) {
+    if (elapsed > copy.businessDays) {
       raise.push({
-        type: ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+        type: copy.alertType,
         source: ComplianceAlertSource.COUNCIL,
         detail: `Lodged ${workingDays(elapsed)} ago${
           application.applicationRef
             ? ` under ${application.applicationRef}`
             : ""
-        }, against a quoted three to five.`,
+        }, against a quoted ${copy.turnaround}.`,
       });
     }
   }
@@ -281,32 +393,67 @@ export function assessOverdueConditions(
   // -------------------------------------------------------------------
   for (const party of CONSULTANT_PARTIES) {
     const outreach = outreachForParty(engagement, party);
-    const target = outreach?.checklistDocumentId
-      ? engagement.documents.find(
-          (document) => document.id === outreach.checklistDocumentId,
-        )
-      : undefined;
 
-    // A row that has gone — a checklist re-extracted since the outreach —
-    // reads as settled rather than as permanently outstanding. There is
-    // nothing on screen to chase against, so an alert would point nowhere.
-    const isComplete =
-      !target || target.files.length > 0 || isNotRequired(target.status);
+    // Every line this party was asked to answer, not one.
+    //
+    // A structural engineer answers three, and reading only the first meant a
+    // job holding the structural drawings and waiting three weeks on the
+    // geotechnical report read as finished with them. Falls back to the single
+    // column for the consultants engaged before the deliverables table existed.
+    const targets = deliverableTargets(engagement, outreach);
+
+    // Complete when every line it was raised against is settled. A row that has
+    // gone — a checklist re-extracted since the outreach — is not among them:
+    // there is nothing on screen to chase against, so an alert would point
+    // nowhere. A party with no lines at all is likewise finished with, which is
+    // what an engagement raised off the development application looks like.
+    const isComplete = targets.every(
+      (target) => target.files.length > 0 || isNotRequired(target.status),
+    );
 
     record(
       assessPartyResponse(
         engagement,
         party,
-        party === CompliancePartyType.BASIX_CONSULTANT
-          ? ComplianceAlertType.BASIX_RESPONSE_OVERDUE
-          : ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE,
-        party === CompliancePartyType.BASIX_CONSULTANT
-          ? ComplianceAlertSource.BASIX_CONSULTANT
-          : ComplianceAlertSource.BUSHFIRE_CONSULTANT,
+        CONSULTANT_ALERT[party],
+        CONSULTANT_ALERT_SOURCE[party],
         isComplete,
         now,
       ),
     );
+  }
+
+  // -------------------------------------------------------------------
+  // The waste management plan.
+  //
+  // The architect's third clock, and the only one measured from a request
+  // rather than from an event or an engagement. It has to be: the plan is asked
+  // for off a checklist line or off the development application, often months
+  // after the outreach that engaged them, and an SLA read off that outreach
+  // would be past on the day it was requested.
+  // -------------------------------------------------------------------
+  const wasteRequestedAt = architect?.wasteManagementRequestedAt ?? null;
+  const wastePlanIn = isSettled(
+    engagement,
+    ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+  );
+
+  if (!wasteRequestedAt || wastePlanIn) {
+    resolve.push({
+      type: ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE,
+      note: wastePlanIn
+        ? "The waste management plan is on the file."
+        : "Nobody has been asked for a waste management plan.",
+    });
+  } else {
+    const elapsed = businessDaysSince(wasteRequestedAt, now);
+    if (elapsed > WASTE_MANAGEMENT_BUSINESS_DAYS) {
+      raise.push({
+        type: ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE,
+        source: ComplianceAlertSource.ARCHITECT,
+        detail: `Asked for ${workingDays(elapsed)} ago and nothing has come back.`,
+      });
+    }
   }
 
   return { raise, resolve };

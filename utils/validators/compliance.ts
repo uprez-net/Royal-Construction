@@ -2,6 +2,7 @@ import {
   ComplianceAlertSource,
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   CompliancePartyType,
 } from "@prisma/client";
 import { z } from "zod";
@@ -75,8 +76,35 @@ export const startPartyOutreachSchema = z.object({
    * layer for the other three. A surveyor is engaged against the job; a BASIX
    * consultant is engaged against item 7, and what they send back answers that
    * item rather than becoming a document of its own.
+   *
+   * Names the line for the party's *first* deliverable. A structural engineer
+   * answers three lines off one engagement, and which line each of their three
+   * documents answers is `deliverables` below — this field stays for the
+   * consultants that produce exactly one thing, which is where the whole
+   * arrangement started.
    */
   checklistDocumentId: idSchema.optional(),
+  /**
+   * Every checklist line this engagement is meant to answer.
+   *
+   * One entry per document the party was asked for. Sent from the row that
+   * offered the control, because only the tab knows which lines of the
+   * certifier's checklist ask for which of the three things a structural
+   * engineer produces — the server would have to guess by re-reading labels
+   * the extraction has already read once.
+   *
+   * Empty is legitimate and common: on the development application path there
+   * is no certifier checklist at all, and what comes back is filed under its
+   * own type.
+   */
+  deliverables: z
+    .array(
+      z.object({
+        documentType: z.enum(ComplianceDocumentType),
+        checklistDocumentId: idSchema.optional(),
+      }),
+    )
+    .default([]),
 });
 
 export type StartPartyOutreachInput = z.infer<typeof startPartyOutreachSchema>;
@@ -95,7 +123,7 @@ export const partySelfSuppliedSchema = z.object({
 export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
 
 // ============================================================================
-// Planning certificate
+// Applications to outside bodies
 // ============================================================================
 
 /**
@@ -120,18 +148,27 @@ const isoDateSchema = z
   });
 
 /**
- * Where the planning certificate has got to.
+ * Where one application has got to.
  *
  * A discriminated union rather than one object of optional fields, because the
  * three steps are three different acts against the same row and inferring which
  * one from the fields present got it wrong in the case that matters: an admin
  * correcting a typo in the application number looked identical to one lodging a
  * fresh application, and only the second is allowed to move the clock.
+ *
+ * `kind` rides every branch rather than sitting outside the union, because
+ * `z.discriminatedUnion` discriminates on one key and the step is the one that
+ * decides the shape. Repeating it three times is the price of that, and it is
+ * cheaper than a wrapper object whose inner union every caller has to reach
+ * through.
  */
-export const planningCertificateSchema = z.discriminatedUnion("step", [
-  /** "Do you already have the planning certificate?" — yes or no. */
+const applicationKindSchema = z.enum(ComplianceExternalApplicationKind);
+
+export const externalApplicationSchema = z.discriminatedUnion("step", [
+  /** "Do you already have this?" — yes or no. */
   z.object({
     step: z.literal("answer"),
+    kind: applicationKindSchema,
     alreadyHeld: z.boolean(),
   }),
   /**
@@ -145,6 +182,7 @@ export const planningCertificateSchema = z.discriminatedUnion("step", [
    */
   z.object({
     step: z.literal("applied"),
+    kind: applicationKindSchema,
     appliedAt: isoDateSchema,
     applicationRef: normalizedStringSchema.optional(),
     lodgedWith: normalizedStringSchema.optional(),
@@ -152,13 +190,14 @@ export const planningCertificateSchema = z.discriminatedUnion("step", [
   /** It came back — or it did not, and somebody is un-ticking a mistake. */
   z.object({
     step: z.literal("received"),
+    kind: applicationKindSchema,
     received: z.boolean(),
   }),
 ]);
 
 /** What the data layer receives — dates already parsed into instants. */
-export type PlanningCertificateInput = z.infer<
-  typeof planningCertificateSchema
+export type ExternalApplicationInput = z.infer<
+  typeof externalApplicationSchema
 >;
 
 /**
@@ -169,8 +208,8 @@ export type PlanningCertificateInput = z.infer<
  * asked for a `Date` and would send one that `JSON.stringify` turns back into
  * the string this parses. Same schema, both ends, neither pretending.
  */
-export type PlanningCertificateRequest = z.input<
-  typeof planningCertificateSchema
+export type ExternalApplicationRequest = z.input<
+  typeof externalApplicationSchema
 >;
 
 // ============================================================================
@@ -194,7 +233,7 @@ export type ScheduleComplianceMeetingInput = z.infer<
   typeof scheduleComplianceMeetingSchema
 >;
 
-/** The browser's half — see `PlanningCertificateRequest`. */
+/** The browser's half — see `ExternalApplicationRequest`. */
 export type ScheduleComplianceMeetingRequest = z.input<
   typeof scheduleComplianceMeetingSchema
 >;
@@ -231,9 +270,41 @@ export type ResolveComplianceMeetingInput = z.infer<
   typeof resolveComplianceMeetingSchema
 >;
 
-/** The browser's half — see `PlanningCertificateRequest`. */
+/** The browser's half — see `ExternalApplicationRequest`. */
 export type ResolveComplianceMeetingRequest = z.input<
   typeof resolveComplianceMeetingSchema
+>;
+
+// ============================================================================
+// The waste management plan
+// ============================================================================
+
+/**
+ * Asking the architect for the waste management plan.
+ *
+ * Carries what to send them and nothing about who they are, which is the whole
+ * distinction from `startPartyOutreachSchema`. Nobody is being engaged: the
+ * architect already has an outreach, a contact and a thread on this file, and a
+ * contact on this request would be an invitation to send the plan request to
+ * somebody who has never seen the design.
+ *
+ * The checklist line is optional because the same request is sent from two
+ * places. Off a checklist item the certifier raised, it names that item so the
+ * plan lands on it; off the development application list, there is no checklist
+ * and the plan is filed under its own type.
+ */
+export const wasteManagementRequestSchema = z.object({
+  /** An extra line on the request — "the certifier wants this by Friday". */
+  note: normalizedStringSchema.optional(),
+  /** The checklist line this answers, where it came off one. */
+  checklistDocumentId: idSchema.optional(),
+});
+
+export type WasteManagementInput = z.infer<typeof wasteManagementRequestSchema>;
+
+/** The browser's half. Identical today; declared for symmetry with the rest. */
+export type WasteManagementRequest = z.input<
+  typeof wasteManagementRequestSchema
 >;
 
 // ============================================================================

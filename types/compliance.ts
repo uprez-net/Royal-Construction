@@ -2,6 +2,7 @@ import {
   ComplianceAlertStatus,
   ComplianceAlertType,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceMeetingStatus,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -35,6 +36,15 @@ export const certifierEngagementInclude = {
     include: {
       emails: { orderBy: { sentAt: "asc" } },
       /**
+       * What this party was asked for, and which checklist line asked.
+       *
+       * One row per document rather than the single column it replaced, which
+       * is what lets a structural engineer answer three lines off one
+       * engagement. Loaded here because both the row that offers the connect
+       * control and the reply that files a document read it.
+       */
+      deliverables: true,
+      /**
        * The architect's client meetings, newest first.
        *
        * Every one of them, including the reschedules. The tab only ever renders
@@ -57,14 +67,15 @@ export const certifierEngagementInclude = {
     orderBy: { createdAt: "asc" },
   },
   /**
-   * The 10.7 certificate as a thing being obtained.
+   * Every application to an outside body on this file.
    *
-   * Null until somebody answers "do you already have it?". Included on the main
-   * read rather than fetched by the council block on its own: it decides which
-   * of four states that block renders, and a card that has to fetch before it
-   * can decide what it is flickers through all four.
+   * The 10.7 certificate, the road opening permit, the long service levy, the
+   * mine subsidence approval, and the development application itself. Included
+   * on the main read rather than fetched per block: each one decides which of
+   * five states its block renders, and a card that has to fetch before it can
+   * decide what it is flickers through all five.
    */
-  planningCertificate: true,
+  externalApplications: true,
   /**
    * Open first, then newest.
    *
@@ -96,9 +107,55 @@ export type ComplianceMeetingRecord =
 export type CompliancePlanRevisionRecord =
   ComplianceOutreachDetail["revisions"][number];
 
+/** One application to an outside body, as the tab reads it. */
+export type ComplianceExternalApplicationRecord =
+  CertifierEngagementDetail["externalApplications"][number];
+
+/**
+ * One kind of application on this file, or null before it is started.
+ *
+ * Null is the ordinary state for four of the five: nobody has answered "do we
+ * already have this?" yet, and until somebody does there is no row.
+ */
+export function externalApplication(
+  engagement:
+    | Pick<CertifierEngagementDetail, "externalApplications">
+    | null
+    | undefined,
+  kind: ComplianceExternalApplicationKind,
+): ComplianceExternalApplicationRecord | null {
+  return (
+    engagement?.externalApplications.find(
+      (application) => application.kind === kind,
+    ) ?? null
+  );
+}
+
 /** The 10.7 certificate application, or null before the question is answered. */
-export type PlanningCertificateRecord =
-  CertifierEngagementDetail["planningCertificate"];
+export function planningCertificate(
+  engagement:
+    | Pick<CertifierEngagementDetail, "externalApplications">
+    | null
+    | undefined,
+): ComplianceExternalApplicationRecord | null {
+  return externalApplication(
+    engagement,
+    ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
+  );
+}
+
+/** The development application, or null before anything has been lodged. */
+export function developmentApplication(
+  engagement:
+    | Pick<CertifierEngagementDetail, "externalApplications">
+    | null
+    | undefined,
+): ComplianceExternalApplicationRecord | null {
+  return externalApplication(
+    engagement,
+    ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+  );
+}
 
 export type ComplianceAlertRecord =
   CertifierEngagementDetail["alerts"][number];
@@ -167,17 +224,26 @@ export function hasOpenAlert(
 }
 
 /**
- * Whether the planning certificate is still part of this file.
+ * Whether the certifier's pack still wants the planning certificate.
  *
- * An open DA_APPROVAL_REQUIRED takes it out: a development application is
- * assessed by the council itself, so ordering a 10.7 certificate to hand to a
- * certifier is no longer the path this job is on. It comes back if the alert
- * is resolved as not applying after all.
+ * An open DA_APPROVAL_REQUIRED takes it out of the pack: the pack is what asks
+ * a certifier to assess the job as complying development, and that question is
+ * no longer being asked. It comes back if the alert is resolved as not applying
+ * after all.
+ *
+ * Deliberately narrower than "is the certificate wanted at all", which it used
+ * to be read as. A development application needs the same 10.7 certificate the
+ * CDC path did — the council assesses against the same zoning and the same
+ * overlays — so the certificate is not dropped when the job changes path, it
+ * moves. The council block on the pack goes read-only and the block that
+ * actually orders it appears on the development application, which is where the
+ * document is now needed. Reading this as "not wanted" is what left a job on the
+ * DA path with a council section saying the certificate had been replaced and
+ * no way anywhere on the tab to order one.
  *
  * One predicate rather than the condition repeated, because it is read by the
- * section that renders the row, the progress count beside it, and the outreach
- * that refuses to send an incomplete pack — and any two of those disagreeing
- * strands the engagement.
+ * progress count on the pack, and by the outreach that refuses to send an
+ * incomplete pack — and the two disagreeing strands the engagement.
  */
 export function requiresPlanningCertificate(
   engagement: Pick<CertifierEngagementDetail, "alerts"> | null | undefined,
@@ -186,7 +252,7 @@ export function requiresPlanningCertificate(
 }
 
 /**
- * Which step the planning certificate block is on.
+ * Which step an application block is on.
  *
  * A derived value rather than a stored column, because every one of these is
  * already implied by the fields underneath it and a second, stored account of
@@ -197,20 +263,24 @@ export function requiresPlanningCertificate(
  * - `held` — they do; the row is just waiting for the file.
  * - `to-order` — they do not, and nothing has been lodged. This is the portal
  *   link.
- * - `lodged` — an application is with the portal. This is where the three-to-
- *   five-day clock runs.
+ * - `lodged` — an application is with the body. This is where the clock runs.
  * - `received` — it has come back, whether or not the file is on the row yet.
+ *
+ * The same five steps for all five kinds. A development application never
+ * reaches `held` — nobody turns up already holding a DA for the house they
+ * have not built — but the step is derived rather than declared per kind, and
+ * an answer of false to a question the DA block never asks costs nothing.
  */
-export type PlanningCertificateStep =
+export type ExternalApplicationStep =
   | "unanswered"
   | "held"
   | "to-order"
   | "lodged"
   | "received";
 
-export function planningCertificateStep(
-  application: PlanningCertificateRecord,
-): PlanningCertificateStep {
+export function externalApplicationStep(
+  application: ComplianceExternalApplicationRecord | null,
+): ExternalApplicationStep {
   if (!application || application.alreadyHeld === null) return "unanswered";
   if (application.receivedAt) return "received";
   if (application.alreadyHeld) return "held";

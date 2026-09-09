@@ -29,6 +29,27 @@ export const COMPLIANCE_ALERT_PARTY: Readonly<
     CompliancePartyType.BASIX_CONSULTANT,
   [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]:
     CompliancePartyType.BUSHFIRE_CONSULTANT,
+  [ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE]:
+    CompliancePartyType.STRUCTURAL_ENGINEER,
+  [ComplianceAlertType.WATER_AUTHORITY_RESPONSE_OVERDUE]:
+    CompliancePartyType.WATER_AUTHORITY,
+  [ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE]:
+    CompliancePartyType.TRAFFIC_CONSULTANT,
+  // The one alert whose party is not the party it is about. Nobody new is
+  // engaged for a waste management plan: it is drawn by the architect who did
+  // the design, on the thread they already have, so the chase goes there.
+  [ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE]:
+    CompliancePartyType.ARCHITECT,
+
+  // Nothing to chase. Every one of these is a website or a decision about the
+  // whole job rather than a correspondent -- the road opening permit is chased
+  // by ringing the council with the application number the block shows, and a
+  // development application is not something anybody can be reminded about in
+  // one line.
   [ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED]: null,
+  [ComplianceAlertType.ROAD_OPENING_DELAYED]: null,
+  [ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED]: null,
+  [ComplianceAlertType.MINE_SUBSIDENCE_DELAYED]: null,
+  [ComplianceAlertType.DA_DETERMINATION_OVERDUE]: null,
   [ComplianceAlertType.DA_APPROVAL_REQUIRED]: null,
 };

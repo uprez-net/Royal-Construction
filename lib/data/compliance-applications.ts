@@ -1,7 +1,8 @@
 "use server";
 
 import {
-  ComplianceAlertType,
+  ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
   CompliancePartyType,
@@ -9,6 +10,10 @@ import {
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
+import {
+  EXTERNAL_APPLICATION_COPY,
+  externalApplicationForDocumentType,
+} from "@/constants/complianceDocuments";
 import { resolveComplianceAlertBySystem } from "@/lib/data/compliance-alerts";
 import { generatePartyRefToken } from "@/lib/graph/party-subject";
 import prisma from "@/lib/prisma";
@@ -19,25 +24,30 @@ import {
   outreachForParty,
   type CertifierEngagementDetail,
 } from "@/types/compliance";
-import type { PlanningCertificateInput } from "@/utils/validators/compliance";
+import type { ExternalApplicationInput } from "@/utils/validators/compliance";
 import { logAction } from "./actionLog";
 
 /**
- * The 10.7(2) & (5) certificate, tracked as something being obtained.
+ * The things this file buys rather than asks anybody for.
  *
- * Its own module rather than an addition to compliance-outreach.ts, because the
- * council is not an outreach in the sense that file means: nothing is emailed,
- * nobody is picked from a directory, and the thing being waited on is a portal
- * transaction rather than a reply. What the two share is the engagement, the
- * revalidation tags and — once an application is lodged — a thread for the
- * portal's own mail to land on, which is the one place this reaches across.
+ * Its own module rather than an addition to compliance-outreach.ts, because
+ * none of these is an outreach in the sense that file means: nothing is
+ * emailed, nobody is picked from a directory, and the thing being waited on is
+ * a portal transaction rather than a reply. What they share with an outreach is
+ * the engagement, the revalidation tags and — once an application is lodged — a
+ * thread for the body's own mail to land on, which is the one place this
+ * reaches across.
  *
- * The whole reason this exists is that the answer used to live in component
+ * This began as the 10.7 certificate alone, and the reason it existed then is
+ * the reason it now covers five things: the answer used to live in component
  * state. "Do you already have the planning certificate?" was asked on every
  * render, answered into `useState`, and forgotten on navigation — so a job
  * where somebody had lodged an application three days ago looked identical to
- * one where nobody had done anything at all, and the three-to-five working days
- * the portal takes were three to five days nobody could see elapsing.
+ * one where nobody had done anything at all, and the three to five working days
+ * the portal takes were days nobody could see elapsing. A road opening permit,
+ * a long service levy, a mine subsidence approval and a development application
+ * are the same shape of wait, so they are the same rows and the same functions
+ * rather than four more copies of a mistake we already made once.
  */
 
 function revalidateEngagement(projectId: string) {
@@ -70,15 +80,26 @@ async function requireEngagement(
  * find. So a certificate emailed back by the portal landed in the lead queue.
  *
  * Written when an application is lodged, which is the first moment there is
- * anything true to record. Status SENT because we have genuinely asked — through
- * their website rather than by email, which the portal does not care about and
- * which is exactly the kind of distinction that should not decide whether their
- * reply can be filed. `sentAt` carries the lodgement date so the overdue sweep
- * measures the portal's clock from when the portal's clock actually started.
+ * anything true to record. Status SENT because we have genuinely asked —
+ * through their website rather than by email, which the portal does not care
+ * about and which is exactly the kind of distinction that should not decide
+ * whether their reply can be filed. `sentAt` carries the lodgement date so the
+ * overdue sweep measures the portal's clock from when it actually started.
+ *
+ * Only the applications the council or the portal answers by email get one.
+ * Nothing arrives back from the long service levy — the receipt is downloaded
+ * from a screen — so a thread there would be a correspondent who never writes.
  *
  * Idempotent: a second lodgement, or a corrected date, updates the row rather
  * than colliding with the unique index on [engagementId, party].
  */
+const APPLICATIONS_WITH_A_COUNCIL_THREAD: ReadonlySet<ComplianceExternalApplicationKind> =
+  new Set([
+    ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
+    ComplianceExternalApplicationKind.ROAD_OPENING,
+    ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+  ]);
+
 async function ensureCouncilThread(
   engagement: CertifierEngagementDetail,
   appliedAt: Date,
@@ -90,7 +111,16 @@ async function ensureCouncilThread(
       where: { id: existing.id },
       data: {
         status: ComplianceOutreachStatus.SENT,
-        sentAt: appliedAt,
+        // Only ever moved earlier. A file with a 10.7 lodged in March and a
+        // road opening lodged in July has one council thread, and the clock on
+        // it belongs to whichever wait started first — the sweep measures each
+        // application off its own `appliedAt` anyway, so overwriting this with
+        // the later date would only make the thread claim the council was
+        // written to more recently than they were.
+        sentAt:
+          existing.sentAt && existing.sentAt < appliedAt
+            ? existing.sentAt
+            : appliedAt,
       },
     });
     return;
@@ -113,45 +143,50 @@ async function ensureCouncilThread(
 }
 
 /**
- * Records where the planning certificate has got to.
+ * Records where one application has got to.
  *
- * One function for all four steps rather than four endpoints, because they are
- * four answers to one question and the row they write to is the same row. The
- * step is explicit in the payload rather than inferred from which fields are
+ * One function for all three steps and all five kinds rather than fifteen
+ * endpoints, because they are answers to one question about one row. The step
+ * is explicit in the payload rather than inferred from which fields are
  * present: inferring it meant an admin correcting a typo'd application number
  * looked identical to one lodging a fresh application, and the second resets a
  * clock the first must not touch.
  */
-export async function recordPlanningCertificate(
+export async function recordExternalApplication(
   projectId: string,
-  input: PlanningCertificateInput,
+  input: ExternalApplicationInput,
   recordedBy: string,
 ): Promise<CertifierEngagementDetail> {
   const engagement = await requireEngagement(projectId);
+  const where = {
+    engagementId_kind: { engagementId: engagement.id, kind: input.kind },
+  };
 
   switch (input.step) {
     case "answer": {
-      await prisma.planningCertificateApplication.upsert({
-        where: { engagementId: engagement.id },
+      await prisma.complianceExternalApplication.upsert({
+        where,
         create: {
           engagementId: engagement.id,
+          kind: input.kind,
           alreadyHeld: input.alreadyHeld,
         },
-        // Only the answer. Changing it from "no" back to "yes" must not silently
-        // discard a lodged application — if one exists it stays on the row, and
-        // the block reads as received-or-lodged rather than re-asking.
+        // Only the answer. Changing it from "no" back to "yes" must not
+        // silently discard a lodged application — if one exists it stays on the
+        // row, and the block reads as received-or-lodged rather than re-asking.
         update: { alreadyHeld: input.alreadyHeld },
       });
       break;
     }
 
     case "applied": {
-      await prisma.planningCertificateApplication.upsert({
-        where: { engagementId: engagement.id },
+      await prisma.complianceExternalApplication.upsert({
+        where,
         create: {
           engagementId: engagement.id,
+          kind: input.kind,
           // Lodging one is the answer to the question, so the two cannot
-          // disagree: nobody applies for a certificate they already hold.
+          // disagree: nobody applies for something they already hold.
           alreadyHeld: false,
           appliedAt: input.appliedAt,
           applicationRef: input.applicationRef ?? null,
@@ -165,15 +200,18 @@ export async function recordPlanningCertificate(
         },
       });
 
-      await ensureCouncilThread(engagement, input.appliedAt);
+      if (APPLICATIONS_WITH_A_COUNCIL_THREAD.has(input.kind)) {
+        await ensureCouncilThread(engagement, input.appliedAt);
+      }
       break;
     }
 
     case "received": {
-      await prisma.planningCertificateApplication.upsert({
-        where: { engagementId: engagement.id },
+      await prisma.complianceExternalApplication.upsert({
+        where,
         create: {
           engagementId: engagement.id,
+          kind: input.kind,
           alreadyHeld: false,
           receivedAt: input.received ? new Date() : null,
         },
@@ -189,8 +227,8 @@ export async function recordPlanningCertificate(
         await resolveComplianceAlertBySystem({
           projectId,
           engagementId: engagement.id,
-          type: ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
-          resolutionNote: "The planning certificate came back.",
+          type: EXTERNAL_APPLICATION_COPY[input.kind].alertType,
+          resolutionNote: `${EXTERNAL_APPLICATION_COPY[input.kind].label} came back.`,
         });
       }
       break;
@@ -200,9 +238,10 @@ export async function recordPlanningCertificate(
   after(async () => {
     revalidateEngagement(projectId);
     await logAction(
-      createActivityLogEntry("compliancePlanningCertificateUpdated", {
+      createActivityLogEntry("complianceExternalApplicationUpdated", {
         projectId,
         engagementId: engagement.id,
+        kind: input.kind,
         step: input.step,
         recordedBy,
       }),
@@ -213,24 +252,33 @@ export async function recordPlanningCertificate(
 }
 
 /**
- * Marks the certificate as arrived because its file just did.
+ * Marks an application as arrived because its document just did.
  *
  * The upload is the stronger statement of the two: somebody ticking "received"
  * is reporting it, and somebody attaching the PDF is proving it. So an upload
  * against a row nobody ticked closes the wait anyway, rather than leaving an
  * overdue alert open underneath a certificate sitting on the file.
  *
+ * A no-op for a document type no application produces, which is almost all of
+ * them — this runs behind every compliance upload, and the four types it does
+ * cover are looked up rather than branched on so a sixth application is a row
+ * in a table rather than a condition here.
+ *
  * Never throws, and never overwrites a receivedAt that is already there. It
  * runs in an `after()` behind an upload that has already succeeded, and the
  * upload is the thing that mattered.
  */
-export async function recordPlanningCertificateArrival(params: {
+export async function recordExternalApplicationArrival(params: {
   projectId: string;
   engagementId: string;
+  documentType: ComplianceDocumentType;
 }): Promise<void> {
+  const kind = externalApplicationForDocumentType(params.documentType);
+  if (!kind) return;
+
   try {
-    const claimed = await prisma.planningCertificateApplication.updateMany({
-      where: { engagementId: params.engagementId, receivedAt: null },
+    const claimed = await prisma.complianceExternalApplication.updateMany({
+      where: { engagementId: params.engagementId, kind, receivedAt: null },
       data: { receivedAt: new Date() },
     });
 
@@ -239,10 +287,13 @@ export async function recordPlanningCertificateArrival(params: {
       // and there is no row. The second is the case where a builder simply
       // uploaded the certificate they were holding without answering anything,
       // which is a perfectly reasonable way to use the block.
-      await prisma.planningCertificateApplication.upsert({
-        where: { engagementId: params.engagementId },
+      await prisma.complianceExternalApplication.upsert({
+        where: {
+          engagementId_kind: { engagementId: params.engagementId, kind },
+        },
         create: {
           engagementId: params.engagementId,
+          kind,
           alreadyHeld: true,
           receivedAt: new Date(),
         },
@@ -253,12 +304,12 @@ export async function recordPlanningCertificateArrival(params: {
     await resolveComplianceAlertBySystem({
       projectId: params.projectId,
       engagementId: params.engagementId,
-      type: ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
-      resolutionNote: "The planning certificate was uploaded to the file.",
+      type: EXTERNAL_APPLICATION_COPY[kind].alertType,
+      resolutionNote: `${EXTERNAL_APPLICATION_COPY[kind].label} was uploaded to the file.`,
     });
   } catch (error) {
     console.error(
-      "  Failed to record the planning certificate's arrival:",
+      `  Failed to record the arrival of the ${kind} application:`,
       error,
     );
   }

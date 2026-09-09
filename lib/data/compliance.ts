@@ -40,8 +40,11 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
 import { packSendBlockedReason } from "@/lib/compliance/prerequisites";
-import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
-import { recordPlanningCertificateArrival } from "@/lib/data/compliance-council";
+import {
+  recordPreliminaryPlansArrival,
+  recordWasteManagementPlanArrival,
+} from "@/lib/data/compliance-architect";
+import { recordExternalApplicationArrival } from "@/lib/data/compliance-applications";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -769,16 +772,31 @@ export async function attachComplianceDocumentFile(params: {
     });
   }
 
-  // The certificate arriving is what the council block's whole state machine is
+  // A document arriving is what an application block's whole state machine is
   // waiting for, and an upload says so more strongly than the tick box does:
   // one is somebody reporting it, the other is somebody proving it. Without
   // this a certificate could sit on the file with an overdue alert still open
   // underneath it, because nobody went back to tick the box.
-  if (
-    document.documentType === ComplianceDocumentType.PLANNING_CERTIFICATE_10_7
-  ) {
+  //
+  // Called for every upload rather than behind a type check, because the four
+  // types this covers are a lookup inside it — the 10.7 certificate, the road
+  // opening approval, the levy receipt and the mine subsidence approval — and
+  // a condition here would be a fifth place to remember when a fifth
+  // application is added.
+  after(async () => {
+    await recordExternalApplicationArrival({
+      projectId: params.projectId,
+      engagementId: params.engagementId,
+      documentType: document.documentType,
+    });
+  });
+
+  // The waste management plan is the architect's, on their existing thread, and
+  // its clock is its own — so its alert closes on its own too. Nothing else the
+  // architect sends answers it, and it answers nothing else of theirs.
+  if (document.documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN) {
     after(async () => {
-      await recordPlanningCertificateArrival({
+      await recordWasteManagementPlanArrival({
         projectId: params.projectId,
         engagementId: params.engagementId,
       });

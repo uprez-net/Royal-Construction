@@ -44,6 +44,8 @@ export type ModalType =
   | "resolveComplianceAlert"
   | "scheduleComplianceMeeting"
   | "resolveComplianceMeeting"
+  | "complianceApplication"
+  | "requestWasteManagementPlan"
   | "reviewArchitectPlans"
   | null;
 

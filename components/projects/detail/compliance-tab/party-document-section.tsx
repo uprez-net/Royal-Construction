@@ -2,11 +2,21 @@
 
 import {
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
-import { Compass, Flame, Landmark, Leaf, PencilRuler } from "lucide-react";
+import {
+  Compass,
+  Droplets,
+  Flame,
+  Landmark,
+  Leaf,
+  PencilRuler,
+  Ruler,
+  TrafficCone,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -19,13 +29,13 @@ import {
 } from "@/constants/complianceDocuments";
 import type {
   ComplianceDocumentWithFiles,
+  ComplianceExternalApplicationRecord,
   ComplianceOutreachDetail,
-  PlanningCertificateRecord,
 } from "@/types/compliance";
 
 import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceSectionCard } from "./compliance-section-card";
-import { CouncilCertificateBlock } from "./council-certificate-block";
+import { ExternalApplicationBlock } from "./external-application-block";
 
 /**
  * One icon per party, exported because the consultant controls on the checklist
@@ -38,6 +48,9 @@ export const PARTY_ICON: Record<CompliancePartyType, LucideIcon> = {
   [CompliancePartyType.COUNCIL]: Landmark,
   [CompliancePartyType.BASIX_CONSULTANT]: Leaf,
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: Flame,
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: Ruler,
+  [CompliancePartyType.WATER_AUTHORITY]: Droplets,
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: TrafficCone,
 };
 
 type PartyDocumentSectionProps = {
@@ -83,10 +96,21 @@ type PartyDocumentSectionProps = {
    * The 10.7 application, for the council block's state machine.
    *
    * Passed down rather than read from the store here, because the section is
-   * rendered once per party and four of the five have no use for it. Null until
+   * rendered once per party and the other two have no use for it. Null until
    * somebody answers the first question.
    */
-  planningCertificate: PlanningCertificateRecord;
+  planningCertificate: ComplianceExternalApplicationRecord | null;
+  /**
+   * Whether the certificate is now ordered from the development application.
+   *
+   * Council section only. Once a job needs a DA the certifier is no longer
+   * being asked to assess a CDC, so the certificate leaves the pack — but the
+   * council still wants it for the DA, so it is not gone, it has moved. The
+   * block here goes read-only and the one on the DA list is where it is
+   * actually ordered; offering both would be one certificate applied for in two
+   * places by two people.
+   */
+  orderedFromDa?: boolean;
   /**
    * The meeting and plan-approval controls, for the architect.
    *
@@ -136,6 +160,7 @@ export function PartyDocumentSection({
   className,
   projectId,
   planningCertificate,
+  orderedFromDa = false,
   architectWorkflow,
 }: PartyDocumentSectionProps) {
   const { party } = section;
@@ -162,10 +187,16 @@ export function PartyDocumentSection({
     ? blockedReason !== null
     : blockedReason !== null || !isEngaged;
 
-  // Nothing left to want. The block stays on screen — its heading is how the
-  // reader learns the certificate is no longer part of this job — but it says
-  // so rather than offering an upload for it.
-  const isMoot = types.length === 0;
+  // Nothing left to want, and nowhere else it has gone. The block stays on
+  // screen — its heading is how the reader learns the document is no longer
+  // part of this job — but it says so rather than offering an upload for it.
+  //
+  // The `orderedFromDa` half is the correction. An empty council section used
+  // to read as "the development application replaces it", which was true of the
+  // pack and false of the job: a DA needs the same 10.7 certificate, and a
+  // section saying it had been replaced left nobody anywhere on the tab able to
+  // order one.
+  const isMoot = types.length === 0 && !orderedFromDa;
 
   const rows = (
     <ul>
@@ -267,12 +298,16 @@ export function PartyDocumentSection({
            in before anybody answered anything, has answered the question by
            existing.
         ----------------------------------------------------------- */
-        documents[0]?.files.length ? (
+        documents[0]?.files.length && !orderedFromDa ? (
           rows
         ) : (
-          <CouncilCertificateBlock
+          <ExternalApplicationBlock
             projectId={projectId}
+            kind={
+              ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7
+            }
             application={planningCertificate}
+            readOnly={orderedFromDa}
             documentRows={rows}
           />
         )

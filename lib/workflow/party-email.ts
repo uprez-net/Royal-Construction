@@ -13,14 +13,21 @@ import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
-import { PARTY_INBOUND_DOCUMENT_TYPES, PARTY_LABEL } from "@/constants/complianceDocuments";
+import {
+  PARTY_INBOUND_DOCUMENT_TYPES,
+  PARTY_LABEL,
+  partyDeliverables,
+} from "@/constants/complianceDocuments";
 import {
   discardSupersededFiles,
   placeConsultantDeliverable,
   placeInboundDocument,
 } from "@/lib/compliance/document-replacement";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
-import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
+import {
+  recordPreliminaryPlansArrival,
+  recordWasteManagementPlanArrival,
+} from "@/lib/data/compliance-architect";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
@@ -119,8 +126,16 @@ async function findOutreach(refToken: string) {
       party: true,
       engagementId: true,
       // The checklist line a consultant was engaged against, so what they send
-      // back can answer it rather than becoming a document of its own.
+      // back can answer it rather than becoming a document of its own. Read
+      // only as a fallback for the rows written before deliverables existed --
+      // see `checklistLineFor` below.
       checklistDocumentId: true,
+      // Which line each of this party's documents answers. A structural
+      // engineer answers three, and the reply that carries two PDFs has to file
+      // each of them against the line that asked for that one.
+      deliverables: {
+        select: { documentType: true, checklistDocumentId: true },
+      },
       engagement: { select: { projectId: true } },
     },
   });
@@ -358,20 +373,28 @@ async function classifyStoredDocuments(
   party: CompliancePartyType,
   stored: { documentId: string; name: string; url: string }[],
   /**
-   * The checklist line a consultant's reply answers, where there is one.
+   * Which checklist line each of this party's documents answers.
    *
-   * Present only for the two consultant parties. What a BASIX consultant sends
-   * back is not a document on the file in its own right — it exists because a
-   * checklist item asked for it, and the certifier is going to tick that item
-   * when they see it. Filing it as a BASIX_CERTIFICATE row beside a checklist
-   * line still reading "Not supplied yet" is the document being on the file
-   * and the file still being incomplete.
+   * Present only for a consultant party. What a BASIX consultant sends back is
+   * not a document on the file in its own right — it exists because a checklist
+   * item asked for it, and the certifier is going to tick that item when they
+   * see it. Filing it as a BASIX_CERTIFICATE row beside a checklist line still
+   * reading "Not supplied yet" is the document being on the file and the file
+   * still being incomplete.
+   *
+   * Keyed by document type rather than a single id, which is what lets one
+   * engagement answer several lines: the classifier says which of the three
+   * things a structural engineer produces this attachment is, and that answer
+   * picks the line.
    */
-  checklistDocumentId: string | null,
+  checklistLineFor: (
+    documentType: ComplianceDocumentType,
+  ) => string | null,
 ): Promise<{
   labelled: number;
   titleSearches: { url: string; name: string }[];
   preliminaryPlans: number;
+  wasteManagementPlans: number;
 }> {
   "use step";
 
@@ -387,6 +410,11 @@ async function classifyStoredDocuments(
   // architect alerts. Read off what was actually placed rather than off the
   // party, because an architect's covering email carries other things too.
   let preliminaryPlans = 0;
+  // Counted separately from the plans above, because the two are different
+  // waits on the same party: a redraw of the elevations does not answer a
+  // request for a waste management plan, and either closing the other's alert
+  // would credit the architect with work they have not started.
+  let wasteManagementPlans = 0;
 
   for (const item of stored) {
     try {
@@ -404,6 +432,7 @@ async function classifyStoredDocuments(
       // when the checklist row has gone, which is what a checklist re-extracted
       // between the outreach and the reply leaves behind — worse than the
       // checklist row, and much better than dropping the certificate.
+      const checklistDocumentId = checklistLineFor(result.documentType);
       const placed = checklistDocumentId
         ? ((await placeConsultantDeliverable({
             engagementId,
@@ -437,6 +466,12 @@ async function classifyStoredDocuments(
       }
 
       if (
+        result.documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
+      ) {
+        wasteManagementPlans += 1;
+      }
+
+      if (
         result.documentType ===
         ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
       ) {
@@ -447,7 +482,7 @@ async function classifyStoredDocuments(
     }
   }
 
-  return { labelled, titleSearches, preliminaryPlans };
+  return { labelled, titleSearches, preliminaryPlans, wasteManagementPlans };
 }
 
 /**
@@ -492,6 +527,21 @@ async function closePlansLoop(params: {
 }): Promise<void> {
   "use step";
   await recordPreliminaryPlansArrival(params);
+}
+
+/**
+ * Closes the waste management wait when the plan arrives on the thread.
+ *
+ * Its own step beside `closePlansLoop` rather than folded into it, because they
+ * close different alerts off different clocks and only one of them ever fires
+ * on a given reply.
+ */
+async function closeWasteManagementLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordWasteManagementPlanArrival(params);
 }
 
 /**
@@ -591,6 +641,44 @@ async function advanceAndNotify(
   );
 }
 
+/**
+ * Which checklist line a given document type from this party answers.
+ *
+ * A closure rather than a map passed in, because the fallback matters and is
+ * easy to get wrong. Deliverables are the answer wherever they exist; where
+ * they do not — a consultant engaged before the table existed, or one the
+ * backfill could not reach — the single `checklistDocumentId` column is used,
+ * but only for the party's own deliverable. Without that narrowing, a BASIX
+ * consultant who attached the survey they were sent would have had the survey
+ * filed onto the checklist line asking for a BASIX certificate.
+ */
+function checklistLineResolver(outreach: {
+  party: CompliancePartyType;
+  checklistDocumentId: string | null;
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId: string | null;
+  }[];
+}): (documentType: ComplianceDocumentType) => string | null {
+  const byType = new Map(
+    outreach.deliverables.map((deliverable) => [
+      deliverable.documentType,
+      deliverable.checklistDocumentId,
+    ]),
+  );
+
+  const ownDeliverables = new Set(partyDeliverables(outreach.party));
+
+  return (documentType) => {
+    if (byType.has(documentType)) {
+      return byType.get(documentType) ?? null;
+    }
+    return ownDeliverables.has(documentType)
+      ? outreach.checklistDocumentId
+      : null;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -648,7 +736,7 @@ export const processInboundPartyEmail = async (
       outreach.engagementId,
       outreach.party,
       stored,
-      outreach.checklistDocumentId,
+      checklistLineResolver(outreach),
     );
     console.log(
       `  Classified ${classification.labelled} of ${stored.length} ${outreach.party.toLowerCase()} document(s).`,
@@ -671,6 +759,13 @@ export const processInboundPartyEmail = async (
     // not be able to cost the classification that produced them.
     if (classification.preliminaryPlans > 0) {
       await closePlansLoop({ projectId, engagementId: outreach.engagementId });
+    }
+
+    if (classification.wasteManagementPlans > 0) {
+      await closeWasteManagementLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
     }
   }
 

@@ -15,6 +15,10 @@ import {
   type ExtractedChecklistItem,
 } from "@/lib/agent/checklistExtractionAgent";
 import { notifyCompliance } from "@/lib/compliance/notify";
+import {
+  mapExistingDocumentsOntoChecklist,
+  type ChecklistMappingResult,
+} from "@/lib/compliance/checklist-mapping";
 import prisma from "@/lib/prisma";
 import { ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -341,6 +345,43 @@ async function saveChecklistItems(
   return saved;
 }
 
+/**
+ * Answers the lines the file already holds documents for.
+ *
+ * Its own step, after the rows exist and outside their transaction, because the
+ * two are different kinds of work with different failure costs. Writing the
+ * checklist is the thing the admin asked for and must be all-or-nothing;
+ * mapping is a convenience over the top of it, and a checklist that lands
+ * unmapped is a checklist somebody fills in the way they did last week.
+ *
+ * Its own step also means a retry re-runs only the mapping. The mapper is
+ * idempotent three ways over precisely so that is safe — see
+ * `mapExistingDocumentsOntoChecklist`.
+ */
+async function mapCollectedDocuments(
+  input: ChecklistExtractionInput,
+): Promise<ChecklistMappingResult> {
+  "use step";
+
+  const result = await mapExistingDocumentsOntoChecklist({
+    engagementId: input.engagementId,
+    projectId: input.projectId,
+  });
+
+  if (result.mapped > 0) {
+    await logAction(
+      createActivityLogEntry("complianceChecklistMapped", {
+        projectId: input.projectId,
+        engagementId: input.engagementId,
+        mappedCount: result.mapped,
+        documentTypes: result.documentTypes,
+      }),
+    );
+  }
+
+  return result;
+}
+
 async function failWorkflow(message: string) {
   "use step";
   try {
@@ -432,10 +473,22 @@ export const extractComplianceChecklist = async (
       extraction.document,
     );
 
+    await emitStage("Matching what we already hold");
+    const mapping = await mapCollectedDocuments(input);
+
+    // Said out loud rather than left to be noticed. Six lines answering
+    // themselves is the single most surprising thing this workflow does, and an
+    // admin who opens the checklist expecting twenty empty rows and finds
+    // fourteen needs to be told why before they conclude something went wrong.
+    const message =
+      mapping.mapped > 0
+        ? `Extracted ${saved} checklist item${saved === 1 ? "" : "s"}, and answered ${mapping.mapped} of them from documents already on the file.`
+        : `Extracted ${saved} checklist item${saved === 1 ? "" : "s"}.`;
+
     const result: ChecklistExtractionResult = {
       status: "success",
       items: extraction.items,
-      message: `Extracted ${saved} checklist item${saved === 1 ? "" : "s"}.`,
+      message,
     };
 
     await writeToStream({

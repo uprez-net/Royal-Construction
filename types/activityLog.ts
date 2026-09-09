@@ -291,10 +291,28 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
-    compliancePlanningCertificateUpdated: (data) => ({
+    complianceExternalApplicationUpdated: (data) => ({
         id: uuidv4(),
-        type: "compliancePlanningCertificateUpdated",
-        message: `${data.recordedBy} updated the planning certificate (${data.step})`,
+        type: "complianceExternalApplicationUpdated",
+        message: `${data.recordedBy} updated the ${data.kind} application (${data.step})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceChecklistMapped: (data) => ({
+        id: uuidv4(),
+        type: "complianceChecklistMapped",
+        message: `${data.mappedCount} checklist item${data.mappedCount === 1 ? "" : "s"} answered from documents already on the file (${data.documentTypes.join(", ")})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceWasteManagementRequested: (data) => ({
+        id: uuidv4(),
+        type: "complianceWasteManagementRequested",
+        message: `${data.requestedBy} asked the architect (${data.contactEmail}) for the waste management plan with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
         authorId: "system",
         timestamp: new Date().toISOString(),
         projectId: data.projectId,
