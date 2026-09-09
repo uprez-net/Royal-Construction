@@ -13,7 +13,7 @@ import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
-import { readDaCorrespondence } from "@/lib/agent/daCorrespondenceAgent";
+import { readAssessorCorrespondence } from "@/lib/agent/assessorCorrespondenceAgent";
 import { detectDeveloperVerdict } from "@/lib/agent/developerApprovalAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import {
@@ -31,7 +31,7 @@ import {
   recordPreliminaryPlansArrival,
   recordWasteManagementPlanArrival,
 } from "@/lib/data/compliance-architect";
-import { applyDaCorrespondence } from "@/lib/data/compliance-da-items";
+import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
 import {
   recordBushfireRevisionArrival,
   recordDeveloperDecision,
@@ -662,7 +662,8 @@ async function recordCouncilRequests(
 ): Promise<{ created: number; rejected: number }> {
   "use step";
 
-  const correspondence = await readDaCorrespondence({
+  const correspondence = await readAssessorCorrespondence({
+    assessor: "council",
     subject: message.subject,
     body: message.body,
   });
@@ -674,9 +675,10 @@ async function recordCouncilRequests(
     return { created: 0, rejected: 0 };
   }
 
-  const outcome = await applyDaCorrespondence({
+  const outcome = await applyAssessorCorrespondence({
     projectId: params.projectId,
     engagementId: params.engagementId,
+    assessor: "council",
     requested: correspondence.requested,
     rejected: correspondence.rejected,
   });

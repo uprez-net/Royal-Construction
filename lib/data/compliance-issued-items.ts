@@ -8,6 +8,12 @@ import {
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 
+import type { AssessorKind } from "@/lib/agent/assessorCorrespondenceAgent";
+import {
+  comparableName,
+  matchRejection,
+  type RejectionCandidate,
+} from "@/lib/compliance/rejection-matching";
 import {
   complianceDocumentLabel,
   DA_DOCUMENTS,
@@ -19,7 +25,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { logAction } from "./actionLog";
 
 /**
- * What a consent authority asks for after the application is lodged.
+ * What an assessing body asks for once it holds the pack.
  *
  * The council's half of the DA, and the mirror of what
  * lib/workflow/compliance-checklist.ts does with a certifier's checklist. The
@@ -45,167 +51,115 @@ function revalidateEngagement(projectId: string) {
 }
 
 /**
- * A label reduced to what is actually being compared.
+ * Every row a rejection could be about, with the names it might be called.
  *
- * Same normalisation `comparableLabel` uses on the checklist, and for the same
- * reason: a council writing "Shadow Diagrams" in March and "shadow diagram" in
- * April is asking for one thing twice, and two rows would have somebody
- * commissioning it again.
+ * The matching itself is in lib/compliance/rejection-matching.ts, which is a
+ * plain module: it is the one genuinely uncertain step in this pipeline and it
+ * has to be reachable from a test, which a `"use server"` module is not.
  */
-function comparable(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    // Crude, and enough for the job: the difference between "diagram" and
-    // "diagrams" is not a difference in what is being asked for. Applied to
-    // whole words only, so "address" does not become "addres".
-    .replace(/\b(\w{4,}?)s\b/g, "$1");
-}
-
-/**
- * Every DA row a rejection could be about, with the names it might be called.
- *
- * Built from the fixed DA list plus whatever DA_ITEM rows exist, because a
- * council rejects both kinds: the stormwater drawings that went in with the
- * pack, and the shadow diagram they asked for in round two and did not like.
- */
-async function rejectionCandidates(engagementId: string) {
+async function rejectionCandidates(
+  engagementId: string,
+  documentTypes: readonly ComplianceDocumentType[],
+): Promise<RejectionCandidate[]> {
   const rows = await prisma.complianceDocument.findMany({
-    where: {
-      engagementId,
-      OR: [
-        { documentType: ComplianceDocumentType.DA_ITEM },
-        {
-          documentType: {
-            in: DA_DOCUMENTS.map((document) => document.type),
-          },
-        },
-      ],
-    },
-    select: { id: true, documentType: true, label: true },
+    where: { engagementId, documentType: { in: [...documentTypes] } },
+    select: { id: true, documentType: true, label: true, order: true },
   });
 
   return rows.map((row) => ({
-    ...row,
-    // A DA item is known by the council's own wording; a typed row is known by
-    // ours. Both are compared, because a council refusing "the hydraulic plans"
-    // is refusing the row we call "Hydraulic/stormwater drawings & design
-    // certificate" and neither name contains the other.
+    id: row.id,
+    // An issued item is known by the sender's own wording; a typed row is known
+    // by ours. Both are compared, because a council refusing "the hydraulic
+    // plans" is refusing the row we call "Hydraulic/stormwater drawings &
+    // design certificate" and neither name contains the other.
     names: [
       row.label ?? "",
       complianceDocumentLabel(row.documentType, row.label),
       row.documentType.replace(/_/g, " "),
     ]
-      .map(comparable)
+      .map(comparableName)
       .filter(Boolean),
+    // Only a row on a numbered list has one that means anything. A certifier
+    // saying "item 7" means the seventh line of their checklist; nothing on the
+    // DA's fixed groups is numbered, and `order` there is assembly order.
+    order: ISSUED_ITEM_TYPES.has(row.documentType) ? row.order : null,
   }));
 }
 
-/**
- * The row a council's objection is about, or null.
- *
- * Deliberately requires a real overlap rather than picking the closest match. A
- * rejection landing on the wrong row is worse than one landing on none: the row
- * it lands on goes back to outstanding with an objection that is not about it,
- * and the row it should have hit still reads as accepted. An unmatched
- * rejection is reported on the thread and in the notification, where somebody
- * can place it.
- *
- * Matching is on whole words shared between the council's name for the document
- * and ours, ignoring the words every document name contains.
- */
-function matchRejection(
-  documentName: string,
-  candidates: Awaited<ReturnType<typeof rejectionCandidates>>,
-): string | null {
-  const wanted = comparable(documentName);
-  if (!wanted) return null;
-
-  // Substring either way first, which is what most of these are: "stormwater
-  // drawings" against "hydraulic stormwater drawings and design certificate".
-  for (const candidate of candidates) {
-    if (
-      candidate.names.some(
-        (name) => name.includes(wanted) || wanted.includes(name),
-      )
-    ) {
-      return candidate.id;
-    }
-  }
-
-  // Otherwise a shared distinctive word. "the BASIX certificate" against a row
-  // called "BASIX Certificate" is already caught above; this is for "amended
-  // stormwater plan" against "hydraulic/stormwater drawings", where neither
-  // contains the other and one word decides it.
-  const wantedWords = new Set(
-    wanted.split(" ").filter((word) => word.length > 3 && !GENERIC.has(word)),
-  );
-  if (wantedWords.size === 0) return null;
-
-  for (const candidate of candidates) {
-    for (const name of candidate.names) {
-      const shared = name
-        .split(" ")
-        .filter((word) => wantedWords.has(word));
-      if (shared.length > 0) {
-        return candidate.id;
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Words that appear in half the document names on a compliance file.
- *
- * Excluded from the distinctive-word match because matching on one of them is
- * matching on nothing: a council refusing "the amended plan" would otherwise
- * land on whichever row happens to have "plan" in its name first.
- */
-const GENERIC: ReadonlySet<string> = new Set([
-  "plan",
-  "plans",
-  "drawing",
-  "drawings",
-  "certificate",
-  "report",
-  "document",
-  "documents",
-  "amended",
-  "revised",
-  "updated",
-  "copy",
-  "development",
-  "application",
-  "plane",
+/** The two row types that belong to a numbered list somebody issued. */
+const ISSUED_ITEM_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
 ]);
 
-export type DaCorrespondenceOutcome = {
-  /** DA_ITEM rows written for things the council newly asked for. */
+export type IssuedItemOutcome = {
+  /** Rows written for things the sender newly asked for. */
   created: number;
   /** Rejections landed on a row. */
   rejected: number;
-  /** Rejections we could not place, with the council's own wording. */
+  /** Rejections we could not place, with the sender's own wording. */
   unmatched: string[];
 };
 
 /**
- * Records what a council's message asked for and what it sent back.
+ * How each body's correspondence lands on the file.
+ *
+ * A table rather than two near-identical functions, because everything that
+ * differs between them is here: which row type a new request becomes, which
+ * rows a refusal can be about, and whose name goes on the refusal. The
+ * behaviour -- add without reconciling, refuse to write the same request twice,
+ * place an objection or report that it could not be placed -- is genuinely
+ * identical, and was worth writing once.
+ */
+const ASSESSOR_ROWS: Readonly<
+  Record<
+    AssessorKind,
+    {
+      itemType: ComplianceDocumentType;
+      rejectable: readonly ComplianceDocumentType[];
+      source: ComplianceAlertSource;
+    }
+  >
+> = {
+  council: {
+    itemType: ComplianceDocumentType.DA_ITEM,
+    // Both kinds: the stormwater drawings that went in with the pack, and the
+    // shadow diagram they asked for in round two and did not like.
+    rejectable: [
+      ComplianceDocumentType.DA_ITEM,
+      ...DA_DOCUMENTS.map((document) => document.type),
+    ],
+    source: ComplianceAlertSource.COUNCIL,
+  },
+  certifier: {
+    itemType: ComplianceDocumentType.CHECKLIST_ITEM,
+    // Only their own checklist. The required pack and the signed copies are
+    // documents they already hold and were never asked to pass judgement on --
+    // the same narrowing `isApprovableDocumentType` makes on the screen, and
+    // for the same reason: a refusal landed on one of those freezes a row
+    // nobody can then re-upload.
+    rejectable: [ComplianceDocumentType.CHECKLIST_ITEM],
+    source: ComplianceAlertSource.CERTIFIER,
+  },
+};
+
+/**
+ * Records what an assessing body's message asked for and what it sent back.
  *
  * Idempotent in both halves, which matters because a durable workflow retries
- * and because a council routinely re-sends the same letter. A request whose
+ * and because both bodies routinely re-send the same letter. A request whose
  * wording already exists as a row is not written again, and a rejection whose
  * reason is already on the row it names changes nothing.
  */
-export async function applyDaCorrespondence(params: {
+export async function applyAssessorCorrespondence(params: {
   projectId: string;
   engagementId: string;
+  assessor: AssessorKind;
   requested: { label: string; description: string }[];
   rejected: { documentName: string; reason: string }[];
-}): Promise<DaCorrespondenceOutcome> {
-  const outcome: DaCorrespondenceOutcome = {
+}): Promise<IssuedItemOutcome> {
+  const rows = ASSESSOR_ROWS[params.assessor];
+  const outcome: IssuedItemOutcome = {
     created: 0,
     rejected: 0,
     unmatched: [],
@@ -218,14 +172,14 @@ export async function applyDaCorrespondence(params: {
     const existing = await prisma.complianceDocument.findMany({
       where: {
         engagementId: params.engagementId,
-        documentType: ComplianceDocumentType.DA_ITEM,
+        documentType: rows.itemType,
       },
       select: { label: true, order: true },
       orderBy: { order: "desc" },
     });
 
     const seen = new Set(
-      existing.map((row) => comparable(row.label ?? "")).filter(Boolean),
+      existing.map((row) => comparableName(row.label ?? "")).filter(Boolean),
     );
     // Appended after whatever is there. Order is the order they were asked for,
     // which is the order somebody works through them in — a council's round
@@ -233,9 +187,9 @@ export async function applyDaCorrespondence(params: {
     let order = (existing[0]?.order ?? 0) + 1;
 
     for (const item of params.requested) {
-      const key = comparable(item.label);
+      const key = comparableName(item.label);
       if (!key || seen.has(key)) {
-        // Already on the list. A council re-sending its request letter, or a
+        // Already on the list. A sender re-sending their request letter, or a
         // workflow retry, is the same request rather than a second one.
         continue;
       }
@@ -244,7 +198,7 @@ export async function applyDaCorrespondence(params: {
       await prisma.complianceDocument.create({
         data: {
           engagementId: params.engagementId,
-          documentType: ComplianceDocumentType.DA_ITEM,
+          documentType: rows.itemType,
           status: ComplianceDocumentStatus.PENDING,
           label: item.label,
           order: order++,
@@ -264,7 +218,10 @@ export async function applyDaCorrespondence(params: {
   // What they sent back.
   // ------------------------------------------------------------------
   if (params.rejected.length > 0) {
-    const candidates = await rejectionCandidates(params.engagementId);
+    const candidates = await rejectionCandidates(
+      params.engagementId,
+      rows.rejectable,
+    );
 
     for (const rejection of params.rejected) {
       const documentId = matchRejection(rejection.documentName, candidates);
@@ -283,7 +240,7 @@ export async function applyDaCorrespondence(params: {
         data: {
           status: ComplianceDocumentStatus.PENDING,
           rejectionReason: rejection.reason,
-          rejectedBySource: ComplianceAlertSource.COUNCIL,
+          rejectedBySource: rows.source,
         },
       });
       outcome.rejected += 1;
@@ -297,9 +254,10 @@ export async function applyDaCorrespondence(params: {
   revalidateEngagement(params.projectId);
 
   await logAction(
-    createActivityLogEntry("complianceDaItemsRecorded", {
+    createActivityLogEntry("complianceIssuedItemsRecorded", {
       projectId: params.projectId,
       engagementId: params.engagementId,
+      assessor: params.assessor,
       requestedCount: outcome.created,
       rejectedCount: outcome.rejected,
       unmatched: outcome.unmatched,

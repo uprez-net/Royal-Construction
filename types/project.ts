@@ -1,5 +1,5 @@
 import type { TradiePriceUnit } from "@prisma/client";
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails, Invoice } from "@prisma/client";
+import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, ProjectStatus, LeadEmails, Invoice } from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
 
@@ -191,6 +191,30 @@ export interface ProjectDetail extends SafeProject {
   invoices: SafeInvoice[];
 }
 
+/**
+ * The pipeline, as one filter value.
+ *
+ * Not a `ProjectStatus`, deliberately. It is a question the list asks — "what
+ * has not started on site yet" — and the answer spans three statuses a reader
+ * has no reason to distinguish between while scanning a list. Expressing it as
+ * a filter value rather than as three chips is what keeps the chip row
+ * readable; expressing it here rather than as a fourth status is what keeps the
+ * ladder honest, because the three are genuinely different stages and just not
+ * different answers to this question.
+ *
+ * It lives here rather than beside the query it feeds because that module is
+ * `"use server"`, which may export nothing but async functions — and the chip
+ * that sends this value is a client component.
+ */
+export const PRE_CONSTRUCTION_FILTER = "PRE_CONSTRUCTION";
+
+/** The statuses it covers, in ladder order. */
+export const PRE_CONSTRUCTION_STATUSES: readonly ProjectStatus[] = [
+  ProjectStatus.DRAFT,
+  ProjectStatus.COMPLIANCE_STARTED,
+  ProjectStatus.COMPLIANCE_COMPLETED,
+];
+
 export type ProjectKPIs = {
   totalActive: number;
   active: number;
@@ -198,6 +222,16 @@ export type ProjectKPIs = {
   needsAttention: number;
   delayed: number;
   completed: number;
+  /**
+   * Projects that have not started on site yet — draft, in compliance, or
+   * through compliance and waiting on a start date.
+   *
+   * One count across the three rather than one each, because they are one
+   * answer to the question the chip asks: what is in the pipeline. Somebody
+   * looking at the list wants to know how many jobs have not begun, not how
+   * many are between the certifier's checklist and their certificate.
+   */
+  preConstruction: number;
 };
 
 export type TradieKPIs = {

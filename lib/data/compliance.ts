@@ -45,6 +45,11 @@ import {
   recordWasteManagementPlanArrival,
 } from "@/lib/data/compliance-architect";
 import { recordExternalApplicationArrival } from "@/lib/data/compliance-applications";
+import {
+  closeComplianceIfComplete,
+  recordComplianceStarted,
+  recordConstructionCertificate,
+} from "@/lib/data/compliance-certificate";
 import { fillChecklistLinesFor } from "@/lib/compliance/checklist-mapping";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
@@ -153,7 +158,17 @@ export async function startCertifierEngagement(
     include: engagementInclude,
   });
 
-  after(() => revalidateEngagement(projectId));
+  after(async () => {
+    revalidateEngagement(projectId);
+    // The project stops being a draft here.
+    //
+    // Engaging the certifier is the first thing on this whole flow that
+    // involves anybody outside the office — everything before it is collecting
+    // documents, and a job that has collected two documents is not meaningfully
+    // under way. It is also the point a person would name if asked when the
+    // project started, which is what the list is trying to answer.
+    await recordComplianceStarted(projectId);
+  });
 
   return engagement;
 }
@@ -839,6 +854,39 @@ export async function attachComplianceDocumentFile(params: {
       });
     });
   }
+
+  // The certifier's certificate, put on the file by hand.
+  //
+  // The ordinary route is the inbound workflow, which classifies it off their
+  // reply and moves the engagement itself. This is for the certifier who posts
+  // it, or emails it from an address the correlation missed, or hands it over
+  // at a site meeting — none of which should leave a finished job stuck one
+  // stage short with the certificate sitting on the row.
+  if (
+    document.documentType === ComplianceDocumentType.CONSTRUCTION_CERTIFICATE
+  ) {
+    after(async () => {
+      await recordConstructionCertificate({
+        id: params.engagementId,
+        projectId: params.projectId,
+      });
+    });
+  }
+
+  // Whether that was the last thing this file was waiting for.
+  //
+  // Run on every upload rather than behind a type check, and it reads both
+  // documents rather than trusting the one that triggered it. The certificate
+  // and the HBCF cover arrive in either order — a builder who raised the cover
+  // months ago has it on the file long before the certifier issues anything —
+  // so "whichever lands last closes it" is the only rule that works from both
+  // ends, and a condition here would have to encode both.
+  after(async () => {
+    await closeComplianceIfComplete({
+      projectId: params.projectId,
+      engagementId: params.engagementId,
+    });
+  });
 
   // A replacement for something the certifier sent back. They asked for a
   // change and have no way of knowing it has been made — the file just appears

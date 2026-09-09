@@ -335,9 +335,23 @@ export const activityLogSchemas = {
      * a person can place it — but it is the one thing here nobody would
      * otherwise know had happened.
      */
-    complianceDaItemsRecorded: z.object({
+    /** The certifier issued the construction certificate. */
+    complianceCertificateIssued: z.object({
         projectId: z.string(),
         engagementId: z.string(),
+    }),
+
+    /** The certificate and the HBCF cover are both on the file. */
+    complianceCompleted: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+    }),
+
+    complianceIssuedItemsRecorded: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        /** Which body wrote it, so the trail can say whose list grew. */
+        assessor: z.string(),
         requestedCount: z.number(),
         rejectedCount: z.number(),
         unmatched: z.array(z.string()),

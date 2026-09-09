@@ -5,7 +5,13 @@ import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
 import { serializeInvoice, serializeListInvoice } from "@/lib/data/invoice";
 import { summarizeInvoices } from "@/lib/projects/invoice-totals";
-import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
+import {
+  PRE_CONSTRUCTION_FILTER,
+  PRE_CONSTRUCTION_STATUSES,
+  ProjectDetail,
+  ProjectKPIs,
+  ProjectWithStats,
+} from "@/types/project";
 import { CACHE_PROFILES } from "@/types/cache";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 import { certifierEngagementInclude } from "@/types/compliance";
@@ -13,7 +19,12 @@ import { certifierEngagementInclude } from "@/types/compliance";
 export type ProjectListSortBy = "name" | "progress" | "budget" | "startDate" | "spent";
 
 export type ProjectListQuery = {
-  status?: ProjectStatus | null;
+  /**
+   * One status, or `PRE_CONSTRUCTION_FILTER` for the three that precede a
+   * build. Widened from `ProjectStatus` for that one value rather than for
+   * arbitrary strings, so a typo is still a compile error at every call site.
+   */
+  status?: ProjectStatus | typeof PRE_CONSTRUCTION_FILTER | null;
   page?: number;
   limit?: number;
   search?: string;
@@ -188,7 +199,9 @@ function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput |
 
   const filters: Prisma.ProjectWhereInput[] = [];
 
-  if (query?.status) {
+  if (query?.status === PRE_CONSTRUCTION_FILTER) {
+    filters.push({ status: { in: [...PRE_CONSTRUCTION_STATUSES] } });
+  } else if (query?.status) {
     filters.push({ status: query.status });
   }
 
@@ -566,6 +579,7 @@ type ProjectKPIResult = {
   needs_attention: bigint;
   delayed: bigint;
   completed: bigint;
+  pre_construction: bigint;
 };
 
 /**
@@ -609,7 +623,14 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
 
                 COUNT(*) FILTER (
                     WHERE status = 'COMPLETED'
-                ) AS completed
+                ) AS completed,
+
+                -- The pipeline: created, in compliance, or through compliance
+                -- and waiting to start. Counted together because that is the
+                -- question the chip asks -- how many jobs have not begun.
+                COUNT(*) FILTER (
+                    WHERE status IN ('DRAFT', 'COMPLIANCE_STARTED', 'COMPLIANCE_COMPLETED')
+                ) AS pre_construction
             FROM "Project"
         `;
 
@@ -620,6 +641,7 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
       needsAttention: Number(result.needs_attention),
       delayed: Number(result.delayed),
       completed: Number(result.completed),
+      preConstruction: Number(result.pre_construction),
     };
   } catch (error) {
     console.error("Error fetching project KPIs:", error);
@@ -631,6 +653,7 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
       needsAttention: 0,
       delayed: 0,
       completed: 0,
+      preConstruction: 0,
     };
   }
 }

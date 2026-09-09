@@ -371,12 +371,30 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
-    complianceDaItemsRecorded: (data) => ({
+    complianceCertificateIssued: (data) => ({
         id: uuidv4(),
-        type: "complianceDaItemsRecorded",
+        type: "complianceCertificateIssued",
+        message: "The certifier issued the construction certificate",
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceCompleted: (data) => ({
+        id: uuidv4(),
+        type: "complianceCompleted",
+        message: "Compliance complete — the construction certificate and the HBCF cover are both on the file",
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceIssuedItemsRecorded: (data) => ({
+        id: uuidv4(),
+        type: "complianceIssuedItemsRecorded",
         message: [
             data.requestedCount > 0
-                ? `The council asked for ${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"}`
+                ? `The ${data.assessor} asked for ${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"}`
                 : null,
             data.rejectedCount > 0
                 ? `sent back ${data.rejectedCount}`

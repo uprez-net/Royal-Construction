@@ -3,7 +3,7 @@
 import React from "react";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { setProjectFilter } from "@/lib/store/slices/uiSlice";
-import type { ProjectKPIs } from "@/types/project";
+import { PRE_CONSTRUCTION_FILTER, type ProjectKPIs } from "@/types/project";
 import { cn } from "@/lib/utils";
 
 interface ProjectFiltersProps {
@@ -21,6 +21,14 @@ export function ProjectFilters({
 
   const filters: { label: string; value: string | null; count: number }[] = [
     { label: "All", value: null, count: kpis.totalActive + kpis.completed },
+    // Before "Active", because it is before it: a job is in the pipeline until
+    // somebody starts a milestone on it. Three statuses under one chip — see
+    // PRE_CONSTRUCTION_FILTER, which is what the server matches it against.
+    {
+      label: "Pre-construction",
+      value: PRE_CONSTRUCTION_FILTER,
+      count: kpis.preConstruction,
+    },
     { label: "Active", value: "ACTIVE", count: kpis.active },
     { label: "On track", value: "ON_TRACK", count: kpis.onTrack },
     {

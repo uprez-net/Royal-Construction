@@ -11,7 +11,6 @@ import {
 } from "@prisma/client";
 import {
   ClipboardList,
-  ExternalLink,
   HelpCircle,
   Inbox,
   Loader2,
@@ -44,7 +43,6 @@ import {
   consultantForDocumentType,
   CONSULTANT_DELIVERABLES,
   externalApplicationForDocumentType,
-  HBCF_INSURANCE_URL,
   mappedDocumentSource,
   roadOpeningUrlForCouncil,
   isApprovableDocumentType,
@@ -91,6 +89,7 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
 import { developerByKey } from "@/constants/complianceDevelopers";
+import { CertificateAndCoverSection } from "./certificate-and-cover-section";
 import {
   DeveloperApprovalBlock,
   isDeveloperApprovalSettled,
@@ -223,6 +222,7 @@ type SectionKey =
   | "response"
   | "checklist"
   | "development-application"
+  | "certificate"
   | "vault";
 
 type ProjectComplianceTabProps = {
@@ -270,9 +270,6 @@ export function ProjectComplianceTab({
       documentId: document?.id,
       documentType,
     });
-  const [insuranceAnswer, setInsuranceAnswer] = useState<"yes" | "no" | null>(
-    null,
-  );
   const [isThreadOpen, setIsThreadOpen] = useState(false);
   /**
    * Which blocks the reader has opened or shut by hand.
@@ -1220,14 +1217,22 @@ export function ProjectComplianceTab({
   }
 
   // ---------------------------------------------------------------------
-  // Everything approved — the finished file, straight away.
+  // The finished file, straight away.
   //
   // It used to sit behind a "View final document list" button on a card whose
   // only other content restated what the final page says in its own header.
   // A closed engagement has one thing left to look at, so this shows it.
+  //
+  // Keyed on COMPLETED rather than on APPROVED, which is where it used to be
+  // and where it stopped being right. APPROVED means every checklist line has
+  // passed, which was the end of the file when the file ended at the checklist;
+  // it is now the point at which the certifier goes away and issues the
+  // construction certificate, with the HBCF cover following that. Returning the
+  // final page here would hide both of them behind a screen announcing that the
+  // job was finished.
   // ---------------------------------------------------------------------
 
-  if (engagement.status === CertifierEngagementStatus.APPROVED) {
+  if (engagement.status === CertifierEngagementStatus.COMPLETED) {
     return (
       <ComplianceFinalPage
         documents={engagement.documents}
@@ -1278,10 +1283,6 @@ export function ProjectComplianceTab({
   const checklistDocument = documentsByType.get(
     ComplianceDocumentType.CHECKLIST,
   );
-  // Gates the insurance question. A waved-off line must not hold it shut —
-  // that is the whole point of being able to wave one off.
-  const allChecklistUploaded =
-    checklistItems.length > 0 && !checklistItems.some(isOutstandingEvidence);
   const insuranceDocument = documentsByType.get(
     ComplianceDocumentType.HOME_INSURANCE,
   );
@@ -1474,25 +1475,45 @@ export function ProjectComplianceTab({
   // pack is where the engagement starts. Cards the reader has not touched
   // follow this, so the tab re-points itself as the engagement moves on.
   // -------------------------------------------------------------------
+  /**
+   * Whether the certifier has finished passing the checklist.
+   *
+   * The two statuses between the last item being approved and the file being
+   * finished. COMPLETED is deliberately absent: it returns the final page
+   * above, so a job that reaches here has not got there yet.
+   *
+   * Read by the section that closes the file and by the marker below, so the
+   * card that unlocks and the card the tab opens on cannot disagree.
+   */
+  const checklistPassed =
+    engagement.status === CertifierEngagementStatus.APPROVED ||
+    engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED;
+
   const activeSection: SectionKey =
     unidentified.length > 0
       ? "unidentified"
-      : // A job waiting on development approval has a checklist it cannot work
-        // on, so the DA is where the work is — and only while that is true. Once
-        // the consent lands the checklist unfreezes and takes the marker back,
-        // which is the order the job is actually done in.
-        checklistBlocked
-        ? "development-application"
-        : checklistItems.length > 0
-          ? "checklist"
-          : hasResponse
-            ? "response"
-            : // The collection half now has three blocks rather than one, so
-              // "where the engagement starts" is the first party that still owes
-              // something. Falls back to the surveyor, which is where a file with
-              // nothing outstanding began and where a finished one reads fine.
-              (partySections.find((section) => !section.isComplete)?.party ??
-              CompliancePartyType.SURVEYOR);
+      : // Once the certifier has passed the checklist, the two documents that
+        // close the file are the only work left — so the marker comes off a
+        // twenty-row list nobody has anything more to do with.
+        checklistPassed
+        ? "certificate"
+        : // A job waiting on development approval has a checklist it cannot work
+          // on, so the DA is where the work is — and only while that is true.
+          // Once the consent lands the checklist unfreezes and takes the marker
+          // back, which is the order the job is actually done in.
+          checklistBlocked
+          ? "development-application"
+          : checklistItems.length > 0
+            ? "checklist"
+            : hasResponse
+              ? "response"
+              : // The collection half now has three blocks rather than one, so
+                // "where the engagement starts" is the first party that still
+                // owes something. Falls back to the surveyor, which is where a
+                // file with nothing outstanding began and where a finished one
+                // reads fine.
+                (partySections.find((section) => !section.isComplete)?.party ??
+                CompliancePartyType.SURVEYOR);
 
   const isOpen = (key: SectionKey) => sections[key] ?? key === activeSection;
   const toggleSection = (key: SectionKey) => (open: boolean) =>
@@ -2151,90 +2172,35 @@ export function ProjectComplianceTab({
               ))}
             </ul>
 
-            {/* -------------------------------------------------------
-                  Home insurance
-              ------------------------------------------------------- */}
-            {allChecklistUploaded && !checklistBlocked ? (
-              <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-                {insuranceDocument?.files.length ? (
-                  <ul>
-                    <ComplianceDocumentRow
-                      label="Home Insurance"
-                      document={insuranceDocument}
-                      mode={rowMode(insuranceDocument)}
-                      isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
-                      onUpload={(file) =>
-                        void attachEvidence(file, insuranceUpload)
-                      }
-                      onApprove={() => void handleApprove(insuranceDocument)}
-                      onReject={() => handleReject(insuranceDocument)}
-                      onPreviewFile={handlePreviewFile}
-                    />
-                  </ul>
-                ) : (
-                  <>
-                    <p className="font-medium text-foreground">
-                      Have you raised the home insurance?
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        type="button"
-                        variant={
-                          insuranceAnswer === "yes" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setInsuranceAnswer("yes")}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={
-                          insuranceAnswer === "no" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => setInsuranceAnswer("no")}
-                      >
-                        No
-                      </Button>
-                    </div>
-
-                    {insuranceAnswer === "yes" ? (
-                      <ul className="mt-2">
-                        <ComplianceDocumentRow
-                          label="Home Insurance"
-                          helperText="Upload the certificate of insurance"
-                          mode="upload"
-                          isBusy={
-                            isScopeBusy(insuranceScope) || submissionClaimed
-                          }
-                          onUpload={(file) =>
-                            void attachEvidence(file, insuranceUpload)
-                          }
-                        />
-                      </ul>
-                    ) : null}
-
-                    {insuranceAnswer === "no" ? (
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        Raise Home Building Compensation Fund cover with icare,
-                        then come back and upload the certificate.{" "}
-                        <a
-                          href={HBCF_INSURANCE_URL}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                        >
-                          icare HBCF
-                          <ExternalLink className="size-3" aria-hidden="true" />
-                        </a>
-                      </p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            ) : null}
           </ComplianceSectionCard>
+
+          {/* -----------------------------------------------------------
+              The last two documents.
+
+              The insurance question used to sit at the bottom of the card
+              above, appearing the moment every checklist row had a file on it
+              — which is weeks before the certifier has finished with them. A
+              builder who answered "no" was being told to raise cover for a job
+              that might still come back with four amendments. It moved behind
+              the certificate, where the job is definitely proceeding.
+          ----------------------------------------------------------- */}
+          <CertificateAndCoverSection
+            className="md:col-span-2"
+            certificate={documentsByType.get(
+              ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+            )}
+            insurance={insuranceDocument}
+            checklistPassed={checklistPassed}
+            rowMode={rowMode}
+            isRowBusy={(document, documentType) =>
+              isScopeBusy(scopeOf(document, documentType))
+            }
+            onUpload={(file, target) => void attachEvidence(file, target)}
+            onPreviewFile={handlePreviewFile}
+            isActive={activeSection === "certificate"}
+            open={isOpen("certificate")}
+            onOpenChange={toggleSection("certificate")}
+          />
         </div>
 
         {/* -------------------------------------------------------------
