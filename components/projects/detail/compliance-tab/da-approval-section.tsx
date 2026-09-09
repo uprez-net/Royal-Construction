@@ -91,6 +91,28 @@ type DaApprovalSectionProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   className?: string;
+  /**
+   * The estate developer's sign-off, rendered by the caller.
+   *
+   * A slot rather than something built here, for the reason `renderAction` is
+   * one: this component knows what a document is and nothing about who
+   * produces one — and the developer block needs an outreach, three dispatches
+   * and two modals, none of which belong in a list of rows.
+   *
+   * It sits beside the lodgement rather than among the documents because it is
+   * not one. Nothing is being collected: it is a condition on sending, like the
+   * bushfire row being answered, and both are what `blockedReason` below reads.
+   */
+  developerBlock?: ReactNode;
+  /**
+   * Why the application cannot be lodged yet, beyond outstanding documents.
+   *
+   * Null when the only thing missing is rows, which the block already says for
+   * itself. Set when every row is answered and the pack still must not go — the
+   * shape `packSendBlockedReason` uses on the certifier's own send, and for the
+   * same reason: a grey button with no sentence beside it is a bug report.
+   */
+  blockedReason?: string | null;
 };
 
 export function DaApprovalSection({
@@ -108,6 +130,8 @@ export function DaApprovalSection({
   open,
   onOpenChange,
   className,
+  developerBlock,
+  blockedReason,
 }: DaApprovalSectionProps) {
   /**
    * Whether a row is answered.
@@ -147,7 +171,7 @@ export function DaApprovalSection({
    * file": the council does not want a mine subsidence approval for a lot that
    * is not in a subsidence district, and an admin saying so is an answer.
    */
-  const isReadyToLodge = outstanding.length === 0;
+  const isReadyToLodge = outstanding.length === 0 && !blockedReason;
 
   return (
     <ComplianceSectionCard
@@ -293,6 +317,12 @@ export function DaApprovalSection({
               }
             />
           </>
+        ) : blockedReason ? (
+          // Said before the count, because it is the sharper answer. A reader
+          // whose rows are all green and whose button is still grey is looking
+          // for exactly this sentence, and putting the document tally first
+          // would tell them the one thing they already know.
+          <p className="text-sm text-muted-foreground">{blockedReason}</p>
         ) : (
           <p className="text-sm text-muted-foreground">
             {outstanding.length} document
@@ -302,6 +332,12 @@ export function DaApprovalSection({
           </p>
         )}
       </div>
+
+      {/* The estate developer's sign-off on the bushfire report, where the lot
+          sits in an estate that wants one. Above the certificate block and
+          below the lodgement, because it is a condition on lodging rather than
+          a document being ordered. */}
+      {developerBlock}
 
       {/* The 10.7 certificate, which the pack has written off and the council
           still wants. Its block lives here rather than on the pack from the

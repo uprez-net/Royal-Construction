@@ -40,6 +40,9 @@ import type {
   CertifierReplyInput,
   ClassifyReceivedDocumentInput,
   ComplianceDocumentUploadInput,
+  DeveloperDecisionInput,
+  DeveloperRequirementInput,
+  DeveloperResendInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
   ExternalApplicationRequest,
@@ -403,6 +406,16 @@ export const complianceScope = {
    */
   application: (kind: ComplianceExternalApplicationKind): ComplianceScope =>
     `application:${kind}`,
+  /**
+   * Everything on the estate developer's block.
+   *
+   * One scope for three writes — the verdict, the re-send, and whether the
+   * approval is needed at all — rather than three, because unlike the party
+   * sections these controls are never on screen together. The block renders one
+   * step at a time, so a shared key freezes exactly the control that is showing
+   * and nothing else.
+   */
+  developer: "developer" as ComplianceScope,
   /** Booking, moving or resolving the client and architect meeting. */
   meeting: "meeting" as ComplianceScope,
   /** Recording the client's verdict on the preliminary plans. */
@@ -701,6 +714,88 @@ export const startPartyOutreach = createAsyncThunk<
   }
 });
 
+/**
+ * Records the estate developer's answer on the bushfire report.
+ *
+ * A rejection carries the reasons through to the bushfire consultant server
+ * side, so this one dispatch is the whole of the loop from the client's point
+ * of view — there is no second call to make and nothing for the tab to remember
+ * to do.
+ */
+export const recordDeveloperDecision = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & DeveloperDecisionInput,
+  { rejectValue: string }
+>(
+  "projects/recordDeveloperDecision",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/developer/decision",
+        jsonPost(payload),
+        "Unable to record the developer's decision",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the developer's decision",
+      );
+    }
+  },
+);
+
+/** Puts the revised bushfire report back in front of the developer. */
+export const resendDeveloperApproval = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & DeveloperResendInput,
+  { rejectValue: string }
+>(
+  "projects/resendDeveloperApproval",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/developer/resend",
+        jsonPost(payload),
+        "Unable to send the report back to the developer",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the report back to the developer",
+      );
+    }
+  },
+);
+
+/** Records whether this lot needs the estate developer's approval at all. */
+export const setDeveloperApprovalRequired = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & DeveloperRequirementInput,
+  { rejectValue: string }
+>(
+  "projects/setDeveloperApprovalRequired",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/developer/requirement",
+        jsonPost(payload),
+        "Unable to record whether a developer approval is needed",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record whether a developer approval is needed",
+      );
+    }
+  },
+);
+
 /** Records that the client already had this party's documents. */
 export const recordPartySelfSupplied = createAsyncThunk<
   ComplianceResult,
@@ -988,6 +1083,12 @@ const complianceOperations = [
   ),
   complianceOperation(sendPartyReply, (arg) =>
     complianceScope.partyReply(arg.outreachId),
+  ),
+  complianceOperation(recordDeveloperDecision, () => complianceScope.developer),
+  complianceOperation(resendDeveloperApproval, () => complianceScope.developer),
+  complianceOperation(
+    setDeveloperApprovalRequired,
+    () => complianceScope.developer,
   ),
   complianceOperation(recordExternalApplication, (arg) =>
     complianceScope.application(arg.kind),

@@ -7,6 +7,7 @@ import {
   CompliancePartyType,
 } from "@prisma/client";
 
+import { BUSHFIRE_REVISION_BUSINESS_DAYS } from "@/constants/complianceDevelopers";
 import {
   ARCHITECT_PLANS_BUSINESS_DAYS,
   ARCHITECT_REVISION_BUSINESS_DAYS,
@@ -427,6 +428,61 @@ export function assessOverdueConditions(
         now,
       ),
     );
+  }
+
+  // -------------------------------------------------------------------
+  // The estate developer, and the rework a refusal from them causes.
+  //
+  // Two clocks on one report, and they are never both running: the first is the
+  // wait on a verdict, the second is the wait on a consultant to answer it.
+  // Separate types because at most one alert of a type is open per file, and
+  // "waiting on the developer" and "waiting on the consultant to redo it" want
+  // different chases sent to different people.
+  // -------------------------------------------------------------------
+  const developer = outreachForParty(engagement, CompliancePartyType.DEVELOPER);
+
+  if (!developer || !developer.sentAt || developer.approvalDecision) {
+    // Nobody asked, or they have answered. A rejection counts as answered: the
+    // wait has moved to the consultant, and chasing a developer who has already
+    // told us no is the alert pointing at the wrong party.
+    resolve.push({
+      type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+      note: developer?.approvalDecision
+        ? "The developer has given their answer."
+        : "Nobody is waiting on a developer approval.",
+    });
+  } else {
+    const elapsed = businessDaysSince(developer.sentAt, now);
+    if (elapsed > PARTY_RESPONSE_BUSINESS_DAYS[CompliancePartyType.DEVELOPER]) {
+      raise.push({
+        type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+        source: ComplianceAlertSource.DEVELOPER,
+        detail: `The bushfire report went to them ${workingDays(elapsed)} ago and no decision has come back.`,
+      });
+    }
+  }
+
+  // The rework, measured off the revision round the refusal opened rather than
+  // off the consultant's original engagement — which was months earlier, and
+  // would have this past its threshold on the day the developer said no.
+  const bushfireRevision = outstandingRevision(
+    outreachForParty(engagement, CompliancePartyType.BUSHFIRE_CONSULTANT),
+  );
+
+  if (!bushfireRevision) {
+    resolve.push({
+      type: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+      note: "There is no bushfire report outstanding for revision.",
+    });
+  } else {
+    const elapsed = businessDaysSince(bushfireRevision.requestedAt, now);
+    if (elapsed > BUSHFIRE_REVISION_BUSINESS_DAYS) {
+      raise.push({
+        type: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+        source: ComplianceAlertSource.DEVELOPER,
+        detail: `The developer's reasons went to the consultant ${workingDays(elapsed)} ago and no revised report has come back.`,
+      });
+    }
   }
 
   // -------------------------------------------------------------------

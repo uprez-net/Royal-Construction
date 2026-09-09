@@ -533,3 +533,184 @@ test("a checklist line that has gone since the outreach is not chased forever", 
     resolvedTypes(result).includes(ComplianceAlertType.BASIX_RESPONSE_OVERDUE),
   );
 });
+
+// ---------------------------------------------------------------------------
+// The estate developer, and the rework a refusal from them causes
+//
+// Two clocks on one report that are never both running. The interesting cases
+// are the handovers between them: a rejection has to stop chasing the developer
+// and start chasing the consultant, and the revised report has to stop chasing
+// the consultant without silently restarting the developer's clock from an
+// engagement date months old.
+// ---------------------------------------------------------------------------
+
+test("a developer inside their quoted turnaround is not chased", () => {
+  const file = engagement({
+    outreaches: [outreach(CompliancePartyType.DEVELOPER)] as never,
+  });
+
+  const result = assessOverdueConditions(file, ELEVEN_WORKING_DAYS_LATER);
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a developer past their turnaround with no verdict is chased", () => {
+  const file = engagement({
+    outreaches: [outreach(CompliancePartyType.DEVELOPER)] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("a developer who has approved is not chased", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        approvalDecision: "APPROVED",
+        approvalDecidedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("a developer who has rejected is not chased either", () => {
+  // The handover. A rejection is still an answer, and the wait has moved to the
+  // consultant — chasing the developer here points the alert at the one party
+  // who has already done what was asked of them.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        approvalDecision: "REJECTED",
+        approvalDecidedAt: MONDAY,
+        approvalReason: "Roof material is not compliant at BAL-29.",
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a bushfire revision past its threshold chases the consultant", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.BUSHFIRE_CONSULTANT, {
+        revisions: [{ id: "round-1", requestedAt: MONDAY, respondedAt: null }],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+  );
+});
+
+test("the revision clock runs from the refusal, not from the engagement", () => {
+  // The reason the round is a row rather than a flag. This consultant was
+  // engaged on the Monday and the developer refused the report on the Monday
+  // twelve working days later; the rework is one day old and is not late,
+  // however long ago the engagement was.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.BUSHFIRE_CONSULTANT, {
+        sentAt: MONDAY,
+        revisions: [
+          {
+            id: "round-1",
+            requestedAt: TWELVE_WORKING_DAYS_LATER,
+            respondedAt: null,
+          },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(
+    file,
+    sydney("2026-06-19T09:00:00"),
+  );
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a revision that has been answered stops being chased", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.BUSHFIRE_CONSULTANT, {
+        revisions: [
+          {
+            id: "round-1",
+            requestedAt: MONDAY,
+            respondedAt: ELEVEN_WORKING_DAYS_LATER,
+          },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+  );
+});
+
+test("a file with no developer raises neither of their alerts", () => {
+  // Most jobs. The lot is not in a covenanted estate, nobody is ever asked, and
+  // an alert here would be permanent on every project in the system.
+  const result = assessOverdueConditions(engagement(), TWELVE_WORKING_DAYS_LATER);
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+    false,
+  );
+});

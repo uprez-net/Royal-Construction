@@ -1,6 +1,13 @@
 "use client";
 
-import { Check, ChevronsUpDown, FileText, FolderOpen, Loader2, Paperclip, X } from "lucide-react";
+import {
+  Check,
+  FileText,
+  FolderOpen,
+  Loader2,
+  Paperclip,
+  X,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 

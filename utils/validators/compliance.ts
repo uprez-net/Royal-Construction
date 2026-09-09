@@ -1,6 +1,7 @@
 import {
   ComplianceAlertSource,
   ComplianceAlertType,
+  ComplianceApprovalDecision,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   CompliancePartyType,
@@ -150,6 +151,68 @@ export const partySelfSuppliedSchema = z.object({
 });
 
 export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
+
+// ============================================================================
+// The estate developer's approval
+// ============================================================================
+
+/**
+ * The developer's verdict on the bushfire report, as an admin records it.
+ *
+ * `reason` is required on a rejection and ignored on an approval, which is a
+ * refinement rather than two schemas because it is one form with one submit and
+ * the reader is answering one question. A rejection with no reasons is the case
+ * this exists to prevent: those words are quoted verbatim to the bushfire
+ * consultant who has to redo the report, and "the developer said no" costs
+ * another eleven working days.
+ */
+export const developerDecisionSchema = z
+  .object({
+    decision: z.enum(ComplianceApprovalDecision),
+    reason: normalizedStringSchema.optional(),
+  })
+  .refine(
+    (input) =>
+      input.decision !== ComplianceApprovalDecision.REJECTED ||
+      Boolean(input.reason?.trim()),
+    {
+      message:
+        "Say why they rejected it — the bushfire consultant is sent this word for word.",
+      path: ["reason"],
+    },
+  );
+
+export type DeveloperDecisionInput = z.infer<typeof developerDecisionSchema>;
+
+/**
+ * Putting a revised report back in front of the developer.
+ *
+ * No contact and no estate: the outreach already exists and this rides its
+ * thread. What it carries beyond the report is a note and whatever the sender
+ * attached, which is the same pair every other send here takes.
+ */
+export const developerResendSchema = z.object({
+  note: normalizedStringSchema.optional(),
+  extraAttachmentIds: extraAttachmentsSchema,
+});
+
+export type DeveloperResendInput = z.infer<typeof developerResendSchema>;
+
+/**
+ * Whether this lot needs a developer's approval at all.
+ *
+ * A bare boolean, and it is worth being clear that both values are answers.
+ * `false` is not "we do not know" -- it is somebody saying this estate carries
+ * no covenant, which is what opens the development application gate. Nobody
+ * having been asked is the column being null, which no request can set.
+ */
+export const developerRequirementSchema = z.object({
+  required: z.boolean(),
+});
+
+export type DeveloperRequirementInput = z.infer<
+  typeof developerRequirementSchema
+>;
 
 // ============================================================================
 // Applications to outside bodies

@@ -41,6 +41,8 @@ export type ModalType =
   | "complianceComplete"
   | "complianceReject"
   | "connectComplianceParty"
+  | "developerDecision"
+  | "developerResend"
   | "resolveComplianceAlert"
   | "scheduleComplianceMeeting"
   | "resolveComplianceMeeting"

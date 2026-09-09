@@ -4,6 +4,7 @@ import {
   CertifierEmailDirection,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceApprovalChannel,
   ComplianceOutreachStatus,
   CompliancePartyType,
   Prisma,
@@ -12,6 +13,7 @@ import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
+import { detectDeveloperVerdict } from "@/lib/agent/developerApprovalAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import {
   PARTY_INBOUND_DOCUMENT_TYPES,
@@ -28,6 +30,10 @@ import {
   recordPreliminaryPlansArrival,
   recordWasteManagementPlanArrival,
 } from "@/lib/data/compliance-architect";
+import {
+  recordBushfireRevisionArrival,
+  recordDeveloperDecision,
+} from "@/lib/data/compliance-developer";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
@@ -399,6 +405,7 @@ async function classifyStoredDocuments(
   titleSearches: { url: string; name: string }[];
   preliminaryPlans: number;
   wasteManagementPlans: number;
+  bushfireReports: number;
 }> {
   "use step";
 
@@ -424,6 +431,10 @@ async function classifyStoredDocuments(
   // request for a waste management plan, and either closing the other's alert
   // would credit the architect with work they have not started.
   let wasteManagementPlans = 0;
+  // Counted for the same reason as the two above and against a different
+  // clock: a bushfire report landing is what closes the round the estate
+  // developer's refusal opened.
+  let bushfireReports = 0;
 
   for (const item of stored) {
     try {
@@ -480,6 +491,10 @@ async function classifyStoredDocuments(
         wasteManagementPlans += 1;
       }
 
+      if (result.documentType === ComplianceDocumentType.BUSHFIRE_REPORT) {
+        bushfireReports += 1;
+      }
+
       if (
         result.documentType ===
         ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
@@ -491,7 +506,13 @@ async function classifyStoredDocuments(
     }
   }
 
-  return { labelled, titleSearches, preliminaryPlans, wasteManagementPlans };
+  return {
+    labelled,
+    titleSearches,
+    preliminaryPlans,
+    wasteManagementPlans,
+    bushfireReports,
+  };
 }
 
 /**
@@ -551,6 +572,67 @@ async function closeWasteManagementLoop(params: {
 }): Promise<void> {
   "use step";
   await recordWasteManagementPlanArrival(params);
+}
+
+/**
+ * Closes the developer's revision round when a revised report arrives.
+ *
+ * Its own step beside the two above, and the same shape: the consultant's reply
+ * carrying a fresh bushfire assessment ends the wait that the developer's
+ * refusal started. It also clears the stale verdict, so the block goes back to
+ * offering the send rather than showing a rejection against a report that has
+ * since been redone.
+ */
+async function closeBushfireRevisionLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordBushfireRevisionArrival(params);
+}
+
+/**
+ * Reads a developer's reply for their verdict, and records it.
+ *
+ * The one inbound message on this file that carries a decision rather than a
+ * document. Everybody else answers with an attachment and the classifier above
+ * records their answer; a developer writes "approved, thanks" and attaches
+ * nothing, so without this the file waits out the SLA and then chases somebody
+ * who has already replied.
+ *
+ * Its own step for the reason every model call here is: it can fail on its own
+ * without costing the reply, which is already stored and already on the thread
+ * by the time this runs. The verdict is a courtesy on top of that — an admin
+ * can record the same answer in one click, and the block goes on offering both
+ * buttons whether or not this succeeded.
+ *
+ * Never overrides a person. `recordDeveloperDecision` refuses an INBOUND_EMAIL
+ * verdict on a row an admin has already decided, so a second pass over the same
+ * thread cannot undo somebody who had read it properly.
+ */
+async function recordDeveloperVerdict(
+  params: { projectId: string },
+  message: InboundPartyMessage,
+): Promise<"approved" | "rejected" | "none"> {
+  "use step";
+
+  const verdict = await detectDeveloperVerdict({
+    subject: message.subject,
+    body: message.body,
+  });
+
+  if (!verdict.decision) {
+    return "none";
+  }
+
+  await recordDeveloperDecision({
+    projectId: params.projectId,
+    decision: verdict.decision,
+    reason: verdict.reason || null,
+    channel: ComplianceApprovalChannel.INBOUND_EMAIL,
+  });
+
+  return verdict.decision === "APPROVED" ? "approved" : "rejected";
 }
 
 /**
@@ -786,6 +868,35 @@ export const processInboundPartyEmail = async (
         projectId,
         engagementId: outreach.engagementId,
       });
+    }
+
+    // A bushfire report arriving on the consultant's thread. Read off what was
+    // actually placed rather than off the party, exactly as the two above are:
+    // a consultant's covering email carries other things, and the round only
+    // closes on the document that answers it.
+    //
+    // Guarded on the party as well, because BUSHFIRE_REPORT is a type the
+    // developer's own thread may carry too -- they routinely return the report
+    // stamped -- and a developer sending back the copy they just approved must
+    // not read as the consultant having redone it.
+    if (
+      classification.bushfireReports > 0 &&
+      outreach.party === CompliancePartyType.BUSHFIRE_CONSULTANT
+    ) {
+      await closeBushfireRevisionLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
+    }
+  }
+
+  // The developer's verdict, where this is their thread. After the documents,
+  // because a rejection opens a revision round and mails the consultant, and
+  // that should happen against a file whose attachments have already landed.
+  if (outreach.party === CompliancePartyType.DEVELOPER) {
+    const verdict = await recordDeveloperVerdict({ projectId }, message);
+    if (verdict !== "none") {
+      console.log(`  Developer ${verdict} the bushfire report.`);
     }
   }
 

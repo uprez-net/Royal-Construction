@@ -2,6 +2,7 @@
 
 import {
   CertifierEngagementStatus,
+  ComplianceApprovalDecision,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
@@ -84,10 +85,16 @@ import {
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
+  setDeveloperApprovalRequired,
   uploadComplianceDocument,
   type ComplianceScope,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
+import { developerByKey } from "@/constants/complianceDevelopers";
+import {
+  DeveloperApprovalBlock,
+  isDeveloperApprovalSettled,
+} from "./developer-approval-block";
 import {
   checklistBlockedReason,
   checklistItemDetail,
@@ -96,7 +103,9 @@ import {
   externalApplication,
   outreachForParty,
   planningCertificate,
+  outstandingRevision,
   requiresPlanningCertificate,
+  vaultAttachmentOptions,
   type CertifierEngagementDetail,
   type ComplianceAlertRecord,
   type ComplianceDocumentWithFiles,
@@ -671,10 +680,94 @@ export function ProjectComplianceTab({
           prefilled,
           checklistDocumentId,
           deliverables: deliverablesForParty(party, checklistDocumentId),
+          // Read only by the developer picker, which orders the estate list by
+          // how likely each one is to be this lot's. Both are hints and neither
+          // filters -- see `developersForArea`.
+          council: project.council,
+          location: project.location,
+          // What the "From the file" control offers. Resolved here for the same
+          // reason `prefilled` is: the modal knows how to send a request and
+          // nothing about which documents exist.
+          vaultOptions,
         },
       }),
     );
   };
+
+  // -------------------------------------------------------------------
+  // The estate developer.
+  //
+  // Three writes and two modals, all keyed on one scope: unlike the party
+  // sections, no two of these controls are ever on screen together, so a shared
+  // key freezes exactly the control that is showing.
+  // -------------------------------------------------------------------
+  const developerOutreach = outreachForParty(
+    engagement,
+    CompliancePartyType.DEVELOPER,
+  );
+  const bushfireRow = documentsByType.get(
+    ComplianceDocumentType.BUSHFIRE_REPORT,
+  );
+
+  /**
+   * Whether the developer question is live at all.
+   *
+   * Only where a bushfire report is actually wanted. A job whose bushfire row
+   * has been marked as not applying is not in a bushfire-prone area, so there
+   * is nothing for a covenant to be about — and asking the question anyway
+   * would put a permanent unanswered gate on the majority of jobs.
+   */
+  const needsBushfireReport = !(
+    bushfireRow && isNotRequired(bushfireRow.status)
+  );
+
+  /**
+   * Whether a revised report has landed since the developer refused one.
+   *
+   * Read off the consultant's revision rounds rather than off the report's own
+   * timestamps: a file replaced for an unrelated reason must not read as an
+   * answer to an objection nobody addressed, which is the same distinction
+   * `outstandingRevision` draws for the architect.
+   */
+  const hasRevisedReport = Boolean(
+    developerOutreach?.approvalDecision ===
+      ComplianceApprovalDecision.REJECTED &&
+      bushfireRow?.files.length &&
+      !outstandingRevision(
+        outreachForParty(engagement, CompliancePartyType.BUSHFIRE_CONSULTANT),
+      ),
+  );
+
+  const handleSetDeveloperRequired = async (required: boolean) => {
+    try {
+      await dispatch(
+        setDeveloperApprovalRequired({ projectId: project.id, required }),
+      ).unwrap();
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not record that answer.",
+      );
+    }
+  };
+
+  /**
+   * Everything on the file a message could carry, for every modal that sends
+   * one.
+   *
+   * Not wrapped in `useMemo`, unlike the derivations above it. Passing an
+   * imported function through as an argument is a shape the React Compiler
+   * cannot prove it is safe to preserve, so the manual memo made it bail out of
+   * optimising this component altogether — which costs far more than the sort
+   * it was saving. The compiler memoises this on its own.
+   */
+  const vaultOptions = vaultAttachmentOptions(
+    engagement,
+    complianceDocumentLabel,
+  );
 
   /**
    * Every checklist line this engagement will be answering.
@@ -1891,6 +1984,68 @@ export function ProjectComplianceTab({
               isActive={activeSection === "development-application"}
               open={isOpen("development-application")}
               onOpenChange={toggleSection("development-application")}
+              developerBlock={
+                // Only where a bushfire report is wanted. On a lot that is not
+                // bushfire prone there is nothing for a covenant to be about,
+                // and the block would be a permanent unanswered question on the
+                // majority of jobs.
+                needsBushfireReport ? (
+                  <DeveloperApprovalBlock
+                    outreach={developerOutreach}
+                    required={engagement.developerApprovalRequired}
+                    report={bushfireRow}
+                    hasRevisedReport={hasRevisedReport}
+                    isBusy={isScopeBusy(complianceScope.developer)}
+                    onSetRequired={(required) =>
+                      void handleSetDeveloperRequired(required)
+                    }
+                    onEngage={() =>
+                      handleConnectParty(CompliancePartyType.DEVELOPER)
+                    }
+                    onDecide={(decision) =>
+                      dispatch(
+                        openModal({
+                          type: "developerDecision",
+                          payload: {
+                            projectId: project.id,
+                            decision,
+                            estate:
+                              developerByKey(developerOutreach?.developerKey)
+                                ?.estate ?? null,
+                          },
+                        }),
+                      )
+                    }
+                    onResend={() =>
+                      dispatch(
+                        openModal({
+                          type: "developerResend",
+                          payload: {
+                            projectId: project.id,
+                            previousReason:
+                              developerOutreach?.approvalReason ?? null,
+                            vaultOptions,
+                          },
+                        }),
+                      )
+                    }
+                  />
+                ) : null
+              }
+              blockedReason={
+                needsBushfireReport &&
+                !isDeveloperApprovalSettled({
+                  required: engagement.developerApprovalRequired,
+                  outreach: developerOutreach,
+                })
+                  ? engagement.developerApprovalRequired === null
+                    ? "Say whether this estate's developer has to approve the bushfire report before the application can be lodged."
+                    : developerOutreach?.approvalDecision ===
+                        ComplianceApprovalDecision.REJECTED
+                      ? "The estate developer rejected the bushfire report. Lodging it as it stands means the council assessing a report the developer has already refused."
+                      : "The bushfire report is still waiting on the estate developer's approval."
+                  : null
+              }
             />
           ) : null}
 
