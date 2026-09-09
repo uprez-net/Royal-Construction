@@ -4,6 +4,11 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +21,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -39,10 +45,16 @@ import {
  */
 export function ReviewPlansModal({
   projectId,
+  vaultOptions,
   open,
   onOpenChange,
 }: {
   projectId: string;
+  /**
+   * What is on the file already, for the attach control's "From the file"
+   * picker. Resolved by the caller with `vaultAttachmentOptions`.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -54,6 +66,7 @@ export function ReviewPlansModal({
 
   const [approved, setApproved] = useState<"yes" | "no">("yes");
   const [feedback, setFeedback] = useState("");
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +79,7 @@ export function ReviewPlansModal({
           projectId,
           approved: isApproved,
           feedback: isApproved ? undefined : feedback.trim(),
+          extraAttachmentIds: extraAttachmentIds(extras),
         }),
       ).unwrap();
       toast.success(
@@ -150,6 +164,15 @@ export function ReviewPlansModal({
               </div>
             ) : null}
           </div>
+
+          <ExtraAttachmentsField
+            projectId={projectId}
+            value={extras}
+            onChange={setExtras}
+            vaultOptions={vaultOptions}
+            disabled={isPending}
+            hint="A photograph of the marked-up printout, a sketch — anything that says what the client wants better than the words do."
+          />
 
           <DialogFooter>
             <Button

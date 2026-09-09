@@ -662,12 +662,14 @@ export function ModalManager() {
         contactName,
         contactEmail,
         attachments,
+        vaultOptions,
         checklistDocumentId,
       } = modal.payload as {
         projectId: string;
         contactName: string | null;
         contactEmail: string | null;
         attachments: { name: string; url: string }[];
+        vaultOptions?: VaultAttachmentOption[];
         checklistDocumentId?: string;
       };
       return (
@@ -676,6 +678,7 @@ export function ModalManager() {
           contactName={contactName}
           contactEmail={contactEmail}
           attachments={attachments}
+          vaultOptions={vaultOptions}
           checklistDocumentId={checklistDocumentId}
           open
           onOpenChange={(open) => {
@@ -798,10 +801,14 @@ export function ModalManager() {
       );
     }
     case "scheduleComplianceMeeting": {
-      const { projectId: id } = modal.payload as { projectId: string };
+      const { projectId: id, vaultOptions } = modal.payload as {
+        projectId: string;
+        vaultOptions?: VaultAttachmentOption[];
+      };
       return (
         <ScheduleMeetingModal
           projectId={id}
+          vaultOptions={vaultOptions}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();
@@ -810,13 +817,19 @@ export function ModalManager() {
       );
     }
     case "resolveComplianceMeeting": {
-      const { projectId: id, scheduledFor } = modal.payload as {
+      const {
+        projectId: id,
+        scheduledFor,
+        vaultOptions,
+      } = modal.payload as {
         projectId: string;
         scheduledFor: string;
+        vaultOptions?: VaultAttachmentOption[];
       };
       return (
         <ResolveMeetingModal
           projectId={id}
+          vaultOptions={vaultOptions}
           scheduledFor={scheduledFor}
           open
           onOpenChange={(open) => {
@@ -826,10 +839,14 @@ export function ModalManager() {
       );
     }
     case "reviewArchitectPlans": {
-      const { projectId: id } = modal.payload as { projectId: string };
+      const { projectId: id, vaultOptions } = modal.payload as {
+        projectId: string;
+        vaultOptions?: VaultAttachmentOption[];
+      };
       return (
         <ReviewPlansModal
           projectId={id}
+          vaultOptions={vaultOptions}
           open
           onOpenChange={(open) => {
             if (!open) handleClose();

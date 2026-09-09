@@ -904,6 +904,7 @@ export function ProjectComplianceTab({
               })),
             ),
           checklistDocumentId,
+          vaultOptions,
         },
       }),
     );
@@ -1786,6 +1787,7 @@ export function ProjectComplianceTab({
                   entry.party === CompliancePartyType.ARCHITECT ? (
                     <ArchitectWorkflow
                       projectId={project.id}
+                      vaultOptions={vaultOptions}
                       outreach={entry.outreach}
                       hasPreliminaryPlans={Boolean(
                         documentsByType.get(

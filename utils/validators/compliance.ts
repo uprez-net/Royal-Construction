@@ -341,6 +341,14 @@ export const scheduleComplianceMeetingSchema = z.object({
   scheduledFor: isoDateSchema,
   /** Why it moved, on a reschedule. Sent to both sides on the invitation. */
   note: normalizedStringSchema.optional(),
+  /**
+   * Anything the sender attached by hand.
+   *
+   * The one invitation on this file that both the client and the architect
+   * receive, so it is also the one place an agenda, a mood board or the
+   * client's own sketches can reach both of them at once.
+   */
+  extraAttachmentIds: extraAttachmentsSchema,
 });
 
 export type ScheduleComplianceMeetingInput = z.infer<
@@ -377,6 +385,15 @@ export const resolveComplianceMeetingSchema = z.discriminatedUnion("outcome", [
     outcome: z.literal("rescheduled"),
     scheduledFor: isoDateSchema,
     note: normalizedStringSchema.optional(),
+    /**
+     * Anything the sender attached by hand.
+     *
+     * Only on the reschedule branch, because only the reschedule sends a
+     * message: recording a meeting as held is a note to ourselves about
+     * something that already happened, and there is nobody to attach anything
+     * to.
+     */
+    extraAttachmentIds: extraAttachmentsSchema,
   }),
 ]);
 
@@ -412,6 +429,8 @@ export const wasteManagementRequestSchema = z.object({
   note: normalizedStringSchema.optional(),
   /** The checklist line this answers, where it came off one. */
   checklistDocumentId: idSchema.optional(),
+  /** Anything the sender attached by hand. See `extraAttachmentsSchema`. */
+  extraAttachmentIds: extraAttachmentsSchema,
 });
 
 export type WasteManagementInput = z.infer<typeof wasteManagementRequestSchema>;
@@ -438,6 +457,15 @@ export const reviewArchitectPlansSchema = z
   .object({
     approved: z.boolean(),
     feedback: z.string().trim().optional(),
+    /**
+     * Anything the sender attached by hand.
+     *
+     * Carried on both outcomes and useful on one. A client rejecting a set of
+     * plans routinely marks them up — a photograph of the printout, a sketch on
+     * the back of an envelope — and the words alone lose exactly the part the
+     * architect needs most.
+     */
+    extraAttachmentIds: extraAttachmentsSchema,
   })
   .superRefine((data, ctx) => {
     if (!data.approved && !data.feedback) {

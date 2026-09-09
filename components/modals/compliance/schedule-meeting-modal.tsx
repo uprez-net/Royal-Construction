@@ -4,6 +4,11 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -36,10 +42,16 @@ import {
  */
 export function ScheduleMeetingModal({
   projectId,
+  vaultOptions,
   open,
   onOpenChange,
 }: {
   projectId: string;
+  /**
+   * What is on the file already, for the attach control's "From the file"
+   * picker. Resolved by the caller with `vaultAttachmentOptions`.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -51,6 +63,7 @@ export function ScheduleMeetingModal({
 
   const [scheduledFor, setScheduledFor] = useState("");
   const [note, setNote] = useState("");
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +79,7 @@ export function ScheduleMeetingModal({
           // reaches.
           scheduledFor: new Date(scheduledFor).toISOString(),
           note: note.trim() || undefined,
+          extraAttachmentIds: extraAttachmentIds(extras),
         }),
       ).unwrap();
       toast.success("Invitation sent to the client and the architect.");
@@ -117,6 +131,15 @@ export function ScheduleMeetingModal({
               />
             </div>
           </div>
+
+          <ExtraAttachmentsField
+            projectId={projectId}
+            value={extras}
+            onChange={setExtras}
+            vaultOptions={vaultOptions}
+            disabled={isPending}
+            hint="Both the client and the architect receive this, so it is the one place an agenda or the client's own sketches reach them together."
+          />
 
           <DialogFooter>
             <Button

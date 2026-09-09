@@ -13,6 +13,7 @@ import { after } from "next/server";
 import { PARTY_LABEL } from "@/constants/complianceDocuments";
 import {
   escapeEmailHtml,
+  resolveExtraAttachments,
   sendOnPartyThread,
   sydneyMeetingTime,
 } from "@/lib/compliance/party-mail";
@@ -52,6 +53,23 @@ import { logAction } from "./actionLog";
  * working days after the feedback, and the daily sweep can only raise an alert
  * against a date that exists.
  */
+
+/**
+ * What the sender attached by hand, as a send wants it.
+ *
+ * A thin wrapper over `resolveExtraAttachments` so the three calls below read
+ * the same and none of them has to remember that ids are resolved against the
+ * project rather than trusted. The check itself is in that function: a caller
+ * who could name a url could put anything on the storage account onto an
+ * outbound email.
+ */
+async function extraAttachments(
+  projectId: string,
+  fileIds: readonly string[] | undefined,
+) {
+  const files = await resolveExtraAttachments(projectId, fileIds ?? []);
+  return files.map((file) => ({ name: file.filename, url: file.url }));
+}
 
 function revalidateEngagement(projectId: string) {
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
@@ -198,6 +216,10 @@ export async function scheduleClientMeeting(
       note: input.note ?? null,
       isReschedule: false,
     }),
+    // The one message on this file both the client and the architect receive,
+    // and therefore the one place an agenda or the client's own sketches reach
+    // both of them at once.
+    attachments: await extraAttachments(projectId, input.extraAttachmentIds),
   });
 
   after(async () => {
@@ -310,6 +332,7 @@ export async function resolveClientMeeting(
       note: input.note ?? null,
       isReschedule: true,
     }),
+    attachments: await extraAttachments(projectId, input.extraAttachmentIds),
   });
 
   after(async () => {
@@ -426,6 +449,10 @@ export async function reviewArchitectPlans(
         feedback,
         round,
       }),
+      // A client rejecting a set of plans routinely marks them up -- a
+      // photograph of the printout, a sketch on the back of an envelope -- and
+      // the words alone lose exactly the part the architect needs most.
+      attachments: await extraAttachments(projectId, input.extraAttachmentIds),
     });
   }
 
@@ -553,13 +580,35 @@ export async function requestWasteManagementPlan(
     ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
     ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
   ];
-  const attachments = attachmentTypes.flatMap((type) =>
+  const planFiles = attachmentTypes.flatMap((type) =>
     engagement.documents
       .filter((document) => document.documentType === type)
       .flatMap((document) =>
-        document.files.map((file) => ({ name: file.filename, url: file.url })),
+        document.files.map((file) => ({
+          id: file.id,
+          name: file.filename,
+          url: file.url,
+        })),
       ),
   );
+
+  // What the sender added on top -- the certifier's own wording on the line
+  // that asked for the plan, most often, which saves the architect being told
+  // second-hand what a waste management plan has to say on this council.
+  const extras = await resolveExtraAttachments(
+    projectId,
+    input.extraAttachmentIds ?? [],
+  );
+  const planIds = new Set(planFiles.map((file) => file.id));
+  const attachments = [
+    ...planFiles.map((file) => ({ name: file.name, url: file.url })),
+    // De-duplicated against the plans, because the picker offers everything on
+    // the file and the obvious thing to reach for is the design they were going
+    // to be sent anyway.
+    ...extras
+      .filter((file) => !planIds.has(file.id))
+      .map((file) => ({ name: file.filename, url: file.url })),
+  ];
 
   await sendOnPartyThread({
     engagement,

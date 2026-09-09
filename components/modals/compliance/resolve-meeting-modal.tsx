@@ -4,6 +4,11 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -45,10 +51,16 @@ type Outcome = "held" | "rescheduled";
 export function ResolveMeetingModal({
   projectId,
   scheduledFor,
+  vaultOptions,
   open,
   onOpenChange,
 }: {
   projectId: string;
+  /**
+   * What is on the file already, for the attach control's "From the file"
+   * picker. Resolved by the caller with `vaultAttachmentOptions`.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
   /** The booked time, so the dialog can say which meeting this is about. */
   scheduledFor: string;
   open: boolean;
@@ -64,6 +76,7 @@ export function ResolveMeetingModal({
   const [heldAt, setHeldAt] = useState("");
   const [newTime, setNewTime] = useState("");
   const [note, setNote] = useState("");
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
 
   const booked = new Date(scheduledFor);
 
@@ -89,6 +102,7 @@ export function ResolveMeetingModal({
                 outcome: "rescheduled" as const,
                 scheduledFor: new Date(newTime).toISOString(),
                 note: note.trim() || undefined,
+                extraAttachmentIds: extraAttachmentIds(extras),
               }),
         }),
       ).unwrap();
@@ -199,6 +213,21 @@ export function ResolveMeetingModal({
               />
             </div>
           </div>
+
+          {/* Only on the reschedule, because only the reschedule sends
+              anything. Recording a meeting as held is a note to ourselves about
+              something that already happened, and there is nobody to attach a
+              file to. */}
+          {outcome === "rescheduled" ? (
+            <ExtraAttachmentsField
+              projectId={projectId}
+              value={extras}
+              onChange={setExtras}
+              vaultOptions={vaultOptions}
+              disabled={isPending}
+              hint="Anything the new invitation should carry — both the client and the architect receive it."
+            />
+          ) : null}
 
           <DialogFooter>
             <Button
