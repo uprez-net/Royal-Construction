@@ -166,6 +166,74 @@ test("a resolved alert marks nothing", () => {
   assert.equal(overdue.documentIds.size, 0);
 });
 
+test("a rejected row is outstanding, though it still holds a file", () => {
+  // The badge this exists for. A rejection puts the row back to PENDING and
+  // records the reason while the refused file stays attached — it is the only
+  // evidence of what was tried. Reading the file count alone called that
+  // settled, which suppressed the revision badges entirely: the architect
+  // redrawing plans the client sent back, and the bushfire consultant
+  // reissuing a report the developer refused.
+  const overdue = overdueComplianceDocuments(
+    engagement({
+      outreaches: [outreach(CompliancePartyType.ARCHITECT)] as never,
+      documents: [
+        supplied(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS, {
+          status: ComplianceDocumentStatus.PENDING,
+          rejectionReason: "The client wants the garage moved.",
+        }),
+      ] as never,
+      alerts: [alert(ComplianceAlertType.ARCHITECT_REVISION_OVERDUE)] as never,
+    }),
+  );
+
+  assert.ok(
+    overdue.types.has(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS),
+  );
+});
+
+test("the replacement clears the badge with the rejection", () => {
+  // The reason is cleared in the same write that supersedes the file, so the
+  // two move together and the badge goes with them.
+  const overdue = overdueComplianceDocuments(
+    engagement({
+      outreaches: [outreach(CompliancePartyType.ARCHITECT)] as never,
+      documents: [
+        supplied(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS, {
+          rejectionReason: null,
+        }),
+      ] as never,
+      alerts: [alert(ComplianceAlertType.ARCHITECT_REVISION_OVERDUE)] as never,
+    }),
+  );
+
+  assert.equal(
+    overdue.types.has(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS),
+    false,
+  );
+});
+
+test("a rejected line marked not required is still answered", () => {
+  // Not required beats a rejection: somebody has decided the job does not want
+  // this at all, which settles it however it got there.
+  const overdue = overdueComplianceDocuments(
+    engagement({
+      outreaches: [outreach(CompliancePartyType.ARCHITECT)] as never,
+      documents: [
+        supplied(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS, {
+          status: ComplianceDocumentStatus.NOT_REQUIRED,
+          rejectionReason: "Superseded.",
+        }),
+      ] as never,
+      alerts: [alert(ComplianceAlertType.ARCHITECT_REVISION_OVERDUE)] as never,
+    }),
+  );
+
+  assert.equal(
+    overdue.types.has(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS),
+    false,
+  );
+});
+
 // ---------------------------------------------------------------------------
 // The alerts that are not about a late document at all
 // ---------------------------------------------------------------------------

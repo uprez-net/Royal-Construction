@@ -50,12 +50,27 @@ const EMPTY: OverdueDocuments = {
   documentIds: new Set(),
 };
 
-/** Whether a row still wants something. A settled row is never late. */
+/**
+ * Whether a row still wants something. A settled row is never late.
+ *
+ * A file on the row is not enough, because a rejection leaves one there. When a
+ * document is sent back, `resolveComplianceDocument` puts the row to PENDING
+ * and records the reason while the refused file stays attached — it is the only
+ * evidence of what was tried, and the row renders it struck through. So a row
+ * carrying a rejection is outstanding despite having a file, and reading the
+ * file count alone suppressed exactly the badges the revision alerts exist for:
+ * the architect redrawing plans the client sent back, and the bushfire
+ * consultant reissuing a report the developer refused.
+ *
+ * The reason clears on the replacement upload, in the same write that
+ * supersedes the file, so the two move together without a marker of their own.
+ */
 function isOutstanding(
   document: ComplianceDocumentWithFiles | undefined,
 ): boolean {
   if (!document) return true;
-  return document.files.length === 0 && !isNotRequired(document.status);
+  if (isNotRequired(document.status)) return false;
+  return document.files.length === 0 || Boolean(document.rejectionReason);
 }
 
 /**

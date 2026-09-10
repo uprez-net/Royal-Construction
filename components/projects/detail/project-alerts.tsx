@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { addWeeks, isWithinInterval } from "date-fns";
+import { addWeeks, isWithinInterval, startOfDay } from "date-fns";
 import {
   AlertTriangle,
   Bell,
@@ -289,10 +289,24 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   const tradieAlerts = useMemo(() => {
     const now = new Date();
     const nextWeek = addWeeks(now, 1);
+    // Midnight, not the current instant. A trade booked for this morning is
+    // still today's work at two in the afternoon, and dropping it off the list
+    // the moment the clock passes it is the opposite of useful.
+    const today = startOfDay(now);
 
     return project.tradieSchedules.filter((schedule) => {
-      const hasAlertStatus = schedule.status === "CONFIRMED";
+      // Confirmed and still ahead. The row prints `scheduledDate`, so an
+      // unbounded status test put a booking from three months ago under a
+      // heading that says "Upcoming" with a date in the past beside it — and
+      // every one of those pushed a genuinely upcoming trade further down a
+      // list that shows four.
+      const isConfirmedAndAhead =
+        schedule.status === "CONFIRMED" &&
+        new Date(schedule.scheduledDate) >= today;
 
+      // Kept as it was, and deliberately not bounded the same way: this arm is
+      // about a milestone falling due within the week, which is actionable
+      // whatever state the booking behind it is in.
       const targetDate = schedule.milestone?.targetDate;
       const isMilestoneDueSoon =
         targetDate &&
@@ -301,7 +315,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
           end: nextWeek,
         });
 
-      return hasAlertStatus || isMilestoneDueSoon;
+      return isConfirmedAndAhead || isMilestoneDueSoon;
     });
   }, [project.tradieSchedules]);
 

@@ -64,6 +64,33 @@ function StageMarker({
 }
 
 /**
+ * The state, in words, for a reader who cannot see the colour.
+ *
+ * The marker is `aria-hidden` and everything it says is carried by an icon and
+ * a fill, and `aria-current="step"` only ever labels one of the seven nodes. So
+ * a screen reader announced "Surveyor" identically for a finished stage, a
+ * stage nine days late and a stage nobody has started -- seven names and no
+ * state at all, which is the whole of what this header is for.
+ */
+function stageStateLabel(stage: ComplianceStage): string {
+  if (stage.isOverdue) {
+    return stage.daysLeft !== null && stage.daysLeft < 0
+      ? `overdue by ${Math.abs(stage.daysLeft)} working days`
+      : "needs attention";
+  }
+  switch (stage.state) {
+    case "done":
+      return "completed";
+    case "current":
+      return stage.daysLeft !== null
+        ? `in progress, ${stage.daysLeft} working days left`
+        : "in progress";
+    default:
+      return "not started";
+  }
+}
+
+/**
  * The one line under a stage name.
  *
  * Four readings and no more, in the order they matter: how far past the quote
@@ -164,6 +191,12 @@ export function ComplianceStageFlow({
                   )}
                 >
                   {stage.label}
+                  {/* Inside the label rather than beside it, so the two are
+                      announced as one thing: "Surveyor, overdue by 4 working
+                      days". The timing line below says the same in fewer
+                      characters for a sighted reader, so it is hidden from the
+                      accessibility tree rather than read out twice. */}
+                  <span className="sr-only">, {stageStateLabel(stage)}</span>
                 </span>
 
                 {/* The line is rendered even when empty, so the nodes that have
@@ -171,6 +204,7 @@ export function ComplianceStageFlow({
                     baseline. A row of dots at seven different heights is
                     harder to read than one with gaps in its second line. */}
                 <span
+                  aria-hidden="true"
                   className={cn(
                     "text-[11px] leading-tight tabular-nums",
                     stage.isOverdue

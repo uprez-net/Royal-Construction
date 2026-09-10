@@ -540,6 +540,66 @@ test("every alert type lands on a stage that exists", () => {
   }
 });
 
+test("every open alert reddens some node on the flow it is raised against", () => {
+  // The guard the routing table cannot give on its own. `ALERT_STAGE` is
+  // exhaustive over the enum, so a stage id is always produced -- but the flow
+  // only builds a DEVELOPMENT_APPLICATION node on files that have one, and five
+  // of the alerts routed there can be raised on a file that does not. Each of
+  // those reddened nothing anywhere, on a file where something was genuinely
+  // late.
+  for (const type of Object.values(ComplianceAlertType)) {
+    const file = engagement({ alerts: [alert(type)] as never });
+    const stages = complianceStageFlow(file, MONDAY);
+    const target = stageForAlert(file, type);
+
+    assert.ok(
+      stages.some((entry) => entry.id === target),
+      `${type} routes to ${target}, which is not on this file's flow`,
+    );
+    assert.ok(
+      stages.some((entry) => entry.isOverdue),
+      `${type} reddens nothing`,
+    );
+  }
+});
+
+test("a levy late on a CDC reddens the checklist, not a DA that is not there", () => {
+  // A CDC can buy a long service levy and a road opening permit; the sweep
+  // raises those off the application rows alone, with no development
+  // application anywhere on the file.
+  const cdc = engagement({
+    alerts: [alert(ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED)] as never,
+  });
+
+  assert.equal(
+    stageForAlert(cdc, ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED),
+    "CHECKLIST",
+  );
+
+  // And the DA once there is one, because that is where the row lives then.
+  const withDa = engagement({
+    alerts: [
+      alert(ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED),
+      alert(ComplianceAlertType.DA_APPROVAL_REQUIRED),
+    ] as never,
+  });
+
+  assert.equal(
+    stageForAlert(withDa, ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED),
+    "DEVELOPMENT_APPLICATION",
+  );
+});
+
+test("the developer's two alerts follow the same rule", () => {
+  const noDa = engagement({});
+  for (const type of [
+    ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+  ]) {
+    assert.equal(stageForAlert(noDa, type), "CHECKLIST");
+  }
+});
+
 test("a consultant late on a frozen checklist reddens the DA instead", () => {
   // The one alert whose stage depends on the file rather than the type. While a
   // job waits on development approval the checklist is frozen and the same

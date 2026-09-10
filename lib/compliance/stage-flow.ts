@@ -128,9 +128,9 @@ export type ComplianceStage = {
  * Which stage each alert belongs to.
  *
  * Exhaustive over the enum so a new alert type is a compile error here rather
- * than an alert that silently reddens nothing. The consultant alerts are the
- * exception and are decided in `stageForAlert` below, because their stage
- * depends on the file rather than on the type.
+ * than an alert that silently reddens nothing. What this table gives is where
+ * an alert belongs in principle; `stageForAlert` below corrects it to the block
+ * the reader can actually act in on this particular file.
  */
 const ALERT_STAGE: Readonly<
   Record<ComplianceAlertType, ComplianceStageId>
@@ -141,10 +141,9 @@ const ALERT_STAGE: Readonly<
   [ComplianceAlertType.ARCHITECT_REVISION_OVERDUE]: "ARCHITECT",
   [ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED]: "COUNCIL",
 
-  // Everything about the application itself, and the three permits nobody asks
-  // for on a CDC. A road opening, a levy receipt and a subsidence approval are
-  // rows on the DA list and nowhere else, so a delay on one belongs to the
-  // stage that is waiting for it.
+  // The application itself, and the three permits bought alongside it. Every
+  // one of these falls back to the checklist on a file with no DA -- see
+  // `stageForAlert`, since a CDC lodges a levy and a road opening permit too.
   [ComplianceAlertType.DA_APPROVAL_REQUIRED]: "DEVELOPMENT_APPLICATION",
   [ComplianceAlertType.DA_DETERMINATION_OVERDUE]: "DEVELOPMENT_APPLICATION",
   [ComplianceAlertType.ROAD_OPENING_DELAYED]: "DEVELOPMENT_APPLICATION",
@@ -152,12 +151,13 @@ const ALERT_STAGE: Readonly<
   [ComplianceAlertType.MINE_SUBSIDENCE_DELAYED]: "DEVELOPMENT_APPLICATION",
 
   // The developer's covenant is a condition on lodging the application, and the
-  // consultant's redraw is what a refusal costs. Both sit in the DA block on
-  // the tab, which is where the reader goes to act on either.
+  // consultant's redraw is what a refusal costs. Both sit in the DA block where
+  // there is one; the sweep raises them off outreach rows alone, so both can be
+  // open on a file that has none.
   [ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE]: "DEVELOPMENT_APPLICATION",
   [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]: "DEVELOPMENT_APPLICATION",
 
-  // Overridden per file -- see `stageForAlert`.
+  // Moved to the DA while the checklist is frozen -- see `stageForAlert`.
   [ComplianceAlertType.BASIX_RESPONSE_OVERDUE]: "CHECKLIST",
   [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]: "CHECKLIST",
   [ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE]: "CHECKLIST",
@@ -167,33 +167,47 @@ const ALERT_STAGE: Readonly<
 };
 
 /**
- * The alerts raised against a consultant rather than against a stage.
+ * Which stage one alert reddens on this particular file.
  *
- * Six alerts about firms who are engaged from whichever list is asking for what
- * they produce. On a CDC that is the certifier's checklist; on a job waiting for
- * development approval the checklist is frozen and the same firms are
- * commissioned from the DA list instead. The alert is identical either way, so
- * the type cannot say which block the reader should be looking at -- only the
- * file can.
+ * `ALERT_STAGE` says which block an alert belongs to in principle. This says
+ * which block the reader can actually act in, which is not always the same one,
+ * and the difference runs in both directions between the two blocks that share
+ * a slot on the tab:
+ *
+ * - **A DA stage that is not there.** The three bought permits, the developer's
+ *   covenant and the redraw a refusal costs all have their rows on the DA list,
+ *   so the table files them under the development application. But a CDC lodges
+ *   a long service levy and a road opening permit too, and the sweep raises
+ *   those from the application rows alone — on a file with no DA the stage they
+ *   name is not in the flow, and the alert reddened nothing anywhere.
+ * - **A checklist nobody can work on.** The consultants are engaged from the
+ *   certifier's checklist on a CDC and from the DA list on a job waiting for
+ *   development approval, where the checklist is frozen. The alert is identical
+ *   either way, so only the file can say which block to point at.
+ *
+ * Written as two corrections to the table rather than as a list of exceptions,
+ * which is what makes it total: the flow always has a CHECKLIST node and only
+ * sometimes has a DEVELOPMENT_APPLICATION one, so anything routed to the second
+ * on a file without it falls back to the first. There is no alert type that can
+ * name a stage the flow did not build, and a test walks the whole enum to
+ * prove it.
  */
-const CONSULTANT_ALERTS: ReadonlySet<ComplianceAlertType> = new Set([
-  ComplianceAlertType.BASIX_RESPONSE_OVERDUE,
-  ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE,
-  ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE,
-  ComplianceAlertType.WATER_AUTHORITY_RESPONSE_OVERDUE,
-  ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE,
-  ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE,
-]);
-
-/** Which stage one alert reddens on this particular file. */
 export function stageForAlert(
   engagement: CertifierEngagementDetail,
   type: ComplianceAlertType,
 ): ComplianceStageId {
-  if (CONSULTANT_ALERTS.has(type) && checklistBlockedReason(engagement)) {
+  const belongsTo = ALERT_STAGE[type];
+  const hasDa = hasDevelopmentApplication(engagement);
+
+  if (belongsTo === "DEVELOPMENT_APPLICATION") {
+    return hasDa ? "DEVELOPMENT_APPLICATION" : "CHECKLIST";
+  }
+
+  if (belongsTo === "CHECKLIST" && checklistBlockedReason(engagement) && hasDa) {
     return "DEVELOPMENT_APPLICATION";
   }
-  return ALERT_STAGE[type];
+
+  return belongsTo;
 }
 
 /** Whether a document type has something on it, or has been waved off. */
