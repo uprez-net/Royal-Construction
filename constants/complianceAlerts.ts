@@ -1,18 +1,18 @@
-"use client";
-
+/**
+ * What every compliance alert says, and who it is attributed to.
+ *
+ * A plain constants module rather than part of the component that renders it,
+ * which is where both tables lived until the alert list moved off the
+ * Compliance tab. Three unrelated readers now want the same wording -- the
+ * merged alert list above the tabs, the resolve dialog the tab opens, and the
+ * stage header that has to say which stage an open alert belongs to -- and a
+ * component importing a component to read a string is how the copy ends up
+ * duplicated and then drifting.
+ */
 import {
   ComplianceAlertSource,
-  ComplianceAlertStatus,
   ComplianceAlertType,
 } from "@prisma/client";
-import { AlertTriangle, CheckCircle2, Loader2, Send } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/common/status-pill";
-
-import { cn } from "@/lib/utils";
-import type { ComplianceAlertRecord } from "@/types/compliance";
-import { dataTimeFormat } from "@/utils/formatters";
 
 /**
  * What each alert is called, and what closing it actually requires.
@@ -186,7 +186,7 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
  * not an outreach party — and because the pill wording is "via the X", which
  * wants the lower-case form.
  */
-const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
+export const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
   [ComplianceAlertSource.SURVEYOR]: "surveyor",
   [ComplianceAlertSource.ARCHITECT]: "architect",
   [ComplianceAlertSource.COUNCIL]: "NSW Planning",
@@ -198,153 +198,3 @@ const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
   [ComplianceAlertSource.DEVELOPER]: "estate developer",
   [ComplianceAlertSource.TRAFFIC_CONSULTANT]: "traffic control consultant",
 };
-
-type ComplianceAlertsPanelProps = {
-  alerts: ComplianceAlertRecord[];
-  onResolve: (alert: ComplianceAlertRecord) => void;
-  /** Sends the alert's follow-up request, on the thread it belongs to. */
-  onFollowUp?: (alert: ComplianceAlertRecord) => void;
-  /**
-   * Whether this particular alert has anybody to chase.
-   *
-   * Per alert rather than per panel, which is the correction. One flag for the
-   * whole list got it wrong in both directions: a file whose surveyor documents
-   * the client supplied has nobody to write to about a title search, and may at
-   * the same moment have a live architect thread with a redraw overdue on it.
-   * Absent means every alert with copy for a chase gets the button.
-   */
-  canFollowUp?: (alert: ComplianceAlertRecord) => boolean;
-  isBusy: (alertId: string) => boolean;
-};
-
-/**
- * The conditions raised on this file, open ones first.
- *
- * Above the document blocks rather than inside one, because that is the shape
- * of what they do: a stale title search is about the surveyor's section and a
- * DA requirement removes a row from the council's, so filing either under a
- * single block would hide it from the section it actually changes.
- *
- * Resolved alerts stay listed, quietly. What was raised and settled on a job is
- * exactly what somebody auditing it later is looking for, and a list that
- * empties itself as things are fixed leaves no trace that anything was.
- */
-export function ComplianceAlertsPanel({
-  alerts,
-  onResolve,
-  onFollowUp,
-  canFollowUp,
-  isBusy,
-}: ComplianceAlertsPanelProps) {
-  if (alerts.length === 0) {
-    return null;
-  }
-
-  return (
-    <ul className="space-y-2">
-      {alerts.map((alert) => {
-        const copy = COMPLIANCE_ALERT_COPY[alert.type];
-        const isOpen = alert.status === ComplianceAlertStatus.OPEN;
-
-        return (
-          <li
-            key={alert.id}
-            className={cn(
-              "flex flex-wrap items-start gap-3 rounded-lg border px-4 py-3",
-              isOpen
-                ? "border-warning/40 bg-warning-light"
-                : "border-border/70 bg-muted/40",
-            )}
-          >
-            {isOpen ? (
-              <AlertTriangle
-                className="mt-0.5 size-4 shrink-0 text-warning-ink"
-                aria-hidden="true"
-              />
-            ) : (
-              <CheckCircle2
-                className="mt-0.5 size-4 shrink-0 text-success-ink"
-                aria-hidden="true"
-              />
-            )}
-
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="font-medium text-foreground">{copy.title}</p>
-                {alert.raisedBySource ? (
-                  // Who supplied the document, not who reported the problem.
-                  // On a stale title search nobody reported it — the surveyor
-                  // could not have known — so "from the surveyor" would be an
-                  // accusation rather than a fact. "via" is the honest word,
-                  // and it is also the answer to who to go back to.
-                  <StatusPill tone="neutral">
-                    via the {ALERT_SOURCE_LABEL[alert.raisedBySource]}
-                  </StatusPill>
-                ) : null}
-                {!isOpen ? (
-                  <StatusPill tone="success">Resolved</StatusPill>
-                ) : null}
-              </div>
-
-              {/* The raiser's own sentence, where the message carried one. It
-                  is quoted rather than summarised — "we'll re-pull the title
-                  once the registry updates" is the whole instruction. */}
-              {alert.detail ? (
-                <p className="text-sm text-muted-foreground italic">
-                  &ldquo;{alert.detail}&rdquo;
-                </p>
-              ) : null}
-
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {isOpen
-                  ? copy.guidance
-                  : `${alert.resolutionNote ?? "Resolved"}${
-                      alert.resolvedAt
-                        ? ` — ${dataTimeFormat.format(new Date(alert.resolvedAt))}`
-                        : ""
-                    }`}
-              </p>
-            </div>
-
-            {isOpen ? (
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {/* The chase comes first and carries the weight: on a freshly
-                    raised alert it is what someone is here to do, and Resolve
-                    is what they come back for once the replacement lands. */}
-                {copy.followUp &&
-                onFollowUp &&
-                (canFollowUp?.(alert) ?? true) ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={isBusy(alert.id)}
-                    onClick={() => onFollowUp(alert)}
-                  >
-                    {isBusy(alert.id) ? (
-                      <Loader2
-                        className="size-4 animate-spin"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Send className="size-4" aria-hidden="true" />
-                    )}
-                    {copy.followUp}
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={isBusy(alert.id)}
-                  onClick={() => onResolve(alert)}
-                >
-                  Resolve
-                </Button>
-              </div>
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}

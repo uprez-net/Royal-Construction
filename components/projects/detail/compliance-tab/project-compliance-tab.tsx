@@ -6,7 +6,6 @@ import {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
-  ComplianceOutreachMode,
   CompliancePartyType,
 } from "@prisma/client";
 import {
@@ -69,7 +68,14 @@ import {
   packSendBlockedReason,
   partyBlockedReason,
 } from "@/lib/compliance/prerequisites";
-import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
+import {
+  isDocumentOverdue,
+  overdueComplianceDocuments,
+} from "@/lib/compliance/overdue-documents";
+import {
+  complianceStageFlow,
+  type ComplianceStageId,
+} from "@/lib/compliance/stage-flow";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -79,7 +85,6 @@ import {
   resolveComplianceDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
-  sendComplianceFollowUp,
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
@@ -106,15 +111,10 @@ import {
   requiresPlanningCertificate,
   vaultAttachmentOptions,
   type CertifierEngagementDetail,
-  type ComplianceAlertRecord,
   type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
-import {
-  COMPLIANCE_ALERT_COPY,
-  ComplianceAlertsPanel,
-} from "./compliance-alerts-panel";
 import { ArchitectWorkflow } from "./architect-workflow";
 import { ChecklistApplicationAction } from "./checklist-application-action";
 import { ChecklistConsultantAction } from "./checklist-consultant-action";
@@ -125,6 +125,7 @@ import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
 import { ComplianceSectionCard } from "./compliance-section-card";
+import { ComplianceStageFlow } from "./compliance-stage-flow";
 
 /**
  * Statuses that mean the signed copies have already gone to the certifier.
@@ -224,6 +225,24 @@ type SectionKey =
   | "development-application"
   | "certificate"
   | "vault";
+
+/**
+ * Which block each stage of the flow opens.
+ *
+ * The header and the cards are two views of one sequence, so clicking a node
+ * has to land on the block that node is about. Every stage has one — the map is
+ * total rather than partial — because a node that looks clickable and does
+ * nothing is worse than one that is not clickable at all.
+ */
+const SECTION_FOR_STAGE: Readonly<Record<ComplianceStageId, SectionKey>> = {
+  SURVEYOR: CompliancePartyType.SURVEYOR,
+  ARCHITECT: CompliancePartyType.ARCHITECT,
+  COUNCIL: CompliancePartyType.COUNCIL,
+  CERTIFIER: "response",
+  DEVELOPMENT_APPLICATION: "development-application",
+  CHECKLIST: "checklist",
+  CERTIFICATE: "certificate",
+};
 
 type ProjectComplianceTabProps = {
   project: ProjectDetail;
@@ -944,21 +963,6 @@ export function ProjectComplianceTab({
    * this screen. It does not resolve anything: asking is not fixing, and every
    * one of these closes itself when the thing it is waiting for arrives.
    */
-  const handleFollowUp = async (alert: ComplianceAlertRecord) => {
-    try {
-      await dispatch(
-        sendComplianceFollowUp({ projectId: project.id, alertId: alert.id }),
-      ).unwrap();
-      toast.success("Follow-up sent.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Could not send the follow-up.",
-      );
-    }
-  };
-
   /**
    * The consultant control on one checklist line, or nothing.
    *
@@ -1024,6 +1028,7 @@ export function ProjectComplianceTab({
           // Its own clock, and its own label. The architect is engaged already,
           // so "Connect with the architect" would be an offer to do something
           // that happened months ago.
+          tracksOwnRequest
           requestedAt={architect?.wasteManagementRequestedAt ?? null}
           actionLabel="Ask the architect"
           onConnect={() =>
@@ -1061,21 +1066,6 @@ export function ProjectComplianceTab({
         isBusy={isScopeBusy(complianceScope.party(party))}
         onConnect={() => handleConnectParty(party, checklistDocumentId)}
       />
-    );
-  };
-
-  const handleResolveAlert = (alert: ComplianceAlertRecord) => {
-    const copy = COMPLIANCE_ALERT_COPY[alert.type];
-    dispatch(
-      openModal({
-        type: "resolveComplianceAlert",
-        payload: {
-          projectId: project.id,
-          alertId: alert.id,
-          alertTitle: copy.title,
-          guidance: copy.guidance,
-        },
-      }),
     );
   };
 
@@ -1375,7 +1365,20 @@ export function ProjectComplianceTab({
       ? section.types
       : section.types.filter((type) => requiredTypesInPlay.has(type));
     const documents = types.map((type) => documentsByType.get(type));
-    const outstanding = types.filter(
+
+    /**
+     * What the progress pill actually counts.
+     *
+     * The pack filter on every path, which is what the comment above always
+     * claimed and the line above did not do: on the DA path `types` keeps the
+     * 10.7 so the row can render read-only, and counting it left the council
+     * card showing 0/1 for a certificate that is ordered from the DA block —
+     * the permanently unfillable count this filter exists to avoid.
+     */
+    const countedTypes = section.types.filter((type) =>
+      requiredTypesInPlay.has(type),
+    );
+    const outstanding = countedTypes.filter(
       (type) => !documentsByType.get(type)?.files.length,
     );
 
@@ -1383,6 +1386,7 @@ export function ProjectComplianceTab({
       section,
       party: section.party,
       types,
+      countedTypes,
       documents,
       outreach: outreachForParty(engagement, section.party),
       // Only what the outreach actually waits for. The full architectural
@@ -1533,28 +1537,32 @@ export function ProjectComplianceTab({
   const responseLocked = !hasResponse;
   const checklistLocked = checklistItems.length === 0;
 
-  // Resolved alerts stay listed: what was raised and settled on a job is
-  // exactly what somebody auditing it later is looking for, and a list that
-  // empties itself as things are fixed leaves no trace that anything was.
-  const alerts = engagement.alerts;
+  /**
+   * The route this file takes, and how long it has been on each step.
+   *
+   * The alerts themselves are no longer here — they moved above the tabs, where
+   * a trade reminder and a compliance condition are one list, because they are
+   * the same thing to whoever is reading. What is left on this tab is the half
+   * that only means anything beside the blocks it describes: which stage the
+   * flow is on, what its clock says, and which rows are late.
+   */
+  const stages = complianceStageFlow(engagement);
 
   /**
-   * Whether one alert has anybody to chase.
+   * The rows an open alert is actually about.
    *
-   * The same reading the server takes before it refuses the send — which party
-   * the condition belongs to, and whether that party has a live thread — so a
-   * button that offers a chase and a request that refuses one cannot disagree.
-   * A button that can only fail is worse than no button.
+   * Derived from the alerts the nightly sweep raised rather than from a second
+   * set of clocks on this side. The sweep is the one thing that knows a
+   * checklist line was marked not required, that the client supplied the
+   * survey, that a DA took the certificate out of the pack — a badge computed
+   * here from dates alone would go red on a row the sweep had already written
+   * off.
    */
-  const canChaseAlert = (alert: ComplianceAlertRecord) => {
-    const party = COMPLIANCE_ALERT_PARTY[alert.type];
-    if (!party) return false;
-    const outreach = outreachForParty(engagement, party);
-    return Boolean(
-      outreach?.contactEmail &&
-      outreach.mode === ComplianceOutreachMode.OUTREACH,
-    );
-  };
+  const overdue = overdueComplianceDocuments(engagement);
+  const isRowOverdue = (
+    document: ComplianceDocumentWithFiles | undefined,
+    documentType?: ComplianceDocumentType,
+  ) => isDocumentOverdue(overdue, document, documentType);
 
   /**
    * How many of these are done with.
@@ -1641,25 +1649,27 @@ export function ProjectComplianceTab({
       </div>
 
       {/* ---------------------------------------------------------------
-          What has been raised on this file.
+          Where the file is up to.
 
-          Above the blocks rather than inside one, because that is the shape of
-          what these do: a stale title search is about the surveyor's section
-          and a DA requirement removes a row from the council's, so filing
-          either under a single block would hide it from the section it
-          actually changes.
+          Above the blocks rather than inside one, for the reason the alerts
+          used to be: no single block can say it. A stale title search is about
+          the surveyor's section and a DA requirement removes a row from the
+          council's, and the question this answers — which of seven steps is
+          the job actually on, and is anything past its quote — is about all of
+          them at once.
+
+          Clicking a stage opens its block and shuts nothing else. A header
+          that collapsed the other six would make finding the step you wanted
+          cost you the one you had open.
       --------------------------------------------------------------- */}
-      <ComplianceAlertsPanel
-        alerts={alerts}
-        onResolve={handleResolveAlert}
-        onFollowUp={handleFollowUp}
-        // Which alerts have somebody to chase, decided per alert rather than
-        // once. A file whose surveyor documents the client supplied has nobody
-        // to write to about a title search, and may at the same time have a
-        // live architect thread with a redraw overdue on it — one flag for the
-        // whole panel got that wrong in both directions.
-        canFollowUp={canChaseAlert}
-        isBusy={(alertId) => isScopeBusy(complianceScope.alert(alertId))}
+      <ComplianceStageFlow
+        stages={stages}
+        onSelectStage={(stage) =>
+          setSections((current) => ({
+            ...current,
+            [SECTION_FOR_STAGE[stage.id]]: true,
+          }))
+        }
       />
 
       {/* ---------------------------------------------------------------
@@ -1768,8 +1778,10 @@ export function ProjectComplianceTab({
                 open={isOpen(entry.party)}
                 onOpenChange={toggleSection(entry.party)}
                 progress={{
-                  done: countSupplied(entry.documents),
-                  total: entry.types.length,
+                  done: countSupplied(
+                    entry.countedTypes.map((type) => documentsByType.get(type)),
+                  ),
+                  total: entry.countedTypes.length,
                 }}
                 isBusy={isScopeBusy(complianceScope.party(entry.party))}
                 orderedFromDa={entry.orderedFromDa}
@@ -1777,6 +1789,7 @@ export function ProjectComplianceTab({
                 isRowBusy={(document, documentType) =>
                   isScopeBusy(scopeOf(document, documentType))
                 }
+                isRowOverdue={isRowOverdue}
                 onConnect={() => handleConnectParty(entry.party)}
                 onSelfSupplied={() => void handleSelfSupplied(entry.party)}
                 onUpload={(file, target) => void attachEvidence(file, target)}
@@ -2008,6 +2021,7 @@ export function ProjectComplianceTab({
               isRowBusy={(document, documentType) =>
                 isScopeBusy(scopeOf(document, documentType))
               }
+              isRowOverdue={isRowOverdue}
               onUpload={(file, target) => void attachEvidence(file, target)}
               onSetNotRequired={
                 isAdmin
@@ -2115,6 +2129,7 @@ export function ProjectComplianceTab({
             open={isOpen("checklist")}
             onOpenChange={toggleSection("checklist")}
             isActive={activeSection === "checklist"}
+            overdue={checklistItems.some((item) => isRowOverdue(item))}
             locked={checklistLocked}
             lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
             // Across both columns. Each row can open its own requirements
@@ -2148,6 +2163,10 @@ export function ProjectComplianceTab({
                       scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
                     ) || submissionClaimed
                   }
+                  // By id, not by type. Twenty lines share CHECKLIST_ITEM, so
+                  // the consultant three weeks late on the geotechnical report
+                  // reddens that line and not the other nineteen.
+                  overdue={isRowOverdue(item)}
                   onUpload={(file) =>
                     void attachEvidence(file, {
                       documentId: item.id,

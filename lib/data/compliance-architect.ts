@@ -592,6 +592,28 @@ export async function requestWasteManagementPlan(
       ),
   );
 
+  /**
+   * The checklist line this request answers, if it is one of ours.
+   *
+   * The route authorises the project and validates the shape of the id, and the
+   * foreign key checks only that the document exists — so an id belonging to
+   * another engagement was accepted and stored. Nothing loud follows: the
+   * inbound workflow cannot resolve a target outside this engagement, so it
+   * files the architect's reply under its own type instead and the line that
+   * asked stays outstanding forever, with a deliverable row pointing at
+   * somebody else's job.
+   *
+   * Dropped rather than refused. A stale id is what a re-extracted checklist
+   * leaves behind, and the request itself is still the right thing to send.
+   */
+  const checklistDocumentId =
+    input.checklistDocumentId &&
+    engagement.documents.some(
+      (document) => document.id === input.checklistDocumentId,
+    )
+      ? input.checklistDocumentId
+      : null;
+
   // What the sender added on top -- the certifier's own wording on the line
   // that asked for the plan, most often, which saves the architect being told
   // second-hand what a waste management plan has to say on this council.
@@ -647,24 +669,26 @@ export async function requestWasteManagementPlan(
       create: {
         outreachId: outreach.id,
         documentType: ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
-        checklistDocumentId: input.checklistDocumentId ?? null,
+        checklistDocumentId,
       },
       // A second request that names a checklist line where the first named
       // none fills it in; one that names none leaves what is there alone.
-      update: input.checklistDocumentId
-        ? { checklistDocumentId: input.checklistDocumentId }
-        : {},
+      update: checklistDocumentId ? { checklistDocumentId } : {},
     });
   });
 
   after(async () => {
     revalidateEngagement(projectId);
     await logAction(
+      // No `contactEmail`. It is an external party's personal address and the
+      // activity log is persisted and rendered in the project feed, so writing
+      // it there puts PII in a long-lived record for no gain: `outreachId`
+      // already identifies the thread, and the outreach row holds the address
+      // for anybody who needs it.
       createActivityLogEntry("complianceWasteManagementRequested", {
         projectId,
         engagementId: engagement.id,
         outreachId: outreach.id,
-        contactEmail: outreach.contactEmail ?? "",
         attachmentCount: attachments.length,
         requestedBy,
       }),

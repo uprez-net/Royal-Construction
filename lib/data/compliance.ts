@@ -746,7 +746,6 @@ export async function attachComplianceDocumentFile(params: {
   }
 
   after(async () => {
-    revalidateEngagement(params.projectId);
     await logAction(
       createActivityLogEntry("complianceDocumentUploaded", {
         projectId: params.projectId,
@@ -818,11 +817,25 @@ export async function attachComplianceDocumentFile(params: {
   // certifier asked for on their checklist, and collecting it twice is what
   // this stops. It also catches the ordinary case the extraction cannot — a
   // document that arrives weeks after the checklist was read.
+  //
+  // The revalidation rides on this callback rather than its own, and that is
+  // the ordering that matters. `after()` callbacks run on a queue with no
+  // concurrency limit, so a revalidation registered separately could — and did
+  // — invalidate the cache before these rows were written, and the next read
+  // repopulated it from a checklist that had not been filled in yet. The
+  // upload then showed rows still asking for the document it had just supplied.
+  //
+  // In a `finally` so a mapping that throws still clears the cache. A stale
+  // cache is the one failure here nobody can see or clear from the screen.
   after(async () => {
-    await fillChecklistLinesFor({
-      engagementId: params.engagementId,
-      documentType: document.documentType,
-    });
+    try {
+      await fillChecklistLinesFor({
+        engagementId: params.engagementId,
+        documentType: document.documentType,
+      });
+    } finally {
+      revalidateEngagement(params.projectId);
+    }
   });
 
   // The waste management plan is the architect's, on their existing thread, and
@@ -862,31 +875,44 @@ export async function attachComplianceDocumentFile(params: {
   // it, or emails it from an address the correlation missed, or hands it over
   // at a site meeting — none of which should leave a finished job stuck one
   // stage short with the certificate sitting on the row.
-  if (
-    document.documentType === ComplianceDocumentType.CONSTRUCTION_CERTIFICATE
-  ) {
+  const isCertificate =
+    document.documentType === ComplianceDocumentType.CONSTRUCTION_CERTIFICATE;
+
+  if (isCertificate) {
+    // Chained rather than left to the queue. `after()` runs its callbacks with
+    // no concurrency limit, so the close below could win the race: it would set
+    // the engagement to COMPLETED first, `recordConstructionCertificate` would
+    // then update zero rows against its own status guard, and CERTIFICATE_ISSUED
+    // — with its activity entry and its notification — would be skipped
+    // entirely on the one upload that is supposed to produce it.
     after(async () => {
       await recordConstructionCertificate({
         id: params.engagementId,
         projectId: params.projectId,
       });
+      await closeComplianceIfComplete({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
+    });
+  } else {
+    // Whether that was the last thing this file was waiting for.
+    //
+    // Run on every other upload rather than behind a type check, and it reads
+    // both documents rather than trusting the one that triggered it. The
+    // certificate and the HBCF cover arrive in either order — a builder who
+    // raised the cover months ago has it on the file long before the certifier
+    // issues anything — so "whichever lands last closes it" is the only rule
+    // that works from both ends, and a condition here would have to encode
+    // both. The certificate's own branch above runs the same check, after the
+    // stage move it depends on.
+    after(async () => {
+      await closeComplianceIfComplete({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
     });
   }
-
-  // Whether that was the last thing this file was waiting for.
-  //
-  // Run on every upload rather than behind a type check, and it reads both
-  // documents rather than trusting the one that triggered it. The certificate
-  // and the HBCF cover arrive in either order — a builder who raised the cover
-  // months ago has it on the file long before the certifier issues anything —
-  // so "whichever lands last closes it" is the only rule that works from both
-  // ends, and a condition here would have to encode both.
-  after(async () => {
-    await closeComplianceIfComplete({
-      projectId: params.projectId,
-      engagementId: params.engagementId,
-    });
-  });
 
   // A replacement for something the certifier sent back. They asked for a
   // change and have no way of knowing it has been made — the file just appears

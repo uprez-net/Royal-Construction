@@ -203,7 +203,7 @@ const CONSULTANT_ALERT_SOURCE: Readonly<
 };
 
 /**
- * The checklist lines one outreach was raised against, as rows on the file.
+ * Whether one party has answered everything the engagement asked them for.
  *
  * Read off the deliverables table, which is the whole reason that table exists:
  * a structural engineer answers three lines off one engagement, and the single
@@ -211,29 +211,57 @@ const CONSULTANT_ALERT_SOURCE: Readonly<
  * job holding the structural drawings and three weeks overdue on the
  * geotechnical report read, through that column, as finished with them.
  *
- * Falls back to the column for the consultants engaged before the table
- * existed, and for the rows the backfill could not reach.
+ * A deliverable is settled two ways, because it is asked for two ways:
  *
- * Rows that have gone are dropped rather than counted as outstanding — a
- * checklist re-extracted since the outreach rewrites its items, and an alert
- * against a line nobody can see is an alert pointing nowhere.
+ * - **Against a checklist line.** The row is the thing being waited on, and its
+ *   own file or its NOT_REQUIRED status answers it. A line that has since gone
+ *   -- a checklist re-extracted since the outreach -- is treated as settled
+ *   rather than outstanding: there is nothing on screen to chase against, so an
+ *   alert raised on it would point nowhere.
+ * - **By type alone.** `startPartyOutreach` writes a null `checklistDocumentId`
+ *   for every deliverable raised off the development application, where there
+ *   is no certifier checklist to hang one on. Those are settled when a document
+ *   of that type is on the file.
+ *
+ * The second half is the correction. Reading only the checklist rows meant a
+ * DA-raised engagement resolved to an empty target list, `[].every()` returned
+ * true, and the sweep closed the alert with "Their documents came through" over
+ * a consultant who had sent nothing at all -- the one failure mode on this file
+ * that is completely silent, because the alert it closes is the only thing that
+ * would have said otherwise.
+ *
+ * An outreach carrying no deliverables and no legacy column is genuinely
+ * finished with; there is nothing recorded that anybody is waiting for.
  */
-function deliverableTargets(
+function isOutreachSettled(
   engagement: CertifierEngagementDetail,
   outreach: ComplianceOutreachDetail | undefined,
-): ComplianceDocumentWithFiles[] {
-  if (!outreach) return [];
+): boolean {
+  if (!outreach) return true;
 
-  const ids = new Set(
-    outreach.deliverables
-      .map((deliverable) => deliverable.checklistDocumentId)
-      .filter((id): id is string => id !== null),
+  const rowsById = new Map(
+    engagement.documents.map((document) => [document.id, document]),
   );
-  if (ids.size === 0 && outreach.checklistDocumentId) {
-    ids.add(outreach.checklistDocumentId);
+  const isRowSettled = (document: ComplianceDocumentWithFiles) =>
+    document.files.length > 0 || isNotRequired(document.status);
+
+  const deliverables = outreach.deliverables;
+
+  if (deliverables.length === 0) {
+    // The consultants engaged before the table existed, whose one line is on
+    // the outreach itself.
+    if (!outreach.checklistDocumentId) return true;
+    const row = rowsById.get(outreach.checklistDocumentId);
+    return !row || isRowSettled(row);
   }
 
-  return engagement.documents.filter((document) => ids.has(document.id));
+  return deliverables.every((deliverable) => {
+    if (deliverable.checklistDocumentId) {
+      const row = rowsById.get(deliverable.checklistDocumentId);
+      return !row || isRowSettled(row);
+    }
+    return isSettled(engagement, deliverable.documentType);
+  });
 }
 
 export function assessOverdueConditions(
@@ -410,22 +438,12 @@ export function assessOverdueConditions(
   for (const party of CONSULTANT_PARTIES) {
     const outreach = outreachForParty(engagement, party);
 
-    // Every line this party was asked to answer, not one.
-    //
-    // A structural engineer answers three, and reading only the first meant a
-    // job holding the structural drawings and waiting three weeks on the
-    // geotechnical report read as finished with them. Falls back to the single
-    // column for the consultants engaged before the deliverables table existed.
-    const targets = deliverableTargets(engagement, outreach);
-
-    // Complete when every line it was raised against is settled. A row that has
-    // gone — a checklist re-extracted since the outreach — is not among them:
-    // there is nothing on screen to chase against, so an alert would point
-    // nowhere. A party with no lines at all is likewise finished with, which is
-    // what an engagement raised off the development application looks like.
-    const isComplete = targets.every(
-      (target) => target.files.length > 0 || isNotRequired(target.status),
-    );
+    // Everything this party was asked for, however it was asked. See
+    // `isOutreachSettled` -- a deliverable raised off the development
+    // application carries a type and no checklist line, and judging those by
+    // the checklist alone closed the alert over a consultant who had sent
+    // nothing.
+    const isComplete = isOutreachSettled(engagement, outreach);
 
     record(
       assessPartyResponse(

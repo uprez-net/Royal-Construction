@@ -408,6 +408,29 @@ export async function startPartyOutreach(
     throw new Error(blocked);
   }
 
+  /**
+   * Which of the supplied checklist ids are actually rows on this file.
+   *
+   * The route validates them as ids and authorises the project; the foreign key
+   * checks only that a `ComplianceDocument` with that id exists. Neither asks
+   * whether it belongs to *this* engagement, so an id lifted from another job
+   * was accepted and stored on the deliverable.
+   *
+   * Nothing then fails loudly. The inbound workflow refuses a target whose
+   * `engagementId` does not match and files the reply by type instead, so the
+   * line that asked for the report stays outstanding for good while a
+   * deliverable row on this job points at somebody else's checklist.
+   *
+   * Unknown ids are dropped rather than refused, which is also what a checklist
+   * re-extracted between opening the modal and pressing send leaves behind. The
+   * engagement is still the right one to open; it simply answers no line.
+   */
+  const ownDocumentIds = new Set(
+    engagement.documents.map((document) => document.id),
+  );
+  const ownChecklistId = (id: string | null | undefined) =>
+    id && ownDocumentIds.has(id) ? id : null;
+
   const contactEmail = normalizeEmailAddress(input.contactEmail);
   const contact = {
     tradieId: input.tradieId ?? null,
@@ -426,7 +449,7 @@ export async function startPartyOutreach(
     // them rather than made to pick a favourite.
     checklistDocumentId:
       isConsultantParty(party) && input.deliverables.length <= 1
-        ? (input.checklistDocumentId ?? null)
+        ? ownChecklistId(input.checklistDocumentId)
         : null,
     // Which estate was picked, for a developer. Not the contact -- the address
     // is `contactEmail` above like everybody else's, because the list holds an
@@ -472,7 +495,7 @@ export async function startPartyOutreach(
         data: input.deliverables.map((deliverable) => ({
           outreachId: outreach.id,
           documentType: deliverable.documentType,
-          checklistDocumentId: deliverable.checklistDocumentId ?? null,
+          checklistDocumentId: ownChecklistId(deliverable.checklistDocumentId),
         })),
         skipDuplicates: true,
       }),

@@ -123,6 +123,21 @@ type ComplianceDocumentRowProps = {
    * body for every case but the historical ones.
    */
   rejectedBy?: string | null;
+  /**
+   * Whether somebody is past their quoted turnaround on this row.
+   *
+   * A fact about the wait rather than about the document, which is why it is
+   * its own pill rather than a seventh `ComplianceDocumentStatus`. The row is
+   * still PENDING; what has changed is that the eleven working days the
+   * surveyor quoted ran out four days ago, and the status pill has no way to
+   * say that.
+   *
+   * Passed in rather than worked out here. A row cannot see the outreach that
+   * asked for it, the checklist line it answers, or the alert the nightly sweep
+   * raised — and a second set of clocks on this side would go red on rows the
+   * sweep had already decided nobody was waiting for.
+   */
+  overdue?: boolean;
 };
 
 /**
@@ -264,6 +279,7 @@ export function ComplianceDocumentRow({
   consultantAction,
   mappedFrom,
   rejectedBy,
+  overdue = false,
   onPreviewFile,
 }: ComplianceDocumentRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -327,6 +343,19 @@ export function ComplianceDocumentRow({
           <StatusPill tone={STATUS_TONE[status]}>
             {STATUS_LABEL[status]}
           </StatusPill>
+          {/* Beside the status rather than replacing it. "Outstanding" and
+              "Overdue" are two different facts — what the row holds, and
+              whether anybody is late with it — and a row that swapped one for
+              the other would lose the first at exactly the moment somebody
+              needs to know whether anything at all has arrived.
+
+              Suppressed once the line is settled, which the badge cannot check
+              for itself: a document that landed this morning after three weeks
+              late is not late any more, and the alert behind this closes on the
+              same event. */}
+          {overdue && !notRequired ? (
+            <StatusPill tone="danger">Overdue</StatusPill>
+          ) : null}
         </div>
 
         {files.length > 0 ? (

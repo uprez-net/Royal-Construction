@@ -312,7 +312,7 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
     complianceWasteManagementRequested: (data) => ({
         id: uuidv4(),
         type: "complianceWasteManagementRequested",
-        message: `${data.requestedBy} asked the architect (${data.contactEmail}) for the waste management plan with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
+        message: `${data.requestedBy} asked the architect for the waste management plan with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
         authorId: "system",
         timestamp: new Date().toISOString(),
         projectId: data.projectId,

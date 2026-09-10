@@ -165,9 +165,13 @@ test("a preliminary set does not answer a line asking for the full design", () =
   // drawings means the set the job is assessed on, and answering it with the
   // sketch set the architect produced first looks answered and is not — which
   // is worse than leaving the row empty.
-  assert.notEqual(
+  // Asserted as an equality rather than an inequality. `notEqual` catches a
+  // regression back to the preliminary set and passes just as happily on null
+  // or on some third type, either of which is its own bug: the checklist
+  // contract is that this line resolves to the full design.
+  assert.equal(
     checklistDocumentType(line("Preliminary architectural plans")),
-    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
   );
   assert.equal(
     isChecklistMappableType(

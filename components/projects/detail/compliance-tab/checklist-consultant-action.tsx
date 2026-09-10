@@ -46,13 +46,23 @@ type ChecklistConsultantActionProps = {
   isSupplied: boolean;
   isBusy: boolean;
   /**
-   * When this particular thing was asked for, where that is not the outreach.
+   * Whether this row waits on its own request rather than on the engagement.
    *
    * The waste management plan, and only it. The architect has been engaged
-   * since the plans were commissioned, so their `sentAt` is months old and the
+   * since the plans were commissioned, so their `sentAt` is months old and a
    * pill read off it would say "day 47" on a plan requested this morning — and
    * the alert behind it measures from the request too.
+   *
+   * A flag of its own rather than the presence of `requestedAt`, which is the
+   * correction. `null` is what that prop holds until somebody asks, and it is
+   * also what it holds on every other row, so a value test could not tell
+   * "nobody has asked yet" from "this row is not about a request". It read the
+   * architect's outreach instead, found it SENT, and decided the plan had been
+   * asked for — so the row rendered "Architect asked, day 47" and the button
+   * that actually sends the request never appeared on any job.
    */
+  tracksOwnRequest?: boolean;
+  /** When it was asked for, where `tracksOwnRequest` is set. */
   requestedAt?: Date | string | null;
   /**
    * What the button says, where "Connect with…" is wrong.
@@ -70,6 +80,7 @@ export function ChecklistConsultantAction({
   outreach,
   isSupplied,
   isBusy,
+  tracksOwnRequest = false,
   requestedAt,
   actionLabel,
   onConnect,
@@ -94,13 +105,15 @@ export function ChecklistConsultantAction({
    * date is passed, that is what decides it, and the button stays on offer
    * until somebody presses it.
    */
-  const askedAt = requestedAt
-    ? new Date(requestedAt)
+  const askedAt = tracksOwnRequest
+    ? requestedAt
+      ? new Date(requestedAt)
+      : null
     : outreach && outreach.status !== ComplianceOutreachStatus.NOT_SENT
       ? (outreach.sentAt ?? null)
       : null;
-  const isAsked = requestedAt
-    ? Boolean(requestedAt)
+  const isAsked = tracksOwnRequest
+    ? requestedAt !== null && requestedAt !== undefined
     : outreach !== undefined &&
       outreach.status !== ComplianceOutreachStatus.NOT_SENT;
 
@@ -125,7 +138,7 @@ export function ChecklistConsultantAction({
   // The waste management plan has a threshold of its own, and it is read here
   // rather than folded into the party table so the pill and the nightly sweep
   // measure the same wait against the same number.
-  const threshold = requestedAt
+  const threshold = tracksOwnRequest
     ? WASTE_MANAGEMENT_BUSINESS_DAYS
     : PARTY_RESPONSE_BUSINESS_DAYS[party];
   const isOverdue = elapsed !== null && elapsed > threshold;

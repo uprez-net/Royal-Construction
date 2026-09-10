@@ -11,11 +11,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EXTERNAL_APPLICATION_COPY } from "@/constants/complianceDocuments";
-import type { ComplianceExternalApplicationRecord } from "@/types/compliance";
+import { useAppSelector } from "@/lib/store/hooks";
+import {
+  externalApplication,
+  type ComplianceExternalApplicationRecord,
+} from "@/types/compliance";
 
 type ApplicationModalProps = {
   projectId: string;
   kind: ComplianceExternalApplicationKind;
+  /**
+   * The record as it stood when the dialog opened.
+   *
+   * A fallback rather than the source. `ModalManager` freezes `modal.payload`
+   * at open, so this goes stale the moment anything here saves — the thunk
+   * refreshes the engagement in the store and the dialog carried on rendering
+   * the record from before it. An admin answered "Do you already have the
+   * 10.7?", saw the success toast, and was asked the same question again while
+   * the row behind the dialog moved on without them.
+   */
   application: ComplianceExternalApplicationRecord | null;
   /** The portal link, where it depends on the project's council. */
   portalUrl?: string | null;
@@ -51,6 +65,18 @@ export function ApplicationModal({
 }: ApplicationModalProps) {
   const copy = EXTERNAL_APPLICATION_COPY[kind];
 
+  // The live row, so the block re-reads its own step after every save. Falls
+  // back to the snapshot for the one render before the store has this project,
+  // which is the only moment the two can differ in the other direction.
+  const engagement = useAppSelector((state) =>
+    state.projects.activeProject?.id === projectId
+      ? state.projects.activeProject.certifierEngagement
+      : null,
+  );
+  const current = engagement
+    ? externalApplication(engagement, kind)
+    : application;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -67,7 +93,7 @@ export function ApplicationModal({
           <ExternalApplicationBlock
             projectId={projectId}
             kind={kind}
-            application={application}
+            application={current}
             portalUrl={portalUrl}
             documentRows={null}
           />

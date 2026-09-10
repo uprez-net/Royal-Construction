@@ -178,6 +178,15 @@ export function ConnectPartyModal({
   const [developer, setDeveloper] = useState<DeveloperOption | null>(null);
   /** Anything the sender attached by hand. See ExtraAttachmentsField. */
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those is still transferring.
+   *
+   * Named apart from `isAttachingDeed` because they are two uploads on one
+   * dialog and both gate the send. The deed already had this and the extras did
+   * not, so a sender could press Send with a covenant schedule mid-flight and
+   * the outreach went out without it.
+   */
+  const [isAttachingExtras, setIsAttachingExtras] = useState(false);
   const [deed, setDeed] = useState<PrefilledAttachment | null>(null);
   /**
    * The deed upload, from the first byte to the row being linked.
@@ -313,6 +322,7 @@ export function ConnectPartyModal({
     Boolean(resolvedContact) &&
     !isPending &&
     !isDeedBusy &&
+    !isAttachingExtras &&
     (!needsDeed || Boolean(deed));
 
   return (
@@ -462,6 +472,7 @@ export function ConnectPartyModal({
             ) : null}
 
             <ExtraAttachmentsField
+              onUploadingChange={setIsAttachingExtras}
               projectId={projectId}
               value={extras}
               onChange={setExtras}

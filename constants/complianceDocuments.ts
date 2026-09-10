@@ -1234,28 +1234,48 @@ export const EXTERNAL_APPLICATION_COPY: Readonly<
  * Keyed on `Project.council` exactly as it is stored. Not exhaustive and not
  * meant to be — the fallback below is a working answer for a council that is
  * not here yet, and adding one is a line rather than a change.
+ *
+ * Every entry was fetched and read in September 2026. The first set was not,
+ * and nine of the ten had moved: councils reorganise their sites, and a link
+ * that 404s here sends somebody to a search box on a day they are trying to
+ * lodge something. Each one lands on the page that carries the road opening
+ * permit and the vehicle crossing application, because that is the one
+ * `ComplianceExternalApplicationKind.ROAD_OPENING` covers.
+ *
+ * Worth re-checking when one is reported dead rather than on a schedule — the
+ * fallback below means a stale entry costs a hop, not a dead end.
  */
 export const COUNCIL_ROAD_OPENING_URL: Readonly<Record<string, string>> = {
+  // Not the `Stage-4-apply` path of the same name, which still resolves and is
+  // titled "... -OLD". Two live pages one word apart is exactly the trap a
+  // checked link table is for.
   "Blacktown City Council":
-    "https://www.blacktown.nsw.gov.au/Services/Roads-and-footpaths",
+    "https://www.blacktown.nsw.gov.au/Plan-build/Stage-4-Apply-for-a-certificate-or-application/Roads-openings-driveways-and-footpath-works",
   "Camden Council":
-    "https://www.camden.nsw.gov.au/development/other-approvals/",
+    "https://www.camden.nsw.gov.au/resident-information/traffic-and-transport/public-road-activity",
   "Campbelltown City Council":
-    "https://www.campbelltown.nsw.gov.au/Development-and-Building/Applications-and-Approvals",
+    "https://www.campbelltown.nsw.gov.au/Build-and-Develop/Obtaining-Approval-to-Build/Section-138-Applications",
   "City of Parramatta":
-    "https://www.cityofparramatta.nsw.gov.au/development/other-approvals",
+    "https://www.cityofparramatta.nsw.gov.au/development/forms-and-documents/road-and-footpath-works",
   "Cumberland City Council":
-    "https://www.cumberland.nsw.gov.au/roads-and-footpaths",
+    "https://www.cumberland.nsw.gov.au/build/works-within-roads-and-footpaths",
+  // The forms directory rather than a page about the works. Liverpool has no
+  // landing page for this -- what it has is one list carrying the road opening
+  // form, the section 138 road reserve form and the vehicular crossing form,
+  // which is the whole of what somebody comes here for.
   "Liverpool City Council":
-    "https://www.liverpool.nsw.gov.au/development/applications-and-approvals",
+    "https://www.liverpool.nsw.gov.au/council/Fees-Forms-Policies-and-Enforcement/forms",
+  // The engineering hub rather than the driveway page under it: the driveway
+  // page is only the crossing half, and the road opening permit sits beside it
+  // rather than on it.
   "Northern Beaches Council":
-    "https://www.northernbeaches.nsw.gov.au/development/apply-permit",
+    "https://www.northernbeaches.nsw.gov.au/planning-and-development/permits-and-certification",
   "Penrith City Council":
-    "https://www.penrithcity.nsw.gov.au/waste-environment/roads-footpaths-and-drainage",
+    "https://www.penrithcity.nsw.gov.au/services/other-services/roads-paths-driveways",
   "Sydney City Council":
-    "https://www.cityofsydney.nsw.gov.au/permits/road-occupancy-permits",
+    "https://www.cityofsydney.nsw.gov.au/construction-permits-approvals/get-permit-dig-public-road-footpath",
   "The Hills Shire Council":
-    "https://www.thehills.nsw.gov.au/Development/Other-Approvals",
+    "https://www.thehills.nsw.gov.au/Council/Application-Form-Directory/Road-Opening-Permit",
 };
 
 /**

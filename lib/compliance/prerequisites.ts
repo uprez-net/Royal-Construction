@@ -154,11 +154,20 @@ export function partyBlockedReason(
 export function developerBlockedReason(
   engagement: Pick<CertifierEngagementDetail, "documents">,
 ): string | null {
-  const report = engagement.documents.find(
-    (document) => document.documentType === DEVELOPER_APPROVAL_DOCUMENT,
+  // `some` over any row of the type, not the first one found. `documents` is
+  // not unique per type -- `attachComplianceDocumentFile` creates a row when it
+  // finds none, and other paths add their own -- so a seeded empty row sitting
+  // in front of the one that actually carries the report had this reporting a
+  // block over a document that was on the file, with the developer approval
+  // step locked behind it. `isSettled` in lib/compliance/overdue.ts reads it
+  // this way for the same reason, and these two gates must not disagree.
+  const hasReport = engagement.documents.some(
+    (document) =>
+      document.documentType === DEVELOPER_APPROVAL_DOCUMENT &&
+      document.files.length > 0,
   );
 
-  if (!report || report.files.length === 0) {
+  if (!hasReport) {
     return `Upload or commission the ${complianceDocumentLabel(
       DEVELOPER_APPROVAL_DOCUMENT,
     ).toLowerCase()} first — there is nothing for the developer to approve yet.`;

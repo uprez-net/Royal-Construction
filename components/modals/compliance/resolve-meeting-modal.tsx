@@ -77,6 +77,14 @@ export function ResolveMeetingModal({
   const [newTime, setNewTime] = useState("");
   const [note, setNote] = useState("");
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those attachments is still transferring.
+   *
+   * Reported by the control rather than inferred here, and part of the
+   * submit gate: pressing Send mid-upload sent the ids that had landed and
+   * left the rest behind, with a success toast on top of it.
+   */
+  const [isAttaching, setIsAttaching] = useState(false);
 
   const booked = new Date(scheduledFor);
 
@@ -120,7 +128,7 @@ export function ResolveMeetingModal({
   };
 
   const canSubmit =
-    !isPending && (outcome === "held" || Boolean(newTime));
+    !isPending && !isAttaching && (outcome === "held" || Boolean(newTime));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -220,6 +228,7 @@ export function ResolveMeetingModal({
               file to. */}
           {outcome === "rescheduled" ? (
             <ExtraAttachmentsField
+              onUploadingChange={setIsAttaching}
               projectId={projectId}
               value={extras}
               onChange={setExtras}

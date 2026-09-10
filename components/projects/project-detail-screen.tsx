@@ -9,12 +9,12 @@ import {
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
 
+import { ProjectAlerts } from "./detail/project-alerts";
 import { ProjectComplianceAlert } from "./detail/project-compliance-alert";
 import { ProjectDetailTabs } from "./detail/project-detail-tabs";
 import { ProjectHeader } from "./detail/project-header";
 import { ProjectStatCards } from "./detail/project-stat-cards";
 import type { Role } from "@prisma/client";
-import { ProjectTradieAlert } from "./detail/project-tradie-alert";
 
 type ProjectRequirementsHeader = {
   siteAddress?: string | null;
@@ -66,7 +66,7 @@ export function ProjectDetailScreen({
       />
       <ProjectStatCards role={role} />
       <ProjectComplianceAlert project={displayedProject} />
-      <ProjectTradieAlert project={displayedProject} />
+      <ProjectAlerts project={displayedProject} />
       <ProjectDetailTabs project={displayedProject} role={role} />
     </div>
   );
