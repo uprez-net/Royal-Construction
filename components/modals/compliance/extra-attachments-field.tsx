@@ -8,7 +8,7 @@ import {
   Paperclip,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -94,6 +94,17 @@ export function ExtraAttachmentsField({
    * came in on paper. A generic "add files" says nothing anybody needed told.
    */
   hint,
+  /**
+   * Whether a transfer is in the air, reported to whoever owns the Send button.
+   *
+   * The count below is the whole point of this control and it was invisible
+   * from outside: every modal disabled its submit on the mutation alone, so a
+   * sender who attached a large file and pressed Send immediately dispatched
+   * the ids of the uploads that had finished, and the mail went out short with
+   * a success toast on top of it. The control cannot disable a button it does
+   * not own, so it says, and the caller gates.
+   */
+  onUploadingChange,
 }: {
   projectId: string;
   value: ExtraAttachment[];
@@ -102,6 +113,7 @@ export function ExtraAttachmentsField({
   label?: string;
   vaultOptions?: readonly VaultAttachmentOption[];
   hint?: string;
+  onUploadingChange?: (uploading: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { uploadFile } = useComplianceUpload(projectId);
@@ -117,6 +129,27 @@ export function ExtraAttachmentsField({
    */
   const [inFlight, setInFlight] = useState(0);
   const isUploading = inFlight > 0;
+
+  // Reported on the crossing rather than on every change, so a caller adding
+  // three files at once is told "uploading" once and "done" once.
+  useEffect(() => {
+    onUploadingChange?.(isUploading);
+  }, [isUploading, onUploadingChange]);
+
+  /**
+   * What is picked right now, for the upload to append to when it lands.
+   *
+   * `handleFiles` is async and closes over `value` as it was when the file was
+   * chosen. The vault picker stays live during an upload — deliberately, since
+   * the two are unrelated — so a sender who picks a document from the file
+   * while a scan is transferring had that pick silently reverted the moment the
+   * scan finished, by an `onChange` built from the value before it. They then
+   * sent a message short of a file they had selected and watched appear.
+   */
+  const latestValue = useRef(value);
+  useEffect(() => {
+    latestValue.current = value;
+  }, [value]);
 
   const picked = useMemo(
     () => new Set(value.map((attachment) => attachment.fileId)),
@@ -174,7 +207,7 @@ export function ExtraAttachmentsField({
     setInFlight((count) => Math.max(0, count - chosen.length));
 
     if (added.length > 0) {
-      onChange([...value, ...added]);
+      onChange([...latestValue.current, ...added]);
     }
     if (failed > 0) {
       toast.error(

@@ -86,6 +86,14 @@ export function WasteManagementModal({
   const isPending = mutation.status === "pending";
   const [note, setNote] = useState("");
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those attachments is still transferring.
+   *
+   * Reported by the control rather than inferred here, and part of the
+   * submit gate: pressing Send mid-upload sent the ids that had landed and
+   * left the rest behind, with a success toast on top of it.
+   */
+  const [isAttaching, setIsAttaching] = useState(false);
 
   const recipient = contactName ?? contactEmail ?? "the architect";
 
@@ -117,8 +125,12 @@ export function WasteManagementModal({
             <DialogTitle>Ask for the waste management plan</DialogTitle>
             <DialogDescription>
               This goes to {recipient} on the architect thread already open on
-              this job, with the current drawings attached. Their reply is
-              matched back by the reference in the subject line.
+              this job
+              {attachments.length > 0
+                ? ", with the current drawings attached"
+                : ""}
+              . Their reply is matched back by the reference in the subject
+              line.
             </DialogDescription>
           </DialogHeader>
 
@@ -167,6 +179,7 @@ export function WasteManagementModal({
           </div>
 
           <ExtraAttachmentsField
+            onUploadingChange={setIsAttaching}
             projectId={projectId}
             value={extras}
             onChange={setExtras}
@@ -184,7 +197,7 @@ export function WasteManagementModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || isAttaching}>
               {isPending ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               ) : null}

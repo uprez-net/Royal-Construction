@@ -515,6 +515,111 @@ test("a checklist line marked not required finishes with the consultant", () => 
   );
 });
 
+test("a consultant engaged off the development application is still chased", () => {
+  // The silent one. A consultant commissioned from the DA list has no certifier
+  // checklist to hang a line on, so `startPartyOutreach` writes deliverables
+  // carrying a document type and a null `checklistDocumentId`. Reading only the
+  // checklist rows produced an empty target set, `[].every()` returned true,
+  // and the sweep closed the alert with "Their documents came through" over a
+  // consultant who had sent nothing at all — which is the one failure on this
+  // file with nothing left on screen to contradict it.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.TRAFFIC_CONSULTANT, {
+        checklistDocumentId: null,
+        deliverables: [
+          {
+            id: "deliverable-1",
+            documentType: ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+            checklistDocumentId: null,
+          },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE),
+  );
+  assert.equal(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a type-only deliverable is settled by a document of that type", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.TRAFFIC_CONSULTANT, {
+        checklistDocumentId: null,
+        deliverables: [
+          {
+            id: "deliverable-1",
+            documentType: ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+            checklistDocumentId: null,
+          },
+        ],
+      }),
+    ] as never,
+    documents: [
+      document(ComplianceDocumentType.TRAFFIC_CONTROL_PLAN),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("one outstanding deliverable of three keeps the consultant late", () => {
+  // A structural engineer answers three lines off one engagement. Two in and
+  // one missing is still late, which is the whole reason the deliverables table
+  // replaced the single column.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.STRUCTURAL_ENGINEER, {
+        checklistDocumentId: null,
+        deliverables: [
+          {
+            id: "d-1",
+            documentType: ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+            checklistDocumentId: "item-drawings",
+          },
+          {
+            id: "d-2",
+            documentType: ComplianceDocumentType.GEOTECH_REPORT,
+            checklistDocumentId: "item-geotech",
+          },
+        ],
+      }),
+    ] as never,
+    documents: [
+      document(ComplianceDocumentType.CHECKLIST_ITEM, { id: "item-drawings" }),
+      document(ComplianceDocumentType.CHECKLIST_ITEM, {
+        id: "item-geotech",
+        status: ComplianceDocumentStatus.PENDING,
+        files: [],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
 test("a checklist line that has gone since the outreach is not chased forever", () => {
   // A checklist re-extracted between engaging the consultant and their reply
   // rewrites its items. There is nothing on screen to chase against, so an

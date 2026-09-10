@@ -58,6 +58,14 @@ export function DeveloperResendModal({
   const dispatch = useAppDispatch();
   const [note, setNote] = useState("");
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those attachments is still transferring.
+   *
+   * Reported by the control rather than inferred here, and part of the
+   * submit gate: pressing Send mid-upload sent the ids that had landed and
+   * left the rest behind, with a success toast on top of it.
+   */
+  const [isAttaching, setIsAttaching] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
   const close = () => {
@@ -118,6 +126,7 @@ export function DeveloperResendModal({
           ) : null}
 
           <ExtraAttachmentsField
+            onUploadingChange={setIsAttaching}
             projectId={projectId}
             value={extras}
             onChange={setExtras}
@@ -150,7 +159,7 @@ export function DeveloperResendModal({
           </Button>
           <Button
             type="button"
-            disabled={isSending}
+            disabled={isSending || isAttaching}
             onClick={() => void handleSend()}
           >
             {isSending ? (

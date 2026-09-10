@@ -26,7 +26,7 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import { MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus, type ComplianceApprovalDecision, type ComplianceDocumentType, type ComplianceExternalApplicationKind, type CompliancePartyType } from "@prisma/client";
+import { ComplianceApprovalDecision, MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus, type ComplianceDocumentType, type ComplianceExternalApplicationKind, type CompliancePartyType } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
@@ -738,9 +738,22 @@ export function ModalManager() {
         estate,
       } = modal.payload as {
         projectId: string;
-        decision: ComplianceApprovalDecision;
+        decision?: ComplianceApprovalDecision;
         estate?: string | null;
       };
+      // A guard rather than a cast, for the reason the certifierExtract case
+      // below keeps one. `DeveloperDecisionModal` reads `isRejecting` as
+      // `decision === REJECTED`, so a payload arriving without one renders the
+      // approval copy and dispatches `recordDeveloperDecision` with
+      // `decision: undefined`. That click opens a covenant gate the dialog
+      // itself says cannot be undone from the screen, and defaulting it to the
+      // approval branch is the worst of the two ways to be wrong.
+      if (
+        decision !== ComplianceApprovalDecision.APPROVED &&
+        decision !== ComplianceApprovalDecision.REJECTED
+      ) {
+        return null;
+      }
       return (
         <DeveloperDecisionModal
           projectId={id}

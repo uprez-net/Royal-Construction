@@ -372,8 +372,16 @@ export function DaApprovalSection({
         {isReadyToLodge || step !== "unanswered" ? (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2">
+              {/* Read off the step, like the pill beside it. This panel renders
+                  from "ready to lodge" all the way through to determination,
+                  and a fixed heading told an admin the application still needed
+                  submitting while the pill next to it read "Determined". */}
               <p className="font-medium text-foreground">
-                Ready to submit the application
+                {step === "received"
+                  ? "The council has determined this application"
+                  : step === "lodged"
+                    ? "Lodged with the council"
+                    : "Ready to submit the application"}
               </p>
               {step === "received" ? (
                 <StatusPill tone="success">Determined</StatusPill>

@@ -151,8 +151,7 @@ function followUpBody(params: {
       // the parties that produce several things: a structural engineer who sent
       // the drawings three weeks ago and still owes the geotechnical report
       // should be asked for the report, not handed their own delivery back as
-      // though nothing had arrived. Falls back to the whole list where none of
-      // it has landed, which is the ordinary case.
+      // though nothing had arrived.
       const deliverables =
         outreach.party === CompliancePartyType.SURVEYOR
           ? documentTypesForParty(outreach.party)
@@ -161,9 +160,30 @@ function followUpBody(params: {
       const outstanding = deliverables.filter(
         (type) => !isSuppliedOnFile(params.engagement, type, outreach),
       );
-      const wanted = (
-        outstanding.length > 0 ? outstanding : deliverables
-      ).map((type) => complianceDocumentLabel(type));
+
+      // Nothing left to ask for. The fallback here used to be the whole list,
+      // on the reading that an empty `outstanding` meant "none of it has
+      // landed" -- which is exactly backwards: with nothing supplied,
+      // `outstanding` is the whole list already, so the fallback could only
+      // ever be reached when every deliverable was on the file. It then sent
+      // the party a chase listing documents they had already delivered.
+      //
+      // The window is real. `sendComplianceFollowUp` only requires the alert to
+      // be OPEN, and the sweep does not close it until its next run, so an
+      // admin can press the chase in the hours between the last document
+      // arriving and the alert clearing. Refusing is the honest answer, and it
+      // is thrown for the same reason the two refusals in `sendComplianceFollow
+      // Up` are: the sentence is what tells the reader the wait is actually
+      // over, where silence would read as a send that failed.
+      if (outstanding.length === 0) {
+        throw new Error(
+          `Everything we asked ${PARTY_LABEL[outreach.party].toLowerCase()} for is on the file — there is nothing left to chase. The alert closes on tonight's sweep.`,
+        );
+      }
+
+      const wanted = outstanding.map((type) =>
+        complianceDocumentLabel(type),
+      );
 
       return [
         `<p>${greeting}</p>`,

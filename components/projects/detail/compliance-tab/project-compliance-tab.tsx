@@ -1028,6 +1028,7 @@ export function ProjectComplianceTab({
           // Its own clock, and its own label. The architect is engaged already,
           // so "Connect with the architect" would be an offer to do something
           // that happened months ago.
+          tracksOwnRequest
           requestedAt={architect?.wasteManagementRequestedAt ?? null}
           actionLabel="Ask the architect"
           onConnect={() =>
@@ -1364,7 +1365,20 @@ export function ProjectComplianceTab({
       ? section.types
       : section.types.filter((type) => requiredTypesInPlay.has(type));
     const documents = types.map((type) => documentsByType.get(type));
-    const outstanding = types.filter(
+
+    /**
+     * What the progress pill actually counts.
+     *
+     * The pack filter on every path, which is what the comment above always
+     * claimed and the line above did not do: on the DA path `types` keeps the
+     * 10.7 so the row can render read-only, and counting it left the council
+     * card showing 0/1 for a certificate that is ordered from the DA block —
+     * the permanently unfillable count this filter exists to avoid.
+     */
+    const countedTypes = section.types.filter((type) =>
+      requiredTypesInPlay.has(type),
+    );
+    const outstanding = countedTypes.filter(
       (type) => !documentsByType.get(type)?.files.length,
     );
 
@@ -1372,6 +1386,7 @@ export function ProjectComplianceTab({
       section,
       party: section.party,
       types,
+      countedTypes,
       documents,
       outreach: outreachForParty(engagement, section.party),
       // Only what the outreach actually waits for. The full architectural
@@ -1763,8 +1778,10 @@ export function ProjectComplianceTab({
                 open={isOpen(entry.party)}
                 onOpenChange={toggleSection(entry.party)}
                 progress={{
-                  done: countSupplied(entry.documents),
-                  total: entry.types.length,
+                  done: countSupplied(
+                    entry.countedTypes.map((type) => documentsByType.get(type)),
+                  ),
+                  total: entry.countedTypes.length,
                 }}
                 isBusy={isScopeBusy(complianceScope.party(entry.party))}
                 orderedFromDa={entry.orderedFromDa}

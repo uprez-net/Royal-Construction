@@ -258,8 +258,11 @@ export const activityLogSchemas = {
     complianceWasteManagementRequested: z.object({
         projectId: z.string(),
         engagementId: z.string(),
+        // No contactEmail. It is an external party's personal address, and this
+        // log is persisted and rendered in the project feed -- `outreachId`
+        // identifies the thread, and the outreach row holds the address for
+        // anybody who actually needs it.
         outreachId: z.string(),
-        contactEmail: z.string(),
         attachmentCount: z.number(),
         requestedBy: z.string(),
     }),

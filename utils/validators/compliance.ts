@@ -236,6 +236,35 @@ const isoDateSchema = z
       ctx.addIssue({ code: "custom", message: "That is not a valid date." });
       return z.NEVER;
     }
+
+    // A day that does not exist in the month it names.
+    //
+    // `new Date("2026-02-31")` does not fail — it rolls forward to 3 March, so
+    // the NaN check above passes and a date nobody typed is stored. That value
+    // becomes `ComplianceApplicationSubmission.submittedAt`, which is what the
+    // determination clock counts from, so the silent correction moves an SLA
+    // rather than just displaying oddly.
+    //
+    // Checked on the date-only form alone. Everything on this file comes off an
+    // <input type="date"> and is `YYYY-MM-DD`; a full instant carries an offset,
+    // and comparing its UTC components against the text would reject perfectly
+    // good Sydney evenings.
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (dateOnly) {
+      const [, year, month, day] = dateOnly;
+      const rollsForward =
+        parsed.getUTCFullYear() !== Number(year) ||
+        parsed.getUTCMonth() + 1 !== Number(month) ||
+        parsed.getUTCDate() !== Number(day);
+      if (rollsForward) {
+        ctx.addIssue({
+          code: "custom",
+          message: "That day does not exist in that month.",
+        });
+        return z.NEVER;
+      }
+    }
+
     return parsed;
   });
 

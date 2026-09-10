@@ -167,27 +167,47 @@ export async function closeComplianceIfComplete(params: {
       return;
     }
 
-    const claim = await prisma.certifierEngagement.updateMany({
-      where: {
-        id: params.engagementId,
-        status: { not: CertifierEngagementStatus.COMPLETED },
-      },
-      data: { status: CertifierEngagementStatus.COMPLETED },
+    /**
+     * The claim and the status move, together or not at all.
+     *
+     * They were two statements, and the claim is the idempotency guard — so a
+     * failure between them was unrecoverable rather than merely untidy. The
+     * engagement went COMPLETED, the project kept its old status, and the
+     * retry found `claim.count === 0` and returned early: the project status
+     * was never corrected, and no activity entry or notification was written
+     * either. That status is what the project list and the header read, so the
+     * job showed as still in compliance forever.
+     *
+     * In one transaction the claim rolls back with the write it guards, and the
+     * retry re-enters and finishes the job.
+     */
+    const claimed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.certifierEngagement.updateMany({
+        where: {
+          id: params.engagementId,
+          status: { not: CertifierEngagementStatus.COMPLETED },
+        },
+        data: { status: CertifierEngagementStatus.COMPLETED },
+      });
+
+      if (claim.count === 0) {
+        // Already closed. Two uploads landing together would otherwise both
+        // find the file complete and both announce it.
+        return false;
+      }
+
+      await tx.project.updateMany({
+        where: {
+          id: params.projectId,
+          status: { in: [...COMPLIANCE_STAGE_STATUSES] },
+        },
+        data: { status: ProjectStatus.COMPLIANCE_COMPLETED },
+      });
+
+      return true;
     });
 
-    if (claim.count === 0) {
-      // Already closed. Two uploads landing together would otherwise both find
-      // the file complete and both announce it.
-      return;
-    }
-
-    await prisma.project.updateMany({
-      where: {
-        id: params.projectId,
-        status: { in: [...COMPLIANCE_STAGE_STATUSES] },
-      },
-      data: { status: ProjectStatus.COMPLIANCE_COMPLETED },
-    });
+    if (!claimed) return;
 
     revalidate(params.projectId);
 

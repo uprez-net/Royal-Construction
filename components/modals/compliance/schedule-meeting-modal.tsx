@@ -64,6 +64,14 @@ export function ScheduleMeetingModal({
   const [scheduledFor, setScheduledFor] = useState("");
   const [note, setNote] = useState("");
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those attachments is still transferring.
+   *
+   * Reported by the control rather than inferred here, and part of the
+   * submit gate: pressing Send mid-upload sent the ids that had landed and
+   * left the rest behind, with a success toast on top of it.
+   */
+  const [isAttaching, setIsAttaching] = useState(false);
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -133,6 +141,7 @@ export function ScheduleMeetingModal({
           </div>
 
           <ExtraAttachmentsField
+            onUploadingChange={setIsAttaching}
             projectId={projectId}
             value={extras}
             onChange={setExtras}
@@ -150,7 +159,10 @@ export function ScheduleMeetingModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isPending || !scheduledFor}>
+            <Button
+              type="submit"
+              disabled={isPending || isAttaching || !scheduledFor}
+            >
               {isPending ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               ) : null}

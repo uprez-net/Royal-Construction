@@ -60,9 +60,22 @@ export function ResubmitApplicationModal({
   const dispatch = useAppDispatch();
   const copy = EXTERNAL_APPLICATION_COPY[kind];
 
-  const [submittedAt, setSubmittedAt] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  /**
+   * Today, in the calendar the person typing it is standing in.
+   *
+   * `toISOString` returns the UTC date, and Sydney runs ten or eleven hours
+   * ahead of it -- so from midnight until mid-morning the prefilled value was
+   * yesterday. The date is stored as `submittedAt` and starts the
+   * determination clock, which then ran a day early on every resubmission
+   * recorded during an Australian morning. Everything else in this file treats
+   * the value as a plain local date, which is what it is.
+   */
+  const [submittedAt, setSubmittedAt] = useState(() => {
+    const now = new Date();
+    const month = `${now.getMonth() + 1}`.padStart(2, "0");
+    const day = `${now.getDate()}`.padStart(2, "0");
+    return `${now.getFullYear()}-${month}-${day}`;
+  });
   const [reference, setReference] = useState(applicationRef ?? "");
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);

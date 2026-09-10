@@ -67,6 +67,14 @@ export function ReviewPlansModal({
   const [approved, setApproved] = useState<"yes" | "no">("yes");
   const [feedback, setFeedback] = useState("");
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those attachments is still transferring.
+   *
+   * Reported by the control rather than inferred here, and part of the
+   * submit gate: pressing Send mid-upload sent the ids that had landed and
+   * left the rest behind, with a success toast on top of it.
+   */
+  const [isAttaching, setIsAttaching] = useState(false);
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,7 +106,9 @@ export function ReviewPlansModal({
   };
 
   const canSubmit =
-    !isPending && (approved === "yes" || Boolean(feedback.trim()));
+    !isPending &&
+    !isAttaching &&
+    (approved === "yes" || Boolean(feedback.trim()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -165,14 +175,27 @@ export function ReviewPlansModal({
             ) : null}
           </div>
 
-          <ExtraAttachmentsField
-            projectId={projectId}
-            value={extras}
-            onChange={setExtras}
-            vaultOptions={vaultOptions}
-            disabled={isPending}
-            hint="A photograph of the marked-up printout, a sketch — anything that says what the client wants better than the words do."
-          />
+          {/* Only on the rejection, because only the rejection sends anything.
+              `reviewArchitectPlans` reads `extraAttachmentIds` inside its else
+              branch alone -- an approval writes `clientPlansApprovedAt` and
+              posts no mail -- so a sender who answered "Yes", attached the
+              marked-up printout and pressed Record approval got a success toast
+              over a file that went nowhere. The hint is written for the
+              rejection case, which is the other half of the same tell.
+
+              `ResolveMeetingModal` already gates its control on the branch that
+              sends; this is the same gate. */}
+          {approved === "no" ? (
+            <ExtraAttachmentsField
+              onUploadingChange={setIsAttaching}
+              projectId={projectId}
+              value={extras}
+              onChange={setExtras}
+              vaultOptions={vaultOptions}
+              disabled={isPending}
+              hint="A photograph of the marked-up printout, a sketch — anything that says what the client wants better than the words do."
+            />
+          ) : null}
 
           <DialogFooter>
             <Button

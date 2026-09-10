@@ -1506,10 +1506,32 @@ const projectsSlice = createSlice({
         state.mutations.updateMilestone = { status: "succeeded", error: null };
         if (state.activeProject?.id === action.payload.projectId) {
           const milestoneIndex = state.activeProject.milestones.findIndex((m) => m.id === action.meta.arg.milestoneId);
-          const pendingMilestones = state.activeProject.milestones.filter((m) => m.status === "PENDING");
-          if (pendingMilestones.length === 0 && state.activeProject.milestones.every((m) => ["DONE", "NOT_REQUIRED"].includes(m.status))) {
+          // The same rule `lib/data/milestones.ts` applies, rather than this
+          // reducer's own reading of it.
+          //
+          // It used to force ACTIVE on any project that still had pending
+          // milestones, which was harmless while every project was created
+          // ACTIVE and could only re-assert what was already true. Against the
+          // status ladder it is not: correcting the spend on a job whose
+          // certifier had just been engaged flipped COMPLIANCE_STARTED to
+          // ACTIVE on screen until the next refetch, and did the same to a
+          // NEEDS_ATTENTION somebody had set on purpose.
+          //
+          // So the two ends are stated separately and neither infers the other,
+          // exactly as the server states them: no pending milestones means the
+          // build is finished, a milestone actually being started means it has
+          // begun, and every other update leaves the status alone. Counted
+          // against the status this update carries, because the merge below has
+          // not happened yet.
+          const pendingAfterUpdate = state.activeProject.milestones.filter(
+            (m) =>
+              m.id === action.meta.arg.milestoneId
+                ? (action.payload.status ?? m.status) === "PENDING"
+                : m.status === "PENDING",
+          );
+          if (pendingAfterUpdate.length === 0) {
             state.activeProject.status = "COMPLETED";
-          } else if (state.activeProject.status !== "ACTIVE") {
+          } else if (action.meta.arg.status === "ACTIVE") {
             state.activeProject.status = "ACTIVE";
           }
           if (milestoneIndex !== -1) {

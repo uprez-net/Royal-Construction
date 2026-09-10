@@ -17,6 +17,7 @@ import {
   PARTY_LABEL,
 } from "@/constants/complianceDocuments";
 import { developerByKey } from "@/constants/complianceDevelopers";
+import { requireComplianceAccess } from "@/lib/compliance/access";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import {
   escapeEmailHtml,
@@ -54,6 +55,32 @@ import { logAction } from "./actionLog";
  * file on a row, and why a rejection has somewhere to go: back to the
  * consultant who wrote the report, in the developer's own words.
  */
+
+/**
+ * Runs a follow-on now, or after the response.
+ *
+ * `after()` schedules work against the request that is being served. Two of the
+ * functions below are also reached from `"use step"` workflow steps, which have
+ * no request scope — so the callbacks they scheduled could be dropped, and a
+ * developer verdict read off an inbound reply landed with no cache
+ * revalidation, no activity entry and no notification. Nothing failed; the
+ * decision was simply invisible until something else revalidated the project.
+ *
+ * So a caller that is not serving a request awaits the work instead. The step
+ * is already asynchronous and already retried as a unit, which is the better
+ * place for it: a follow-on that throws fails the step rather than disappearing
+ * into a queue nobody reads.
+ */
+async function runFollowOn(
+  inRequest: boolean,
+  work: () => Promise<void> | void,
+): Promise<void> {
+  if (inRequest) {
+    after(work);
+    return;
+  }
+  await work();
+}
 
 function revalidateEngagement(projectId: string) {
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
@@ -146,6 +173,21 @@ export async function recordDeveloperDecision(params: {
   decidedById?: string | null;
   decidedByName?: string | null;
 }): Promise<CertifierEngagementDetail> {
+  // The admin path only. Next treats every export of a `"use server"` module as
+  // a Server Function, so the route handler that fronts this is not the access
+  // boundary it looks like — without this, a caller who can reach the action
+  // endpoint can record a covenant verdict on any project with a compliance
+  // file, on a gate the dialog itself says cannot be undone from the screen.
+  //
+  // Deliberately not applied to the inbound workflow, which reaches this with
+  // `channel: INBOUND_EMAIL` from a step that has no signed-in user and is
+  // trusted on a different basis — the correlation token on the thread. An
+  // interactive check there would throw on every developer reply we parse.
+  const fromAdmin = params.channel === ComplianceApprovalChannel.ADMIN;
+  if (fromAdmin) {
+    await requireComplianceAccess(params.projectId);
+  }
+
   const engagement = await requireEngagement(params.projectId);
   const developer = requireDeveloper(engagement);
 
@@ -169,7 +211,7 @@ export async function recordDeveloperDecision(params: {
     return engagement;
   }
 
-  after(() => revalidateEngagement(params.projectId));
+  await runFollowOn(fromAdmin, () => revalidateEngagement(params.projectId));
 
   await prisma.complianceOutreach.update({
     where: { id: developer.id },
@@ -206,7 +248,7 @@ export async function recordDeveloperDecision(params: {
     });
   }
 
-  after(async () => {
+  await runFollowOn(fromAdmin, async () => {
     await logAction(
       createActivityLogEntry("complianceDeveloperDecision", {
         projectId: params.projectId,
@@ -401,7 +443,11 @@ export async function recordBushfireRevisionArrival(params: {
     resolutionNote: "A revised bushfire report has come back.",
   });
 
-  after(() => revalidateEngagement(params.projectId));
+  // Called direct rather than scheduled. Both callers are already outside a
+  // request scope -- an inbound workflow step, and the upload path's own
+  // `after()` callback -- so scheduling a second one here is either dropped or
+  // pointless, and the work is two writes.
+  revalidateEngagement(params.projectId);
 
   await logAction(
     createActivityLogEntry("complianceBushfireRevisionReceived", {
@@ -435,6 +481,11 @@ export async function resendDeveloperApproval(params: {
   extraAttachmentIds?: readonly string[];
   requestedByName?: string | null;
 }): Promise<CertifierEngagementDetail> {
+  // Reached only from the admin dialog, so the check is unconditional. This
+  // sends a real email to an external party under our name; the route handler
+  // in front of it is not a boundary a Server Function has to pass through.
+  await requireComplianceAccess(params.projectId);
+
   const engagement = await requireEngagement(params.projectId);
   const developer = requireDeveloper(engagement);
 
@@ -540,6 +591,11 @@ export async function setDeveloperApprovalRequired(params: {
   required: boolean;
   answeredByName?: string | null;
 }): Promise<CertifierEngagementDetail> {
+  // Reached only from the admin control. The answer is what holds the
+  // development application shut, so an unauthenticated flip of it lodges a pack
+  // without a covenanted approval — which comes straight back.
+  await requireComplianceAccess(params.projectId);
+
   const engagement = await requireEngagement(params.projectId);
 
   after(() => revalidateEngagement(params.projectId));
