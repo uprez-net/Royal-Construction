@@ -391,10 +391,21 @@ function clock(
  * The latest rather than the earliest: a surveyor owes three documents and is
  * finished with when the last of them is in, not the first.
  *
- * A row that was waved off rather than supplied has no arrival to read, and
- * `createdAt` on it is when somebody typed the row rather than when the
- * question was answered — so a set closed out that way returns null and the
- * stage keeps no duration. Better than a figure measured to the wrong instant.
+ * Read off the files rather than off the row they hang from, which is the
+ * correction. A ComplianceDocument row is written when the type enters the
+ * pack — the fixed types are laid down with the engagement, a checklist line
+ * the moment the extraction reads it — and the file that answers it arrives
+ * days or weeks later. Taking `document.createdAt` therefore measured the wait
+ * to the instant the question was *asked*: a surveyor written to on the Monday
+ * whose deposited plan has sat on the file since the engagement opened finished
+ * before they were asked, and `businessDaysSince` clamped that to a flat "Done
+ * in 0d" under a green tick. The file's own `createdAt` is when the answer
+ * landed, which is the instant the stage is actually finished at.
+ *
+ * A row that was waved off rather than supplied has no file on it, so it is
+ * skipped exactly as before and a set closed out that way returns null — the
+ * stage keeps no duration, which is better than a figure measured to the wrong
+ * instant.
  */
 function latestArrival(
   engagement: CertifierEngagementDetail,
@@ -404,10 +415,13 @@ function latestArrival(
   let latest: Date | null = null;
 
   for (const document of engagement.documents) {
-    if (!wanted.has(document.documentType) || document.files.length === 0) {
-      continue;
+    if (!wanted.has(document.documentType)) continue;
+    // A row with no files contributes nothing, which is the non-empty-file
+    // filter this used to spell out separately: an empty loop cannot move
+    // `latest`.
+    for (const file of document.files) {
+      if (!latest || file.createdAt > latest) latest = file.createdAt;
     }
-    if (!latest || document.createdAt > latest) latest = document.createdAt;
   }
 
   return latest;

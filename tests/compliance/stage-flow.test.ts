@@ -99,12 +99,18 @@ function document(
   documentType: ComplianceDocumentType,
   overrides: Record<string, unknown> = {},
 ) {
+  // The row and its file share an instant unless a test separates them. Two
+  // different things are read off them -- the row is when the type entered the
+  // pack, the file is when the answer landed -- and defaulting them apart would
+  // put a date nobody chose behind every clock in here.
+  const createdAt = (overrides.createdAt as Date | undefined) ?? MONDAY;
+
   return {
     id: `document-${documentType}`,
     documentType,
     status: ComplianceDocumentStatus.UPLOADED,
-    files: [{ id: "file-1", url: "https://blob/one.pdf" }],
-    createdAt: MONDAY,
+    files: [{ id: "file-1", url: "https://blob/one.pdf", createdAt }],
+    createdAt,
     detail: null,
     label: null,
     order: 0,
@@ -380,6 +386,43 @@ test("a finished surveyor stops counting down, however late they were", () => {
   // Four working days, measured to the documents landing rather than to now.
   assert.equal(surveyor.elapsedBusinessDays, 4);
   assert.deepEqual(surveyor.settledAt, FOUR_WORKING_DAYS_LATER);
+});
+
+test("the wait ends when the file landed, not when the row was written", () => {
+  // The pack rows are laid down with the engagement, so `createdAt` on one of
+  // them is when the type entered the pack rather than when the answer arrived.
+  // Measured to the row, a surveyor written to on the Monday finished four
+  // working days before they were asked -- which `businessDaysSince` clamps to
+  // a flat "Done in 0d" under a green tick, on a firm that took four days.
+  const rowWritten = sydney("2026-05-25T09:00:00");
+  const supplied = (documentType: ComplianceDocumentType) =>
+    document(documentType, {
+      createdAt: rowWritten,
+      files: [
+        {
+          id: `file-${documentType}`,
+          url: "https://blob/one.pdf",
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        },
+      ],
+    });
+
+  const stages = complianceStageFlow(
+    engagement({
+      outreaches: [outreach(CompliancePartyType.SURVEYOR)] as never,
+      documents: [
+        supplied(ComplianceDocumentType.DEPOSITED_PLAN),
+        supplied(ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL),
+        supplied(ComplianceDocumentType.SURVEY),
+      ] as never,
+    }),
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const surveyor = stage(stages, "SURVEYOR");
+  assert.equal(surveyor.state, "done");
+  assert.deepEqual(surveyor.settledAt, FOUR_WORKING_DAYS_LATER);
+  assert.equal(surveyor.elapsedBusinessDays, 4);
 });
 
 test("a stage that finished with no date recorded reports no duration", () => {
