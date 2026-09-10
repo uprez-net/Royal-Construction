@@ -321,7 +321,33 @@ type TargetLine = {
   id: string;
   files: { id: string; url: string }[];
   mappedFromDocumentId: string | null;
+  mappedFromProject: boolean;
 };
+
+/**
+ * Whether the copy on this line is one the mapper made.
+ *
+ * The question both guards below are actually asking, and it has two answers
+ * because a source is one of two things: a document on the compliance file,
+ * which leaves an id, and the project's own HBCF certificate, which has no
+ * compliance row to point at and leaves the boolean instead.
+ *
+ * Reading the id alone was the bug. An HBCF line mapped from the project had
+ * `mappedFromDocumentId` null, so every pass after the first read it as a line
+ * somebody had filled in by hand and left it alone -- and a certificate
+ * replaced on the project left the superseded copy on the checklist for good,
+ * which is the copy that then went to the certifier.
+ *
+ * Exported for the tests, which is the only part of this decision that can be
+ * pinned without a database. Structural rather than taking a `TargetLine`, so a
+ * test does not have to build a row to ask a question about two fields.
+ */
+export function isMappedCopy(line: {
+  mappedFromDocumentId: string | null;
+  mappedFromProject: boolean;
+}): boolean {
+  return line.mappedFromDocumentId !== null || line.mappedFromProject;
+}
 
 /**
  * Puts one document's files onto one checklist line, or leaves it alone.
@@ -397,6 +423,10 @@ async function copyOntoChecklistLine(
         status: ComplianceDocumentStatus.UPLOADED,
         rejectionReason: null,
         mappedFromDocumentId: source.id,
+        // The other half of the provenance, and the only one the HBCF case has.
+        // Set from the absence of a source id rather than passed in, so the two
+        // cannot disagree about where one copy came from.
+        mappedFromProject: source.id === null,
       },
     });
   });
@@ -492,7 +522,7 @@ export async function mapExistingDocumentsOntoChecklist(params: {
       // A line carrying a *mapped* copy is a different matter and is handled in
       // `copyOntoChecklistLine`, because the document it copied may since have
       // been replaced.
-      if (item.files.length > 0 && !item.mappedFromDocumentId) continue;
+      if (item.files.length > 0 && !isMappedCopy(item)) continue;
 
       const wanted = checklistDocumentType(item);
       if (!isChecklistMappableType(wanted)) continue;
@@ -579,7 +609,7 @@ export async function fillChecklistLinesFor(params: {
     for (const item of documents) {
       if (item.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) continue;
       // Filled in by hand. Only a mapped copy is ours to refresh.
-      if (item.files.length > 0 && !item.mappedFromDocumentId) continue;
+      if (item.files.length > 0 && !isMappedCopy(item)) continue;
       if (checklistDocumentType(item) !== params.documentType) continue;
 
       if (await copyOntoChecklistLine(item, source)) mapped += 1;

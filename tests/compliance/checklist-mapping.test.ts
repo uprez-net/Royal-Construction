@@ -8,7 +8,10 @@ import {
   isChecklistMappableType,
   mappedDocumentSource,
 } from "../../constants/complianceDocuments";
-import { checklistDocumentType } from "../../lib/compliance/checklist-mapping";
+import {
+  checklistDocumentType,
+  isMappedCopy,
+} from "../../lib/compliance/checklist-mapping";
 
 /**
  * Reading a certifier's checklist line and saying what it asks for.
@@ -223,4 +226,64 @@ test("every mappable type can say where it came from", () => {
       `${type}'s source reads mid-sentence, so it should not open with a capital`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Whose copy is on the line
+//
+// The guard both mapper passes read before deciding whether a line is theirs to
+// refresh. It is two fields and no database, and it is where the HBCF bug lived:
+// a line answered from the project's own certificate has no compliance document
+// to point at, so reading the id alone called it a manual upload and left it
+// alone for good.
+// ---------------------------------------------------------------------------
+
+test("a line mapped from a document on the file is ours to refresh", () => {
+  assert.equal(
+    isMappedCopy({
+      mappedFromDocumentId: "document-1",
+      mappedFromProject: false,
+    }),
+    true,
+  );
+});
+
+test("a line mapped from the project's own certificate is ours too", () => {
+  // The correction. HBCF cover is raised on the Overview tab, so the
+  // certificate is a File with no ComplianceDocument behind it and there is no
+  // id to record — which is exactly what a hand-filled line looks like through
+  // the old reading.
+  assert.equal(
+    isMappedCopy({ mappedFromDocumentId: null, mappedFromProject: true }),
+    true,
+  );
+});
+
+test("a line somebody filled in by hand is left alone", () => {
+  // The half that must not regress. A mapper that refreshes a manual upload
+  // overwrites somebody's own work with a copy of something else.
+  assert.equal(
+    isMappedCopy({ mappedFromDocumentId: null, mappedFromProject: false }),
+    false,
+  );
+});
+
+test("the two marks are read independently", () => {
+  // Nothing sets both today — a source has an id or it does not — but the guard
+  // must not depend on that, because a row written before the boolean existed
+  // carries an id and a false, and it is still ours.
+  assert.equal(
+    isMappedCopy({ mappedFromDocumentId: "document-1", mappedFromProject: true }),
+    true,
+  );
+});
+
+test("the HBCF line has a sentence to show once it is marked", () => {
+  // `mappedDocumentSource` has carried this wording since the mapping landed and
+  // nothing could reach it: the row that would have shown it was the one row
+  // whose provenance was never recorded.
+  assert.equal(
+    mappedDocumentSource(ComplianceDocumentType.HOME_INSURANCE),
+    "the project's HBCF cover",
+  );
 });
