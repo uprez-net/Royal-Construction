@@ -99,12 +99,18 @@ function document(
   documentType: ComplianceDocumentType,
   overrides: Record<string, unknown> = {},
 ) {
+  // The row and its file share an instant unless a test separates them. Two
+  // different things are read off them -- the row is when the type entered the
+  // pack, the file is when the answer landed -- and defaulting them apart would
+  // put a date nobody chose behind every clock in here.
+  const createdAt = (overrides.createdAt as Date | undefined) ?? MONDAY;
+
   return {
     id: `document-${documentType}`,
     documentType,
     status: ComplianceDocumentStatus.UPLOADED,
-    files: [{ id: "file-1", url: "https://blob/one.pdf" }],
-    createdAt: MONDAY,
+    files: [{ id: "file-1", url: "https://blob/one.pdf", createdAt }],
+    createdAt,
     detail: null,
     label: null,
     order: 0,
@@ -156,7 +162,7 @@ const stage = (stages: ComplianceStage[], id: ComplianceStageId) => {
 // The shape of the flow
 // ---------------------------------------------------------------------------
 
-test("a file with no development application does not carry a DA stage", () => {
+test("every file carries the whole route, approval branch included", () => {
   const stages = complianceStageFlow(engagement(), MONDAY);
 
   assert.deepEqual(
@@ -166,13 +172,31 @@ test("a file with no development application does not carry a DA stage", () => {
       "ARCHITECT",
       "COUNCIL",
       "CERTIFIER",
+      "DEVELOPMENT_APPLICATION",
       "CHECKLIST",
       "CERTIFICATE",
     ],
   );
+
+  assert.deepEqual(
+    stages.filter((entry) => entry.track === "approval").map((e) => e.id),
+    ["DEVELOPMENT_APPLICATION"],
+  );
 });
 
-test("a raised development approval puts the DA stage in the route", () => {
+test("a file with no development application has the branch dormant", () => {
+  // Drawn and not live. The reader can see there is a road to development
+  // approval; nothing about this job says it is on it.
+  const da = stage(complianceStageFlow(engagement(), MONDAY), "DEVELOPMENT_APPLICATION");
+
+  assert.equal(da.isActive, false);
+  assert.equal(da.state, "upcoming");
+  assert.equal(da.startedAt, null);
+  assert.equal(da.elapsedBusinessDays, null);
+  assert.equal(da.daysLeft, null);
+});
+
+test("a raised development approval lights the branch up", () => {
   const stages = complianceStageFlow(
     engagement({
       alerts: [alert(ComplianceAlertType.DA_APPROVAL_REQUIRED)] as never,
@@ -180,7 +204,88 @@ test("a raised development approval puts the DA stage in the route", () => {
     MONDAY,
   );
 
-  assert.ok(stages.some((entry) => entry.id === "DEVELOPMENT_APPLICATION"));
+  const da = stage(stages, "DEVELOPMENT_APPLICATION");
+  assert.equal(da.isActive, true);
+  // The checklist behind it is frozen, so the branch is where the work is.
+  assert.equal(da.state, "current");
+});
+
+test("a dormant branch never holds the marker", () => {
+  // The failure this guards is silent and would be on every CDC ever opened:
+  // the branch sitting between the certifier and the checklist in the array,
+  // being unfinished, and taking "the first unfinished stage" from the step the
+  // job is actually on.
+  const stages = complianceStageFlow(engagement(), MONDAY);
+
+  const current = stages.filter((entry) => entry.state === "current");
+  assert.equal(current.length, 1);
+  assert.equal(current[0].id, "SURVEYOR");
+});
+
+test("the branch leaves the main line where the job was when it was raised", () => {
+  // Raised on the checklist the certifier had just issued, which is one of the
+  // three places it can be raised from and the latest of them.
+  const stages = complianceStageFlow(
+    engagement({
+      alerts: [
+        alert(ComplianceAlertType.DA_APPROVAL_REQUIRED, {
+          createdAt: ELEVEN_WORKING_DAYS_LATER,
+        }),
+      ] as never,
+      emails: [
+        { direction: CertifierEmailDirection.OUTBOUND, sentAt: MONDAY },
+      ] as never,
+      outreaches: [outreach(CompliancePartyType.ARCHITECT)] as never,
+      documents: [
+        document(ComplianceDocumentType.CHECKLIST_ITEM, {
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        }),
+      ] as never,
+    }),
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const da = stage(stages, "DEVELOPMENT_APPLICATION");
+  assert.equal(da.branchesFrom, "CHECKLIST");
+  assert.equal(da.rejoinsAt, "CHECKLIST");
+});
+
+test("a branch raised before the certifier answered leaves from the architect", () => {
+  const stages = complianceStageFlow(
+    engagement({
+      alerts: [
+        alert(ComplianceAlertType.DA_APPROVAL_REQUIRED, {
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        }),
+      ] as never,
+      outreaches: [
+        outreach(CompliancePartyType.ARCHITECT, {
+          meetings: [
+            {
+              id: "meeting-1",
+              status: ComplianceMeetingStatus.HELD,
+              scheduledFor: MONDAY,
+              heldAt: MONDAY,
+            },
+          ],
+        }),
+      ] as never,
+    }),
+    ELEVEN_WORKING_DAYS_LATER,
+  );
+
+  assert.equal(
+    stage(stages, "DEVELOPMENT_APPLICATION").branchesFrom,
+    "ARCHITECT",
+  );
+});
+
+test("a dormant branch falls back to the architect, the earliest it can leave", () => {
+  assert.equal(
+    stage(complianceStageFlow(engagement(), MONDAY), "DEVELOPMENT_APPLICATION")
+      .branchesFrom,
+    "ARCHITECT",
+  );
 });
 
 test("exactly one stage is current, and it is the first unfinished one", () => {
@@ -248,6 +353,144 @@ test("a surveyor past their quote reads as days over", () => {
   );
 
   assert.equal(stage(stages, "SURVEYOR").daysLeft, -1);
+});
+
+test("a finished surveyor stops counting down, however late they were", () => {
+  // The bug this pins, and it was on screen for every finished stage on every
+  // file: the clock was measured to *now* regardless of state, so a surveyor
+  // who answered on the Tuesday carried "3d over" under a green tick for the
+  // rest of the job. What a stage that is finished has is a duration, not a
+  // countdown.
+  const stages = complianceStageFlow(
+    engagement({
+      outreaches: [outreach(CompliancePartyType.SURVEYOR)] as never,
+      documents: [
+        document(ComplianceDocumentType.DEPOSITED_PLAN, {
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        }),
+        document(ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL, {
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        }),
+        document(ComplianceDocumentType.SURVEY, {
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        }),
+      ] as never,
+    }),
+    // Months later, and long past the eleven working days they were quoted.
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const surveyor = stage(stages, "SURVEYOR");
+  assert.equal(surveyor.state, "done");
+  assert.equal(surveyor.daysLeft, null);
+  // Four working days, measured to the documents landing rather than to now.
+  assert.equal(surveyor.elapsedBusinessDays, 4);
+  assert.deepEqual(surveyor.settledAt, FOUR_WORKING_DAYS_LATER);
+});
+
+test("the wait ends when the file landed, not when the row was written", () => {
+  // The pack rows are laid down with the engagement, so `createdAt` on one of
+  // them is when the type entered the pack rather than when the answer arrived.
+  // Measured to the row, a surveyor written to on the Monday finished four
+  // working days before they were asked -- which `businessDaysSince` clamps to
+  // a flat "Done in 0d" under a green tick, on a firm that took four days.
+  const rowWritten = sydney("2026-05-25T09:00:00");
+  const supplied = (documentType: ComplianceDocumentType) =>
+    document(documentType, {
+      createdAt: rowWritten,
+      files: [
+        {
+          id: `file-${documentType}`,
+          url: "https://blob/one.pdf",
+          createdAt: FOUR_WORKING_DAYS_LATER,
+        },
+      ],
+    });
+
+  const stages = complianceStageFlow(
+    engagement({
+      outreaches: [outreach(CompliancePartyType.SURVEYOR)] as never,
+      documents: [
+        supplied(ComplianceDocumentType.DEPOSITED_PLAN),
+        supplied(ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL),
+        supplied(ComplianceDocumentType.SURVEY),
+      ] as never,
+    }),
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const surveyor = stage(stages, "SURVEYOR");
+  assert.equal(surveyor.state, "done");
+  assert.deepEqual(surveyor.settledAt, FOUR_WORKING_DAYS_LATER);
+  assert.equal(surveyor.elapsedBusinessDays, 4);
+});
+
+test("a stage that finished with no date recorded reports no duration", () => {
+  // A checklist every line of which is answered. Nothing timestamps the last
+  // one, so the honest answer is that it is done and nothing about how long --
+  // rather than a figure counted to an instant nobody waited until.
+  const stages = complianceStageFlow(
+    engagement({
+      documents: [
+        document(ComplianceDocumentType.CHECKLIST_ITEM, { createdAt: MONDAY }),
+      ] as never,
+    }),
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const checklist = stage(stages, "CHECKLIST");
+  assert.equal(checklist.state, "done");
+  assert.equal(checklist.elapsedBusinessDays, null);
+  assert.equal(checklist.daysLeft, null);
+});
+
+test("the certifier's wait ends where the checklist's begins", () => {
+  // One instant read by both stages. Two readings of the same handover would
+  // leave a working day unaccounted for between two adjacent nodes.
+  const stages = complianceStageFlow(
+    engagement({
+      emails: [
+        { direction: CertifierEmailDirection.OUTBOUND, sentAt: MONDAY },
+      ] as never,
+      documents: [
+        document(ComplianceDocumentType.CHECKLIST_ITEM, {
+          id: "item-1",
+          createdAt: FOUR_WORKING_DAYS_LATER,
+          files: [],
+        }),
+      ] as never,
+    }),
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const certifier = stage(stages, "CERTIFIER");
+  assert.equal(certifier.state, "done");
+  assert.equal(certifier.elapsedBusinessDays, 4);
+  assert.deepEqual(certifier.settledAt, FOUR_WORKING_DAYS_LATER);
+  assert.deepEqual(
+    stage(stages, "CHECKLIST").startedAt,
+    FOUR_WORKING_DAYS_LATER,
+  );
+});
+
+test("a determined development application counts to the determination", () => {
+  const stages = complianceStageFlow(
+    engagement({
+      externalApplications: [
+        application(ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION, {
+          appliedAt: MONDAY,
+          receivedAt: FOUR_WORKING_DAYS_LATER,
+          submissions: [{ id: "s1", round: 1, submittedAt: MONDAY }],
+        }),
+      ] as never,
+    }),
+    TWELVE_WORKING_DAYS_LATER,
+  );
+
+  const da = stage(stages, "DEVELOPMENT_APPLICATION");
+  assert.equal(da.state, "done");
+  assert.equal(da.daysLeft, null);
+  assert.equal(da.elapsedBusinessDays, 4);
 });
 
 test("a party the client supplied has no clock at all", () => {
