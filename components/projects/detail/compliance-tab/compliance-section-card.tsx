@@ -38,6 +38,15 @@ type ComplianceSectionCardProps = {
   /** Marks the block the flow is currently waiting on. */
   isActive?: boolean;
   /**
+   * Whether anything in this block is past its quoted turnaround.
+   *
+   * On the header rather than only on the rows, because a collapsed card is the
+   * state most of these are in most of the time: seven blocks, one open, and a
+   * badge that can only be seen by opening the card is a badge nobody reads
+   * until they already knew to look.
+   */
+  overdue?: boolean;
+  /**
    * The step has not been reached yet.
    *
    * Locked blocks stay on the page rather than being dropped from it. A stage
@@ -112,6 +121,7 @@ export function ComplianceSectionCard({
   open,
   onOpenChange,
   isActive = false,
+  overdue = false,
   locked = false,
   lockMessage,
   lockActions,
@@ -159,6 +169,15 @@ export function ComplianceSectionCard({
             </StatusPill>
           ) : null}
 
+          {/* Before "Now" and after the count. A block can be the step the
+              flow is on *and* late, and those are different facts — the first
+              says where to work, the second says somebody has to be chased —
+              so neither replaces the other. Never on a locked block: a step
+              that has not been reached has nobody running late on it. */}
+          {overdue && !locked ? (
+            <StatusPill tone="danger">Overdue</StatusPill>
+          ) : null}
+
           {isActive && !locked ? (
             <StatusPill tone="primary">Now</StatusPill>
           ) : null}
@@ -181,7 +200,11 @@ export function ComplianceSectionCard({
             <span
               className={cn(
                 "block h-full rounded-full transition-all",
-                complete ? "bg-success-ink" : "bg-primary",
+                overdue
+                  ? "bg-destructive"
+                  : complete
+                    ? "bg-success-ink"
+                    : "bg-primary",
               )}
               style={{
                 width: `${Math.round((progress.done / progress.total) * 100)}%`,
@@ -256,6 +279,10 @@ export function ComplianceSectionCard({
           // not inherit the height of a twelve-row one sitting beside it.
           "self-start",
           isActive && "border-primary/50 ring-1 ring-primary/20",
+          // Overdue wins the border. Both can be true at once, and of the two
+          // the one worth finding across a screen of seven cards is the one
+          // somebody is late on.
+          overdue && "border-destructive/50 ring-1 ring-destructive/20",
           className,
         )}
       >

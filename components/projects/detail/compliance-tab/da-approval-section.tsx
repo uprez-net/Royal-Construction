@@ -81,6 +81,17 @@ type DaApprovalSectionProps = {
     document: ComplianceDocumentWithFiles | undefined,
     documentType: ComplianceDocumentType,
   ) => boolean;
+  /**
+   * Whether one row is past what whoever was asked for it quoted.
+   *
+   * The same shape and the same reason as `isRowBusy`: the answer needs the
+   * outreach that asked and the alert the nightly sweep raised, neither of
+   * which a list of rows can see.
+   */
+  isRowOverdue?: (
+    document: ComplianceDocumentWithFiles | undefined,
+    documentType: ComplianceDocumentType,
+  ) => boolean;
   onUpload: (
     file: File,
     target: { documentId?: string; documentType: ComplianceDocumentType },
@@ -143,6 +154,7 @@ export function DaApprovalSection({
   renderAction,
   rowMode,
   isRowBusy,
+  isRowOverdue,
   onUpload,
   onSetNotRequired,
   onPreviewFile,
@@ -206,6 +218,19 @@ export function DaApprovalSection({
       open={open}
       onOpenChange={onOpenChange}
       isActive={isActive}
+      // Anything on this list somebody is late with, carry-overs excluded --
+      // those are the pack's rows and are chased on the pack's own block.
+      overdue={
+        DA_DOCUMENTS_FLAT.some(
+          (entry) =>
+            entry.source !== "pack" &&
+            (isRowOverdue?.(documentsByType.get(entry.type), entry.type) ??
+              false),
+        ) ||
+        daItems.some(
+          (item) => isRowOverdue?.(item, item.documentType) ?? false,
+        )
+      }
       className={className}
     >
       {DA_DOCUMENT_GROUPS.map((group) => (
@@ -230,6 +255,13 @@ export function DaApprovalSection({
                   // them is replaced.
                   mode={entry.source === "pack" ? "frozen" : rowMode(row)}
                   isBusy={isRowBusy(row, entry.type)}
+                  // Never on a carry-over. Those rows are the pack's, chased on
+                  // the pack's own block, and a badge in two places is two
+                  // people going after the same firm.
+                  overdue={
+                    entry.source !== "pack" &&
+                    (isRowOverdue?.(row, entry.type) ?? false)
+                  }
                   onUpload={(file) =>
                     onUpload(file, {
                       documentId: row?.id,
@@ -306,6 +338,7 @@ export function DaApprovalSection({
                 helperText="Not supplied yet"
                 mode={rowMode(item)}
                 isBusy={isRowBusy(item, item.documentType)}
+                overdue={isRowOverdue?.(item, item.documentType) ?? false}
                 onUpload={(file) =>
                   onUpload(file, {
                     documentId: item.id,

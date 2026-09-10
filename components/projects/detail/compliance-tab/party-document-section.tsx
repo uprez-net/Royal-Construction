@@ -87,6 +87,19 @@ type PartyDocumentSectionProps = {
     document: ComplianceDocumentWithFiles | undefined,
     documentType: ComplianceDocumentType,
   ) => boolean;
+  /**
+   * Whether one row is past what its party quoted.
+   *
+   * The same shape as `isRowBusy` and passed the same way, because the answer
+   * comes from the same place: the tab, which can see the outreach that asked
+   * for the document and the alert the nightly sweep raised against it. A
+   * section working it out from its own rows would be a second set of clocks
+   * disagreeing with the one that sends the follow-ups.
+   */
+  isRowOverdue?: (
+    document: ComplianceDocumentWithFiles | undefined,
+    documentType: ComplianceDocumentType,
+  ) => boolean;
   onConnect: () => void;
   onSelfSupplied: () => void;
   onUpload: (
@@ -158,6 +171,7 @@ export function PartyDocumentSection({
   isBusy,
   rowMode,
   isRowBusy,
+  isRowOverdue,
   onConnect,
   onSelfSupplied,
   onUpload,
@@ -203,6 +217,15 @@ export function PartyDocumentSection({
   // order one.
   const isMoot = types.length === 0 && !orderedFromDa;
 
+  // Whether anything in this block is late, read off the rows it is actually
+  // rendering rather than off the party's full list. The council's section can
+  // be empty on a DA path and the architect's second document is not something
+  // the outreach waits for — a section badge computed from the party would go
+  // red over a row that is not on screen.
+  const sectionOverdue = types.some(
+    (type, index) => isRowOverdue?.(documents[index], type) ?? false,
+  );
+
   const rows = (
     <ul>
       {types.map((type, index) => {
@@ -224,6 +247,7 @@ export function PartyDocumentSection({
             }
             mode={rowMode(document)}
             isBusy={isRowBusy(document, type)}
+            overdue={isRowOverdue?.(document, type) ?? false}
             onUpload={(file) =>
               onUpload(file, { documentId: document?.id, documentType: type })
             }
@@ -249,6 +273,7 @@ export function PartyDocumentSection({
       open={open}
       onOpenChange={onOpenChange}
       isActive={isActive}
+      overdue={sectionOverdue}
       locked={locked}
       lockMessage={
         blockedReason ??
