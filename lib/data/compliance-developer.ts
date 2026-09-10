@@ -211,8 +211,6 @@ export async function recordDeveloperDecision(params: {
     return engagement;
   }
 
-  await runFollowOn(fromAdmin, () => revalidateEngagement(params.projectId));
-
   await prisma.complianceOutreach.update({
     where: { id: developer.id },
     data: {
@@ -248,7 +246,14 @@ export async function recordDeveloperDecision(params: {
     });
   }
 
+  // After every write, not before them. On the admin path `after()` defers past
+  // the response either way, but the workflow path awaits `runFollowOn` where it
+  // stands -- so revalidating up front cleared the cache before the verdict, the
+  // alert and the revision were written, and any read landing in that window
+  // repopulated it with the state from before the decision and left nothing to
+  // invalidate it again.
   await runFollowOn(fromAdmin, async () => {
+    revalidateEngagement(params.projectId);
     await logAction(
       createActivityLogEntry("complianceDeveloperDecision", {
         projectId: params.projectId,

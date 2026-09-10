@@ -127,7 +127,15 @@ export function ReviewPlansModal({
             <RadioGroup
               value={approved}
               onValueChange={(value) => setApproved(value as "yes" | "no")}
-              disabled={isPending}
+              // Held while an attachment is transferring, because the control
+              // below only renders on the rejection: switching to "Yes" mid
+              // upload unmounts it, and the fresh instance that comes back on a
+              // switch to "No" starts its own counter at zero. It would then
+              // report "not uploading" over a transfer that is still running,
+              // which is precisely the send-goes-out-short failure the counter
+              // exists to prevent -- and the unmount cleanup, which is what
+              // stops the dialog sticking, is what makes that reachable.
+              disabled={isPending || isAttaching}
               className="gap-3"
             >
               <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 p-3">

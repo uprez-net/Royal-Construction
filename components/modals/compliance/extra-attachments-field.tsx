@@ -132,8 +132,18 @@ export function ExtraAttachmentsField({
 
   // Reported on the crossing rather than on every change, so a caller adding
   // three files at once is told "uploading" once and "done" once.
+  //
+  // The cleanup is the half that matters. Several callers render this control
+  // conditionally -- ReviewPlansModal only on a rejection, ResolveMeetingModal
+  // only on a reschedule -- so it can unmount with a transfer still in the air,
+  // and the effect that would have reported the crossing back to false goes
+  // with it. The caller is then left holding `true` for good: its Send button
+  // never re-enables and the dialog cannot be submitted at all. Saying "not
+  // uploading" on the way out is what a caller can actually act on; the
+  // orphaned transfer resolves into a component that is gone.
   useEffect(() => {
     onUploadingChange?.(isUploading);
+    return () => onUploadingChange?.(false);
   }, [isUploading, onUploadingChange]);
 
   /**

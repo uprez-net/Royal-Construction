@@ -240,18 +240,43 @@ export async function recordExternalApplication(
 
     case "resubmitted": {
       /**
-       * The round number is read and then written, so it needs a transaction.
+       * The round number is read and then written, so it needs both a
+       * transaction and a lock, and they answer different problems.
        *
-       * Two consequences of leaving it outside one, and the second is the worse.
-       * Two admins recording a resubmission together both read round N and both
-       * write N+1, and the `applicationId_round` unique index throws the second
-       * back at the route as a raw Prisma error. And if the submission is
-       * created but the update that follows it fails, the file keeps a new round
+       * The transaction is what keeps the pair atomic. If the submission is
+       * created and the update that follows it fails, the file keeps a new round
        * while `receivedAt` still says the application was determined -- the
        * determination clock stays closed on an application that has gone back
        * in, which is precisely the state the rounds table was added to prevent.
+       *
+       * The lock is what stops two admins colliding, and a transaction on its
+       * own does not give it. Postgres runs these at READ COMMITTED, so two
+       * resubmissions recorded together both read round N, both compute N+1, and
+       * the `applicationId_round` unique index throws the second back at the
+       * route as a raw Prisma error.
+       *
+       * So the row is claimed before the round is read. Clearing `receivedAt` is
+       * work this branch has to do anyway -- an application that has gone back in
+       * is under assessment again -- and doing it first takes the row-level write
+       * lock as a side effect, which is cheaper and plainer than a raw
+       * `SELECT ... FOR UPDATE`. A second transaction blocks here until the first
+       * commits, and its next statement reads a fresh snapshot carrying round
+       * N+1, so it computes N+2 rather than colliding.
        */
       await prisma.$transaction(async (tx) => {
+        const claimed = await tx.complianceExternalApplication.updateMany({
+          where: { engagementId: engagement.id, kind: input.kind },
+          data: { receivedAt: null },
+        });
+
+        if (claimed.count === 0) {
+          // No row to lock is no application to resubmit, and the same refusal
+          // the read below would have given.
+          throw new Error(
+            "There is no application on this file to resubmit — record the first lodgement instead.",
+          );
+        }
+
         const application = await tx.complianceExternalApplication.findUnique({
           where,
           select: {
@@ -293,13 +318,11 @@ export async function recordExternalApplication(
 
         // The row's own reference follows the latest round, because that is what
         // every chase quotes and what the inbound correlation matches a council's
-        // mail against. `receivedAt` is cleared for the same reason: an
-        // application that has gone back in is under assessment again, and
-        // leaving it marked determined would close the clock on a wait that has
-        // just restarted.
+        // mail against. `receivedAt` was cleared by the claim above, in the same
+        // write that took the lock.
         await tx.complianceExternalApplication.update({
           where: { id: application.id },
-          data: { applicationRef, receivedAt: null },
+          data: { applicationRef },
         });
       });
       break;
