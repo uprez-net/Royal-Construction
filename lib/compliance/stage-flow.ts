@@ -20,6 +20,10 @@ import {
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import {
+  STAGE_ACTORS,
+  type ComplianceStageActor,
+} from "@/lib/compliance/stage-actors";
+import {
   checklistBlockedReason,
   externalApplication,
   hasDevelopmentApplication,
@@ -75,11 +79,47 @@ export type ComplianceStageId =
  */
 export type ComplianceStageState = "done" | "current" | "upcoming";
 
+/**
+ * Which line of the drawing a stage sits on.
+ *
+ * The flow is not a straight line and never was. Development approval leaves
+ * the main run at whichever step the job was on when somebody said it was
+ * needed, does a month of its own work with its own cast, and comes back in at
+ * the checklist — and rendering that as a seventh node in a row said none of
+ * it. It read as a step every job takes, which is the opposite of true.
+ */
+export type ComplianceStageTrack = "main" | "approval";
+
 export type ComplianceStage = {
   id: ComplianceStageId;
   /** The heading, matching the section card this stage corresponds to. */
   label: string;
   state: ComplianceStageState;
+  track: ComplianceStageTrack;
+  /**
+   * Whether this stage is on the route this file actually takes.
+   *
+   * True for every stage on the main run, always. False only for a dormant
+   * development approval — the branch is drawn on every job so the reader can
+   * see the route exists, and it lights up when the alert that puts a job on it
+   * is raised or a lodgement is recorded. See `hasDevelopmentApplication`.
+   *
+   * A dormant stage carries no clock, no alerts and never holds the marker: it
+   * is a picture of a road this job is not on.
+   */
+  isActive: boolean;
+  /**
+   * Where the branch leaves the main line, and where it comes back.
+   *
+   * Both null on the main run. On the approval branch they are the two nodes
+   * the connector is drawn between, which is what makes the drawing a graph
+   * rather than a row — see `branchOrigin` for how the leaving point is
+   * decided.
+   */
+  branchesFrom: ComplianceStageId | null;
+  rejoinsAt: ComplianceStageId | null;
+  /** Who is behind this stage, and whether they still owe it anything. */
+  actors: ComplianceStageActor[];
   /**
    * When the wait on this stage started, or null where nothing has started it.
    *
@@ -90,7 +130,30 @@ export type ComplianceStage = {
    * of a three-month-old file reading as months overdue.
    */
   startedAt: Date | null;
-  /** NSW business days since `startedAt`, or null where there is none. */
+  /**
+   * When the wait on this stage ended, or null while it is still running.
+   *
+   * The half that was missing, and the whole of why a finished stage kept a
+   * clock on it. `elapsedBusinessDays` was measured to *now* on every stage
+   * regardless of state, so a surveyor engaged a fortnight ago and finished on
+   * the Tuesday read "3 days over" against their own quote for the rest of the
+   * file's life — a green tick with a red-shaped number under it, on a firm
+   * that delivered on time.
+   *
+   * Null on a finished stage is not a gap either. Only some of these have a
+   * date behind the finish: a 10.7 is received, a checklist is issued, and
+   * nothing whatsoever timestamps a certifier passing the last item. Where
+   * there is no such date the stage says how it ended and nothing about when,
+   * which is the honest answer — see `clock`.
+   */
+  settledAt: Date | null;
+  /**
+   * NSW business days the wait took, or has taken so far.
+   *
+   * Counted to `settledAt` once there is one and to `now` before that, so a
+   * finished stage reports how long it took rather than how long ago it
+   * started.
+   */
   elapsedBusinessDays: number | null;
   /**
    * The turnaround quoted for this stage, or null where nobody quotes one.
@@ -107,6 +170,10 @@ export type ComplianceStage = {
    * Signed rather than clamped, because the header says both halves -- "3 days
    * left" and "3 days over" are the same figure read from either side of zero,
    * and a clamped one cannot say the second.
+   *
+   * Null once the stage is settled, whatever the arithmetic would have said. A
+   * wait that is over has no time left in it in either direction, and the
+   * countdown outliving the wait is what put "9d over" under a finished node.
    */
   daysLeft: number | null;
   /**
@@ -210,6 +277,27 @@ export function stageForAlert(
   return belongsTo;
 }
 
+/**
+ * What one stage builder produces.
+ *
+ * The identity of the stage and the clock on it, and deliberately nothing about
+ * where it sits: the track it is drawn on, whether the file is on it, who is
+ * behind it and whether it holds the marker are all decisions about the flow as
+ * a whole rather than about one stage, and `complianceStageFlow` is the one
+ * place that can make them. `done` is the builder's own verdict and is folded
+ * into `state` there.
+ */
+type BuiltStage = Pick<
+  ComplianceStage,
+  | "id"
+  | "label"
+  | "startedAt"
+  | "settledAt"
+  | "elapsedBusinessDays"
+  | "slaBusinessDays"
+  | "daysLeft"
+> & { done: boolean };
+
 /** Whether a document type has something on it, or has been waved off. */
 function isSettled(
   engagement: CertifierEngagementDetail,
@@ -222,19 +310,65 @@ function isSettled(
   );
 }
 
-/** The wait, worked out once for every stage that has dates behind it. */
+/**
+ * Whether a stage's wait is over, and when.
+ *
+ * Two facts rather than one, because they come apart: every finished stage
+ * knows *that* it is finished and only some of them know *when*. A 10.7 is
+ * received on a date, a checklist is issued on a date, and nothing whatsoever
+ * timestamps a certifier passing the last item on a twenty-line list. So
+ * `null` here means the wait is still running, and `{ at: null }` means it is
+ * over and the file does not record the instant — which is a different thing
+ * from both and has to be, or a finished stage falls back to counting to now.
+ */
+type StageSettlement = { at: Date | null } | null;
+
+/**
+ * The wait, worked out once for every stage that has dates behind it.
+ *
+ * The settlement is what stops the clock, and stopping it is the whole of this
+ * change. Elapsed was measured to *now* on every stage regardless of state, so
+ * a surveyor engaged a fortnight ago and finished on the Tuesday read "3 days
+ * over" against their own quote for the rest of the file's life — a green tick
+ * with a red-shaped number under it, on a firm that delivered on time.
+ *
+ * A settled stage never counts down, whatever the arithmetic would have said: a
+ * wait that is over has no days left in it in either direction. Where the
+ * instant is known it reports how long the wait took; where it is not, it
+ * reports nothing rather than a figure measured to the wrong end.
+ */
 function clock(
   startedAt: Date | null,
+  settled: StageSettlement,
   slaBusinessDays: number | null,
   now: Date,
 ): Pick<
   ComplianceStage,
-  "startedAt" | "elapsedBusinessDays" | "slaBusinessDays" | "daysLeft"
+  | "startedAt"
+  | "settledAt"
+  | "elapsedBusinessDays"
+  | "slaBusinessDays"
+  | "daysLeft"
 > {
+  const settledAt = settled?.at ?? null;
+
   if (!startedAt) {
     return {
       startedAt: null,
+      settledAt,
       elapsedBusinessDays: null,
+      slaBusinessDays,
+      daysLeft: null,
+    };
+  }
+
+  if (settled) {
+    return {
+      startedAt,
+      settledAt,
+      elapsedBusinessDays: settledAt
+        ? businessDaysSince(startedAt, settledAt)
+        : null,
       slaBusinessDays,
       daysLeft: null,
     };
@@ -243,10 +377,40 @@ function clock(
   const elapsed = businessDaysSince(startedAt, now);
   return {
     startedAt,
+    settledAt: null,
     elapsedBusinessDays: elapsed,
     slaBusinessDays,
     daysLeft: slaBusinessDays === null ? null : slaBusinessDays - elapsed,
   };
+}
+
+/**
+ * The latest date on which one of these document types landed, or null.
+ *
+ * What a stage finished at, where the stage is finished by documents arriving.
+ * The latest rather than the earliest: a surveyor owes three documents and is
+ * finished with when the last of them is in, not the first.
+ *
+ * A row that was waved off rather than supplied has no arrival to read, and
+ * `createdAt` on it is when somebody typed the row rather than when the
+ * question was answered — so a set closed out that way returns null and the
+ * stage keeps no duration. Better than a figure measured to the wrong instant.
+ */
+function latestArrival(
+  engagement: CertifierEngagementDetail,
+  documentTypes: readonly ComplianceDocumentType[],
+): Date | null {
+  const wanted = new Set(documentTypes);
+  let latest: Date | null = null;
+
+  for (const document of engagement.documents) {
+    if (!wanted.has(document.documentType) || document.files.length === 0) {
+      continue;
+    }
+    if (!latest || document.createdAt > latest) latest = document.createdAt;
+  }
+
+  return latest;
 }
 
 /**
@@ -256,14 +420,15 @@ function clock(
 function surveyorStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const outreach = outreachForParty(engagement, CompliancePartyType.SURVEYOR);
   const inPlay = new Set(
     applicableRequiredDocuments(engagement).map((required) => required.type),
   );
-  const done = documentTypesForParty(CompliancePartyType.SURVEYOR)
-    .filter((type) => inPlay.has(type))
-    .every((type) => isSettled(engagement, type));
+  const wanted = documentTypesForParty(CompliancePartyType.SURVEYOR).filter(
+    (type) => inPlay.has(type),
+  );
+  const done = wanted.every((type) => isSettled(engagement, type));
 
   // Nothing is running on a party the client supplied. The stage is finished
   // with the moment that is recorded, so it carries no clock at all rather than
@@ -279,6 +444,7 @@ function surveyorStage(
     done,
     ...clock(
       running,
+      done ? { at: latestArrival(engagement, wanted) } : null,
       PARTY_RESPONSE_BUSINESS_DAYS[CompliancePartyType.SURVEYOR],
       now,
     ),
@@ -298,7 +464,7 @@ function surveyorStage(
 function architectStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const outreach = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
   const plansIn = isSettled(
     engagement,
@@ -326,7 +492,21 @@ function architectStage(
     id: "ARCHITECT",
     label: "Architect",
     done,
-    ...clock(startedAt, sla, now),
+    ...clock(
+      startedAt,
+      // The plans landing is what ends the wait, whichever of the three clocks
+      // was running: a revision is finished with by a revised set arriving on
+      // the same row.
+      done
+        ? {
+            at: latestArrival(engagement, [
+              ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+            ]),
+          }
+        : null,
+      sla,
+      now,
+    ),
   };
 }
 
@@ -340,7 +520,7 @@ function architectStage(
 function councilStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const application = externalApplication(
     engagement,
     ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
@@ -364,6 +544,19 @@ function councilStage(
     done,
     ...clock(
       latestSubmission(application)?.submittedAt ?? null,
+      // The portal answering, however that was recorded. A DA having taken the
+      // certificate out of the pack is not the portal answering, so that case
+      // finishes the stage with no duration on it rather than with one measured
+      // to a date nobody waited until.
+      done
+        ? {
+            at:
+              application?.receivedAt ??
+              latestArrival(engagement, [
+                ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+              ]),
+          }
+        : null,
       EXTERNAL_APPLICATION_COPY[
         ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7
       ].businessDays,
@@ -387,10 +580,11 @@ function councilStage(
 function certifierStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const firstSend = engagement.emails.find(
     (email) => email.direction === CertifierEmailDirection.OUTBOUND,
   );
+  const issuedAt = checklistIssuedAt(engagement);
 
   return {
     id: "CERTIFIER",
@@ -398,11 +592,11 @@ function certifierStage(
     // The checklist existing is what says the certifier has answered. Reading
     // the status rather than the documents keeps this and the tab's own
     // "collection is over" line the same reading.
-    done: engagement.documents.some(
-      (document) =>
-        document.documentType === ComplianceDocumentType.CHECKLIST_ITEM,
-    ),
-    ...clock(firstSend?.sentAt ?? null, null, now),
+    done: issuedAt !== null,
+    // The same instant the checklist stage starts from, which is the point: the
+    // certifier's wait ends where the checklist's begins, and two readings of
+    // one handover would leave a day unaccounted for between two nodes.
+    ...clock(firstSend?.sentAt ?? null, issuedAt ? { at: issuedAt } : null, null, now),
   };
 }
 
@@ -418,7 +612,7 @@ function certifierStage(
 function developmentApplicationStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const application = externalApplication(
     engagement,
     ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
@@ -427,13 +621,14 @@ function developmentApplicationStage(
 
   return {
     id: "DEVELOPMENT_APPLICATION",
-    label: "Development application",
+    label: "Development approval",
     // Determined. The certificate leaving the pack is what a raised DA does;
     // the certificate coming back to the pack is what consent granted does, and
     // that is the same predicate read the other way.
     done: Boolean(application?.receivedAt),
     ...clock(
       submission?.submittedAt ?? null,
+      application?.receivedAt ? { at: application.receivedAt } : null,
       submission
         ? EXTERNAL_APPLICATION_COPY[
             ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION
@@ -447,34 +642,52 @@ function developmentApplicationStage(
   };
 }
 
+/**
+ * When the certifier issued the checklist, or null before they have.
+ *
+ * The earliest row rather than the latest: a re-extraction rewrites the rows,
+ * and reading the newest would restart the clock on a list that has been open
+ * for a month.
+ *
+ * Read by both stages either side of the handover — it is what ends the
+ * certifier's wait and what starts the checklist's — so the two cannot disagree
+ * about when the list arrived.
+ */
+function checklistIssuedAt(engagement: CertifierEngagementDetail): Date | null {
+  return engagement.documents.reduce<Date | null>(
+    (earliest, document) =>
+      document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM ||
+      (earliest !== null && document.createdAt >= earliest)
+        ? earliest
+        : document.createdAt,
+    null,
+  );
+}
+
 /** Every checklist line answered, one way or the other. */
 function checklistStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const items = engagement.documents.filter(
     (document) =>
       document.documentType === ComplianceDocumentType.CHECKLIST_ITEM,
   );
 
-  // When the certifier issued it. The earliest row rather than the latest: a
-  // re-extraction rewrites the rows, and reading the newest would restart the
-  // clock on a list that has been open for a month.
-  const issuedAt = items.reduce<Date | null>(
-    (earliest, item) =>
-      !earliest || item.createdAt < earliest ? item.createdAt : earliest,
-    null,
-  );
+  const done =
+    items.length > 0 &&
+    items.every((item) => item.files.length > 0 || isNotRequired(item.status));
 
   return {
     id: "CHECKLIST",
     label: "Checklist",
-    done:
-      items.length > 0 &&
-      items.every(
-        (item) => item.files.length > 0 || isNotRequired(item.status),
-      ),
-    ...clock(issuedAt, null, now),
+    done,
+    // Finished, and with no date to say when. Nothing timestamps the last line
+    // being answered — a row waved off as not required records who decided it
+    // and not when — so a completed checklist reports that it is done and says
+    // nothing about how long it took, rather than counting to an instant that
+    // is not the one anybody waited until.
+    ...clock(checklistIssuedAt(engagement), done ? { at: null } : null, null, now),
   };
 }
 
@@ -490,28 +703,110 @@ function checklistStage(
 function certificateStage(
   engagement: CertifierEngagementDetail,
   now: Date,
-): Omit<ComplianceStage, "state" | "isOverdue" | "alerts"> & { done: boolean } {
+): BuiltStage {
   const certificate = engagement.documents.find(
     (document) =>
       document.documentType ===
       ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
   );
 
+  const done = engagement.status === CertifierEngagementStatus.COMPLETED;
+
   return {
     id: "CERTIFICATE",
     label: "Certificate and cover",
-    done: engagement.status === CertifierEngagementStatus.COMPLETED,
-    ...clock(certificate?.createdAt ?? null, null, now),
+    done,
+    // Finished with, and again with nothing to say when. The engagement's
+    // status is the only mark that the file is closed and it carries no
+    // instant of its own here.
+    ...clock(certificate?.createdAt ?? null, done ? { at: null } : null, null, now),
   };
 }
 
 /**
- * The whole route this file takes, in order, with the clock on each stage.
+ * Where the approval branch leaves the main line on this particular file.
  *
- * Exactly one stage is `current`: the first that is not done. Everything before
- * it is `done` and everything after is `upcoming`, which is what lets the header
- * be read at a glance rather than decoded. A finished file has no current stage,
- * and that is the honest answer -- there is nothing left to be waiting on.
+ * Development approval is not a step at a fixed point in the route. It starts
+ * wherever somebody first says the job needs it, and that is one of three
+ * places: an architect looking at the proposal and saying it cannot go through
+ * as a CDC, a certifier saying the same in their first reply, or a certifier
+ * saying it on the checklist they have just issued. Drawing the branch from a
+ * fixed node would be a picture of a route no particular job took.
+ *
+ * So it is read back off the raise: the last main stage that had actually
+ * started by the time the condition was recorded. The earliest
+ * DA_APPROVAL_REQUIRED rather than the open one, because the branch has to stay
+ * drawn in the same place after the consent lands and the alert is closed —
+ * a line that jumps to a different origin the day the job finishes is a line
+ * nobody trusts.
+ *
+ * A job with a lodgement and no alert is the other way in, and the lodgement
+ * date stands in for the raise. A dormant branch has neither and falls back to
+ * the architect, which is the earliest of the three points and therefore the
+ * widest span — a picture of everywhere the branch could leave from, on a job
+ * that has not taken it.
+ */
+function branchOrigin(
+  engagement: CertifierEngagementDetail,
+  main: readonly { id: ComplianceStageId; startedAt: Date | null }[],
+): ComplianceStageId {
+  const candidates: ComplianceStageId[] = [
+    "ARCHITECT",
+    "CERTIFIER",
+    "CHECKLIST",
+  ];
+
+  const raisedAt = engagement.alerts.reduce<Date | null>(
+    (earliest, alert) =>
+      alert.type !== ComplianceAlertType.DA_APPROVAL_REQUIRED ||
+      (earliest !== null && alert.createdAt >= earliest)
+        ? earliest
+        : alert.createdAt,
+    null,
+  );
+
+  const lodgedAt =
+    latestSubmission(
+      externalApplication(
+        engagement,
+        ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+      ),
+    )?.submittedAt ?? null;
+
+  const decidedAt = raisedAt ?? lodgedAt;
+  if (!decidedAt) return "ARCHITECT";
+
+  const started = new Map(main.map((stage) => [stage.id, stage.startedAt]));
+  const reached = candidates.filter((id) => {
+    const startedAt = started.get(id) ?? null;
+    return startedAt !== null && startedAt <= decidedAt;
+  });
+
+  return reached.at(-1) ?? "ARCHITECT";
+}
+
+/**
+ * The whole route this file takes, with the clock and the cast on each stage.
+ *
+ * Exactly one stage is `current`: the first on the main run that is not done.
+ * Everything before it is `done` and everything after is `upcoming`, which is
+ * what lets the header be read at a glance rather than decoded. A finished file
+ * has no current stage, and that is the honest answer — there is nothing left
+ * to be waiting on.
+ *
+ * The development approval is in the list on every job now, and it was not
+ * before. That is the change: it used to be dropped from files that had not
+ * taken it, on the reading that the header should be what the route is rather
+ * than what every route could be. Which was right about the main run and wrong
+ * about this — approval is not the seventh step of the same line, it is a
+ * detour off it, and a reader who has never seen one has no way to learn that
+ * the detour exists or where it goes. So it is always drawn and only sometimes
+ * live: `isActive` is false until the alert is raised or a lodgement recorded,
+ * and a dormant branch holds no marker, no clock and no alerts.
+ *
+ * Returned as one array with the branch stage in route order, so a caller that
+ * wants the plain sequence still reads it top to bottom. The drawing splits it
+ * on `track`.
  */
 export function complianceStageFlow(
   engagement: CertifierEngagementDetail,
@@ -520,41 +815,107 @@ export function complianceStageFlow(
   const open = engagement.alerts.filter(
     (alert) => alert.status === ComplianceAlertStatus.OPEN,
   );
+  const isActive = hasDevelopmentApplication(engagement);
 
-  const built = [
+  const main = [
     surveyorStage(engagement, now),
     architectStage(engagement, now),
     councilStage(engagement, now),
     certifierStage(engagement, now),
-    // Only on the files that have one. A CDC that never needed development
-    // approval should not carry a permanently grey node for a step it is not
-    // taking -- the header is what the route is, not what every route could be.
-    ...(hasDevelopmentApplication(engagement)
-      ? [developmentApplicationStage(engagement, now)]
-      : []),
     checklistStage(engagement, now),
     certificateStage(engagement, now),
   ];
 
-  const currentIndex = built.findIndex((stage) => !stage.done);
+  // Over the main run alone. The marker says which step of the job the reader
+  // should be looking at, and a dormant branch is not a step of this job —
+  // letting it into the search would hand the marker to development approval on
+  // every CDC ever opened.
+  const currentIndex = main.findIndex((stage) => !stage.done);
 
-  return built.map(({ done, ...stage }, index) => {
-    const alerts = open.filter(
-      (alert) => stageForAlert(engagement, alert.type) === stage.id,
-    );
+  const decorate = (
+    { done, ...stage }: (typeof main)[number],
+    extras: Pick<
+      ComplianceStage,
+      "track" | "isActive" | "branchesFrom" | "rejoinsAt"
+    > & { state?: ComplianceStageState },
+    index: number,
+  ): ComplianceStage => {
+    const alerts = extras.isActive
+      ? open.filter(
+          (alert) => stageForAlert(engagement, alert.type) === stage.id,
+        )
+      : [];
 
     return {
       ...stage,
-      state: done
-        ? "done"
-        : index === currentIndex
-          ? "current"
-          : ("upcoming" as const),
+      ...extras,
+      actors: STAGE_ACTORS[stage.id](engagement),
+      state:
+        extras.state ??
+        (done ? "done" : index === currentIndex ? "current" : "upcoming"),
       // A done stage with an open alert still reads as late, which is not a
       // contradiction: a stale title search is raised against a surveyor who
       // has sent everything they were asked for.
       isOverdue: alerts.length > 0,
       alerts,
     } satisfies ComplianceStage;
-  });
+  };
+
+  const mainStages = main.map((stage, index) =>
+    decorate(
+      stage,
+      {
+        track: "main",
+        isActive: true,
+        branchesFrom: null,
+        rejoinsAt: null,
+      },
+      index,
+    ),
+  );
+
+  const approval = isActive
+    ? developmentApplicationStage(engagement, now)
+    : // A dormant branch has no clock and nothing on it to be done with, and
+      // reading the real one would give it a start date off a lodgement that
+      // does not exist. Emptied instead, which is what "this job is not on this
+      // road" looks like.
+      {
+        ...developmentApplicationStage(engagement, now),
+        done: false,
+        startedAt: null,
+        settledAt: null,
+        elapsedBusinessDays: null,
+        daysLeft: null,
+      };
+
+  const branch = decorate(
+    approval,
+    {
+      track: "approval",
+      isActive,
+      branchesFrom: branchOrigin(engagement, mainStages),
+      // Always the checklist. Whatever the job was doing when it took the
+      // detour, what it comes back to is a certifier assessing it against a
+      // list — the consent is what unfreezes that list, and the branch closing
+      // anywhere else would be drawing a route the file cannot take.
+      rejoinsAt: "CHECKLIST",
+      // Not by index, which is what `currentIndex` decides and which is about
+      // position on the main run. A branch is current when the job is actually
+      // on it — the consent is outstanding and the checklist behind it is
+      // frozen, which is the same reading the tab's own marker takes. A dormant
+      // branch is upcoming for as long as it exists: not started, not skipped,
+      // there.
+      state: !isActive
+        ? "upcoming"
+        : approval.done
+          ? "done"
+          : checklistBlockedReason(engagement)
+            ? "current"
+            : "upcoming",
+    },
+    -1,
+  );
+
+  return [...mainStages.slice(0, 4), branch, ...mainStages.slice(4)];
 }

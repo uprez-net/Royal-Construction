@@ -1545,13 +1545,19 @@ export function ProjectComplianceTab({
   const checklistLocked = checklistItems.length === 0;
 
   /**
-   * The route this file takes, and how long it has been on each step.
+   * The route this file takes, how long it has been on each step, and who is
+   * behind each one.
    *
    * The alerts themselves are no longer here — they moved above the tabs, where
    * a trade reminder and a compliance condition are one list, because they are
    * the same thing to whoever is reading. What is left on this tab is the half
    * that only means anything beside the blocks it describes: which stage the
-   * flow is on, what its clock says, and which rows are late.
+   * flow is on, what its clock says, which rows are late, and which firms are
+   * still owing.
+   *
+   * Carries the development approval on every job now, dormant on the ones that
+   * have not taken it. The drawing puts it on a branch off the main run rather
+   * than in the row — which is what it is, and which the row could not say.
    */
   const stages = complianceStageFlow(engagement);
 
@@ -1656,27 +1662,34 @@ export function ProjectComplianceTab({
       </div>
 
       {/* ---------------------------------------------------------------
-          Where the file is up to.
+          Where the file is up to, drawn.
 
           Above the blocks rather than inside one, for the reason the alerts
           used to be: no single block can say it. A stale title search is about
           the surveyor's section and a DA requirement removes a row from the
-          council's, and the question this answers — which of seven steps is
-          the job actually on, and is anything past its quote — is about all of
-          them at once.
+          council's, and the question this answers — which step is the job
+          actually on, is anything past its quote, and who is still owing — is
+          about all of them at once.
 
           Clicking a stage opens its block and shuts nothing else. A header
-          that collapsed the other six would make finding the step you wanted
-          cost you the one you had open.
+          that collapsed the others would make finding the step you wanted cost
+          you the one you had open.
+
+          A dormant approval branch is not clickable and does not reach here:
+          the block it would open is not on this tab on a job with no
+          development application. The guard is repeated on this side anyway,
+          because the two conditions live in different files and the failure —
+          a section key toggled for a card that is not rendered — is silent.
       --------------------------------------------------------------- */}
       <ComplianceStageFlow
         stages={stages}
-        onSelectStage={(stage) =>
+        onSelectStage={(stage) => {
+          if (!stage.isActive) return;
           setSections((current) => ({
             ...current,
             [SECTION_FOR_STAGE[stage.id]]: true,
-          }))
-        }
+          }));
+        }}
       />
 
       {/* ---------------------------------------------------------------
