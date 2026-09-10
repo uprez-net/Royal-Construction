@@ -8,7 +8,11 @@ import {
   isChecklistMappableType,
   mappedDocumentSource,
 } from "../../constants/complianceDocuments";
-import { checklistDocumentType } from "../../lib/compliance/checklist-mapping";
+import {
+  checklistDocumentType,
+  isMappedCopy,
+  planChecklistCopy,
+} from "../../lib/compliance/checklist-mapping";
 
 /**
  * Reading a certifier's checklist line and saying what it asks for.
@@ -223,4 +227,197 @@ test("every mappable type can say where it came from", () => {
       `${type}'s source reads mid-sentence, so it should not open with a capital`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Whose copy is on the line
+//
+// The guard both mapper passes read before deciding whether a line is theirs to
+// refresh. It is two fields and no database, and it is where the HBCF bug lived:
+// a line answered from the project's own certificate has no compliance document
+// to point at, so reading the id alone called it a manual upload and left it
+// alone for good.
+// ---------------------------------------------------------------------------
+
+test("a line mapped from a document on the file is ours to refresh", () => {
+  assert.equal(
+    isMappedCopy({
+      mappedFromDocumentId: "document-1",
+      mappedFromProject: false,
+    }),
+    true,
+  );
+});
+
+test("a line mapped from the project's own certificate is ours too", () => {
+  // The correction. HBCF cover is raised on the Overview tab, so the
+  // certificate is a File with no ComplianceDocument behind it and there is no
+  // id to record — which is exactly what a hand-filled line looks like through
+  // the old reading.
+  assert.equal(
+    isMappedCopy({ mappedFromDocumentId: null, mappedFromProject: true }),
+    true,
+  );
+});
+
+test("a line somebody filled in by hand is left alone", () => {
+  // The half that must not regress. A mapper that refreshes a manual upload
+  // overwrites somebody's own work with a copy of something else.
+  assert.equal(
+    isMappedCopy({ mappedFromDocumentId: null, mappedFromProject: false }),
+    false,
+  );
+});
+
+test("the two marks are read independently", () => {
+  // Nothing sets both today — a source has an id or it does not — but the guard
+  // must not depend on that, because a row written before the boolean existed
+  // carries an id and a false, and it is still ours.
+  assert.equal(
+    isMappedCopy({ mappedFromDocumentId: "document-1", mappedFromProject: true }),
+    true,
+  );
+});
+
+test("the HBCF line has a sentence to show once it is marked", () => {
+  // `mappedDocumentSource` has carried this wording since the mapping landed and
+  // nothing could reach it: the row that would have shown it was the one row
+  // whose provenance was never recorded.
+  assert.equal(
+    mappedDocumentSource(ComplianceDocumentType.HOME_INSURANCE),
+    "the project's HBCF cover",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// What a copy actually changes
+//
+// The decision half of `copyOntoChecklistLine`, which is where the outcomes
+// worth pinning live: whether anything is written at all, which files go, and
+// which provenance mark the line ends up carrying. The write itself is a
+// transaction over the answer.
+// ---------------------------------------------------------------------------
+
+const sourceFile = (id: string) => ({
+  id,
+  url: `https://blob/${id}.pdf`,
+  filename: `${id}.pdf`,
+  fileType: "application/pdf",
+  filesize: 1024,
+  uploadedBy: "user-1",
+  projectId: "project-1",
+});
+
+/** An empty line, and the plan that fills it. */
+const emptyLine = {
+  id: "line-1",
+  files: [],
+  mappedFromDocumentId: null,
+  mappedFromProject: false,
+};
+
+test("a line answered from a document on the file records that document", () => {
+  const plan = planChecklistCopy(emptyLine, {
+    id: "document-survey",
+    files: [sourceFile("file-a")],
+  });
+
+  assert.ok(plan);
+  assert.equal(plan.mappedFromDocumentId, "document-survey");
+  assert.equal(plan.mappedFromProject, false);
+  assert.equal(plan.createFileIds.length, 1);
+  assert.deepEqual(plan.staleFileIds, []);
+});
+
+test("a line answered from the project records that it came from the project", () => {
+  // The HBCF case, and the whole point of the second mark: there is no
+  // compliance document to name, so without this the line is indistinguishable
+  // from one somebody filled in by hand.
+  const plan = planChecklistCopy(emptyLine, {
+    id: null,
+    files: [sourceFile("hbcf-file")],
+  });
+
+  assert.ok(plan);
+  assert.equal(plan.mappedFromDocumentId, null);
+  assert.equal(plan.mappedFromProject, true);
+});
+
+test("a line already holding exactly this copy is left alone", () => {
+  // What a replayed workflow step and a re-extraction both look like. Writing
+  // again would delete and recreate the same File rows on every pass.
+  const first = planChecklistCopy(emptyLine, {
+    id: null,
+    files: [sourceFile("hbcf-file")],
+  });
+  assert.ok(first);
+
+  const settled = {
+    ...emptyLine,
+    files: first.createFileIds.map((id) => ({ id, url: "https://blob/x.pdf" })),
+    mappedFromProject: true,
+  };
+
+  assert.equal(
+    planChecklistCopy(settled, { id: null, files: [sourceFile("hbcf-file")] }),
+    null,
+  );
+});
+
+test("a replaced source supersedes the copy the line was holding", () => {
+  // The failure the marker exists to make reachable. The certificate on the
+  // project is replaced, so the derived id changes, the old copy is named as
+  // stale and the new one is written in its place — and the certifier stops
+  // being sent last month's certificate.
+  const first = planChecklistCopy(emptyLine, {
+    id: null,
+    files: [sourceFile("hbcf-old")],
+  });
+  assert.ok(first);
+  const oldCopyId = first.createFileIds[0];
+
+  const settled = {
+    ...emptyLine,
+    files: [{ id: oldCopyId, url: "https://blob/old.pdf" }],
+    mappedFromProject: true,
+  };
+
+  const replaced = planChecklistCopy(settled, {
+    id: null,
+    files: [sourceFile("hbcf-new")],
+  });
+
+  assert.ok(replaced, "a replaced source must not read as already held");
+  assert.deepEqual(replaced.staleFileIds, [oldCopyId]);
+  assert.equal(replaced.createFileIds.length, 1);
+  assert.notEqual(replaced.createFileIds[0], oldCopyId);
+  assert.equal(replaced.mappedFromProject, true);
+});
+
+test("copied file ids are derived, so the same source on two lines does not collide", () => {
+  // Two checklist lines can ask for the same document. The id is derived from
+  // the line as well as the file, which is what keeps the File primary key from
+  // colliding when both are answered from it.
+  const a = planChecklistCopy(emptyLine, {
+    id: "document-survey",
+    files: [sourceFile("file-a")],
+  });
+  const b = planChecklistCopy(
+    { ...emptyLine, id: "line-2" },
+    { id: "document-survey", files: [sourceFile("file-a")] },
+  );
+
+  assert.ok(a && b);
+  assert.notEqual(a.createFileIds[0], b.createFileIds[0]);
+});
+
+test("a source carrying two files answers the line with both", () => {
+  const plan = planChecklistCopy(emptyLine, {
+    id: "document-structural",
+    files: [sourceFile("file-a"), sourceFile("file-b")],
+  });
+
+  assert.ok(plan);
+  assert.equal(plan.createFileIds.length, 2);
+  assert.equal(new Set(plan.createFileIds).size, 2);
 });

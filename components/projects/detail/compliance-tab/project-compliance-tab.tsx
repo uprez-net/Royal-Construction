@@ -858,12 +858,19 @@ export function ProjectComplianceTab({
    * so the first question anybody asks is where the file came from, and a
    * filename does not answer it.
    *
-   * Read off `mappedFromDocumentId`, which the mapper stamps, and named by the
-   * line's own type rather than by looking the source row up: the two agree by
-   * construction, and the type is what the reader is actually being told.
+   * Read off the two marks the mapper stamps, and named by the line's own type
+   * rather than by looking the source row up: the two agree by construction,
+   * and the type is what the reader is actually being told.
+   *
+   * Both marks, because a source is one of two things. `mappedFromDocumentId`
+   * names a document on the compliance file; `mappedFromProject` says it came
+   * from the project's own HBCF certificate, which has no compliance row to
+   * point at. Reading the id alone meant the one line answered that way carried
+   * no provenance at all — and `mappedDocumentSource` has had the sentence for
+   * it, "the project's HBCF cover", sitting unreachable ever since.
    */
   const mappedSourceFor = (item: ComplianceDocumentWithFiles) => {
-    if (!item.mappedFromDocumentId) return undefined;
+    if (!item.mappedFromDocumentId && !item.mappedFromProject) return undefined;
     const type = checklistLineType(item);
     return type ? mappedDocumentSource(type) : undefined;
   };

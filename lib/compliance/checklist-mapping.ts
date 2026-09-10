@@ -321,7 +321,33 @@ type TargetLine = {
   id: string;
   files: { id: string; url: string }[];
   mappedFromDocumentId: string | null;
+  mappedFromProject: boolean;
 };
+
+/**
+ * Whether the copy on this line is one the mapper made.
+ *
+ * The question both guards below are actually asking, and it has two answers
+ * because a source is one of two things: a document on the compliance file,
+ * which leaves an id, and the project's own HBCF certificate, which has no
+ * compliance row to point at and leaves the boolean instead.
+ *
+ * Reading the id alone was the bug. An HBCF line mapped from the project had
+ * `mappedFromDocumentId` null, so every pass after the first read it as a line
+ * somebody had filled in by hand and left it alone -- and a certificate
+ * replaced on the project left the superseded copy on the checklist for good,
+ * which is the copy that then went to the certifier.
+ *
+ * Exported for the tests, which is the only part of this decision that can be
+ * pinned without a database. Structural rather than taking a `TargetLine`, so a
+ * test does not have to build a row to ask a question about two fields.
+ */
+export function isMappedCopy(line: {
+  mappedFromDocumentId: string | null;
+  mappedFromProject: boolean;
+}): boolean {
+  return line.mappedFromDocumentId !== null || line.mappedFromProject;
+}
 
 /**
  * Puts one document's files onto one checklist line, or leaves it alone.
@@ -336,10 +362,31 @@ type TargetLine = {
  * refreshed, because the old copy points at a blob the replacement deleted and
  * the certifier would otherwise be sent a dead link to last month's survey.
  */
-async function copyOntoChecklistLine(
+/**
+ * What copying one document onto one line would change, or null for nothing.
+ *
+ * The decision half, split out from the write for the reason
+ * `assessOverdueConditions` is split from the sweep that runs it: everything
+ * here is a comparison between two sets of file ids and a flag, none of it needs
+ * a database, and the cases that matter — a replaced source, a line that already
+ * holds exactly this, which provenance mark to set — are then pinned by tests
+ * rather than argued about.
+ *
+ * Returning null rather than an empty plan, because "nothing to do" is the
+ * common answer on a replayed step and a re-extraction, and the caller counts
+ * what it actually wrote.
+ */
+export function planChecklistCopy(
   line: TargetLine,
   source: SourceDocument,
-): Promise<boolean> {
+): {
+  /** Copies this line holds that the source no longer accounts for. */
+  staleFileIds: string[];
+  /** The File rows to write, ids already derived. */
+  createFileIds: string[];
+  mappedFromDocumentId: string | null;
+  mappedFromProject: boolean;
+} | null {
   const wanted = source.files.map((file) => copiedFileId(line.id, file.id));
   const held = new Set(line.files.map((file) => file.id));
 
@@ -347,10 +394,30 @@ async function copyOntoChecklistLine(
   // source document, so a replacement — which produces different file ids — is
   // correctly read as something new even though it came from the same row.
   if (wanted.length === held.size && wanted.every((id) => held.has(id))) {
-    return false;
+    return null;
   }
 
-  const stale = line.files.filter((file) => !wanted.includes(file.id));
+  return {
+    staleFileIds: line.files
+      .filter((file) => !wanted.includes(file.id))
+      .map((file) => file.id),
+    createFileIds: wanted,
+    mappedFromDocumentId: source.id,
+    // The other half of the provenance, and the only one the HBCF case has.
+    // Derived from the absence of a source id rather than passed in, so the two
+    // cannot disagree about where one copy came from.
+    mappedFromProject: source.id === null,
+  };
+}
+
+async function copyOntoChecklistLine(
+  line: TargetLine,
+  source: SourceDocument,
+): Promise<boolean> {
+  const plan = planChecklistCopy(line, source);
+  if (!plan) return false;
+
+  const stale = plan.staleFileIds;
 
   await prisma.$transaction(async (tx) => {
     // The copies this line used to hold. Deleted rather than left beside the
@@ -361,9 +428,7 @@ async function copyOntoChecklistLine(
     // this was copied from, and `discardSupersededFiles` is what decides when
     // one is genuinely unreferenced.
     if (stale.length > 0) {
-      await tx.file.deleteMany({
-        where: { id: { in: stale.map((file) => file.id) } },
-      });
+      await tx.file.deleteMany({ where: { id: { in: stale } } });
     }
 
     await tx.file.createMany({
@@ -396,7 +461,8 @@ async function copyOntoChecklistLine(
         // `mappedFromDocumentId` records.
         status: ComplianceDocumentStatus.UPLOADED,
         rejectionReason: null,
-        mappedFromDocumentId: source.id,
+        mappedFromDocumentId: plan.mappedFromDocumentId,
+        mappedFromProject: plan.mappedFromProject,
       },
     });
   });
@@ -492,7 +558,7 @@ export async function mapExistingDocumentsOntoChecklist(params: {
       // A line carrying a *mapped* copy is a different matter and is handled in
       // `copyOntoChecklistLine`, because the document it copied may since have
       // been replaced.
-      if (item.files.length > 0 && !item.mappedFromDocumentId) continue;
+      if (item.files.length > 0 && !isMappedCopy(item)) continue;
 
       const wanted = checklistDocumentType(item);
       if (!isChecklistMappableType(wanted)) continue;
@@ -579,7 +645,7 @@ export async function fillChecklistLinesFor(params: {
     for (const item of documents) {
       if (item.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) continue;
       // Filled in by hand. Only a mapped copy is ours to refresh.
-      if (item.files.length > 0 && !item.mappedFromDocumentId) continue;
+      if (item.files.length > 0 && !isMappedCopy(item)) continue;
       if (checklistDocumentType(item) !== params.documentType) continue;
 
       if (await copyOntoChecklistLine(item, source)) mapped += 1;

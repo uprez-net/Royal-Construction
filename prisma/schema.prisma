@@ -1391,6 +1391,31 @@ model ComplianceDocument {
   /// made.
   mappedFromDocumentId String?
 
+  /// Whether this row was answered from a document the project holds rather
+  /// than from one on the compliance file.
+  ///
+  /// One case, and it needs a column of its own because the column above cannot
+  /// describe it. HBCF cover is raised on the Overview tab, often before a
+  /// certifier is engaged, and lands in the project's own requirements -- so a
+  /// checklist line asking for the warranty is answered from a File with no
+  /// ComplianceDocument behind it, and `mappedFromDocumentId` has nothing to
+  /// point at. It was left null, which is indistinguishable from a line
+  /// somebody filled in by hand.
+  ///
+  /// That is what the mapper's guards read to decide whether a line is theirs
+  /// to refresh, so an HBCF line read as manual on every pass after the first.
+  /// Replacing the certificate on the project then left the old copy on the
+  /// checklist for good -- and the old certificate is what went to the
+  /// certifier in the review pack.
+  ///
+  /// A boolean rather than a nullable project-file id, because nothing needs to
+  /// know which File it was: the guards ask "is this copy ours", and the
+  /// provenance line says "from the project's HBCF cover" off the document
+  /// type. The copied File ids stay the replacement detector -- they are
+  /// derived from the source file id, so a replaced certificate produces
+  /// different ids and `copyOntoChecklistLine` sees the difference on its own.
+  mappedFromProject Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
