@@ -231,6 +231,24 @@ export const activityLogSchemas = {
     }),
 
     /**
+     * The certifier being appointed principal certifier on the portal.
+     *
+     * Its own entry rather than a step on the application above, because it is a
+     * fact about the engagement rather than about a lodgement — one appointment
+     * per job, and a job that has to relodge a CDC appoints nobody twice. It is
+     * also the one gate on the CDC lodgement that nothing else on the file
+     * records, so "why could we not lodge on the Tuesday" is a question only this
+     * line can answer.
+     */
+    compliancePrincipalCertifierAppointed: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        appointedAt: z.string(),
+        appointmentRef: z.string().nullable(),
+        recordedById: z.string(),
+    }),
+
+    /**
      * A consultant, or a portal, satisfying a checklist line from what the file
      * already held.
      *

@@ -87,6 +87,31 @@ function document(
   };
 }
 
+/** One application to an outside body, as the flow reads it. */
+function application(
+  kind: ComplianceExternalApplicationKind,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    id: `application-${kind}`,
+    kind,
+    alreadyHeld: false,
+    appliedAt: null,
+    applicationRef: null,
+    lodgedWith: null,
+    receivedAt: null,
+    approvalNotifiedAt: null,
+    approvalNotificationMessageId: null,
+    submissions:
+      overrides.appliedAt && !overrides.submissions
+        ? // The clock reads the latest round rather than `appliedAt`, so a lodged
+          // application with no rounds behind it would read as never submitted.
+          [{ id: "round-1", round: 1, submittedAt: overrides.appliedAt }]
+        : [],
+    ...overrides,
+  };
+}
+
 /** A checklist line the extraction labelled as asking for one document type. */
 function checklistLine(
   id: string,
@@ -343,4 +368,125 @@ test("every party's full name is the one the rest of the tab uses", () => {
       `${actor.id} is named two ways`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// The portal, and the certificate after it
+//
+// The node that did not exist and the node that named the wrong party. Both are
+// the same correction read from two ends: the file believed a certifier issues
+// the construction certificate off their own desk, so the last node pointed at
+// them for the whole of a wait that is actually ours.
+// ---------------------------------------------------------------------------
+
+test("the portal waits on us before the certifier has passed the checklist", () => {
+  // Idle rather than outstanding on both. Nothing can be lodged until the
+  // certifier has finished, so a builder marked as owing something would be a
+  // reader chased towards a control the tab has not unlocked.
+  const actors = actorsOn(engagement(), "PLANNING_PORTAL");
+
+  assert.deepEqual(ids(actors), ["builder", "certifier"]);
+  assert.equal(stateOf(actors, "builder"), "idle");
+  assert.equal(stateOf(actors, "certifier"), "idle");
+});
+
+test("an approved checklist puts the lodgement on us", () => {
+  const actors = actorsOn(
+    engagement({ status: "APPROVED" as never }),
+    "PLANNING_PORTAL",
+  );
+
+  assert.equal(stateOf(actors, "builder"), "outstanding");
+  // Still idle: they cannot determine an application nobody has lodged.
+  assert.equal(stateOf(actors, "certifier"), "idle");
+});
+
+test("a lodged application hands the wait to the certifier", () => {
+  // The normal state of this stage for a fortnight, and the reason the node names
+  // two parties rather than one: "we have done our half, they have not done
+  // theirs" is what a reader needs and neither party alone can say it.
+  const actors = actorsOn(
+    engagement({
+      status: "APPROVED" as never,
+      externalApplications: [
+        application(
+          ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE,
+          { appliedAt: MONDAY },
+        ),
+      ] as never,
+    }),
+    "PLANNING_PORTAL",
+  );
+
+  assert.equal(stateOf(actors, "builder"), "settled");
+  assert.equal(stateOf(actors, "certifier"), "outstanding");
+});
+
+test("a determination settles the certifier without a document", () => {
+  // The distinction the whole change turns on. The portal answering ends the wait
+  // on *them*; fetching the certificate is the next stage's work, and a certifier
+  // left outstanding through it would be chased for something they have done.
+  const actors = actorsOn(
+    engagement({
+      status: "APPROVED" as never,
+      externalApplications: [
+        application(
+          ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE,
+          { appliedAt: MONDAY, approvalNotifiedAt: MONDAY },
+        ),
+      ] as never,
+    }),
+    "PLANNING_PORTAL",
+  );
+
+  assert.equal(stateOf(actors, "certifier"), "settled");
+});
+
+test("the certificate node waits on us, not on the certifier", () => {
+  /**
+   * The correction, pinned.
+   *
+   * This node used to name the certifier as the party owing the certificate,
+   * because the file believed they issued it on their own thread. By the time the
+   * stage is live they have determined the application and their work is finished;
+   * what is left is a download, and the person doing it is on our side.
+   *
+   * Not a cosmetic error. The node is what a reader consults to decide who to
+   * ring, and it pointed at a firm that had already done everything on a file
+   * whose actual blocker was an admin who had not logged into the portal.
+   */
+  const actors = actorsOn(
+    engagement({
+      status: "APPROVED" as never,
+      externalApplications: [
+        application(
+          ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE,
+          { appliedAt: MONDAY, approvalNotifiedAt: MONDAY },
+        ),
+      ] as never,
+    }),
+    "CERTIFICATE",
+  );
+
+  assert.deepEqual(ids(actors), ["builder", "insurer"]);
+  assert.equal(stateOf(actors, "builder"), "outstanding");
+});
+
+test("a CDC on the file settles the certificate node's half of it", () => {
+  // Either certificate counts, which is what `hasCertificate` is for: a complying
+  // development job never gets a construction certificate, and asking for one by
+  // name is what left a finished CDC job reading as unfinished.
+  const actors = actorsOn(
+    engagement({
+      status: "APPROVED" as never,
+      documents: [
+        document(ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE),
+      ] as never,
+    }),
+    "CERTIFICATE",
+  );
+
+  assert.equal(stateOf(actors, "builder"), "settled");
+  // The cover is the other half and nobody has supplied it.
+  assert.equal(stateOf(actors, "insurer"), "outstanding");
 });

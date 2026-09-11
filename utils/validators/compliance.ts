@@ -166,8 +166,23 @@ export type PartySelfSuppliedInput = z.infer<typeof partySelfSuppliedSchema>;
  * consultant who has to redo the report, and "the developer said no" costs
  * another eleven working days.
  */
+/**
+ * Which document under covenant a request or a verdict is about.
+ *
+ * Narrowed to the two rather than taking the whole document enum, which is what
+ * makes a verdict against the survey a 400 rather than a row in a table that
+ * nothing will ever read. Optional on every schema that takes it and defaulted in
+ * the data layer to the bushfire report — see `recordDeveloperDecision` for why
+ * that leniency is deliberate rather than an oversight.
+ */
+const developerDocumentSchema = z.enum([
+  ComplianceDocumentType.BUSHFIRE_REPORT,
+  ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+]);
+
 export const developerDecisionSchema = z
   .object({
+    documentType: developerDocumentSchema.optional(),
     decision: z.enum(ComplianceApprovalDecision),
     reason: normalizedStringSchema.optional(),
   })
@@ -177,7 +192,7 @@ export const developerDecisionSchema = z
       Boolean(input.reason?.trim()),
     {
       message:
-        "Say why they rejected it — the bushfire consultant is sent this word for word.",
+        "Say why they rejected it — whoever produced the document is sent this word for word.",
       path: ["reason"],
     },
   );
@@ -192,6 +207,7 @@ export type DeveloperDecisionInput = z.infer<typeof developerDecisionSchema>;
  * attached, which is the same pair every other send here takes.
  */
 export const developerResendSchema = z.object({
+  documentType: developerDocumentSchema.optional(),
   note: normalizedStringSchema.optional(),
   extraAttachmentIds: extraAttachmentsSchema,
 });
@@ -213,6 +229,43 @@ export const developerRequirementSchema = z.object({
 export type DeveloperRequirementInput = z.infer<
   typeof developerRequirementSchema
 >;
+
+/**
+ * Who the estate developer is, answered off the banner.
+ *
+ * Supersedes `developerRequirementSchema` for the banner's own control and does
+ * not replace it: the bare boolean is still what the development application
+ * block's own yes/no writes, and both end up on the same column.
+ *
+ * The name is required when the answer is yes and forbidden-in-effect when it is
+ * no, which the refine enforces rather than the field types. A covenant with
+ * nobody behind it is the state the old flow left jobs in whose estate was not on
+ * the checked-in list, and it is worse than an unanswered question: the gate
+ * refuses the lodgement and there is nobody to send the plans to.
+ *
+ * The address is optional even on a yes, deliberately. An estate's approvals
+ * address is on the covenant paperwork rather than published, and a wrong one is
+ * much worse than a blank one — the request appears to have been sent, the clock
+ * starts, and eleven working days later the file is chasing a bounce nobody read.
+ * The send is what refuses without an address; recording who it is does not have
+ * to wait for it.
+ */
+export const estateDeveloperSchema = z
+  .object({
+    required: z.boolean(),
+    name: normalizedStringSchema.optional(),
+    email: z.string().trim().email().optional().or(z.literal("")),
+    phone: normalizedStringSchema.optional(),
+  })
+  .refine((input) => !input.required || Boolean(input.name?.trim()), {
+    message:
+      "Name the developer — they are who the approval is sought from, and the plans cannot be sent to nobody.",
+    path: ["name"],
+  });
+
+export type EstateDeveloperInput = z.infer<typeof estateDeveloperSchema>;
+/** The browser's half — see `ExternalApplicationRequest`. */
+export type EstateDeveloperRequest = z.input<typeof estateDeveloperSchema>;
 
 // ============================================================================
 // Applications to outside bodies
@@ -336,7 +389,59 @@ export const externalApplicationSchema = z.discriminatedUnion("step", [
     kind: applicationKindSchema,
     received: z.boolean(),
   }),
+  /**
+   * The portal has determined it, and has not sent the document.
+   *
+   * Its own step rather than part of "received", and the distinction is the whole
+   * reason it exists. Every reader of `receivedAt` treats it as "the wait is
+   * over, the document is here or is about to be" — and the NSW Planning Portal
+   * determines a CDC, a construction certificate or a development application and
+   * sends an email that carries nothing but the news. So there is a real state,
+   * sometimes a week long, in which the application is decided and the file holds
+   * nothing, and folding it into "received" would have the certificate block
+   * offering an upload row for a document nobody had fetched while the stage above
+   * it read as finished.
+   *
+   * What it actually buys is stopping the determination clock without claiming
+   * the document: the certifier has done everything asked of them, so chasing
+   * them is wrong, and the download-ready alert carries the step that is left.
+   *
+   * The date is optional and defaults to now. Unlike a lodgement — which an admin
+   * is often recording days late off a portal receipt — this is almost always
+   * entered the moment somebody reads the email, and making them confirm today's
+   * date is a field nobody wants. Supplied where the email sat unread.
+   */
+  z.object({
+    step: z.literal("determined"),
+    kind: applicationKindSchema,
+    determinedAt: isoDateSchema.optional(),
+    applicationRef: normalizedStringSchema.optional(),
+  }),
 ]);
+
+/**
+ * The principal certifier appointment, recorded off the portal.
+ *
+ * Its own schema rather than a step on the union above, because it is a fact
+ * about the engagement rather than about an application — one appointment per job,
+ * not one per lodgement, so a job that has to relodge a CDC appoints nobody a
+ * second time. See `CertifierEngagement.principalCertifierAppointedAt`.
+ *
+ * The reference is optional on the same reasoning as a lodgement's: the date is
+ * what the gate reads, and the portal's reference is what somebody needs in order
+ * to chase the appointment, which is routinely not to hand at the moment the form
+ * is submitted.
+ */
+export const principalCertifierSchema = z.object({
+  appointedAt: isoDateSchema,
+  appointmentRef: normalizedStringSchema.optional(),
+});
+
+export type PrincipalCertifierInput = z.infer<typeof principalCertifierSchema>;
+/** The browser's half — see `ExternalApplicationRequest`. */
+export type PrincipalCertifierRequest = z.input<
+  typeof principalCertifierSchema
+>;
 
 /** What the data layer receives — dates already parsed into instants. */
 export type ExternalApplicationInput = z.infer<

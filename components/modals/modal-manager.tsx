@@ -60,6 +60,7 @@ import type {
   ComplianceExternalApplicationRecord,
   VaultAttachmentOption,
 } from "@/types/compliance";
+import type { DeveloperApprovalDocument } from "@/constants/complianceDocuments";
 import { ApplicationModal } from "./compliance/application-modal";
 import { ConnectPartyModal } from "./compliance/connect-party-modal";
 import { DeveloperDecisionModal } from "./compliance/developer-decision-modal";
@@ -734,10 +735,15 @@ export function ModalManager() {
     case "developerDecision": {
       const {
         projectId: id,
+        documentType,
         decision,
         estate,
       } = modal.payload as {
         projectId: string;
+        // Which document they are answering about. Optional on the wire and
+        // defaulted in the data layer to the bushfire report, which is what every
+        // caller meant before the architectural design came under covenant.
+        documentType?: DeveloperApprovalDocument;
         decision?: ComplianceApprovalDecision;
         estate?: string | null;
       };
@@ -757,6 +763,7 @@ export function ModalManager() {
       return (
         <DeveloperDecisionModal
           projectId={id}
+          documentType={documentType}
           decision={decision}
           estate={estate}
           open
@@ -794,16 +801,19 @@ export function ModalManager() {
     case "developerResend": {
       const {
         projectId: id,
+        documentType,
         previousReason,
         vaultOptions,
       } = modal.payload as {
         projectId: string;
+        documentType?: DeveloperApprovalDocument;
         previousReason?: string | null;
         vaultOptions?: VaultAttachmentOption[];
       };
       return (
         <DeveloperResendModal
           projectId={id}
+          documentType={documentType}
           previousReason={previousReason}
           vaultOptions={vaultOptions}
           open

@@ -17,6 +17,13 @@ import {
   isNotRequired,
   PARTY_RESPONSE_BUSINESS_DAYS,
 } from "@/constants/complianceDocuments";
+import {
+  certificateApplication,
+  certificateDocumentTypeFor,
+  certificateKindFor,
+  hasCertificate,
+  isPortalDownloadAlert,
+} from "@/lib/compliance/portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import {
@@ -67,6 +74,7 @@ export type ComplianceStageId =
   | "CERTIFIER"
   | "DEVELOPMENT_APPLICATION"
   | "CHECKLIST"
+  | "PLANNING_PORTAL"
   | "CERTIFICATE";
 
 /**
@@ -187,6 +195,19 @@ export type ComplianceStage = {
    * stage where the sweep had decided there was nobody outstanding.
    */
   isOverdue: boolean;
+  /**
+   * Whether this stage is waiting on a download rather than on anybody.
+   *
+   * The positive counterpart of `isOverdue`, and its own field rather than a
+   * third value on one enum because the two are genuinely independent: a portal
+   * stage can hold a determination waiting to be fetched *and* a second
+   * application that is past its days. Collapsing them would mean choosing which
+   * of those a reader is told about.
+   *
+   * Read off the same alerts `isOverdue` is, so the node and the panel above the
+   * tabs cannot disagree about what is outstanding on a stage.
+   */
+  hasPortalDownload: boolean;
   /** The open alerts filed against this stage, for the header's tooltip. */
   alerts: ComplianceAlertRecord[];
 };
@@ -223,6 +244,31 @@ const ALERT_STAGE: Readonly<
   // open on a file that has none.
   [ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE]: "DEVELOPMENT_APPLICATION",
   [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]: "DEVELOPMENT_APPLICATION",
+
+  // The developer sitting on the architectural design. Filed with the other two
+  // developer alerts and corrected by `stageForAlert` on a file with no DA, for
+  // the same reason they are: the covenant binds a CDC exactly as hard, and it
+  // is the portal lodgement it blocks there.
+  [ComplianceAlertType.DEVELOPER_PLANS_OVERDUE]: "DEVELOPMENT_APPLICATION",
+
+  // -------------------------------------------------------------------
+  // The portal stage.
+  //
+  // The two certificate determinations and the download that follows either of
+  // them all belong to the lodgement rather than to the certificate: the
+  // certificate node is where the document lands, and these are raised while
+  // there is no document and nothing for that node to be about.
+  // -------------------------------------------------------------------
+  [ComplianceAlertType.CDC_DETERMINATION_OVERDUE]: "PLANNING_PORTAL",
+  [ComplianceAlertType.CC_DETERMINATION_OVERDUE]: "PLANNING_PORTAL",
+  [ComplianceAlertType.CDC_DOWNLOAD_READY]: "PLANNING_PORTAL",
+  [ComplianceAlertType.CC_DOWNLOAD_READY]: "PLANNING_PORTAL",
+
+  // The consent, which is the DA's own determination arriving the same way.
+  // Corrected to the checklist on a file with no DA node, like everything else
+  // routed here -- though in practice this one cannot be raised on such a file,
+  // since nothing lodges a development application on a job that has none.
+  [ComplianceAlertType.DA_DOWNLOAD_READY]: "DEVELOPMENT_APPLICATION",
 
   // Moved to the DA while the checklist is frozen -- see `stageForAlert`.
   [ComplianceAlertType.BASIX_RESPONSE_OVERDUE]: "CHECKLIST",
@@ -706,34 +752,115 @@ function checklistStage(
 }
 
 /**
- * The construction certificate and the HBCF cover.
+ * The portal: the application, the appointment, and the determination.
  *
- * The one stage with no start date of its own. Nothing timestamps the certifier
- * passing the last checklist item, and the gap between that and the certificate
- * being issued is entirely theirs -- so the stage says it is where the file is
- * up to and says nothing about how long, rather than counting from a date that
- * would be a guess.
+ * The stage the flow did not have, and the whole of the drift this header was
+ * wrong about. It used to run Checklist -> Certificate and cover, on the reading
+ * that a certifier passes the last item and issues the certificate off their own
+ * desk. What actually sits between those two is a lodgement on the NSW Planning
+ * Portal, a principal certifier appointment that has to go in with it on the
+ * CDC path, and a determination that takes a fortnight or more -- a wait longer
+ * than most of the ones the header already drew, and it was drawn nowhere.
+ *
+ * Labelled for the path the file is on rather than generically, because the
+ * reader of this node wants to know which certificate is coming: "CDC
+ * application" and "Construction certificate" are the two things it can say,
+ * and "Planning portal" would make them guess.
+ *
+ * The clock starts at the latest submission rather than at `appliedAt`, the same
+ * correction the DA node already carries: an application sent back for further
+ * information and relodged is not overdue from the first lodgement. The SLA
+ * exists here, unlike on the checklist and the certificate either side of it,
+ * because a determination period is a real published figure rather than one we
+ * invented -- see CDC_DETERMINATION_BUSINESS_DAYS.
+ *
+ * Finished by the determination, not by the document. That is the distinction
+ * the whole change turns on: the portal answering is what ends *this* wait, and
+ * fetching the certificate is the next stage's work. Reading the document here
+ * would leave the node counting days against the certifier for a week in which
+ * they had already done everything asked of them.
+ */
+function planningPortalStage(
+  engagement: CertifierEngagementDetail,
+  now: Date,
+): BuiltStage {
+  const kind = certificateKindFor(engagement);
+  const application = certificateApplication(engagement);
+  const submission = latestSubmission(application);
+
+  // Either mark of the portal having answered. `approvalNotifiedAt` is the
+  // ordinary one -- the determination email -- and `receivedAt` is an admin who
+  // ticked it through without one, which happens when somebody sees the
+  // determination on the portal before the mail lands. The certificate being on
+  // the file closes it too, for the file that skipped both: a certifier who
+  // hands the certificate over at a site meeting has self-evidently determined
+  // it.
+  const determinedAt =
+    application?.approvalNotifiedAt ??
+    application?.receivedAt ??
+    (hasCertificate(engagement)
+      ? latestArrival(engagement, [certificateDocumentTypeFor(engagement)])
+      : null);
+
+  return {
+    id: "PLANNING_PORTAL",
+    label:
+      kind === ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
+        ? "CDC application"
+        : "Construction certificate",
+    done: determinedAt !== null,
+    ...clock(
+      submission?.submittedAt ?? null,
+      determinedAt ? { at: determinedAt } : null,
+      submission
+        ? EXTERNAL_APPLICATION_COPY[kind].businessDays
+        : // Nothing lodged, so no clock. The pack is still being assembled or
+          // the certifier has not passed it yet, and a countdown here would be
+          // against a portal nobody has given anything to.
+          null,
+      now,
+    ),
+  };
+}
+
+/**
+ * The certificate on the file, and the HBCF cover beside it.
+ *
+ * Still the last stage, and no longer the one that waits for the certifier. The
+ * wait it used to describe has moved to `planningPortalStage`, which is where
+ * the determination actually happens; what is left here is the two documents,
+ * and both of them are ours to put on the file.
+ *
+ * Which is why this is the one stage with a start date that means something now.
+ * It used to have none -- nothing timestamped a certifier passing the last item
+ * -- and it starts at the determination, because that is the instant the
+ * certificate becomes available and the clock on fetching it begins. A file that
+ * is approved and still holding nothing is the state this node exists to show,
+ * and it was invisible before.
+ *
+ * No SLA, and deliberately none: this is a wait on us rather than on anybody
+ * else, and the download-ready alert is the thing that chases it.
  */
 function certificateStage(
   engagement: CertifierEngagementDetail,
   now: Date,
 ): BuiltStage {
-  const certificate = engagement.documents.find(
-    (document) =>
-      document.documentType ===
-      ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
-  );
-
+  const application = certificateApplication(engagement);
   const done = engagement.status === CertifierEngagementStatus.COMPLETED;
 
   return {
     id: "CERTIFICATE",
     label: "Certificate and cover",
     done,
-    // Finished with, and again with nothing to say when. The engagement's
-    // status is the only mark that the file is closed and it carries no
-    // instant of its own here.
-    ...clock(certificate?.createdAt ?? null, done ? { at: null } : null, null, now),
+    ...clock(
+      application?.approvalNotifiedAt ?? application?.receivedAt ?? null,
+      // Finished with, and with nothing to say when. The engagement's status is
+      // the only mark that the file is closed and it carries no instant of its
+      // own here.
+      done ? { at: null } : null,
+      null,
+      now,
+    ),
   };
 }
 
@@ -837,6 +964,7 @@ export function complianceStageFlow(
     councilStage(engagement, now),
     certifierStage(engagement, now),
     checklistStage(engagement, now),
+    planningPortalStage(engagement, now),
     certificateStage(engagement, now),
   ];
 
@@ -870,7 +998,17 @@ export function complianceStageFlow(
       // A done stage with an open alert still reads as late, which is not a
       // contradiction: a stale title search is raised against a surveyor who
       // has sent everything they were asked for.
-      isOverdue: alerts.length > 0,
+      //
+      // The download-ready alerts are the exception, and the only alerts on this
+      // file that mark a node without reddening it. They are raised by the
+      // portal approving something, so nobody is behind -- a node gone red on
+      // the day a CDC came through is the opposite of what the colour means. The
+      // node still carries the alert and still says there is a step left; it
+      // says so in green. See `hasPortalDownload`.
+      isOverdue: alerts.some((alert) => !isPortalDownloadAlert(alert.type)),
+      hasPortalDownload: alerts.some((alert) =>
+        isPortalDownloadAlert(alert.type),
+      ),
       alerts,
     } satisfies ComplianceStage;
   };
@@ -931,5 +1069,22 @@ export function complianceStageFlow(
     -1,
   );
 
-  return [...mainStages.slice(0, 4), branch, ...mainStages.slice(4)];
+  // Immediately before the node it rejoins at, which is where a detour belongs
+  // in a list read top to bottom: everything above the branch happened before
+  // it, everything below is what it feeds into.
+  //
+  // Found by id rather than by index. It was `slice(0, 4)`, and the portal stage
+  // landing in the middle of this array is exactly the kind of edit that turns a
+  // correct magic number into a branch drawn one node off with nothing failing
+  // to say so.
+  const rejoinIndex = mainStages.findIndex(
+    (stage) => stage.id === branch.rejoinsAt,
+  );
+  const insertAt = rejoinIndex === -1 ? mainStages.length : rejoinIndex;
+
+  return [
+    ...mainStages.slice(0, insertAt),
+    branch,
+    ...mainStages.slice(insertAt),
+  ];
 }

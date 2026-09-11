@@ -642,16 +642,48 @@ test("a checklist line that has gone since the outreach is not chased forever", 
 // ---------------------------------------------------------------------------
 // The estate developer, and the rework a refusal from them causes
 //
-// Two clocks on one report that are never both running. The interesting cases
-// are the handovers between them: a rejection has to stop chasing the developer
-// and start chasing the consultant, and the revised report has to stop chasing
-// the consultant without silently restarting the developer's clock from an
-// engagement date months old.
+// Three clocks now, and the shape is what changed. The covenant turns out to
+// cover the full architectural design as well as the bushfire report, so the
+// developer is waited on twice over -- and because the plans come off the
+// architect's board months before a bushfire consultant is engaged off a
+// checklist line, the two waits start at quite different times. One clock read
+// off `outreach.sentAt` had the second document overdue on the day it was sent.
+//
+// So each wait is measured from its own `ComplianceDeveloperApproval` row, and
+// the interesting cases are the handovers: a rejection has to stop chasing the
+// developer and start chasing whoever redoes the document, and the two documents
+// must be able to be late independently.
 // ---------------------------------------------------------------------------
+
+/** One document put to the developer, as the sweep reads it. */
+function developerApproval(
+  documentType: ComplianceDocumentType,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    id: `approval-${documentType}`,
+    outreachId: "outreach-DEVELOPER",
+    documentType,
+    requestedAt: MONDAY,
+    decision: null,
+    decidedAt: null,
+    channel: null,
+    reason: null,
+    round: 1,
+    recordedById: null,
+    ...overrides,
+  };
+}
 
 test("a developer inside their quoted turnaround is not chased", () => {
   const file = engagement({
-    outreaches: [outreach(CompliancePartyType.DEVELOPER)] as never,
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT),
+        ],
+      }),
+    ] as never,
   });
 
   const result = assessOverdueConditions(file, ELEVEN_WORKING_DAYS_LATER);
@@ -666,7 +698,13 @@ test("a developer inside their quoted turnaround is not chased", () => {
 
 test("a developer past their turnaround with no verdict is chased", () => {
   const file = engagement({
-    outreaches: [outreach(CompliancePartyType.DEVELOPER)] as never,
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT),
+        ],
+      }),
+    ] as never,
   });
 
   const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
@@ -682,8 +720,12 @@ test("a developer who has approved is not chased", () => {
   const file = engagement({
     outreaches: [
       outreach(CompliancePartyType.DEVELOPER, {
-        approvalDecision: "APPROVED",
-        approvalDecidedAt: MONDAY,
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT, {
+            decision: "APPROVED",
+            decidedAt: MONDAY,
+          }),
+        ],
       }),
     ] as never,
   });
@@ -704,9 +746,13 @@ test("a developer who has rejected is not chased either", () => {
   const file = engagement({
     outreaches: [
       outreach(CompliancePartyType.DEVELOPER, {
-        approvalDecision: "REJECTED",
-        approvalDecidedAt: MONDAY,
-        approvalReason: "Roof material is not compliant at BAL-29.",
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT, {
+            decision: "REJECTED",
+            decidedAt: MONDAY,
+            reason: "Roof material is not compliant at BAL-29.",
+          }),
+        ],
       }),
     ] as never,
   });
@@ -723,6 +769,99 @@ test("a developer who has rejected is not chased either", () => {
       ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
     ),
     false,
+  );
+});
+
+test("a verdict recorded before the approval table still counts", () => {
+  // The fallback onto the outreach's own five columns. Every verdict recorded
+  // before ComplianceDeveloperApproval existed lives there, and the migration
+  // copies them across -- so this is the window between `migrate deploy` and the
+  // deploy that follows it, during which new code reads rows the backfill has
+  // written and old rows it has not. A developer who approved the report in March
+  // must not start being chased again by tonight's sweep.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [],
+        approvalDecision: "APPROVED",
+        approvalDecidedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("the plans and the report are late independently", () => {
+  /**
+   * The whole reason DEVELOPER_PLANS_OVERDUE is its own type.
+   *
+   * At most one alert of a type is open per file, so folding both documents into
+   * DEVELOPER_RESPONSE_OVERDUE meant a job could only ever say one of them out
+   * loud -- and the chase that went out named whichever document the copy
+   * happened to mention rather than the one actually outstanding.
+   *
+   * Here the plans went over on the Monday and are late; the report went over
+   * eleven working days later and is not. Both readings have to be available at
+   * once.
+   */
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN, {
+            requestedAt: MONDAY,
+          }),
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT, {
+            requestedAt: ELEVEN_WORKING_DAYS_LATER,
+          }),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(ComplianceAlertType.DEVELOPER_PLANS_OVERDUE),
+    "the plans are twelve working days old and should be chased",
+  );
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+    "the report went over yesterday and is not late",
+  );
+});
+
+test("a design nobody has put to the developer is not chased", () => {
+  // No row means it was never sent, which is different from their not having
+  // answered -- and the difference is what the clock reads. A file whose
+  // architect has not finished the drawings must not be chasing a developer who
+  // has been given nothing.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_PLANS_OVERDUE,
+    ),
   );
 });
 

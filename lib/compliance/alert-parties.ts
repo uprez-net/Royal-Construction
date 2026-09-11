@@ -50,6 +50,10 @@ export const COMPLIANCE_ALERT_PARTY: Readonly<
     CompliancePartyType.DEVELOPER,
   [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]:
     CompliancePartyType.BUSHFIRE_CONSULTANT,
+  // The same developer, the other document. One thread, two waits, and the
+  // chase is the same mail down the same thread -- which is why this is the one
+  // new party entry rather than a new party.
+  [ComplianceAlertType.DEVELOPER_PLANS_OVERDUE]: CompliancePartyType.DEVELOPER,
 
   // Nothing to chase. Every one of these is a website or a decision about the
   // whole job rather than a correspondent -- the road opening permit is chased
@@ -62,4 +66,21 @@ export const COMPLIANCE_ALERT_PARTY: Readonly<
   [ComplianceAlertType.MINE_SUBSIDENCE_DELAYED]: null,
   [ComplianceAlertType.DA_DETERMINATION_OVERDUE]: null,
   [ComplianceAlertType.DA_APPROVAL_REQUIRED]: null,
+
+  // The two certificate determinations, and the one case where null is a
+  // limitation rather than a decision. Unlike a council, the body determining
+  // these *is* a correspondent: the registered certifier this file has been
+  // writing to for weeks, who has a live thread on it. But a certifier is not a
+  // CompliancePartyType -- their thread hangs off the engagement itself, with no
+  // outreach row -- and `sendComplianceFollowUp` resolves a thread by party. So
+  // the chase is a sentence in the guidance naming them rather than a button,
+  // which is honest: a button that resolves to no outreach can only fail.
+  [ComplianceAlertType.CDC_DETERMINATION_OVERDUE]: null,
+  [ComplianceAlertType.CC_DETERMINATION_OVERDUE]: null,
+
+  // Nobody to chase because there is nothing to chase. The portal has already
+  // answered; what is left is one download by whoever is reading the alert.
+  [ComplianceAlertType.CDC_DOWNLOAD_READY]: null,
+  [ComplianceAlertType.CC_DOWNLOAD_READY]: null,
+  [ComplianceAlertType.DA_DOWNLOAD_READY]: null,
 };

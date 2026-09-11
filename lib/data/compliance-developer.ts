@@ -7,15 +7,17 @@ import {
   ComplianceApprovalDecision,
   ComplianceDocumentType,
   CompliancePartyType,
+  EstateDeveloperSource,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
 import {
   complianceDocumentLabel,
-  DEVELOPER_APPROVAL_DOCUMENT,
   PARTY_LABEL,
+  type DeveloperApprovalDocument,
 } from "@/constants/complianceDocuments";
+import { readLandDeedDeveloper } from "@/lib/agent/landDeedDeveloperAgent";
 import { developerByKey } from "@/constants/complianceDevelopers";
 import { requireComplianceAccess } from "@/lib/compliance/access";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -33,11 +35,34 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   certifierEngagementInclude,
+  developerApprovalFor,
   outreachForParty,
   type CertifierEngagementDetail,
   type ComplianceOutreachDetail,
 } from "@/types/compliance";
 import { logAction } from "./actionLog";
+
+/**
+ * What the wait on each document under covenant is called.
+ *
+ * Two types rather than one, because at most one alert of a type is open per file
+ * and both waits can be live at once — a developer sitting on the plans while the
+ * report they were also sent is still outstanding. One shared type meant a job
+ * could only ever say one of them out loud, and the chase named whichever document
+ * the copy happened to mention.
+ *
+ * Keyed on the document so the table is exhaustive over
+ * `DEVELOPER_APPROVAL_DOCUMENTS`: a third document brought under covenant is a
+ * compile error here rather than a wait nothing measures.
+ */
+const DEVELOPER_WAIT_ALERT: Readonly<
+  Record<DeveloperApprovalDocument, ComplianceAlertType>
+> = {
+  [ComplianceDocumentType.BUSHFIRE_REPORT]:
+    ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+  [ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN]:
+    ComplianceAlertType.DEVELOPER_PLANS_OVERDUE,
+};
 
 /**
  * The estate developer's sign-off on the bushfire report.
@@ -123,15 +148,6 @@ function requireDeveloper(
   return developer;
 }
 
-/** The bushfire report on the file, with its files, or null. */
-function bushfireReport(engagement: CertifierEngagementDetail) {
-  return (
-    engagement.documents.find(
-      (document) => document.documentType === DEVELOPER_APPROVAL_DOCUMENT,
-    ) ?? null
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Recording the verdict
 // ---------------------------------------------------------------------------
@@ -151,13 +167,32 @@ function bushfireReport(engagement: CertifierEngagementDetail) {
  * and a later automated pass re-reading the same message must not undo them.
  * That is the whole of `channel`.
  *
- * A rejection is not terminal. It clears back to undecided when the consultant
- * re-issues the report, because it is the same approval being sought again on
- * the same thread — see `openBushfireRevision` below, which is what carries the
- * developer's reasons to whoever has to act on them.
+ * A rejection is not terminal. It clears back to undecided when whoever produced
+ * the document re-issues it, because it is the same approval being sought again
+ * on the same thread — see `openDeveloperRevision` below, which is what carries
+ * the developer's reasons to whoever has to act on them.
+ *
+ * Per document now, and that is the change. The covenant covers the full
+ * architectural design as well as the bushfire report — what an estate protects is
+ * the house as it will be built, not only its bushfire rating — and the two go
+ * over independently, weeks or months apart, because they are produced by
+ * different people. One verdict on the outreach row could hold one answer, so the
+ * second request overwrote the first and the block showed a single decision for
+ * whichever document had most recently been sent.
  */
 export async function recordDeveloperDecision(params: {
   projectId: string;
+  /**
+   * Which document they are answering about.
+   *
+   * Defaulted to the bushfire report rather than required, which is the one piece
+   * of leniency in this signature and it is deliberate: the inbound workflow reads
+   * a verdict off a reply that very often does not say which document it is about
+   * — "approved, go ahead" on a thread carrying both. Defaulting to the report
+   * keeps the behaviour the model path already had, and an admin correcting it
+   * names the document explicitly.
+   */
+  documentType?: DeveloperApprovalDocument;
   decision: ComplianceApprovalDecision;
   /**
    * Why, in the developer's words.
@@ -191,47 +226,83 @@ export async function recordDeveloperDecision(params: {
   const engagement = await requireEngagement(params.projectId);
   const developer = requireDeveloper(engagement);
 
+  const documentType =
+    params.documentType ?? ComplianceDocumentType.BUSHFIRE_REPORT;
+  const documentLabel = complianceDocumentLabel(documentType).toLowerCase();
+
   const rejecting =
     params.decision === ComplianceApprovalDecision.REJECTED;
   const reason = params.reason?.trim() || null;
 
   if (rejecting && !reason) {
     throw new Error(
-      "A rejection needs the developer's reasons — they are what the bushfire consultant is sent.",
+      `A rejection needs the developer's reasons — they are what whoever produced the ${documentLabel} is sent.`,
     );
   }
+
+  const existing = developerApprovalFor(engagement, documentType);
 
   // A person's decision stands against a later automated read of the same
   // thread. The reverse is not true: an admin correcting what the extraction
   // concluded is exactly what the button is for.
+  //
+  // Read off this document's own row rather than the outreach, which is the
+  // correction the per-document rows make: an admin who recorded the plans by hand
+  // used to block every later parsed verdict on the file, including one about the
+  // bushfire report they had said nothing about.
   if (
     params.channel === ComplianceApprovalChannel.INBOUND_EMAIL &&
-    developer.approvalChannel === ComplianceApprovalChannel.ADMIN
+    existing?.channel === ComplianceApprovalChannel.ADMIN
   ) {
     return engagement;
   }
 
-  await prisma.complianceOutreach.update({
-    where: { id: developer.id },
-    data: {
-      approvalDecision: params.decision,
-      approvalDecidedAt: new Date(),
-      approvalChannel: params.channel,
-      approvalReason: rejecting ? reason : null,
-      approvalDecidedById: params.decidedById ?? null,
+  /**
+   * The verdict, against the document it is about.
+   *
+   * Upserted rather than updated, because a verdict can arrive on a document
+   * nobody recorded sending — an admin reading a developer's unprompted reply
+   * about plans that went over by post. `requestedAt` falls back to the outreach's
+   * own send date, which is the best available answer to "since when" on a request
+   * the file did not record.
+   */
+  await prisma.complianceDeveloperApproval.upsert({
+    where: {
+      outreachId_documentType: {
+        outreachId: developer.id,
+        documentType,
+      },
+    },
+    create: {
+      outreachId: developer.id,
+      documentType,
+      requestedAt: developer.sentAt ?? new Date(),
+      decision: params.decision,
+      decidedAt: new Date(),
+      channel: params.channel,
+      reason: rejecting ? reason : null,
+      recordedById: params.decidedById ?? null,
+    },
+    update: {
+      decision: params.decision,
+      decidedAt: new Date(),
+      channel: params.channel,
+      reason: rejecting ? reason : null,
+      recordedById: params.decidedById ?? null,
     },
   });
 
-  // Either answer ends the wait on them. The report being rejected is still the
-  // developer having answered, and leaving the alert open would chase somebody
-  // who has already replied while the job waits on a consultant instead.
+  // Either answer ends the wait on them, and it ends the wait on *this* document
+  // only. The report being rejected is still the developer having answered, and
+  // leaving the alert open would chase somebody who has already replied while the
+  // job waits on a consultant instead.
   await resolveComplianceAlertBySystem({
     projectId: params.projectId,
     engagementId: engagement.id,
-    type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    type: DEVELOPER_WAIT_ALERT[documentType],
     resolutionNote: rejecting
-      ? "The developer rejected the report."
-      : "The developer approved the report.",
+      ? `The developer rejected the ${documentLabel}.`
+      : `The developer approved the ${documentLabel}.`,
   });
 
   if (rejecting && reason) {
@@ -239,9 +310,10 @@ export async function recordDeveloperDecision(params: {
     // rejection and the rework are one act: a file that has recorded a refusal
     // and not passed it on is a fortnight of nobody doing anything, and the
     // reasons are already in hand.
-    await openBushfireRevision({
+    await openDeveloperRevision({
       projectId: params.projectId,
       engagement,
+      documentType,
       reason,
     });
   }
@@ -281,12 +353,23 @@ export async function recordDeveloperDecision(params: {
 // ---------------------------------------------------------------------------
 
 /**
- * Opens a revision round on the bushfire consultant, in the developer's words.
+ * Sends a developer's refusal back to whoever produced the document.
  *
  * The same shape as `reviewArchitectPlans` refusing a set of plans, and it
  * reuses the same table: a round is written, the words that caused it go out on
- * the thread, and the round stays open until a replacement lands. What
- * BUSHFIRE_REVISION_OVERDUE measures is the gap.
+ * the thread, and the round stays open until a replacement lands.
+ *
+ * Routed by document rather than fixed on the bushfire consultant, which is what
+ * bringing the architectural design under the covenant forces. A refused report
+ * goes back to the consultant who wrote it; refused plans go back to the
+ * architect who drew them. Sending either to the other party is a fortnight lost
+ * on a job that was already waiting — the consultant cannot redraw an elevation
+ * and the architect cannot reassess a BAL rating.
+ *
+ * What differs per document is the party, the alert and one sentence of the mail;
+ * everything else — the round, the attachment of the copy they actually read, the
+ * alert raised whether or not the mail went — is identical, so it is one function
+ * with a table rather than two that would drift.
  *
  * Never throws, and that is deliberate at this one call site. The verdict has
  * already been recorded and is already on the screen; a mailbox that is down is
@@ -295,61 +378,108 @@ export async function recordDeveloperDecision(params: {
  * refusal was stored. The round is written before the mail, so a send that
  * fails leaves a visible, obviously incomplete round rather than nothing.
  */
-async function openBushfireRevision(params: {
+
+/**
+ * Who redoes each document under covenant, and what the wait on them is called.
+ *
+ * The architect's revision alert is deliberately the same ARCHITECT_REVISION_
+ * OVERDUE the client's own redraws use, and not a new type. The wait is
+ * identical — an architect owes a revised set — and at most one alert of a type
+ * is open per file, which is the right behaviour here: a job whose plans have
+ * been refused by the client *and* the developer is waiting on one redraw, not
+ * two. The round itself carries who objected, so the chase quotes the right
+ * words.
+ */
+const DEVELOPER_REVISION: Readonly<
+  Record<
+    DeveloperApprovalDocument,
+    {
+      party: CompliancePartyType;
+      alertType: ComplianceAlertType;
+      /** How the mail describes what they are being asked to redo. */
+      ask: string;
+    }
+  >
+> = {
+  [ComplianceDocumentType.BUSHFIRE_REPORT]: {
+    party: CompliancePartyType.BUSHFIRE_CONSULTANT,
+    alertType: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ask: "revise the assessment to address that and send the updated report back on this thread",
+  },
+  [ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN]: {
+    party: CompliancePartyType.ARCHITECT,
+    alertType: ComplianceAlertType.ARCHITECT_REVISION_OVERDUE,
+    ask: "revise the drawings to address that and send the updated set back on this thread",
+  },
+};
+
+async function openDeveloperRevision(params: {
   projectId: string;
   engagement: CertifierEngagementDetail;
+  documentType: DeveloperApprovalDocument;
   reason: string;
 }): Promise<void> {
-  const { engagement, reason } = params;
-  const consultant = outreachForParty(
-    engagement,
-    CompliancePartyType.BUSHFIRE_CONSULTANT,
-  );
+  const { engagement, reason, documentType } = params;
+  const route = DEVELOPER_REVISION[documentType];
+  const documentLabel = complianceDocumentLabel(documentType).toLowerCase();
+  const producer = outreachForParty(engagement, route.party);
 
-  if (!consultant) {
-    // The report came from somewhere else — the client's own consultant, or
+  if (!producer) {
+    // The document came from somewhere else — the client's own consultant, or
     // their paperwork. There is nobody on this file to send it back to, so the
     // rejection is recorded and the alert says what has to happen next.
     await raiseComplianceAlert({
       projectId: params.projectId,
       engagementId: engagement.id,
-      type: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+      type: route.alertType,
       raisedBySource: ComplianceAlertSource.DEVELOPER,
-      detail: `The developer rejected the bushfire report and there is no consultant engaged on this file to redo it. Their reasons: ${reason}`,
+      detail: `The developer rejected the ${documentLabel} and there is nobody engaged on this file to redo it. Their reasons: ${reason}`,
     });
     return;
   }
 
   const round = await prisma.compliancePlanRevision.create({
-    data: { outreachId: consultant.id, feedback: reason },
+    data: {
+      outreachId: producer.id,
+      feedback: reason,
+      // What makes this round the developer's rather than the client's. Without
+      // it a covenant refusal counted towards the revision rounds the architect
+      // card reports and ran under the clock for a different wait — see
+      // `outstandingRevision`.
+      requestedBySource: ComplianceAlertSource.DEVELOPER,
+    },
   });
 
   try {
-    const report = bushfireReport(engagement);
+    const refused = engagement.documents.find(
+      (document) => document.documentType === documentType,
+    );
     await sendOnPartyThread({
       engagement,
-      outreach: consultant,
+      outreach: producer,
       body: [
-        `<p>Hi${consultant.contactName ? ` ${consultant.contactName}` : ""},</p>`,
-        `<p>The estate developer has reviewed the bushfire assessment for <strong>${escapeEmailHtml(
+        `<p>Hi${producer.contactName ? ` ${producer.contactName}` : ""},</p>`,
+        `<p>The estate developer has reviewed the ${escapeEmailHtml(
+          documentLabel,
+        )} for <strong>${escapeEmailHtml(
           engagement.subjectAddress,
         )}</strong> and has not approved it. This is what they said:</p>`,
         `<blockquote style="margin:0 0 1em;padding:0 0 0 1em;border-left:3px solid #ccc;">${escapeEmailHtml(
           reason,
         )}</blockquote>`,
-        "<p>Could you revise the assessment to address that and send the updated report back on this thread? It goes straight back to them once we have it.</p>",
+        `<p>Could you ${route.ask}? It goes straight back to them once we have it.</p>`,
         "<p>Kind regards,<br/>Royal Constructions</p>",
       ].join("\n"),
-      // The report they wrote, so the revision is against the copy the
-      // developer actually read rather than whichever draft is on their desk.
-      attachments: (report?.files ?? []).map((file) => ({
+      // The copy they wrote, so the revision is against what the developer
+      // actually read rather than whichever draft is on their desk.
+      attachments: (refused?.files ?? []).map((file) => ({
         name: file.filename,
         url: file.url,
       })),
     });
   } catch (error) {
     console.error(
-      "Could not send the developer's rejection to the bushfire consultant",
+      `Could not send the developer's rejection of the ${documentLabel} to the ${route.party.toLowerCase()}`,
       error,
     );
   }
@@ -359,7 +489,7 @@ async function openBushfireRevision(params: {
   await raiseComplianceAlert({
     projectId: params.projectId,
     engagementId: engagement.id,
-    type: ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    type: route.alertType,
     raisedBySource: ComplianceAlertSource.DEVELOPER,
     detail: reason,
   });
@@ -368,7 +498,7 @@ async function openBushfireRevision(params: {
     createActivityLogEntry("complianceBushfireRevisionRequested", {
       projectId: params.projectId,
       engagementId: engagement.id,
-      outreachId: consultant.id,
+      outreachId: producer.id,
       revisionId: round.id,
       reason,
     }),
@@ -420,17 +550,30 @@ export async function recordBushfireRevisionArrival(params: {
   // stands must survive the consultant re-issuing the report for an unrelated
   // reason, and clearing it would put a job that was through this gate back
   // behind it.
-  const cleared = await prisma.complianceOutreach.updateMany({
+  // Against this document's own approval row, and only where the verdict was a
+  // refusal. A revised report arriving must not clear an *approval*: the
+  // developer has already said yes, the replacement is an improvement on
+  // something they accepted, and clearing it would put a job that was through
+  // this gate back behind it.
+  //
+  // Scoped to BUSHFIRE_REPORT rather than to the outreach, which is what the
+  // per-document rows make possible and what the outreach columns could not
+  // express: a revised report used to clear whatever single verdict the row held,
+  // including one about the architectural design that nobody had touched.
+  const cleared = await prisma.complianceDeveloperApproval.updateMany({
     where: {
-      engagementId: params.engagementId,
-      party: CompliancePartyType.DEVELOPER,
-      approvalDecision: ComplianceApprovalDecision.REJECTED,
+      outreach: {
+        engagementId: params.engagementId,
+        party: CompliancePartyType.DEVELOPER,
+      },
+      documentType: ComplianceDocumentType.BUSHFIRE_REPORT,
+      decision: ComplianceApprovalDecision.REJECTED,
     },
     data: {
-      approvalDecision: null,
-      approvalDecidedAt: null,
-      approvalChannel: null,
-      approvalDecidedById: null,
+      decision: null,
+      decidedAt: null,
+      channel: null,
+      recordedById: null,
       // The reasons stay. They are what the revised report was written to
       // answer, and the block shows them beside the re-send so whoever presses
       // it can check that it actually has been answered.
@@ -467,21 +610,35 @@ export async function recordBushfireRevisionArrival(params: {
 // ---------------------------------------------------------------------------
 
 /**
- * Sends the current bushfire report to the developer again.
+ * Puts one document under covenant in front of the developer.
  *
- * The other half of a rejection loop. The outreach already exists and the
- * thread is already running, so this is a message on it rather than a second
- * engagement — which is also what keeps the whole conversation, refusal and
- * all, in one place a person can read top to bottom.
+ * Both halves of the loop in one function, because they are one act: the first
+ * send and every re-send are a message on a thread that already exists, asking the
+ * same question about the same document. The outreach and the thread are created
+ * when the developer is engaged, so this never creates either — which is also what
+ * keeps the whole conversation, refusal and all, in one place a person can read
+ * top to bottom.
  *
- * `sentAt` is deliberately not re-stamped. It is the clock the response SLA is
- * measured from and it belongs to the engagement rather than to this message;
- * re-stamping it would mean a job that has been round this loop twice reads as
- * though it were first asked yesterday. What restarts the wait is the alert
- * being raised again by the sweep, off a verdict that is null once more.
+ * Per document, which is the change. It sent the bushfire report and nothing else,
+ * because the report was the only thing under covenant; the architectural design
+ * now goes the same way and through the same thread.
+ *
+ * The clock is stamped on this document's approval row rather than on the
+ * outreach, and that is the fix the rows exist for. `outreach.sentAt` belongs to
+ * the engagement as a whole — it is when the developer was first written to — and
+ * measuring both documents from it had the plans reading as overdue on the day
+ * they were sent, because the report had gone over eleven working days earlier.
+ *
+ * `requestedAt` *is* re-stamped on a re-send, unlike `outreach.sentAt` which was
+ * deliberately left alone. The two differ because they answer different questions:
+ * the outreach's date is when this party joined the job, and this one is how long
+ * they have had the thing they are being asked about. A round two that kept round
+ * one's date would be overdue the moment it went out.
  */
 export async function resendDeveloperApproval(params: {
   projectId: string;
+  /** Which document to put to them. Defaults to the bushfire report. */
+  documentType?: DeveloperApprovalDocument;
   note?: string | null;
   extraAttachmentIds?: readonly string[];
   requestedByName?: string | null;
@@ -494,10 +651,16 @@ export async function resendDeveloperApproval(params: {
   const engagement = await requireEngagement(params.projectId);
   const developer = requireDeveloper(engagement);
 
-  const report = bushfireReport(engagement);
-  if (!report || report.files.length === 0) {
+  const documentType =
+    params.documentType ?? ComplianceDocumentType.BUSHFIRE_REPORT;
+  const documentLabel = complianceDocumentLabel(documentType).toLowerCase();
+
+  const document = engagement.documents.find(
+    (row) => row.documentType === documentType,
+  );
+  if (!document || document.files.length === 0) {
     throw new Error(
-      "There is no bushfire report on the file to send them.",
+      `There is no ${documentLabel} on the file to send them.`,
     );
   }
 
@@ -505,10 +668,15 @@ export async function resendDeveloperApproval(params: {
     params.projectId,
     params.extraAttachmentIds ?? [],
   );
-  const reportIds = new Set(report.files.map((file) => file.id));
+  const documentFileIds = new Set(document.files.map((file) => file.id));
 
   const note = params.note?.trim() || null;
-  const previous = developer.approvalReason?.trim() || null;
+  // What they said last time, where they have seen this document before. Read off
+  // the document's own approval row, so a refusal of the plans is not quoted into
+  // a mail about the report.
+  const existing = developerApprovalFor(engagement, documentType);
+  const previous = existing?.reason?.trim() || null;
+  const isFirstAsk = !existing;
 
   await sendOnPartyThread({
     engagement,
@@ -516,42 +684,56 @@ export async function resendDeveloperApproval(params: {
     body: [
       `<p>Hi${developer.contactName ? ` ${developer.contactName}` : ""},</p>`,
       previous
-        ? `<p>The bushfire assessment for <strong>${escapeEmailHtml(
+        ? `<p>The ${escapeEmailHtml(documentLabel)} for <strong>${escapeEmailHtml(
             engagement.subjectAddress,
           )}</strong> has been revised to address what you raised:</p><blockquote style="margin:0 0 1em;padding:0 0 0 1em;border-left:3px solid #ccc;">${escapeEmailHtml(
             previous,
           )}</blockquote>`
-        : `<p>Here is the bushfire assessment for <strong>${escapeEmailHtml(
-            engagement.subjectAddress,
-          )}</strong> again.</p>`,
-      "<p>The updated report is attached. Could you let us know whether you approve it? If it still does not meet the covenant, please tell us what has to change.</p>",
+        : isFirstAsk
+          ? `<p>Please find the ${escapeEmailHtml(documentLabel)} for <strong>${escapeEmailHtml(
+              engagement.subjectAddress,
+            )}</strong>, which we understand needs your approval under the estate covenant.</p>`
+          : `<p>Here is the ${escapeEmailHtml(documentLabel)} for <strong>${escapeEmailHtml(
+              engagement.subjectAddress,
+            )}</strong> again.</p>`,
+      `<p>It is attached. Could you let us know whether you approve it? If it does not meet the covenant, please tell us what has to change.</p>`,
       note ? `<p>${escapeEmailHtml(note)}</p>` : "",
       "<p>Kind regards,<br/>Royal Constructions</p>",
     ]
       .filter(Boolean)
       .join("\n"),
     attachments: [
-      ...report.files.map((file) => ({ name: file.filename, url: file.url })),
+      ...document.files.map((file) => ({ name: file.filename, url: file.url })),
       ...extras
-        .filter((file) => !reportIds.has(file.id))
+        .filter((file) => !documentFileIds.has(file.id))
         .map((file) => ({ name: file.filename, url: file.url })),
     ],
   });
 
-  // Back to undecided, whatever it was. This is the same question being asked
-  // again, and a verdict left over from the last round would show against a
-  // report they have not seen.
+  // Back to undecided, whatever it was, and the clock restarted. This is the same
+  // question being asked again about the same document, and a verdict left over
+  // from the last round would show against a copy they have not seen.
+  await prisma.complianceDeveloperApproval.upsert({
+    where: {
+      outreachId_documentType: { outreachId: developer.id, documentType },
+    },
+    create: { outreachId: developer.id, documentType, requestedAt: new Date() },
+    update: {
+      requestedAt: new Date(),
+      decision: null,
+      decidedAt: null,
+      channel: null,
+      recordedById: null,
+      // Bumped rather than reset, so the block can say how many times this has
+      // been round. The reasons are kept for the same purpose: they are what this
+      // send was written to answer, and the only record of why it went round twice.
+      round: { increment: 1 },
+    },
+  });
+
   await prisma.complianceOutreach.update({
     where: { id: developer.id },
-    data: {
-      approvalDecision: null,
-      approvalDecidedAt: null,
-      approvalChannel: null,
-      approvalDecidedById: null,
-      // Kept, unlike the four above. It is what this send was written to
-      // answer, and it is the only record of why the job went round twice.
-      lastFollowUpAt: new Date(),
-    },
+    data: { lastFollowUpAt: new Date() },
   });
 
   after(async () => {
@@ -561,15 +743,13 @@ export async function resendDeveloperApproval(params: {
         projectId: params.projectId,
         engagementId: engagement.id,
         outreachId: developer.id,
-        attachmentCount: report.files.length + extras.length,
+        attachmentCount: document.files.length + extras.length,
         requestedBy: params.requestedByName ?? null,
       }),
     );
     await notifyCompliance("complianceDeveloperResent", params.projectId, {
       party: PARTY_LABEL[CompliancePartyType.DEVELOPER],
-      documentLabel: complianceDocumentLabel(
-        ComplianceDocumentType.BUSHFIRE_REPORT,
-      ),
+      documentLabel: complianceDocumentLabel(documentType),
     });
   });
 
@@ -622,4 +802,174 @@ export async function setDeveloperApprovalRequired(params: {
   });
 
   return requireEngagement(params.projectId);
+}
+
+// ---------------------------------------------------------------------------
+// Who the developer is
+// ---------------------------------------------------------------------------
+
+/**
+ * Records whether this lot is in an estate, and who the developer is.
+ *
+ * One function for both halves of the banner's question, because they are one
+ * answer. "Is this land under a developer" and "here is their address" are asked
+ * and answered together, and splitting them meant a file could say yes and hold
+ * nobody — which is exactly the state the old flow left jobs in whose estate was
+ * not on the checked-in list.
+ *
+ * Supersedes nothing. `constants/complianceDevelopers.ts` is still the fast path
+ * and still the better one where it applies: picking "Elara" off a combobox is
+ * quicker and less error-prone than typing an approvals address nobody has to
+ * hand. What this adds is the estate that is not on the list — a few dozen are,
+ * against hundreds that exist and new ones every quarter.
+ *
+ * Answering "no" is a real answer and is recorded as one, which is the half that
+ * is easy to get wrong. It sets the source to MANUAL with the three fields left
+ * null, and that combination is what stops the land deed being parsed on every
+ * upload for the rest of the job: a person has said there is no developer, and a
+ * document cannot contradict them.
+ *
+ * Does not delete a developer outreach that already exists. Somebody correcting a
+ * mis-answer must not silently discard a thread with real messages on it; the gate
+ * stops reading the approval and the thread stays on the file where it can be
+ * seen.
+ */
+export async function setEstateDeveloper(params: {
+  projectId: string;
+  /** Whether the lot is in an estate with a covenant at all. */
+  required: boolean;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  recordedById: string;
+  recordedByName?: string | null;
+}): Promise<CertifierEngagementDetail> {
+  // Reached only from the admin banner. The answer gates the portal lodgement and
+  // the development application both, so an unauthenticated flip of it lodges a
+  // pack without a covenanted approval.
+  await requireComplianceAccess(params.projectId);
+
+  const engagement = await requireEngagement(params.projectId);
+
+  const name = params.name?.trim() || null;
+  const email = params.email?.trim() || null;
+  const phone = params.phone?.trim() || null;
+
+  if (params.required && !name) {
+    throw new Error(
+      "A lot under a covenant needs the developer's name — it is who the approval is sought from.",
+    );
+  }
+
+  await prisma.certifierEngagement.update({
+    where: { id: engagement.id },
+    data: {
+      developerApprovalRequired: params.required,
+      // Cleared on a "no", rather than left behind. A file that has been
+      // corrected from yes to no must not keep an address the gate no longer
+      // reads — it would show on the tab as a developer nobody is writing to.
+      estateDeveloperName: params.required ? name : null,
+      estateDeveloperEmail: params.required ? email : null,
+      estateDeveloperPhone: params.required ? phone : null,
+      // MANUAL either way, which is the point. See the note above: a person's
+      // answer is what stops the land deed parse, and answering "no" is an answer.
+      estateDeveloperSource: EstateDeveloperSource.MANUAL,
+      estateDeveloperRecordedAt: new Date(),
+      estateDeveloperRecordedById: params.recordedById,
+    },
+  });
+
+  after(async () => {
+    revalidateEngagement(params.projectId);
+    await logAction(
+      createActivityLogEntry("complianceDeveloperApprovalRequirementSet", {
+        projectId: params.projectId,
+        engagementId: engagement.id,
+        required: params.required,
+        answeredBy: params.recordedByName ?? null,
+      }),
+    );
+  });
+
+  return requireEngagement(params.projectId);
+}
+
+/**
+ * Records a developer read off the land deed, if nobody has answered already.
+ *
+ * The fallback half of the question, and deliberately the weaker one. The deed is
+ * the document that names whoever released the land, and it is already on the file
+ * by the time a surveyor is engaged — so parsing it costs nothing and answers a
+ * question somebody would otherwise have to be asked.
+ *
+ * Guarded on `estateDeveloperSource` being null, which is the whole of its
+ * courtesy. A person who typed the estate's approvals address in, or who said
+ * there is no developer on this lot, has told us something a parse cannot argue
+ * with: MANUAL stops this for good. A previous parse does not — a second deed, or
+ * a re-run after the extraction improved, is allowed to correct itself.
+ *
+ * Sets `developerApprovalRequired` only when it finds somebody. A deed that names
+ * no developer is not evidence that there is none: plenty of lots are sold by a
+ * private vendor through an estate that still holds the covenant, and writing
+ * `false` off a silent document would close the question with a guess and hide the
+ * banner that would have got it answered properly.
+ *
+ * Never throws. It runs in an `after()` behind an upload that has already
+ * succeeded, and a deed this cannot read is one somebody answers by hand.
+ */
+export async function recordEstateDeveloperFromDeed(params: {
+  projectId: string;
+  engagementId: string;
+  file: { url: string; filename: string };
+}): Promise<void> {
+  try {
+    const engagement = await prisma.certifierEngagement.findUnique({
+      where: { id: params.engagementId },
+      select: {
+        id: true,
+        estateDeveloperSource: true,
+        developerApprovalRequired: true,
+      },
+    });
+
+    if (!engagement) return;
+
+    if (engagement.estateDeveloperSource === EstateDeveloperSource.MANUAL) {
+      // Somebody has answered. Nothing a document says outranks that, including
+      // an answer of "no developer on this lot" — which is why the check is on the
+      // source rather than on the three fields being empty.
+      return;
+    }
+
+    const found = await readLandDeedDeveloper(params.file);
+    if (!found?.name) return;
+
+    await prisma.certifierEngagement.update({
+      where: { id: engagement.id },
+      data: {
+        developerApprovalRequired: true,
+        estateDeveloperName: found.name,
+        estateDeveloperEmail: found.email ?? null,
+        estateDeveloperPhone: found.phone ?? null,
+        estateDeveloperSource: EstateDeveloperSource.LAND_DEED,
+        estateDeveloperRecordedAt: new Date(),
+      },
+    });
+
+    revalidateEngagement(params.projectId);
+
+    await logAction(
+      createActivityLogEntry("complianceDeveloperApprovalRequirementSet", {
+        projectId: params.projectId,
+        engagementId: engagement.id,
+        required: true,
+        answeredBy: `the land deed (${params.file.filename})`,
+      }),
+    );
+  } catch (error) {
+    console.error(
+      `Could not read the estate developer off the land deed on ${params.projectId}`,
+      error,
+    );
+  }
 }

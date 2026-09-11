@@ -1,5 +1,6 @@
 "use client";
 
+import { ComplianceDocumentType } from "@prisma/client";
 import { Loader2, Send } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  complianceDocumentLabel,
+  type DeveloperApprovalDocument,
+} from "@/constants/complianceDocuments";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -26,6 +31,15 @@ import type { VaultAttachmentOption } from "@/types/compliance";
 
 type DeveloperResendModalProps = {
   projectId: string;
+  /**
+   * Which document is going over.
+   *
+   * Optional and defaulted to the bushfire report, which is what this dialog sent
+   * before the architectural design came under covenant. Named in the copy, because
+   * the whole value of the dialog is the objection quoted in it and an objection
+   * about the drawings under a heading about the report is worse than no heading.
+   */
+  documentType?: DeveloperApprovalDocument;
   /** What they said last time, so the sender can check it has been answered. */
   previousReason?: string | null;
   vaultOptions?: readonly VaultAttachmentOption[];
@@ -34,28 +48,33 @@ type DeveloperResendModalProps = {
 };
 
 /**
- * Puts the revised bushfire report back in front of the developer.
+ * Puts one document under covenant in front of the developer.
+ *
+ * Both the first ask and every re-ask, because they are the same message on the
+ * same thread about the same document — see `resendDeveloperApproval`.
  *
  * A dialog rather than a bare button, and the reason is the block quoted at the
- * top of it. The one way this loop goes wrong is a revised report that does not
+ * top of it. The one way this loop goes wrong is a revised document that does not
  * actually answer what the developer objected to — a consultant who addressed
- * the wrong clause, or who returned the same document with a new date — and
+ * the wrong clause, an architect who returned the same set with a new date — and
  * sending that costs a second full turnaround. So their words are put in front
  * of whoever is about to press send, next to the send.
  *
- * The report itself is not chosen here. It is whatever is on the bushfire row,
- * resolved server-side at send time, for the same reason every other outreach
- * on this tab resolves its own attachments: the mail should carry the current
- * copy rather than whichever one the client happened to be looking at.
+ * The document itself is not chosen here. It is whatever is on that row, resolved
+ * server-side at send time, for the same reason every other outreach on this tab
+ * resolves its own attachments: the mail should carry the current copy rather than
+ * whichever one the client happened to be looking at.
  */
 export function DeveloperResendModal({
   projectId,
+  documentType = ComplianceDocumentType.BUSHFIRE_REPORT,
   previousReason,
   vaultOptions,
   open,
   onOpenChange,
 }: DeveloperResendModalProps) {
   const dispatch = useAppDispatch();
+  const label = complianceDocumentLabel(documentType).toLowerCase();
   const [note, setNote] = useState("");
   const [extras, setExtras] = useState<ExtraAttachment[]>([]);
   /**
@@ -80,6 +99,7 @@ export function DeveloperResendModal({
       await dispatch(
         resendDeveloperApproval({
           projectId,
+          documentType,
           note: note.trim() || undefined,
           extraAttachmentIds: extraAttachmentIds(extras),
         }),
@@ -103,11 +123,14 @@ export function DeveloperResendModal({
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Send the report back for approval</DialogTitle>
+          <DialogTitle>
+            {previousReason
+              ? `Send the ${label} back for approval`
+              : `Send the ${label} for approval`}
+          </DialogTitle>
           <DialogDescription>
-            The bushfire report currently on the file goes back on the
-            developer&apos;s own thread, and the file waits on their answer
-            again.
+            The {label} currently on the file goes to the developer on their own
+            thread, and the file waits on their answer.
           </DialogDescription>
         </DialogHeader>
 
@@ -119,8 +142,8 @@ export function DeveloperResendModal({
               </p>
               <p className="mt-1 text-sm text-foreground">{previousReason}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Check the revised report actually answers this before you send
-                it — a second refusal is another two weeks.
+                Check the revised {label} actually answers this before you send it
+                — a second refusal is another two weeks.
               </p>
             </div>
           ) : null}

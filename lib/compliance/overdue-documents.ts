@@ -83,10 +83,19 @@ function isOutstanding(
  *
  * `DA_APPROVAL_REQUIRED` is likewise absent. It is a fact about the route the
  * job is taking rather than a document anybody is late with.
+ *
+ * The three download-ready alerts are absent for the plainest reason of the
+ * three: nobody is late at all. The portal has determined the application inside
+ * its own time, and the one step left belongs to whoever is reading the screen.
+ * An "Overdue" badge on the certificate row the day the CDC came through would be
+ * this system telling a builder off for the portal's success.
  */
 const NOT_A_LATE_DOCUMENT: ReadonlySet<ComplianceAlertType> = new Set([
   ComplianceAlertType.STALE_TITLE_SEARCH,
   ComplianceAlertType.DA_APPROVAL_REQUIRED,
+  ComplianceAlertType.CDC_DOWNLOAD_READY,
+  ComplianceAlertType.CC_DOWNLOAD_READY,
+  ComplianceAlertType.DA_DOWNLOAD_READY,
 ]);
 
 /**
@@ -109,6 +118,15 @@ const APPLICATION_ALERT_KIND: Readonly<
     ComplianceExternalApplicationKind.MINE_SUBSIDENCE,
   [ComplianceAlertType.DA_DETERMINATION_OVERDUE]:
     ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+  // The two certificate determinations. Unlike the four above there *is*
+  // somebody at the other end -- the registered certifier -- but they are not a
+  // CompliancePartyType, so the party branch drops these exactly as it drops a
+  // portal wait. Naming the document is the same answer either way: the row that
+  // goes red is the certificate the application will produce.
+  [ComplianceAlertType.CDC_DETERMINATION_OVERDUE]:
+    ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE,
+  [ComplianceAlertType.CC_DETERMINATION_OVERDUE]:
+    ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE,
 };
 
 /**
@@ -124,8 +142,9 @@ const APPLICATION_ALERT_KIND: Readonly<
  *
  * The waste management plan is chased on the architect's thread but is not one
  * of the architect's pack documents, so going by party would redden their
- * drawings instead. The developer's two alerts are about the bushfire report,
- * which the bushfire consultant produced.
+ * drawings instead. The developer's alerts are about documents somebody else
+ * produced — the bushfire consultant's report and the architect's design — so
+ * going by party would mark the developer's own row, which holds nothing.
  */
 const NAMED_DOCUMENT: Readonly<
   Partial<Record<ComplianceAlertType, ComplianceDocumentType>>
@@ -140,6 +159,12 @@ const NAMED_DOCUMENT: Readonly<
     ComplianceDocumentType.BUSHFIRE_REPORT,
   [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]:
     ComplianceDocumentType.BUSHFIRE_REPORT,
+  // The developer's other wait, and the one alert in this table whose document
+  // the architect produced. Named for exactly the reason the two above are:
+  // going by party would chase the developer's own row, and the row a reader
+  // needs to see marked is the drawing set sitting on the developer's desk.
+  [ComplianceAlertType.DEVELOPER_PLANS_OVERDUE]:
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
 };
 
 export function overdueComplianceDocuments(

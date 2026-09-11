@@ -14,7 +14,8 @@ import { FatalError } from "workflow";
 import { readAssessorCorrespondence } from "@/lib/agent/assessorCorrespondenceAgent";
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
 import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
-import { recordConstructionCertificate } from "@/lib/data/compliance-certificate";
+import { recordCertificateIssued } from "@/lib/data/compliance-certificate";
+import { isCertificateDocument } from "@/lib/compliance/portal-certificates";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
 import {
@@ -78,11 +79,19 @@ const INBOUND_CLASSIFIABLE: ReadonlySet<ComplianceDocumentType> = new Set([
   ComplianceDocumentType.FEE_PROPOSAL,
   ComplianceDocumentType.CDC_FORM,
   ComplianceDocumentType.CHECKLIST,
-  // The last thing they send. It arrives on this thread like everything else
-  // above, and it is the document that ends the compliance file -- so leaving
-  // it unclassified would strand a finished job one step from done with the
-  // certificate sitting in the needs-identifying queue.
+  // Either certificate, where the certifier sends it rather than leaving it on
+  // the portal for us to fetch.
+  //
+  // Not the ordinary route and kept here because of how much the exception
+  // costs. The certificate is determined on the NSW Planning Portal and
+  // downloaded from it, so the normal path is an upload by hand and the
+  // classifier never sees one. But a certifier who has just determined an
+  // application routinely forwards it on this thread as a courtesy — and since
+  // this is the document that ends the compliance file, leaving it unclassified
+  // would strand a finished job one step from done with its certificate sitting
+  // in the needs-identifying queue.
   ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -430,10 +439,11 @@ async function classifyStoredDocuments(
         checklistDocumentId = placed.documentId;
       }
 
-      if (
-        result.documentType ===
-        ComplianceDocumentType.CONSTRUCTION_CERTIFICATE
-      ) {
+      // Either certificate counts. Read through `isCertificateDocument` rather
+      // than compared against one type, because which of the two a file ends on
+      // depends on the route it took and this workflow has no business knowing
+      // which — see `certificateKindFor`.
+      if (isCertificateDocument(result.documentType)) {
         certificateArrived = true;
       }
     } catch (error) {
@@ -554,7 +564,7 @@ async function closeOutCertificate(engagement: {
   projectId: string;
 }): Promise<void> {
   "use step";
-  await recordConstructionCertificate(engagement);
+  await recordCertificateIssued(engagement);
 }
 
 /**

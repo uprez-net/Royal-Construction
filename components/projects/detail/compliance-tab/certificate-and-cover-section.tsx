@@ -17,10 +17,17 @@ import { ComplianceSectionCard } from "./compliance-section-card";
 /**
  * The last two documents on a compliance file.
  *
- * The certifier issues the construction certificate once every checklist line
- * has passed. The builder puts the HBCF certificate of insurance on the file.
- * With both there the compliance stage is finished and the build can start,
- * which is what moves the project to COMPLIANCE_COMPLETED.
+ * The certificate downloaded off the NSW Planning Portal once the application
+ * lodged there has been determined, and the HBCF certificate of insurance the
+ * builder puts on the file. With both there the compliance stage is finished and
+ * the build can start, which is what moves the project to COMPLIANCE_COMPLETED.
+ *
+ * Which certificate is not this component's decision, and used to be. It named
+ * CONSTRUCTION_CERTIFICATE outright, which is only ever right on a job that went
+ * to a council for consent — a complying development job is built under a CDC and
+ * never gets a construction certificate at all, so on the commoner of the two
+ * paths this block asked for a document that was never going to exist. The caller
+ * resolves the type from the route the file took; see `certificateKindFor`.
  *
  * The insurance question used to sit at the bottom of the checklist card, on
  * the reading that the certifier wants the cover in the pack they review. That
@@ -43,6 +50,14 @@ import { ComplianceSectionCard } from "./compliance-section-card";
 
 type CertificateAndCoverSectionProps = {
   certificate: ComplianceDocumentWithFiles | undefined;
+  /**
+   * Which of the two certificates this file closes on.
+   *
+   * Passed rather than decided here, because the answer depends on the route the
+   * job took and a list of rows has no business reading alerts and application
+   * rows to work that out. See `certificateKindFor`.
+   */
+  certificateDocumentType: ComplianceDocumentType;
   insurance: ComplianceDocumentWithFiles | undefined;
   /**
    * Whether the certifier has finished with the checklist.
@@ -72,6 +87,7 @@ type CertificateAndCoverSectionProps = {
 
 export function CertificateAndCoverSection({
   certificate,
+  certificateDocumentType,
   insurance,
   checklistPassed,
   rowMode,
@@ -105,7 +121,7 @@ export function CertificateAndCoverSection({
   return (
     <ComplianceSectionCard
       title="Certificate and cover"
-      description="The last two documents — the certifier's certificate, and the HBCF cover."
+      description="The last two documents — the issued certificate, and the HBCF cover."
       icon={Award}
       progress={{
         done: (hasCertificate ? 1 : 0) + (hasCover ? 1 : 0),
@@ -115,29 +131,30 @@ export function CertificateAndCoverSection({
       onOpenChange={onOpenChange}
       isActive={isActive}
       locked={!checklistPassed && !hasCertificate}
-      lockMessage="Unlocks when the certifier has passed every checklist item and issues the construction certificate."
+      lockMessage="Unlocks when the certifier has passed every checklist item and the application lodged on the NSW Planning Portal has been determined."
       className={className}
     >
       <ul>
         <ComplianceDocumentRow
-          label={complianceDocumentLabel(
-            ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
-          )}
+          label={complianceDocumentLabel(certificateDocumentType)}
           document={certificate}
           helperText={
             hasCertificate
               ? undefined
-              : "Issued by the certifier once every item has passed. It is filed here automatically when it arrives on their thread — upload it if they send it another way."
+              : // Said this way round on purpose. The helper used to promise the
+                // certificate would be filed automatically when it arrived on
+                // the certifier's thread, which is the exception rather than the
+                // rule: it is determined on the portal and downloaded from it, so
+                // the upload is the expected act and a reader waiting for it to
+                // appear on its own waits forever.
+                "Downloaded from the NSW Planning Portal once the application is determined, and uploaded here. It is filed automatically only if the certifier happens to send it on their thread."
           }
           mode={rowMode(certificate)}
-          isBusy={isRowBusy(
-            certificate,
-            ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
-          )}
+          isBusy={isRowBusy(certificate, certificateDocumentType)}
           onUpload={(file) =>
             onUpload(file, {
               documentId: certificate?.id,
-              documentType: ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+              documentType: certificateDocumentType,
             })
           }
           onPreviewFile={onPreviewFile}

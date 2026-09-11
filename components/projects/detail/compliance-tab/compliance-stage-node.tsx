@@ -6,7 +6,9 @@ import {
   Check,
   ClipboardList,
   Compass,
+  Download,
   FileStack,
+  Globe,
   Landmark,
   PencilRuler,
   ShieldCheck,
@@ -45,6 +47,10 @@ const STAGE_ICON: Readonly<Record<ComplianceStageId, LucideIcon>> = {
   CERTIFIER: ShieldCheck,
   DEVELOPMENT_APPLICATION: FileStack,
   CHECKLIST: ClipboardList,
+  // The portal, not a certificate. The node either side of it is a document and
+  // this one is a lodgement with a website, which is the distinction the icon has
+  // to carry -- two seals in a row read as the same step drawn twice.
+  PLANNING_PORTAL: Globe,
   CERTIFICATE: BadgeCheck,
 };
 
@@ -84,6 +90,13 @@ function stageStateLabel(stage: ComplianceStage): string {
   }
   if (stage.isOverdue) {
     return "needs attention";
+  }
+  // Ahead of the three states below rather than folded into them, because it is
+  // not a state of the wait at all -- the wait is over and well. It is the one
+  // thing left to do, and a reader who cannot see the green heard "in progress"
+  // on a stage whose only remaining work was a download.
+  if (stage.hasPortalDownload) {
+    return "approved, ready to download";
   }
   switch (stage.state) {
     case "done":
@@ -129,6 +142,15 @@ function stageTiming(
   // and a node that is red and says nothing reads as a rendering fault.
   if (stage.isOverdue) {
     return { text: "Needs attention", tone: "danger" };
+  }
+
+  // Green with a clock that has stopped, and the one badge on this header that
+  // asks for something without complaining. Checked before `done` as well as
+  // before the countdowns: the portal stage *is* done the moment it is
+  // determined, and "Done in 12d" there is true and useless -- what the reader
+  // needs is that the certificate is sitting on the portal.
+  if (stage.hasPortalDownload) {
+    return { text: "Ready to download", tone: "ok" };
   }
 
   if (stage.state === "done") {
@@ -296,31 +318,43 @@ export function StageMarker({ stage }: { stage: ComplianceStage }) {
             ? "border-dashed border-border bg-card text-muted-foreground/70"
             : stage.isOverdue
               ? "border-destructive/60 bg-destructive-light text-destructive-ink"
-              : stage.state === "done"
-                ? "border-success/50 bg-success-light text-success-ink"
-                : stage.state === "current"
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                  : "border-border bg-muted text-muted-foreground",
+              : // Ahead of `done`, because this stage is done and the fill has
+                // something better to say. A solid success marker reads as
+                // "nothing here" and walks a reader straight past the one node
+                // with a job left on it; the ring says finished-and-waiting.
+                stage.hasPortalDownload
+                ? "border-success bg-success-light text-success-ink ring-2 ring-success/30"
+                : stage.state === "done"
+                  ? "border-success/50 bg-success-light text-success-ink"
+                  : stage.state === "current"
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    : "border-border bg-muted text-muted-foreground",
         )}
       >
         <Icon className="size-4.5" />
       </span>
 
-      {/* The corner mark, so a finished node and a late one are told apart
-          without reading the fill. The alert wins where a stage is both, which
-          happens more than it sounds: a stale title search is raised against a
-          surveyor who sent everything they were asked for. */}
-      {stage.isActive && (stage.isOverdue || stage.state === "done") ? (
+      {/* The corner mark, so a finished node, a late one and one holding a
+          download are told apart without reading the fill.
+
+          The alert wins where a stage is both, which happens more than it
+          sounds: a stale title search is raised against a surveyor who sent
+          everything they were asked for, and a portal stage can hold a
+          determination to fetch while a second application on the same file is
+          past its days. The download mark comes next and beats the plain tick,
+          because a tick is what a reader scrolls past. */}
+      {stage.isActive &&
+      (stage.isOverdue || stage.hasPortalDownload || stage.state === "done") ? (
         <span
           className={cn(
             "absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full border-2 border-card",
-            stage.isOverdue
-              ? "bg-destructive text-white"
-              : "bg-success text-white",
+            stage.isOverdue ? "bg-destructive text-white" : "bg-success text-white",
           )}
         >
           {stage.isOverdue ? (
             <AlertTriangle className="size-2.5" />
+          ) : stage.hasPortalDownload ? (
+            <Download className="size-2.5" strokeWidth={3} />
           ) : (
             <Check className="size-2.5" strokeWidth={3} />
           )}
@@ -367,9 +401,11 @@ export function StageCaption({
             ? "text-muted-foreground"
             : stage.isOverdue
               ? "text-destructive-ink"
-              : stage.state === "upcoming"
-                ? "text-muted-foreground"
-                : "text-foreground",
+              : stage.hasPortalDownload
+                ? "text-success-ink"
+                : stage.state === "upcoming"
+                  ? "text-muted-foreground"
+                  : "text-foreground",
         )}
       >
         {stage.label}

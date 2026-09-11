@@ -45,7 +45,9 @@ import type {
   DeveloperResendInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
+  EstateDeveloperRequest,
   ExternalApplicationRequest,
+  PrincipalCertifierRequest,
   WasteManagementRequest,
   ResolveComplianceAlertInput,
   ResolveComplianceMeetingRequest,
@@ -406,6 +408,16 @@ export const complianceScope = {
    */
   application: (kind: ComplianceExternalApplicationKind): ComplianceScope =>
     `application:${kind}`,
+  /**
+   * Recording the principal certifier appointment.
+   *
+   * Its own scope rather than the certificate application's, though the two sit
+   * in the same block and the appointment gates the lodgement. They are on screen
+   * together, which is the whole test this table applies: an admin filling in the
+   * appointment form must not grey out the lodgement form underneath it, since the
+   * ordinary sitting is to submit both in a row.
+   */
+  principalCertifier: "principal-certifier" as ComplianceScope,
   /**
    * Everything on the estate developer's block.
    *
@@ -796,6 +808,42 @@ export const setDeveloperApprovalRequired = createAsyncThunk<
   },
 );
 
+/**
+ * Records whether this lot is in an estate, and who the developer is.
+ *
+ * The banner's own write, and a superset of `setDeveloperApprovalRequired` above.
+ * Both exist because the question is asked in two places: the bare yes/no on the
+ * development application block, where the address is not to hand, and the whole
+ * thing on the banner at the top of the tab, where it is.
+ *
+ * Filed under the developer scope with the other three, which is the right trade
+ * here for the reason that scope is shared: the banner and the developer block are
+ * never on screen at the same moment.
+ */
+export const setEstateDeveloper = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & EstateDeveloperRequest,
+  { rejectValue: string }
+>(
+  "projects/setEstateDeveloper",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/developer/estate",
+        jsonPost(payload),
+        "Unable to record the estate developer",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the estate developer",
+      );
+    }
+  },
+);
+
 /** Records that the client already had this party's documents. */
 export const recordPartySelfSupplied = createAsyncThunk<
   ComplianceResult,
@@ -868,6 +916,37 @@ export const recordExternalApplication = createAsyncThunk<
         error instanceof Error
           ? error.message
           : "Unable to record the application",
+      );
+    }
+  },
+);
+
+/**
+ * Records the certifier's appointment as principal certifier.
+ *
+ * Its own thunk rather than a step on `recordExternalApplication`, because it
+ * writes to the engagement rather than to an application row: one appointment per
+ * job, not one per lodgement. See `principalCertifierSchema`.
+ */
+export const recordPrincipalCertifier = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & PrincipalCertifierRequest,
+  { rejectValue: string }
+>(
+  "projects/recordPrincipalCertifier",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/principal-certifier",
+        jsonPost(payload),
+        "Unable to record the appointment",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the appointment",
       );
     }
   },
@@ -1090,8 +1169,13 @@ const complianceOperations = [
     setDeveloperApprovalRequired,
     () => complianceScope.developer,
   ),
+  complianceOperation(setEstateDeveloper, () => complianceScope.developer),
   complianceOperation(recordExternalApplication, (arg) =>
     complianceScope.application(arg.kind),
+  ),
+  complianceOperation(
+    recordPrincipalCertifier,
+    () => complianceScope.principalCertifier,
   ),
   complianceOperation(requestWasteManagementPlan, () =>
     complianceScope.party(CompliancePartyType.ARCHITECT),

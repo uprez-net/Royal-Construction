@@ -300,6 +300,18 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    compliancePrincipalCertifierAppointed: (data) => ({
+        id: uuidv4(),
+        type: "compliancePrincipalCertifierAppointed",
+        // The reference is named where there is one, because this is the entry
+        // somebody reads when the appointment has to be chased on the portal and
+        // nobody remembers which of two certifiers was named.
+        message: `${data.recordedById} recorded the principal certifier appointment${data.appointmentRef ? ` (${data.appointmentRef})` : ""}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceChecklistMapped: (data) => ({
         id: uuidv4(),
         type: "complianceChecklistMapped",

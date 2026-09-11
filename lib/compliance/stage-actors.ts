@@ -1,4 +1,9 @@
 import {
+  certificateApplication,
+  certifierHasPassedChecklist,
+  hasCertificate,
+} from "@/lib/compliance/portal-certificates";
+import {
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   ComplianceOutreachMode,
@@ -440,18 +445,72 @@ function checklistActors(
   ];
 }
 
+/**
+ * Who is behind the portal stage.
+ *
+ * Two, and the pairing is the point. The builder is on it because lodging the
+ * application and appointing the principal certifier are both our paperwork --
+ * a node that named only the certifier would have a reader waiting on a firm
+ * that has not been given anything yet. The certifier is on it because they are
+ * the body that determines it, which is what makes this stage different from
+ * every other portal wait on the file: a 10.7 or a levy receipt is answered by a
+ * website, and a CDC is answered by the firm already on the thread.
+ *
+ * The builder settles on lodgement and the certifier on determination, so the
+ * node reads "we have done our half, they have not done theirs" for the fortnight
+ * that is the normal state of this stage.
+ */
+function planningPortalActors(
+  engagement: CertifierEngagementDetail,
+): ComplianceStageActor[] {
+  const application = certificateApplication(engagement);
+  const lodged = Boolean(application?.appliedAt);
+  const determined = Boolean(
+    application?.approvalNotifiedAt ?? application?.receivedAt,
+  );
+
+  return [
+    {
+      ...STANDING_ACTOR.builder,
+      // Idle rather than outstanding until the certifier has passed the
+      // checklist. Nothing can be lodged before then, so a builder marked as
+      // owing something would be a reader chased towards a control the tab has
+      // not unlocked.
+      state: lodged
+        ? "settled"
+        : certifierHasPassedChecklist(engagement)
+          ? "outstanding"
+          : "idle",
+    },
+    {
+      ...STANDING_ACTOR.certifier,
+      state: determined ? "settled" : lodged ? "outstanding" : "idle",
+    },
+  ];
+}
+
+/**
+ * Who is behind the last stage.
+ *
+ * The builder rather than the certifier on the certificate itself, which is the
+ * correction. This node used to name the certifier as the party owing the
+ * certificate, because the file believed they issued it on their own thread.
+ * They do not: by the time this stage is live the certifier has determined the
+ * application and their work is finished. What is left is a download, and the
+ * person doing it is on our side of the job.
+ *
+ * Naming them here was not a cosmetic error. The node is what a reader consults
+ * to decide who to ring, and it pointed at a firm that had already done
+ * everything, on a file whose actual blocker was an admin who had not logged
+ * into the portal.
+ */
 function certificateActors(
   engagement: CertifierEngagementDetail,
 ): ComplianceStageActor[] {
   return [
     {
-      ...STANDING_ACTOR.certifier,
-      state: isSettled(
-        engagement,
-        ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
-      )
-        ? "settled"
-        : "outstanding",
+      ...STANDING_ACTOR.builder,
+      state: hasCertificate(engagement) ? "settled" : "outstanding",
     },
     {
       ...STANDING_ACTOR.insurer,
@@ -478,6 +537,7 @@ export const STAGE_ACTORS = {
   CERTIFIER: certifierActors,
   DEVELOPMENT_APPLICATION: developmentApplicationActors,
   CHECKLIST: checklistActors,
+  PLANNING_PORTAL: planningPortalActors,
   CERTIFICATE: certificateActors,
 } as const satisfies Record<
   string,

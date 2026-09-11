@@ -55,6 +55,10 @@ export async function POST(
     const { user } = await requireComplianceAccess(projectId);
     const engagement = await recordDeveloperDecision({
       projectId,
+      // Optional on the wire and defaulted in the data layer, so a caller that
+      // does not say reads as the bushfire report -- which is what every caller
+      // meant before the architectural design came under covenant.
+      documentType: body.data.documentType,
       decision: body.data.decision,
       reason: body.data.reason ?? null,
       channel: ComplianceApprovalChannel.ADMIN,
