@@ -123,7 +123,7 @@ export async function recordCertificateIssued(params: {
     );
   } catch (error) {
     console.error(
-      `Could not record the construction certificate on ${params.projectId}`,
+      `Could not record the complying development certificate on ${params.projectId}`,
       error,
     );
   }

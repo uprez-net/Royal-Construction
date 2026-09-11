@@ -28,9 +28,8 @@ import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.
-import { CompliancePartyType } from "@prisma/client";
+import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
 import type {
-  ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   File as ProjectFiles,
 } from "@prisma/client"
@@ -58,6 +57,7 @@ import type {
   StartEngagementInput,
   StartPartyOutreachInput,
 } from "@/utils/validators/compliance";
+import type { DeveloperApprovalDocument } from "@/constants/complianceDocuments";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
 import { createProjectWithLeadAction, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
 import {
@@ -102,6 +102,7 @@ export interface ProjectsState {
    * only known once the engagement has been read.
    */
   complianceMutations: ComplianceMutationState;
+  developerPendingDocument: DeveloperApprovalDocument | null;
   uploadsByProjectId: ProjectUploadState;
   detailUi: {
     byProjectId: Record<
@@ -138,6 +139,7 @@ const initialState: ProjectsState = {
   optimisticUpdates: {},
   mutations: initialMutationState(),
   complianceMutations: {},
+  developerPendingDocument: null,
   uploadsByProjectId: {},
   detailUi: {
     byProjectId: {},
@@ -1193,6 +1195,25 @@ const complianceOperations = [
 
 const complianceThunks = complianceOperations.map((operation) => operation.thunk);
 
+const developerApprovalThunks = [
+  recordDeveloperDecision,
+  resendDeveloperApproval,
+] as const;
+
+const isDeveloperApprovalPending = isAnyOf(
+  ...developerApprovalThunks.map((thunk) => thunk.pending),
+);
+const isDeveloperApprovalFinished = isAnyOf(
+  ...developerApprovalThunks.map((thunk) => thunk.fulfilled),
+  ...developerApprovalThunks.map((thunk) => thunk.rejected),
+);
+
+function developerDocumentOf(action: { meta: { arg: unknown } }): DeveloperApprovalDocument {
+  const documentType = (action.meta.arg as { documentType?: DeveloperApprovalDocument })
+    .documentType;
+  return documentType ?? ComplianceDocumentType.BUSHFIRE_REPORT;
+}
+
 const complianceScopeByTypePrefix = new Map(
   complianceOperations.map((operation) => [
     operation.thunk.typePrefix,
@@ -1249,6 +1270,7 @@ const projectsSlice = createSlice({
       // row on the new project reading the outcome of a write to another one.
       if (state.activeProject?.id !== action.payload?.id) {
         state.complianceMutations = {};
+        state.developerPendingDocument = null;
       }
       state.activeProject = action.payload;
     },
@@ -1378,6 +1400,7 @@ const projectsSlice = createSlice({
     resetProjectDetailUiState(state, action: PayloadAction<string>) {
       if (action.payload === state.activeProject?.id) {
         state.activeProject = null;
+        state.developerPendingDocument = null;
       }
       delete state.uploadsByProjectId[action.payload];
       delete state.detailUi.byProjectId[action.payload];
@@ -1388,6 +1411,7 @@ const projectsSlice = createSlice({
       state.optimisticUpdates = {};
       state.mutations = initialMutationState();
       state.complianceMutations = {};
+      state.developerPendingDocument = null;
       state.uploadsByProjectId = {};
       state.detailUi.byProjectId = {};
     }
@@ -1696,6 +1720,9 @@ const projectsSlice = createSlice({
           error: null,
         };
       })
+      .addMatcher(isDeveloperApprovalPending, (state, action) => {
+        state.developerPendingDocument = developerDocumentOf(action);
+      })
       .addMatcher(isComplianceThunkFulfilled, (state, action) => {
         state.complianceMutations[complianceScopeOf(action)] = {
           status: "succeeded",
@@ -1703,6 +1730,11 @@ const projectsSlice = createSlice({
         };
         if (state.activeProject?.id === action.payload.projectId) {
           state.activeProject.certifierEngagement = action.payload.engagement;
+        }
+      })
+      .addMatcher(isDeveloperApprovalFinished, (state, action) => {
+        if (state.developerPendingDocument === developerDocumentOf(action)) {
+          state.developerPendingDocument = null;
         }
       })
       .addMatcher(isComplianceThunkRejected, (state, action) => {
@@ -1749,6 +1781,9 @@ const IDLE_MUTATION: ProjectMutationState = { status: "idle", error: null };
 
 export const selectComplianceMutations = (state: RootState) =>
   state.projects.complianceMutations;
+
+export const selectDeveloperPendingDocument = (state: RootState) =>
+  state.projects.developerPendingDocument;
 
 /**
  * One scope's state, `idle` where nothing has been dispatched against it.

@@ -45,7 +45,10 @@ import {
   recordWasteManagementPlanArrival,
 } from "@/lib/data/compliance-architect";
 import { recordExternalApplicationArrival } from "@/lib/data/compliance-applications";
-import { recordEstateDeveloperFromDeed } from "@/lib/data/compliance-developer";
+import {
+  recordArchitecturalDesignRevisionArrival,
+  recordEstateDeveloperFromDeed,
+} from "@/lib/data/compliance-developer";
 import {
   closeComplianceIfComplete,
   recordComplianceStarted,
@@ -784,6 +787,18 @@ export async function attachComplianceDocumentFile(params: {
   ) {
     after(async () => {
       await recordPreliminaryPlansArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
+    });
+  }
+
+  if (
+    document.documentType ===
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+  ) {
+    after(async () => {
+      await recordArchitecturalDesignRevisionArrival({
         projectId: params.projectId,
         engagementId: params.engagementId,
       });

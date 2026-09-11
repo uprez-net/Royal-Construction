@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import {
-  complianceAccessResponse,
+  complianceErrorResponse,
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { setEstateDeveloper } from "@/lib/data/compliance-developer";
@@ -60,14 +60,12 @@ export async function POST(
     });
     return successResponse(engagement, { status: 201 });
   } catch (error) {
-    const refusal = complianceAccessResponse(error);
+    const refusal = complianceErrorResponse(error);
     if (refusal) return refusal;
     console.error("Failed to record the estate developer", error);
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Failed to record the estate developer.",
-      { status: 400, code: "ESTATE_DEVELOPER_FAILED" },
+      "Failed to record the estate developer.",
+      { status: 500, code: "ESTATE_DEVELOPER_FAILED" },
     );
   }
 }

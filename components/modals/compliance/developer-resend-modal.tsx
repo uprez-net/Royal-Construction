@@ -112,7 +112,7 @@ export function DeveloperResendModal({
           ? error
           : error instanceof Error
             ? error.message
-            : "Could not send the report back.",
+          : `Could not send the ${label} back.`,
       );
     } finally {
       setIsSending(false);
@@ -155,7 +155,7 @@ export function DeveloperResendModal({
             onChange={setExtras}
             vaultOptions={vaultOptions}
             disabled={isSending}
-            hint="The report is attached automatically. Add anything else the estate asked to see."
+            hint={`The ${label} is attached automatically. Add anything else the estate asked to see.`}
           />
 
           <div className="space-y-2">

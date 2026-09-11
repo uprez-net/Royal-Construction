@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 import {
-  complianceAccessResponse,
+  complianceErrorResponse,
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { recordPrincipalCertifier } from "@/lib/data/compliance-applications";
@@ -50,17 +50,16 @@ export async function POST(
       projectId,
       body.data,
       user.id,
+      user.name,
     );
     return successResponse(engagement);
   } catch (error) {
-    const refusal = complianceAccessResponse(error);
+    const refusal = complianceErrorResponse(error);
     if (refusal) return refusal;
     console.error("Failed to record the principal certifier", error);
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Failed to record the principal certifier appointment.",
-      { status: 400, code: "PRINCIPAL_CERTIFIER_FAILED" },
+      "Failed to record the principal certifier appointment.",
+      { status: 500, code: "PRINCIPAL_CERTIFIER_FAILED" },
     );
   }
 }

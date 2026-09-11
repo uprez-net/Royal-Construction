@@ -14,7 +14,10 @@ import { FatalError } from "workflow";
 import { readAssessorCorrespondence } from "@/lib/agent/assessorCorrespondenceAgent";
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
 import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
-import { recordCertificateIssued } from "@/lib/data/compliance-certificate";
+import {
+  closeComplianceIfComplete,
+  recordCertificateIssued,
+} from "@/lib/data/compliance-certificate";
 import { isCertificateDocument } from "@/lib/compliance/portal-certificates";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
@@ -565,6 +568,10 @@ async function closeOutCertificate(engagement: {
 }): Promise<void> {
   "use step";
   await recordCertificateIssued(engagement);
+  await closeComplianceIfComplete({
+    projectId: engagement.projectId,
+    engagementId: engagement.id,
+  });
 }
 
 /**

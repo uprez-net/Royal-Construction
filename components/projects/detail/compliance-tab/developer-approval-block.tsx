@@ -74,6 +74,7 @@ type DeveloperApprovalBlockProps = {
   /** The documents under covenant, in the order they are asked for. */
   items: readonly DeveloperApprovalItem[];
   isBusy: boolean;
+  pendingDocumentType: DeveloperApprovalDocument | null;
   onSetRequired: (required: boolean) => void;
   onEngage: () => void;
   onDecide: (
@@ -89,6 +90,7 @@ export function DeveloperApprovalBlock({
   developerName,
   items,
   isBusy,
+  pendingDocumentType,
   onSetRequired,
   onEngage,
   onDecide,
@@ -201,6 +203,7 @@ export function DeveloperApprovalBlock({
                 who={who}
                 outreach={outreach}
                 isBusy={isBusy}
+                isPending={pendingDocumentType === item.documentType}
                 onEngage={onEngage}
                 onDecide={onDecide}
                 onResend={onResend}
@@ -227,6 +230,7 @@ function DocumentApprovalPanel({
   who,
   outreach,
   isBusy,
+  isPending,
   onEngage,
   onDecide,
   onResend,
@@ -234,6 +238,7 @@ function DocumentApprovalPanel({
   item: DeveloperApprovalItem;
   who: string;
   outreach: ComplianceOutreachDetail | undefined;
+  isPending: boolean;
   isBusy: boolean;
   onEngage: () => void;
   onDecide: (
@@ -283,7 +288,11 @@ function DocumentApprovalPanel({
             disabled={isBusy || !hasDocument}
             onClick={() => (outreach ? onResend(documentType) : onEngage())}
           >
-            <Send className="size-4" aria-hidden="true" />
+            {isPending ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Send className="size-4" aria-hidden="true" />
+            )}
             Send for approval
           </Button>
         </>
@@ -326,7 +335,11 @@ function DocumentApprovalPanel({
             disabled={isBusy || !hasDocument}
             onClick={() => onResend(documentType)}
           >
-            <Send className="size-4" aria-hidden="true" />
+            {isPending ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Send className="size-4" aria-hidden="true" />
+            )}
             Send back for approval
           </Button>
         </>
@@ -356,7 +369,7 @@ function DocumentApprovalPanel({
                 onDecide(documentType, ComplianceApprovalDecision.APPROVED)
               }
             >
-              {isBusy ? (
+              {isPending ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />
               ) : (
                 <Check className="size-4" aria-hidden="true" />

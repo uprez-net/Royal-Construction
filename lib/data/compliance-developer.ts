@@ -19,7 +19,10 @@ import {
 } from "@/constants/complianceDocuments";
 import { readLandDeedDeveloper } from "@/lib/agent/landDeedDeveloperAgent";
 import { developerByKey } from "@/constants/complianceDevelopers";
-import { requireComplianceAccess } from "@/lib/compliance/access";
+import {
+  ComplianceDomainError,
+  requireComplianceAccess,
+} from "@/lib/compliance/access";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import {
   escapeEmailHtml,
@@ -495,13 +498,18 @@ async function openDeveloperRevision(params: {
   });
 
   await logAction(
-    createActivityLogEntry("complianceBushfireRevisionRequested", {
-      projectId: params.projectId,
-      engagementId: engagement.id,
-      outreachId: producer.id,
-      revisionId: round.id,
-      reason,
-    }),
+    createActivityLogEntry(
+      documentType === ComplianceDocumentType.BUSHFIRE_REPORT
+        ? "complianceBushfireRevisionRequested"
+        : "complianceArchitectRevisionRequested",
+      {
+        projectId: params.projectId,
+        engagementId: engagement.id,
+        outreachId: producer.id,
+        revisionId: round.id,
+        reason,
+      },
+    ),
   );
 }
 
@@ -603,6 +611,72 @@ export async function recordBushfireRevisionArrival(params: {
       engagementId: params.engagementId,
     }),
   );
+}
+
+/** Closes the developer's architectural-design revision loop only. */
+export async function recordArchitecturalDesignRevisionArrival(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  try {
+    const architect = await prisma.complianceOutreach.findFirst({
+      where: {
+        engagementId: params.engagementId,
+        party: CompliancePartyType.ARCHITECT,
+      },
+      select: { id: true, revisions: true },
+    });
+    if (!architect) return;
+
+    const closed = await prisma.compliancePlanRevision.updateMany({
+      where: {
+        outreachId: architect.id,
+        requestedBySource: ComplianceAlertSource.DEVELOPER,
+        respondedAt: null,
+      },
+      data: { respondedAt: new Date() },
+    });
+
+    const cleared = await prisma.complianceDeveloperApproval.updateMany({
+      where: {
+        outreach: {
+          engagementId: params.engagementId,
+          party: CompliancePartyType.DEVELOPER,
+        },
+        documentType: ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+        decision: ComplianceApprovalDecision.REJECTED,
+      },
+      data: {
+        decision: null,
+        decidedAt: null,
+        channel: null,
+        recordedById: null,
+      },
+    });
+
+    if (closed.count === 0 && cleared.count === 0) return;
+
+    const clientRevisionOutstanding = architect.revisions.some(
+      (revision) =>
+        !revision.respondedAt &&
+        revision.requestedBySource !== ComplianceAlertSource.DEVELOPER,
+    );
+    if (!clientRevisionOutstanding) {
+      await resolveComplianceAlertBySystem({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        type: ComplianceAlertType.ARCHITECT_REVISION_OVERDUE,
+        resolutionNote: "A revised architectural design arrived.",
+      });
+    }
+
+    revalidateEngagement(params.projectId);
+  } catch (error) {
+    console.error(
+      "Failed to record the architectural design's arrival:",
+      error,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -856,7 +930,7 @@ export async function setEstateDeveloper(params: {
   const phone = params.phone?.trim() || null;
 
   if (params.required && !name) {
-    throw new Error(
+    throw new ComplianceDomainError(
       "A lot under a covenant needs the developer's name — it is who the approval is sought from.",
     );
   }
@@ -923,6 +997,14 @@ export async function recordEstateDeveloperFromDeed(params: {
   file: { url: string; filename: string };
 }): Promise<void> {
   try {
+    const authorized = await requireComplianceAccess(params.projectId);
+    if (authorized.engagement?.id !== params.engagementId) {
+      console.error(
+        `Ignoring land deed developer extraction for an unrelated engagement on ${params.projectId}`,
+      );
+      return;
+    }
+
     const engagement = await prisma.certifierEngagement.findUnique({
       where: { id: params.engagementId },
       select: {

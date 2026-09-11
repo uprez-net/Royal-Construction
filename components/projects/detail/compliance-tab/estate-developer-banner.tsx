@@ -254,9 +254,10 @@ export function EstateDeveloperBanner({
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Leave the address blank if you do not have it yet — it can be
-                filled in before the plans go over. Uploading the land deed will
-                also fill this in on its own, if nobody has answered first.
+                Leave the approvals email blank if you do not have it yet — it
+                can be filled in before the plans go over. Uploading the land
+                deed will also fill this in on its own, if nobody has answered
+                first.
               </p>
             </form>
           )}

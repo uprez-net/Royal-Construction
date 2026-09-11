@@ -131,11 +131,11 @@ export const PORTAL_DOWNLOAD_ALERT: Readonly<
     ComplianceAlertType.DA_DOWNLOAD_READY,
 };
 
-const PORTAL_DOWNLOAD_ALERTS: ReadonlySet<ComplianceAlertType> = new Set([
-  ComplianceAlertType.CDC_DOWNLOAD_READY,
-  ComplianceAlertType.CC_DOWNLOAD_READY,
-  ComplianceAlertType.DA_DOWNLOAD_READY,
-]);
+const PORTAL_DOWNLOAD_ALERTS: ReadonlySet<ComplianceAlertType> = new Set(
+  Object.values(PORTAL_DOWNLOAD_ALERT).filter(
+    (type): type is ComplianceAlertType => Boolean(type),
+  ),
+);
 
 /**
  * Whether an alert is good news waiting to be acted on.
@@ -328,18 +328,20 @@ export function certificateCompletionBlockedReason(
 ): string | null {
   if (engagement.status === CertifierEngagementStatus.COMPLETED) return null;
 
-  const blocked = certificateLodgementBlockedReason(
-    engagement,
-    developerBlocked,
-  );
-  if (blocked) return blocked;
+  const certificateOnFile = hasCertificate(engagement);
 
-  const application = certificateApplication(engagement);
-  if (!application?.appliedAt) {
-    return "Lodge the application on the NSW Planning Portal and record the date below.";
-  }
+  if (!certificateOnFile) {
+    const blocked = certificateLodgementBlockedReason(
+      engagement,
+      developerBlocked,
+    );
+    if (blocked) return blocked;
 
-  if (!hasCertificate(engagement)) {
+    const application = certificateApplication(engagement);
+    if (!application?.appliedAt) {
+      return "Lodge the application on the NSW Planning Portal and record the date below.";
+    }
+
     return "Download the issued certificate from the NSW Planning Portal and upload it here. The portal's approval email is a notification, not the certificate.";
   }
 

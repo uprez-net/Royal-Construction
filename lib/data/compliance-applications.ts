@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import {
   ComplianceAlertSource,
@@ -21,6 +21,10 @@ import {
   resolveComplianceAlertBySystem,
 } from "@/lib/data/compliance-alerts";
 import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
+import {
+  ComplianceDomainError,
+  requireComplianceAccess,
+} from "@/lib/compliance/access";
 import { generatePartyRefToken } from "@/lib/graph/party-subject";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -72,7 +76,7 @@ async function requireEngagement(
     include: certifierEngagementInclude,
   });
   if (!engagement) {
-    throw new Error(
+    throw new ComplianceDomainError(
       "This project has no compliance file yet. Connect with a certifier first.",
     );
   }
@@ -584,8 +588,17 @@ export async function recordPrincipalCertifier(
   projectId: string,
   input: PrincipalCertifierInput,
   recordedById: string,
+  recordedByName: string,
 ): Promise<CertifierEngagementDetail> {
+  const access = await requireComplianceAccess(projectId);
   const engagement = await requireEngagement(projectId);
+  if (access.engagement?.id !== engagement.id) {
+    throw new ComplianceDomainError(
+      "The compliance file does not belong to this project.",
+      "NOT_FOUND",
+      404,
+    );
+  }
 
   await prisma.certifierEngagement.update({
     where: { id: engagement.id },
@@ -605,6 +618,7 @@ export async function recordPrincipalCertifier(
         appointedAt: input.appointedAt.toISOString(),
         appointmentRef: input.appointmentRef ?? null,
         recordedById,
+        recordedByName,
       }),
     );
   });
@@ -642,6 +656,18 @@ export async function recordPortalDetermination(params: {
   applicationRef?: string | null;
 }): Promise<boolean> {
   try {
+    const authorizedEngagement = await prisma.certifierEngagement.findFirst({
+      where: { id: params.engagementId, projectId: params.projectId },
+      select: { id: true },
+    });
+    if (!authorizedEngagement) {
+      throw new ComplianceDomainError(
+        "The compliance file does not belong to this project.",
+        "NOT_FOUND",
+        404,
+      );
+    }
+
     const existing = await prisma.complianceExternalApplication.findUnique({
       where: {
         engagementId_kind: {
@@ -649,7 +675,11 @@ export async function recordPortalDetermination(params: {
           kind: params.kind,
         },
       },
-      select: { id: true, approvalNotificationMessageId: true },
+      select: {
+        id: true,
+        approvalNotificationMessageId: true,
+        receivedAt: true,
+      },
     });
 
     if (existing?.approvalNotificationMessageId === params.messageId) {
@@ -688,7 +718,7 @@ export async function recordPortalDetermination(params: {
     });
 
     const downloadAlert = PORTAL_DOWNLOAD_ALERT[params.kind];
-    if (downloadAlert) {
+    if (downloadAlert && !existing?.receivedAt) {
       await raiseComplianceAlert({
         projectId: params.projectId,
         engagementId: params.engagementId,

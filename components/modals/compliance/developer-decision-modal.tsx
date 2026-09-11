@@ -99,7 +99,7 @@ export function DeveloperDecisionModal({
       ).unwrap();
       toast.success(
         isRejecting
-          ? "Recorded, and sent on to the bushfire consultant."
+        ? `Recorded, and sent on to whoever produced the ${what}.`
           : "Developer approval recorded.",
       );
       close();

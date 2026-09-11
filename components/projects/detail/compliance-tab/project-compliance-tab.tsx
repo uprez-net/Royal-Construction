@@ -83,6 +83,7 @@ import {
   complianceScope,
   identifyComplianceDocument,
   resolveComplianceDocument,
+  selectDeveloperPendingDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
   sendCertifierReply,
@@ -96,13 +97,9 @@ import type { ProjectDetail } from "@/types/project";
 import { DEVELOPER_APPROVAL_DOCUMENTS } from "@/constants/complianceDocuments";
 import { developerByKey } from "@/constants/complianceDevelopers";
 import {
-  CERTIFICATE_DOCUMENT_TYPE,
-  certificateKindFor,
-  certificateLodgementBlockedReason,
-  hasCertificate,
-} from "@/lib/compliance/portal-certificates";
-import { CertificateAndCoverSection } from "./certificate-and-cover-section";
-import { PlanningPortalSection } from "./planning-portal-section";
+  PortalCertificateBlock,
+  portalCertificateValues,
+} from "./portal-certificate-block";
 import {
   DeveloperApprovalBlock,
   type DeveloperApprovalItem,
@@ -269,6 +266,9 @@ export function ProjectComplianceTab({
 }: ProjectComplianceTabProps) {
   const dispatch = useAppDispatch();
   const complianceMutations = useAppSelector(selectComplianceMutations);
+  const developerPendingDocument = useAppSelector(
+    selectDeveloperPendingDocument,
+  );
   const { uploadFile, isUploading } = useComplianceUpload(project.id);
 
   /**
@@ -1608,14 +1608,6 @@ export function ProjectComplianceTab({
    * construction certificate job, and two readings of that question is a tab
    * showing a CDC application above a construction certificate row.
    */
-  const certificateKind = certificateKindFor(engagement);
-  const certificateDocument = documentsByType.get(
-    CERTIFICATE_DOCUMENT_TYPE[certificateKind],
-  );
-  const certificateApplicationRow = externalApplication(
-    engagement,
-    certificateKind,
-  );
   /**
    * Why the application cannot be lodged, in the server's own words.
    *
@@ -1625,11 +1617,12 @@ export function ProjectComplianceTab({
    * developer has signed off the plans is a fact about an outreach and
    * `portal-certificates.ts` deliberately knows nothing about parties.
    */
-  const portalBlocked = certificateLodgementBlockedReason(
+  const portalCertificate = portalCertificateValues({
     engagement,
-    developerPlansBlockedReason(engagement),
-  );
-  const certificateHeld = hasCertificate(engagement);
+    documentsByType,
+    developerBlocked: developerPlansBlockedReason(engagement),
+  });
+  const { certificateHeld } = portalCertificate;
 
   const activeSection: SectionKey =
     unidentified.length > 0
@@ -2254,6 +2247,7 @@ export function ProjectComplianceTab({
                       needsBushfireReport,
                   )}
                   isBusy={isScopeBusy(complianceScope.developer)}
+                  pendingDocumentType={developerPendingDocument}
                   onSetRequired={(required) =>
                     void handleSetDeveloperRequired(required)
                   }
@@ -2377,57 +2371,10 @@ export function ProjectComplianceTab({
 
           </ComplianceSectionCard>
 
-          {/* -----------------------------------------------------------
-              The portal.
-
-              Between the checklist and the certificate, because that is where
-              it happens and the tab used to pretend there was nothing there.
-              A certifier passing the last item does not produce a certificate;
-              it produces a job that can finally be lodged, and the lodgement,
-              the principal certifier appointment and a fortnight's
-              determination all sat in a gap the reader could not see.
-          ----------------------------------------------------------- */}
-          <PlanningPortalSection
-            className="md:col-span-2"
+          <PortalCertificateBlock
             projectId={project.id}
-            kind={certificateKind}
-            application={certificateApplicationRow}
-            certificate={certificateDocument}
-            principalCertifierAppointedAt={
-              engagement.principalCertifierAppointedAt
-            }
-            principalCertifierAppointmentRef={
-              engagement.principalCertifierAppointmentRef
-            }
-            certifierName={engagement.certifierName}
-            blockedReason={portalBlocked}
-            rowMode={rowMode}
-            isRowBusy={(document, documentType) =>
-              isScopeBusy(scopeOf(document, documentType))
-            }
-            onUpload={(file, target) => void attachEvidence(file, target)}
-            onPreviewFile={handlePreviewFile}
-            isActive={activeSection === "planning-portal"}
-            open={isOpen("planning-portal")}
-            onOpenChange={toggleSection("planning-portal")}
-          />
-
-          {/* -----------------------------------------------------------
-              The last two documents.
-
-              The insurance question used to sit at the bottom of the card
-              above, appearing the moment every checklist row had a file on it
-              — which is weeks before the certifier has finished with them. A
-              builder who answered "no" was being told to raise cover for a job
-              that might still come back with four amendments. It moved behind
-              the certificate, where the job is definitely proceeding.
-          ----------------------------------------------------------- */}
-          <CertificateAndCoverSection
-            className="md:col-span-2"
-            certificate={certificateDocument}
-            certificateDocumentType={
-              CERTIFICATE_DOCUMENT_TYPE[certificateKind]
-            }
+            engagement={engagement}
+            values={portalCertificate}
             insurance={insuranceDocument}
             checklistPassed={checklistPassed}
             rowMode={rowMode}
@@ -2436,9 +2383,12 @@ export function ProjectComplianceTab({
             }
             onUpload={(file, target) => void attachEvidence(file, target)}
             onPreviewFile={handlePreviewFile}
-            isActive={activeSection === "certificate"}
-            open={isOpen("certificate")}
-            onOpenChange={toggleSection("certificate")}
+            portalIsActive={activeSection === "planning-portal"}
+            portalOpen={isOpen("planning-portal")}
+            onPortalOpenChange={toggleSection("planning-portal")}
+            certificateIsActive={activeSection === "certificate"}
+            certificateOpen={isOpen("certificate")}
+            onCertificateOpenChange={toggleSection("certificate")}
           />
         </div>
 

@@ -500,6 +500,26 @@ test("a certificate on the file leaves only the cover", () => {
   assert.match(blocked, /HBCF/i);
 });
 
+test("an issued construction certificate satisfies a CDC application", () => {
+  const blocked = certificateCompletionBlockedReason(
+    engagement({
+      externalApplications: [
+        application(
+          ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE,
+          { appliedAt: MONDAY },
+        ),
+      ] as never,
+      documents: [
+        document(ComplianceDocumentType.CONSTRUCTION_CERTIFICATE),
+      ] as never,
+    }),
+  );
+
+  assert.ok(blocked);
+  assert.match(blocked, /HBCF/i);
+  assert.doesNotMatch(blocked, /notice of determination|lodge/i);
+});
+
 test("a cover marked not required is answered", () => {
   // Waved off counts, as it does on every other row: owners covered under an
   // existing policy are not a job to hold open.

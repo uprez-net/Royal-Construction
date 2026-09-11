@@ -507,10 +507,19 @@ function planningPortalActors(
 function certificateActors(
   engagement: CertifierEngagementDetail,
 ): ComplianceStageActor[] {
+  const application = certificateApplication(engagement);
+  const certificateAvailable = Boolean(
+    application?.approvalNotifiedAt ?? application?.receivedAt,
+  );
+
   return [
     {
       ...STANDING_ACTOR.builder,
-      state: hasCertificate(engagement) ? "settled" : "outstanding",
+      state: hasCertificate(engagement)
+        ? "settled"
+        : certificateAvailable
+          ? "outstanding"
+          : "idle",
     },
     {
       ...STANDING_ACTOR.insurer,

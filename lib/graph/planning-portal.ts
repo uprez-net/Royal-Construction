@@ -1,3 +1,5 @@
+import { getAllEmailThreads } from "@/utils/email-parser";
+
 /**
  * Recognising mail from the NSW Planning Portal and the consent authorities.
  *
@@ -323,7 +325,10 @@ export function readPortalDetermination(
   subject: string | null | undefined,
   body?: string | null,
 ): PortalDeterminationSubject | null {
-  const haystack = `${subject ?? ""}\n${body ?? ""}`;
+  const newest = body?.trim()
+    ? getAllEmailThreads(body, { subject: subject ?? undefined })[0]
+    : undefined;
+  const haystack = `${subject ?? ""}\n${newest?.body ?? ""}`;
   if (!haystack.trim()) return null;
 
   // The disqualifiers first and absolutely. See NOT_A_DETERMINATION.

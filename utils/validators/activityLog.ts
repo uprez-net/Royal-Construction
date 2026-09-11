@@ -246,6 +246,7 @@ export const activityLogSchemas = {
         appointedAt: z.string(),
         appointmentRef: z.string().nullable(),
         recordedById: z.string(),
+        recordedByName: z.string(),
     }),
 
     /**
@@ -313,6 +314,14 @@ export const activityLogSchemas = {
     }),
 
     complianceBushfireRevisionRequested: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        revisionId: z.string(),
+        reason: z.string(),
+    }),
+
+    complianceArchitectRevisionRequested: z.object({
         projectId: z.string(),
         engagementId: z.string(),
         outreachId: z.string(),

@@ -34,6 +34,7 @@ import {
 } from "@/lib/data/compliance-architect";
 import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
 import {
+  recordArchitecturalDesignRevisionArrival,
   recordBushfireRevisionArrival,
   recordDeveloperDecision,
 } from "@/lib/data/compliance-developer";
@@ -414,6 +415,7 @@ async function classifyStoredDocuments(
   preliminaryPlans: number;
   wasteManagementPlans: number;
   bushfireReports: number;
+  architecturalDesigns: number;
 }> {
   "use step";
 
@@ -443,6 +445,7 @@ async function classifyStoredDocuments(
   // clock: a bushfire report landing is what closes the round the estate
   // developer's refusal opened.
   let bushfireReports = 0;
+  let architecturalDesigns = 0;
 
   for (const item of stored) {
     try {
@@ -505,6 +508,13 @@ async function classifyStoredDocuments(
 
       if (
         result.documentType ===
+        ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+      ) {
+        architecturalDesigns += 1;
+      }
+
+      if (
+        result.documentType ===
         ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
       ) {
         titleSearches.push({ url: item.url, name: item.name });
@@ -520,6 +530,7 @@ async function classifyStoredDocuments(
     preliminaryPlans,
     wasteManagementPlans,
     bushfireReports,
+    architecturalDesigns,
   };
 }
 
@@ -597,6 +608,14 @@ async function closeBushfireRevisionLoop(params: {
 }): Promise<void> {
   "use step";
   await recordBushfireRevisionArrival(params);
+}
+
+async function closeArchitecturalDesignRevisionLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordArchitecturalDesignRevisionArrival(params);
 }
 
 /**
@@ -745,7 +764,7 @@ async function recordCouncilDetermination(
     // webhook — re-raising a download alert somebody has already closed by
     // uploading the certificate.
     messageId: message.messageId,
-    determinedAt: new Date(message.receivedDateTime),
+    determinedAt: parseEmailDate(message.receivedDateTime) ?? new Date(),
     // Whichever reference the message quotes, where it quotes one we can place.
     // Only used to fill a row that has none; the lodgement's own reference is not
     // overwritten, since a council quoting a case number is not a council renaming
@@ -1005,6 +1024,16 @@ export const processInboundPartyEmail = async (
       outreach.party === CompliancePartyType.BUSHFIRE_CONSULTANT
     ) {
       await closeBushfireRevisionLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
+    }
+
+    if (
+      classification.architecturalDesigns > 0 &&
+      outreach.party === CompliancePartyType.ARCHITECT
+    ) {
+      await closeArchitecturalDesignRevisionLoop({
         projectId,
         engagementId: outreach.engagementId,
       });

@@ -355,7 +355,9 @@ function PrincipalCertifierPanel({
       setIsOpen(false);
     } catch (error) {
       toast.error(
-        error instanceof Error
+        typeof error === "string"
+          ? error
+          : error instanceof Error
           ? error.message
           : "Could not record the appointment.",
       );
