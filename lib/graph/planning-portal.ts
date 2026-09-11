@@ -1,3 +1,5 @@
+import { getAllEmailThreads } from "@/utils/email-parser";
+
 /**
  * Recognising mail from the NSW Planning Portal and the consent authorities.
  *
@@ -205,4 +207,147 @@ export function looksLikePlanningNotification(params: {
   if (!fromAuthority) return false;
 
   return mentionsPlanningMatter(params.subject, params.body);
+}
+
+/**
+ * Which application a portal message says has been approved, and nothing else.
+ *
+ * The layer this module was missing. `looksLikePlanningNotification` answers
+ * whether a message is a planning matter at all, and that was enough while every
+ * such message was something to be read by a person — a request for further
+ * information, an acknowledgement, a fee notice. One of them is not: the
+ * determination, which says the application has been approved and tells the
+ * applicant to log in and download the certificate. Nothing is attached, so the
+ * document pipeline sees an email with no files and does nothing, and the file
+ * sat reading as "with the portal" for as long as it took somebody to open their
+ * inbox and notice.
+ *
+ * Deterministic, like everything else here, and for the same reason: this decides
+ * that a clock stops and a green alert goes up on somebody's project page, and a
+ * model that occasionally reads "your application has been refused" as an approval
+ * would do real damage. Two conditions, both string comparisons, and both have to
+ * hold:
+ *
+ *  1. The message says a determination has happened **favourably**. Refusals and
+ *     requests for information use different words and must not match.
+ *  2. The message names which of the three it is about.
+ *
+ * Returns null on anything it cannot place, which is the common answer and the
+ * safe one: an unread determination is a file somebody has to chase, and a
+ * misread one is a green tick over an application that was refused.
+ */
+
+/**
+ * The words a favourable determination is announced in.
+ *
+ * Taken from what these systems send rather than from what a planner would say.
+ * Every phrase has to be one that cannot appear in a refusal or in a request for
+ * information, which is the whole difficulty: "determined" alone is useless, since
+ * a refusal is a determination too.
+ */
+const DETERMINATION_PHRASES: readonly RegExp[] = [
+  /\bhas been (?:approved|granted|issued)\b/i,
+  /\b(?:approved|granted|issued) (?:on|by|with)\b/i,
+  /\bdetermination[:\s-]+approved?\b/i,
+  /\bapproved with conditions\b/i,
+  /\bnotice of determination\b.*\bapprov/i,
+  /\bcertificate (?:has been |is )?(?:issued|available|ready)\b/i,
+  /\bready (?:for|to) download\b/i,
+  /\bdevelopment consent (?:has been )?granted\b/i,
+];
+
+/**
+ * The words that disqualify a message however approving the rest of it sounds.
+ *
+ * Checked before the phrases above rather than after, and they win outright. A
+ * refusal routinely quotes the application's own description back — "your
+ * application for approved works at 14 Example St has been refused" — so a
+ * message can satisfy a determination phrase and be the opposite of one.
+ *
+ * "Request for further information" is here for the same reason: it often arrives
+ * carrying the conditions under which approval *would* be granted, which reads
+ * like an approval to any phrase list.
+ */
+const NOT_A_DETERMINATION: readonly RegExp[] = [
+  /\b(?:refus|reject|declin|withdraw)/i,
+  /\bnot (?:been )?(?:approved|granted|supported)\b/i,
+  /\brequest for (?:additional |further )?information\b/i,
+  /\badditional information (?:request|required)\b/i,
+  /\bunable to (?:approve|determine|issue)\b/i,
+  /\bfurther information is (?:required|needed)\b/i,
+  /\binvoice\b|\bfee (?:notice|proposal|payable)\b/i,
+];
+
+/** What kind of thing a determination message is about. */
+export type PortalDeterminationSubject =
+  | "COMPLYING_DEVELOPMENT_CERTIFICATE"
+  | "CONSTRUCTION_CERTIFICATE"
+  | "DEVELOPMENT_APPLICATION";
+
+/**
+ * Which of the three a message names, in order of how specific the wording is.
+ *
+ * The CDC and the construction certificate are tested before the development
+ * application, deliberately: a construction certificate notice names the consent
+ * it follows ("CC for DA 2026/0412"), so a DA test run first would claim every
+ * one of them. The DA is the fallback, which is the right way round — it is the
+ * only one of the three whose own vocabulary is also the generic vocabulary of
+ * the others.
+ */
+const SUBJECT_PHRASES: readonly (readonly [
+  PortalDeterminationSubject,
+  readonly RegExp[],
+])[] = [
+  [
+    "COMPLYING_DEVELOPMENT_CERTIFICATE",
+    [/\bcomplying development certificate\b/i, /\bCDC\b/, /\bCDC[-\s]?\d/i],
+  ],
+  [
+    "CONSTRUCTION_CERTIFICATE",
+    [
+      /\bconstruction certificate\b/i,
+      /\bCC[-\s]?\d{2,}/,
+      /\bpost[-\s]consent certificate\b/i,
+    ],
+  ],
+  [
+    "DEVELOPMENT_APPLICATION",
+    [
+      /\bdevelopment application\b/i,
+      /\bdevelopment consent\b/i,
+      /\bnotice of determination\b/i,
+      /\bDA[-\s/]?\d{2,4}[/-]\d{1,6}\b/i,
+    ],
+  ],
+];
+
+export function readPortalDetermination(
+  subject: string | null | undefined,
+  body?: string | null,
+): PortalDeterminationSubject | null {
+  const newest = body?.trim()
+    ? getAllEmailThreads(body, { subject: subject ?? undefined })[0]
+    : undefined;
+  const haystack = `${subject ?? ""}\n${newest?.body ?? ""}`;
+  if (!haystack.trim()) return null;
+
+  // The disqualifiers first and absolutely. See NOT_A_DETERMINATION.
+  if (NOT_A_DETERMINATION.some((pattern) => pattern.test(haystack))) {
+    return null;
+  }
+
+  if (!DETERMINATION_PHRASES.some((pattern) => pattern.test(haystack))) {
+    return null;
+  }
+
+  for (const [kind, patterns] of SUBJECT_PHRASES) {
+    if (patterns.some((pattern) => pattern.test(haystack))) {
+      return kind;
+    }
+  }
+
+  // Approving words about a planning matter this cannot name. Null rather than a
+  // guess: a determination filed against the wrong application stops the wrong
+  // clock and puts a download alert on a certificate nobody applied for.
+  return null;
 }

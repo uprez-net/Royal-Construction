@@ -46,11 +46,16 @@ import {
 } from "@/lib/data/compliance-architect";
 import { recordExternalApplicationArrival } from "@/lib/data/compliance-applications";
 import {
+  recordArchitecturalDesignRevisionArrival,
+  recordEstateDeveloperFromDeed,
+} from "@/lib/data/compliance-developer";
+import {
   closeComplianceIfComplete,
   recordComplianceStarted,
-  recordConstructionCertificate,
+  recordCertificateIssued,
 } from "@/lib/data/compliance-certificate";
 import { fillChecklistLinesFor } from "@/lib/compliance/checklist-mapping";
+import { isCertificateDocument } from "@/lib/compliance/portal-certificates";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -788,6 +793,18 @@ export async function attachComplianceDocumentFile(params: {
     });
   }
 
+  if (
+    document.documentType ===
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+  ) {
+    after(async () => {
+      await recordArchitecturalDesignRevisionArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
+    });
+  }
+
   // A document arriving is what an application block's whole state machine is
   // waiting for, and an upload says so more strongly than the tick box does:
   // one is somebody reporting it, the other is somebody proving it. Without
@@ -868,25 +885,50 @@ export async function attachComplianceDocumentFile(params: {
     });
   }
 
-  // The certifier's certificate, put on the file by hand.
+  // The estate developer, read off the deed.
   //
-  // The ordinary route is the inbound workflow, which classifies it off their
-  // reply and moves the engagement itself. This is for the certifier who posts
-  // it, or emails it from an address the correlation missed, or hands it over
-  // at a site meeting — none of which should leave a finished job stuck one
-  // stage short with the certificate sitting on the row.
-  const isCertificate =
-    document.documentType === ComplianceDocumentType.CONSTRUCTION_CERTIFICATE;
+  // The deed is the document that names whoever released the land, and it is
+  // already here: it is uploaded so it can be sent to the surveyor, long before
+  // anybody has to answer whether this lot carries a covenant. So the parse is
+  // free in the sense that matters — no extra document is asked for — and it fills
+  // in a question that otherwise has to be put to a person who may not know.
+  //
+  // `recordEstateDeveloperFromDeed` is the one that decides whether to look at
+  // all: a file whose developer somebody has already answered for is skipped
+  // there rather than here, because the skip has to hold on the inbound path too
+  // and the condition belongs with the rule rather than with one of its callers.
+  if (document.documentType === ComplianceDocumentType.LAND_DEED) {
+    after(async () => {
+      await recordEstateDeveloperFromDeed({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        file: { url: file.url, filename: file.filename },
+      });
+    });
+  }
+
+  // The certificate, put on the file by hand — which is now the ordinary route
+  // rather than the exception.
+  //
+  // This branch was written for the certifier who posts the certificate or hands
+  // it over at a site meeting, on the understanding that the inbound workflow
+  // normally classified it off their reply. That is backwards: a CDC or a
+  // construction certificate is determined on the NSW Planning Portal and
+  // downloaded from it, so an upload is how it reaches the file nearly every
+  // time, and the inbound path is the courtesy case.
+  //
+  // Either certificate, read through the one predicate that knows there are two.
+  const isCertificate = isCertificateDocument(document.documentType);
 
   if (isCertificate) {
     // Chained rather than left to the queue. `after()` runs its callbacks with
     // no concurrency limit, so the close below could win the race: it would set
-    // the engagement to COMPLETED first, `recordConstructionCertificate` would
+    // the engagement to COMPLETED first, `recordCertificateIssued` would
     // then update zero rows against its own status guard, and CERTIFICATE_ISSUED
     // — with its activity entry and its notification — would be skipped
     // entirely on the one upload that is supposed to produce it.
     after(async () => {
-      await recordConstructionCertificate({
+      await recordCertificateIssued({
         id: params.engagementId,
         projectId: params.projectId,
       });

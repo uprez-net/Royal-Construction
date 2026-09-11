@@ -201,6 +201,20 @@ export function DaApprovalSection({
   const step = externalApplicationStep(application);
 
   /**
+   * Whether the council has decided and the notice is still not on the file.
+   *
+   * Read off the step rather than off `approvalNotifiedAt` directly, so this and
+   * the panel below it cannot disagree about what "determined" means — see
+   * `externalApplicationStep`, where the state sits between `lodged` and
+   * `received` precisely so it can be told apart from both.
+   *
+   * Narrowed to the consent being absent, because a file that has downloaded it has
+   * nothing left to be prompted about and the row above says so.
+   */
+  const awaitingConsentDownload =
+    step === "determined" && !consent?.files.length;
+
+  /**
    * Whether the pack is complete enough to lodge.
    *
    * Every row answered, one way or the other. Deliberately not "every row has a
@@ -231,6 +245,15 @@ export function DaApprovalSection({
           (item) => isRowOverdue?.(item, item.documentType) ?? false,
         )
       }
+      // Determined, and the notice is still on the portal.
+      //
+      // The same state the certificate block renders green for, and it reaches the
+      // DA for the same reason: a council determines the application and emails to
+      // say so without attaching the notice of determination. The consent is what
+      // unfreezes the certifier's checklist, so a file sitting in this state is the
+      // whole rest of the job waiting on one download.
+      ready={awaitingConsentDownload}
+      readyLabel="Consent ready to download"
       className={className}
     >
       {DA_DOCUMENT_GROUPS.map((group) => (

@@ -8,6 +8,7 @@ import {
 import { revalidateTag } from "next/cache";
 
 import { notifyCompliance } from "@/lib/compliance/notify";
+import { CERTIFICATE_DOCUMENT_TYPES } from "@/lib/compliance/portal-certificates";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -57,18 +58,25 @@ const COMPLIANCE_STAGE_STATUSES = [
 ] as const;
 
 /**
- * Moves the engagement on when the construction certificate lands.
+ * Moves the engagement on when either certificate lands.
  *
- * Called from the inbound workflow when the certifier's reply carries one, and
- * from the upload path when somebody puts it on the file by hand — a certifier
- * who posts the certificate, or emails it from an address the correlation
- * missed, is not a job that should be stuck.
+ * Renamed from `recordConstructionCertificate`, and the rename is the point: a
+ * complying development job never gets a construction certificate. It gets a
+ * CDC, which carries planning and building approval together, and a file holds
+ * one or the other — so a function named after one of them was only ever going to
+ * be right about half the jobs on the system.
+ *
+ * Called from the upload path, which is now the ordinary route rather than the
+ * exception: the certificate is determined on the NSW Planning Portal and
+ * downloaded from it, so somebody puts it on the file by hand. Still called from
+ * the inbound workflow too, for the certifier who forwards it on the thread as a
+ * courtesy.
  *
  * The status move is guarded rather than assigned, so a second copy of the same
  * certificate arriving does not re-announce it, and an engagement that has
  * already been completed is not dragged back a stage.
  */
-export async function recordConstructionCertificate(params: {
+export async function recordCertificateIssued(params: {
   id: string;
   projectId: string;
 }): Promise<void> {
@@ -115,7 +123,7 @@ export async function recordConstructionCertificate(params: {
     );
   } catch (error) {
     console.error(
-      `Could not record the construction certificate on ${params.projectId}`,
+      `Could not record the complying development certificate on ${params.projectId}`,
       error,
     );
   }
@@ -146,7 +154,7 @@ export async function closeComplianceIfComplete(params: {
         engagementId: params.engagementId,
         documentType: {
           in: [
-            ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+            ...CERTIFICATE_DOCUMENT_TYPES,
             ComplianceDocumentType.HOME_INSURANCE,
           ],
         },
@@ -160,10 +168,29 @@ export async function closeComplianceIfComplete(params: {
         .map((document) => document.documentType),
     );
 
-    if (
-      !held.has(ComplianceDocumentType.CONSTRUCTION_CERTIFICATE) ||
-      !held.has(ComplianceDocumentType.HOME_INSURANCE)
-    ) {
+    /**
+     * Either certificate closes the file, and that is the bug this fixes.
+     *
+     * This asked for CONSTRUCTION_CERTIFICATE by name. A complying development
+     * job never gets one — it gets a CDC — so on the CDC path the upload moved
+     * the engagement to CERTIFICATE_ISSUED and then this returned early on every
+     * subsequent call, forever, waiting for a document that does not exist on
+     * that route. The job sat one step from done with its certificate and its
+     * HBCF cover both on the file, which is precisely the state the rest of this
+     * module is written to prevent.
+     *
+     * Read as "any certificate" rather than "the certificate this file should
+     * have", deliberately. Which kind a job ends on is a derived reading of the
+     * route it took, and a mismatch between that reading and the document
+     * actually issued must not be able to hold a finished file open: the
+     * certificate in hand is the stronger evidence, which is the same ordering
+     * `certificateKindFor` takes.
+     */
+    const hasCertificate = CERTIFICATE_DOCUMENT_TYPES.some((type) =>
+      held.has(type),
+    );
+
+    if (!hasCertificate || !held.has(ComplianceDocumentType.HOME_INSURANCE)) {
       return;
     }
 

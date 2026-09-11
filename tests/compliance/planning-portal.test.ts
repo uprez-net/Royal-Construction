@@ -7,6 +7,7 @@ import {
   mentionsPlanningMatter,
   normaliseReference,
   planningReferencesIn,
+  readPortalDetermination,
 } from "@/lib/graph/planning-portal";
 
 /**
@@ -196,5 +197,121 @@ describe("the two cheap layers together", () => {
       }),
       false,
     );
+  });
+});
+
+/**
+ * Reading a determination off an email that carries no document.
+ *
+ * The one thing this module decides that has consequences beyond where a message
+ * is filed: a determination stops the overdue clock and puts a green
+ * "ready to download" line on somebody's project page. So the tests that matter
+ * are the ones where it must say no — a refusal is also a determination, and a
+ * request for information routinely arrives carrying the conditions under which
+ * approval would be granted, which reads exactly like an approval.
+ */
+describe("reading a portal determination", () => {
+  it("reads an approved CDC", () => {
+    assert.equal(
+      readPortalDetermination(
+        "Your Complying Development Certificate has been approved",
+        "CDC-2026/0188 for 14 Example St. Log in to the NSW Planning Portal to download your certificate.",
+      ),
+      "COMPLYING_DEVELOPMENT_CERTIFICATE",
+    );
+  });
+
+  it("reads an approved construction certificate", () => {
+    assert.equal(
+      readPortalDetermination(
+        "Construction Certificate issued",
+        "The construction certificate for DA 2026/0412 has been issued and is ready for download.",
+      ),
+      "CONSTRUCTION_CERTIFICATE",
+    );
+  });
+
+  it("reads development consent granted", () => {
+    assert.equal(
+      readPortalDetermination(
+        "Notice of Determination — DA 2026/0412",
+        "Development consent has been granted. The notice of determination is available on the portal.",
+      ),
+      "DEVELOPMENT_APPLICATION",
+    );
+  });
+
+  it("prefers the certificate over the consent it cites", () => {
+    // A construction certificate notice names the DA it follows, so a message
+    // can satisfy both vocabularies. Reading it as the DA would stop the wrong
+    // clock and raise a download alert for a consent that came through months
+    // ago.
+    assert.equal(
+      readPortalDetermination(
+        "CC approved — development application DA 2026/0412",
+        "Your construction certificate has been approved under development consent DA 2026/0412.",
+      ),
+      "CONSTRUCTION_CERTIFICATE",
+    );
+  });
+
+  it("refuses a refusal, however approving the rest reads", () => {
+    // The case the disqualifier list exists for. A refusal quotes the
+    // application's own description back, so "approved works" appears in a
+    // message that is the opposite of an approval.
+    assert.equal(
+      readPortalDetermination(
+        "Determination — CDC-2026/0188",
+        "Your application for the approved works at 14 Example St has been refused.",
+      ),
+      null,
+    );
+    assert.equal(
+      readPortalDetermination(
+        "Complying Development Certificate — determination",
+        "The certificate has not been approved. See the attached reasons.",
+      ),
+      null,
+    );
+  });
+
+  it("refuses a request for further information", () => {
+    // These arrive carrying the conditions under which approval *would* be
+    // granted, which satisfies a determination phrase on its own.
+    assert.equal(
+      readPortalDetermination(
+        "Request for additional information — DA 2026/0412",
+        "Development consent can be granted once the following is provided: a shadow diagram and a revised waste plan.",
+      ),
+      null,
+    );
+  });
+
+  it("refuses a fee notice", () => {
+    assert.equal(
+      readPortalDetermination(
+        "Invoice for your complying development certificate",
+        "A fee is payable before the certificate has been issued.",
+      ),
+      null,
+    );
+  });
+
+  it("refuses approving words it cannot place", () => {
+    // Null rather than a guess. A determination filed against the wrong
+    // application stops the wrong clock and raises a download alert on a
+    // certificate nobody applied for.
+    assert.equal(
+      readPortalDetermination(
+        "Your application has been approved",
+        "Log in to the portal to see the outcome.",
+      ),
+      null,
+    );
+  });
+
+  it("refuses an empty message", () => {
+    assert.equal(readPortalDetermination("", ""), null);
+    assert.equal(readPortalDetermination(null, null), null);
   });
 });

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EXTERNAL_APPLICATION_COPY } from "@/constants/complianceDocuments";
+import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
@@ -61,7 +62,7 @@ import type { ExternalApplicationRequest } from "@/utils/validators/compliance";
  * the moment a save lands, so a single "busy" flag has no way of saying what it
  * was busy with.
  */
-type PendingControl = "yes" | "no" | "applied" | "received";
+type PendingControl = "yes" | "no" | "applied" | "received" | "determined";
 
 type ExternalApplicationBlockProps = {
   projectId: string;
@@ -104,6 +105,17 @@ export function ExternalApplicationBlock({
   const copy = EXTERNAL_APPLICATION_COPY[kind];
   const url = portalUrl ?? copy.url;
   const isBusy = mutation.status === "pending" || readOnly;
+
+  /**
+   * Whether this kind is determined by an email that carries no document.
+   *
+   * Read off `PORTAL_DOWNLOAD_ALERT` rather than listed here, because having that
+   * table decide it is what keeps this control and the alert it produces in step:
+   * a kind that offers the tick and raises no alert would be a determination
+   * recorded with nothing anywhere telling anybody to go and fetch the document,
+   * which is the exact failure the whole step exists to prevent.
+   */
+  const notifiesDetermination = Boolean(PORTAL_DOWNLOAD_ALERT[kind]);
 
   /**
    * Whether the lodgement form is open.
@@ -257,16 +269,25 @@ export function ExternalApplicationBlock({
   // from here they are the same thing: a document to upload. What differs is
   // only what is said above the row.
   // -----------------------------------------------------------------
-  if (step === "held" || step === "received") {
+  if (step === "held" || step === "received" || step === "determined") {
     return (
       <>
         {/* The caller renders the rows on their own once a file has landed, so
             this branch only ever runs while the row is still empty — which is
-            why the line above it always asks for one. */}
+            why the line above it always asks for one.
+
+            `determined` joins the two because from here all three are the same
+            thing: a document to put on the file. What differs is only what is
+            said above the row — and on a determination that sentence has to say
+            where the document is, because unlike the other two nobody is holding
+            it. It is on the portal, and a reader who does not know that goes
+            looking through their inbox for an attachment that was never sent. */}
         <p className="mb-2 text-sm text-muted-foreground">
-          {step === "received"
-            ? "Marked as received. Upload it to put it on the file."
-            : "Upload the copy you are holding."}
+          {step === "determined"
+            ? `${copy.portal} has determined this application. Download the ${copy.label.toLowerCase()} from the portal and upload it here — the approval email does not carry it.`
+            : step === "received"
+              ? "Marked as received. Upload it to put it on the file."
+              : "Upload the copy you are holding."}
         </p>
         {documentRows}
       </>
@@ -402,6 +423,56 @@ export function ExternalApplicationBlock({
           />
         ) : null}
       </label>
+
+      {/* -------------------------------------------------------------
+          Approved, and nothing attached.
+
+          A second control beside "Received it" on the three kinds the portal
+          determines by email — a CDC, a construction certificate and a
+          development application — and absent on the permits, which either send
+          the document or are downloaded off a screen the moment they are ready.
+
+          It exists because the two are different facts and the file needs both.
+          "Received it" is somebody saying the document is here; this is somebody
+          saying the decision is made and the document is still on the portal,
+          which is the state the approval email actually leaves behind. Folding
+          them together is what had an admin ticking "received" off an email that
+          carried nothing, against a row that then sat empty with the stage above
+          it reading as finished.
+
+          Below "Received it" rather than above, because on a file where the
+          document is in hand the first control is the one to reach for.
+      ------------------------------------------------------------- */}
+      {notifiesDetermination ? (
+        <label className="flex items-start gap-2 text-sm font-medium text-foreground">
+          <Checkbox
+            className="mt-0.5"
+            checked={pending === "determined"}
+            disabled={isBusy}
+            onCheckedChange={(checked) => {
+              if (checked !== true) return;
+              void save(
+                "determined",
+                { step: "determined", kind },
+                "Determination recorded — download it from the portal and upload it here.",
+              );
+            }}
+          />
+          <span>
+            Approved on the portal, not downloaded yet
+            {pending === "determined" ? (
+              <Loader2
+                className="ml-2 inline size-4 animate-spin text-muted-foreground align-text-bottom"
+                aria-hidden="true"
+              />
+            ) : null}
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              Tick this off the portal&apos;s approval email. It stops us chasing{" "}
+              {copy.portal} and puts the download on the alert panel.
+            </span>
+          </span>
+        </label>
+      ) : null}
 
       <button
         type="button"

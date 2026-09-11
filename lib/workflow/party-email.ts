@@ -5,6 +5,7 @@ import {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ComplianceApprovalChannel,
+  ComplianceExternalApplicationKind,
   ComplianceOutreachStatus,
   CompliancePartyType,
   Prisma,
@@ -33,11 +34,17 @@ import {
 } from "@/lib/data/compliance-architect";
 import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
 import {
+  recordArchitecturalDesignRevisionArrival,
   recordBushfireRevisionArrival,
   recordDeveloperDecision,
 } from "@/lib/data/compliance-developer";
+import { recordPortalDetermination } from "@/lib/data/compliance-applications";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
+import {
+  planningReferencesIn,
+  readPortalDetermination,
+} from "@/lib/graph/planning-portal";
 import { getGraphConfig } from "@/lib/graph/config";
 import {
   collectLeadAttachments,
@@ -408,6 +415,7 @@ async function classifyStoredDocuments(
   preliminaryPlans: number;
   wasteManagementPlans: number;
   bushfireReports: number;
+  architecturalDesigns: number;
 }> {
   "use step";
 
@@ -437,6 +445,7 @@ async function classifyStoredDocuments(
   // clock: a bushfire report landing is what closes the round the estate
   // developer's refusal opened.
   let bushfireReports = 0;
+  let architecturalDesigns = 0;
 
   for (const item of stored) {
     try {
@@ -499,6 +508,13 @@ async function classifyStoredDocuments(
 
       if (
         result.documentType ===
+        ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+      ) {
+        architecturalDesigns += 1;
+      }
+
+      if (
+        result.documentType ===
         ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
       ) {
         titleSearches.push({ url: item.url, name: item.name });
@@ -514,6 +530,7 @@ async function classifyStoredDocuments(
     preliminaryPlans,
     wasteManagementPlans,
     bushfireReports,
+    architecturalDesigns,
   };
 }
 
@@ -591,6 +608,14 @@ async function closeBushfireRevisionLoop(params: {
 }): Promise<void> {
   "use step";
   await recordBushfireRevisionArrival(params);
+}
+
+async function closeArchitecturalDesignRevisionLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordArchitecturalDesignRevisionArrival(params);
 }
 
 /**
@@ -694,6 +719,60 @@ async function recordCouncilRequests(
   }
 
   return { created: outcome.created, rejected: outcome.rejected };
+}
+
+/**
+ * Reads a council message for a determination, and records it.
+ *
+ * The step that turns "your application has been approved, log in to download
+ * it" into something on the screen. Without it that email was the least useful
+ * message on the thread: the one that said the wait was over, carrying nothing the
+ * document pipeline could file, on a file that went on counting days against the
+ * portal.
+ *
+ * Deterministic rather than a model call, which is the one place this differs from
+ * the two steps either side of it. `recordCouncilRequests` and the alert detection
+ * both read prose for things a person would otherwise have to notice, and being
+ * occasionally wrong costs a row somebody corrects. This decides that a clock
+ * stops and a green alert goes up, and a refusal misread as an approval would put
+ * "approved, ready to download" on a job that has just been knocked back. So the
+ * reading is a string comparison with an explicit disqualifier list — see
+ * `readPortalDetermination`.
+ *
+ * Still its own step, for the reason the others are: it writes against rows this
+ * run has already touched and must not be able to cost them.
+ *
+ * Returns what it placed, or null — which is the answer on nearly every council
+ * message, and on every one it cannot read with confidence.
+ */
+async function recordCouncilDetermination(
+  params: { projectId: string; engagementId: string },
+  message: InboundPartyMessage,
+): Promise<ComplianceExternalApplicationKind | null> {
+  "use step";
+
+  const subject = readPortalDetermination(message.subject, message.body);
+  if (!subject) return null;
+
+  const kind = ComplianceExternalApplicationKind[subject];
+
+  const recorded = await recordPortalDetermination({
+    projectId: params.projectId,
+    engagementId: params.engagementId,
+    kind,
+    // The guard against the same notification twice — a resend, a cc, a replayed
+    // webhook — re-raising a download alert somebody has already closed by
+    // uploading the certificate.
+    messageId: message.messageId,
+    determinedAt: parseEmailDate(message.receivedDateTime) ?? new Date(),
+    // Whichever reference the message quotes, where it quotes one we can place.
+    // Only used to fill a row that has none; the lodgement's own reference is not
+    // overwritten, since a council quoting a case number is not a council renaming
+    // our application.
+    applicationRef: [...planningReferencesIn(message.subject, message.body)][0] ?? null,
+  });
+
+  return recorded ? kind : null;
 }
 
 /**
@@ -949,6 +1028,16 @@ export const processInboundPartyEmail = async (
         engagementId: outreach.engagementId,
       });
     }
+
+    if (
+      classification.architecturalDesigns > 0 &&
+      outreach.party === CompliancePartyType.ARCHITECT
+    ) {
+      await closeArchitecturalDesignRevisionLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
+    }
   }
 
   // What the council is asking for, where this is their thread. After the
@@ -964,6 +1053,23 @@ export const processInboundPartyEmail = async (
       console.log(
         `  Council asked for ${requests.created} more document(s) and sent back ${requests.rejected}.`,
       );
+    }
+
+    // A determination that carried no document, which is the ordinary shape of
+    // one. The portal emails to say the application is approved and tells the
+    // applicant to log in and fetch the certificate, so by this point in the run
+    // the classifier has placed nothing and there is nothing on the row — and
+    // without this the file went on reading as "with the portal" until somebody
+    // opened their inbox.
+    //
+    // After the requests rather than before, because a single council message can
+    // be both: approved with conditions, and here are three things we still want.
+    const determined = await recordCouncilDetermination(
+      { projectId, engagementId: outreach.engagementId },
+      message,
+    );
+    if (determined) {
+      console.log(`  Portal determined the ${determined} application.`);
     }
   }
 

@@ -25,6 +25,18 @@ export class ComplianceAccessError extends Error {
   }
 }
 
+/** An expected, user-safe compliance domain failure. */
+export class ComplianceDomainError extends Error {
+  constructor(
+    message: string,
+    readonly code = "BAD_REQUEST",
+    readonly status: number = 400,
+  ) {
+    super(message);
+    this.name = "ComplianceDomainError";
+  }
+}
+
 export type ComplianceActor = {
   id: string;
   role: Role;
@@ -170,4 +182,19 @@ export function complianceAccessResponse(error: unknown) {
         code: "NOT_FOUND",
       });
   }
+}
+
+/** Maps expected compliance failures without exposing infrastructure errors. */
+export function complianceErrorResponse(error: unknown) {
+  const accessResponse = complianceAccessResponse(error);
+  if (accessResponse) return accessResponse;
+
+  if (error instanceof ComplianceDomainError) {
+    return errorResponse(error.message, {
+      status: error.status,
+      code: error.code,
+    });
+  }
+
+  return null;
 }

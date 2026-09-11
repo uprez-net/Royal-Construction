@@ -48,6 +48,7 @@ export async function POST(
     const { user } = await requireComplianceAccess(projectId);
     const engagement = await resendDeveloperApproval({
       projectId,
+      documentType: body.data.documentType,
       note: body.data.note ?? null,
       extraAttachmentIds: body.data.extraAttachmentIds,
       requestedByName: user.name,

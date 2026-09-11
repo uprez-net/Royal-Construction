@@ -28,9 +28,8 @@ import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.
-import { CompliancePartyType } from "@prisma/client";
+import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
 import type {
-  ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   File as ProjectFiles,
 } from "@prisma/client"
@@ -45,7 +44,9 @@ import type {
   DeveloperResendInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
+  EstateDeveloperRequest,
   ExternalApplicationRequest,
+  PrincipalCertifierRequest,
   WasteManagementRequest,
   ResolveComplianceAlertInput,
   ResolveComplianceMeetingRequest,
@@ -56,6 +57,7 @@ import type {
   StartEngagementInput,
   StartPartyOutreachInput,
 } from "@/utils/validators/compliance";
+import type { DeveloperApprovalDocument } from "@/constants/complianceDocuments";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
 import { createProjectWithLeadAction, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
 import {
@@ -100,6 +102,7 @@ export interface ProjectsState {
    * only known once the engagement has been read.
    */
   complianceMutations: ComplianceMutationState;
+  developerPendingDocument: DeveloperApprovalDocument | null;
   uploadsByProjectId: ProjectUploadState;
   detailUi: {
     byProjectId: Record<
@@ -136,6 +139,7 @@ const initialState: ProjectsState = {
   optimisticUpdates: {},
   mutations: initialMutationState(),
   complianceMutations: {},
+  developerPendingDocument: null,
   uploadsByProjectId: {},
   detailUi: {
     byProjectId: {},
@@ -406,6 +410,16 @@ export const complianceScope = {
    */
   application: (kind: ComplianceExternalApplicationKind): ComplianceScope =>
     `application:${kind}`,
+  /**
+   * Recording the principal certifier appointment.
+   *
+   * Its own scope rather than the certificate application's, though the two sit
+   * in the same block and the appointment gates the lodgement. They are on screen
+   * together, which is the whole test this table applies: an admin filling in the
+   * appointment form must not grey out the lodgement form underneath it, since the
+   * ordinary sitting is to submit both in a row.
+   */
+  principalCertifier: "principal-certifier" as ComplianceScope,
   /**
    * Everything on the estate developer's block.
    *
@@ -796,6 +810,42 @@ export const setDeveloperApprovalRequired = createAsyncThunk<
   },
 );
 
+/**
+ * Records whether this lot is in an estate, and who the developer is.
+ *
+ * The banner's own write, and a superset of `setDeveloperApprovalRequired` above.
+ * Both exist because the question is asked in two places: the bare yes/no on the
+ * development application block, where the address is not to hand, and the whole
+ * thing on the banner at the top of the tab, where it is.
+ *
+ * Filed under the developer scope with the other three, which is the right trade
+ * here for the reason that scope is shared: the banner and the developer block are
+ * never on screen at the same moment.
+ */
+export const setEstateDeveloper = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & EstateDeveloperRequest,
+  { rejectValue: string }
+>(
+  "projects/setEstateDeveloper",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/developer/estate",
+        jsonPost(payload),
+        "Unable to record the estate developer",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the estate developer",
+      );
+    }
+  },
+);
+
 /** Records that the client already had this party's documents. */
 export const recordPartySelfSupplied = createAsyncThunk<
   ComplianceResult,
@@ -868,6 +918,37 @@ export const recordExternalApplication = createAsyncThunk<
         error instanceof Error
           ? error.message
           : "Unable to record the application",
+      );
+    }
+  },
+);
+
+/**
+ * Records the certifier's appointment as principal certifier.
+ *
+ * Its own thunk rather than a step on `recordExternalApplication`, because it
+ * writes to the engagement rather than to an application row: one appointment per
+ * job, not one per lodgement. See `principalCertifierSchema`.
+ */
+export const recordPrincipalCertifier = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & PrincipalCertifierRequest,
+  { rejectValue: string }
+>(
+  "projects/recordPrincipalCertifier",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/principal-certifier",
+        jsonPost(payload),
+        "Unable to record the appointment",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record the appointment",
       );
     }
   },
@@ -1090,8 +1171,13 @@ const complianceOperations = [
     setDeveloperApprovalRequired,
     () => complianceScope.developer,
   ),
+  complianceOperation(setEstateDeveloper, () => complianceScope.developer),
   complianceOperation(recordExternalApplication, (arg) =>
     complianceScope.application(arg.kind),
+  ),
+  complianceOperation(
+    recordPrincipalCertifier,
+    () => complianceScope.principalCertifier,
   ),
   complianceOperation(requestWasteManagementPlan, () =>
     complianceScope.party(CompliancePartyType.ARCHITECT),
@@ -1108,6 +1194,25 @@ const complianceOperations = [
 ];
 
 const complianceThunks = complianceOperations.map((operation) => operation.thunk);
+
+const developerApprovalThunks = [
+  recordDeveloperDecision,
+  resendDeveloperApproval,
+] as const;
+
+const isDeveloperApprovalPending = isAnyOf(
+  ...developerApprovalThunks.map((thunk) => thunk.pending),
+);
+const isDeveloperApprovalFinished = isAnyOf(
+  ...developerApprovalThunks.map((thunk) => thunk.fulfilled),
+  ...developerApprovalThunks.map((thunk) => thunk.rejected),
+);
+
+function developerDocumentOf(action: { meta: { arg: unknown } }): DeveloperApprovalDocument {
+  const documentType = (action.meta.arg as { documentType?: DeveloperApprovalDocument })
+    .documentType;
+  return documentType ?? ComplianceDocumentType.BUSHFIRE_REPORT;
+}
 
 const complianceScopeByTypePrefix = new Map(
   complianceOperations.map((operation) => [
@@ -1165,6 +1270,7 @@ const projectsSlice = createSlice({
       // row on the new project reading the outcome of a write to another one.
       if (state.activeProject?.id !== action.payload?.id) {
         state.complianceMutations = {};
+        state.developerPendingDocument = null;
       }
       state.activeProject = action.payload;
     },
@@ -1294,6 +1400,7 @@ const projectsSlice = createSlice({
     resetProjectDetailUiState(state, action: PayloadAction<string>) {
       if (action.payload === state.activeProject?.id) {
         state.activeProject = null;
+        state.developerPendingDocument = null;
       }
       delete state.uploadsByProjectId[action.payload];
       delete state.detailUi.byProjectId[action.payload];
@@ -1304,6 +1411,7 @@ const projectsSlice = createSlice({
       state.optimisticUpdates = {};
       state.mutations = initialMutationState();
       state.complianceMutations = {};
+      state.developerPendingDocument = null;
       state.uploadsByProjectId = {};
       state.detailUi.byProjectId = {};
     }
@@ -1612,6 +1720,9 @@ const projectsSlice = createSlice({
           error: null,
         };
       })
+      .addMatcher(isDeveloperApprovalPending, (state, action) => {
+        state.developerPendingDocument = developerDocumentOf(action);
+      })
       .addMatcher(isComplianceThunkFulfilled, (state, action) => {
         state.complianceMutations[complianceScopeOf(action)] = {
           status: "succeeded",
@@ -1619,6 +1730,11 @@ const projectsSlice = createSlice({
         };
         if (state.activeProject?.id === action.payload.projectId) {
           state.activeProject.certifierEngagement = action.payload.engagement;
+        }
+      })
+      .addMatcher(isDeveloperApprovalFinished, (state, action) => {
+        if (state.developerPendingDocument === developerDocumentOf(action)) {
+          state.developerPendingDocument = null;
         }
       })
       .addMatcher(isComplianceThunkRejected, (state, action) => {
@@ -1665,6 +1781,9 @@ const IDLE_MUTATION: ProjectMutationState = { status: "idle", error: null };
 
 export const selectComplianceMutations = (state: RootState) =>
   state.projects.complianceMutations;
+
+export const selectDeveloperPendingDocument = (state: RootState) =>
+  state.projects.developerPendingDocument;
 
 /**
  * One scope's state, `idle` where nothing has been dispatched against it.

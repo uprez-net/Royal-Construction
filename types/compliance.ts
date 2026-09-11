@@ -1,6 +1,8 @@
 import {
+  ComplianceAlertSource,
   ComplianceAlertStatus,
   ComplianceAlertType,
+  ComplianceApprovalDecision,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
   ComplianceMeetingStatus,
@@ -63,6 +65,18 @@ export const certifierEngagementInclude = {
        * found off the same array.
        */
       revisions: { orderBy: { requestedAt: "desc" } },
+      /**
+       * What the estate developer has been asked to approve, and what they said.
+       *
+       * DEVELOPER rows only and empty on every other party, loaded on the main
+       * read because the two documents under covenant gate two different things
+       * — the portal lodgement and the development application — and a gate that
+       * has to fetch before it can decide whether to refuse is a button that
+       * flickers through enabled on every render.
+       *
+       * At most two rows per file, so loading them whole costs nothing.
+       */
+      developerApprovals: true,
     },
     orderBy: { createdAt: "asc" },
   },
@@ -470,25 +484,41 @@ export function requiresPlanningCertificate(
  * - `to-order` — they do not, and nothing has been lodged. This is the portal
  *   link.
  * - `lodged` — an application is with the body. This is where the clock runs.
+ * - `determined` — the body has decided it and sent no document. The clock has
+ *   stopped and the file holds nothing.
  * - `received` — it has come back, whether or not the file is on the row yet.
  *
- * The same five steps for all five kinds. A development application never
+ * The same six steps for all seven kinds. A development application never
  * reaches `held` — nobody turns up already holding a DA for the house they
  * have not built — but the step is derived rather than declared per kind, and
  * an answer of false to a question the DA block never asks costs nothing.
+ *
+ * `determined` is the addition, and it is between `lodged` and `received` rather
+ * than a flag on either because it is genuinely its own step: the NSW Planning
+ * Portal determines a CDC, a construction certificate or a development
+ * application and emails to say so without attaching anything. Before this, such
+ * a file stayed on `lodged` — so the block went on reporting how many working
+ * days the portal had had it, counting up, on an application that had already been
+ * approved. Reading it as `received` was the other option and is worse: every
+ * consumer of that step treats it as the document being here or imminent.
  */
 export type ExternalApplicationStep =
   | "unanswered"
   | "held"
   | "to-order"
   | "lodged"
+  | "determined"
   | "received";
 
 export function externalApplicationStep(
   application: ComplianceExternalApplicationRecord | null,
 ): ExternalApplicationStep {
   if (!application || application.alreadyHeld === null) return "unanswered";
+  // Ahead of `determined`, because `receivedAt` is the stronger claim of the two
+  // and a row can carry both — a determination recorded off the portal email on
+  // the Monday, the document ticked through on the Thursday.
   if (application.receivedAt) return "received";
+  if (application.approvalNotifiedAt) return "determined";
   if (application.alreadyHeld) return "held";
   return application.appliedAt ? "lodged" : "to-order";
 }
@@ -548,9 +578,182 @@ export function outstandingRevision(
   outreach: Pick<ComplianceOutreachDetail, "revisions"> | null | undefined,
 ): CompliancePlanRevisionRecord | null {
   return (
-    (outreach?.revisions ?? []).find((revision) => !revision.respondedAt) ??
-    null
+    (outreach?.revisions ?? []).find(
+      (revision) =>
+        !revision.respondedAt &&
+        // The client's rounds only. A developer's objection to the plans is
+        // written against the same architect outreach, and counting it here made
+        // it read as the client asking for changes — which put it in the rounds
+        // the card reports and under ARCHITECT_REVISION_OVERDUE's clock, a
+        // different wait with a different party behind it. Null is the client,
+        // which is every row written before the column existed.
+        revision.requestedBySource !== ComplianceAlertSource.DEVELOPER,
+    ) ?? null
   );
+}
+
+/**
+ * The round of developer objections still waiting on a redraw, or null.
+ *
+ * The counterpart of `outstandingRevision` over the same table, split by who
+ * asked. Both exist because the architect's outreach now carries two independent
+ * revision loops: the client's, which is the original, and the estate
+ * developer's, which is a covenant refusal and goes back through the architect
+ * in exactly the same way.
+ */
+export function outstandingDeveloperRevision(
+  outreach: Pick<ComplianceOutreachDetail, "revisions"> | null | undefined,
+): CompliancePlanRevisionRecord | null {
+  return (
+    (outreach?.revisions ?? []).find(
+      (revision) =>
+        !revision.respondedAt &&
+        revision.requestedBySource === ComplianceAlertSource.DEVELOPER,
+    ) ?? null
+  );
+}
+
+export type ComplianceDeveloperApprovalRecord =
+  ComplianceOutreachDetail["developerApprovals"][number];
+
+/**
+ * What the developer was asked about one document, or null.
+ *
+ * Null means the document has not been put to them — which is different from
+ * their not having answered, and the difference is what the overdue clock reads:
+ * a row exists from the moment the request goes out, so "with the developer since
+ * Tuesday" is a fact the file holds rather than one inferred from silence.
+ */
+export function developerApprovalFor(
+  engagement:
+    | Pick<CertifierEngagementDetail, "outreaches">
+    | null
+    | undefined,
+  documentType: ComplianceDocumentType,
+): ComplianceDeveloperApprovalRecord | null {
+  const developer = outreachForParty(
+    engagement,
+    CompliancePartyType.DEVELOPER,
+  );
+  if (!developer) return null;
+
+  // `?? []` for the same reason `revisions` and `meetings` are read that way: the
+  // include guarantees the array, and a caller that projected the outreach without
+  // it should get "nothing was put to them" rather than a crash.
+  const row = (developer.developerApprovals ?? []).find(
+    (approval) => approval.documentType === documentType,
+  );
+  if (row) return row;
+
+  /**
+   * The fallback onto the outreach's own columns.
+   *
+   * Every verdict recorded before `ComplianceDeveloperApproval` existed lives on
+   * five columns of the outreach row, and all of them are about the bushfire
+   * report — it was the only document under covenant at the time. The migration
+   * copies them across, so this should never fire; it is here for the window
+   * between `migrate deploy` and the deploy that follows it, during which new
+   * code reads rows the backfill has written and old rows it has not.
+   *
+   * Synthesised rather than returned raw, so every caller sees one shape. Nothing
+   * writes these columns any more.
+   */
+  if (
+    documentType === ComplianceDocumentType.BUSHFIRE_REPORT &&
+    developer.approvalDecision
+  ) {
+    return {
+      id: `legacy:${developer.id}`,
+      outreachId: developer.id,
+      documentType,
+      requestedAt: developer.sentAt ?? developer.createdAt,
+      decision: developer.approvalDecision,
+      decidedAt: developer.approvalDecidedAt,
+      channel: developer.approvalChannel,
+      reason: developer.approvalReason,
+      round: 1,
+      recordedById: developer.approvalDecidedById,
+      createdAt: developer.createdAt,
+      updatedAt: developer.updatedAt,
+    } satisfies ComplianceDeveloperApprovalRecord;
+  }
+
+  return null;
+}
+
+/**
+ * Whether the developer has approved one document.
+ *
+ * Deliberately not "have they answered". A rejection is an answer and is not an
+ * approval, and every gate that reads this is asking the second question: a
+ * refused set of plans must not let an application through to the portal.
+ */
+export function hasDeveloperApproval(
+  engagement:
+    | Pick<CertifierEngagementDetail, "outreaches">
+    | null
+    | undefined,
+  documentType: ComplianceDocumentType,
+): boolean {
+  return (
+    developerApprovalFor(engagement, documentType)?.decision ===
+    ComplianceApprovalDecision.APPROVED
+  );
+}
+
+/**
+ * Why the developer's covenant blocks a lodgement on the plans, or null.
+ *
+ * The gate on both the CDC lodgement and the development application, which is
+ * the whole of why the architectural design was brought under the covenant: a
+ * pack lodged against plans the estate has not approved comes straight back, and
+ * by then the application fee is spent and the clock has been running for a
+ * fortnight.
+ *
+ * Null on the great majority of jobs, and there are two quite different reasons
+ * for that which this collapses on purpose. A lot with no covenant on it is not
+ * gated; neither is a lot whose developer has signed off. Both are "nothing is in
+ * the way", and a caller that had to tell them apart would be a caller about to
+ * explain a covenant to somebody who does not have one.
+ *
+ * Reads `developerApprovalRequired` first, which is the question the banner on
+ * the tab asks. Null there means nobody has been asked yet — and that does *not*
+ * block, deliberately: the answer is collected at the top of the engagement and a
+ * file that somehow reached the portal without it should not be held up by a
+ * question about an estate that probably does not exist. The banner is what
+ * chases it.
+ */
+export function developerPlansBlockedReason(
+  engagement:
+    | Pick<CertifierEngagementDetail, "outreaches" | "documents"> & {
+        developerApprovalRequired: boolean | null;
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!engagement?.developerApprovalRequired) return null;
+
+  const approval = developerApprovalFor(
+    engagement,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  );
+
+  if (approval?.decision === ComplianceApprovalDecision.APPROVED) return null;
+
+  if (approval && approval.decision === ComplianceApprovalDecision.REJECTED) {
+    // Their words, because "the developer said no" is not something anybody can
+    // act on — the same reason the rejection is quoted into the mail that goes
+    // back to the architect.
+    return approval.reason
+      ? `The estate developer has not approved the architectural design: "${approval.reason}" The plans have to be revised and re-approved before the application is lodged.`
+      : "The estate developer rejected the architectural design. The plans have to be revised and re-approved before the application is lodged.";
+  }
+
+  if (approval) {
+    return "The architectural design is with the estate developer for approval. Their covenant has to be satisfied before the application is lodged.";
+  }
+
+  return "This lot is in an estate whose developer has to approve the architectural design. Send the plans to them from the developer block before lodging the application.";
 }
 
 /**

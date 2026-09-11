@@ -227,6 +227,14 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
     ["construction"],
     ["certificate", "cc "],
   ],
+  // The same two-hit demand, for the same reason and with one more: "cdc" on
+  // its own is also the CDC *application form*, which is a document the file
+  // holds from the other end of the engagement entirely. Reading the form as the
+  // issued certificate would mark a job finished before it had been lodged.
+  [ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE]: [
+    ["complying development", "cdc"],
+    ["certificate", "cdc "],
+  ],
   [ComplianceDocumentType.BUSHFIRE_REPORT]: [
     ["bushfire", "bush fire", "bal ", "bal-", "bal report", "bal rating"],
   ],

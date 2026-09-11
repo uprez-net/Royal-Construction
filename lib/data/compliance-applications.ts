@@ -1,6 +1,7 @@
-"use server";
+import "server-only";
 
 import {
+  ComplianceAlertSource,
   ComplianceAlertType,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
@@ -15,7 +16,15 @@ import {
   EXTERNAL_APPLICATION_COPY,
   externalApplicationForDocumentType,
 } from "@/constants/complianceDocuments";
-import { resolveComplianceAlertBySystem } from "@/lib/data/compliance-alerts";
+import {
+  raiseComplianceAlert,
+  resolveComplianceAlertBySystem,
+} from "@/lib/data/compliance-alerts";
+import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
+import {
+  ComplianceDomainError,
+  requireComplianceAccess,
+} from "@/lib/compliance/access";
 import { generatePartyRefToken } from "@/lib/graph/party-subject";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -25,7 +34,10 @@ import {
   outreachForParty,
   type CertifierEngagementDetail,
 } from "@/types/compliance";
-import type { ExternalApplicationInput } from "@/utils/validators/compliance";
+import type {
+  ExternalApplicationInput,
+  PrincipalCertifierInput,
+} from "@/utils/validators/compliance";
 import { logAction } from "./actionLog";
 
 /**
@@ -64,7 +76,7 @@ async function requireEngagement(
     include: certifierEngagementInclude,
   });
   if (!engagement) {
-    throw new Error(
+    throw new ComplianceDomainError(
       "This project has no compliance file yet. Connect with a certifier first.",
     );
   }
@@ -91,6 +103,15 @@ async function requireEngagement(
  * Nothing arrives back from the long service levy — the receipt is downloaded
  * from a screen — so a thread there would be a correspondent who never writes.
  *
+ * The two certificate applications are here, and they are the addition. A CDC is
+ * determined by a registered certifier rather than by a council, which is why it
+ * was not obvious that it belongs — but the determination arrives from the NSW
+ * Planning Portal, under the portal's own address, exactly as a development
+ * consent does. Without a council row on the file there was nothing for
+ * `matchPartyOutreach` to correlate that message to, so the one email that says a
+ * CDC has been issued fell through to the lead queue: the whole automatic path to
+ * the download alert was dead on the commoner of the two routes.
+ *
  * Idempotent: a second lodgement, or a corrected date, updates the row rather
  * than colliding with the unique index on [engagementId, party].
  */
@@ -99,6 +120,8 @@ const APPLICATIONS_WITH_A_COUNCIL_THREAD: ReadonlySet<ComplianceExternalApplicat
     ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
     ComplianceExternalApplicationKind.ROAD_OPENING,
     ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+    ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE,
+    ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE,
   ]);
 
 async function ensureCouncilThread(
@@ -355,6 +378,67 @@ export async function recordExternalApplication(
       }
       break;
     }
+
+    /**
+     * The portal said yes, and sent nothing.
+     *
+     * Recorded by hand here, and by the inbound notification where the
+     * correlation lands one — see `recordPortalDetermination`. The manual route
+     * is the one that has to work: nothing in the compliance mail paths has been
+     * exercised against a live mailbox, and a determination nobody can record is
+     * a file that cannot progress.
+     *
+     * Two writes and a raise, in that order. The date stops the determination
+     * clock; the alert carries the one step left. The alert is raised here rather
+     * than left to the nightly sweep because the gap matters: a determination
+     * recorded at ten in the morning should not wait until eight in the evening
+     * to appear on the panel as something to go and fetch. The sweep still
+     * recomputes it, which is what closes it when the certificate lands.
+     */
+    case "determined": {
+      const determinedAt = input.determinedAt ?? new Date();
+
+      await prisma.complianceExternalApplication.upsert({
+        where,
+        create: {
+          engagementId: engagement.id,
+          kind: input.kind,
+          alreadyHeld: false,
+          approvalNotifiedAt: determinedAt,
+          applicationRef: input.applicationRef ?? null,
+        },
+        // `receivedAt` is deliberately left alone. A determination is not the
+        // document arriving, and writing both here would collapse the two facts
+        // this step exists to keep apart.
+        update: {
+          approvalNotifiedAt: determinedAt,
+          ...(input.applicationRef
+            ? { applicationRef: input.applicationRef }
+            : {}),
+        },
+      });
+
+      await resolveComplianceAlertBySystem({
+        projectId,
+        engagementId: engagement.id,
+        type: EXTERNAL_APPLICATION_COPY[input.kind].alertType,
+        resolutionNote: `${EXTERNAL_APPLICATION_COPY[input.kind].label} was determined.`,
+      });
+
+      const downloadAlert = PORTAL_DOWNLOAD_ALERT[input.kind];
+      if (downloadAlert) {
+        await raiseComplianceAlert({
+          projectId,
+          engagementId: engagement.id,
+          type: downloadAlert,
+          raisedBySource: ComplianceAlertSource.COUNCIL,
+          detail: `Determined${
+            input.applicationRef ? ` under ${input.applicationRef}` : ""
+          }. Download it from the NSW Planning Portal and upload it here.`,
+        });
+      }
+      break;
+    }
   }
 
   after(async () => {
@@ -430,6 +514,22 @@ export async function recordExternalApplicationArrival(params: {
       resolutionNote: `${EXTERNAL_APPLICATION_COPY[kind].label} was uploaded to the file.`,
     });
 
+    // The download-ready alert, where this kind has one. The upload *is* the
+    // download having happened, so this is the one event that closes it — which
+    // is why it is resolved here rather than only on the nightly pass. A green
+    // "go and fetch it" line sitting above the document somebody has just
+    // fetched is the kind of staleness that teaches people to stop reading the
+    // panel.
+    const downloadAlert = PORTAL_DOWNLOAD_ALERT[kind];
+    if (downloadAlert) {
+      await resolveComplianceAlertBySystem({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        type: downloadAlert,
+        resolutionNote: `${EXTERNAL_APPLICATION_COPY[kind].label} was downloaded and is on the file.`,
+      });
+    }
+
     // The consent arriving is what ends the development approval condition, and
     // ending it is what unfreezes the checklist so the builder can go back to
     // collecting for the certifier.
@@ -452,5 +552,191 @@ export async function recordExternalApplicationArrival(params: {
       `  Failed to record the arrival of the ${kind} application:`,
       error,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The principal certifier appointment
+// ---------------------------------------------------------------------------
+
+/**
+ * Records that the certifier has been appointed principal certifier.
+ *
+ * A separate act from engaging them, and a later one. Engaging a certifier is a
+ * fee proposal and a checklist; appointing them principal certifier is a form on
+ * the NSW Planning Portal naming the person who will inspect the build and issue
+ * the occupation certificate. A CDC cannot be determined without it — the
+ * application and the appointment go in together — so this is a gate on the
+ * lodgement rather than a note beside it. See
+ * `certificateLodgementBlockedReason`.
+ *
+ * Recorded rather than performed, like every portal step on this file: the
+ * appointment happens on the website and what is tracked here is the date and
+ * the reference, which is everything the gate reads and everything somebody
+ * needs to chase it.
+ *
+ * Lives in this module rather than beside the engagement's own writes because it
+ * belongs to the lodgement it unblocks, and because it is read by the same block
+ * that records the application.
+ *
+ * Re-recordable on purpose. An admin correcting a date or adding the reference
+ * they did not have to hand is the ordinary second call, so this overwrites
+ * rather than refusing — there is no clock hanging off it that a correction
+ * could restart, which is what makes that safe.
+ */
+export async function recordPrincipalCertifier(
+  projectId: string,
+  input: PrincipalCertifierInput,
+  recordedById: string,
+  recordedByName: string,
+): Promise<CertifierEngagementDetail> {
+  const access = await requireComplianceAccess(projectId);
+  const engagement = await requireEngagement(projectId);
+  if (access.engagement?.id !== engagement.id) {
+    throw new ComplianceDomainError(
+      "The compliance file does not belong to this project.",
+      "NOT_FOUND",
+      404,
+    );
+  }
+
+  await prisma.certifierEngagement.update({
+    where: { id: engagement.id },
+    data: {
+      principalCertifierAppointedAt: input.appointedAt,
+      principalCertifierAppointmentRef: input.appointmentRef ?? null,
+      principalCertifierAppointedById: recordedById,
+    },
+  });
+
+  after(async () => {
+    revalidateEngagement(projectId);
+    await logAction(
+      createActivityLogEntry("compliancePrincipalCertifierAppointed", {
+        projectId,
+        engagementId: engagement.id,
+        appointedAt: input.appointedAt.toISOString(),
+        appointmentRef: input.appointmentRef ?? null,
+        recordedById,
+        recordedByName,
+      }),
+    );
+  });
+
+  return requireEngagement(projectId);
+}
+
+/**
+ * Records a determination read off an inbound portal notification.
+ *
+ * The automatic counterpart of the `"determined"` step above, and deliberately
+ * the weaker of the two routes. It correlates a message to one application and
+ * writes the date; everything else — raising the download alert, closing the
+ * determination clock — is the same code the manual step runs, so the two cannot
+ * end up describing the same event differently.
+ *
+ * Guarded on the message id rather than on the date being absent, which is the
+ * idempotency that matters here. A portal that sends the same approval twice —
+ * a resend, a cc, a replayed webhook — must not re-raise a download alert
+ * somebody has already closed by uploading the certificate. Guarding on
+ * `approvalNotifiedAt IS NULL` would have done that correctly too, right up until
+ * an admin recorded the determination by hand first, at which point the second
+ * notification would have been silently discarded along with its message id.
+ *
+ * Never throws. It runs behind a message that has already been stored and is
+ * already visible on the thread; a determination this fails to read is one
+ * somebody records by hand from the same email.
+ */
+export async function recordPortalDetermination(params: {
+  projectId: string;
+  engagementId: string;
+  kind: ComplianceExternalApplicationKind;
+  messageId: string;
+  determinedAt?: Date;
+  applicationRef?: string | null;
+}): Promise<boolean> {
+  try {
+    const authorizedEngagement = await prisma.certifierEngagement.findFirst({
+      where: { id: params.engagementId, projectId: params.projectId },
+      select: { id: true },
+    });
+    if (!authorizedEngagement) {
+      throw new ComplianceDomainError(
+        "The compliance file does not belong to this project.",
+        "NOT_FOUND",
+        404,
+      );
+    }
+
+    const existing = await prisma.complianceExternalApplication.findUnique({
+      where: {
+        engagementId_kind: {
+          engagementId: params.engagementId,
+          kind: params.kind,
+        },
+      },
+      select: {
+        id: true,
+        approvalNotificationMessageId: true,
+        receivedAt: true,
+      },
+    });
+
+    if (existing?.approvalNotificationMessageId === params.messageId) {
+      // The same notification, again. Nothing to do and nothing to announce.
+      return false;
+    }
+
+    const determinedAt = params.determinedAt ?? new Date();
+
+    await prisma.complianceExternalApplication.upsert({
+      where: {
+        engagementId_kind: {
+          engagementId: params.engagementId,
+          kind: params.kind,
+        },
+      },
+      create: {
+        engagementId: params.engagementId,
+        kind: params.kind,
+        alreadyHeld: false,
+        approvalNotifiedAt: determinedAt,
+        approvalNotificationMessageId: params.messageId,
+        applicationRef: params.applicationRef ?? null,
+      },
+      update: {
+        approvalNotifiedAt: determinedAt,
+        approvalNotificationMessageId: params.messageId,
+      },
+    });
+
+    await resolveComplianceAlertBySystem({
+      projectId: params.projectId,
+      engagementId: params.engagementId,
+      type: EXTERNAL_APPLICATION_COPY[params.kind].alertType,
+      resolutionNote: `${EXTERNAL_APPLICATION_COPY[params.kind].label} was determined.`,
+    });
+
+    const downloadAlert = PORTAL_DOWNLOAD_ALERT[params.kind];
+    if (downloadAlert && !existing?.receivedAt) {
+      await raiseComplianceAlert({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        type: downloadAlert,
+        raisedBySource: ComplianceAlertSource.COUNCIL,
+        detail: `The portal has determined this application${
+          params.applicationRef ? ` (${params.applicationRef})` : ""
+        }. The approval email carries no document — download it from the portal and upload it here.`,
+      });
+    }
+
+    revalidateEngagement(params.projectId);
+    return true;
+  } catch (error) {
+    console.error(
+      `  Failed to record the ${params.kind} determination on ${params.projectId}:`,
+      error,
+    );
+    return false;
   }
 }

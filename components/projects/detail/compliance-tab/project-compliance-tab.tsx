@@ -83,6 +83,7 @@ import {
   complianceScope,
   identifyComplianceDocument,
   resolveComplianceDocument,
+  selectDeveloperPendingDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
   sendCertifierReply,
@@ -93,15 +94,22 @@ import {
   type ComplianceScope,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
+import { DEVELOPER_APPROVAL_DOCUMENTS } from "@/constants/complianceDocuments";
 import { developerByKey } from "@/constants/complianceDevelopers";
-import { CertificateAndCoverSection } from "./certificate-and-cover-section";
+import {
+  PortalCertificateBlock,
+  portalCertificateValues,
+} from "./portal-certificate-block";
 import {
   DeveloperApprovalBlock,
-  isDeveloperApprovalSettled,
+  type DeveloperApprovalItem,
 } from "./developer-approval-block";
 import {
   checklistBlockedReason,
   checklistItemDetail,
+  developerApprovalFor,
+  developerPlansBlockedReason,
+  outstandingDeveloperRevision,
   developmentApplication,
   hasDevelopmentApplication,
   externalApplication,
@@ -126,6 +134,7 @@ import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
 import { ComplianceSectionCard } from "./compliance-section-card";
 import { ComplianceStageFlow } from "./compliance-stage-flow";
+import { EstateDeveloperBanner } from "./estate-developer-banner";
 
 /**
  * Statuses that mean the signed copies have already gone to the certifier.
@@ -223,6 +232,7 @@ type SectionKey =
   | "response"
   | "checklist"
   | "development-application"
+  | "planning-portal"
   | "certificate"
   | "vault";
 
@@ -241,6 +251,7 @@ const SECTION_FOR_STAGE: Readonly<Record<ComplianceStageId, SectionKey>> = {
   CERTIFIER: "response",
   DEVELOPMENT_APPLICATION: "development-application",
   CHECKLIST: "checklist",
+  PLANNING_PORTAL: "planning-portal",
   CERTIFICATE: "certificate",
 };
 
@@ -255,6 +266,9 @@ export function ProjectComplianceTab({
 }: ProjectComplianceTabProps) {
   const dispatch = useAppDispatch();
   const complianceMutations = useAppSelector(selectComplianceMutations);
+  const developerPendingDocument = useAppSelector(
+    selectDeveloperPendingDocument,
+  );
   const { uploadFile, isUploading } = useComplianceUpload(project.id);
 
   /**
@@ -505,7 +519,7 @@ export function ProjectComplianceTab({
     // Only an upload that is part of the send can be the one that completes it.
     // Without this the prompt fired on any upload at all once the set happened
     // to be whole — replacing a required document while the checklist was live
-    // opened "Compliance and Certification complete" over a document that has
+    // opened "Checklist pack ready for certifier review" over a document that has
     // nothing to do with the send.
     if (!isReviewSubmissionType(uploadedType)) return;
     if (!next || !isReadyForReview(next)) return;
@@ -750,21 +764,105 @@ export function ProjectComplianceTab({
   );
 
   /**
-   * Whether a revised report has landed since the developer refused one.
+   * The documents under covenant, with what was asked and what came back.
    *
-   * Read off the consultant's revision rounds rather than off the report's own
-   * timestamps: a file replaced for an unrelated reason must not read as an
-   * answer to an objection nobody addressed, which is the same distinction
-   * `outstandingRevision` draws for the architect.
+   * Built here rather than inside the block because two of the three facts per
+   * document are not about the developer at all: the row itself comes off the
+   * document map, and whether a replacement has landed since a refusal comes off
+   * a third party's revision rounds — the bushfire consultant's for the report,
+   * the architect's for the plans.
+   *
+   * "Has a replacement landed" is read off those rounds rather than off the
+   * document's own timestamps, which is the same distinction
+   * `outstandingRevision` draws for the architect: a file replaced for an
+   * unrelated reason must not read as an answer to an objection nobody addressed.
+   *
+   * And off `outstandingDeveloperRevision` for the plans specifically, because the
+   * architect's outreach carries two independent revision loops — the client's and
+   * the developer's — and the client asking for a bigger kitchen is not the
+   * developer's objection being answered.
    */
-  const hasRevisedReport = Boolean(
-    developerOutreach?.approvalDecision ===
-      ComplianceApprovalDecision.REJECTED &&
-      bushfireRow?.files.length &&
-      !outstandingRevision(
-        outreachForParty(engagement, CompliancePartyType.BUSHFIRE_CONSULTANT),
+  const developerItems = DEVELOPER_APPROVAL_DOCUMENTS.map((documentType) => {
+    const document = documentsByType.get(documentType);
+    const approval = developerApprovalFor(engagement, documentType);
+
+    const producer = outreachForParty(
+      engagement,
+      documentType === ComplianceDocumentType.BUSHFIRE_REPORT
+        ? CompliancePartyType.BUSHFIRE_CONSULTANT
+        : CompliancePartyType.ARCHITECT,
+    );
+
+    const outstanding =
+      documentType === ComplianceDocumentType.BUSHFIRE_REPORT
+        ? outstandingRevision(producer)
+        : outstandingDeveloperRevision(producer);
+
+    return {
+      documentType,
+      document,
+      approval,
+      hasRevised: Boolean(
+        approval?.decision === ComplianceApprovalDecision.REJECTED &&
+          document?.files.length &&
+          !outstanding,
       ),
-  );
+    } satisfies DeveloperApprovalItem;
+  });
+
+  /**
+   * Whether the banner at the top of the tab still has a question to ask.
+   *
+   * Only while nobody has answered. The answer is one column, so a job answered
+   * from the block below, from the banner, or off the land deed all hide it for
+   * good — which is the point: the banner is a prompt rather than a permanent
+   * fixture, and a prompt that survives being answered is one people learn to
+   * scroll past.
+   *
+   * Deliberately not gated on the bushfire report the way the block below is. The
+   * block asks because a covenant is about to hold the lodgement; the banner asks
+   * at the start of the engagement, before anybody knows whether the job is in a
+   * bushfire-prone area, and the architectural design needs the same approval
+   * either way.
+   */
+  const needsEstateDeveloperAnswer =
+    // Optional, because this sits above the early return that narrows the
+    // engagement — as every derivation in this block does. A project with no
+    // compliance file has no banner to show, and `undefined === null` is false,
+    // which is the answer that wants.
+    engagement?.developerApprovalRequired === null;
+
+  /**
+   * Why the bushfire report's own covenant blocks the DA lodgement, or null.
+   *
+   * The counterpart of `developerPlansBlockedReason`, which covers the
+   * architectural design and is read by the portal block as well as here. This one
+   * is read by the development application alone, because that is the only
+   * lodgement the report holds up: a CDC is assessed by a certifier who wants the
+   * report itself rather than the estate's opinion of it, and the council is who
+   * insists on the covenant being satisfied.
+   *
+   * Null where no bushfire report is wanted, which is most jobs. A lot outside a
+   * bushfire-prone area has nothing for a covenant to be about, and a gate that
+   * can never be cleared would hold the majority of applications shut.
+   */
+  const bushfireDeveloperBlockedReason = (() => {
+    if (!needsBushfireReport) return null;
+    if (engagement?.developerApprovalRequired === null) {
+      return "Say whether this estate's developer has to approve the bushfire report before the application can be lodged.";
+    }
+    if (!engagement?.developerApprovalRequired) return null;
+
+    const approval = developerApprovalFor(
+      engagement,
+      ComplianceDocumentType.BUSHFIRE_REPORT,
+    );
+    if (approval?.decision === ComplianceApprovalDecision.APPROVED) return null;
+    if (approval?.decision === ComplianceApprovalDecision.REJECTED) {
+      return "The estate developer rejected the bushfire report. Lodging it as it stands means the council assessing a report the developer has already refused.";
+    }
+    return "The bushfire report is still waiting on the estate developer's approval.";
+  })();
 
   const handleSetDeveloperRequired = async (required: boolean) => {
     try {
@@ -1501,14 +1599,48 @@ export function ProjectComplianceTab({
     engagement.status === CertifierEngagementStatus.APPROVED ||
     engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED;
 
+  /**
+   * Which certificate this file closes on, and the application behind it.
+   *
+   * Derived rather than stored, and derived here once rather than in each of the
+   * three places that want it: the portal block, the certificate block and the
+   * marker below all have to agree about whether this is a CDC job or a
+   * construction certificate job, and two readings of that question is a tab
+   * showing a CDC application above a construction certificate row.
+   */
+  /**
+   * Why the application cannot be lodged, in the server's own words.
+   *
+   * Read off the same function the route refuses with, so a locked block and a
+   * rejected request cannot give two accounts of one condition. The developer's
+   * covenant is passed in rather than read inside it, because whether the estate
+   * developer has signed off the plans is a fact about an outreach and
+   * `portal-certificates.ts` deliberately knows nothing about parties.
+   */
+  const portalCertificate = portalCertificateValues({
+    engagement,
+    documentsByType,
+    developerBlocked: developerPlansBlockedReason(engagement),
+  });
+  const { certificateHeld } = portalCertificate;
+
   const activeSection: SectionKey =
     unidentified.length > 0
       ? "unidentified"
-      : // Once the certifier has passed the checklist, the two documents that
-        // close the file are the only work left — so the marker comes off a
-        // twenty-row list nobody has anything more to do with.
+      : // Once the certifier has passed the checklist the remaining work is the
+        // lodgement and then the two documents that close the file — so the
+        // marker comes off a twenty-row list nobody has anything more to do with.
+        //
+        // The portal first and the certificate only once one is on the file. The
+        // order matters more than it looks: between the checklist passing and the
+        // certificate arriving there is a lodgement, an appointment and a
+        // fortnight's determination, and pointing the marker at "Certificate and
+        // cover" through all of that sent a reader to a block whose only row is
+        // one nobody can fill yet.
         checklistPassed
-        ? "certificate"
+        ? certificateHeld
+          ? "certificate"
+          : "planning-portal"
         : // A job waiting on development approval has a checklist it cannot work
           // on, so the DA is where the work is — and only while that is true.
           // Once the consent lands the checklist unfreezes and takes the marker
@@ -1691,6 +1823,25 @@ export function ProjectComplianceTab({
           }));
         }}
       />
+
+      {/* ---------------------------------------------------------------
+          The one question nothing on this file can answer for itself.
+
+          Above the blocks and below the route, which is where a prompt about the
+          whole job belongs: it is not a step of the flow and it is not a document,
+          it is a fact about the land that changes what two of the lodgements below
+          will accept.
+
+          Rendered only while unanswered. The answer is one column, so answering it
+          here, answering it on the development application block, or uploading a
+          land deed that names the developer all take the banner away for good.
+      --------------------------------------------------------------- */}
+      {needsEstateDeveloperAnswer ? (
+        <EstateDeveloperBanner
+          projectId={project.id}
+          address={engagement.subjectAddress}
+        />
+      ) : null}
 
       {/* ---------------------------------------------------------------
           The document blocks, on a recessed panel.
@@ -2074,67 +2225,72 @@ export function ProjectComplianceTab({
                 );
               }}
               developerBlock={
-                // Only where a bushfire report is wanted. On a lot that is not
-                // bushfire prone there is nothing for a covenant to be about,
-                // and the block would be a permanent unanswered question on the
-                // majority of jobs.
-                needsBushfireReport ? (
-                  <DeveloperApprovalBlock
-                    outreach={developerOutreach}
-                    required={engagement.developerApprovalRequired}
-                    report={bushfireRow}
-                    hasRevisedReport={hasRevisedReport}
-                    isBusy={isScopeBusy(complianceScope.developer)}
-                    onSetRequired={(required) =>
-                      void handleSetDeveloperRequired(required)
-                    }
-                    onEngage={() =>
-                      handleConnectParty(CompliancePartyType.DEVELOPER)
-                    }
-                    onDecide={(decision) =>
-                      dispatch(
-                        openModal({
-                          type: "developerDecision",
-                          payload: {
-                            projectId: project.id,
-                            decision,
-                            estate:
-                              developerByKey(developerOutreach?.developerKey)
-                                ?.estate ?? null,
-                          },
-                        }),
-                      )
-                    }
-                    onResend={() =>
-                      dispatch(
-                        openModal({
-                          type: "developerResend",
-                          payload: {
-                            projectId: project.id,
-                            previousReason:
-                              developerOutreach?.approvalReason ?? null,
-                            vaultOptions,
-                          },
-                        }),
-                      )
-                    }
-                  />
-                ) : null
+                // Rendered on every job whose lot might be in an estate, which is
+                // wider than it used to be. It was gated on a bushfire report
+                // being wanted, on the reading that a covenant is about bushfire
+                // construction standards — and the covenant also binds the
+                // architectural design, which every job has. So a lot that is not
+                // bushfire prone still needs the question asked; what drops away
+                // on such a job is the report's own panel, not the block.
+                <DeveloperApprovalBlock
+                  outreach={developerOutreach}
+                  required={engagement.developerApprovalRequired}
+                  developerName={engagement.estateDeveloperName}
+                  // The report's panel is dropped where the row is marked as not
+                  // applying: there is nothing for a covenant to be about on a lot
+                  // outside a bushfire-prone area, and a panel that can never be
+                  // satisfied is a gate nobody can clear.
+                  items={developerItems.filter(
+                    (item) =>
+                      item.documentType !==
+                        ComplianceDocumentType.BUSHFIRE_REPORT ||
+                      needsBushfireReport,
+                  )}
+                  isBusy={isScopeBusy(complianceScope.developer)}
+                  pendingDocumentType={developerPendingDocument}
+                  onSetRequired={(required) =>
+                    void handleSetDeveloperRequired(required)
+                  }
+                  onEngage={() =>
+                    handleConnectParty(CompliancePartyType.DEVELOPER)
+                  }
+                  onDecide={(documentType, decision) =>
+                    dispatch(
+                      openModal({
+                        type: "developerDecision",
+                        payload: {
+                          projectId: project.id,
+                          documentType,
+                          decision,
+                          estate:
+                            developerByKey(developerOutreach?.developerKey)
+                              ?.estate ?? null,
+                        },
+                      }),
+                    )
+                  }
+                  onResend={(documentType) =>
+                    dispatch(
+                      openModal({
+                        type: "developerResend",
+                        payload: {
+                          projectId: project.id,
+                          documentType,
+                          // This document's own objection, not whatever the row
+                          // last held. Quoting a refusal of the plans into a mail
+                          // about the report is the confusion the per-document
+                          // rows exist to prevent.
+                          previousReason:
+                            developerApprovalFor(engagement, documentType)
+                              ?.reason ?? null,
+                          vaultOptions,
+                        },
+                      }),
+                    )
+                  }
+                />
               }
-              blockedReason={
-                needsBushfireReport &&
-                !isDeveloperApprovalSettled({
-                  required: engagement.developerApprovalRequired,
-                  outreach: developerOutreach,
-                })
-                  ? engagement.developerApprovalRequired === null
-                    ? "Say whether this estate's developer has to approve the bushfire report before the application can be lodged."
-                    : developerOutreach?.approvalDecision ===
-                        ComplianceApprovalDecision.REJECTED
-                      ? "The estate developer rejected the bushfire report. Lodging it as it stands means the council assessing a report the developer has already refused."
-                      : "The bushfire report is still waiting on the estate developer's approval."
-                  : null
-              }
+              blockedReason={developerPlansBlockedReason(engagement) ?? bushfireDeveloperBlockedReason}
             />
           ) : null}
 
@@ -2215,21 +2371,10 @@ export function ProjectComplianceTab({
 
           </ComplianceSectionCard>
 
-          {/* -----------------------------------------------------------
-              The last two documents.
-
-              The insurance question used to sit at the bottom of the card
-              above, appearing the moment every checklist row had a file on it
-              — which is weeks before the certifier has finished with them. A
-              builder who answered "no" was being told to raise cover for a job
-              that might still come back with four amendments. It moved behind
-              the certificate, where the job is definitely proceeding.
-          ----------------------------------------------------------- */}
-          <CertificateAndCoverSection
-            className="md:col-span-2"
-            certificate={documentsByType.get(
-              ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
-            )}
+          <PortalCertificateBlock
+            projectId={project.id}
+            engagement={engagement}
+            values={portalCertificate}
             insurance={insuranceDocument}
             checklistPassed={checklistPassed}
             rowMode={rowMode}
@@ -2238,9 +2383,12 @@ export function ProjectComplianceTab({
             }
             onUpload={(file, target) => void attachEvidence(file, target)}
             onPreviewFile={handlePreviewFile}
-            isActive={activeSection === "certificate"}
-            open={isOpen("certificate")}
-            onOpenChange={toggleSection("certificate")}
+            portalIsActive={activeSection === "planning-portal"}
+            portalOpen={isOpen("planning-portal")}
+            onPortalOpenChange={toggleSection("planning-portal")}
+            certificateIsActive={activeSection === "certificate"}
+            certificateOpen={isOpen("certificate")}
+            onCertificateOpenChange={toggleSection("certificate")}
           />
         </div>
 
@@ -2256,7 +2404,7 @@ export function ProjectComplianceTab({
         {allEvidenceIn ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success-light px-4 py-3">
             <p className="flex-1 font-medium text-foreground">
-              Compliance and Certification complete
+              Checklist pack ready for certifier review
             </p>
             <Button
               type="button"

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Bell,
   CheckCircle2,
+  Download,
   Loader2,
   Send,
   Wrench,
@@ -76,6 +77,23 @@ function ComplianceAlertRow({
   const copy = COMPLIANCE_ALERT_COPY[alert.type];
   const isOpen = alert.status === ComplianceAlertStatus.OPEN;
 
+  /**
+   * An open alert that is good news, rendered as such.
+   *
+   * Three of the twenty-four are raised by the NSW Planning Portal *approving*
+   * something and sending no document with the email — so the file is approved
+   * and holding nothing, and there is one download left. Before this they came out
+   * in the same amber as a surveyor three weeks late, which was actively
+   * misleading: somebody scanning this panel saw a job in trouble on the morning
+   * its CDC came through.
+   *
+   * Still an open alert rather than a quiet status change, because the step that
+   * is left only a person can take, and a file that went silently "approved" with
+   * nothing on it is how a certificate sits undownloaded for a fortnight. What
+   * changes is the colour, the icon and the verb — not whether it is listed.
+   */
+  const isPositive = isOpen && copy.tone === "positive";
+
   const handleFollowUp = async () => {
     try {
       await dispatch(
@@ -95,12 +113,23 @@ function ComplianceAlertRow({
     <li
       className={cn(
         "flex flex-wrap items-start gap-3 rounded-[10px] border px-4 py-3",
-        isOpen
-          ? "border-warning/40 bg-warning-light"
-          : "border-border/70 bg-muted/40",
+        isPositive
+          ? "border-success/40 bg-success-light"
+          : isOpen
+            ? "border-warning/40 bg-warning-light"
+            : "border-border/70 bg-muted/40",
       )}
     >
-      {isOpen ? (
+      {/* A download rather than a tick on the positive ones, which is the
+          distinction the icon has to carry: a resolved alert also renders green,
+          and a tick on both would say "nothing to do here" on the one row that
+          has something to do. */}
+      {isPositive ? (
+        <Download
+          className="mt-0.5 size-4 shrink-0 text-success-ink"
+          aria-hidden="true"
+        />
+      ) : isOpen ? (
         <AlertTriangle
           className="mt-0.5 size-4 shrink-0 text-warning-ink"
           aria-hidden="true"
@@ -124,6 +153,9 @@ function ComplianceAlertRow({
             <StatusPill tone="neutral">
               via the {ALERT_SOURCE_LABEL[alert.raisedBySource]}
             </StatusPill>
+          ) : null}
+          {isPositive ? (
+            <StatusPill tone="success">Approved</StatusPill>
           ) : null}
           {!isOpen ? <StatusPill tone="success">Resolved</StatusPill> : null}
         </div>
@@ -320,9 +352,28 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
   }, [project.tradieSchedules]);
 
   const complianceAlerts = engagement?.alerts ?? [];
-  const openCount = complianceAlerts.filter(
+
+  /**
+   * The two counts on the header, and why they are two.
+   *
+   * "Open" has always meant "something on this job needs attention", and the
+   * download-ready alerts break that: they are open, and nothing is wrong. Folding
+   * them in put a number on this card that went *up* when a job went well — a
+   * builder whose CDC came through on the Tuesday saw their open count rise, which
+   * is the opposite of what the badge is read for.
+   *
+   * So they are counted separately and shown in green beside it. Not counted at
+   * all was the other option and is worse: a download nobody has done is the one
+   * outstanding thing on a finished-looking file, and a collapsed card with no
+   * number is a card nobody opens.
+   */
+  const openAlerts = complianceAlerts.filter(
     (alert) => alert.status === ComplianceAlertStatus.OPEN,
+  );
+  const readyCount = openAlerts.filter(
+    (alert) => COMPLIANCE_ALERT_COPY[alert.type].tone === "positive",
   ).length;
+  const openCount = openAlerts.length - readyCount;
 
   /**
    * Whether one alert has anybody to chase.
@@ -368,6 +419,11 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
               number on this card that goes up when a job is going well. */}
           {openCount > 0 ? (
             <StatusPill tone="warning">{openCount} open</StatusPill>
+          ) : null}
+          {readyCount > 0 ? (
+            <StatusPill tone="success">
+              {readyCount} ready to download
+            </StatusPill>
           ) : null}
         </CardTitle>
       </CardHeader>

@@ -14,6 +14,7 @@
 import { z } from "zod";
 import { activityLogSchemas } from "@/utils/validators";
 import { v4 as uuidv4 } from "uuid";
+import { dateFormat } from "@/utils/formatters";
 
 
 /**
@@ -300,6 +301,18 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    compliancePrincipalCertifierAppointed: (data) => ({
+        id: uuidv4(),
+        type: "compliancePrincipalCertifierAppointed",
+        // The reference is named where there is one, because this is the entry
+        // somebody reads when the appointment has to be chased on the portal and
+        // nobody remembers which of two certifiers was named.
+        message: `${data.recordedByName} recorded the principal certifier appointment on ${dateFormat.format(new Date(data.appointedAt))}${data.appointmentRef ? ` (${data.appointmentRef})` : ""}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceChecklistMapped: (data) => ({
         id: uuidv4(),
         type: "complianceChecklistMapped",
@@ -337,6 +350,15 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         id: uuidv4(),
         type: "complianceBushfireRevisionRequested",
         message: `Sent the developer's reasons to the bushfire consultant and asked for a revised report: "${data.reason}"`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceArchitectRevisionRequested: (data) => ({
+        id: uuidv4(),
+        type: "complianceArchitectRevisionRequested",
+        message: `Sent the developer's reasons to the architect and asked for a revised architectural design: "${data.reason}"`,
         authorId: "system",
         timestamp: new Date().toISOString(),
         projectId: data.projectId,

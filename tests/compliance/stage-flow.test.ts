@@ -174,6 +174,12 @@ test("every file carries the whole route, approval branch included", () => {
       "CERTIFIER",
       "DEVELOPMENT_APPLICATION",
       "CHECKLIST",
+      // The lodgement between the checklist passing and the certificate landing.
+      // It was missing, which is the drift this node was added to fix: the file
+      // went straight from a certifier passing the last item to the certificate
+      // being on the file, and what sits between them is a portal application,
+      // a principal certifier appointment and a fortnight's determination.
+      "PLANNING_PORTAL",
       "CERTIFICATE",
     ],
   );
@@ -772,6 +778,7 @@ test("every alert type lands on a stage that exists", () => {
     "CERTIFIER",
     "DEVELOPMENT_APPLICATION",
     "CHECKLIST",
+    "PLANNING_PORTAL",
     "CERTIFICATE",
   ]);
 
@@ -783,13 +790,20 @@ test("every alert type lands on a stage that exists", () => {
   }
 });
 
-test("every open alert reddens some node on the flow it is raised against", () => {
+test("every open alert marks some node on the flow it is raised against", () => {
   // The guard the routing table cannot give on its own. `ALERT_STAGE` is
   // exhaustive over the enum, so a stage id is always produced -- but the flow
   // only builds a DEVELOPMENT_APPLICATION node on files that have one, and five
   // of the alerts routed there can be raised on a file that does not. Each of
-  // those reddened nothing anywhere, on a file where something was genuinely
-  // late.
+  // those marked nothing anywhere, on a file where something was genuinely late.
+  //
+  // "Marks" rather than "reddens", which is the widening the download-ready
+  // alerts forced. Those three are raised by the portal approving something, so
+  // reddening a node over one would tell a reader a job was in trouble on the
+  // day its CDC came through -- but they still have a step left that only a
+  // person can take, so the node still has to say so. `hasPortalDownload` is
+  // where they land, and the invariant is that every alert lands somewhere
+  // visible rather than that every alert is a complaint.
   for (const type of Object.values(ComplianceAlertType)) {
     const file = engagement({ alerts: [alert(type)] as never });
     const stages = complianceStageFlow(file, MONDAY);
@@ -800,10 +814,39 @@ test("every open alert reddens some node on the flow it is raised against", () =
       `${type} routes to ${target}, which is not on this file's flow`,
     );
     assert.ok(
-      stages.some((entry) => entry.isOverdue),
-      `${type} reddens nothing`,
+      stages.some((entry) => entry.isOverdue || entry.hasPortalDownload),
+      `${type} marks nothing`,
     );
   }
+});
+
+test("a portal download marks its node green rather than red", () => {
+  // The whole point of the tone split, pinned from both sides. A determination
+  // waiting to be fetched is not a node anybody is late on, and it is not a node
+  // a reader should scroll past either.
+  for (const type of [
+    ComplianceAlertType.CDC_DOWNLOAD_READY,
+    ComplianceAlertType.CC_DOWNLOAD_READY,
+  ]) {
+    const file = engagement({ alerts: [alert(type)] as never });
+    const portal = stage(complianceStageFlow(file, MONDAY), "PLANNING_PORTAL");
+
+    assert.equal(portal.hasPortalDownload, true, `${type} marks no download`);
+    assert.equal(portal.isOverdue, false, `${type} reddened its node`);
+  }
+});
+
+test("a determination overdue still reddens the portal node", () => {
+  // The counterpart, and the reason the two flags are independent rather than one
+  // enum: the same stage has to be able to say "late" as loudly as it says
+  // "ready", and on a file carrying both it has to say both.
+  const file = engagement({
+    alerts: [alert(ComplianceAlertType.CDC_DETERMINATION_OVERDUE)] as never,
+  });
+  const portal = stage(complianceStageFlow(file, MONDAY), "PLANNING_PORTAL");
+
+  assert.equal(portal.isOverdue, true);
+  assert.equal(portal.hasPortalDownload, false);
 });
 
 test("a levy late on a CDC reddens the checklist, not a DA that is not there", () => {

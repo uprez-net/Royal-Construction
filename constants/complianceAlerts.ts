@@ -44,6 +44,27 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
        * this file, which is `canFollowUp` below.
        */
       followUp?: string;
+      /**
+       * How the row reads, where it does not read as a problem.
+       *
+       * Absent on twenty-one of the twenty-four, and absent means amber: an
+       * open alert is something outstanding, which is what the panel was built
+       * to say and what the colour has always meant.
+       *
+       * The three download-ready alerts are the exception and are the reason
+       * this field exists. They are raised by the portal *approving* something
+       * \u2014 the best news a compliance file gets \u2014 and rendering them in the same
+       * amber as a surveyor three weeks late was actively misleading: a reader
+       * scanning the panel saw a job in trouble on the day its CDC came
+       * through. They are still alerts rather than a quiet status change,
+       * because there is a step left that only a person can take, and a file
+       * that silently went "approved" with nothing on it is how a certificate
+       * sits undownloaded for a fortnight.
+       *
+       * A tone rather than a boolean so a third reading has somewhere to go
+       * without every consumer growing a second conditional.
+       */
+      tone?: "positive";
     }
   >
 > = {
@@ -175,6 +196,74 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
     title: "Development application still undetermined",
     guidance:
       "The DA has been with the council for more than sixty working days, which is well past what a residential application normally takes. Ring the assessing officer using the DA number on the block. This closes itself when the determination is recorded.",
+  },
+
+  // -------------------------------------------------------------------
+  // The two certificate applications.
+  //
+  // Chased the way every other portal wait is — by ringing, with the reference
+  // off the block — so neither has a button. What is different is who is at the
+  // other end: a CDC and a construction certificate are determined by the
+  // registered certifier this file has been corresponding with for weeks, not
+  // by a council. So the guidance names them, because there *is* somebody to
+  // ring and they are already on the thread.
+  // -------------------------------------------------------------------
+
+  [ComplianceAlertType.CDC_DETERMINATION_OVERDUE]: {
+    title: "CDC still undetermined",
+    guidance:
+      "The complying development certificate application has been with the certifier past the fourteen working days a determination normally takes. Check the portal for a request for further information — the clock stops while one is outstanding — and ring the certifier using the application number on the block. This closes itself when the determination is recorded or the certificate is on the file.",
+  },
+  [ComplianceAlertType.CC_DETERMINATION_OVERDUE]: {
+    title: "Construction certificate still undetermined",
+    guidance:
+      "The construction certificate application has been with the certifier past the twenty-eight working days a determination normally takes. Check the portal for a request for further information and ring the certifier using the application number on the block. This closes itself when the determination is recorded or the certificate is on the file.",
+  },
+
+  // The developer sitting on the plans, which is a different wait from the same
+  // developer sitting on the report. Worded to say which document, because the
+  // two can be open together and "Developer approval pending" twice is a panel
+  // nobody can act on.
+  [ComplianceAlertType.DEVELOPER_PLANS_OVERDUE]: {
+    title: "Developer approval of the plans pending",
+    guidance:
+      "The full architectural design went to the estate developer more than eleven working days ago and no decision has come back. Their covenant has to be satisfied before the application is lodged. The follow-up asks for a decision on their thread; it closes itself when they approve or reject the plans, whether that arrives by email or somebody records it here.",
+    followUp: "Send a follow up",
+  },
+
+  // -------------------------------------------------------------------
+  // The portal has said yes, and the document is still not here.
+  //
+  // The only three alerts on this file that are not a complaint. Each is raised
+  // by a determination arriving as an email that carries no attachment: the
+  // portal says the application has been approved and tells the applicant to
+  // log in and fetch the certificate.
+  //
+  // No follow-up on any of them, and that absence means something different
+  // here than it does on the portal waits above. There is nobody to chase
+  // because there is nothing to chase — the work is done, and what is left is
+  // one download by the person reading this line. Which is why each guidance
+  // says the same two things: the email is not the document, and here is where
+  // the document goes.
+  // -------------------------------------------------------------------
+
+  [ComplianceAlertType.CDC_DOWNLOAD_READY]: {
+    title: "CDC approved — ready to download",
+    guidance:
+      "The certifier has determined the application and the complying development certificate is waiting on the NSW Planning Portal. Log in, download it, and upload it to the certificate block — the portal's email is a notification and does not carry the certificate. The compliance file closes once it and the HBCF cover are both on it.",
+    tone: "positive",
+  },
+  [ComplianceAlertType.CC_DOWNLOAD_READY]: {
+    title: "Construction certificate approved — ready to download",
+    guidance:
+      "The certifier has determined the application and the construction certificate is waiting on the NSW Planning Portal. Log in, download it, and upload it to the certificate block — the portal's email is a notification and does not carry the certificate. The compliance file closes once it and the HBCF cover are both on it.",
+    tone: "positive",
+  },
+  [ComplianceAlertType.DA_DOWNLOAD_READY]: {
+    title: "Development consent granted — ready to download",
+    guidance:
+      "The council has determined the application and the notice of determination is waiting on the NSW Planning Portal. Log in, download it, and upload it to the development application block. The certifier's checklist stays frozen until the notice itself is on the file — a ticked box is not something they can assess against.",
+    tone: "positive",
   },
 };
 

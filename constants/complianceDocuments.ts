@@ -357,12 +357,40 @@ export const WASTE_MANAGEMENT_PLAN_PARTY = CompliancePartyType.ARCHITECT;
 export const WASTE_MANAGEMENT_BUSINESS_DAYS = 11;
 
 /**
- * The document a developer's approval is sought on.
+ * The documents a developer's approval is sought on.
  *
- * One type, and named rather than inlined at the six places that gate on it.
- * The developer step exists because of a covenant about bushfire construction
- * standards specifically -- it is not a general "somebody senior signs off the
- * pack" step, and writing it as one would invite it to grow into one.
+ * Two, and it was one. The step was built for a covenant about bushfire
+ * construction standards specifically, and that reading was too narrow: what an
+ * estate covenant actually protects is the house as it will be built, so the
+ * developer approves the full architectural design as well — the siting, the
+ * facade, the roof pitch, the materials. A builder who had the bushfire report
+ * signed off and lodged against unapproved plans had satisfied half a condition.
+ *
+ * Still a named list rather than "somebody senior signs off the pack", for the
+ * reason the single constant was named: these are the two documents a covenant
+ * binds, and leaving the set open would invite every future reviewer to be added
+ * to it.
+ *
+ * Order is the order they are asked for, which is the order they are produced
+ * in: the plans come off the architect's board long before a bushfire consultant
+ * is engaged off a checklist line.
+ */
+export const DEVELOPER_APPROVAL_DOCUMENTS = [
+  ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  ComplianceDocumentType.BUSHFIRE_REPORT,
+] as const;
+
+export type DeveloperApprovalDocument =
+  (typeof DEVELOPER_APPROVAL_DOCUMENTS)[number];
+
+/**
+ * The bushfire report, still named on its own.
+ *
+ * Kept because the existing bushfire loop reads it in a dozen places and every
+ * one of them is specifically about that report: the consultant who redoes it,
+ * the revision round the rejection opens, the alert that measures the redraw.
+ * None of those generalise to the architectural design, which is revised by the
+ * architect through a loop of its own that already exists.
  */
 export const DEVELOPER_APPROVAL_DOCUMENT =
   ComplianceDocumentType.BUSHFIRE_REPORT;
@@ -802,11 +830,18 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   ComplianceDocumentType.BUILD_COST_SUMMARY,
   ComplianceDocumentType.OWNER_CONSENT_FORM,
   ComplianceDocumentType.DEVELOPMENT_CONSENT,
-  // What the certifier issues at the end. Classifiable because it arrives the
-  // same way their checklist does -- as an attachment on the thread we already
-  // hold -- and misreading it as anything else would leave the file one
-  // document short of finished with nothing saying which.
+  // The two certificates that end the file. Classifiable even though neither
+  // normally arrives by mail: both are downloaded off the portal and uploaded by
+  // hand, which is not a path the classifier sees at all.
+  //
+  // Kept classifiable for the case that is left, which is common enough to
+  // matter: a certifier who has just determined an application routinely
+  // forwards the certificate on the thread as a courtesy, ahead of or instead of
+  // the applicant fetching it. Leaving either unreadable would put the one
+  // document the file is waiting on into the needs-identifying queue, with the
+  // job reading as unfinished beside it.
   ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
   // Not part of the pack, but a surveyor routinely quotes the deed back on
   // their reply, and a copy the classifier cannot name lands in the
   // needs-identifying queue for somebody to place by hand.
@@ -882,8 +917,15 @@ const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
   // this fallback only on a row written before one was captured. Worded as the
   // body would word it, for the same reason as the block above.
   [ComplianceDocumentType.DA_ITEM]: "Development application item",
-  [ComplianceDocumentType.CONSTRUCTION_CERTIFICATE]:
-    "Construction Certificate",
+  [ComplianceDocumentType.CONSTRUCTION_CERTIFICATE]: "Construction Certificate",
+  // Spelt out with the initials after it, which is the one label in this table
+  // that carries both. "CDC" is what everybody on the job says and what the
+  // portal calls the application; "Complying Development Certificate" is what is
+  // printed on the document. A row showing only the initials reads as the CDC
+  // *form* the certifier sent back at the start of the engagement, which is a
+  // different document on the same file.
+  [ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE]:
+    "Complying Development Certificate (CDC)",
 };
 
 /**
@@ -1100,6 +1142,10 @@ export const EXTERNAL_APPLICATION_DOCUMENT_TYPE: Readonly<
     ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL,
   [ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION]:
     ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  [ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE]:
+    ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
+  [ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE]:
+    ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
 };
 
 const EXTERNAL_APPLICATION_BY_DOCUMENT_TYPE = new Map<
@@ -1135,6 +1181,38 @@ export function externalApplicationForDocumentType(
  * is the fastest way to teach people to stop reading the panel.
  */
 export const DA_DETERMINATION_BUSINESS_DAYS = 60;
+
+/**
+ * How long the two certificate determinations take, in working days.
+ *
+ * The only two thresholds in this file derived from a published statutory figure
+ * rather than from what a firm quotes, and the conversion is the part worth
+ * spelling out. The regulation counts **calendar** days; every clock in this
+ * system counts NSW **business** days, because that is the unit a builder chases
+ * in and the one `businessDaysSince` measures. So the statutory number has to be
+ * converted, not copied.
+ *
+ *  - A complying development certificate is to be determined within **20
+ *    calendar days** of a complete application (NSW DPE, complying development
+ *    pathway). Twenty calendar days spans four weekends, leaving 14 working days.
+ *  - A construction certificate has a **40 calendar day** deemed-refusal period
+ *    (cl. 119, EP&A (Development Certification and Fire Safety) Regulation
+ *    2021). Forty calendar days leaves 28.
+ *
+ * Copying 20 and 40 across as working days was the first cut and it is wrong in
+ * the one direction that matters: 20 working days is 28 calendar days, so the CDC
+ * alert would not have fired until more than a week after the statutory
+ * determination date had already passed — on the one wait where the date is a
+ * legal entitlement rather than a courtesy.
+ *
+ * Both are a floor rather than a promise, for a reason neither figure shows: the
+ * clock stops while a certifier's request for further information is outstanding.
+ * So an application legitimately past these days is common, and the alert says to
+ * check the portal for an RFI before ringing anybody. It is still worth raising —
+ * an RFI sitting unanswered is exactly the thing that goes unnoticed.
+ */
+export const CDC_DETERMINATION_BUSINESS_DAYS = 14;
+export const CC_DETERMINATION_BUSINESS_DAYS = 28;
 
 /**
  * Everything one application needs to render itself and to be chased.
@@ -1220,6 +1298,42 @@ export const EXTERNAL_APPLICATION_COPY: Readonly<
     instruction:
       "Lodge the development application on the NSW Planning Portal with the documents above, then record the DA number here.",
     turnaround: "weeks to months",
+  },
+
+  // -------------------------------------------------------------------
+  // The two certificates.
+  //
+  // The same five fields as every permit above, which is the whole reason they
+  // are in this table rather than in a block of their own: a certificate
+  // application is a portal, a date, a reference and a wait, and the existing
+  // block renders all of that already.
+  //
+  // What is unlike the permits is who answers. A 10.7 or a levy receipt comes
+  // back from a website; these come back from the registered certifier already on
+  // the thread, which is why both turnarounds name the statute rather than
+  // "usually" — the builder is entitled to the determination, and saying so is
+  // what makes chasing it reasonable.
+  // -------------------------------------------------------------------
+
+  [ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE]: {
+    label: "Complying development certificate",
+    portal: "NSW Planning Portal",
+    url: "https://www.planningportal.nsw.gov.au/onlinecdc",
+    businessDays: CDC_DETERMINATION_BUSINESS_DAYS,
+    alertType: ComplianceAlertType.CDC_DETERMINATION_OVERDUE,
+    instruction:
+      "Lodge the CDC application on the NSW Planning Portal with the approved checklist pack, and appoint the certifier as principal certifier in the same sitting. Record the date and the application number here.",
+    turnaround: "the 20 calendar days the regulation allows, about 14 working days",
+  },
+  [ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE]: {
+    label: "Construction certificate",
+    portal: "NSW Planning Portal",
+    url: "https://www.planningportal.nsw.gov.au/development-and-assessment/post-consent-certificates/construction-certificate",
+    businessDays: CC_DETERMINATION_BUSINESS_DAYS,
+    alertType: ComplianceAlertType.CC_DETERMINATION_OVERDUE,
+    instruction:
+      "Lodge the construction certificate application on the NSW Planning Portal with the consent and the approved checklist pack. Record the date and the application number here.",
+    turnaround: "the 40 calendar days before a deemed refusal, about 28 working days",
   },
 };
 
@@ -1355,10 +1469,12 @@ const NOT_CHECKLIST_MAPPABLE: ReadonlySet<ComplianceDocumentType> = new Set([
   ComplianceDocumentType.DA_ITEM,
   ComplianceDocumentType.UNKNOWN,
 
-  // What the certifier issues after the checklist has passed. A line on that
-  // checklist cannot be answered by the document the checklist itself has to be
-  // finished before anybody will issue.
+  // The two certificates the file ends on. A line on the checklist cannot be
+  // answered by a document that only exists once the checklist has passed and
+  // the application built on it has been determined -- the dependency runs
+  // entirely the other way.
   ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
 ]);
 
 /**

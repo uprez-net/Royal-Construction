@@ -1,6 +1,9 @@
 "use client";
 
-import { ComplianceApprovalDecision } from "@prisma/client";
+import {
+  ComplianceApprovalDecision,
+  ComplianceDocumentType,
+} from "@prisma/client";
 import { Check, Loader2, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -14,6 +17,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  complianceDocumentLabel,
+  type DeveloperApprovalDocument,
+} from "@/constants/complianceDocuments";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDispatch } from "@/lib/store/hooks";
@@ -21,6 +28,15 @@ import { recordDeveloperDecision } from "@/lib/store/slices/projectsSlice";
 
 type DeveloperDecisionModalProps = {
   projectId: string;
+  /**
+   * Which document they are answering about.
+   *
+   * Optional, and defaulted to the bushfire report. The covenant covers the
+   * architectural design too, and the dialog names whichever it was opened for —
+   * a confirmation that says "the report" over a verdict about the drawings is
+   * the one place this dialog could mislead somebody into an irreversible click.
+   */
+  documentType?: DeveloperApprovalDocument;
   decision: ComplianceApprovalDecision;
   /** The estate, for the heading. Blank on a row whose list entry has gone. */
   estate?: string | null;
@@ -29,7 +45,7 @@ type DeveloperDecisionModalProps = {
 };
 
 /**
- * Records the estate developer's answer on the bushfire report.
+ * Records the estate developer's answer on one document under covenant.
  *
  * One dialog for both verdicts rather than a modal for the refusal and a bare
  * button for the approval, because they are the same act — a person has read
@@ -48,6 +64,7 @@ type DeveloperDecisionModalProps = {
  */
 export function DeveloperDecisionModal({
   projectId,
+  documentType = ComplianceDocumentType.BUSHFIRE_REPORT,
   decision,
   estate,
   open,
@@ -59,6 +76,7 @@ export function DeveloperDecisionModal({
 
   const isRejecting = decision === ComplianceApprovalDecision.REJECTED;
   const who = estate?.trim() || "the estate developer";
+  const what = complianceDocumentLabel(documentType).toLowerCase();
 
   const close = () => {
     setReason("");
@@ -74,13 +92,14 @@ export function DeveloperDecisionModal({
       await dispatch(
         recordDeveloperDecision({
           projectId,
+          documentType,
           decision,
           reason: isRejecting ? trimmed : undefined,
         }),
       ).unwrap();
       toast.success(
         isRejecting
-          ? "Recorded, and sent on to the bushfire consultant."
+        ? `Recorded, and sent on to whoever produced the ${what}.`
           : "Developer approval recorded.",
       );
       close();
@@ -116,8 +135,8 @@ export function DeveloperDecisionModal({
           </DialogTitle>
           <DialogDescription>
             {isRejecting
-              ? `What ${who} said goes straight to the bushfire consultant on their own thread, word for word, with the report attached. The file then waits on a revised assessment.`
-              : `This records that ${who} has approved the bushfire report. It is one of the things holding the development application shut, so the pack becomes lodgeable once every other row is answered.`}
+              ? `What ${who} said goes straight to whoever produced the ${what}, on their own thread, word for word and with the document attached. The file then waits on a revised version.`
+              : `This records that ${who} has approved the ${what}. It is one of the things holding the lodgement shut, so the pack becomes lodgeable once every other row is answered.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -139,8 +158,8 @@ export function DeveloperDecisionModal({
               onChange={(event) => setReason(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Their words, not a summary. The consultant redoing the report has
-              only this to work from.
+              Their words, not a summary. Whoever redoes the {what} has only this
+              to work from.
             </p>
           </div>
         ) : null}

@@ -20,8 +20,10 @@ import {
   WASTE_MANAGEMENT_BUSINESS_DAYS,
 } from "@/constants/complianceDocuments";
 import { businessDaysSince } from "@/lib/dates/business-days";
+import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
 import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
 import {
+  developerApprovalFor,
   externalApplication,
   latestSubmission,
   meetingHeldAt,
@@ -310,12 +312,61 @@ export function assessOverdueConditions(
       requiresPlanningCertificate(engagement) ||
       Boolean(application?.appliedAt);
 
-    if (!wanted || documentIn || application?.receivedAt) {
+    /**
+     * The download the portal's approval email leaves behind.
+     *
+     * Raised and resolved here rather than only on the arrival of the mail,
+     * because closing is the half that gets forgotten and this one closes on an
+     * event the mail handler cannot see: somebody uploading the certificate.
+     * The full nightly recompute is exactly what that asymmetry is for.
+     *
+     * Three kinds can be in this state -- both certificates and the development
+     * application -- and `PORTAL_DOWNLOAD_ALERT` is partial over the seven, so a
+     * kind with no entry simply never reaches the raise.
+     */
+    const downloadAlert = PORTAL_DOWNLOAD_ALERT[kind];
+    if (downloadAlert) {
+      if (application?.approvalNotifiedAt && !documentIn) {
+        raise.push({
+          type: downloadAlert,
+          source: ComplianceAlertSource.COUNCIL,
+          detail: `Determined ${workingDays(
+            businessDaysSince(application.approvalNotifiedAt, now),
+          )} ago${
+            application.applicationRef
+              ? ` under ${application.applicationRef}`
+              : ""
+          }. The ${copy.label.toLowerCase()} is on the portal and not on the file.`,
+        });
+      } else if (documentIn) {
+        resolve.push({
+          type: downloadAlert,
+          note: `${copy.label} has been downloaded and is on the file.`,
+        });
+      }
+    }
+
+    /**
+     * What stops the determination clock.
+     *
+     * `approvalNotifiedAt` is the addition, and it is the whole reason that
+     * column exists. The portal answering is what ends the wait on *them*; the
+     * document arriving is a separate wait on us, and chasing a certifier who has
+     * already determined the application is the complaint this prevents. The
+     * download-ready alert above is what carries the remaining step, so nothing
+     * is lost by closing this one.
+     */
+    if (
+      !wanted ||
+      documentIn ||
+      application?.receivedAt ||
+      application?.approvalNotifiedAt
+    ) {
       resolve.push({
         type: copy.alertType,
         note: documentIn
           ? `${copy.label} is on the file.`
-          : application?.receivedAt
+          : (application?.receivedAt ?? application?.approvalNotifiedAt)
             ? `${copy.label} came back.`
             : `${copy.label} is not part of this job.`,
       });
@@ -460,31 +511,62 @@ export function assessOverdueConditions(
   // -------------------------------------------------------------------
   // The estate developer, and the rework a refusal from them causes.
   //
-  // Two clocks on one report, and they are never both running: the first is the
-  // wait on a verdict, the second is the wait on a consultant to answer it.
-  // Separate types because at most one alert of a type is open per file, and
-  // "waiting on the developer" and "waiting on the consultant to redo it" want
-  // different chases sent to different people.
+  // Two documents under covenant and three clocks. The developer is waiting on
+  // twice over -- once for the bushfire report and once for the full
+  // architectural design -- and a refusal of the report opens a third wait on the
+  // consultant who has to redo it.
+  //
+  // One alert type per wait, because at most one alert of a type is open per file
+  // and all three can be live at once: a developer sitting on the plans while the
+  // report they rejected last month is still being redone is an ordinary state of
+  // a job, not an edge case. Folding the two documents into
+  // DEVELOPER_RESPONSE_OVERDUE meant a file could only ever say one of them out
+  // loud, and the chase went out naming the wrong document.
+  //
+  // Each clock runs from the request for *that* document rather than from the
+  // outreach, which is the correction the per-document rows made possible. The
+  // plans go over when the architect finishes them and the report weeks or months
+  // later off a checklist line, so one clock off `outreach.sentAt` had the second
+  // document overdue on the day it was sent.
   // -------------------------------------------------------------------
   const developer = outreachForParty(engagement, CompliancePartyType.DEVELOPER);
 
-  if (!developer || !developer.sentAt || developer.approvalDecision) {
-    // Nobody asked, or they have answered. A rejection counts as answered: the
-    // wait has moved to the consultant, and chasing a developer who has already
-    // told us no is the alert pointing at the wrong party.
-    resolve.push({
+  const developerWaits = [
+    {
+      documentType: ComplianceDocumentType.BUSHFIRE_REPORT,
       type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
-      note: developer?.approvalDecision
-        ? "The developer has given their answer."
-        : "Nobody is waiting on a developer approval.",
-    });
-  } else {
-    const elapsed = businessDaysSince(developer.sentAt, now);
+      label: "The bushfire report",
+    },
+    {
+      documentType: ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+      type: ComplianceAlertType.DEVELOPER_PLANS_OVERDUE,
+      label: "The architectural design",
+    },
+  ] as const;
+
+  for (const wait of developerWaits) {
+    const approval = developerApprovalFor(engagement, wait.documentType);
+
+    if (!developer || !approval || approval.decision) {
+      // Nobody asked, it was never put to them, or they have answered. A
+      // rejection counts as answered: the wait has moved to whoever has to redo
+      // the document, and chasing a developer who has already told us no is the
+      // alert pointing at the wrong party.
+      resolve.push({
+        type: wait.type,
+        note: approval?.decision
+          ? "The developer has given their answer."
+          : "Nobody is waiting on a developer approval.",
+      });
+      continue;
+    }
+
+    const elapsed = businessDaysSince(approval.requestedAt, now);
     if (elapsed > PARTY_RESPONSE_BUSINESS_DAYS[CompliancePartyType.DEVELOPER]) {
       raise.push({
-        type: ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+        type: wait.type,
         source: ComplianceAlertSource.DEVELOPER,
-        detail: `The bushfire report went to them ${workingDays(elapsed)} ago and no decision has come back.`,
+        detail: `${wait.label} went to them ${workingDays(elapsed)} ago and no decision has come back.`,
       });
     }
   }
