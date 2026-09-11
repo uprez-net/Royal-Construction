@@ -254,7 +254,7 @@ export const estateDeveloperSchema = z
   .object({
     required: z.boolean(),
     name: normalizedStringSchema.optional(),
-    email: z.email().trim().optional().or(z.literal("")),
+    email: z.string().trim().check(z.email()).optional().or(z.literal("")),
     phone: normalizedStringSchema.optional(),
   })
   .refine((input) => !input.required || Boolean(input.name?.trim()), {
