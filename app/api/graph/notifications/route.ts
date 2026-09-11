@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
+import { isOwnMailbox, resolveLeadEmail } from '@/lib/graph/mailbox';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
 
@@ -84,12 +85,18 @@ export async function checkLeadPresentWithEmailPhone(
 ): Promise<boolean> {
   const orConditions: Prisma.LeadWhereInput[] = [];
 
-  const normalizedFromEmail = fromEmail?.trim().toLowerCase();
+  // Our own mailbox is never a lead identity. It appears as the sender on every
+  // website form notification and as a recipient on essentially all inbound
+  // mail, so matching on it would make one lead swallow the entire inbox.
+  const normalizedFromEmail = isOwnMailbox(fromEmail)
+    ? undefined
+    : fromEmail?.trim().toLowerCase();
   const normalizedContactNo = contactNo?.trim();
 
   const normalizedToEmails = toEmails
     .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((email) => !isOwnMailbox(email));
 
   if (normalizedFromEmail) {
     orConditions.push({
@@ -370,17 +377,28 @@ export async function POST(request: Request): Promise<Response> {
                   console.log(`  Lead with MicrosoftmessageId: ${message.id} was already processed while extracting. Aborting database save.`);
                   continue;
                 }
-                else if (await checkLeadPresentWithEmailPhone(extracted.Email, [], extracted.ContactNo == null ? "" : String(extracted.ContactNo))) {
-                  console.log(`  Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists in database. Aborting database save.`);
+                const leadEmail = resolveLeadEmail(message.from, extracted.Email);
+                const phoneVal = extracted.ContactNo ?? '';
+
+                // Only reachable when the sender is our own mailbox and the
+                // model found no address in the body. Logged distinctly
+                // rather than skipped: the phone and notes may still be a
+                // reachable lead, and dropping the enquiry here would
+                // recreate the silent-loss failure this fix exists to close.
+                if (!leadEmail) {
+                  console.warn(`  No client email resolved for message ${message.id}; saving lead without one.`);
+                }
+
+                if (await checkLeadPresentWithEmailPhone(leadEmail, [], phoneVal)) {
+                  console.log(`  Lead with Email: ${leadEmail} or ContactNo: ${phoneVal} already exists in database. Aborting database save.`);
                   continue;
                 }
 
-                const phoneVal = extracted.ContactNo != null ? String(extracted.ContactNo) : '';
                 console.log('  Saving lead to database...');
                 const newLead = await prisma.lead.create({
                   data: {
                     name: extracted.Name || 'Unknown Lead',
-                    email: message.from || extracted.Email,
+                    email: leadEmail,
                     phone: phoneVal,
                     location: extracted.Address || '',
                     sourceDetail: 'Website',
@@ -395,7 +413,10 @@ export async function POST(request: Request): Promise<Response> {
                 // ═══════════════════════════════════════════════════════
                 // SEND WELCOME EMAIL AUTOMATICALLY
                 // ═══════════════════════════════════════════════════════
-                if (newLead.email && newLead.name && graphClient) {
+                // isOwnMailbox is belt and braces over resolveLeadEmail: a
+                // welcome email addressed to ourselves is both useless to the
+                // client and a fresh inbound message for this very route.
+                if (newLead.email && newLead.name && graphClient && !isOwnMailbox(newLead.email)) {
                   console.log('  Sending welcome email to new lead...');
                   try {
                     // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
