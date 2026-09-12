@@ -11,6 +11,7 @@ import { extractLeadFromMessage, type LeadExtraction } from '@/lib/graph/lead-ex
 import { archiveLeadAttachments } from '@/lib/leads/archive-lead-attachments';
 import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
 import { renderEmailHtml } from '@/lib/leads/render-email-html';
+import { isOwnMailbox, resolveLeadEmail } from '@/lib/graph/mailbox';
 import prisma from '@/lib/prisma';
 
 /**
@@ -108,18 +109,26 @@ async function saveLead(
     return { leadId: existing.id, created: false };
   }
 
+  // The envelope is preferred for a direct enquiry, where the mail system has
+  // verified it; it falls back to what the model read from the body only when
+  // the sender is our own mailbox — a website form notification is sent by
+  // that mailbox to itself, so the envelope names us rather than the client.
+  const leadEmail = resolveLeadEmail(message.from, extracted.Email);
+  const phoneVal = extracted.ContactNo ?? '';
+
+  // Only reachable when the sender is our own mailbox and the model found no
+  // address in the body. Logged distinctly rather than treated as a reason to
+  // drop the enquiry: the phone and notes may still be a reachable lead.
+  if (!leadEmail) {
+    console.warn(`No client email resolved for message ${message.messageId}; saving lead without one.`);
+  }
+
   // The same person writing in from a second address, or a form that fires
   // twice. Checked against what the model read rather than the envelope, which
   // is why it cannot happen before extraction.
-  if (
-    await checkLeadPresentWithEmailPhone(
-      extracted.Email,
-      [],
-      extracted.ContactNo == null ? '' : String(extracted.ContactNo),
-    )
-  ) {
+  if (await checkLeadPresentWithEmailPhone(leadEmail, [], phoneVal)) {
     console.log(
-      `Lead with Email: ${extracted.Email} or ContactNo: ${extracted.ContactNo} already exists. Aborting save.`,
+      `Lead with Email: ${leadEmail} or ContactNo: ${phoneVal} already exists. Aborting save.`,
     );
     return null;
   }
@@ -127,8 +136,8 @@ async function saveLead(
   const lead = await prisma.lead.create({
     data: {
       name: extracted.Name || 'Unknown Lead',
-      email: message.from || extracted.Email,
-      phone: extracted.ContactNo != null ? String(extracted.ContactNo) : '',
+      email: leadEmail,
+      phone: phoneVal,
       location: extracted.Address || '',
       sourceDetail: 'Website',
       stage: 'CONTACTED',
@@ -164,7 +173,10 @@ async function sendWelcomeEmail(leadId: number): Promise<boolean> {
 
   try {
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!lead?.email || !lead.name) {
+    // isOwnMailbox is belt and braces over resolveLeadEmail: a welcome email
+    // addressed to ourselves is both useless to the client and a fresh
+    // inbound message for the notifications route to (mis)process.
+    if (!lead?.email || !lead.name || isOwnMailbox(lead.email)) {
       return false;
     }
 
