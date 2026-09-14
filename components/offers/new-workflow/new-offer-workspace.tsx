@@ -832,6 +832,11 @@ export function NewOfferWorkspace({
   }, []);
   const stateVersionRef = useRef(0);
   const lastSavedRef = useRef<string | null>(null);
+  // Set when a save refused as "locked" reloaded the live copy, cleared by the
+  // next save that lands. A second refusal while it is set means the reload did
+  // not settle it, so autosave halts rather than reload in a loop.
+  const lockedReloadRef = useRef(false);
+  const autosaveHaltedRef = useRef(false);
   // Tracks the last-persisted particulars JSON so the contract-draft save effect
   // fires only on a real change (and never re-saves what we just hydrated).
   const lastSavedParticularsRef = useRef<string | null>(null);
@@ -998,14 +1003,33 @@ export function NewOfferWorkspace({
             if (result.ok) {
               stateVersionRef.current = result.stateVersion;
               lastSavedRef.current = currentJson;
+              lockedReloadRef.current = false;
               setSaveState("saved");
               continue; // re-check: capture edits made during the save
             }
-            if (result.reason === "stale" || result.reason === "superseded") {
+            if (result.reason === "locked" && lockedReloadRef.current) {
+              console.error(
+                "[offer] autosave refused again after reloading; autosave stopped",
+              );
+              autosaveHaltedRef.current = true;
+              setSaveState("error");
+              return "error";
+            }
+            if (
+              result.reason === "stale" ||
+              result.reason === "superseded" ||
+              result.reason === "locked"
+            ) {
               // A different tab moved on (single-flight rules out our own
               // overlap) — reconcile to the live copy rather than clobber it.
               // "superseded" means another tab forked a new revision; the same
               // reload lands us on the live one. See ADR 0002 (no field merge).
+              // "locked" means the offer was issued meanwhile, so this tab's
+              // edits to now-frozen steps were refused; the reload shows the
+              // offer at its real status.
+              if (result.reason === "locked") {
+                lockedReloadRef.current = true;
+              }
               try {
                 const loaded = await loadActiveOfferWorkspace(leadId);
                 adoptOffer(loaded.offerId);
@@ -1033,6 +1057,8 @@ export function NewOfferWorkspace({
               setSaveState("error");
               return "reconciled";
             }
+            // "invalid": the server refused the snapshot's shape, and saving
+            // the same snapshot again would be refused the same way.
             setSaveState("error");
             return "error";
           }
@@ -1068,6 +1094,8 @@ export function NewOfferWorkspace({
       }
       adoptOffer(loaded.offerId);
       stateVersionRef.current = loaded.stateVersion;
+      lockedReloadRef.current = false;
+      autosaveHaltedRef.current = false;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
       setHydrated(true);
       // The loader already re-applied the current admin defaults if this offer
@@ -1255,6 +1283,11 @@ export function NewOfferWorkspace({
     ) {
       return; // frozen once the Tender is sent
     }
+    // The server kept refusing this snapshot even after a reload (see
+    // flushWorkspace). Explicit actions still try; the timer does not.
+    if (autosaveHaltedRef.current) {
+      return;
+    }
     const currentJson = JSON.stringify(snapshot);
     if (currentJson === lastSavedRef.current) {
       return;
@@ -1440,6 +1473,8 @@ export function NewOfferWorkspace({
         const loaded = await loadActiveOfferWorkspace(leadId);
         adoptOffer(loaded.offerId);
         stateVersionRef.current = loaded.stateVersion;
+        lockedReloadRef.current = false;
+        autosaveHaltedRef.current = false;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
         setSignerStatuses(loaded.signerStatuses ?? []);
         // A forked revision starts with no contract — clear any in-memory

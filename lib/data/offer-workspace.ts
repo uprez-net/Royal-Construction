@@ -2,7 +2,7 @@
 
 import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, updateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
@@ -27,9 +27,11 @@ import {
 import {
   CURRENT_CALC_VERSION,
   LEGACY_CALC_VERSION,
+  canonicalStoredWorkspace,
   deserializeWorkspace,
   parseWorkspaceState,
   serializeWorkspace,
+  validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
   type PersistedOfferWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
@@ -37,7 +39,10 @@ import {
   applyAdminPrefillToSnapshot,
   buildAdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
-import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
+import {
+  isOfferBuildStepEditable,
+  lockedSnapshotChanges,
+} from "@/lib/offer/offer-editability";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   resolveOfferContractValue,
@@ -412,7 +417,13 @@ export async function loadActiveOfferWorkspace(
 type SaveResult =
   | { ok: true; stateVersion: number }
   | { ok: false; reason: "stale"; currentStateVersion: number | null }
-  | { ok: false; reason: "superseded" };
+  | { ok: false; reason: "superseded" }
+  // The save would change a step that is frozen at the offer's stored status
+  // (lockedSnapshotChanges), typically because another tab issued the offer.
+  | { ok: false; reason: "locked" }
+  // The snapshot does not satisfy the persisted schema, or names an image
+  // outside Royal's Blob storage.
+  | { ok: false; reason: "invalid" };
 
 export type OfferSigningStatusPoll =
   | {
@@ -518,12 +529,60 @@ export async function saveOfferWorkspace(input: {
   // today's rules; anything already saved keeps its stored pin forever.
   const storedRow = await prisma.offer.findUnique({
     where: { id: input.offerId },
-    select: { workspaceState: true },
+    select: {
+      workspaceState: true,
+      offerStatus: true,
+      amount: true,
+      gstAmount: true,
+      totalAmount: true,
+      contractValueIncGst: true,
+    },
   });
+  if (storedRow === null) {
+    return { ok: false, reason: "stale", currentStateVersion: null };
+  }
   const persisted = pinCalcVersion(
     serializeWorkspace(input.snapshot),
-    readStoredCalcVersion(storedRow?.workspaceState),
+    readStoredCalcVersion(storedRow.workspaceState),
   );
+  const validated = validatePersistedWorkspace(persisted);
+  if (!validated.ok) {
+    console.error(
+      `[offer-workspace] refused an invalid snapshot for offer ${input.offerId}: ${validated.error}`,
+    );
+    return { ok: false, reason: "invalid" };
+  }
+
+  // The workspace locks a step's controls once the offer is issued, but this
+  // action writes the whole snapshot it is given. A tab still showing the offer
+  // as pending after another tab sent it could otherwise change the cost lines
+  // and reprice an issued offer. Compared in persisted form, against the stored
+  // row as a tab that opened it would save it back.
+  const storedStatus = storedRow.offerStatus.toLowerCase() as OfferWorkspaceStatus;
+  let storedCanonical: PersistedOfferWorkspaceState | null = null;
+  if (storedRow.workspaceState !== null) {
+    try {
+      storedCanonical = canonicalStoredWorkspace(storedRow.workspaceState);
+    } catch (error) {
+      // Unreadable, so nothing can be compared. A pending offer has no issued
+      // record to protect and the save repairs the row; an issued one keeps it.
+      if (storedStatus !== "pending") {
+        console.error(
+          `[offer-workspace] stored snapshot for issued offer ${input.offerId} is unreadable; refusing the save:`,
+          error,
+        );
+        return { ok: false, reason: "locked" };
+      }
+    }
+  }
+  const frozenChanges = lockedSnapshotChanges(
+    storedStatus,
+    storedCanonical,
+    validated.state,
+  );
+  if (frozenChanges.length > 0) {
+    return { ok: false, reason: "locked" };
+  }
   // Resolve the price through the same path the Tender/Contract and the project
   // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
   // blank override serialises to 0 cents — so reading it here stamped $0 on every
@@ -543,22 +602,33 @@ export async function saveOfferWorkspace(input: {
     contractValueIncGst: selectedContractValueIncGst,
     gstRate: input.snapshot.workspacePricingSettings.gstRate,
   });
+  const amount = new Prisma.Decimal(priceSplit.amountExGst);
+  const gstAmount = new Prisma.Decimal(priceSplit.gstAmount);
+  const totalAmount = new Prisma.Decimal(priceSplit.totalIncGst);
+  const moneyChanged =
+    !sameMoney(storedRow.amount, amount) ||
+    !sameMoney(storedRow.gstAmount, gstAmount) ||
+    !sameMoney(storedRow.totalAmount, totalAmount) ||
+    !sameMoney(storedRow.contractValueIncGst, contractValue);
 
   // isActive is part of the predicate, not just the check above: forking a
   // revision deactivates this row without touching its stateVersion, so a save
   // that passed the check moments earlier would still satisfy an id+version
-  // predicate and land on the freshly archived revision.
+  // predicate and land on the freshly archived revision. offerStatus is there
+  // for the same reason: the lock above was decided against that status, and a
+  // send landing in between must not let this write through.
   const result = await prisma.offer.updateMany({
     where: {
       id: input.offerId,
       isActive: true,
+      offerStatus: storedRow.offerStatus,
       stateVersion: input.expectedStateVersion,
     },
     data: {
       workspaceState: persisted as unknown as Prisma.InputJsonValue,
-      amount: new Prisma.Decimal(priceSplit.amountExGst),
-      gstAmount: new Prisma.Decimal(priceSplit.gstAmount),
-      totalAmount: new Prisma.Decimal(priceSplit.totalIncGst),
+      amount,
+      gstAmount,
+      totalAmount,
       contractValueIncGst: contractValue,
       stateVersion: { increment: 1 },
     },
@@ -633,7 +703,19 @@ export async function saveOfferWorkspace(input: {
   }
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
+  // The Offers list and its KPIs print these columns from a cached read. Only
+  // a price edit moves them, and most autosaves are copy edits.
+  if (moneyChanged) {
+    updateTag("offers");
+  }
   return { ok: true, stateVersion: input.expectedStateVersion + 1 };
+}
+
+function sameMoney(
+  stored: Prisma.Decimal | null,
+  next: Prisma.Decimal,
+): boolean {
+  return stored !== null && stored.equals(next);
 }
 
 // Persist a lifecycle transition, record an audit event, and freeze the agreed
@@ -1397,6 +1479,8 @@ export async function createOfferRevision(input: {
   }
 
   revalidateTag(`offer-lead-${created.leadId}`, CACHE_PROFILES.SHORT);
+  // The Offers list shows the live revision and its price.
+  updateTag("offers");
   return {
     ok: true,
     offerId: created.id,

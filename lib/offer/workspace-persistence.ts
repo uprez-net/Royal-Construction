@@ -701,6 +701,42 @@ export function parseWorkspaceState(
   return workspaceStateV1Schema.parse(migrateWorkspaceState(json));
 }
 
+// The write-side check for a snapshot a client asked to save. The save used to
+// write whatever arrived, so a malformed snapshot could land a row the read parse
+// then refuses, which makes the offer unopenable. The read parse also forgives a
+// bad image URL by dropping it, so old rows still open; a save is refused
+// instead, so none is ever written.
+export function validatePersistedWorkspace(
+  value: unknown,
+):
+  | { ok: true; state: PersistedOfferWorkspaceState }
+  | { ok: false; error: string } {
+  const images =
+    typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>).images
+      : undefined;
+  if (typeof images === "object" && images !== null) {
+    for (const [slot, entry] of Object.entries(images)) {
+      if (entry === undefined || entry === null) {
+        continue;
+      }
+      const url =
+        typeof entry === "string" ? entry : (entry as { url?: unknown }).url;
+      if (!isAllowedOfferImageUrl(url)) {
+        return {
+          ok: false,
+          error: `Image slot "${slot}" does not point at Royal's Blob storage.`,
+        };
+      }
+    }
+  }
+  const parsed = workspaceStateV1Schema.safeParse(value);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.message };
+  }
+  return { ok: true, state: parsed.data };
+}
+
 // ─── Serialize in-memory snapshot → persisted (cents) ───
 export function serializeWorkspace(
   snapshot: OfferWorkspaceSnapshot,
@@ -844,6 +880,18 @@ export function deserializeWorkspace(
     // be quietly re-read as v1 and repriced under rules it was never quoted on.
     calcVersion: persisted.calcVersion,
   };
+}
+
+// A stored snapshot in the form a tab that opened it saves it back in: the
+// workspace hydrates from deserializeWorkspace and saves through
+// serializeWorkspace. The save lock compares an incoming snapshot against this,
+// never against the raw row, whose legacy shape (pre-migration keys, a missing
+// derived field) would otherwise read as an edit nobody made. Throws when the
+// read parse refuses the row.
+export function canonicalStoredWorkspace(
+  raw: unknown,
+): PersistedOfferWorkspaceState {
+  return serializeWorkspace(deserializeWorkspace(parseWorkspaceState(raw)));
 }
 
 
