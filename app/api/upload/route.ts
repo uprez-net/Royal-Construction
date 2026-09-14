@@ -6,7 +6,7 @@ import { getUserByClerkIdCached } from '@/lib/data/user';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
 import { LeadAccessError, assertCanAccessLead } from '@/lib/offer/access';
-import { ProjectAccessError, assertCanEditProject } from '@/lib/data/project-access';
+import { ProjectAccessError, assertCanAttachToProject } from '@/lib/data/project-access';
 
 export async function POST(request: Request): Promise<NextResponse> {
     try {
@@ -57,7 +57,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                         throw new Error('Unauthorized');
                     }
                     try {
-                        await assertCanEditProject(user, {
+                        await assertCanAttachToProject(user, {
                             projectId: clientPayload.projectId,
                             milestoneId: clientPayload.milestoneId,
                         });

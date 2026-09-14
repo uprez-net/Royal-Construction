@@ -61,7 +61,7 @@ import { put } from "@vercel/blob"
 import { buildBlobPath } from "@/utils/formatters";
 import { v4 as uuid } from "uuid";
 import { saveFile } from "@/lib/data/file";
-import { assertCanEditProject } from "@/lib/data/project-access";
+import { assertCanAttachToProject } from "@/lib/data/project-access";
 import { auth } from '@clerk/nextjs/server'
 import { verifyClerkToken } from '@clerk/mcp-tools/next'
 import { parseLeadStageFilter } from "@/lib/leads/types";
@@ -941,7 +941,7 @@ const handler = createMcpHandler((server) => {
                 if (!user) {
                     throw new Error("User not found");
                 }
-                await assertCanEditProject(user, { projectId, milestoneId });
+                await assertCanAttachToProject(user, { projectId, milestoneId });
                 const fileId = uuid();
                 const pathname = buildBlobPath({
                     fileId: fileId,

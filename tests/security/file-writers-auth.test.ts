@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { canEditProject } from "../../lib/projects/project-access";
+import { PROJECT_STAFF_ROLES, canAttachToProject } from "../../lib/projects/project-access";
 
 // saveFile writes a File row for whatever user, lead, project and milestone it
 // is handed, so each user-facing caller has to derive the user and check the
@@ -35,33 +35,32 @@ function ordered(text: string, ...needles: string[]) {
   }
 }
 
-const ADMIN = { id: "u-admin", role: "ADMIN" };
-const PROJECT = {
-  customerId: "c-1",
-  siteManagerId: "u-site",
-  Lead: { assignedId: "u-sales" },
-};
+const PROJECT = { customerId: "c-1" };
 
-test("the project edit rule lets in the people who work on the project", () => {
-  assert.equal(canEditProject(ADMIN, PROJECT), true);
-  assert.equal(canEditProject({ id: "u-site", role: "SITE_MANAGER" }, PROJECT), true);
-  assert.equal(canEditProject({ id: "u-sales", role: "GUEST" }, PROJECT), true);
-  assert.equal(canEditProject({ id: "u-cust", role: "CUSTOMER", customerId: "c-1" }, PROJECT), true);
+test("staff may attach files to any project, as every project screen lets them", () => {
+  // A site manager who is not this project's site manager still gets the
+  // upload button, the milestone photo and the update form, and the writes
+  // behind them accept the file. Refusing the upload only broke them.
+  assert.equal(canAttachToProject({ role: "ADMIN" }, PROJECT), true);
+  assert.equal(canAttachToProject({ role: "SITE_MANAGER" }, PROJECT), true);
+  assert.equal(canAttachToProject({ role: "GUEST" }, PROJECT), true);
 });
 
-test("the project edit rule keeps everyone else out", () => {
-  assert.equal(canEditProject({ id: "u-other", role: "SITE_MANAGER" }, PROJECT), false);
-  assert.equal(canEditProject({ id: "u-other", role: "GUEST" }, PROJECT), false);
-  assert.equal(canEditProject({ id: "u-cust", role: "CUSTOMER", customerId: "c-2" }, PROJECT), false);
-  // A customer id only counts for a CUSTOMER, and a missing one matches nothing.
-  assert.equal(canEditProject({ id: "u-x", role: "GUEST", customerId: "c-1" }, PROJECT), false);
-  assert.equal(
-    canEditProject(
-      { id: "u-cust", role: "CUSTOMER", customerId: null },
-      { ...PROJECT, siteManagerId: null, Lead: { assignedId: null } },
-    ),
-    false,
-  );
+test("a customer may attach files only to their own project", () => {
+  assert.equal(canAttachToProject({ role: "CUSTOMER", customerId: "c-1" }, PROJECT), true);
+  assert.equal(canAttachToProject({ role: "CUSTOMER", customerId: "c-2" }, PROJECT), false);
+  assert.equal(canAttachToProject({ role: "CUSTOMER", customerId: null }, PROJECT), false);
+  assert.equal(canAttachToProject({ role: "CUSTOMER" }, PROJECT), false);
+  // An unknown role is not staff.
+  assert.equal(canAttachToProject({ role: "TRADIE", customerId: "c-1" }, PROJECT), false);
+});
+
+test("the upload staff roles are the roles that read every lead", () => {
+  const access = read("lib/offer/access.ts");
+  const declared = /const INTERNAL_ROLES = new Set<Role>\(\[([^\]]*)\]\)/.exec(access);
+  assert.ok(declared, "INTERNAL_ROLES moved; point this test at it");
+  const internal = declared[1].split(",").map((role) => role.trim().replace(/^Role\./, "")).sort();
+  assert.deepEqual([...PROJECT_STAFF_ROLES].sort(), internal);
 });
 
 test("the upload route checks the lead and the project before issuing a token", () => {
@@ -70,9 +69,9 @@ test("the upload route checks the lead and the project before issuing a token", 
   assert.match(before, /assertCanAccessLead\(user, Number\(clientPayload\.leadId\)\)/);
   assert.match(
     before,
-    /assertCanEditProject\(user, \{\s*projectId: clientPayload\.projectId,\s*milestoneId: clientPayload\.milestoneId,\s*\}\)/,
+    /assertCanAttachToProject\(user, \{\s*projectId: clientPayload\.projectId,\s*milestoneId: clientPayload\.milestoneId,\s*\}\)/,
   );
-  ordered(before, "assertCanAccessLead(", "assertCanEditProject(", "tokenPayload:");
+  ordered(before, "assertCanAccessLead(", "assertCanAttachToProject(", "tokenPayload:");
 });
 
 test("the completed upload is recorded as the session's user", () => {
@@ -85,7 +84,7 @@ test("MCP upload_file resolves the User row and checks the project before storin
   ordered(
     tool,
     "getUserByClerkIdCached(clerkId)",
-    "assertCanEditProject(user, { projectId, milestoneId })",
+    "assertCanAttachToProject(user, { projectId, milestoneId })",
     "await put(",
     "await saveFile(",
   );

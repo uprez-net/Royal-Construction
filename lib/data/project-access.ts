@@ -2,8 +2,8 @@ import "server-only";
 
 import prisma from "@/lib/prisma";
 import {
-  canEditProject,
-  type ProjectEditor,
+  canAttachToProject,
+  type ProjectUploader,
 } from "@/lib/projects/project-access";
 
 export class ProjectAccessError extends Error {
@@ -17,14 +17,14 @@ export class ProjectAccessError extends Error {
 }
 
 /**
- * Assert `user` may attach something to a project, or to one of its milestones.
+ * Assert `user` may attach a file to a project, or to one of its milestones.
  *
  * Both ids arrive from outside (an upload's client payload, an MCP tool call),
  * so a milestone is resolved to the project it actually belongs to rather than
  * trusted to belong to the project named alongside it.
  */
-export async function assertCanEditProject(
-  user: ProjectEditor,
+export async function assertCanAttachToProject(
+  user: ProjectUploader,
   target: { projectId?: string | null; milestoneId?: string | null },
 ): Promise<{ projectId: string }> {
   let projectId = target.projectId?.trim() || null;
@@ -47,16 +47,12 @@ export async function assertCanEditProject(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: {
-      customerId: true,
-      siteManagerId: true,
-      Lead: { select: { assignedId: true } },
-    },
+    select: { customerId: true },
   });
   if (!project) {
     throw new ProjectAccessError("Project not found", 404);
   }
-  if (!canEditProject(user, project)) {
+  if (!canAttachToProject(user, project)) {
     throw new ProjectAccessError("You do not have access to this project", 403);
   }
 
