@@ -24,7 +24,7 @@ import {
   updateOfferScope,
   updateOfferContent,
   updateHBFCClaim,
-} from "@/lib/data/admin-offer-content";
+} from "@/lib/data/admin-offer-content-writes";
 
 export type ActionResult =
   | { success: true }
