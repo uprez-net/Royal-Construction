@@ -549,18 +549,14 @@ export async function createProjectWithLead({
         customerName: customer.name
       });
       await logAction(activityLogEntry, tx);
+      // Only this lead's files. The tender and contract are among them: the
+      // wizard uploads both with this leadId and the offer handoff creates
+      // their rows on the lead. Matching sourceDocuments URLs as well, which
+      // the wizard's action takes from the browser, moved whatever File row
+      // had that URL, including another project's signed contract.
       await tx.file.updateMany({
         where: {
-          OR: [
-            {
-              url: {
-                in: [sourceDocuments.tender.url, sourceDocuments.contract.url]
-              }
-            },
-            {
-              leadId: lead.id
-            }
-          ]
+          leadId: lead.id
         },
         data: {
           projectId: newProject.id

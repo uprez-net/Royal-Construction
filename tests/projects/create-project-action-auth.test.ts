@@ -44,6 +44,19 @@ test("a refusal is returned as a failure, not thrown", () => {
   );
 });
 
+test("conversion re-parents only the lead's own files, never a File matched by a browser URL", () => {
+  // sourceDocuments comes from the browser with the lead id, and the lead check
+  // says nothing about which files those URLs belong to. Matching by URL moved
+  // any File row with that URL, such as another project's signed contract,
+  // onto the new project.
+  const body = functionBody(writes, "createProjectWithLead");
+  const start = body.indexOf("tx.file.updateMany(");
+  assert.ok(start >= 0, "createProjectWithLead no longer re-parents the lead's files");
+  const where = body.slice(start, body.indexOf("data:", start));
+  assert.match(where, /where: \{\s*leadId: lead\.id\s*\}/);
+  assert.doesNotMatch(where, /\burl\b|sourceDocuments/);
+});
+
 test("the unauthorized conversion is no longer a Server Action", () => {
   assert.doesNotMatch(writes, /^["']use server["']/m);
   assert.doesNotMatch(writes, /export async function createProjectWithLeadAction/);
