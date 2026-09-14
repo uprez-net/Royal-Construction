@@ -61,11 +61,6 @@ export function LeadCardList({
   // useEffectEvent gives a stable reference that always reads latest values
   // without needing to be listed as a dependency — ideal for event callbacks
   const onIntersect = useEffectEvent(() => {
-    console.log("Intersected sentinel. Loading more?", {
-      loadingMore,
-      currentPage,
-      totalPages,
-    });
     if (!loadingMore && totalPages > 0 && currentPage < totalPages) {
       setPage(currentPage + 1);
     }
@@ -90,7 +85,12 @@ export function LeadCardList({
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [totalPages]); // stable — onIntersect is an EffectEvent, not a dependency
+    // `loading` because the skeleton replaces the whole list while page 1
+    // loads: the sentinel is a new node afterwards, and with only totalPages
+    // here a search that kept the same page count left the observer watching
+    // the detached one, so scrolling never loaded page 2. onIntersect is an
+    // EffectEvent, not a dependency.
+  }, [loading, totalPages]);
 
   if (loading) return skeletonGrid;
 
@@ -131,7 +131,7 @@ export function LeadCardList({
                     </span>
                   ) : lead.runStatus === "RUNNING" ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse" />
+                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
                       Generating Offer
                     </span>
                   ) : lead.runStatus === "COMPLETED" ? (
@@ -141,7 +141,7 @@ export function LeadCardList({
                     </span>
                   ) : lead.runStatus === "FAILED" ? (
                     <span className="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse" />
+                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
                       Offer Generation Failed
                     </span>
                   ) : null}
