@@ -6,7 +6,6 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   hbfcClaimChanged,
   saveHBFCClaim,
@@ -15,6 +14,8 @@ import { FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FilePenLine } from "lucide-react";
 import { OfferCardHeading } from "../new-workflow/offer-workspace-card-heading";
+import { SaveChangesButton } from "./shared/save-changes-button";
+import { isRawCurrent } from "./shared/numeric-input";
 
 function useNumericInput(value: number, onCommit: (value: number) => void) {
   const [raw, setRaw] = useState(() =>
@@ -22,9 +23,7 @@ function useNumericInput(value: number, onCommit: (value: number) => void) {
   );
 
   useEffect(() => {
-    const parsed = parseFloat(raw);
-    const rawIsCurrent = Number.isFinite(value) ? parsed === value : raw === "";
-    if (!rawIsCurrent) {
+    if (!isRawCurrent(raw, value)) {
       setTimeout(() => {
         setRaw(Number.isFinite(value) ? String(value) : "");
       }, 0);
@@ -34,11 +33,10 @@ function useNumericInput(value: number, onCommit: (value: number) => void) {
 
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value;
-    if (!/^-?\d*\.?\d*$/.test(next)) return;
+    // A claim amount and a loading percentage are never negative.
+    if (!/^\d*\.?\d*$/.test(next)) return;
     setRaw(next);
-    onCommit(
-      next === "" || next === "-" || next === "." ? NaN : parseFloat(next),
-    );
+    onCommit(next === "" || next === "." ? NaN : parseFloat(next));
   };
 
   return { value: raw, onChange };
@@ -124,15 +122,23 @@ export function HBFCClaimPage() {
             placeholder="Enter the system wide HBCF loading charge percentage"
           />
         </label>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </CardContent>
-      <CardFooter className="flex items-center justify-end gap-2">
-        <Button
-          onClick={() => dispatch(saveHBFCClaim())}
-          disabled={!dirty || saving}
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </Button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <CardFooter className="justify-end">
+        <SaveChangesButton
+          dirty={dirty}
+          saving={saving}
+          disabled={
+            !Number.isFinite(claimAmount) ||
+            !Number.isFinite(loadingChargePercent)
+          }
+          onSave={() => dispatch(saveHBFCClaim()).unwrap()}
+          successMessage="HBCF settings saved."
+        />
       </CardFooter>
     </Card>
   );
