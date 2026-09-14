@@ -20,7 +20,7 @@ export function ExpiryChip({ expiry }: { readonly expiry: OfferExpiry | null }) 
   }
   const toneClass =
     expiry.state === "expired"
-      ? "border-destructive/30 bg-destructive-light text-destructive"
+      ? "border-destructive/30 bg-destructive-light text-destructive-ink"
       : expiry.state === "soon"
         ? "border-warning/40 bg-warning-light text-foreground"
         : "border-border bg-muted/40 text-muted-foreground";
