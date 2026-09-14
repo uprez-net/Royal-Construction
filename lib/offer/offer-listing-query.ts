@@ -1,5 +1,6 @@
 import type { OfferStatus, Prisma } from "@prisma/client";
 import type { OfferListRow } from "@/types/offer";
+import type { LeadListScope } from "./access";
 import { resolveOfferPriceSplit } from "./offer-contract-value";
 
 // Pure pieces of the offers listing query, kept free of Prisma and next/* so
@@ -128,4 +129,28 @@ export function offerSearchClauses(q: string): Prisma.LeadWhereInput[] {
   }
 
   return clauses;
+}
+
+/**
+ * The listing's lead filter. The scope sits at the top level, AND'd with
+ * everything else: dropped, or moved into the search OR, a customer's
+ * `OF-<id>` would reach any lead.
+ *
+ * `some: {}` keeps out leads that have never been offered on. The search terms
+ * are OR'd: nesting them in one object (as the flat query did) AND's them, so
+ * a name match only counted when the email, phone and location all matched the
+ * same string too. `q` can arrive from the browser, so a non-string is ignored.
+ */
+export function offerListLeadWhere(
+  scope: LeadListScope,
+  leadIdsInBucket: number[] | null,
+  q: string | undefined,
+): Prisma.LeadWhereInput {
+  const query = typeof q === "string" ? q.trim() : "";
+  return {
+    offers: { some: {} },
+    ...(scope.assignedId !== null ? { assignedId: scope.assignedId } : {}),
+    ...(leadIdsInBucket !== null ? { id: { in: leadIdsInBucket } } : {}),
+    ...(query !== "" ? { OR: offerSearchClauses(query) } : {}),
+  };
 }

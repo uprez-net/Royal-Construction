@@ -12,7 +12,7 @@ import type {
 } from "@/types/offer";
 import { calculateTrend } from "@/utils/formatters";
 import type { LeadListScope } from "@/lib/offer/access";
-import { offerSearchClauses, toOfferListRow } from "@/lib/offer/offer-listing-query";
+import { offerListLeadWhere, toOfferListRow } from "@/lib/offer/offer-listing-query";
 import { OFFER_STATUS_BUCKETS } from "@/lib/offer/offer-status-buckets";
 
 // The offers listing's queries. Deliberately not a "use server" module: every
@@ -82,7 +82,6 @@ export async function queryOfferGroups(
     scope: LeadListScope,
 ): Promise<PaginatedOfferGroupResult> {
     const { page: safePage, limit: safeLimit } = offerListPaging(page, limit);
-    const safeQuery = typeof q === "string" && q.trim() !== "" ? q.trim() : undefined;
     const bucketStatuses =
         status && status !== "all" && Object.hasOwn(OFFER_STATUS_BUCKETS, status)
             ? OFFER_STATUS_BUCKETS[status]
@@ -108,16 +107,7 @@ export async function queryOfferGroups(
             leadIdsInBucket = rows.map((row) => row.leadId);
         }
 
-        // `some: {}` keeps out leads that have never been offered on. The search
-        // terms are OR'd: nesting them in one object (as the flat query did)
-        // AND's them, so a name match only counted when the email, phone and
-        // location all matched the same string too.
-        const leadWhere: Prisma.LeadWhereInput = {
-            offers: { some: {} },
-            ...(scope.assignedId !== null ? { assignedId: scope.assignedId } : {}),
-            ...(leadIdsInBucket !== null ? { id: { in: leadIdsInBucket } } : {}),
-            ...(safeQuery ? { OR: offerSearchClauses(safeQuery) } : {}),
-        };
+        const leadWhere = offerListLeadWhere(scope, leadIdsInBucket, q);
 
         const [leads, totalCount, totalOfferCount] = await Promise.all([
             prisma.lead.findMany({

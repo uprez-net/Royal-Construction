@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 import type { Role } from "@prisma/client";
 
 import { canAccessLead, leadListScope } from "../../lib/offer/access";
-import { toOfferListRow } from "../../lib/offer/offer-listing-query";
+import {
+  offerListLeadWhere,
+  toOfferListRow,
+} from "../../lib/offer/offer-listing-query";
 
 // The offers listing read every lead's offers with no session check. Its
 // Server Action answered anyone who replayed it, and a signed-in CUSTOMER saw
 // offers the offer page would refuse to open. The listing now applies the
-// offer page's own rule through leadListScope, and each revision it ships is
-// narrowed by toOfferListRow instead of spreading the whole Offer row.
+// offer page's own rule through leadListScope, offerListLeadWhere carries that
+// scope into the query it runs, and each revision it ships is narrowed by
+// toOfferListRow instead of spreading the whole Offer row.
 
 const INTERNAL_ROLES: Role[] = ["ADMIN", "SITE_MANAGER", "GUEST"];
 
@@ -39,6 +43,32 @@ test("the listing scope admits exactly the leads canAccessLead admits", () => {
         scope.assignedId === null || lead.assignedId === scope.assignedId;
       assert.equal(listed, canAccessLead(user, lead), `${role}, lead ${lead.id}`);
     }
+  }
+});
+
+test("a customer's lead filter keeps their scope beside every search and tab", () => {
+  const scope = leadListScope({ id: "u1", role: "CUSTOMER" });
+  for (const q of [undefined, "", "smith", "OF-123", "RC-Q-2026-042-R2"]) {
+    for (const bucket of [null, [4, 5]]) {
+      const where = offerListLeadWhere(scope, bucket, q);
+      // Top level, so it is AND'd with the search OR. Inside the OR, "OF-123"
+      // would match lead 123 whoever it is assigned to.
+      assert.equal(where.assignedId, "u1", `q=${q}, bucket=${bucket}`);
+    }
+  }
+
+  const where = offerListLeadWhere(scope, [4, 5], "OF-123");
+  assert.deepEqual(where.id, { in: [4, 5] });
+  assert.ok(
+    where.OR?.some((clause) => JSON.stringify(clause) === JSON.stringify({ id: 123 })),
+  );
+});
+
+test("an internal lead filter carries no assignee", () => {
+  for (const role of INTERNAL_ROLES) {
+    const where = offerListLeadWhere(leadListScope({ id: "u1", role }), null, "OF-123");
+    assert.equal("assignedId" in where, false, role);
+    assert.deepEqual(where.offers, { some: {} });
   }
 });
 
