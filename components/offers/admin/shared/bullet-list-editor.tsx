@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, XIcon } from "lucide-react";
-import { InclusionScheduleRow } from "@/types/admin-offer-content";
 
 interface BulletListEditorProps {
-  value: string[] | InclusionScheduleRow[];
-  onChange: (v: string[] | InclusionScheduleRow[]) => void;
+  value: string[];
+  onChange: (v: string[]) => void;
+  onRestore: (bullet: string, index: number) => void;
   addLabel?: string;
   placeholder?: string;
 }
@@ -16,35 +17,40 @@ interface BulletListEditorProps {
 export function BulletListEditor({
   value,
   onChange,
+  onRestore,
   addLabel = "Add bullet",
   placeholder = "Bullet text",
 }: BulletListEditorProps) {
-  const [draft, setDraft] = useState<string | InclusionScheduleRow>("");
+  const [draft, setDraft] = useState("");
 
   const commitDraft = () => {
-    const trimmed = typeof draft === "string" ? draft.trim() : draft.spec.trim();
+    const trimmed = draft.trim();
     if (!trimmed) return;
-    if (typeof draft === "string") {
-      onChange([...(value as string[]), trimmed]);
-    } else {
-      onChange([
-        ...(value as InclusionScheduleRow[]),
-        { spec: trimmed, category: draft.category },
-      ]);
-    }
+    onChange([...value, trimmed]);
     setDraft("");
   };
 
   const updateAt = (index: number, text: string) => {
     const next = value.slice();
-    next[index] = typeof next[index] === "string" ? text : { ...next[index], spec: text };
+    next[index] = text;
     onChange(next);
   };
 
+  // The toast outlives this editor: switching admin tabs unmounts it while
+  // Undo is still on screen. The restore therefore goes through the store,
+  // which inserts into the list as it is when Undo is clicked, not as this
+  // instance last saw it.
   const removeAt = (index: number) => {
+    const removed = value[index];
     const next = value.slice();
     next.splice(index, 1);
     onChange(next);
+    toast("Bullet removed", {
+      action: {
+        label: "Undo",
+        onClick: () => onRestore(removed, index),
+      },
+    });
   };
 
   return (
@@ -58,7 +64,7 @@ export function BulletListEditor({
                 className="size-1.5 shrink-0 rounded-full bg-royal-gold"
               />
               <Input
-                value={typeof bullet === "string" ? bullet : bullet.spec}
+                value={bullet}
                 onChange={(e) => updateAt(index, e.target.value)}
                 placeholder={placeholder}
                 className="flex-1"
@@ -68,7 +74,7 @@ export function BulletListEditor({
                 type="button"
                 aria-label="Remove bullet"
                 onClick={() => removeAt(index)}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
               >
                 <XIcon className="size-4" aria-hidden="true" />
               </button>
@@ -78,7 +84,7 @@ export function BulletListEditor({
       )}
       <div className="flex items-center gap-2">
         <Input
-          value={typeof draft === "string" ? draft : draft.spec}
+          value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
