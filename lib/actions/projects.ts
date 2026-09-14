@@ -1,6 +1,8 @@
 "use server";
 
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
+import { getAllProjectsForExport as readAllProjectsForExport } from "@/lib/data/projects";
 import {
   createProjectWithLead,
   type CreateProjectWithLeadInput,
@@ -10,6 +12,7 @@ import {
   failureFromThrownError,
   type CreateProjectResult,
 } from "@/lib/projects/create-project-errors";
+import type { ProjectWithStats } from "@/types/project";
 
 /**
  * Result-returning wrapper around {@link createProjectWithLead} for client
@@ -66,4 +69,19 @@ export async function createProjectWithLeadAction(
     // `createProjectWithLead` already logged the raw error with its stack.
     return { ok: false, failure: failureFromThrownError(error) };
   }
+}
+
+/**
+ * Every project with its milestones, budget and invoices, for the projects
+ * page's export. Staff only: the export spans every customer, and
+ * lib/data/projects.ts, which reads it, is server-only and checks nobody.
+ */
+export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    // Thrown to keep the signature the export button uses; its catch shows the
+    // failure, and staff never reach this.
+    throw new Error(access.error);
+  }
+  return readAllProjectsForExport();
 }

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getForecast } from "@/lib/data/leads";
+import { getForecast } from "@/lib/actions/leads";
 import type { SafeForecast } from "@/lib/data/leads";
 import type { FyQuarter } from "@/lib/leads/fy-quarter";
 import { compactCurrency } from "@/utils/formatters";

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
-import { sendLeadEmail } from "@/lib/data/leads";
+import { sendLeadEmail } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/button";
 import type { LeadEmails } from "@prisma/client";
 import { ReplyBanner } from "./reply-email";

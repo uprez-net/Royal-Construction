@@ -1,4 +1,5 @@
-"use server";
+import "server-only";
+
 import prisma from "@/lib/prisma";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";

@@ -1,6 +1,6 @@
 import { ProjectStatus } from "@prisma/client";
 import { z } from "zod";
-import { ProjectListSortBy } from "@/lib/data/projects";
+import type { ProjectListSortBy } from "@/lib/data/projects";
 import {
   emailSchema,
   nonNegativeSchema,
