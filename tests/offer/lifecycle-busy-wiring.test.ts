@@ -36,7 +36,9 @@ test("the screen passes the running action to every lifecycle panel", () => {
   const screen = read(`${W}/offer-workspace-screen.tsx`);
 
   for (const panel of [
+    "OfferLockBanner",
     "SendNegotiatePanel",
+    "TenderGatePanel",
     "TenderPanel",
     "ContractPanel",
     "ProjectHandoffPanel",
@@ -54,6 +56,9 @@ const BUTTONS: ReadonlyArray<readonly [file: string, handler: string, action: st
   ["offer-workspace-send-negotiate.tsx", "onMarkOfferSigned", "offer_signed"],
   ["offer-workspace-send-negotiate.tsx", "onRecallOffer", "recall-offer"],
   ["offer-workspace-send-negotiate.tsx", "onCreateRevision", "revision"],
+  // The lock banner and the tender gate show Create revision beside the panels.
+  ["offer-workspace-step-section.tsx", "onCreateRevision", "revision"],
+  ["offer-workspace-tender-gate.tsx", "onCreateRevision", "revision"],
   ["offer-workspace-send-negotiate.tsx", "onMarkAgreed", "agreed"],
   ["offer-workspace-send-negotiate.tsx", "onMarkRejected", "rejected"],
   ["offer-workspace-tender.tsx", "onGenerateTender", "tender_draft"],
@@ -72,7 +77,7 @@ function buttonTag(source: string, handler: string): string {
 }
 
 for (const [file, handler, action] of BUTTONS) {
-  test(`${handler} disables while any action runs and reports its own`, () => {
+  test(`${handler} in ${file} disables while any action runs and reports its own`, () => {
     const tag = buttonTag(read(`${W}/${file}`), handler);
 
     assert.match(tag, /disabled=\{[^}]*lifecycleBusy !== null/, tag);

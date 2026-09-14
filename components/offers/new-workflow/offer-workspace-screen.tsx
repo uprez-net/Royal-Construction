@@ -684,6 +684,7 @@ export function OfferWorkspaceScreen({
             <OfferLockBanner
               canRevise={canRevise}
               revising={revising}
+              lifecycleBusy={lifecycleBusy}
               executed={revisionExecuted}
               documentsEditable={documentsStillEditable}
               notice={
@@ -881,6 +882,7 @@ export function OfferWorkspaceScreen({
               onCreateRevision={onCreateRevision}
               canRevise={canRevise}
               revising={revising}
+              lifecycleBusy={lifecycleBusy}
             />
           </StepPane>
 
