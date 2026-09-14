@@ -9,8 +9,10 @@ import { test } from "node:test";
 // writes a File row for whatever userId it is handed, generatePDF runs headless
 // Chromium on arbitrary HTML, handleProjectSpecsGeneration spends model tokens.
 // Every real caller is already server-side (route handlers, workflow steps and
-// action modules that do their own checks), so they are plain server modules
-// guarded by "server-only" instead.
+// other action modules), so they are plain server modules guarded by
+// "server-only" instead. That closes only the direct endpoints: an action that
+// calls one of them must still authorize its own caller, and projectsWrite's
+// createProjectWithLeadAction does not yet.
 
 const ROOT = join(__dirname, "..", "..");
 
