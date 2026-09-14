@@ -3,7 +3,7 @@ import { CardContent } from "../ui/card";
 import { currency, dateFormat } from "@/utils/formatters";
 import { ChevronRight, Layers, ReceiptText } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { KeyboardEvent } from "react";
 import type {
@@ -13,7 +13,7 @@ import type {
 } from "@/types/offer";
 import {
   fetchOffers,
-  setOffers,
+  syncServerOffers,
   updateOffer,
 } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
@@ -21,7 +21,8 @@ import { useRouter } from "next/navigation";
 import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
 import { cn } from "@/lib/utils";
-import { skeletonTableRows } from "../ui/skeleton";
+import { Skeleton } from "../ui/skeleton";
+import { isDefaultOfferFilters } from "@/lib/offer/offer-listing-view";
 
 const money = (value: string) => {
   const parsed = parseFloat(value);
@@ -54,20 +55,26 @@ export function OfferTable({
 }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { offers: stateOffers, filters, loading } = useAppSelector(
-    (state) => state.offers,
-  );
+  const {
+    offers: stateOffers,
+    filters,
+    loading,
+    hydrated,
+  } = useAppSelector((state) => state.offers);
   const [expandedLeadIds, setExpandedLeadIds] = useState<number[]>([]);
 
-  const offers = useMemo(() => {
-    if (stateOffers.items.length === 0) {
-      return serverOffers;
-    }
-    return stateOffers;
-  }, [stateOffers, serverOffers]);
+  // Until the store has adopted a result, show the server's page. After that
+  // the store is the view, empty or not: falling back to the server's
+  // unfiltered page whenever the store had no rows made a search or tab with no
+  // matches show every offer.
+  const offers = hydrated ? stateOffers : serverOffers;
+  const filtered = !isDefaultOfferFilters(filters.status, filters.q);
 
+  // Runs on mount and on every server re-render (router.refresh()). A filtered
+  // view refetches its own filters rather than being replaced by the server's
+  // unfiltered page.
   useEffect(() => {
-    dispatch(setOffers(serverOffers));
+    dispatch(syncServerOffers(serverOffers));
   }, [serverOffers, dispatch]);
 
   const handlePageChange = async (page: number) => {
@@ -171,17 +178,17 @@ export function OfferTable({
               ))
             ) : (
               <tr>
-                <td colSpan={HEADERS.length} className="px-4 py-16 text-center">
+                <td
+                  colSpan={HEADERS.length}
+                  className={cn("px-4 text-center", loading ? "py-4" : "py-16")}
+                >
                   {loading ? (
-                    skeletonTableRows(HEADERS.length, 5).map((row, rowIndex) => (
-                      <tr key={`skeleton-row-${rowIndex}`} className="border-t border-border/70">
-                        {row.map((cell, cellIndex) => (
-                          <td key={`skeleton-cell-${cellIndex}`} className="px-4 py-3">
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
+                    // Block bars, not rows: a <tr> is not valid inside this <td>.
+                    <div className="space-y-3">
+                      {Array.from({ length: 5 }, (_, index) => (
+                        <Skeleton key={index} className="h-8 w-full" />
+                      ))}
+                    </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center gap-3">
                       <div className="flex size-12 items-center justify-center">
@@ -190,11 +197,15 @@ export function OfferTable({
 
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-foreground">
-                          No offers available
+                          {filtered
+                            ? "No offers match this view"
+                            : "No offers available"}
                         </p>
 
                         <p className="text-xs text-muted-foreground">
-                          Your offers will appear here.
+                          {filtered
+                            ? "Try another tab, or clear the search."
+                            : "Your offers will appear here."}
                         </p>
                       </div>
                     </div>

@@ -27,7 +27,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   const dispatch = useAppDispatch();
-  const { offers, filters } = useAppSelector((state) => state.offers);
+  const { offers, filters, hydrated } = useAppSelector((state) => state.offers);
   const [searchInput, setSearchInput] = useState(filters.q);
   // Seed from the store so a re-mount after a client-side fetch (e.g. navigating
   // into an offer and back via the browser) keeps the active tab selected.
@@ -143,10 +143,14 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
 
           {/* Reflects the *current view* (filtered + searched), not the global
               KPI total — that's what `offers.totalCount` holds after a fetch,
-              and it is what the pagination footer divides up. */}
-          <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
-            {offers.totalCount} results
-          </p>
+              and it is what the pagination footer divides up. Hidden until the
+              store holds a result: before that it is the empty initial state,
+              and a hard reload flashed "0 results". */}
+          {hydrated ? (
+            <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
+              {offers.totalCount} results
+            </p>
+          ) : null}
         </div>
       </div>
     </CardHeader>

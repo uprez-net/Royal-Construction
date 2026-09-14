@@ -2,6 +2,7 @@ import { getOfferGroups, updateOfferStatus } from "@/lib/data/offers";
 import { PaginatedOfferGroupResult, OfferStatusBucket } from "@/types/offer";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { OfferStatus } from "@prisma/client";
+import { isDefaultOfferFilters } from "@/lib/offer/offer-listing-view";
 
 interface OffersState {
     offers: PaginatedOfferGroupResult;
@@ -23,6 +24,12 @@ interface OffersState {
      * results for a query the search box no longer shows.
      */
     latestRequestId: string | null;
+    /**
+     * Whether `offers` holds a real result yet. Before it does, the table shows
+     * the server's page. After, an empty `items` means "nothing matches", not
+     * "not loaded".
+     */
+    hydrated: boolean;
 }
 
 const initialState: OffersState = {
@@ -41,6 +48,7 @@ const initialState: OffersState = {
     loading: false,
     error: null,
     latestRequestId: null,
+    hydrated: false,
 };
 
 export const fetchOffers = createAsyncThunk(
@@ -74,6 +82,14 @@ const offersSlice = createSlice({
     reducers: {
         setOffers(state, action: PayloadAction<PaginatedOfferGroupResult>) {
             state.offers = action.payload;
+            // The server renders the unfiltered first page, so adopting its
+            // rows adopts its filters too. Keeping a stale tab here left the
+            // tab and the rows describing different views.
+            state.filters = { status: "all", q: "" };
+            state.hydrated = true;
+            // Any fetch still in flight was for the view this replaces.
+            state.latestRequestId = null;
+            state.loading = false;
         },
     },
     extraReducers: (builder) => {
@@ -87,6 +103,7 @@ const offersSlice = createSlice({
                 if (action.meta.requestId !== state.latestRequestId) return;
                 state.loading = false;
                 state.offers = action.payload;
+                state.hydrated = true;
                 // Persist the filters that produced this result so a later page
                 // change (dispatched from the table) re-applies them. Undefined
                 // means "leave the existing filter untouched", which lets the
@@ -135,4 +152,31 @@ const offersSlice = createSlice({
 });
 
 export const { setOffers } = offersSlice.actions;
+
+/**
+ * Reconcile the store with the page the server just rendered, on mount and on
+ * every router.refresh(). The server always renders the unfiltered first page:
+ * adopt it when that is the view the user has, and otherwise refetch the
+ * user's own tab, search and page so a refresh or a Back navigation keeps them.
+ */
+export const syncServerOffers = createAsyncThunk<
+    void,
+    PaginatedOfferGroupResult,
+    { state: { offers: OffersState } }
+>("offers/syncServerOffers", async (serverOffers, { dispatch, getState }) => {
+    const { filters, offers } = getState().offers;
+    if (isDefaultOfferFilters(filters.status, filters.q)) {
+        dispatch(setOffers(serverOffers));
+        return;
+    }
+    await dispatch(
+        fetchOffers({
+            page: offers.page,
+            limit: offers.limit,
+            status: filters.status,
+            q: filters.q,
+        }),
+    );
+});
+
 export default offersSlice.reducer;
