@@ -58,7 +58,7 @@ export function OfferStepRail({
               ) : (
                 <>
                   <hr className="mx-3 my-2 border-border/70 lg:hidden" />
-                  <p className="hidden px-4 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground/80 lg:block">
+                  <p className="hidden px-4 pb-1 pt-3 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground lg:block">
                     {phase.label}
                   </p>
                 </>
@@ -137,7 +137,6 @@ function RailRow({
         "flex w-full items-center gap-2.5 px-4 py-2 text-left transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
         active ? "bg-royal-gold-light/70" : "hover:bg-muted/50",
-        locked && !active && "opacity-60",
       )}
     >
       <StepGlyph active={active} index={index} state={state} />
@@ -173,7 +172,7 @@ function StepGlyph({
     "grid size-5 shrink-0 place-items-center rounded-full font-mono text-[0.625rem] font-semibold";
   if (active) {
     return (
-      <span aria-hidden="true" className={cn(base, "bg-royal-gold text-white")}>
+      <span aria-hidden="true" className={cn(base, "bg-royal-gold-ink text-white")}>
         {index}
       </span>
     );
@@ -192,7 +191,7 @@ function StepGlyph({
     return (
       <span
         aria-hidden="true"
-        className={cn(base, "bg-muted text-muted-foreground/70")}
+        className={cn(base, "bg-muted text-muted-foreground")}
       >
         <Lock className="size-2.5" />
       </span>
