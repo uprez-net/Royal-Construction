@@ -5,7 +5,6 @@ import { ChevronRight, Layers, ReceiptText } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { KeyboardEvent } from "react";
 import type {
   OfferGroup,
   OfferListRow,
@@ -17,6 +16,7 @@ import {
   updateOffer,
 } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OfferStatusBadge } from "./offer-status-badge";
 import { OfferStatus } from "@prisma/client";
@@ -125,17 +125,6 @@ export function OfferTable({
     [router],
   );
 
-  const handleRowKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTableRowElement>, leadId: number) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      // Let the chevron and the status popover handle their own keys.
-      if (event.target !== event.currentTarget) return;
-      event.preventDefault();
-      openGroup(leadId);
-    },
-    [openGroup],
-  );
-
   return (
     <CardContent className="px-5 py-4">
       <div className="overflow-x-auto rounded-lg border border-border/70 bg-background">
@@ -172,7 +161,6 @@ export function OfferTable({
                   expanded={expandedLeadIds.includes(group.leadId)}
                   onToggle={toggleGroup}
                   onOpen={openGroup}
-                  onRowKeyDown={handleRowKeyDown}
                   onStatusChange={handleStatusChange}
                 />
               ))
@@ -226,10 +214,6 @@ interface OfferGroupRowsProps {
   expanded: boolean;
   onToggle: (leadId: number) => void;
   onOpen: (leadId: number) => void;
-  onRowKeyDown: (
-    event: KeyboardEvent<HTMLTableRowElement>,
-    leadId: number,
-  ) => void;
   onStatusChange: (offerId: string, status: OfferStatus) => Promise<void>;
 }
 
@@ -243,7 +227,6 @@ function OfferGroupRows({
   expanded,
   onToggle,
   onOpen,
-  onRowKeyDown,
   onStatusChange,
 }: OfferGroupRowsProps) {
   const { latest, revisions, versionCount } = group;
@@ -252,15 +235,14 @@ function OfferGroupRows({
 
   return (
     <>
+      {/* A plain row, not role="button": that role replaced the row's table
+          semantics, so a screen reader lost each cell's column header. The row
+          click is a mouse shortcut; the Offer # link is the keyboard route. */}
       <tr
-        role="button"
-        tabIndex={0}
-        aria-label={`Open offer for ${group.lead.name || "unnamed client"}`}
         onClick={() => onOpen(group.leadId)}
-        onKeyDown={(event) => onRowKeyDown(event, group.leadId)}
         className={cn(
           "border-t border-border/70 transition-colors",
-          "cursor-pointer hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+          "cursor-pointer hover:bg-muted/40",
           expanded && "bg-muted/30",
         )}
       >
@@ -291,7 +273,18 @@ function OfferGroupRows({
             </button>
           ) : null}
         </td>
-        <td className="px-4 py-3 font-medium">{group.reference}</td>
+        <td className="px-4 py-3 font-medium">
+          {/* stopPropagation: the row's click would push the same route again,
+              and on cmd-click it would navigate this tab as well as opening
+              the new one. */}
+          <Link
+            href={`/offers/${group.leadId}`}
+            onClick={(event) => event.stopPropagation()}
+            className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {group.reference}
+          </Link>
+        </td>
         <td className="px-4 py-3">{group.lead?.name || "N/A"}</td>
         <td className="px-4 py-3">
           {group.lead.type.length > 0 ? group.lead.type.join(", ") : "-"}
@@ -299,7 +292,7 @@ function OfferGroupRows({
         <td className="px-4 py-3">
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold",
               hasHistory
                 ? "bg-teal-50 text-teal-700"
                 : "bg-muted text-muted-foreground",
@@ -309,17 +302,21 @@ function OfferGroupRows({
             {versionCount} {versionCount === 1 ? "version" : "versions"}
           </span>
         </td>
-        <td className="px-4 py-3 text-right tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
           {money(latest.amount)}
         </td>
-        <td className="px-4 py-3 text-right tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
           {money(latest.gstAmount)}
         </td>
-        <td className="px-4 py-3 text-right font-medium tabular-nums">
+        <td className="whitespace-nowrap px-4 py-3 text-right font-medium tabular-nums">
           {money(latest.totalAmount)}
         </td>
-        <td className="px-4 py-3">{day(latest.sentAt)}</td>
-        <td className="px-4 py-3">{day(latest.acceptedAt)}</td>
+        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+          {day(latest.sentAt)}
+        </td>
+        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+          {day(latest.acceptedAt)}
+        </td>
         <td className="px-4 py-3">
           <OfferStatusBadge
             status={latest.offerStatus}
@@ -442,18 +439,24 @@ function OfferRevisionRow({
           Doc v{revision.version}
         </span>
       </td>
-      <td className="px-3 py-2 text-right tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
         {money(revision.amount)}
       </td>
-      <td className="px-3 py-2 text-right tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
         {money(revision.gstAmount)}
       </td>
-      <td className="px-3 py-2 text-right font-medium tabular-nums">
+      <td className="whitespace-nowrap px-3 py-2 text-right font-medium tabular-nums">
         {money(revision.totalAmount)}
       </td>
-      <td className="px-3 py-2">{day(revision.createdAt)}</td>
-      <td className="px-3 py-2">{day(revision.sentAt)}</td>
-      <td className="px-3 py-2">{day(revision.acceptedAt)}</td>
+      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+        {day(revision.createdAt)}
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+        {day(revision.sentAt)}
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+        {day(revision.acceptedAt)}
+      </td>
       <td className="px-3 py-2">
         <OfferStatusBadge
           status={revision.offerStatus}
