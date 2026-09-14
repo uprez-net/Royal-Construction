@@ -8,6 +8,7 @@ import { CACHE_PROFILES } from "@/types/cache";
 import {
   authorizeLeadAccess,
   authorizeOfferAccess,
+  type OfferAccess,
 } from "@/lib/data/offer-access";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
@@ -47,37 +48,15 @@ import {
   collectOwnerIssues,
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
-
-// Allowed lifecycle transitions for the offer WORKSPACE (the legacy
-// OFFER_STATE_MACHINE in offers.ts treats these new states as terminal). The
-// early offer phase (pending/sent/agreed/rejected) moves flexibly; the
-// tender→contract→project progression must pass each gate in order. A
-// self-transition is always allowed so the UI's post-server-action status sync
-// (the dedicated send actions already advanced the row) is a harmless no-op.
-const OFFER_WORKFLOW_TRANSITIONS: Partial<Record<OfferStatus, OfferStatus[]>> = {
-  PENDING: [OfferStatus.SENT, OfferStatus.AGREED, OfferStatus.REJECTED],
-  SENT: [OfferStatus.AGREED, OfferStatus.REJECTED, OfferStatus.PENDING],
-  // Offer-acceptance signing (ADR 0004). SENT → OFFER_SENT is performed by the
-  // sendOfferForSignature action (atomic claim), not this map. Recall returns an
-  // out-for-signature offer to SENT; OFFER_SIGNED → AGREED is the estimator's
-  // "Mark agreed"; OFFER_SIGNED via transition is a dev-only simulate (guarded
-  // below, like the Tender). A declined acceptance re-opens for a new revision.
-  OFFER_SENT: [OfferStatus.SENT, OfferStatus.OFFER_SIGNED],
-  OFFER_SIGNED: [OfferStatus.AGREED, OfferStatus.SENT],
-  // A declined acceptance only re-opens for renegotiation / a new revision — it
-  // must NOT jump straight to AGREED (that would bypass signature into the Tender
-  // flow). Reaching AGREED requires going back through SENT first.
-  OFFER_DECLINED: [OfferStatus.SENT, OfferStatus.PENDING],
-  REJECTED: [OfferStatus.PENDING, OfferStatus.SENT, OfferStatus.AGREED],
-  AGREED: [OfferStatus.TENDER_DRAFT, OfferStatus.SENT, OfferStatus.PENDING],
-  TENDER_DRAFT: [OfferStatus.TENDER_SENT, OfferStatus.AGREED],
-  TENDER_SENT: [OfferStatus.TENDER_DRAFT, OfferStatus.TENDER_SIGNED],
-  TENDER_SIGNED: [OfferStatus.CONTRACT_DRAFT],
-  CONTRACT_DRAFT: [OfferStatus.CONTRACT_SENT, OfferStatus.TENDER_SIGNED],
-  CONTRACT_SENT: [OfferStatus.CONTRACT_DRAFT, OfferStatus.CONTRACT_SIGNED],
-  CONTRACT_SIGNED: [OfferStatus.PROJECT],
-  PROJECT: [],
-};
+import {
+  classifyOfferTransition,
+  requiresOwnerGate,
+} from "@/lib/offer/offer-workflow-transitions";
+import {
+  envelopeScopeFilter,
+  resolveRecall,
+  type OfferEnvelopeScope,
+} from "@/lib/offer/offer-recall";
 
 // The active offer for a lead, ready to hydrate the workspace. `snapshot` is
 // null when the offer has no saved working-state yet (client uses defaults).
@@ -673,22 +652,81 @@ export async function transitionOfferStatus(input: {
     );
   }
 
-  await prisma.$transaction(async (tx) => {
+  const offer = await prisma.offer.findUniqueOrThrow({
+    where: { id: input.offerId },
+    select: { offerStatus: true },
+  });
+
+  const kind = classifyOfferTransition(offer.offerStatus, input.toStatus);
+  if (typeof kind === "object") {
+    // Stepping back from a document out for signature has to void the envelope
+    // first, or the customer keeps a signing link for a document we show as a
+    // draft.
+    throw new Error(
+      `Use Recall envelope to take the ${RECALL_DOCUMENT_LABEL[kind.recall]} back from signature. It voids the DocuSign envelope before the status changes.`,
+    );
+  }
+  if (kind === "send-only") {
+    throw new Error(
+      `An offer moves from ${offer.offerStatus} to ${input.toStatus} only through its own action (sending for signature, or creating the project), not a status change.`,
+    );
+  }
+  if (kind === "invalid") {
+    throw new Error(
+      `Invalid offer transition from ${offer.offerStatus} to ${input.toStatus}`,
+    );
+  }
+
+  const committed = await commitOfferTransition(access, {
+    offerId: input.offerId,
+    from: offer.offerStatus,
+    to: input.toStatus,
+    skipOwnerGate: false,
+    stampSentAt: input.toStatus === OfferStatus.SENT,
+    actorId: input.actorId,
+    note: input.note,
+  });
+  if (!committed) {
+    throw new Error(
+      "The offer's status changed while you were updating it. Refresh to see where it is now, then try again.",
+    );
+  }
+  return { ok: true, status: input.toStatus };
+}
+
+const RECALL_DOCUMENT_LABEL = {
+  offer: "offer",
+  tender: "Tender",
+  contract: "Contract",
+} as const;
+
+/**
+ * The single write behind every workspace status change.
+ *
+ * `from` is the status the caller decided against. The update only lands while
+ * the row still has that status and is still the live revision, so a webhook or
+ * another tab that moved the offer in between turns this into a no-op (returns
+ * false) instead of an overwrite. It takes the caller's successful access
+ * result so it cannot be reached without authorizing first, and it is not
+ * exported: this file is "use server".
+ */
+async function commitOfferTransition(
+  access: Extract<OfferAccess, { ok: true }>,
+  input: {
+    offerId: string;
+    from: OfferStatus;
+    to: OfferStatus;
+    skipOwnerGate: boolean;
+    stampSentAt: boolean;
+    actorId?: string;
+    note?: string;
+  },
+): Promise<boolean> {
+  const committed = await prisma.$transaction(async (tx) => {
     const offer = await tx.offer.findUniqueOrThrow({
       where: { id: input.offerId },
-      select: { offerStatus: true, workspaceState: true },
+      select: { workspaceState: true },
     });
-
-    const allowed =
-      offer.offerStatus === input.toStatus ||
-      (OFFER_WORKFLOW_TRANSITIONS[offer.offerStatus] ?? []).includes(
-        input.toStatus,
-      );
-    if (!allowed) {
-      throw new Error(
-        `Invalid offer transition from ${offer.offerStatus} to ${input.toStatus}`,
-      );
-    }
 
     // Owner completeness gate (PR #124 review): SENT locks the offer and AGREED
     // freezes it for the Tender, so both require complete owner parties. A
@@ -696,13 +734,9 @@ export async function transitionOfferStatus(input: {
     // must not be lockable and advanced into the legal documents. This guards the
     // generic "Mark sent" / "Mark agreed" path, which does not go through the
     // send actions that already validate owners.
-    const requiresCompleteOwners =
-      (input.toStatus === OfferStatus.SENT ||
-        input.toStatus === OfferStatus.AGREED) &&
-      offer.offerStatus !== input.toStatus;
-    if (requiresCompleteOwners) {
+    if (!input.skipOwnerGate && requiresOwnerGate(input.from, input.to)) {
       const verb =
-        input.toStatus === OfferStatus.SENT
+        input.to === OfferStatus.SENT
           ? "marking the offer sent"
           : "marking the offer agreed";
       // A blank offer (no workspaceState) has no owners at all — refuse to lock /
@@ -721,18 +755,22 @@ export async function transitionOfferStatus(input: {
     }
 
     // Freeze only on the first transition into AGREED. An AGREED → AGREED
-    // re-transition (permitted above) must not re-snapshot a since-mutated
+    // re-transition (a permitted self-transition) must not re-snapshot a since-mutated
     // workspaceState over the frozen agreedSnapshot or reset acceptedAt.
     const freezeAgreed =
-      input.toStatus === OfferStatus.AGREED &&
-      offer.offerStatus !== OfferStatus.AGREED &&
+      input.to === OfferStatus.AGREED &&
+      input.from !== OfferStatus.AGREED &&
       offer.workspaceState !== null;
 
-    await tx.offer.update({
-      where: { id: input.offerId },
+    const written = await tx.offer.updateMany({
+      where: {
+        id: input.offerId,
+        offerStatus: input.from,
+        isActive: true,
+      },
       data: {
-        offerStatus: input.toStatus,
-        ...(input.toStatus === OfferStatus.SENT ? { sentAt: new Date() } : {}),
+        offerStatus: input.to,
+        ...(input.stampSentAt ? { sentAt: new Date() } : {}),
         ...(freezeAgreed
           ? {
               agreedSnapshot: offer.workspaceState as Prisma.InputJsonValue,
@@ -741,23 +779,30 @@ export async function transitionOfferStatus(input: {
           : {}),
       },
     });
+    if (written.count === 0) {
+      return false;
+    }
 
     await tx.offerStatusEvent.create({
       data: {
         offerId: input.offerId,
-        fromStatus: offer.offerStatus,
-        toStatus: input.toStatus,
+        fromStatus: input.from,
+        toStatus: input.to,
         actorId: input.actorId,
         note: input.note,
       },
     });
+    return true;
   });
+  if (!committed) {
+    return false;
+  }
 
   // After the transaction, never inside it — see syncLeadStageForOffer.
   await syncLeadStageForOffer(input.offerId);
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
-  return { ok: true, status: input.toStatus };
+  return true;
 }
 
 // One entry in the revision timeline for a lead's offer family.
@@ -924,27 +969,6 @@ export type CreateOfferRevisionResult =
   // variation, a separate instrument, not a new offer revision.
   | { ok: false; reason: "locked" };
 
-// Which of an offer's live envelopes a recall should pull back. A tender recall
-// must not void a contract envelope, so the scope is always explicit.
-type OfferEnvelopeScope = "offer" | "tender" | "contract" | "all";
-
-function envelopeScopeFilter(
-  offerId: string,
-  scope: OfferEnvelopeScope,
-): Prisma.EnvelopeWhereInput[] {
-  switch (scope) {
-    // A live OFFER-acceptance envelope (ADR 0004) hangs off the offer directly.
-    case "offer":
-      return [{ offerId }];
-    case "tender":
-      return [{ tender: { offerId } }];
-    case "contract":
-      return [{ contract: { offerId } }];
-    case "all":
-      return [{ tender: { offerId } }, { contract: { offerId } }, { offerId }];
-  }
-}
-
 /**
  * Void every envelope in `scope` that is still out for signature, so a customer
  * can no longer sign a document the builder has pulled back.
@@ -1019,6 +1043,11 @@ async function voidLiveOfferEnvelopes(
  * edited with confidence while the customer still held a live signing link for
  * the superseded document — and could sign it, producing an executed PDF for a
  * contract the builder believed was withdrawn.
+ *
+ * `scope` and `toStatus` come from the client, so neither is trusted: both are
+ * derived from the offer's own status and the call is refused unless the
+ * client's values agree. `toStatus` is kept in the input only so the client is
+ * unchanged.
  */
 export async function recallOfferEnvelope(input: {
   offerId: string;
@@ -1036,23 +1065,51 @@ export async function recallOfferEnvelope(input: {
     throw new Error(access.error);
   }
 
+  // Decide everything before voiding: an unchecked scope once reached the void
+  // query as `OR: undefined` and matched every live envelope in the database.
+  const offer = await prisma.offer.findUniqueOrThrow({
+    where: { id: input.offerId },
+    select: { offerStatus: true, isActive: true },
+  });
+  const recall = resolveRecall(
+    input.scope,
+    input.toStatus,
+    offer.offerStatus,
+    offer.isActive,
+  );
+  if (!recall.ok) {
+    throw new Error(recall.error);
+  }
+
   // Void FIRST. If the transition then fails, the envelope is already dead and
   // the customer cannot sign — the safe direction to fail in. The reverse order
   // would leave a live envelope behind a status claiming it was recalled.
   const { warnings: voidWarnings } = await voidLiveOfferEnvelopes(
     input.offerId,
     "Recalled by the builder.",
-    input.scope,
+    recall.scope,
   );
 
-  const result = await transitionOfferStatus({
+  // No owner gate: the offer passed it when it was sent, and it cannot be
+  // edited while out for signature, so a gate here could strand a voided
+  // envelope behind a status that never steps back. sentAt keeps the date the
+  // offer first went out.
+  const committed = await commitOfferTransition(access, {
     offerId: input.offerId,
-    toStatus: input.toStatus,
+    from: recall.from,
+    to: recall.to,
+    skipOwnerGate: true,
+    stampSentAt: false,
     actorId: input.actorId,
     note: input.note,
   });
+  if (!committed) {
+    throw new Error(
+      "Any live envelope for this document was voided, but the offer's status changed at the same moment, so it was not moved back. Refresh to see where it is now.",
+    );
+  }
 
-  return { ok: true, status: result.status, voidWarnings };
+  return { ok: true, status: recall.to, voidWarnings };
 }
 
 // Fork a new active revision from the current one, superseding it. The current
