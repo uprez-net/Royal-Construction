@@ -17,6 +17,7 @@ import { verifyConnectSignature } from "@/lib/docusign/connect-signature";
 import { downloadCombinedDocument } from "@/lib/docusign/tender-envelope";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
+import { signerStatusesBelow } from "@/lib/offer/signing-status";
 
 // DocuSign Connect (JSON SIM) webhook: keeps Envelope + EnvelopeSignature in
 // step with signing progress, and on completion archives the executed PDF and
@@ -156,8 +157,14 @@ async function syncRecipients(
     if (!match) {
       continue;
     }
-    await prisma.envelopeSignature.update({
-      where: { id: match.id },
+    // Forward-only, like the envelope status: a replayed or out-of-order event
+    // must not move a signed recipient back to delivered. SIGNED is never in
+    // the list for SIGNED, so signedAt is written only on the move into it.
+    await prisma.envelopeSignature.updateMany({
+      where: {
+        id: match.id,
+        status: { in: signerStatusesBelow(status) as SignerStatus[] },
+      },
       data: {
         status,
         ...(status === SignerStatus.SIGNED
