@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   Card,
@@ -42,28 +42,40 @@ function useNumericInput(value: number, onCommit: (value: number) => void) {
   return { value: raw, onChange };
 }
 
+interface NumericFieldProps {
+  value: number;
+  onChange: (value: number) => void;
+  placeholder?: string;
+  invalid?: boolean;
+  describedBy?: string;
+}
+
 function NumberField({
   value,
   onChange,
   placeholder,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  placeholder?: string;
-}) {
+  invalid,
+  describedBy,
+}: NumericFieldProps) {
   const field = useNumericInput(value, onChange);
-  return <Input {...field} inputMode="decimal" placeholder={placeholder} />;
+  return (
+    <Input
+      {...field}
+      inputMode="decimal"
+      placeholder={placeholder}
+      aria-invalid={invalid || undefined}
+      aria-describedby={describedBy}
+    />
+  );
 }
 
 function PercentInput({
   value,
   onChange,
   placeholder,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  placeholder?: string;
-}) {
+  invalid,
+  describedBy,
+}: NumericFieldProps) {
   const field = useNumericInput(value, onChange);
   return (
     <div className="relative">
@@ -71,6 +83,8 @@ function PercentInput({
         {...field}
         inputMode="decimal"
         placeholder={placeholder}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         className="pr-7"
       />
       <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
@@ -91,6 +105,12 @@ export function HBFCClaimPage() {
   const dirty = useAppSelector((s) => s.adminOfferContent.dirty.hbfcClaim);
   const saving = useAppSelector((s) => s.adminOfferContent.saving.hbfcClaim);
   const error = useAppSelector((s) => s.adminOfferContent.error.hbfcClaim);
+  const blockedMessageId = useId();
+  // An emptied field, or one holding only ".", commits NaN. Save refuses it,
+  // and says so, rather than going grey with no reason given.
+  const claimAmountMissing = !Number.isFinite(claimAmount);
+  const loadingChargeMissing = !Number.isFinite(loadingChargePercent);
+  const saveBlocked = claimAmountMissing || loadingChargeMissing;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -110,6 +130,8 @@ export function HBFCClaimPage() {
               dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF claim amount"
+            invalid={claimAmountMissing}
+            describedBy={claimAmountMissing ? blockedMessageId : undefined}
           />
         </label>
         <label>
@@ -120,8 +142,19 @@ export function HBFCClaimPage() {
               dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF loading charge percentage"
+            invalid={loadingChargeMissing}
+            describedBy={loadingChargeMissing ? blockedMessageId : undefined}
           />
         </label>
+        {saveBlocked && (
+          <p
+            id={blockedMessageId}
+            role="alert"
+            className="text-sm text-destructive"
+          >
+            Save is blocked: both fields need a number.
+          </p>
+        )}
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -132,10 +165,7 @@ export function HBFCClaimPage() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          disabled={
-            !Number.isFinite(claimAmount) ||
-            !Number.isFinite(loadingChargePercent)
-          }
+          disabled={saveBlocked}
           onSave={() => dispatch(saveHBFCClaim()).unwrap()}
           successMessage="HBCF settings saved."
         />
