@@ -32,7 +32,7 @@ import {
   updateOfferScope,
   updateOfferContent,
   getAdminOfferContentNonCache,
-} from "@/lib/data/admin-offer-content";
+} from "@/lib/data/admin-offer-content-writes";
 
 async function seed() {
   console.log("Building seed payload from static data…");

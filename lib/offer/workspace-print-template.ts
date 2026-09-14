@@ -99,7 +99,12 @@ export function buildOfferPrintTemplateData({
 
   return {
     areaLabel: getAreaLabel(getTotalAreaSqm(job)),
-    exclusionBullets: getVisibleExclusions(draft, exclusions),
+    // The offer document is edited in the Offer phase, so its short client-
+    // facing exclusion list must come only from that editable draft. Scope
+    // exclusions remain available to the Tender via `exclusionRows` below,
+    // but must not reappear here after an estimator removes them from the
+    // Offer document.
+    exclusionBullets: getOfferDocumentExclusions(draft),
     exclusionRows: getVisibleExclusionRows(draft, exclusions),
     footerBase: `${job.siteAddress} | Prepared by ${job.preparedBy}`,
     paymentRows: paymentSchedule.map((row) => ({
@@ -290,11 +295,26 @@ function getPriceLine(
   return `${formatCurrencyText(selectedPrice)} incl. GST`;
 }
 
-// The one rule for what prints as an exclusion: the estimator's free-text
-// bullets UNION the Scope step's exclusion items, deduped. Every surface — the
-// offer PDF, the tender, the on-screen preview and the tender view — resolves
-// through this. They previously each had their own rule (union / scope-only /
-// bullets-as-override), so nothing on screen predicted the client's document.
+// The Offer phase owns the short, client-facing exclusion list. Keep the list
+// normalized at the print-data boundary so removed/blank draft rows do not
+// leak into the printed document through Scope state.
+export function getOfferDocumentExclusions(
+  draft: Pick<OfferDocumentDraft, "exclusionBullets">,
+): readonly string[] {
+  const labels = new Set<string>();
+  for (const label of draft.exclusionBullets) {
+    const trimmed = label.trim();
+    if (trimmed.length > 0) {
+      labels.add(trimmed);
+    }
+  }
+  return [...labels];
+}
+
+// The Tender carries the detailed Scope exclusions as well as any short
+// exclusion bullets written in the Offer phase. This resolver is intentionally
+// separate from getOfferDocumentExclusions: Scope data must not repopulate the
+// client-facing Offer list after the estimator removes a line there.
 export function getVisibleExclusions(
   draft: OfferDocumentDraft,
   exclusions: readonly OfferWorkspaceScopeItem[],
@@ -309,14 +329,9 @@ export function getVisibleExclusions(
   );
 }
 
-// The same union rule as getVisibleExclusions, carrying the description and
-// variation rule a Scope item holds.
-//
-// Those two fields were captured on every Scope exclusion and printed NOWHERE —
-// getVisibleExclusions takes `.label` and drops the rest, so an estimator typed
-// "Can be priced later as a written variation" and no client ever saw it. A
-// free-text bullet has no such detail and prints label-only, which is visible
-// rather than hidden.
+// The Tender version of getVisibleExclusions, carrying the description and
+// variation rule a Scope item holds. The offer intentionally keeps the short
+// label-only list above; a free-text bullet has no Scope detail to carry.
 export function getVisibleExclusionRows(
   draft: OfferDocumentDraft,
   exclusions: readonly OfferWorkspaceScopeItem[],
