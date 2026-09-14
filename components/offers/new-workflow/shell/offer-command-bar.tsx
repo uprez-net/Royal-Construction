@@ -37,6 +37,7 @@ type OfferCommandBarProps = {
   readonly saveState: OfferSaveState;
   readonly status: OfferWorkspaceStatus;
   readonly onDownloadPreview: () => void;
+  readonly onRetrySave: () => void;
 };
 
 export function OfferCommandBar({
@@ -47,6 +48,7 @@ export function OfferCommandBar({
   saveState,
   status,
   onDownloadPreview,
+  onRetrySave,
 }: OfferCommandBarProps) {
   const activeRevisionNumber =
     Number.parseInt(job.revision.replace(/\D/g, ""), 10) || 1;
@@ -55,7 +57,7 @@ export function OfferCommandBar({
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 bg-white px-4 py-2.5">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <Badge className="shrink-0 bg-royal-gold font-mono text-white">
+        <Badge className="shrink-0 bg-royal-gold-ink font-mono text-white">
           {formatOfferReference(job.reference, job.revision)}
         </Badge>
         {/* The page's only h1. Screen readers get the offer's identity here;
@@ -73,11 +75,6 @@ export function OfferCommandBar({
         <Badge variant="secondary" className="shrink-0">
           {OFFER_STATUS_LABEL[status]}
         </Badge>
-        {status === "pending" ? (
-          <Badge variant="secondary" className="shrink-0">
-            Working draft
-          </Badge>
-        ) : null}
         <ExpiryChip expiry={offerExpiry} />
       </div>
 
@@ -88,7 +85,7 @@ export function OfferCommandBar({
             {formatCurrency(customerPrice.selectedContractValueIncGst)}
           </p>
           <div className="mt-1 flex justify-end">
-            <SaveIndicator state={saveState} />
+            <SaveIndicator state={saveState} onRetry={onRetrySave} />
           </div>
         </div>
         <Button

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { reevaluateFormulaCostLines } from "../../lib/offer/admin-offer-prefill";
+import {
+  reevaluateFormulaCostLines,
+  reevaluateFormulaCostLinesForStatus,
+} from "../../lib/offer/admin-offer-prefill";
 import {
   INITIAL_AREA_CALCULATOR,
   calculateOfferArea,
@@ -181,4 +184,54 @@ test("the reprice-on-open path honours the offer's own rules", () => {
   // why the version must never be taken from the client.
   assert.notEqual(legacy[0].costExGst, current[0].costExGst);
   assert.ok(current[0].costExGst > legacy[0].costExGst);
+});
+
+test("an issued offer's formula lines keep their price when admin rates change", () => {
+  // The workspace re-ran formula evaluation whenever the job or area calculator
+  // changed, which a reload does. An issued offer's cost lines were re-priced
+  // from today's admin rate constants, so the quote moved with nobody editing it.
+  const quoted = [
+    {
+      ...INITIAL_COST_LINES[0],
+      formula: "TOTAL_FIRST_FLOOR_FRAME_COST",
+      costExGst: 21_000,
+    },
+  ];
+  const changedRates = { FRAME_FIRST_RATE_PER_SQM: 999 } as Parameters<
+    typeof reevaluateFormulaCostLines
+  >[1];
+
+  for (const status of ["sent", "agreed", "tender_draft"] as const) {
+    const lines = reevaluateFormulaCostLinesForStatus(
+      status,
+      quoted,
+      changedRates,
+      BASE_SNAPSHOT.job,
+      INITIAL_AREA_CALCULATOR,
+      CURRENT_CALC_VERSION,
+    );
+    assert.equal(lines[0].costExGst, 21_000, status);
+    assert.equal(lines, quoted, `${status} should hand back the same lines`);
+  }
+
+  // While pending the estimator is still pricing, so the new rates apply.
+  const pending = reevaluateFormulaCostLinesForStatus(
+    "pending",
+    quoted,
+    changedRates,
+    BASE_SNAPSHOT.job,
+    INITIAL_AREA_CALCULATOR,
+    CURRENT_CALC_VERSION,
+  );
+  assert.notEqual(pending[0].costExGst, 21_000);
+  assert.equal(
+    pending[0].costExGst,
+    reevaluateFormulaCostLines(
+      quoted,
+      changedRates,
+      BASE_SNAPSHOT.job,
+      INITIAL_AREA_CALCULATOR,
+      CURRENT_CALC_VERSION,
+    )[0].costExGst,
+  );
 });

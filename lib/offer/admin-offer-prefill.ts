@@ -6,7 +6,9 @@ import {
   type OfferWorkspaceCostLine,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceJob,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import {
   OFFER_SEQUENCE_MAPPINGS,
   type OfferSequenceMapping,
@@ -327,6 +329,22 @@ export function reevaluateFormulaCostLines(
       ? { ...line, costExGst: Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000 }
       : line,
   );
+}
+
+// The workspace calls this, not reevaluateFormulaCostLines. Its effect re-runs
+// whenever the job or the area calculator changes, and a reload changes both.
+// On an issued offer that re-priced formula lines from today's admin rate
+// constants, so the quoted price moved with nobody editing it. Lines are only
+// re-evaluated while the cost schedule is editable; otherwise they come back
+// untouched, same array.
+export function reevaluateFormulaCostLinesForStatus(
+  status: OfferWorkspaceStatus,
+  ...args: Parameters<typeof reevaluateFormulaCostLines>
+): readonly OfferWorkspaceCostLine[] {
+  if (!isOfferBuildStepEditable("cost-schedule", status)) {
+    return args[0];
+  }
+  return reevaluateFormulaCostLines(...args);
 }
 
 // Re-seed an EXISTING offer's admin-derived fields from the current admin

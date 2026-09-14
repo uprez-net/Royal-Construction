@@ -36,7 +36,17 @@ import {
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
-import { Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   useCallback,
   useEffect,
@@ -96,7 +106,21 @@ import type {
   OfferSendBlocker,
 } from "@/lib/offer/offer-readiness";
 
-export type OfferSaveState = "idle" | "saving" | "saved" | "error";
+import type { OfferSaveState } from "@/lib/offer/workspace-save-state";
+
+// Re-exported for the chrome that already imports it from here.
+export type { OfferSaveState };
+
+// A recall or revision waiting on the estimator's confirmation. Recall carries
+// the envelope scope and the status it steps back to, exactly as transition()
+// takes them.
+export type OfferPendingConfirm =
+  | {
+      readonly kind: "recall";
+      readonly scope: "offer" | "tender" | "contract";
+      readonly next: OfferWorkspaceStatus;
+    }
+  | { readonly kind: "revision" };
 
 type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
@@ -109,6 +133,10 @@ type OfferWorkspaceScreenProps = {
   // `status` is the "pending" seed, and the opening step derived from it is a
   // guess that must be corrected exactly once.
   readonly hydrated: boolean;
+  // The mount load failed: there is nothing to show and nothing to save.
+  readonly loadFailed: boolean;
+  // A status change or revision is running.
+  readonly transitioning: boolean;
   readonly areaCalculator: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
@@ -132,6 +160,8 @@ type OfferWorkspaceScreenProps = {
   readonly status: OfferWorkspaceStatus;
   readonly offerExpiry: OfferExpiry | null;
   readonly saveState: OfferSaveState;
+  // The "Not saved" chip's Retry.
+  readonly onRetrySave: () => void;
   readonly sendBlockers: readonly OfferSendBlocker[];
   readonly tenderGate: TenderGateState;
   readonly onTenderGateChange: (patch: Partial<TenderGateState>) => void;
@@ -186,6 +216,9 @@ type OfferWorkspaceScreenProps = {
   readonly onMarkRejected: () => void;
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
+  readonly pendingConfirm: OfferPendingConfirm | null;
+  readonly onConfirmPending: () => void;
+  readonly onCancelPending: () => void;
   readonly revising: boolean;
   readonly revisionNotice: string | null;
   readonly revisionExecuted: boolean;
@@ -224,6 +257,7 @@ type OfferWorkspaceScreenProps = {
   readonly projectResult?:
     | import("@/lib/data/offer-project-handoff").ProjectHandoffResult
     | null;
+  readonly projectId?: string | null;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -238,6 +272,8 @@ export function OfferWorkspaceScreen({
   areaCalculator,
   calcVersion,
   hydrated,
+  loadFailed,
+  transitioning,
   rateConstants,
   customerPrice,
   directTotal,
@@ -259,6 +295,7 @@ export function OfferWorkspaceScreen({
   status,
   offerExpiry,
   saveState,
+  onRetrySave,
   sendBlockers,
   tenderGate,
   onTenderGateChange,
@@ -297,6 +334,9 @@ export function OfferWorkspaceScreen({
   onMarkRejected,
   onCreateRevision,
   canRevise,
+  pendingConfirm,
+  onConfirmPending,
+  onCancelPending,
   revising,
   revisionNotice,
   revisionExecuted,
@@ -329,6 +369,7 @@ export function OfferWorkspaceScreen({
   onCreateProject,
   projectCreating,
   projectResult,
+  projectId,
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
@@ -433,6 +474,14 @@ export function OfferWorkspaceScreen({
   }, [activeStepId]);
 
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const confirmCopy =
+    pendingConfirm === null
+      ? null
+      : describePendingConfirm(pendingConfirm, status);
+  // Until the server says what this offer is, the panes would render the seed:
+  // an editable blank pending offer, even when the real one is agreed. Show the
+  // load instead.
+  const awaitingOffer = leadId !== undefined && !hydrated;
 
   // Panel state that must outlive its panel. Only the active step is mounted,
   // so anything a panel kept in local useState was wiped on every step change.
@@ -491,6 +540,7 @@ export function OfferWorkspaceScreen({
         images,
         status,
         sendBlockers,
+        tenderGateStatus,
       }),
     [
       job,
@@ -505,6 +555,7 @@ export function OfferWorkspaceScreen({
       status,
       sendBlockers,
       phaseUnlocked,
+      tenderGateStatus,
     ],
   );
 
@@ -562,6 +613,7 @@ export function OfferWorkspaceScreen({
         offerExpiry={offerExpiry}
         saveState={saveState}
         onDownloadPreview={onDownloadOffer}
+        onRetrySave={onRetrySave}
       />
       <div className="flex min-h-0 flex-1">
         <OfferStepRail
@@ -579,10 +631,47 @@ export function OfferWorkspaceScreen({
           ref={paneRef}
           role="region"
           aria-labelledby="offer-pane-title"
+          aria-busy={transitioning}
           tabIndex={-1}
           className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5 outline-none"
         >
           <div className="space-y-5">
+          {awaitingOffer ? (
+            <OfferPaneLoadState failed={loadFailed} />
+          ) : (
+          <>
+          {transitioning ? (
+            <p
+              role="status"
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+            >
+              <Loader2
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              Working…
+            </p>
+          ) : null}
+          {/* Transition and recall errors used to render only inside the Send
+              panel, which is unmounted on every other step, so a refused
+              Tender or Contract recall said nothing. Send keeps its own slot. */}
+          {transitionError && activeStepId !== "send" ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-xs font-medium text-destructive-ink"
+            >
+              {transitionError}
+            </p>
+          ) : null}
+          {/* On the offer-build steps the lock banner below carries it. */}
+          {revisionNotice && !(offerIssued && activeStepIsOfferPhase) ? (
+            <p
+              role="status"
+              className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
+            >
+              {revisionNotice}
+            </p>
+          ) : null}
           {/* The banner names the offer-build steps; it has no business above
               Tender, Contract or Project. */}
           {offerIssued && activeStepIsOfferPhase ? (
@@ -591,7 +680,14 @@ export function OfferWorkspaceScreen({
               revising={revising}
               executed={revisionExecuted}
               documentsEditable={documentsStillEditable}
-              notice={revisionNotice}
+              notice={
+                revisionNotice ??
+                // Create revision is disabled from the signed Tender on. The
+                // server's refusal used to be what said why.
+                (!canRevise && !revisionExecuted && status !== "superseded"
+                  ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
+                  : null)
+              }
               onCreateRevision={onCreateRevision}
             />
           ) : null}
@@ -848,8 +944,11 @@ export function OfferWorkspaceScreen({
               onCreateProject={onCreateProject}
               projectCreating={projectCreating}
               projectResult={projectResult}
+              projectId={projectId}
             />
           </StepPane>
+          </>
+          )}
           </div>
         </div>
       </div>
@@ -859,8 +958,81 @@ export function OfferWorkspaceScreen({
         pricing={pricing}
         totalAreaSqm={rawTotalAreaSqm(areaBasis)}
       />
+      {/* One confirmation for every recall and revision control, whichever
+          step it sits on. */}
+      <AlertDialog
+        open={pendingConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelPending();
+          }
+        }}
+      >
+        {confirmCopy ? (
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmCopy.title}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmCopy.description}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              {/* While another action runs the transition guard would drop
+                  the confirm, closing the dialog with nothing done. */}
+              <AlertDialogAction
+                disabled={transitioning}
+                variant={confirmCopy.voidsEnvelope ? "destructive" : "default"}
+                onClick={onConfirmPending}
+              >
+                {confirmCopy.action}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        ) : null}
+      </AlertDialog>
     </div>
   );
+}
+
+const RECALL_DOCUMENT_NAME = {
+  offer: "offer",
+  tender: "Tender",
+  contract: "Contract",
+} as const;
+
+const VOIDS_ENVELOPE_COPY =
+  "This voids the DocuSign envelope. The customer's signing link stops working and you'll need to send a new envelope.";
+
+function describePendingConfirm(
+  confirm: OfferPendingConfirm,
+  status: OfferWorkspaceStatus,
+): {
+  readonly title: string;
+  readonly description: string;
+  readonly action: string;
+  readonly voidsEnvelope: boolean;
+} {
+  if (confirm.kind === "recall") {
+    return {
+      title: `Recall the ${RECALL_DOCUMENT_NAME[confirm.scope]}?`,
+      description: VOIDS_ENVELOPE_COPY,
+      action: "Recall",
+      voidsEnvelope: true,
+    };
+  }
+  // Only these two statuses have an envelope out that a revision would void.
+  const voidsEnvelope = status === "offer_sent" || status === "tender_sent";
+  const supersedes =
+    "This supersedes the current revision; it stays readable in Versions.";
+  return {
+    title: "Create a new revision?",
+    description: voidsEnvelope
+      ? `${supersedes} ${VOIDS_ENVELOPE_COPY}`
+      : supersedes,
+    action: "Create revision",
+    voidsEnvelope,
+  };
 }
 
 // Statuses at which the Send & negotiate step has actually succeeded. Everything
@@ -939,5 +1111,35 @@ function PaneHeading({
         </span>
       ) : null}
     </div>
+  );
+}
+
+// Stands in for the step panes until the offer has loaded, or when it could not.
+function OfferPaneLoadState({ failed }: { readonly failed: boolean }) {
+  return (
+    <section aria-labelledby="offer-pane-title" className="space-y-4">
+      <h2 id="offer-pane-title" className="sr-only">
+        Offer
+      </h2>
+      {failed ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-sm font-medium text-destructive-ink"
+        >
+          Couldn&apos;t load this offer. Reload the page to try again.
+        </p>
+      ) : (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-10 text-sm text-muted-foreground"
+        >
+          <Loader2
+            className="size-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+          Loading this offer…
+        </p>
+      )}
+    </section>
   );
 }
