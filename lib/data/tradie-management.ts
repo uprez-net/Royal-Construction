@@ -377,6 +377,7 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
             throw new Error("Tradie not found");
         }
 
+        const fileIds = [...new Set(input.fileIds ?? [])];
         const { incident, approval } = await prisma.$transaction(async (tx) => {
             const incident = await tx.tradieIncident.create({
                 data: {
@@ -384,13 +385,33 @@ export async function reportTradieIncident(input: ReportIncidentInput): Promise<
                     type: input.incidentType,
                     severity: input.incidentSeverity,
                     description: input.incidentDescription,
-                    files: input.fileIds?.length
-                        ? {
-                            connect: input.fileIds.map((id) => ({ id })),
-                        }
-                        : undefined,
                 },
             });
+
+            // The file ids come from the browser. `connect` took any id, which
+            // moved another record's file onto this incident, and File.incidentId
+            // cascades, so deleting the incident deleted that file. Attach only
+            // what the report modal uploads: the reporter's own files, not yet
+            // on a project, milestone, lead, compliance document or incident.
+            if (fileIds.length > 0) {
+                const attached = await tx.file.updateMany({
+                    where: {
+                        id: { in: fileIds },
+                        uploadedBy: user.id,
+                        projectId: null,
+                        milestoneId: null,
+                        leadId: null,
+                        complianceDocumentId: null,
+                        incidentId: null,
+                    },
+                    data: { incidentId: incident.id },
+                });
+                // Fail the report as a missing id did under `connect`, rather
+                // than file it without evidence the reporter attached.
+                if (attached.count !== fileIds.length) {
+                    throw new Error("Incident files are missing or belong to another record");
+                }
+            }
 
             const approval = await tx.tradieApproval.create({
                 data: {

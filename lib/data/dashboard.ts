@@ -1,4 +1,7 @@
-"use server";
+// Server-only, not "use server": only the dashboard page, a Server Component,
+// calls these, and as Server Actions the KPI and graph totals across every
+// lead and project were an endpoint any signed-in user could post to.
+import "server-only";
 import type { DashboardKPI } from "@/types/dashboard";
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";

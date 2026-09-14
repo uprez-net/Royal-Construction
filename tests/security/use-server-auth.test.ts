@@ -12,35 +12,68 @@ import ts from "typescript";
 // check its caller itself, and createProjectWithLeadAction, the lead and
 // project readers and the compliance writers did not.
 //
-// This scans every such module and fails on an export whose body, or a
-// function in the same file that it calls, never reaches one of the checks
-// below. It is a tripwire for a missing check, not proof that a check is the
-// right one. A module whose exports only server code calls should not be
-// "use server" at all: make it `import "server-only"`, as lib/data/leads.ts is.
+// This scans every such module in the repo and sorts each export by the
+// strongest check its body, or a function in the same file that it calls,
+// reaches: a caller check below, only auth(), or nothing. It is a tripwire for
+// a missing check, not proof that a check is the right one. A module whose
+// exports only server code calls should not be "use server" at all: make it
+// `import "server-only"`, as lib/data/leads.ts is.
 
 const ROOT = process.cwd();
-const SOURCE_ROOTS = ["app", "components", "constants", "context", "hooks", "lib", "types", "utils"];
 
-// How this codebase checks a caller. Each refuses one it cannot identify.
+// How this codebase checks a caller. Each does more than prove sign-in: it
+// refuses a caller without the role or the record, or (leadListScope) narrows
+// a listing to the leads the caller may open.
 const CALLER_CHECKS = new Set([
-  "auth",
   "authorizeLeadAccess",
   "authorizeOfferAccess",
   "assertCanAccessLead",
+  "leadListScope",
   "requireAdminUser",
   "requireInternalUser",
   "requireComplianceAccess",
   "requireComplianceAdmin",
 ]);
 
-// Exports that still check nobody, each with why it is left for now. None of
-// them reads or writes offers, leads, projects, files or envelopes; every entry
-// is a follow-up, and the second test fails once one is fixed or removed.
+// auth() alone passes every signed-in user, customers included. An export
+// whose only check is this has to be listed in SIGNED_IN_ONLY with what else
+// limits it, so `await auth()` followed by a write to someone else's record
+// does not pass as checked.
+const SIGN_IN_CHECK = "auth";
+
+// Helpers private to one module that check a role or record after auth().
+// Keyed by file so a same-named function elsewhere earns nothing.
+const LOCAL_CHECKS: Record<string, string> = {
+  "lib/data/tradie-approvals.ts#authorisedForApproval": "refuses anyone but an ADMIN",
+  "lib/data/tradieSchedules.ts#userHasAccessToSchedule":
+    "refuses anyone but the project's site manager or an ADMIN",
+};
+
+// Exports whose only check is sign-in, each with why that is enough for now.
+const TRADIE_REQUEST = "files a tradie approval request that an ADMIN must approve; tradie domain (follow-up: staff only)";
+const SIGNED_IN_ONLY: Record<string, string> = {
+  "lib/data/offer-image-ai.ts#generateOfferInspirationImage":
+    "generates a stock image into Blob storage from a fixed prompt; reads no offer, spends image credits (follow-up: staff only)",
+  "lib/data/offer-image-import.ts#importDropboxImage":
+    "copies an https Dropbox image into Blob storage; reads no offer (follow-up: staff only)",
+  "lib/data/tradie-management.ts#deleteTradie": TRADIE_REQUEST,
+  "lib/data/tradie-management.ts#rateTradie":
+    "writes a tradie rating directly; tradie domain (follow-up: staff only)",
+  "lib/data/tradie-management.ts#reportTradieIncident":
+    "files an incident for ADMIN review and attaches only the reporter's own unattached uploads; tradie domain (follow-up: staff only)",
+  "lib/data/tradie-management.ts#updateTradiePrice": TRADIE_REQUEST,
+};
+
+// Exports that check nobody, each with why it is left for now. None reads or
+// writes offers, leads, files or envelopes, but some return project data: the
+// tradie schedule reads include each schedule's whole project row. Every entry
+// is a follow-up, and the last test fails once one is fixed or removed.
 const CUSTOMERS = "customer records; only server code calls it, so it wants server-only (follow-up)";
 const SITE_MANAGERS = "site manager lookups; only server code calls it, so it wants server-only (follow-up)";
 const TRADIE_APPROVALS = "tradie approvals, called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIES = "tradie records, some called from the browser; tradie domain, outside this pass (follow-up)";
-const TRADIE_SCHEDULES = "tradie schedule reads; only server code calls it, so it wants server-only (follow-up)";
+const TRADIE_SCHEDULES =
+  "tradie schedule reads, some returning whole project rows; only server code calls it, so it wants server-only (follow-up)";
 const USERS = "user accounts; proxy.ts imports this module, so server-only needs a build check first (follow-up)";
 
 const ALLOWLIST: Record<string, string> = {
@@ -94,6 +127,10 @@ const ALLOWLIST: Record<string, string> = {
     "drafts a subject line from text with the model; reads no data, spends tokens (follow-up)",
 };
 
+type Check = "caller" | "signed-in" | "none";
+
+// The whole repo, not a list of source folders: a "use server" file anywhere
+// the app imports it from is an endpoint.
 function sourceFiles(dir: string): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -106,6 +143,16 @@ function sourceFiles(dir: string): string[] {
     }
   }
   return found;
+}
+
+function parse(fileName: string, text: string): ts.SourceFile {
+  return ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
 }
 
 /** The directive prologue: string-literal statements before any code. */
@@ -182,74 +229,86 @@ function readModule(file: ts.SourceFile) {
   return { functions, exports };
 }
 
-function reachesCallerCheck(
+function stronger(a: Check, b: Check): Check {
+  if (a === "caller" || b === "caller") return "caller";
+  if (a === "signed-in" || b === "signed-in") return "signed-in";
+  return "none";
+}
+
+function checkReached(
+  fileName: string,
   node: ts.Node,
   functions: Map<string, ts.Node>,
   seen: Set<string>,
-): boolean {
-  let found = false;
+): Check {
+  let reached: Check = "none";
   const visit = (current: ts.Node) => {
-    if (found) return;
+    if (reached === "caller") return;
     if (ts.isCallExpression(current) && ts.isIdentifier(current.expression)) {
       const callee = current.expression.text;
-      if (CALLER_CHECKS.has(callee)) {
-        found = true;
+      const helper = functions.get(callee);
+      if (
+        CALLER_CHECKS.has(callee) ||
+        (helper !== undefined && Object.hasOwn(LOCAL_CHECKS, `${fileName}#${callee}`))
+      ) {
+        reached = "caller";
         return;
       }
-      const helper = functions.get(callee);
+      if (callee === SIGN_IN_CHECK) {
+        reached = stronger(reached, "signed-in");
+      }
       if (helper && !seen.has(callee)) {
         seen.add(callee);
-        if (reachesCallerCheck(helper, functions, seen)) {
-          found = true;
-          return;
-        }
+        reached = stronger(reached, checkReached(fileName, helper, functions, seen));
+        if (reached === "caller") return;
       }
     }
     ts.forEachChild(current, visit);
   };
   visit(node);
-  return found;
+  return reached;
 }
 
-function uncheckedExports(fileName: string, text: string): string[] {
+/** Each runtime export of a "use server" module, with the strongest check it reaches. */
+function classifyExports(fileName: string, text: string): [string, Check][] {
   if (!text.includes("use server")) return [];
-  const file = ts.createSourceFile(
-    fileName,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const file = parse(fileName, text);
   if (!isUseServerModule(file)) return [];
   const { functions, exports } = readModule(file);
-  return exports
-    .filter(([, local]) => {
-      const body = local === null ? undefined : functions.get(local);
-      return body === undefined || !reachesCallerCheck(body, functions, new Set([local!]));
-    })
-    .map(([name]) => name);
+  return exports.map(([name, local]) => {
+    const body = local === null ? undefined : functions.get(local);
+    const check = body === undefined ? "none" : checkReached(fileName, body, functions, new Set([local!]));
+    return [name, check];
+  });
 }
 
-const unchecked = SOURCE_ROOTS.flatMap((root) => sourceFiles(join(ROOT, root)))
+const classified = sourceFiles(ROOT)
   .flatMap((path) => {
     const file = relative(ROOT, path).split(sep).join("/");
-    return uncheckedExports(file, readFileSync(path, "utf8")).map((name) => `${file}#${name}`);
+    return classifyExports(file, readFileSync(path, "utf8")).map(
+      ([name, check]) => [`${file}#${name}`, check] as const,
+    );
   })
-  .sort();
+  .sort(([a], [b]) => a.localeCompare(b));
 
-test("the scanner flags exports that check nobody, and only those", () => {
-  const flagged = uncheckedExports(
+const withCheck = (check: Check) => classified.filter(([, c]) => c === check).map(([key]) => key);
+const unchecked = withCheck("none");
+const signedInOnly = withCheck("signed-in");
+
+test("the scanner tells a caller check from sign-in alone and from nothing", () => {
+  const sample = classifyExports(
     "sample.ts",
     `"use server";
 import { auth } from "@clerk/nextjs/server";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
 
-async function guard() {
+async function signedIn() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 }
 
-export async function viaHelper() { await guard(); }
+export async function viaHelper() { await signedIn(); }
+export async function signInThenLead(leadId: number) { await signedIn(); return authorizeLeadAccess(leadId); }
 export const direct = async (leadId: number) => authorizeLeadAccess(leadId);
 export async function open(id: string) { return id; }
 export { open as alsoOpen };
@@ -258,11 +317,27 @@ export type Shape = { id: string };
 export interface Other { id: string }
 `,
   );
-  assert.deepEqual(flagged, ["open", "alsoOpen", "elsewhere"]);
+  assert.deepEqual(sample, [
+    ["viaHelper", "signed-in"],
+    ["signInThenLead", "caller"],
+    ["direct", "caller"],
+    ["open", "none"],
+    ["alsoOpen", "none"],
+    ["elsewhere", "none"],
+  ]);
 
-  assert.deepEqual(uncheckedExports("after-comment.tsx", `// why\n'use server'\nexport async function open() {}`), ["open"]);
-  assert.deepEqual(uncheckedExports("server-only.ts", `import "server-only";\nexport async function open() {}`), []);
-  assert.deepEqual(uncheckedExports("late.ts", `import x from "y";\n"use server";\nexport async function open() {}`), []);
+  // A listed local helper counts only in its own file.
+  const approvals = `"use server";
+import { auth } from "@clerk/nextjs/server";
+const authorisedForApproval = async () => { await auth(); };
+export async function approve() { await authorisedForApproval(); }
+`;
+  assert.deepEqual(classifyExports("lib/data/tradie-approvals.ts", approvals), [["approve", "caller"]]);
+  assert.deepEqual(classifyExports("lib/data/other.ts", approvals), [["approve", "signed-in"]]);
+
+  assert.deepEqual(classifyExports("after-comment.tsx", `// why\n'use server'\nexport async function open() {}`), [["open", "none"]]);
+  assert.deepEqual(classifyExports("server-only.ts", `import "server-only";\nexport async function open() {}`), []);
+  assert.deepEqual(classifyExports("late.ts", `import x from "y";\n"use server";\nexport async function open() {}`), []);
 });
 
 test("every Server Action checks its caller or is allowlisted with a reason", () => {
@@ -276,10 +351,35 @@ test("every Server Action checks its caller or is allowlisted with a reason", ()
   );
 });
 
-test("the allowlist names only exports that still check nobody", () => {
-  const stale = Object.keys(ALLOWLIST).filter((key) => !unchecked.includes(key));
-  assert.deepEqual(stale, [], "these entries are fixed or gone; delete them");
-  for (const [key, reason] of Object.entries(ALLOWLIST)) {
+test("a Server Action that only proves sign-in is listed with what else limits it", () => {
+  const unexplained = signedInOnly.filter((key) => !Object.hasOwn(SIGNED_IN_ONLY, key));
+  assert.deepEqual(
+    unexplained,
+    [],
+    `These "use server" exports only call auth(), which every signed-in user ` +
+      `passes, customers included. Check the role or the record, or list the ` +
+      `export in SIGNED_IN_ONLY with why sign-in is enough:\n` +
+      unexplained.join("\n"),
+  );
+});
+
+test("the lists name only exports that still need them, each with a one-line reason", () => {
+  assert.deepEqual(
+    Object.keys(ALLOWLIST).filter((key) => !unchecked.includes(key)),
+    [],
+    "these ALLOWLIST entries now check their caller or are gone; delete them",
+  );
+  assert.deepEqual(
+    Object.keys(SIGNED_IN_ONLY).filter((key) => !signedInOnly.includes(key)),
+    [],
+    "these SIGNED_IN_ONLY entries now check more, or nothing, or are gone; move or delete them",
+  );
+  for (const key of Object.keys(LOCAL_CHECKS)) {
+    const [file, name] = key.split("#");
+    const { functions } = readModule(parse(file, readFileSync(join(ROOT, file), "utf8")));
+    assert.ok(functions.has(name), `${key} no longer exists; delete it from LOCAL_CHECKS`);
+  }
+  for (const [key, reason] of Object.entries({ ...ALLOWLIST, ...SIGNED_IN_ONLY, ...LOCAL_CHECKS })) {
     assert.ok(reason.trim() !== "" && !reason.includes("\n"), `${key} needs a one-line reason`);
   }
 });
