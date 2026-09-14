@@ -4,7 +4,7 @@ import {
   checkOfferLists,
   draftHighlightsForOffer,
 } from "@/lib/data/offer-inclusion-check";
-import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import { getOfferDocumentExclusions } from "@/lib/offer/workspace-print-template";
 import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
 import {
   INITIAL_ALLOWANCES,
@@ -605,7 +605,7 @@ export function NewOfferWorkspace({
           leadId,
           estimated: getIncludedOfferTenderLineItems(lines),
           scheduled: draft.inclusionSchedule.map((entry) => entry.spec),
-          excluded: getVisibleExclusions(draft, exclusions),
+          excluded: getOfferDocumentExclusions(draft),
           offered: draft.inclusionHighlights,
         });
         if (!result.ok) {
@@ -1340,9 +1340,13 @@ export function NewOfferWorkspace({
               scope: recallScope,
               toStatus: next.toUpperCase() as OfferStatus,
             });
-            // A recall that could not reach DocuSign still moved our status, so
-            // this is not an error — but the envelope may still be live and the
-            // estimator is the only one who can finish the job by hand.
+            // A refused recall (DocuSign did not confirm the void) leaves the
+            // status unchanged and comes back as data, because a thrown server
+            // message is hidden in production. Rethrow it so the catch below
+            // shows why and resyncs. voidWarnings is empty in practice.
+            if (!recalled.ok) {
+              throw new Error(recalled.error);
+            }
             if (recalled.voidWarnings.length > 0) {
               setTransitionError(recalled.voidWarnings.join(" "));
             }
@@ -1427,7 +1431,9 @@ export function NewOfferWorkspace({
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
           setRevisionNotice(
-            "This offer is locked — changes need a contract variation, not a new offer revision.",
+            result.reason === "refused"
+              ? result.error
+              : "This offer is locked — changes need a contract variation, not a new offer revision.",
           );
           return;
         }

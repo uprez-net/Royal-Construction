@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { resolveAdminGuard } from "../../lib/auth/require-admin";
@@ -62,4 +64,51 @@ test("refusing a non-admin says no more than refusing a stranger", () => {
     true,
     "the two refusals are distinguishable",
   );
+});
+
+// Guarding the actions was not enough on its own. The writers they call were
+// exported from lib/data/admin-offer-content.ts, which is "use server", and every
+// exported async function in such a module is its own Server Action. So
+// updateBuildScope and the rest stayed callable directly, with no guard,
+// skipping the actions entirely. They now live in a module with no directive.
+
+const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+
+// A directive only counts as the first statement, so skip leading comments.
+function startsWithUseServer(text: string): boolean {
+  const body = text.replace(/^(?:\s+|\/\/[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*/, "");
+  return /^["']use server["']/.test(body);
+}
+
+test("the 'use server' admin data module exports only the cached read", () => {
+  const text = source("lib/data/admin-offer-content.ts");
+  assert.equal(startsWithUseServer(text), true);
+  assert.doesNotMatch(text, /export\s+async\s+function\s+update/);
+  // A re-export makes a writer a Server Action just as surely, and the name
+  // list below cannot see one.
+  assert.doesNotMatch(text, /export\s*(?:\{|\*|default\b)/);
+  const exported = [
+    ...text.matchAll(/export\s+(?:async\s+)?(?:function|const|let)\s+(\w+)/g),
+  ].map((match) => match[1]);
+  assert.deepEqual(exported, ["getAdminOfferContent"]);
+});
+
+test("the admin writers live in a module that is not 'use server'", () => {
+  const text = source("lib/data/admin-offer-content-writes.ts");
+  assert.equal(startsWithUseServer(text), false);
+  for (const writer of [
+    "updateBuildScope",
+    "updateCostSchedule",
+    "updateOfferScope",
+    "updateOfferContent",
+    "updateHBFCClaim",
+  ]) {
+    assert.match(text, new RegExp(`export async function ${writer}\\b`));
+  }
+});
+
+test("the directive check itself sees a directive behind leading comments", () => {
+  assert.equal(startsWithUseServer('// note\n/* block */\n"use server";\n'), true);
+  assert.equal(startsWithUseServer("'use server';"), true);
+  assert.equal(startsWithUseServer('// "use server" in a comment\nimport x from "y";'), false);
 });
