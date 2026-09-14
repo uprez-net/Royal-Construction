@@ -299,6 +299,13 @@ export function NewOfferWorkspace({
   // because the pre-transition save reconciled to another tab or failed — without
   // it the button looked like a silent no-op (codex #4).
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  // True while a status change or a revision is running. Double-clicking a
+  // lifecycle button used to fire its server action twice: the ref blocks
+  // re-entry synchronously, the state drives the screen's busy line.
+  const [transitioning, setTransitioning] = useState(false);
+  const transitioningRef = useRef(false);
+  // The mount load failed, so there is no offer to show or save.
+  const [loadFailed, setLoadFailed] = useState(false);
   // Per-recipient DocuSign status, loaded with the offer and refreshed whenever
   // we reload it. The Connect webhook writes these rows; before #121/#123 the
   // signing tracker ignored them and hard-coded every customer to "awaiting".
@@ -1102,6 +1109,7 @@ export function NewOfferWorkspace({
         console.error("[offer] failed to load the workspace:", error);
         if (!cancelled) {
           setSaveState("error");
+          setLoadFailed(true);
         }
         return;
       }
@@ -1388,6 +1396,11 @@ export function NewOfferWorkspace({
       if (leadId === undefined || offerId === null) {
         return;
       }
+      if (transitioningRef.current) {
+        return;
+      }
+      transitioningRef.current = true;
+      setTransitioning(true);
       setTransitionError(null);
       void (async () => {
         try {
@@ -1462,6 +1475,9 @@ export function NewOfferWorkspace({
           } catch {
             // Reload failed too — leave the UI as-is.
           }
+        } finally {
+          transitioningRef.current = false;
+          setTransitioning(false);
         }
       })();
     },
@@ -1482,6 +1498,13 @@ export function NewOfferWorkspace({
     if (leadId === undefined || offerId === null) {
       return;
     }
+    // Shares the transition guard: a revision racing a recall or status change
+    // on the same offer is the double-submit this exists to stop.
+    if (transitioningRef.current) {
+      return;
+    }
+    transitioningRef.current = true;
+    setTransitioning(true);
     setRevising(true);
     setRevisionNotice(null);
     void (async () => {
@@ -1552,6 +1575,8 @@ export function NewOfferWorkspace({
         );
       } finally {
         setRevising(false);
+        transitioningRef.current = false;
+        setTransitioning(false);
       }
     })();
   }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer]);
@@ -1849,6 +1874,8 @@ export function NewOfferWorkspace({
         areaCalculator={areaCalculator}
         calcVersion={calcVersion}
         hydrated={hydrated}
+        loadFailed={loadFailed}
+        transitioning={transitioning}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}

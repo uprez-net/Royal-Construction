@@ -36,7 +36,7 @@ import {
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { formatOfferReference } from "./offer-workspace-format";
-import { Lock } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -133,6 +133,10 @@ type OfferWorkspaceScreenProps = {
   // `status` is the "pending" seed, and the opening step derived from it is a
   // guess that must be corrected exactly once.
   readonly hydrated: boolean;
+  // The mount load failed: there is nothing to show and nothing to save.
+  readonly loadFailed: boolean;
+  // A status change or revision is running.
+  readonly transitioning: boolean;
   readonly areaCalculator: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
@@ -268,6 +272,8 @@ export function OfferWorkspaceScreen({
   areaCalculator,
   calcVersion,
   hydrated,
+  loadFailed,
+  transitioning,
   rateConstants,
   customerPrice,
   directTotal,
@@ -472,6 +478,10 @@ export function OfferWorkspaceScreen({
     pendingConfirm === null
       ? null
       : describePendingConfirm(pendingConfirm, status);
+  // Until the server says what this offer is, the panes would render the seed:
+  // an editable blank pending offer, even when the real one is agreed. Show the
+  // load instead.
+  const awaitingOffer = leadId !== undefined && !hydrated;
 
   // Panel state that must outlive its panel. Only the active step is mounted,
   // so anything a panel kept in local useState was wiped on every step change.
@@ -621,10 +631,47 @@ export function OfferWorkspaceScreen({
           ref={paneRef}
           role="region"
           aria-labelledby="offer-pane-title"
+          aria-busy={transitioning}
           tabIndex={-1}
           className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5 outline-none"
         >
           <div className="space-y-5">
+          {awaitingOffer ? (
+            <OfferPaneLoadState failed={loadFailed} />
+          ) : (
+          <>
+          {transitioning ? (
+            <p
+              role="status"
+              className="flex items-center gap-2 text-xs text-muted-foreground"
+            >
+              <Loader2
+                className="size-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              Working…
+            </p>
+          ) : null}
+          {/* Transition and recall errors used to render only inside the Send
+              panel, which is unmounted on every other step, so a refused
+              Tender or Contract recall said nothing. Send keeps its own slot. */}
+          {transitionError && activeStepId !== "send" ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-xs font-medium text-destructive-ink"
+            >
+              {transitionError}
+            </p>
+          ) : null}
+          {/* On the offer-build steps the lock banner below carries it. */}
+          {revisionNotice && !(offerIssued && activeStepIsOfferPhase) ? (
+            <p
+              role="status"
+              className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
+            >
+              {revisionNotice}
+            </p>
+          ) : null}
           {/* The banner names the offer-build steps; it has no business above
               Tender, Contract or Project. */}
           {offerIssued && activeStepIsOfferPhase ? (
@@ -893,6 +940,8 @@ export function OfferWorkspaceScreen({
               projectId={projectId}
             />
           </StepPane>
+          </>
+          )}
           </div>
         </div>
       </div>
@@ -1052,5 +1101,35 @@ function PaneHeading({
         </span>
       ) : null}
     </div>
+  );
+}
+
+// Stands in for the step panes until the offer has loaded, or when it could not.
+function OfferPaneLoadState({ failed }: { readonly failed: boolean }) {
+  return (
+    <section aria-labelledby="offer-pane-title" className="space-y-4">
+      <h2 id="offer-pane-title" className="sr-only">
+        Offer
+      </h2>
+      {failed ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-sm font-medium text-destructive-ink"
+        >
+          Couldn&apos;t load this offer. Reload the page to try again.
+        </p>
+      ) : (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-lg border border-dashed border-border px-4 py-10 text-sm text-muted-foreground"
+        >
+          <Loader2
+            className="size-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+          Loading this offer…
+        </p>
+      )}
+    </section>
   );
 }
