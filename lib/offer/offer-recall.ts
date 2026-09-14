@@ -82,59 +82,119 @@ export function resolveRecall(
   return { ok: true, scope: edge.scope, from: currentStatus, to: edge.to };
 }
 
+// A live envelope that could not be shown dead, and why. The reason decides the
+// advice: voiding by hand in DocuSign only helps one still out for signature.
+export type UnsettledEnvelope = {
+  readonly id: string;
+  // DocuSign's envelope id, which is what the estimator can find in DocuSign.
+  readonly docusignId: string;
+  // "still-out": DocuSign refused the void or could not be reached, and does not
+  // say the envelope ended, so the customer may still be able to sign it.
+  // "signed": DocuSign shows it signed, but the signed copy never reached us.
+  // "unrecorded": DocuSign has it voided or declined, but writing that failed.
+  readonly reason: "still-out" | "signed" | "unrecorded";
+};
+
 export type EnvelopeVoidOutcome = {
-  // Every envelope in scope that was still live when the recall started.
+  // Every envelope in scope that was still live when the pull-back started.
   readonly liveIds: readonly string[];
-  // Envelopes DocuSign confirmed voided (or that never reached DocuSign).
+  // Envelopes this pull-back voided (or that never reached DocuSign).
   readonly voidedIds: readonly string[];
-  // Envelopes DocuSign did not confirm: they may still be signable.
-  readonly failedIds: readonly string[];
+  // Envelopes DocuSign already had voided or declined, now recorded as such.
+  readonly endedIds: readonly string[];
+  readonly unsettled: readonly UnsettledEnvelope[];
 };
 
 // A recall or a revision moves on only when every live envelope in scope is
-// confirmed dead. The alternative, which this replaced, moved the offer to a
-// draft while DocuSign had not voided the envelope, so an estimator edited a
-// document the customer could still sign. No live envelopes at all is a clean
-// pull-back: there is nothing a customer can sign.
+// confirmed dead: voided now, or already voided or declined in DocuSign. The
+// alternative, which this replaced, moved the offer to a draft while DocuSign had
+// not voided the envelope, so an estimator edited a document the customer could
+// still sign. No live envelopes at all is a clean pull-back: there is nothing a
+// customer can sign.
 export function decideRecallPullBack(outcome: EnvelopeVoidOutcome): {
   readonly proceed: boolean;
 } {
-  const voided = new Set(outcome.voidedIds);
+  const dead = new Set([...outcome.voidedIds, ...outcome.endedIds]);
   return {
     proceed:
-      outcome.failedIds.length === 0 &&
-      outcome.liveIds.every((id) => voided.has(id)),
+      outcome.unsettled.length === 0 &&
+      outcome.liveIds.every((id) => dead.has(id)),
   };
 }
 
-// What the estimator is told when a void was not confirmed. It has to say the
-// document is still signable, and must not claim nothing changed: an envelope
-// voided before a later one failed stays voided, because voiding is final.
+// What the estimator is told when a pull-back is refused. It names the envelopes
+// and gives advice that can work for each of them. It must not claim nothing
+// changed: an envelope voided before a later one failed stays voided, because
+// voiding is final.
 export function describeUnconfirmedVoid(input: {
-  // DocuSign's envelope ids, which is what the estimator can find in DocuSign.
-  readonly failedEnvelopeIds: readonly string[];
+  readonly unsettled: readonly UnsettledEnvelope[];
   readonly voidedCount: number;
   readonly action: "recall" | "revision";
 }): string {
-  const failed = input.failedEnvelopeIds;
-  const which =
-    failed.length === 0
-      ? "an envelope"
-      : failed.length === 1
-        ? `envelope ${failed[0]}`
-        : `envelopes ${failed.join(", ")}`;
-  const unchanged =
-    input.action === "recall"
-      ? "The offer's status was not changed."
-      : "No revision was created.";
-  const alreadyVoided =
-    input.voidedCount === 0
-      ? ""
-      : input.voidedCount === 1
-        ? " One other envelope was voided and stays voided."
-        : ` ${input.voidedCount} other envelopes were voided and stay voided.`;
-  const voidThere = failed.length > 1 ? "void them" : "void it";
+  const idsFor = (reason: UnsettledEnvelope["reason"]) =>
+    input.unsettled
+      .filter((env) => env.reason === reason)
+      .map((env) => env.docusignId);
+  const stillOut = idsFor("still-out");
+  const signed = idsFor("signed");
+  const unrecorded = idsFor("unrecorded");
   const retry =
     input.action === "recall" ? "recall again" : "create the revision again";
-  return `The document is still out for signature: DocuSign did not confirm the void of ${which} (it may already be signed or declined, or DocuSign could not be reached). ${unchanged}${alreadyVoided} Try again, or ${voidThere} in DocuSign, refresh, and ${retry}.`;
+
+  const sentences: string[] = [];
+  if (stillOut.length > 0) {
+    sentences.push(
+      `The document is still out for signature: DocuSign did not confirm the void of ${envelopeNames(stillOut)}.`,
+    );
+  }
+  if (signed.length > 0) {
+    sentences.push(
+      `DocuSign shows ${envelopeNames(signed)} as signed, but the signed copy never reached the app.`,
+    );
+  }
+  if (unrecorded.length > 0) {
+    sentences.push(
+      `DocuSign has ${envelopeNames(unrecorded)} voided or declined, but the app could not record that.`,
+    );
+  }
+  if (sentences.length === 0) {
+    sentences.push(
+      "The document may still be out for signature: DocuSign did not confirm every void.",
+    );
+  }
+  sentences.push(
+    input.action === "recall"
+      ? "The offer's status was not changed."
+      : "No revision was created.",
+  );
+  if (input.voidedCount === 1) {
+    sentences.push("One other envelope was voided and stays voided.");
+  } else if (input.voidedCount > 1) {
+    sentences.push(
+      `${input.voidedCount} other envelopes were voided and stay voided.`,
+    );
+  }
+  if (signed.length > 0) {
+    // Voiding a signed envelope is impossible, and retrying changes nothing
+    // until DocuSign's completion update is delivered.
+    sentences.push(
+      "Tell an admin that DocuSign's signing update did not reach the app.",
+    );
+  }
+  if (stillOut.length === 1) {
+    sentences.push(
+      `Try again in a moment. If that fails too, open the envelope in DocuSign, void it there if it is still out for signature, then ${retry}.`,
+    );
+  } else if (stillOut.length > 1) {
+    sentences.push(
+      `Try again in a moment. If that fails too, open the envelopes in DocuSign, void any still out for signature, then ${retry}.`,
+    );
+  } else if (signed.length === 0) {
+    sentences.push("Try again in a moment.");
+  }
+  return sentences.join(" ");
+}
+
+function envelopeNames(ids: readonly string[]): string {
+  return ids.length === 1 ? `envelope ${ids[0]}` : `envelopes ${ids.join(", ")}`;
 }

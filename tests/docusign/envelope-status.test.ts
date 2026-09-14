@@ -6,6 +6,7 @@ import { EnvelopeStatus } from "@prisma/client";
 import {
   envelopeStatusRank,
   isLiveEnvelopeStatus,
+  readRefusedVoid,
 } from "../../lib/docusign/envelope-status";
 
 // Recall and Create revision only looked for envelopes with status SENT. The
@@ -69,5 +70,50 @@ test("no live status outranks a terminal one", () => {
     for (const terminal of TERMINAL) {
       assert.ok(envelopeStatusRank(live) < envelopeStatusRank(terminal));
     }
+  }
+});
+
+// Recall and Create revision treated every refused void as an envelope still out
+// for signature. DocuSign also refuses to void one that already expired or was
+// declined, and when that Connect event never arrived the row stayed live: both
+// actions were refused for good, and voiding it by hand was impossible.
+
+test("a refused void on an envelope DocuSign has voided or declined counts as ended", () => {
+  assert.deepEqual(readRefusedVoid("voided"), {
+    kind: "ended",
+    status: EnvelopeStatus.VOIDED,
+  });
+  assert.deepEqual(readRefusedVoid("Voided"), {
+    kind: "ended",
+    status: EnvelopeStatus.VOIDED,
+  });
+  assert.deepEqual(readRefusedVoid("declined"), {
+    kind: "ended",
+    status: EnvelopeStatus.DECLINED,
+  });
+});
+
+test("a refused void on an envelope the customer signed never counts as ended", () => {
+  for (const status of ["signed", "completed"]) {
+    assert.deepEqual(readRefusedVoid(status), { kind: "signed" }, status);
+  }
+});
+
+test("any other status DocuSign reports counts as still out for signature", () => {
+  for (const status of [
+    "sent",
+    "delivered",
+    "created",
+    "correct",
+    "a-status-added-later",
+    "",
+    null,
+    undefined,
+  ]) {
+    assert.deepEqual(
+      readRefusedVoid(status),
+      { kind: "still-out" },
+      `${String(status)} was not treated as still out`,
+    );
   }
 });

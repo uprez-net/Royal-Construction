@@ -37,3 +37,30 @@ export const LIVE_ENVELOPE_STATUSES: EnvelopeStatus[] = [
 export function isLiveEnvelopeStatus(status: EnvelopeStatus): boolean {
   return LIVE_ENVELOPE_STATUSES.includes(status);
 }
+
+// What a refused void means, from the status DocuSign reports for the envelope.
+// DocuSign voids only an envelope still out for signature, so a refusal can mean
+// it already ended and its Connect event never arrived (the webhook URL is fixed
+// when the envelope is created). Voided or declined: nobody can sign it. Signed
+// or completed: the customer signed, so it must never pass as recalled. Any
+// other status, including one we don't know, counts as still out.
+export type RefusedVoidReading =
+  | { readonly kind: "ended"; readonly status: EnvelopeStatus }
+  | { readonly kind: "signed" }
+  | { readonly kind: "still-out" };
+
+export function readRefusedVoid(
+  docusignStatus: string | null | undefined,
+): RefusedVoidReading {
+  switch (docusignStatus?.toLowerCase()) {
+    case "voided":
+      return { kind: "ended", status: EnvelopeStatus.VOIDED };
+    case "declined":
+      return { kind: "ended", status: EnvelopeStatus.DECLINED };
+    case "signed":
+    case "completed":
+      return { kind: "signed" };
+    default:
+      return { kind: "still-out" };
+  }
+}

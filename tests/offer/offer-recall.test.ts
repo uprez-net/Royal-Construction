@@ -195,7 +195,8 @@ test("a pull-back proceeds when every live envelope was voided", () => {
     decideRecallPullBack({
       liveIds: ["env-1", "env-2"],
       voidedIds: ["env-1", "env-2"],
-      failedIds: [],
+      endedIds: [],
+      unsettled: [],
     }).proceed,
     true,
   );
@@ -203,58 +204,121 @@ test("a pull-back proceeds when every live envelope was voided", () => {
 
 test("a pull-back proceeds when nothing was live", () => {
   assert.equal(
-    decideRecallPullBack({ liveIds: [], voidedIds: [], failedIds: [] }).proceed,
+    decideRecallPullBack({
+      liveIds: [],
+      voidedIds: [],
+      endedIds: [],
+      unsettled: [],
+    }).proceed,
     true,
   );
 });
 
-test("a pull-back stops when any void was not confirmed", () => {
-  assert.equal(
-    decideRecallPullBack({
-      liveIds: ["env-1", "env-2"],
-      voidedIds: ["env-1"],
-      failedIds: ["env-2"],
-    }).proceed,
-    false,
-  );
+test("a pull-back stops when any envelope is unsettled, whatever the reason", () => {
+  for (const reason of ["still-out", "signed", "unrecorded"] as const) {
+    assert.equal(
+      decideRecallPullBack({
+        liveIds: ["env-1", "env-2"],
+        voidedIds: ["env-1"],
+        endedIds: [],
+        unsettled: [{ id: "env-2", docusignId: "ds-2", reason }],
+      }).proceed,
+      false,
+      `a ${reason} envelope let the pull-back through`,
+    );
+  }
+});
+
+test("a pull-back stops when a live envelope is unaccounted for", () => {
+  // Neither voided, ended nor reported unsettled: not confirmed, so not safe.
   assert.equal(
     decideRecallPullBack({
       liveIds: ["env-1"],
       voidedIds: [],
-      failedIds: ["env-1"],
+      endedIds: [],
+      unsettled: [],
     }).proceed,
     false,
   );
 });
 
-test("a pull-back stops when a live envelope is unaccounted for", () => {
-  // Neither voided nor reported failed: not confirmed, so not safe.
+// An envelope DocuSign had already voided or declined, whose Connect event never
+// arrived, used to block recall and revision for good: DocuSign refuses to void
+// it again, so it could never be confirmed.
+test("a pull-back proceeds when DocuSign had already ended an envelope", () => {
   assert.equal(
-    decideRecallPullBack({ liveIds: ["env-1"], voidedIds: [], failedIds: [] }).proceed,
-    false,
+    decideRecallPullBack({
+      liveIds: ["env-1", "env-2"],
+      voidedIds: ["env-1"],
+      endedIds: ["env-2"],
+      unsettled: [],
+    }).proceed,
+    true,
   );
 });
 
-test("the refusal says the document is still signable and how to finish", () => {
+test("the refusal says the document is still signable and to check DocuSign first", () => {
   const message = describeUnconfirmedVoid({
-    failedEnvelopeIds: ["ds-123"],
+    unsettled: [{ id: "env-1", docusignId: "ds-123", reason: "still-out" }],
     voidedCount: 0,
     action: "recall",
   });
   assert.match(message, /still out for signature/);
   assert.match(message, /ds-123/);
   assert.match(message, /status was not changed/);
-  assert.match(message, /void it in DocuSign, refresh, and recall again/);
+  assert.match(
+    message,
+    /open the envelope in DocuSign, void it there if it is still out for signature, then recall again/,
+  );
+  assert.doesNotMatch(message, /admin/);
+});
+
+test("the refusal for a signed envelope does not advise voiding or retrying", () => {
+  // DocuSign cannot void a signed envelope, so that advice leads nowhere.
+  const message = describeUnconfirmedVoid({
+    unsettled: [{ id: "env-1", docusignId: "ds-9", reason: "signed" }],
+    voidedCount: 0,
+    action: "revision",
+  });
+  assert.match(message, /ds-9 as signed/);
+  assert.match(message, /No revision was created/);
+  assert.match(message, /Tell an admin/);
+  assert.doesNotMatch(message, /void it|void any|Try again|still out for signature/);
+});
+
+test("the refusal for a void the app could not record does not say it is still signable", () => {
+  const message = describeUnconfirmedVoid({
+    unsettled: [{ id: "env-1", docusignId: "ds-4", reason: "unrecorded" }],
+    voidedCount: 0,
+    action: "recall",
+  });
+  assert.match(message, /ds-4/);
+  assert.match(message, /could not record/);
+  assert.match(message, /Try again in a moment/);
+  assert.doesNotMatch(message, /still out for signature|void it|did not confirm/);
 });
 
 test("the refusal does not hide envelopes that were already voided", () => {
   const message = describeUnconfirmedVoid({
-    failedEnvelopeIds: ["ds-2"],
+    unsettled: [{ id: "env-2", docusignId: "ds-2", reason: "still-out" }],
     voidedCount: 1,
     action: "revision",
   });
   assert.match(message, /No revision was created/);
   assert.match(message, /One other envelope was voided and stays voided/);
-  assert.match(message, /create the revision again/);
+  assert.match(message, /then create the revision again/);
   assert.doesNotMatch(message, /[Nn]othing was changed/);
+});
+
+test("the refusal names every envelope still out", () => {
+  const message = describeUnconfirmedVoid({
+    unsettled: [
+      { id: "env-1", docusignId: "ds-1", reason: "still-out" },
+      { id: "env-2", docusignId: "ds-2", reason: "still-out" },
+    ],
+    voidedCount: 0,
+    action: "recall",
+  });
+  assert.match(message, /envelopes ds-1, ds-2/);
+  assert.match(message, /void any still out for signature, then recall again/);
 });

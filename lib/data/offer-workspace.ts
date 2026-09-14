@@ -11,9 +11,19 @@ import {
   type OfferAccess,
 } from "@/lib/data/offer-access";
 import { getDocusignConfig } from "@/lib/docusign/config";
-import { createDocusignContext } from "@/lib/docusign/client";
-import { voidEnvelope } from "@/lib/docusign/void-envelope";
-import { LIVE_ENVELOPE_STATUSES } from "@/lib/docusign/envelope-status";
+import {
+  createDocusignContext,
+  type DocusignContext,
+} from "@/lib/docusign/client";
+import {
+  getEnvelopeStatus,
+  voidEnvelope,
+} from "@/lib/docusign/void-envelope";
+import {
+  LIVE_ENVELOPE_STATUSES,
+  readRefusedVoid,
+  type RefusedVoidReading,
+} from "@/lib/docusign/envelope-status";
 import {
   CURRENT_CALC_VERSION,
   LEGACY_CALC_VERSION,
@@ -59,6 +69,7 @@ import {
   resolveRecall,
   type EnvelopeVoidOutcome,
   type OfferEnvelopeScope,
+  type UnsettledEnvelope,
 } from "@/lib/offer/offer-recall";
 
 // The active offer for a lead, ready to hydrate the workspace. `snapshot` is
@@ -981,23 +992,26 @@ export type CreateOfferRevisionResult =
  * Void every envelope in `scope` that is still out for signature, so a customer
  * can no longer sign a document the builder has pulled back.
  *
- * Reports exactly what DocuSign confirmed; callers refuse to move on unless it
- * confirmed everything (decideRecallPullBack). An envelope is marked VOIDED only
- * after DocuSign accepts the void, so one that fails stays live here, matching
- * DocuSign. Each VOIDED status is committed in its own write straight away
- * rather than inside a caller's transaction: voiding is irreversible, so if that
- * transaction rolls back, or a later envelope in the same scope fails, the DB
- * must not show a dead envelope as live. The live-status guard avoids
+ * Reports what DocuSign confirmed; callers refuse to move on unless every live
+ * envelope is confirmed dead (decideRecallPullBack). An envelope is marked
+ * VOIDED only after DocuSign accepts the void, so one that fails stays live
+ * here, matching DocuSign. Each status is committed in its own write straight
+ * away rather than inside a caller's transaction: voiding is irreversible, so if
+ * that transaction rolls back, or a later envelope in the same scope fails, the
+ * DB must not show a dead envelope as live. The live-status guard avoids
  * clobbering a terminal status a webhook has already set. "Live" includes
  * DELIVERED: an envelope the customer has opened is still signable.
+ *
+ * DocuSign refuses to void an envelope that has already ended, so a refusal is
+ * followed by reading the envelope's status back from DocuSign. One already
+ * voided or declined (its Connect event lost) is recorded as such and counts as
+ * dead; refusing it would strand the offer, since nobody could void it again.
+ * One DocuSign shows as signed, or still out, is reported unsettled.
  *
  * A row with no docusignId has no DocuSign counterpart (every send writes the id
  * from DocuSign's response in the same write that creates the row), so there is
  * nothing to void and nothing the webhook could ever update. It is marked VOIDED
  * and counted as voided; refusing it would block the offer for good.
- *
- * `failedDocusignIds` names the unconfirmed envelopes the way DocuSign does, for
- * the message to the estimator.
  *
  * Deliberately NOT exported: this file is "use server", so an export here would
  * be a callable endpoint that voids envelopes with no authorization of its own.
@@ -1007,9 +1021,7 @@ async function voidLiveOfferEnvelopes(
   offerId: string,
   reason: string,
   scope: OfferEnvelopeScope,
-): Promise<
-  EnvelopeVoidOutcome & { readonly failedDocusignIds: readonly string[] }
-> {
+): Promise<EnvelopeVoidOutcome> {
   const liveEnvelopes = await prisma.envelope.findMany({
     where: {
       status: { in: LIVE_ENVELOPE_STATUSES },
@@ -1019,56 +1031,117 @@ async function voidLiveOfferEnvelopes(
   });
   const liveIds = liveEnvelopes.map((env) => env.id);
   const voidedIds: string[] = [];
-  const failed: { id: string; docusignId: string }[] = [];
-
-  const markVoided = (id: string) =>
-    prisma.envelope.updateMany({
-      where: { id, status: { in: LIVE_ENVELOPE_STATUSES } },
-      data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
-    });
+  const endedIds: string[] = [];
+  const unsettled: UnsettledEnvelope[] = [];
 
   const inDocusign: { id: string; docusignId: string }[] = [];
   for (const env of liveEnvelopes) {
     if (env.docusignId === null) {
-      await markVoided(env.id);
+      await writeEnvelopeEnded(env.id, EnvelopeStatus.VOIDED);
       voidedIds.push(env.id);
     } else {
       inDocusign.push({ id: env.id, docusignId: env.docusignId });
     }
   }
-
-  if (inDocusign.length > 0) {
-    try {
-      const context = await createDocusignContext(getDocusignConfig());
-      for (const env of inDocusign) {
-        try {
-          await voidEnvelope(context, env.docusignId, reason);
-          await markVoided(env.id);
-          voidedIds.push(env.id);
-        } catch (error) {
-          console.error(
-            `[offer] DocuSign did not confirm the void of envelope ${env.docusignId}:`,
-            error,
-          );
-          failed.push(env);
-        }
-      }
-    } catch (error) {
-      console.error("[offer] could not reach DocuSign to void envelopes:", error);
-      for (const env of inDocusign) {
-        if (!voidedIds.includes(env.id) && !failed.includes(env)) {
-          failed.push(env);
-        }
-      }
-    }
+  if (inDocusign.length === 0) {
+    return { liveIds, voidedIds, endedIds, unsettled };
   }
 
-  return {
-    liveIds,
-    voidedIds,
-    failedIds: failed.map((env) => env.id),
-    failedDocusignIds: failed.map((env) => env.docusignId),
-  };
+  let context: DocusignContext;
+  try {
+    context = await createDocusignContext(getDocusignConfig());
+  } catch (error) {
+    console.error("[offer] could not reach DocuSign to void envelopes:", error);
+    for (const env of inDocusign) {
+      unsettled.push({ ...env, reason: "still-out" });
+    }
+    return { liveIds, voidedIds, endedIds, unsettled };
+  }
+
+  for (const env of inDocusign) {
+    const settled = await settleLiveEnvelope(context, env, reason);
+    if (settled.kind === "voided") {
+      voidedIds.push(env.id);
+    } else if (settled.kind === "ended") {
+      endedIds.push(env.id);
+    } else {
+      unsettled.push({ ...env, reason: settled.reason });
+    }
+  }
+  return { liveIds, voidedIds, endedIds, unsettled };
+}
+
+// Void one envelope in DocuSign and record the result. Not exported: this file
+// is "use server", and the caller has already authorized.
+async function settleLiveEnvelope(
+  context: DocusignContext,
+  env: { id: string; docusignId: string },
+  reason: string,
+): Promise<
+  | { kind: "voided" }
+  | { kind: "ended" }
+  | { kind: "unsettled"; reason: UnsettledEnvelope["reason"] }
+> {
+  try {
+    await voidEnvelope(context, env.docusignId, reason);
+  } catch (voidError) {
+    let reading: RefusedVoidReading = { kind: "still-out" };
+    try {
+      reading = readRefusedVoid(
+        await getEnvelopeStatus(context, env.docusignId),
+      );
+    } catch (readError) {
+      console.error(
+        `[offer] could not read envelope ${env.docusignId} back from DocuSign:`,
+        readError,
+      );
+    }
+    if (reading.kind !== "ended") {
+      console.error(
+        `[offer] DocuSign did not void envelope ${env.docusignId}:`,
+        voidError,
+      );
+      return { kind: "unsettled", reason: reading.kind };
+    }
+    return (await recordEnvelopeEnded(env, reading.status))
+      ? { kind: "ended" }
+      : { kind: "unsettled", reason: "unrecorded" };
+  }
+
+  // DocuSign has voided it, so a failed write is not an unconfirmed void. On a
+  // retry DocuSign refuses the void, the read-back finds it voided, and it is
+  // recorded then.
+  return (await recordEnvelopeEnded(env, EnvelopeStatus.VOIDED))
+    ? { kind: "voided" }
+    : { kind: "unsettled", reason: "unrecorded" };
+}
+
+async function recordEnvelopeEnded(
+  env: { id: string; docusignId: string },
+  status: EnvelopeStatus,
+): Promise<boolean> {
+  try {
+    await writeEnvelopeEnded(env.id, status);
+    return true;
+  } catch (error) {
+    console.error(
+      `[offer] DocuSign has envelope ${env.docusignId} ${status}, but recording it failed:`,
+      error,
+    );
+    return false;
+  }
+}
+
+// Only over a live status, so a terminal status the webhook already wrote is
+// never overwritten.
+function writeEnvelopeEnded(id: string, status: EnvelopeStatus) {
+  return prisma.envelope.updateMany({
+    where: { id, status: { in: LIVE_ENVELOPE_STATUSES } },
+    data: {
+      status,
+      ...(status === EnvelopeStatus.VOIDED ? { voidedAt: new Date() } : {}),
+    },
+  });
 }
 
 /**
@@ -1135,7 +1208,7 @@ export async function recallOfferEnvelope(input: {
     return {
       ok: false,
       error: describeUnconfirmedVoid({
-        failedEnvelopeIds: voids.failedDocusignIds,
+        unsettled: voids.unsettled,
         voidedCount: voids.voidedIds.length,
         action: "recall",
       }),
@@ -1211,7 +1284,7 @@ export async function createOfferRevision(input: {
       ok: false,
       reason: "refused",
       error: describeUnconfirmedVoid({
-        failedEnvelopeIds: voids.failedDocusignIds,
+        unsettled: voids.unsettled,
         voidedCount: voids.voidedIds.length,
         action: "revision",
       }),
@@ -1258,7 +1331,7 @@ export async function createOfferRevision(input: {
       where: {
         status: { in: LIVE_ENVELOPE_STATUSES },
         OR: envelopeScopeFilter(input.offerId, "all"),
-        id: { notIn: [...voids.voidedIds] },
+        id: { notIn: [...voids.voidedIds, ...voids.endedIds] },
       },
     });
     if (sentMeanwhile > 0) {
