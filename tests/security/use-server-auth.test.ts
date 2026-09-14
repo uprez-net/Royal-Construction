@@ -282,11 +282,11 @@ function classifyExports(fileName: string, text: string): [string, Check][] {
   });
 }
 
-const classified = sourceFiles(ROOT)
+const classified: [string, Check][] = sourceFiles(ROOT)
   .flatMap((path) => {
     const file = relative(ROOT, path).split(sep).join("/");
     return classifyExports(file, readFileSync(path, "utf8")).map(
-      ([name, check]) => [`${file}#${name}`, check] as const,
+      ([name, check]): [string, Check] => [`${file}#${name}`, check],
     );
   })
   .sort(([a], [b]) => a.localeCompare(b));
