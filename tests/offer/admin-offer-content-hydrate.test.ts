@@ -67,6 +67,13 @@ const state: AdminOfferContentState = {
   dirty: { ...clean, costSchedule: true },
   saving: { ...clean },
   error: { ...noError, costSchedule: "Failed to save cost schedule." },
+  revision: {
+    buildScope: 0,
+    costSchedule: 4,
+    offerScope: 2,
+    offerContent: 0,
+    hbfcClaim: 0,
+  },
 };
 
 const payload: AdminOfferContent = {
@@ -105,4 +112,10 @@ test("a clean section takes the server copy and stays clean", () => {
 
 test("the version always comes from the server payload", () => {
   assert.equal(mergeHydratedAdminContent(state, payload).data.version, 7);
+});
+
+test("local edit revisions survive a remount so an in-flight save still settles correctly", () => {
+  const merged = mergeHydratedAdminContent(state, payload);
+
+  assert.deepEqual(merged.revision, state.revision);
 });

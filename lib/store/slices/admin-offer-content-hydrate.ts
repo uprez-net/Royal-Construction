@@ -15,6 +15,8 @@ export interface AdminOfferContentState {
   dirty: Record<AdminOfferContentSection, boolean>;
   saving: Record<AdminOfferContentSection, boolean>;
   error: Record<AdminOfferContentSection, string | null>;
+  // Local edit counter per section; see admin-offer-content-save.ts.
+  revision: Record<AdminOfferContentSection, number>;
 }
 
 // The admin page hydrates the store from its server props on every mount, and
@@ -48,6 +50,9 @@ export function mergeHydratedAdminContent(
     // In-flight saves settle through their own thunk; the payload knows nothing
     // about them.
     saving: { ...state.saving },
+    // An in-flight save compares against these counters when it settles, so a
+    // remount must not reset them.
+    revision: { ...state.revision },
     error: {
       buildScope: errorFor("buildScope"),
       costSchedule: errorFor("costSchedule"),
