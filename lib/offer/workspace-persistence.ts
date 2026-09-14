@@ -23,6 +23,7 @@ import {
   RATE_CARD_TIERS,
 } from "./workspace-rate-card";
 import { STANDARD_INCLUSION_ENTRIES } from "./workspace-proposal-content";
+import { isAllowedOfferImageUrl } from "./offer-image-url";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -447,6 +448,11 @@ const workspaceStateV1Schema = z.object({
 
 // Coerce persisted image values to the {url, source} shape. Older offers stored
 // a bare URL string per slot; upgrade those to source "upload" on read.
+//
+// A URL outside Royal's Blob storage is dropped here, leaving the slot empty, so
+// no renderer is ever handed one to fetch (see offer-image-url.ts). Dropped
+// rather than refused: this runs inside the strict read parse, and a refusal
+// would make an old row with one bad slot unopenable.
 function coerceImages(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object") {
     return {};
@@ -454,8 +460,15 @@ function coerceImages(value: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (typeof entry === "string") {
-      out[key] = { url: entry, source: "upload" };
-    } else if (entry && typeof entry === "object" && "url" in entry) {
+      if (isAllowedOfferImageUrl(entry)) {
+        out[key] = { url: entry, source: "upload" };
+      }
+    } else if (
+      entry &&
+      typeof entry === "object" &&
+      "url" in entry &&
+      isAllowedOfferImageUrl((entry as { url: unknown }).url)
+    ) {
       out[key] = entry;
     }
   }
