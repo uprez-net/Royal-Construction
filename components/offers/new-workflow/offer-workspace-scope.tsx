@@ -67,7 +67,7 @@ export function ScopePanel({
       </CardHeader>
       <CardContent className="flex flex-col gap-8">
         <ScopeList
-          icon={<Coins className="size-4 text-amber-600" aria-hidden="true" />}
+          icon={<Coins className="size-4 text-warning-ink" aria-hidden="true" />}
           banner={{
             tone: "warning",
             icon: (
@@ -86,7 +86,7 @@ export function ScopePanel({
           onRemoveItem={onRemoveAllowance}
         />
         <ScopeList
-          icon={<Ban className="size-4 text-primary" aria-hidden="true" />}
+          icon={<Ban className="size-4 text-info-ink" aria-hidden="true" />}
           banner={{
             tone: "info",
             icon: <Info className="size-4 shrink-0" aria-hidden="true" />,
@@ -158,8 +158,8 @@ function ScopeList({
         className={
           "mb-5 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm " +
           (banner.tone === "warning"
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-blue-200 bg-blue-50 text-blue-800")
+            ? "border-warning/40 bg-warning-light text-foreground"
+            : "border-info/40 bg-info-light text-foreground")
         }
       >
         {banner.icon}
@@ -308,7 +308,7 @@ function ScopeList({
       <button
         onClick={onAddItem}
         type="button"
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 py-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-50"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
       >
         <Plus className="size-4" aria-hidden="true" />
         {addLabel}
