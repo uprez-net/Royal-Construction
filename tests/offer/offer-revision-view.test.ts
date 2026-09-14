@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -27,6 +29,7 @@ import {
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { revisionPreparedDate } from "../../lib/offer/revision-prepared-date";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Backs the read-only revision viewer: a superseded revision is re-rendered
@@ -70,17 +73,59 @@ test("stamps the supplied prepared date instead of today", () => {
 test("a re-sent revision prints the date of its latest send", () => {
   // The viewer dated every re-render by when the revision was created, so a
   // revision emailed again weeks later printed a date the customer never saw.
-  // It now passes the latest send; that date is what the document must carry.
   const createdAt = new Date(2026, 5, 2);
   const lastSentAt = new Date(2026, 6, 21, 15, 40);
 
   const data = buildOfferPrintTemplateData({
     ...proposalInput,
-    preparedDate: lastSentAt,
+    preparedDate: revisionPreparedDate({
+      lastSentAt: lastSentAt.toISOString(),
+      createdAt: createdAt.toISOString(),
+    }),
   });
 
   assert.equal(data.preparedDateLabel, formatDateDisplay(lastSentAt));
   assert.notEqual(data.preparedDateLabel, formatDateDisplay(createdAt));
+});
+
+test("a revision never sent prints the date it was drawn up", () => {
+  const createdAt = new Date(2026, 5, 2);
+
+  const data = buildOfferPrintTemplateData({
+    ...proposalInput,
+    preparedDate: revisionPreparedDate({
+      lastSentAt: null,
+      createdAt: createdAt.toISOString(),
+    }),
+  });
+
+  assert.equal(data.preparedDateLabel, formatDateDisplay(createdAt));
+});
+
+test("the viewer and its loader pass the latest send through", () => {
+  // The dialog is a client component and the loader is "use server", so neither
+  // can run here. Reverting either line would leave the tests above green.
+  const dialog = readFileSync(
+    join(
+      process.cwd(),
+      "components/offers/new-workflow/offer-revision-viewer-dialog.tsx",
+    ),
+    "utf8",
+  );
+  assert.match(dialog, /preparedDate=\{revisionPreparedDate\(revision\)\}/);
+
+  const data = readFileSync(
+    join(process.cwd(), "lib/data/offer-workspace.ts"),
+    "utf8",
+  );
+  const start = data.indexOf("async function loadOfferRevisionSnapshot(");
+  assert.ok(start >= 0, "loadOfferRevisionSnapshot not found");
+  const loader = data.slice(start, data.indexOf("\n}\n", start));
+  assert.match(
+    loader,
+    /documentSends:\s*\{\s*select:\s*\{\s*sentAt:\s*true\s*\},\s*orderBy:\s*\{\s*sentAt:\s*"desc"\s*\}/,
+  );
+  assert.match(loader, /lastSentAt:\s*offer\.documentSends\[0\]\?\.sentAt/);
 });
 
 test("falls back to today when no prepared date is supplied", () => {

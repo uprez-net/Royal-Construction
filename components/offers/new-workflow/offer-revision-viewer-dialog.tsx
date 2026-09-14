@@ -14,6 +14,7 @@ import {
   type LoadedOfferRevision,
 } from "@/lib/data/offer-workspace";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { revisionPreparedDate } from "@/lib/offer/revision-prepared-date";
 import {
   OFFER_STATUS_LABEL,
   type OfferWorkspaceStatus,
@@ -176,11 +177,7 @@ function ViewerBody({ state }: { readonly state: ViewerState }) {
           // buildProposalInput does not carry images; without this the cover
           // photo and the whole gallery page render blank.
           images={revision.snapshot.images}
-          // Date it by this revision's most recent send, the copy the customer
-          // received, not today. It used the creation date, so a revision
-          // re-sent weeks later printed a date the customer never saw. A
-          // revision never sent falls back to when it was drawn up.
-          preparedDate={new Date(revision.lastSentAt ?? revision.createdAt)}
+          preparedDate={revisionPreparedDate(revision)}
           screen
         />
       </div>
