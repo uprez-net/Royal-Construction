@@ -20,7 +20,10 @@ import {
   saveCostSchedule,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import type { CostScheduleRow } from "@/types/admin-offer-content";
-import { AREA_MEASUREMENT_KEYS } from "@/lib/offer/formula-variables";
+import {
+  AREA_MEASUREMENT_KEYS,
+  withDefaultRateConstants,
+} from "@/lib/offer/formula-variables";
 import {
   OfferCardHeading,
   OfferSummaryBadge,
@@ -53,19 +56,22 @@ export function OfferCostScheduleScreen() {
 
   const { rows, rateConstants } = costSchedule;
 
-  // The editor validates formulas against the union of admin-editable rate
-  // constants AND per-offer area measurements. Rate constants have admin-set
-  // values for the live preview; area measurements are unknown at admin time
+  // The editor validates formulas against the union of rate constants AND
+  // per-offer area measurements. Rate constants are resolved the way the offer
+  // prefill resolves them (stored overrides on top of the defaults) and supply
+  // the live-preview values; area measurements are unknown at admin time
   // (they're entered per-offer) so they only appear as valid tokens, with the
-  // editor falling back to `1` for any token missing a sample value.
+  // editor falling back to `1` for any token missing a sample value. The panel
+  // below still edits the stored overrides.
+  const resolvedRateConstants = useMemo<Record<string, number>>(
+    () => withDefaultRateConstants(rateConstants),
+    [rateConstants],
+  );
   const allFormulaVariables = useMemo(
-    () => [...Object.keys(rateConstants), ...AREA_MEASUREMENT_KEYS],
-    [rateConstants],
+    () => [...Object.keys(resolvedRateConstants), ...AREA_MEASUREMENT_KEYS],
+    [resolvedRateConstants],
   );
-  const formulaSampleValues = useMemo<Record<string, number>>(
-    () => ({ ...rateConstants }),
-    [rateConstants],
-  );
+  const formulaSampleValues = resolvedRateConstants;
 
   // Track validity per formula row so the Save button stays disabled until
   // every formula row parses cleanly and references only known variables/
