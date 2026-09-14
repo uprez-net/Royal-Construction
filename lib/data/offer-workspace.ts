@@ -53,8 +53,11 @@ import {
   requiresOwnerGate,
 } from "@/lib/offer/offer-workflow-transitions";
 import {
+  decideRecallPullBack,
+  describeUnconfirmedVoid,
   envelopeScopeFilter,
   resolveRecall,
+  type EnvelopeVoidOutcome,
   type OfferEnvelopeScope,
 } from "@/lib/offer/offer-recall";
 
@@ -960,8 +963,9 @@ export type CreateOfferRevisionResult =
       ok: true;
       offerId: string;
       leadId: number;
-      // How many live DocuSign envelopes were pulled back, and any that could
-      // not be voided in DocuSign itself (marked recalled in our DB regardless).
+      // How many live DocuSign envelopes were pulled back. A revision is refused
+      // unless DocuSign confirmed every void, so voidWarnings is always empty;
+      // it stays for the client's existing check.
       voidedEnvelopes: number;
       voidWarnings: readonly string[];
     }
@@ -973,18 +977,23 @@ export type CreateOfferRevisionResult =
  * Void every envelope in `scope` that is still out for signature, so a customer
  * can no longer sign a document the builder has pulled back.
  *
- * DocuSign voiding is best-effort: if DocuSign is unreachable we still mark the
- * envelope recalled in our system and return a warning so it can be voided by
- * hand. Voiding in DocuSign is irreversible, so each VOIDED status is committed
- * in its own write immediately rather than inside a caller's transaction — if
- * that transaction rolls back, the DB must not keep an envelope SENT while it
- * is dead in DocuSign. The live-status guard avoids clobbering a terminal status
- * a webhook has already set. "Live" includes DELIVERED: an envelope the customer
- * has opened is still signable.
+ * Reports exactly what DocuSign confirmed; callers refuse to move on unless it
+ * confirmed everything (decideRecallPullBack). An envelope is marked VOIDED only
+ * after DocuSign accepts the void, so one that fails stays live here, matching
+ * DocuSign. Each VOIDED status is committed in its own write straight away
+ * rather than inside a caller's transaction: voiding is irreversible, so if that
+ * transaction rolls back, or a later envelope in the same scope fails, the DB
+ * must not show a dead envelope as live. The live-status guard avoids
+ * clobbering a terminal status a webhook has already set. "Live" includes
+ * DELIVERED: an envelope the customer has opened is still signable.
  *
- * Returns the ids of every envelope that WAS live (whether or not DocuSign
- * accepted the void) so a caller can re-assert the VOIDED status inside its own
- * transaction, plus any warnings to show the operator.
+ * A row with no docusignId has no DocuSign counterpart (every send writes the id
+ * from DocuSign's response in the same write that creates the row), so there is
+ * nothing to void and nothing the webhook could ever update. It is marked VOIDED
+ * and counted as voided; refusing it would block the offer for good.
+ *
+ * `failedDocusignIds` names the unconfirmed envelopes the way DocuSign does, for
+ * the message to the estimator.
  *
  * Deliberately NOT exported: this file is "use server", so an export here would
  * be a callable endpoint that voids envelopes with no authorization of its own.
@@ -994,7 +1003,9 @@ async function voidLiveOfferEnvelopes(
   offerId: string,
   reason: string,
   scope: OfferEnvelopeScope,
-): Promise<{ readonly ids: readonly string[]; readonly warnings: readonly string[] }> {
+): Promise<
+  EnvelopeVoidOutcome & { readonly failedDocusignIds: readonly string[] }
+> {
   const liveEnvelopes = await prisma.envelope.findMany({
     where: {
       status: { in: LIVE_ENVELOPE_STATUSES },
@@ -1002,36 +1013,58 @@ async function voidLiveOfferEnvelopes(
     },
     select: { id: true, docusignId: true },
   });
-  const ids = liveEnvelopes.map((env) => env.id);
-  if (liveEnvelopes.length === 0) {
-    return { ids, warnings: [] };
+  const liveIds = liveEnvelopes.map((env) => env.id);
+  const voidedIds: string[] = [];
+  const failed: { id: string; docusignId: string }[] = [];
+
+  const markVoided = (id: string) =>
+    prisma.envelope.updateMany({
+      where: { id, status: { in: LIVE_ENVELOPE_STATUSES } },
+      data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
+    });
+
+  const inDocusign: { id: string; docusignId: string }[] = [];
+  for (const env of liveEnvelopes) {
+    if (env.docusignId === null) {
+      await markVoided(env.id);
+      voidedIds.push(env.id);
+    } else {
+      inDocusign.push({ id: env.id, docusignId: env.docusignId });
+    }
   }
 
-  const voidWarnings: string[] = [];
-  try {
-    const context = await createDocusignContext(getDocusignConfig());
-    for (const env of liveEnvelopes) {
-      if (!env.docusignId) {
-        continue;
+  if (inDocusign.length > 0) {
+    try {
+      const context = await createDocusignContext(getDocusignConfig());
+      for (const env of inDocusign) {
+        try {
+          await voidEnvelope(context, env.docusignId, reason);
+          await markVoided(env.id);
+          voidedIds.push(env.id);
+        } catch (error) {
+          console.error(
+            `[offer] DocuSign did not confirm the void of envelope ${env.docusignId}:`,
+            error,
+          );
+          failed.push(env);
+        }
       }
-      try {
-        await voidEnvelope(context, env.docusignId, reason);
-        await prisma.envelope.updateMany({
-          where: { id: env.id, status: { in: LIVE_ENVELOPE_STATUSES } },
-          data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
-        });
-      } catch {
-        voidWarnings.push(
-          `DocuSign envelope ${env.docusignId} could not be voided automatically — void it manually in DocuSign.`,
-        );
+    } catch (error) {
+      console.error("[offer] could not reach DocuSign to void envelopes:", error);
+      for (const env of inDocusign) {
+        if (!voidedIds.includes(env.id) && !failed.includes(env)) {
+          failed.push(env);
+        }
       }
     }
-  } catch {
-    voidWarnings.push(
-      "DocuSign was unreachable — the envelope was recalled in the system but may still be live in DocuSign; void it manually.",
-    );
   }
-  return { ids, warnings: voidWarnings };
+
+  return {
+    liveIds,
+    voidedIds,
+    failedIds: failed.map((env) => env.id),
+    failedDocusignIds: failed.map((env) => env.docusignId),
+  };
 }
 
 /**
@@ -1081,14 +1114,25 @@ export async function recallOfferEnvelope(input: {
     throw new Error(recall.error);
   }
 
-  // Void FIRST. If the transition then fails, the envelope is already dead and
-  // the customer cannot sign — the safe direction to fail in. The reverse order
-  // would leave a live envelope behind a status claiming it was recalled.
-  const { warnings: voidWarnings } = await voidLiveOfferEnvelopes(
+  // Void FIRST, and move the status only once DocuSign has confirmed every void.
+  // An unconfirmed void may leave the document signable; showing it as a draft
+  // would invite edits to a document the customer can still sign, so the offer
+  // stays where it is and the estimator is told why. If the transition fails
+  // after a confirmed void, the envelope is already dead — the safe direction.
+  const voids = await voidLiveOfferEnvelopes(
     input.offerId,
     "Recalled by the builder.",
     recall.scope,
   );
+  if (!decideRecallPullBack(voids).proceed) {
+    throw new Error(
+      describeUnconfirmedVoid({
+        failedEnvelopeIds: voids.failedDocusignIds,
+        voidedCount: voids.voidedIds.length,
+        action: "recall",
+      }),
+    );
+  }
 
   // No owner gate: the offer passed it when it was sent, and it cannot be
   // edited while out for signature, so a gate here could strand a voided
@@ -1105,17 +1149,20 @@ export async function recallOfferEnvelope(input: {
   });
   if (!committed) {
     throw new Error(
-      "Any live envelope for this document was voided, but the offer's status changed at the same moment, so it was not moved back. Refresh to see where it is now.",
+      `${voids.voidedIds.length > 0 ? "The DocuSign envelope was voided and stays voided, but the" : "The"} offer's status changed before the recall could move it back. Refresh to see where it is now.`,
     );
   }
 
-  return { ok: true, status: recall.to, voidWarnings };
+  // Kept for the client's existing check; a recall with anything to warn about
+  // now throws instead.
+  return { ok: true, status: recall.to, voidWarnings: [] };
 }
 
 // Fork a new active revision from the current one, superseding it. The current
 // row is deactivated first so the one-active-per-lead partial index holds. Any
 // live Tender/Contract envelope out for signature is voided first, so nobody can
-// sign a document that a newer revision has replaced.
+// sign a document that a newer revision has replaced, and nothing is forked
+// unless DocuSign confirmed every void.
 export async function createOfferRevision(input: {
   offerId: string;
   actorId?: string;
@@ -1145,12 +1192,20 @@ export async function createOfferRevision(input: {
 
   // Pull back any envelope still out for signature so the customer can't sign a
   // superseded Tender, Contract or acceptance.
-  const { ids: liveEnvelopeIds, warnings: voidWarnings } =
-    await voidLiveOfferEnvelopes(
-      input.offerId,
-      "Superseded by a new revision of this offer.",
-      "all",
+  const voids = await voidLiveOfferEnvelopes(
+    input.offerId,
+    "Superseded by a new revision of this offer.",
+    "all",
+  );
+  if (!decideRecallPullBack(voids).proceed) {
+    throw new Error(
+      describeUnconfirmedVoid({
+        failedEnvelopeIds: voids.failedDocusignIds,
+        voidedCount: voids.voidedIds.length,
+        action: "revision",
+      }),
     );
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     const lockedOffer = await tx.$queryRaw<{ id: string }[]>(
@@ -1173,17 +1228,32 @@ export async function createOfferRevision(input: {
       return null;
     }
 
-    if (liveEnvelopeIds.length > 0) {
-      // Only void rows that are still live — if a webhook marked one completed
-      // between our read and here, don't clobber that terminal state.
+    if (voids.voidedIds.length > 0) {
+      // Re-assert only what DocuSign confirmed, and only on rows still live — if
+      // a webhook marked one terminal between our read and here, don't clobber it.
       await tx.envelope.updateMany({
         where: {
           // Prisma's `in` wants a mutable array; the helper returns readonly.
-          id: { in: [...liveEnvelopeIds] },
+          id: { in: [...voids.voidedIds] },
           status: { in: LIVE_ENVELOPE_STATUSES },
         },
         data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
       });
+    }
+
+    // A live envelope outside the confirmed voids was sent after they ran.
+    // Forking now would supersede an offer the customer can still sign.
+    const sentMeanwhile = await tx.envelope.count({
+      where: {
+        status: { in: LIVE_ENVELOPE_STATUSES },
+        OR: envelopeScopeFilter(input.offerId, "all"),
+        id: { notIn: [...voids.voidedIds] },
+      },
+    });
+    if (sentMeanwhile > 0) {
+      throw new Error(
+        "No revision was created: a document on this offer was sent for signature while the revision was being prepared. Refresh and try again.",
+      );
     }
 
     await tx.offer.update({
@@ -1240,7 +1310,7 @@ export async function createOfferRevision(input: {
     ok: true,
     offerId: created.id,
     leadId: created.leadId,
-    voidedEnvelopes: liveEnvelopeIds.length,
-    voidWarnings,
+    voidedEnvelopes: voids.voidedIds.length,
+    voidWarnings: [],
   };
 }

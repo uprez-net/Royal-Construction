@@ -1340,9 +1340,9 @@ export function NewOfferWorkspace({
               scope: recallScope,
               toStatus: next.toUpperCase() as OfferStatus,
             });
-            // A recall that could not reach DocuSign still moved our status, so
-            // this is not an error — but the envelope may still be live and the
-            // estimator is the only one who can finish the job by hand.
+            // A recall DocuSign does not confirm is refused by the server: it
+            // throws with the status unchanged, and the catch below shows why.
+            // voidWarnings is empty in practice; the check is harmless.
             if (recalled.voidWarnings.length > 0) {
               setTransitionError(recalled.voidWarnings.join(" "));
             }

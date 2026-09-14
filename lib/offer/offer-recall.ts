@@ -81,3 +81,60 @@ export function resolveRecall(
   }
   return { ok: true, scope: edge.scope, from: currentStatus, to: edge.to };
 }
+
+export type EnvelopeVoidOutcome = {
+  // Every envelope in scope that was still live when the recall started.
+  readonly liveIds: readonly string[];
+  // Envelopes DocuSign confirmed voided (or that never reached DocuSign).
+  readonly voidedIds: readonly string[];
+  // Envelopes DocuSign did not confirm: they may still be signable.
+  readonly failedIds: readonly string[];
+};
+
+// A recall or a revision moves on only when every live envelope in scope is
+// confirmed dead. The alternative, which this replaced, moved the offer to a
+// draft while DocuSign had not voided the envelope, so an estimator edited a
+// document the customer could still sign. No live envelopes at all is a clean
+// pull-back: there is nothing a customer can sign.
+export function decideRecallPullBack(outcome: EnvelopeVoidOutcome): {
+  readonly proceed: boolean;
+} {
+  const voided = new Set(outcome.voidedIds);
+  return {
+    proceed:
+      outcome.failedIds.length === 0 &&
+      outcome.liveIds.every((id) => voided.has(id)),
+  };
+}
+
+// What the estimator is told when a void was not confirmed. It has to say the
+// document is still signable, and must not claim nothing changed: an envelope
+// voided before a later one failed stays voided, because voiding is final.
+export function describeUnconfirmedVoid(input: {
+  // DocuSign's envelope ids, which is what the estimator can find in DocuSign.
+  readonly failedEnvelopeIds: readonly string[];
+  readonly voidedCount: number;
+  readonly action: "recall" | "revision";
+}): string {
+  const failed = input.failedEnvelopeIds;
+  const which =
+    failed.length === 0
+      ? "an envelope"
+      : failed.length === 1
+        ? `envelope ${failed[0]}`
+        : `envelopes ${failed.join(", ")}`;
+  const unchanged =
+    input.action === "recall"
+      ? "The offer's status was not changed."
+      : "No revision was created.";
+  const alreadyVoided =
+    input.voidedCount === 0
+      ? ""
+      : input.voidedCount === 1
+        ? " One other envelope was voided and stays voided."
+        : ` ${input.voidedCount} other envelopes were voided and stay voided.`;
+  const voidThere = failed.length > 1 ? "void them" : "void it";
+  const retry =
+    input.action === "recall" ? "recall again" : "create the revision again";
+  return `The document is still out for signature: DocuSign did not confirm the void of ${which} (it may already be signed or declined, or DocuSign could not be reached). ${unchanged}${alreadyVoided} Try again, or ${voidThere} in DocuSign, refresh, and ${retry}.`;
+}

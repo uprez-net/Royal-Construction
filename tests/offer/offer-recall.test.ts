@@ -4,6 +4,8 @@ import { test } from "node:test";
 import { OfferStatus } from "@prisma/client";
 
 import {
+  decideRecallPullBack,
+  describeUnconfirmedVoid,
   envelopeScopeFilter,
   resolveRecall,
 } from "../../lib/offer/offer-recall";
@@ -181,4 +183,78 @@ test("a recall back to SENT skips the owner gate; a first send does not", () => 
   assert.equal(requiresOwnerGate(OfferStatus.PENDING, OfferStatus.SENT), true);
   assert.equal(requiresOwnerGate(OfferStatus.SENT, OfferStatus.AGREED), true);
   assert.equal(requiresOwnerGate(OfferStatus.AGREED, OfferStatus.AGREED), false);
+});
+
+// Recall and Create revision treated a void DocuSign did not confirm as a
+// warning and moved on anyway: the offer went back to draft (or forked a new
+// revision) while the customer could still sign the old document. They now stop
+// unless every live envelope was confirmed voided.
+
+test("a pull-back proceeds when every live envelope was voided", () => {
+  assert.equal(
+    decideRecallPullBack({
+      liveIds: ["env-1", "env-2"],
+      voidedIds: ["env-1", "env-2"],
+      failedIds: [],
+    }).proceed,
+    true,
+  );
+});
+
+test("a pull-back proceeds when nothing was live", () => {
+  assert.equal(
+    decideRecallPullBack({ liveIds: [], voidedIds: [], failedIds: [] }).proceed,
+    true,
+  );
+});
+
+test("a pull-back stops when any void was not confirmed", () => {
+  assert.equal(
+    decideRecallPullBack({
+      liveIds: ["env-1", "env-2"],
+      voidedIds: ["env-1"],
+      failedIds: ["env-2"],
+    }).proceed,
+    false,
+  );
+  assert.equal(
+    decideRecallPullBack({
+      liveIds: ["env-1"],
+      voidedIds: [],
+      failedIds: ["env-1"],
+    }).proceed,
+    false,
+  );
+});
+
+test("a pull-back stops when a live envelope is unaccounted for", () => {
+  // Neither voided nor reported failed: not confirmed, so not safe.
+  assert.equal(
+    decideRecallPullBack({ liveIds: ["env-1"], voidedIds: [], failedIds: [] }).proceed,
+    false,
+  );
+});
+
+test("the refusal says the document is still signable and how to finish", () => {
+  const message = describeUnconfirmedVoid({
+    failedEnvelopeIds: ["ds-123"],
+    voidedCount: 0,
+    action: "recall",
+  });
+  assert.match(message, /still out for signature/);
+  assert.match(message, /ds-123/);
+  assert.match(message, /status was not changed/);
+  assert.match(message, /void it in DocuSign, refresh, and recall again/);
+});
+
+test("the refusal does not hide envelopes that were already voided", () => {
+  const message = describeUnconfirmedVoid({
+    failedEnvelopeIds: ["ds-2"],
+    voidedCount: 1,
+    action: "revision",
+  });
+  assert.match(message, /No revision was created/);
+  assert.match(message, /One other envelope was voided and stays voided/);
+  assert.match(message, /create the revision again/);
+  assert.doesNotMatch(message, /[Nn]othing was changed/);
 });
