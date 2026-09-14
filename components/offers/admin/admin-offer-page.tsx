@@ -3,15 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  type AdminOfferTabs,
-  OfferContentHeader,
-} from "./offer-content-header";
+import { OfferContentHeader } from "./offer-content-header";
+import { type AdminOfferTabs, dirtyByTab } from "./offer-content-tabs";
 import { JobSetupScreen } from "./job-setup-screen";
 import { OfferCostScheduleScreen } from "./cost-schedule-screen";
 import { OfferScopePage } from "./offer-scope-page";
 import { OfferContentPage } from "./offer-content-page";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { hydrated } from "@/lib/store/slices/adminOfferContentSlice";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import { Settings2 } from "lucide-react";
@@ -25,6 +23,7 @@ interface AdminOfferPageProps {
 export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
   const dispatch = useAppDispatch();
   const [activeTab, setActiveTab] = useState<AdminOfferTabs>("job-setup");
+  const dirty = useAppSelector((s) => s.adminOfferContent.dirty);
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -62,7 +61,11 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
         </CardContent>
       </Card>
 
-      <OfferContentHeader activeTab={activeTab} onTabChange={setActiveTab} />
+      <OfferContentHeader
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        dirtyTabs={dirtyByTab(dirty)}
+      />
 
       <div>
         {activeTab === "job-setup" && <JobSetupScreen />}
