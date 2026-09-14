@@ -70,8 +70,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradie-management.ts#getTradieGroupedByCategoryCached": TRADIES,
   "lib/data/tradie-management.ts#toggleTradieFavourite": TRADIES,
   "lib/data/tradie-management.ts#updateTradie": TRADIES,
-  "lib/data/tradieSchedules.ts#sendTradieScheduleReminder":
-    "emails a tradie a booking reminder from the schedule screen; tradie domain, outside this pass (follow-up)",
   "lib/data/tradies.ts#getCachedTradieCoordinationDashboard": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getCachedTradieScheduleKPIs": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getCachedTradieSchedules": TRADIE_SCHEDULES,
