@@ -772,7 +772,7 @@ test("the tender prints Scope exclusion detail; the offer uses its short list", 
   const offer = buildProposalHtml(buildProposalInput(withDetail), EMPTY_OFFER_IMAGES);
 
   assert.match(tender, /Priced separately on request\./);
-  assert.match(tender, /<th>What this means<\/th>/);
+  assert.match(tender, /<th class="c-exc-means">What this means<\/th>/);
   assert.doesNotMatch(
     offer,
     /Pool and spa/,
