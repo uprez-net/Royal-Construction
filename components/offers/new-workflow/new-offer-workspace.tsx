@@ -1836,7 +1836,8 @@ export function NewOfferWorkspace({
         canSend={
           leadId !== undefined &&
           !customerPrice.needsOverrideReason &&
-          ownersComplete
+          ownersComplete &&
+          grannyExclusionConflicts.length === 0
         }
         sending={sending}
         sendError={sendError}

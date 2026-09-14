@@ -39,15 +39,27 @@ export function buildIncludesGrannyFlat(
   return job.hasGrannyHome || job.grannyFlatSqm > 0;
 }
 
-// Narrow on purpose: the line must name the granny flat AND say it is not in
-// scope. "Granny flat landscaping" or "Granny flat site costs" are legitimate
-// exclusions for a build that includes one.
+// "not in scope", "not in current scope", "not in the current scope".
+const NOT_IN_SCOPE = /\bnot in (?:the )?(?:current )?scope\b/;
+
+// What must be left once that statement and its brackets or dashes are gone:
+// the granny flat alone, singular or plural.
+const GRANNY_FLAT_ALONE =
+  /^(?:(?:the|a|any) )?(?:secondary dwelling )?granny ?(?:flat|home)s?(?: secondary dwelling)?(?: (?:is|are))?$/;
+
+// Narrow on purpose: the granny flat must be the whole subject of the line.
+// "Granny flat landscaping (not in current scope)" and "Granny flat site costs"
+// are legitimate exclusions for a build that includes one.
 export function isGrannyOutOfScopeLine(line: string): boolean {
   const text = line.replace(/\s+/g, " ").trim().toLowerCase();
-  return (
-    /\bgranny[ -]?(?:flat|home)\b/.test(text) &&
-    /\bnot in (?:the )?(?:current )?scope\b/.test(text)
-  );
+  if (!NOT_IN_SCOPE.test(text)) {
+    return false;
+  }
+  const subject = text
+    .replace(NOT_IN_SCOPE, " ")
+    .replace(/[^a-z]+/g, " ")
+    .trim();
+  return GRANNY_FLAT_ALONE.test(subject);
 }
 
 // Checks every exclusion the documents print: the draft bullets (seeded or

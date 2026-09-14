@@ -85,18 +85,23 @@ test("a ticked Scope exclusion is found on the Scope step; an unticked one is no
   );
 });
 
-test("matching is narrow: the line must name the granny flat and say it is out of scope", () => {
+test("matching is narrow: the line must be the granny flat alone, said to be out of scope", () => {
   for (const line of [
     SEEDED_LINE,
     "  GRANNY   flat (Not in   scope) ",
     "Granny-flat: not in the current scope",
     "Granny home (not in current scope)",
+    "Granny flats (not in current scope)",
+    "Granny flat / secondary dwelling - not in scope",
   ]) {
     assert.equal(isGrannyOutOfScopeLine(line), true, `"${line}" missed`);
   }
   for (const line of [
     "Granny flat landscaping",
     "Granny flat site costs and connections",
+    // A part of the granny flat left out of a build that includes it.
+    "Granny flat landscaping (not in current scope)",
+    "Granny flat driveway & fencing (not in current scope)",
     "Pool (not in current scope)",
     "Anything not in current scope",
   ]) {
