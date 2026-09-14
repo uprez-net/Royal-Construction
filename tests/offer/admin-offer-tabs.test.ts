@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { OfferContentHeader } from "../../components/offers/admin/offer-content-header";
 import {
   ADMIN_OFFER_TABS,
   TAB_SECTION,
   dirtyByTab,
+  type AdminOfferTabs,
 } from "../../components/offers/admin/offer-content-tabs";
 
 // The admin tab strip ticked every tab to the left of the one you clicked, so
 // opening HBCF Claim showed five "complete" sections nobody had saved, while an
 // unsaved edit vanished from view as soon as you changed tab. A tab is now
 // marked only when the slice's dirty flag for the section it saves is set.
+//
+// The strip also put aria-current on a decorative span and named every button
+// "Jump to …", so a screen reader never heard which tab was open. The render
+// tests below pin both halves in the header itself, not just the mapping.
 
 const allSaved = {
   buildScope: false,
@@ -53,5 +61,68 @@ test("unsaved offer content marks both screens that edit it", () => {
   assert.deepEqual(markedTabs(dirtyByTab({ ...allSaved, offerContent: true })), [
     "offer-content",
     "offer-inclusions",
+  ]);
+});
+
+const noneDirty = dirtyByTab(allSaved);
+
+const renderStrip = (
+  activeTab: AdminOfferTabs,
+  dirtyTabs: Record<AdminOfferTabs, boolean> = noneDirty,
+) =>
+  renderToStaticMarkup(
+    createElement(OfferContentHeader, {
+      activeTab,
+      onTabChange: () => {},
+      dirtyTabs,
+    }),
+  );
+
+const buttonsOf = (markup: string) =>
+  markup.match(/<button\b[\s\S]*?<\/button>/g) ?? [];
+
+const textOf = (html: string) => html.replace(/<[^>]*>/g, "");
+
+// What a screen reader names the button: its text, minus aria-hidden subtrees.
+const accessibleNameOf = (button: string) =>
+  textOf(button.replace(/<div\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/div>/g, ""));
+
+test("opening the last tab ticks nothing and numbers the tabs before it", () => {
+  const markup = renderStrip("HBFC-claim");
+  const buttons = buttonsOf(markup);
+
+  assert.equal(buttons.length, ADMIN_OFFER_TABS.length);
+  assert.doesNotMatch(markup, /<svg\b/, "no tab carries a tick icon");
+  ADMIN_OFFER_TABS.forEach((tab, index) => {
+    const expected =
+      tab.id === "HBFC-claim" ? tab.label : `${index + 1}${tab.label}`;
+    assert.equal(textOf(buttons[index]), expected);
+  });
+});
+
+test("the open tab's button is the one element marked current", () => {
+  const markup = renderStrip("cost-schedule");
+  const buttons = buttonsOf(markup);
+
+  assert.equal(markup.match(/aria-current=/g)?.length, 1);
+  assert.match(buttons[1], /^<button\b[^>]*aria-current="true"/);
+  for (const button of buttons) {
+    assert.doesNotMatch(button, /^<button\b[^>]*aria-label=/);
+  }
+  assert.equal(accessibleNameOf(buttons[1]), "Cost Schedule");
+});
+
+test("an unsaved section is announced only on its own tab", () => {
+  const buttons = buttonsOf(
+    renderStrip("job-setup", { ...noneDirty, "cost-schedule": true }),
+  );
+
+  assert.deepEqual(buttons.map(accessibleNameOf), [
+    "Job Setup",
+    "Cost Schedule, unsaved changes",
+    "Scope",
+    "Inclusions",
+    "Offer Document",
+    "HBCF Claim",
   ]);
 });
