@@ -1,4 +1,5 @@
 import {
+  buildAreaBreakdown,
   buildOfferPrintTemplateData,
   formatArea,
   formatRoomCount,
@@ -268,7 +269,8 @@ export function buildProposalHtml(
   .box { border: 1px solid ${BORDER}; padding: 16px; }
   .box .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
   .box .big { font-weight: 700; color: ${NAVY}; margin-top: 6px; }
-  .areatable { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid ${BORDER}; margin-top: 26px; text-align: center; }
+  /* Column flow, not a fixed 5: void and granny flat add cells only when present. */
+  .areatable { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid ${BORDER}; margin-top: 26px; text-align: center; }
   .areatable > div { padding: 14px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
   .areatable > div:last-child { border-right: none; background: ${NAVY}; color: #fff; }
   .areatable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
@@ -425,9 +427,7 @@ function snapshotPage(
   foot: string,
 ): string {
   const { job } = input;
-  const gfGarage = job.groundFloorSqm + job.garageSqm;
-  const total =
-    gfGarage + job.firstFloorSqm + job.alfrescoPorchSqm + job.porchSqm + job.grannyFlatSqm;
+  const area = buildAreaBreakdown(job);
   const scope = job.buildScope
     .filter((line) => line.trim())
     .map((line) => `<li style="font-size:13px;color:${MUTED};">${esc(line)}</li>`)
@@ -454,11 +454,8 @@ function snapshotPage(
       <div class="box"><div class="lbl">Build scope</div><div class="big">${esc(job.buildType)}</div><ul style="margin-top:8px;list-style:none;">${scope}</ul></div>
     </div>
     <div class="areatable">
-      ${cell("Ground Floor + Garage", formatArea(gfGarage))}
-      ${cell("First Floor", formatArea(job.firstFloorSqm))}
-      ${cell("Alfresco + Balcony", formatArea(job.alfrescoPorchSqm))}
-      ${cell("Porch", formatArea(job.porchSqm))}
-      ${cell("Total Area", formatArea(total))}
+      ${area.cells.map((entry) => cell(entry.label, formatArea(entry.sqm))).join("")}
+      ${cell("Total Area", formatArea(area.totalSqm))}
     </div>
     <p class="muted" style="margin-top:22px;font-size:12px;">Total build area ${esc(data.areaLabel)}.</p>
     ${specSection("Major House Specifications", {

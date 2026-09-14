@@ -17,11 +17,15 @@ import {
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
+  buildAreaBreakdown,
   buildOfferPrintTemplateData,
   formatArea,
+  formatRoomCount,
   formatSiteParticulars,
   getPrintFooterText,
+  grannyDwellingSpec,
   PROPOSAL_TAGLINE,
+  type OfferDwellingSpec,
   type OfferPrintScopeRow,
 } from "@/lib/offer/workspace-print-template";
 import {
@@ -462,27 +466,18 @@ function PrintSnapshotPage({
   readonly job: OfferWorkspaceJob;
   readonly footer: string;
 }) {
-  const gfGarage = job.groundFloorSqm + job.garageSqm;
-  const alfrescoBalcony = job.alfrescoPorchSqm + job.balconySqm;
-  const totalArea =
-    gfGarage + 
-    job.firstFloorSqm + 
-    alfrescoBalcony + 
-    job.porchSqm + 
-    job.grannyFlatSqm
+  // The same cells and total as snapshotPage() in offer-proposal-html.ts, so the
+  // grid adds up and matches the cover, the letter and the Tender.
+  const area = buildAreaBreakdown(job);
   const areaCells = [
-    { label: "Ground Floor + Garage", value: formatArea(gfGarage) },
-    { label: "First Floor", value: formatArea(job.firstFloorSqm) },
-    { label: "Alfresco + Balcony", value: formatArea(alfrescoBalcony) },
-    { label: "Porch", value: formatArea(job.porchSqm) },
-    { label: "Kitchen", value: formatArea(job.kitchenSqm) },
-    // Granny flat is part of Total Area; show it as its own cell when present so
-    // the breakdown reconciles with the emphasized total.
-    ...(job.grannyFlatSqm > 0
-      ? [{ label: "Granny Flat", value: formatArea(job.grannyFlatSqm) }]
-      : []),
-    { label: "Total Area", value: formatArea(totalArea), emphasis: true },
+    ...area.cells.map((cell) => ({
+      label: cell.label,
+      value: formatArea(cell.sqm),
+      emphasis: false,
+    })),
+    { label: "Total Area", value: formatArea(area.totalSqm), emphasis: true },
   ];
+  const granny = grannyDwellingSpec(job);
   const siteParticulars = formatSiteParticulars(job);
   return (
     <PrintPage footerText={footer}>
@@ -517,7 +512,7 @@ function PrintSnapshotPage({
           </div>
         </div>
       </PrintSection>
-      <div className="mt-8 grid grid-cols-5 border border-border text-center text-sm">
+      <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
         {areaCells.map((cell) => (
           <div
             key={cell.label}
@@ -537,7 +532,57 @@ function PrintSnapshotPage({
       <p className="mt-6 text-xs text-muted-foreground">
         Total build area {data.areaLabel}.
       </p>
+      <PrintDwellingSpec
+        title="Major House Specifications"
+        spec={{
+          bathrooms: job.bathrooms,
+          bedrooms: job.bedrooms,
+          garageSpaces: job.garageSpaces,
+        }}
+      />
+      {granny ? (
+        <PrintDwellingSpec title="Granny Home Specifications" spec={granny} />
+      ) : null}
     </PrintPage>
+  );
+}
+
+// Room counts per dwelling, as the emailed snapshot page prints them: the major
+// house always, the granny home only when the build includes one. The printed
+// copy carried neither, so it lost the bedroom counts the emailed PDF showed.
+function PrintDwellingSpec({
+  title,
+  spec,
+}: {
+  readonly title: string;
+  readonly spec: OfferDwellingSpec;
+}) {
+  const cells = [
+    { label: "Bedrooms", value: spec.bedrooms },
+    { label: "Bathrooms", value: spec.bathrooms },
+    { label: "Garage Spaces", value: spec.garageSpaces },
+  ];
+  return (
+    <div className="mt-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sidebar">
+        {title}
+      </p>
+      <div className="mt-2 grid grid-cols-3 border border-border text-center text-sm">
+        {cells.map((cell) => (
+          <div
+            key={cell.label}
+            className="border-r border-border p-3 last:border-r-0"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+              {cell.label}
+            </p>
+            <p className="mt-2 font-mono font-semibold">
+              {formatRoomCount(cell.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

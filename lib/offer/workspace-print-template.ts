@@ -233,6 +233,41 @@ function getTotalAreaSqm(job: OfferWorkspaceJob): number {
   return rawTotalAreaSqm(offerAreaBasisFromJob(job));
 }
 
+export type OfferAreaCell = {
+  readonly label: string;
+  readonly sqm: number;
+};
+
+export type OfferAreaBreakdown = {
+  readonly cells: readonly OfferAreaCell[];
+  readonly totalSqm: number;
+};
+
+// The snapshot page's area grid, and the one total every document prints.
+//
+// Each renderer summed its own subset: the emailed PDF left out balcony and void,
+// the printed copy left out void and showed a Kitchen cell that was never in any
+// total, and the Tender and welcome letter left out both. A client could read
+// three different build areas across one proposal and its Tender. The cells here
+// partition rawTotalAreaSqm exactly — the figure the cover and the cost formulas
+// already use — so the grid adds up to the total beneath it. A cell is dropped
+// only when it contributes nothing to that total.
+export function buildAreaBreakdown(job: OfferWorkspaceJob): OfferAreaBreakdown {
+  const cells: OfferAreaCell[] = [
+    { label: "Ground Floor + Garage", sqm: job.groundFloorSqm + job.garageSqm },
+    { label: "First Floor", sqm: job.firstFloorSqm },
+    { label: "Alfresco + Balcony", sqm: job.alfrescoPorchSqm + job.balconySqm },
+    { label: "Porch", sqm: job.porchSqm },
+  ];
+  if (job.voidSqm !== 0) {
+    cells.push({ label: "Void", sqm: job.voidSqm });
+  }
+  if (job.grannyFlatSqm !== 0) {
+    cells.push({ label: "Granny Flat", sqm: job.grannyFlatSqm });
+  }
+  return { cells, totalSqm: getTotalAreaSqm(job) };
+}
+
 function getAreaLabel(totalAreaSqm: number): string {
   return `${formatArea(totalAreaSqm)} (${formatSquares(totalAreaSqm)} squares)`;
 }

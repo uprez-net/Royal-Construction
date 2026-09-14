@@ -8,6 +8,10 @@ import {
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
 import {
+  offerAreaBasisFromJob,
+  rawTotalAreaSqm,
+} from "./workspace-area";
+import {
   formatBoundedOwnerList,
   chunkAllowanceRows,
   chunkByEstimatedHeight,
@@ -493,13 +497,9 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   // order, so anchor sigOwner{k} on this PDF maps to recipient k. See ADR 0003.
   const signers = collectOfferSigners(job.owners);
   const reference = `${job.reference}-${job.revision}`;
-  const totalArea =
-    job.groundFloorSqm +
-    job.firstFloorSqm +
-    job.garageSqm +
-    job.alfrescoPorchSqm +
-    job.porchSqm +
-    job.grannyFlatSqm;
+  // The total the offer's cover and snapshot print. This sum left out balcony and
+  // void, so the signed Tender stated a smaller build than the offer before it.
+  const totalArea = rawTotalAreaSqm(offerAreaBasisFromJob(job));
 
   // The schedule the estimator edited on this offer — not a module constant.
   // An empty schedule produces zero sections rather than an empty table.
