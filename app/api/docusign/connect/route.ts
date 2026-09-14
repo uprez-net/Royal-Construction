@@ -22,6 +22,7 @@ import {
   completedEventNote,
   completedEventNotePrefix,
   isArchivedForEnvelope,
+  isDeclinableEnvelopeStatus,
   legacyCompletedEventNote,
   unexpectedCompletionNote,
   unexpectedCompletionNotePrefix,
@@ -386,6 +387,16 @@ async function handleCompletion(envelope: ConnectEnvelope): Promise<void> {
     },
     select: { id: true },
   });
+  // Written in one transaction with the row's move to COMPLETED, and the row
+  // was loaded before this read, so a delivery that sees that COMPLETED row
+  // also sees the flag.
+  const unexpectedEvent = await prisma.offerStatusEvent.findFirst({
+    where: {
+      offerId: offer.id,
+      note: { startsWith: unexpectedCompletionNotePrefix(docusignId) },
+    },
+    select: { id: true },
+  });
 
   const completion = classifyCompletion({
     isLatest: latestEnvelope?.id === envelope.id,
@@ -394,6 +405,7 @@ async function handleCompletion(envelope: ConnectEnvelope): Promise<void> {
     expectedFromStatus: target.expectedFromStatus,
     envelopeDbStatusBefore: envelope.status,
     advancedByThisEnvelope: advanceEvent !== null,
+    flaggedUnexpected: unexpectedEvent !== null,
   });
 
   let archived = true;
@@ -438,8 +450,9 @@ async function handleCompletion(envelope: ConnectEnvelope): Promise<void> {
   // (issue #90). Swallowing it returned 200 with executedPdfUrl still null, so
   // DocuSign never redelivered. The 500 makes it redeliver; the retry finds the
   // offer moved on, classifies as a replay and files the PDF without repeating
-  // anything else. An unexpected completion re-classifies the same way, and its
-  // event is deduplicated.
+  // anything else. An unexpected completion is flagged by its event, so its
+  // retry is unexpected again and stores the copy without a second event or
+  // notification.
   if (!archived) {
     throw new Error(
       `The executed PDF for DocuSign envelope ${docusignId} was not archived.`,
@@ -580,23 +593,18 @@ async function recordUnexpectedCompletion(
 ): Promise<boolean> {
   // Our row must say what DocuSign says. The only place a VOIDED envelope may
   // become COMPLETED: here nothing reads it as executed, because the parent's
-  // URL is never written.
-  await prisma.envelope.updateMany({
-    where: {
-      id: envelope.id,
-      status: { in: [...LIVE_ENVELOPE_STATUSES, EnvelopeStatus.VOIDED] },
-    },
-    data: { status: EnvelopeStatus.COMPLETED, completedAt: new Date() },
-  });
-
-  const archived = await tryArchive(docusignId, () =>
-    archiveUnexpectedCompletion(target.parent.kind, docusignId),
-  );
-
+  // URL is never written. The move and the event commit together: a COMPLETED
+  // row without the event reads as a signature to retry, and the next delivery
+  // advanced the offer on the withdrawn envelope.
   const recorded = await recordUnexpectedEvent(
     offer.id,
     unexpectedCompletionNotePrefix(docusignId),
     unexpectedCompletionNote(docusignId, target.documentLabel),
+    { completeEnvelopeId: envelope.id },
+  );
+
+  const archived = await tryArchive(docusignId, () =>
+    archiveUnexpectedCompletion(target.parent.kind, docusignId),
   );
   console.warn(
     `[docusign] envelope ${docusignId} completed after it was recalled or replaced; recorded on offer ${offer.id}, not filed as the executed ${target.documentLabel}.`,
@@ -626,10 +634,13 @@ async function recordUnexpectedCompletion(
 }
 
 // Writes the audit note once per envelope. Returns whether this call wrote it.
+// `completeEnvelopeId` moves that envelope to COMPLETED in the same transaction,
+// on every delivery, whether or not the note was already there.
 async function recordUnexpectedEvent(
   offerId: string,
   notePrefix: string,
   note: string,
+  options?: { readonly completeEnvelopeId?: string },
 ): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
     // Lock the offer row, so two deliveries of the same event cannot both find
@@ -639,6 +650,15 @@ async function recordUnexpectedEvent(
     );
     if (locked.length === 0) {
       return false;
+    }
+    if (options?.completeEnvelopeId) {
+      await tx.envelope.updateMany({
+        where: {
+          id: options.completeEnvelopeId,
+          status: { in: [...LIVE_ENVELOPE_STATUSES, EnvelopeStatus.VOIDED] },
+        },
+        data: { status: EnvelopeStatus.COMPLETED, completedAt: new Date() },
+      });
     }
     const existing = await tx.offerStatusEvent.findFirst({
       where: { offerId, note: { startsWith: notePrefix } },
@@ -677,6 +697,14 @@ async function advanceOfferOnDecline(
 ): Promise<void> {
   const target = resolveEnvelopeTarget(envelope);
   if (!target) {
+    return;
+  }
+
+  // A decline over an envelope recall or revision already voided moves nothing:
+  // the customer is refusing a document the estimator withdrew, and a completion
+  // over the same envelope is unexpected too.
+  if (!isDeclinableEnvelopeStatus(envelope.status)) {
+    await flagUnexpectedDecline(envelope, target);
     return;
   }
 
@@ -772,6 +800,8 @@ async function flagUnexpectedDecline(
     // a replay or a race with the delivery that moved the offer. A recalled or
     // replaced envelope stays VOIDED, because a decline does not outrank it.
     advancedByThisEnvelope: current.status === EnvelopeStatus.DECLINED,
+    // Only a completion is flagged; this decline's own note is deduplicated.
+    flaggedUnexpected: false,
   });
   if (kind !== "unexpected") {
     return;

@@ -31,9 +31,19 @@ export type CompletionFacts = {
   // The envelope's status in our database before this delivery touched it.
   readonly envelopeDbStatusBefore: EnvelopeStatus;
   readonly advancedByThisEnvelope: boolean;
+  // An UNEXPECTED_COMPLETION event already exists for this envelope.
+  readonly flaggedUnexpected: boolean;
 };
 
 export function classifyCompletion(facts: CompletionFacts): CompletionKind {
+  // Once unexpected, always unexpected. Recording it rewrote the row from VOIDED
+  // to COMPLETED, so from the row alone a redelivery looked like a retry of a
+  // real signature and filed the withdrawn document. Checked before
+  // stale-sibling too, so a signed copy whose first archive failed is still
+  // stored after a newer envelope goes out.
+  if (facts.flaggedUnexpected) {
+    return "unexpected";
+  }
   if (!facts.isLatest) {
     return "stale-sibling";
   }
@@ -55,6 +65,15 @@ export function classifyCompletion(facts: CompletionFacts): CompletionKind {
     return "legit-replay";
   }
   return "unexpected";
+}
+
+// Whether a decline may move the offer to its *_DECLINED status. A customer can
+// decline only an envelope still out for signature; DECLINED is let through so
+// a retry after a failure part-way through the first delivery still moves the
+// offer. VOIDED is not: recall and revision write it only once DocuSign
+// confirms the void, so the document was withdrawn, as for a completion over it.
+export function isDeclinableEnvelopeStatus(before: EnvelopeStatus): boolean {
+  return isLiveEnvelopeStatus(before) || before === EnvelopeStatus.DECLINED;
 }
 
 // The advance's status event starts with this, so a later delivery can tell a

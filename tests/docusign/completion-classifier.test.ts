@@ -9,6 +9,7 @@ import {
   completedEventNotePrefix,
   executedPdfPathname,
   isArchivedForEnvelope,
+  isDeclinableEnvelopeStatus,
   type CompletionFacts,
 } from "../../lib/docusign/completion-classifier";
 
@@ -17,6 +18,9 @@ import {
 // still waiting on it. A recalled or voided envelope that DocuSign nonetheless
 // completed was filed as the executed Tender. Its archive guard also asked only
 // whether ANY URL was on file, so a re-sent document kept the first envelope's PDF.
+// Recording an unexpected completion then moved the row from VOIDED to COMPLETED,
+// so the next delivery of the same event advanced the offer on the recalled
+// envelope; and a decline on a voided envelope still moved the offer.
 
 const tenderSent: CompletionFacts = {
   isLatest: true,
@@ -25,6 +29,7 @@ const tenderSent: CompletionFacts = {
   expectedFromStatus: OfferStatus.TENDER_SENT,
   envelopeDbStatusBefore: EnvelopeStatus.DELIVERED,
   advancedByThisEnvelope: false,
+  flaggedUnexpected: false,
 };
 
 // ─── classifyCompletion ───
@@ -93,7 +98,7 @@ test("a completion over an envelope we recorded as voided is unexpected", () => 
   );
 });
 
-test("an envelope with a newer sibling is a stale sibling, whatever else is true", () => {
+test("an envelope with a newer sibling is a stale sibling, unless it was flagged unexpected", () => {
   assert.equal(classifyCompletion({ ...tenderSent, isLatest: false }), "stale-sibling");
   assert.equal(
     classifyCompletion({
@@ -109,6 +114,43 @@ test("the advance note carries the prefix a replay is recognised by", () => {
   assert.ok(
     completedEventNote("env-1").startsWith(completedEventNotePrefix("env-1")),
   );
+});
+
+test("every later delivery of an unexpected completion stays unexpected", () => {
+  const firstDelivery: CompletionFacts = {
+    ...tenderSent,
+    envelopeDbStatusBefore: EnvelopeStatus.VOIDED,
+  };
+  assert.equal(classifyCompletion(firstDelivery), "unexpected");
+
+  // Recording it moved the row to COMPLETED. The offer still reads TENDER_SENT.
+  const redelivery: CompletionFacts = {
+    ...firstDelivery,
+    envelopeDbStatusBefore: EnvelopeStatus.COMPLETED,
+    flaggedUnexpected: true,
+  };
+  assert.equal(classifyCompletion(redelivery), "unexpected");
+  // A newer envelope sent since does not drop it, so a copy whose first archive
+  // failed is still stored.
+  assert.equal(classifyCompletion({ ...redelivery, isLatest: false }), "unexpected");
+});
+
+// ─── isDeclinableEnvelopeStatus ───
+
+test("a decline moves the offer only for an envelope still out, or on a retry", () => {
+  for (const status of [
+    EnvelopeStatus.CREATED,
+    EnvelopeStatus.SENT,
+    EnvelopeStatus.DELIVERED,
+    // A retry after the first delivery failed part-way.
+    EnvelopeStatus.DECLINED,
+  ]) {
+    assert.equal(isDeclinableEnvelopeStatus(status), true, `${status} refused`);
+  }
+  // Recall confirmed the void: the customer declined a withdrawn document.
+  for (const status of [EnvelopeStatus.VOIDED, EnvelopeStatus.COMPLETED]) {
+    assert.equal(isDeclinableEnvelopeStatus(status), false, `${status} let through`);
+  }
 });
 
 // ─── isArchivedForEnvelope ───
