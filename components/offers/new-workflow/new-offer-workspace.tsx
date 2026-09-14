@@ -82,7 +82,7 @@ import {
   type OfferPrefillResult,
 } from "@/lib/data/offer-prefill";
 import {
-  reevaluateFormulaCostLines,
+  reevaluateFormulaCostLinesForStatus,
   resolveAreaRateConstants,
   type AdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
@@ -355,7 +355,10 @@ export function NewOfferWorkspace({
     }
     setLines((prev) => {
       if (!prev.some((l) => l.formula)) return prev;
-      return reevaluateFormulaCostLines(
+      // Only while the cost schedule is editable: an issued offer's lines are
+      // the price the customer was quoted, and admin rates may have moved.
+      return reevaluateFormulaCostLinesForStatus(
+        status,
         prev,
         rateConstantsRef.current,
         job,
@@ -363,7 +366,7 @@ export function NewOfferWorkspace({
         calcVersion,
       );
     });
-  }, [job, areaCalculator, leadId, calcVersion]);
+  }, [job, areaCalculator, leadId, calcVersion, status]);
 
   useEffect(() => {
     if (saveState !== "saving") return;
