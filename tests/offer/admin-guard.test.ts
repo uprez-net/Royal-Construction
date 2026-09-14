@@ -84,6 +84,9 @@ test("the 'use server' admin data module exports only the cached read", () => {
   const text = source("lib/data/admin-offer-content.ts");
   assert.equal(startsWithUseServer(text), true);
   assert.doesNotMatch(text, /export\s+async\s+function\s+update/);
+  // A re-export makes a writer a Server Action just as surely, and the name
+  // list below cannot see one.
+  assert.doesNotMatch(text, /export\s*(?:\{|\*|default\b)/);
   const exported = [
     ...text.matchAll(/export\s+(?:async\s+)?(?:function|const|let)\s+(\w+)/g),
   ].map((match) => match[1]);
