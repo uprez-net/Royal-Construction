@@ -8,6 +8,7 @@ import {
   getPrintFooterText,
   PROPOSAL_TAGLINE,
   COMPANY_LINE,
+  type OfferPrintScopeRow,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
 import {
@@ -24,6 +25,7 @@ import {
   formatBoundedOwnerList,
   CHARS_PER_LINE_INVESTMENT,
   CHARS_PER_LINE_SIGNATURE,
+  chunkAllowanceRows,
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
@@ -198,13 +200,15 @@ export function buildProposalHtml(
     ].filter((chunk) => chunk.length > 0);
   }
 
+  // Only when there is something to disclose, so an offer with no allowances
+  // keeps the page count it had before.
+  const allowancePages = chunkAllowanceRows(data.scopeRows);
+
   const totalPages =
     5 +
     inclusionPages.length +
     (galleryImages.length > 0 ? 1 : 0) +
-    // Only when there is something to disclose, so an offer with no allowances
-    // keeps the page count it had before.
-    (data.scopeRows.length > 0 ? 1 : 0) +
+    allowancePages.length +
     signatureChunks.length;
   let pageNo = 0;
   const foot = () => {
@@ -221,7 +225,9 @@ export function buildProposalHtml(
     ...inclusionPages.map((rows, index) =>
       inclusionsPage(rows, inclusionStartIndexes[index], index > 0, foot()),
     ),
-    ...(data.scopeRows.length > 0 ? [allowancesPage(data, foot())] : []),
+    ...allowancePages.map((rows, index) =>
+      allowancesPage(rows, index > 0, foot()),
+    ),
     termsPage(input, data, inlineSignatures ? signatureBlocks : null, foot()),
     ...signatureChunks.map((chunk, index) =>
       signaturePage(job, chunk, index > 0, foot()),
@@ -546,12 +552,14 @@ function inclusionsPage(
 // Prime cost and provisional sums, mirroring PrintAllowancesPage in
 // offer-workspace-print-template.tsx so the emailed PDF and the printed
 // document disclose the same allowances in the same place. `scopeRows` was
-// computed and rendered by neither before this.
+// computed and rendered by neither before this. A continued page drops the intro,
+// as the inclusions schedule does.
 function allowancesPage(
-  data: ReturnType<typeof buildOfferPrintTemplateData>,
+  rows: readonly OfferPrintScopeRow[],
+  continued: boolean,
   foot: string,
 ): string {
-  const body = data.scopeRows
+  const body = rows
     .map(
       (row) =>
         `<tr><td class="cat">${esc(row.label)}${row.description ? `<div class="sub">${esc(row.description)}</div>` : ""}</td><td class="amt">${esc(row.amountLabel)}</td><td class="muted">${esc(row.variationRule) || "&mdash;"}</td></tr>`,
@@ -560,8 +568,8 @@ function allowancesPage(
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Allowances</div>
-    <h1 class="title">Prime cost &amp; provisional sums</h1>
-    <p class="muted" style="margin-top:12px;max-width:155mm;">The amounts below are allowances held within your fixed contract price, not fixed costs. Where your final selection costs more or less than the allowance, the difference is adjusted by written variation as set out against each item.</p>
+    <h1 class="title">Prime cost &amp; provisional sums${continued ? " (cont.)" : ""}</h1>
+    ${continued ? "" : `<p class="muted" style="margin-top:12px;max-width:155mm;">The amounts below are allowances held within your fixed contract price, not fixed costs. Where your final selection costs more or less than the allowance, the difference is adjusted by written variation as set out against each item.</p>`}
     <table class="inc alw"><thead><tr><th>Item</th><th class="amt">Allowance</th><th>If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>
     ${foot}
   </div>`;

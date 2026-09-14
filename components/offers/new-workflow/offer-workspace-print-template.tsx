@@ -1,5 +1,6 @@
 import {
   CHARS_PER_LINE_SIGNATURE,
+  chunkAllowanceRows,
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
@@ -247,17 +248,19 @@ export function OfferWorkspacePrintTemplate(
             />
           ),
     ),
-    ...(data.scopeRows.length > 0
-      ? [
-          (n: number, total: number) => (
+    ...chunkAllowanceRows(data.scopeRows).map(
+      (rows, i) =>
+        // eslint-disable-next-line react/display-name -- page factory, not a component
+        (n: number, total: number) =>
+          (
             <PrintAllowancesPage
-              key="allowances"
-              rows={data.scopeRows}
+              key={`allowances-${i}`}
+              rows={rows}
+              continued={i > 0}
               footer={foot(data, n, total)}
             />
           ),
-        ]
-      : []),
+    ),
     (n, total) => (
       <PrintTermsPage
         key="terms"
@@ -640,25 +643,37 @@ function PrintInclusionsPage({
 // which sums were allowances, what they were worth, or what happens when the
 // real cost differs — while the estimator saw a ticked checkbox saying it would.
 //
-// Its own page, and only when there is something to disclose, so an offer with
-// no allowances keeps exactly the page count it had before.
+// Its own page(s), and only when there is something to disclose, so an offer with
+// no allowances keeps exactly the page count it had before. A continued page
+// drops the intro, mirroring allowancesPage() in offer-proposal-html.ts.
 function PrintAllowancesPage({
   rows,
+  continued,
   footer,
 }: {
   readonly rows: readonly OfferPrintScopeRow[];
+  readonly continued: boolean;
   readonly footer: string;
 }) {
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <PrintSection eyebrow="Allowances" title="Prime cost & provisional sums">
-        <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-          The amounts below are allowances held within your fixed contract
-          price, not fixed costs. Where your final selection costs more or less
-          than the allowance, the difference is adjusted by written variation as
-          set out against each item.
-        </p>
+      <PrintSection
+        eyebrow="Allowances"
+        title={
+          continued
+            ? "Prime cost & provisional sums (cont.)"
+            : "Prime cost & provisional sums"
+        }
+      >
+        {continued ? null : (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            The amounts below are allowances held within your fixed contract
+            price, not fixed costs. Where your final selection costs more or
+            less than the allowance, the difference is adjusted by written
+            variation as set out against each item.
+          </p>
+        )}
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>

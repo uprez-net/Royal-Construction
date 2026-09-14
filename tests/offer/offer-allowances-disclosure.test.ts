@@ -10,7 +10,11 @@ import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-tem
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 import {
+  ALLOWANCES_INTRO_LINES,
+  allowanceRowLines,
+  chunkAllowanceRows,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
+  INCLUSIONS_LINES_PER_PAGE,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
@@ -201,5 +205,80 @@ test("both renderers agree on the page count with allowances present", () => {
     declaredPageTotal(
       buildProposalHtml(buildProposalInput(snapshot), EMPTY_OFFER_IMAGES),
     ),
+  );
+});
+
+// ─── Pagination ─────────────────────────────────────────────────────────────
+// Both offer renderers put every disclosed allowance on ONE fixed-height page
+// and counted it as one. Thirty rows with real variation rules ran past the
+// footer onto sheets "Page N of M" never declared.
+
+const longRule =
+  "Selections above this allowance are priced as a written variation before the affected works proceed on site. ".slice(
+    0,
+    120,
+  );
+const manyLongAllowances: OfferWorkspaceScopeItem[] = Array.from(
+  { length: 30 },
+  (_, index) => ({
+    ...INITIAL_ALLOWANCES[0],
+    id: `allowance-long-${index + 1}`,
+    label: `Allowance item ${index + 1}`,
+    variationRule: longRule.padEnd(120, "."),
+    includedInOfferDocument: true,
+  }),
+);
+
+test("the seeded allowances still fit one page", () => {
+  assert.equal(chunkAllowanceRows(INITIAL_ALLOWANCES).length, 1);
+});
+
+test("a long allowance list splits into pages that each fit their budget", () => {
+  const rows = buildOfferPrintTemplateData(
+    buildProposalInput(snapshotWith(manyLongAllowances)),
+  ).scopeRows;
+  assert.equal(rows[0].variationRule.length, 120);
+  const chunks = chunkAllowanceRows(rows);
+  assert.ok(chunks.length > 1, `30 long rows packed into ${chunks.length} page`);
+  assert.equal(
+    chunks.flat().length,
+    rows.length,
+    "pagination dropped or duplicated a row",
+  );
+  chunks.forEach((chunk, index) => {
+    const budget =
+      index === 0
+        ? INCLUSIONS_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES
+        : INCLUSIONS_LINES_PER_PAGE;
+    const used = chunk.reduce((sum, row) => sum + allowanceRowLines(row), 0);
+    assert.ok(used <= budget, `page ${index + 1} uses ${used} of ${budget} lines`);
+  });
+});
+
+test("both offer renderers count every allowance page in their footer", () => {
+  const chunkCount = chunkAllowanceRows(
+    buildOfferPrintTemplateData(
+      buildProposalInput(snapshotWith(manyLongAllowances)),
+    ).scopeRows,
+  ).length;
+  const emailedMany = declaredPageTotal(
+    buildProposalHtml(
+      buildProposalInput(snapshotWith(manyLongAllowances)),
+      EMPTY_OFFER_IMAGES,
+    ),
+  );
+  const emailedNone = declaredPageTotal(
+    buildProposalHtml(buildProposalInput(snapshotWith(hidden)), EMPTY_OFFER_IMAGES),
+  );
+  const reactMany = declaredPageTotal(reactMarkup(snapshotWith(manyLongAllowances)));
+
+  assert.equal(reactMany, emailedMany, "the two renderers disagree on page count");
+  assert.equal(emailedMany - emailedNone, chunkCount);
+
+  const reactHtml = reactMarkup(snapshotWith(manyLongAllowances));
+  assert.equal(
+    reactHtml.split("Prime cost &amp; provisional sums (cont.)").length - 1,
+    chunkCount - 1,
+    "the React template did not render one page per chunk",
   );
 });

@@ -1113,6 +1113,61 @@ export function inclusionPageStartIndexes(
   return starts;
 }
 
+// The prime-cost and provisional-sum table's two text columns. Both offer
+// renderers give it a 30mm Allowance column and a 70mm "If the actual cost
+// differs" column, leaving ~74mm for the Item cell; net of padding that is about
+// 36 and 32 characters at the React template's 14px. Rounded DOWN, like every
+// CHARS_PER_LINE_* above, so a row's height is over-counted rather than under.
+export const CHARS_PER_LINE_ALLOWANCE_ITEM = 34;
+export const CHARS_PER_LINE_ALLOWANCE_RULE = 30;
+// The allowances intro runs a line longer than the inclusions one.
+export const ALLOWANCES_INTRO_LINES = 4;
+
+type AllowanceRowText = {
+  readonly label: string;
+  readonly description: string;
+  readonly variationRule: string;
+};
+
+// The Item cell stacks the label over the description and the rule sits beside
+// them, so a row is as tall as the taller of the two, plus its own padding.
+export function allowanceRowLines(row: AllowanceRowText): number {
+  const itemLines =
+    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
+    (row.description.trim().length > 0
+      ? estimateWrappedLines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
+      : 0);
+  return (
+    Math.max(
+      itemLines,
+      estimateWrappedLines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE),
+    ) + INCLUSION_ROW_CHROME_LINES
+  );
+}
+
+// Pack the disclosed allowances into pages. Every row used to go on one
+// fixed-height page counted as one, so a long list ran past the footer onto a
+// sheet "Page N of M" never declared. Shared by the emailed proposal, the React
+// print template and the Tender so none of them can count it differently.
+export function chunkAllowanceRows<T extends AllowanceRowText>(
+  rows: readonly T[],
+): T[][] {
+  if (rows.length === 0) {
+    return [];
+  }
+  const firstBudget = Math.max(
+    1,
+    INCLUSIONS_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES,
+  );
+  const first =
+    chunkByEstimatedHeight(rows, firstBudget, allowanceRowLines)[0] ?? [];
+  const rest = rows.slice(first.length);
+  return [
+    first,
+    ...chunkByEstimatedHeight(rest, INCLUSIONS_LINES_PER_PAGE, allowanceRowLines),
+  ].filter((page) => page.length > 0);
+}
+
 export function getIncludedOfferTenderLineItems(
   lines: readonly OfferWorkspaceCostLine[],
 ): readonly string[] {
