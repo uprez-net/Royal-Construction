@@ -680,7 +680,14 @@ export function OfferWorkspaceScreen({
               revising={revising}
               executed={revisionExecuted}
               documentsEditable={documentsStillEditable}
-              notice={revisionNotice}
+              notice={
+                revisionNotice ??
+                // Create revision is disabled from the signed Tender on. The
+                // server's refusal used to be what said why.
+                (!canRevise && !revisionExecuted && status !== "superseded"
+                  ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
+                  : null)
+              }
               onCreateRevision={onCreateRevision}
             />
           ) : null}
