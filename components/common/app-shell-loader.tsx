@@ -1,71 +1,68 @@
 "use client";
 
-import { Hammer, Bell } from "lucide-react";
+import Image from "next/image";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+// The layout's Suspense fallback while the signed-in user resolves. It draws
+// the same frame as AppShell (light ground, white sidebar and header) so a hard
+// refresh does not flash a dark teal app before the gold one. Only the
+// placeholders pulse, and Skeleton stops pulsing under reduced motion.
 export function AppShellLoader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-transparent text-foreground animate-pulse">
-      <div
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at top left, rgba(13,148,136,0.18), transparent 34%), radial-gradient(circle at top right, rgba(232,115,12,0.12), transparent 26%), linear-gradient(180deg, rgba(248,250,252,0.94), rgba(241,245,249,0.94))",
-        }}
-      />
-
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 opacity-20"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, rgba(15,23,42,0.06) 1px, transparent 1px), linear-gradient(rgba(15,23,42,0.06) 1px, transparent 1px)",
-          backgroundSize: "42px 42px",
-          maskImage: "linear-gradient(to bottom, black, transparent)",
-        }}
-      />
-
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-foreground">
       <div className="flex h-full">
         {/* Sidebar */}
-        <aside className="hidden w-16 shrink-0 border-r border-white/10 bg-slate-950 text-slate-300 shadow-[6px_0_28px_rgba(15,23,42,0.12)] md:flex md:flex-col md:items-center md:py-4">
-          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-teal-500/15 text-teal-400">
-            <Hammer className="size-5" />
+        <aside className="hidden w-16 shrink-0 border-r border-border bg-white shadow-sm md:flex md:flex-col md:items-center md:py-4">
+          <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
+            <Image
+              src="/favicon.ico"
+              alt="Royal Constructions Logo"
+              width={32}
+              height={32}
+            />
           </div>
 
-          <div className="flex flex-1 flex-col items-center gap-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="size-10 rounded-lg bg-white/10" />
+          <div className="flex flex-1 flex-col items-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="size-10 rounded-lg" />
             ))}
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header */}
-          <header className="sticky top-0 z-30 border-b border-white/60 bg-slate-950 text-white shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur">
+          <header className="z-30 shrink-0 border-b border-border bg-white shadow-sm">
             <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
+                <Skeleton className="size-10 rounded-lg md:hidden" />
                 <div>
-                  <div className="h-6 w-32 rounded-md bg-teal-500/20" />
+                  <div className="flex h-7 items-center">
+                    <Skeleton className="h-5 w-44 bg-royal-gold/20" />
+                  </div>
 
-                  <div className="mt-2 hidden items-center gap-2 md:flex">
-                    <div className="h-3 w-14 rounded bg-white/10" />
-                    <div className="h-3 w-3 rounded bg-white/10" />
-                    <div className="h-3 w-24 rounded bg-white/10" />
+                  <div className="hidden h-4 items-center gap-2 md:flex">
+                    <Skeleton className="h-3 w-10" />
+                    <Skeleton className="h-3 w-14" />
+                    <Skeleton className="h-3 w-20" />
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden text-right md:block">
-                  <div className="h-4 w-20 rounded bg-white/10" />
-                  <div className="mt-1 h-3 w-10 rounded bg-white/10" />
+                <div className="hidden flex-col items-end md:flex">
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                  <div className="flex h-4 items-center">
+                    <Skeleton className="h-3 w-8" />
+                  </div>
                 </div>
 
-                <div className="grid size-10 place-items-center rounded-lg border border-white/10 bg-white/5">
-                  <Bell className="size-4 text-slate-500" />
-                </div>
+                <Skeleton className="size-10 rounded-lg" />
 
-                <div className="size-9 rounded-full bg-white/10" />
+                <Skeleton className="hidden size-9 rounded-full md:block" />
               </div>
             </div>
           </header>
@@ -76,7 +73,7 @@ export function AppShellLoader({ children }: { children: React.ReactNode }) {
               "flex min-h-0 w-full flex-1 flex-col gap-6",
               "overflow-y-auto",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
-              "[scrollbar-width:none]",
+              "scrollbar-none",
               "[-ms-overflow-style:none]",
               "[&::-webkit-scrollbar]:hidden",
             )}
