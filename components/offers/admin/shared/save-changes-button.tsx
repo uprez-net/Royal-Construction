@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { useUnsavedAdminGuard } from "./use-unsaved-admin-guard";
 
 interface SaveChangesButtonProps {
   dirty: boolean;
@@ -21,6 +22,8 @@ export function SaveChangesButton({
   className,
   disabled,
 }: SaveChangesButtonProps) {
+  useUnsavedAdminGuard();
+
   return (
     <Button
       type="button"

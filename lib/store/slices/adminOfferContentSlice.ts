@@ -1,6 +1,7 @@
 import {
   createAsyncThunk,
   createSlice,
+  current,
   type PayloadAction,
 } from "@reduxjs/toolkit";
 import {
@@ -21,23 +22,19 @@ import {
   type ActionResult,
   saveHBFCClaimAction,
 } from "@/lib/actions/admin-offer-content";
+import {
+  mergeHydratedAdminContent,
+  type AdminOfferContentSection,
+  type AdminOfferContentState,
+} from "./admin-offer-content-hydrate";
 
-type Section = "buildScope" | "costSchedule" | "offerScope" | "offerContent" | "hbfcClaim";
-
-interface AdminOfferContentState {
-  data: AdminOfferContent;
-  hydrated: boolean;
-  dirty: Record<Section, boolean>;
-  saving: Record<Section, boolean>;
-  error: Record<Section, string | null>;
-}
+type Section = AdminOfferContentSection;
 
 const allClean = { buildScope: false, costSchedule: false, offerScope: false, offerContent: false, hbfcClaim: false };
 const noError = { buildScope: null, costSchedule: null, offerScope: null, offerContent: null, hbfcClaim: null };
 
 const initialState: AdminOfferContentState = {
   data: structuredClone(EMPTY_ADMIN_OFFER_CONTENT),
-  hydrated: false,
   dirty: { ...allClean },
   saving: { ...allClean },
   error: { ...noError },
@@ -184,11 +181,7 @@ const slice = createSlice({
   initialState,
   reducers: {
     hydrated(state, action: PayloadAction<AdminOfferContent>) {
-      state.data = action.payload;
-      state.hydrated = true;
-      state.dirty = { ...allClean };
-      state.saving = { ...allClean };
-      state.error = { ...noError };
+      return mergeHydratedAdminContent(current(state), action.payload);
     },
     buildScopeChanged(state, action: PayloadAction<BuildScopeLines>) {
       state.data.buildScope = action.payload;
@@ -359,4 +352,4 @@ export const {
 
 export const adminOfferContentReducer = slice.reducer;
 
-export type { AdminOfferContentState, Section as AdminOfferContentSection };
+export type { AdminOfferContentState, AdminOfferContentSection };
