@@ -86,12 +86,21 @@ export function OfferCostScheduleScreen() {
       return next;
     });
   };
-  const anyFormulaInvalid = useMemo(() => {
+  const invalidFormulaCount = useMemo(() => {
+    let count = 0;
     for (const [, valid] of formulaValidity) {
-      if (!valid) return true;
+      if (!valid) count += 1;
     }
-    return false;
+    return count;
   }, [formulaValidity]);
+  const anyFormulaInvalid = invalidFormulaCount > 0;
+  const forgetFormulaValidity = (rowId: string) =>
+    setFormulaValidity((prev) => {
+      if (!prev.has(rowId)) return prev;
+      const next = new Map(prev);
+      next.delete(rowId);
+      return next;
+    });
 
   const phases = useMemo(() => {
     const order: string[] = [];
@@ -120,8 +129,12 @@ export function OfferCostScheduleScreen() {
     return { none, fixed, formula, included, total: rows.length };
   }, [rows]);
 
-  const updateRow = (row: CostScheduleRow) =>
+  const updateRow = (row: CostScheduleRow) => {
     dispatch(costScheduleRowUpserted(row));
+    // A row that leaves formula mode unmounts its editor, so its last verdict
+    // would otherwise keep Save disabled with nothing left on screen to fix.
+    if (row.priceMode !== "formula") forgetFormulaValidity(row.id);
+  };
   const renamePhase = (oldPhase: string, newPhase: string) => {
     for (const row of rows) {
       if (row.phase === oldPhase) {
@@ -208,12 +221,7 @@ export function OfferCostScheduleScreen() {
                   onUpdateRow={updateRow}
                   onRemoveRow={(id) => {
                     dispatch(costScheduleRowRemoved(id));
-                    setFormulaValidity((prev) => {
-                      if (!prev.has(id)) return prev;
-                      const next = new Map(prev);
-                      next.delete(id);
-                      return next;
-                    });
+                    forgetFormulaValidity(id);
                   }}
                   onAddTask={() =>
                     dispatch(costScheduleRowUpserted(newRow(phase)))
@@ -234,6 +242,13 @@ export function OfferCostScheduleScreen() {
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
+          </p>
+        )}
+        {anyFormulaInvalid && (
+          <p role="alert" className="text-sm text-destructive">
+            {`Save is blocked: ${invalidFormulaCount} formula ${
+              invalidFormulaCount === 1 ? "row needs" : "rows need"
+            } a valid expression.`}
           </p>
         )}
       </CardContent>
