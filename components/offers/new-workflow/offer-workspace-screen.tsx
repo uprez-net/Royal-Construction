@@ -792,6 +792,7 @@ export function OfferWorkspaceScreen({
             title="Tender"
           >
             <TenderPanel
+              allowances={allowances}
               signerStatuses={signerStatuses}
               customerPrice={customerPrice}
               draft={draft}

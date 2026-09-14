@@ -185,8 +185,8 @@ export function OfferWorkspaceImages({
                     src={url}
                   />
                 ) : (
-                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center font-mono text-[10px] uppercase tracking-wide text-royal-gold-dark">
-                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image"}
+                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image yet"}
                   </span>
                 )}
                 {isAi ? (

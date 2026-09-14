@@ -297,7 +297,7 @@ export function OfferDocumentCanvas({
                 <EditableBulletList
                   addLabel="Add exclusion"
                   ariaLabel="Exclusion"
-                  emptyHint="No exclusions listed."
+                  emptyHint="No exclusions yet. Add anything outside the fixed-price scope."
                   items={draft.exclusionBullets}
                   onChange={(exclusionBullets) =>
                     onDraftChange({ exclusionBullets })
