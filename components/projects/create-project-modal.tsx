@@ -755,6 +755,12 @@ export function CreateProjectModal({
               currentPage={leadSearch.pageInfo.page}
               totalPages={leadSearch.pageInfo.totalPages}
               loadingMore={leadSearch.loadingMore}
+              error={leadSearch.error}
+              emptyMessage={
+                search.trim()
+                  ? "No leads match your search."
+                  : "No leads are waiting for a project."
+              }
             />
 
             <div className="grid gap-4 lg:grid-cols-2">

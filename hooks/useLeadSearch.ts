@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchJson } from "@/utils/fetch";
+import { FetchError, fetchJson } from "@/utils/fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lead as UiLead } from "@/lib/leads/types";
 import { PaginatedLeadsResult } from "@/lib/data/leads";
@@ -15,7 +15,9 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
     // keep throwing the user back to page 1.
     const queryRef = useRef(initialQuery);
     const [items, setItems] = useState<UiLead[]>([]);
-    const [loading, setLoading] = useState(false);
+    // True from the start: the first request waits out the debounce, and until
+    // it lands the picker should show its skeleton, not "no leads".
+    const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pageInfo, setPageInfo] = useState<Omit<PaginatedLeadsResult, 'items'>>({
@@ -73,14 +75,22 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
                     totalPages: data.totalPages,
                 });
             } catch (err) {
-                if (err instanceof Error) {
-                    setError(err.message);
-                } else {
-                    setError("An unknown error occurred");
-                }
+                // Aborted because the search changed or the picker closed. The
+                // request that replaced it reports its own outcome, so this
+                // one must not flash the browser's abort message.
+                if (controller.signal.aborted) return;
+                // A failed first page leaves nothing valid on screen: the
+                // leads there belong to the previous search.
+                if (page === 1) setItems([]);
+                // FetchError carries the API's message. Anything else is the
+                // browser's own network text ("Load failed"), which means
+                // nothing to the user.
+                setError(err instanceof FetchError ? err.message : "Failed to fetch leads");
             } finally {
-                setLoading(false);
-                setLoadingMore(false);
+                if (!controller.signal.aborted) {
+                    setLoading(false);
+                    setLoadingMore(false);
+                }
             }
         }, 300);
 

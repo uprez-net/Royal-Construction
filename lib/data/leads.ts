@@ -504,14 +504,11 @@ export async function getLeads(
       totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
     };
   } catch (error) {
+    // Rethrown rather than swallowed into an empty page: the lead pickers read
+    // that as "no leads" and never said the load had failed. Both callers, the
+    // /api/leads route and the MCP tool, catch it and report the failure.
     console.error("Error fetching leads:", error);
-    return {
-      items: [],
-      page: 1,
-      limit: defaultLookupPageSize,
-      totalCount: 0,
-      totalPages: 0,
-    };
+    throw error;
   }
 }
 

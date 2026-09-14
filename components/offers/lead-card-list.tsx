@@ -14,6 +14,10 @@ interface LeadCardListProps {
   selectedLeadId: number | null;
   setSelectedLeadId: (id: number | null, location: string | null) => void;
   setPage: (page: number) => void;
+  /** Why the last load failed, shown in the list. */
+  error?: string | null;
+  /** The caller's copy for a load that succeeded with no leads. */
+  emptyMessage: string;
   /** The list is its own scroll area, so each caller sizes it (max-h-*). */
   className?: string;
 }
@@ -63,6 +67,8 @@ export function LeadCardList({
   selectedLeadId,
   setSelectedLeadId,
   setPage,
+  error,
+  emptyMessage,
   className,
 }: LeadCardListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -71,7 +77,10 @@ export function LeadCardList({
   // useEffectEvent gives a stable reference that always reads latest values
   // without needing to be listed as a dependency — ideal for event callbacks
   const onIntersect = useEffectEvent(() => {
-    if (!loadingMore && totalPages > 0 && currentPage < totalPages) {
+    // Not after a failure: the page counter has already moved on, so the next
+    // scroll would fetch the page after the one that failed and silently skip
+    // its leads.
+    if (!loadingMore && !error && totalPages > 0 && currentPage < totalPages) {
       setPage(currentPage + 1);
     }
   });
@@ -189,6 +198,29 @@ export function LeadCardList({
         </Card>
       ))}
 
+      {/* After the cards, so a failed next page shows where the user has
+          scrolled to. A failed first page has no cards above it. */}
+      {error && (
+        <div
+          role="alert"
+          className="col-span-full rounded-lg border border-destructive/30 bg-destructive-light px-4 py-3 text-sm"
+        >
+          <p className="font-medium text-destructive-ink">{error}</p>
+          <p className="mt-1 text-muted-foreground">
+            Change the search or reload the page to try again.
+          </p>
+        </div>
+      )}
+
+      {!error && items.length === 0 && (
+        <div role="status" className="col-span-full px-4 py-8 text-center text-sm">
+          <p className="font-medium text-foreground">{emptyMessage}</p>
+          <p className="mt-1 text-muted-foreground">
+            Only leads that don&apos;t have a project yet appear here.
+          </p>
+        </div>
+      )}
+
       {/* Sentinel: observed by IntersectionObserver to trigger next page */}
       <div ref={sentinelRef} className="col-span-full h-1" aria-hidden />
 
@@ -198,7 +230,7 @@ export function LeadCardList({
           <LeadCardSkeleton key={`more-${i}`} />
         ))}
 
-      {currentPage >= totalPages && totalPages > 0 && (
+      {!error && items.length > 0 && currentPage >= totalPages && totalPages > 0 && (
         <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
           You&apos;ve reached the end of the list.
         </p>

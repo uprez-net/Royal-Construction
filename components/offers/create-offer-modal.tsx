@@ -93,6 +93,12 @@ export function CreateOfferFileModal({
             currentPage={leadSearch.pageInfo.page}
             totalPages={leadSearch.pageInfo.totalPages}
             loadingMore={leadSearch.loadingMore}
+            error={leadSearch.error}
+            emptyMessage={
+              search.trim()
+                ? "No leads match your search."
+                : "No leads are ready for an offer."
+            }
           />
         </div>
         <DialogFooter className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
