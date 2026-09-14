@@ -20,7 +20,10 @@ import {
   type OfferActivityEvent,
   type OfferActivitySend,
 } from "@/lib/data/offer-activity-types";
-import { formatActivityWhen } from "@/lib/offer/activity-format";
+import {
+  formatActivityNote,
+  formatActivityWhen,
+} from "@/lib/offer/activity-format";
 import {
   OFFER_STATUS_LABEL,
   type OfferWorkspaceStatus,
@@ -295,7 +298,7 @@ function describeEvent(event: OfferActivityEvent): React.ReactNode {
     return (
       <span>
         <span className="font-medium text-foreground">{to}</span>
-        {event.note ? ` — ${event.note}` : ""}
+        <ActivityNote note={event.note} />
       </span>
     );
   }
@@ -303,8 +306,28 @@ function describeEvent(event: OfferActivityEvent): React.ReactNode {
     <span>
       <span className="text-muted-foreground">{statusLabel(event.fromStatus)}</span>{" "}
       → <span className="font-medium text-foreground">{to}</span>
-      {event.note ? ` — ${event.note}` : ""}
+      <ActivityNote note={event.note} />
     </span>
+  );
+}
+
+// Webhook notes print as sentences; the envelope id stays as secondary text so a
+// signed or declined envelope can still be looked up in DocuSign.
+function ActivityNote({ note }: { readonly note: string | null }) {
+  if (!note) {
+    return null;
+  }
+  const { text, envelopeId } = formatActivityNote(note);
+  return (
+    <>
+      {` — ${text}`}
+      {envelopeId ? (
+        <span className="text-muted-foreground">
+          {" · envelope "}
+          <span className="font-mono">{envelopeId}</span>
+        </span>
+      ) : null}
+    </>
   );
 }
 

@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatActivityWhen } from "../../lib/offer/activity-format";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+  completedEventNote,
+  legacyCompletedEventNote,
+  unexpectedCompletionNote,
+  unexpectedDeclineNote,
+} from "../../lib/docusign/completion-classifier";
+import {
+  formatActivityNote,
+  formatActivityWhen,
+} from "../../lib/offer/activity-format";
 
 // Pins the negotiation timeline's timestamps. They never carried a year, so a
 // send or reply from last year read as this year's. Mid-year instants keep the
@@ -21,4 +33,53 @@ test("REGRESSION: a date from a prior year shows its year", () => {
   const when = formatActivityWhen("2025-06-10T03:00:00Z", NOW);
 
   assert.match(when, /2025/);
+});
+
+// The DocuSign webhook's status-event notes lead with the machine prefix a
+// redelivery dedups on, and the timeline printed them raw ("UNEXPECTED_DECLINE
+// 3f2a…: DocuSign reports…"). The notes here come from the webhook's own
+// builders, so a change to what is stored breaks these tests rather than the
+// timeline.
+const ENVELOPE = "3f2a9c1e-5b7d-4e8a-9c0f-1a2b3c4d5e6f";
+
+test("REGRESSION: a completed envelope reads as signed, with the id aside", () => {
+  assert.deepEqual(formatActivityNote(completedEventNote(ENVELOPE)), {
+    text: "Signed in DocuSign",
+    envelopeId: ENVELOPE,
+  });
+});
+
+test("a signature over a withdrawn envelope says it was kept aside", () => {
+  assert.deepEqual(formatActivityNote(unexpectedCompletionNote(ENVELOPE, "Tender")), {
+    text: "Signed after it was withdrawn — kept aside, not filed as the signed copy",
+    envelopeId: ENVELOPE,
+  });
+});
+
+test("a decline over a withdrawn envelope says so", () => {
+  assert.deepEqual(formatActivityNote(unexpectedDeclineNote(ENVELOPE, "Contract")), {
+    text: "Declined after it was withdrawn",
+    envelopeId: ENVELOPE,
+  });
+});
+
+test("every other note passes through unchanged", () => {
+  for (const note of [
+    legacyCompletedEventNote(ENVELOPE),
+    `DocuSign envelope ${ENVELOPE} sent to owner1@example.com`,
+    "Declined via DocuSign: the price is too high",
+    "DOCUSIGN_COMPLETEDX 123: not a webhook prefix",
+  ]) {
+    assert.deepEqual(formatActivityNote(note), { text: note, envelopeId: null });
+  }
+});
+
+test("the timeline formats event notes instead of printing them raw", () => {
+  const panel = readFileSync(
+    join(process.cwd(), "components/offers/new-workflow/offer-workspace-activity.tsx"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(panel, /\$\{event\.note\}/);
+  assert.match(panel, /formatActivityNote\(note\)/);
 });
