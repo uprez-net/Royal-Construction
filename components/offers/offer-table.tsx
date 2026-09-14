@@ -16,6 +16,7 @@ import {
   updateOffer,
 } from "@/lib/store/slices/offerSlice";
 import { OfferPagination } from "./offer-pagination";
+import { OFFER_TABLE_HEADERS } from "./offer-table-columns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OfferStatusBadge } from "./offer-status-badge";
@@ -31,22 +32,6 @@ const money = (value: string) => {
 
 const day = (value: Date | string | null) =>
   value ? dateFormat.format(new Date(value)) : "-";
-
-// Index-matched to the header row; "end" right-aligns the money columns so the
-// digits line up, the same convention DataTable uses.
-const HEADERS = [
-  { label: <span className="sr-only">Expand versions</span>, align: "start" },
-  { label: "Offer #", align: "start" },
-  { label: "Client", align: "start" },
-  { label: "Type", align: "start" },
-  { label: "Versions", align: "start" },
-  { label: "Amount (Ex GST)", align: "end" },
-  { label: "GST", align: "end" },
-  { label: "Total", align: "end" },
-  { label: "Sent At", align: "start" },
-  { label: "Approved At", align: "start" },
-  { label: "Status", align: "start" },
-] as const;
 
 export function OfferTable({
   serverOffers,
@@ -134,7 +119,7 @@ export function OfferTable({
           </caption>
           <thead className="bg-muted/70 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              {HEADERS.map((header, index) => (
+              {OFFER_TABLE_HEADERS.map((header, index) => (
                 <th
                   key={`header-${index}`}
                   scope="col"
@@ -146,7 +131,11 @@ export function OfferTable({
                     index === 0 && "w-10 px-2",
                   )}
                 >
-                  {header.label}
+                  {header.srOnly ? (
+                    <span className="sr-only">{header.label}</span>
+                  ) : (
+                    header.label
+                  )}
                 </th>
               ))}
             </tr>
@@ -167,7 +156,7 @@ export function OfferTable({
             ) : (
               <tr>
                 <td
-                  colSpan={HEADERS.length}
+                  colSpan={OFFER_TABLE_HEADERS.length}
                   className={cn("px-4 text-center", loading ? "py-4" : "py-16")}
                 >
                   {loading ? (
@@ -330,7 +319,7 @@ function OfferGroupRows({
 
       {expanded && hasHistory ? (
         <tr id={panelId} className="border-t border-border/70 bg-muted/20">
-          <td colSpan={HEADERS.length} className="px-4 py-3">
+          <td colSpan={OFFER_TABLE_HEADERS.length} className="px-4 py-3">
             <div className="ml-6 border-l-2 border-royal-gold/30 pl-4">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Version history
