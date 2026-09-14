@@ -49,7 +49,7 @@ export function PricingDecisionPanel({
           title="Customer Offer price"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4 md:grid-cols-[minmax(0,1fr)_220px]">
+      <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
         <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
           <label>
             <FieldLabel>Standard price inc GST</FieldLabel>
@@ -82,7 +82,7 @@ export function PricingDecisionPanel({
         <label>
           <FieldLabel>Fixed price shown on Offer document</FieldLabel>
           <Input
-            className="font-mono"
+            className="h-10 font-mono text-lg font-semibold tabular-nums md:text-lg"
             inputMode="decimal"
             placeholder={String(customerPrice.computedContractValueIncGst)}
             value={selectedPriceInput}
@@ -116,7 +116,7 @@ export function PricingDecisionPanel({
           <p className={FIELD_LABEL_CLASS}>
             Computed build-up
           </p>
-          <p className="font-mono text-lg font-semibold">
+          <p className="font-mono text-sm tabular-nums text-muted-foreground">
             {formatCurrency(customerPrice.computedContractValueIncGst)}
           </p>
           <p className="mt-1 font-mono text-xs tabular-nums text-muted-foreground">

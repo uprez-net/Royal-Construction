@@ -54,8 +54,10 @@ export function PriceBuildupPanel({
           title="Price build-up"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <CardContent className="grid gap-4">
+        {/* Sized to the step pane, not the viewport: the pane is narrower than
+            the window, so xl:grid-cols-4 squeezed four fields into it. */}
+        <div className="grid gap-3 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
           <PercentField
             label="Royal Construction Overhead"
             value={settings.royalConstructionOverheadPct}
