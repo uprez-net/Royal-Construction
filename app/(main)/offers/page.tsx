@@ -9,7 +9,7 @@ import {
   getOfferGroupsCached,
   getOfferKPIsCached,
 } from "@/lib/data/offer-listing";
-import { getUserByClerkIdCached } from "@/lib/data/user";
+import { getUserByClerkId } from "@/lib/data/user";
 import { leadListScope } from "@/lib/offer/access";
 import { auth } from "@clerk/nextjs/server";
 import { connection } from "next/server";
@@ -27,9 +27,10 @@ async function OfferPageClient() {
   await connection();
   // The user is resolved here, outside the cached fetchers: a "use cache" scope
   // cannot read the request, so the scope goes in as a cache-key argument. No
-  // internal user means no scope, and nothing is read.
+  // internal user means no scope, and nothing is read. The lookup is uncached,
+  // as in authorizeLeadAccess, so a role change narrows the list at once.
   const { userId } = await auth();
-  const user = userId ? await getUserByClerkIdCached(userId) : null;
+  const user = userId ? await getUserByClerkId(userId) : null;
   const scope = user ? leadListScope(user) : null;
   const [offerKPIs, offers] = scope
     ? await Promise.all([

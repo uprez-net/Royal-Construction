@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { OfferStatusBucket, PaginatedOfferGroupResult } from "@/types/offer";
 import { auth } from "@clerk/nextjs/server";
-import { getUserByClerkIdCached } from "@/lib/data/user";
+import { getUserByClerkId, getUserByClerkIdCached } from "@/lib/data/user";
 import { assertCanAccessLead, leadListScope } from "@/lib/offer/access";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 import { emptyOfferGroupResult, queryOfferGroups } from "@/lib/data/offer-listing";
@@ -27,7 +27,10 @@ export async function getOfferGroups(
 ): Promise<PaginatedOfferGroupResult> {
     try {
         const { userId } = await auth();
-        const user = userId ? await getUserByClerkIdCached(userId) : null;
+        // Uncached, as in authorizeLeadAccess. Nothing expires the cached
+        // lookup, so a demoted or deleted user would keep listing every lead
+        // for up to ten minutes after the offer page refused them.
+        const user = userId ? await getUserByClerkId(userId) : null;
         if (!user) {
             return emptyOfferGroupResult(page, limit);
         }
