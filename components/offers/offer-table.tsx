@@ -294,12 +294,15 @@ function OfferGroupRows({
             className={cn(
               "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold",
               hasHistory
-                ? "bg-teal-50 text-teal-700"
+                ? "bg-royal-gold-light text-royal-gold-ink"
                 : "bg-muted text-muted-foreground",
             )}
           >
             <Layers className="size-3" aria-hidden="true" />
-            {versionCount} {versionCount === 1 ? "version" : "versions"}
+            {/* Names the revision the collapsed row's amounts and status come
+                from, which the count alone did not. */}
+            v{latest.revisionNumber} · {versionCount}{" "}
+            {versionCount === 1 ? "version" : "versions"}
           </span>
         </td>
         <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">
@@ -328,7 +331,7 @@ function OfferGroupRows({
       {expanded && hasHistory ? (
         <tr id={panelId} className="border-t border-border/70 bg-muted/20">
           <td colSpan={HEADERS.length} className="px-4 py-3">
-            <div className="ml-6 border-l-2 border-teal-200 pl-4">
+            <div className="ml-6 border-l-2 border-royal-gold/30 pl-4">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Version history
               </p>
@@ -415,20 +418,28 @@ function OfferRevisionRow({
   revision: OfferListRow;
   onStatusChange: (offerId: string, status: OfferStatus) => Promise<void>;
 }) {
+  // The live revision is marked three ways, tint, a gold rule and the pill,
+  // because the old pale tint was all but invisible and the 10px pill failed
+  // AA contrast.
   return (
     <tr
       className={cn(
         "border-t border-border/70",
-        revision.isActive && "bg-teal-50/40",
+        revision.isActive && "bg-royal-gold-light/60",
       )}
     >
-      <td className="px-3 py-2">
+      <td
+        className={cn(
+          "px-3 py-2",
+          revision.isActive && "shadow-[inset_3px_0_0_0_var(--royal-gold-ink)]",
+        )}
+      >
         <div className="flex items-center gap-2">
           <span className="font-mono font-medium tabular-nums">
             v{revision.revisionNumber}
           </span>
           {revision.isActive ? (
-            <span className="rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            <span className="rounded-full bg-royal-gold-ink px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
               Active
             </span>
           ) : null}

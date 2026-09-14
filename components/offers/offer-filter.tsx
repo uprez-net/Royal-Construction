@@ -10,7 +10,7 @@ import type { OfferStatusBucket } from "@/types/offer";
 
 interface OfferFilterProps {
   /**
-   * Global, per-bucket lead counts from `getOfferKPIs`. These are the same
+   * Global, per-bucket lead counts from `queryOfferKPIs`. These are the same
    * numbers the KPI cards show, so the tab badges stay consistent with the cards
    * regardless of which page/search the table is on. The badges are deliberately
    * *not* recomputed from the current page slice: a 10-row page can't sum to the
@@ -91,11 +91,13 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
             return (
               <button
                 key={tab}
+                type="button"
+                aria-pressed={active}
                 onClick={() => handleTabChange(tab)}
                 className={cn(
                   "group relative inline-flex h-9 items-center rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
                   active
-                    ? "bg-teal-50 text-teal-700 shadow-sm"
+                    ? "bg-royal-gold-light text-royal-gold-ink shadow-sm"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
               >
@@ -109,7 +111,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
                   className={cn(
                     "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
                     active
-                      ? "bg-teal-600 text-white"
+                      ? "bg-royal-gold-ink text-white"
                       : "bg-muted text-muted-foreground group-hover:bg-background",
                   )}
                 >
@@ -117,7 +119,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
                 </span>
 
                 {active && (
-                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
                 )}
               </button>
             );
@@ -134,7 +136,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
 
             <Input
               id="search"
-              className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
+              className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-royal-gold/20 focus-visible:border-royal-gold-ink"
               placeholder="Search offer #, client, email, phone or suburb"
               value={searchInput}
               onChange={handleSearchChange}
