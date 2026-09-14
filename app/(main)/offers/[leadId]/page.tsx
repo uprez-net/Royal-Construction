@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { NewOfferWorkspace } from "@/components/offers/new-workflow/new-offer-workspace";
 import { buildAdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
-import { findLeadById } from "@/lib/data/leads";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
+import prisma from "@/lib/prisma";
 import type { Metadata } from "next";
 
 const DESCRIPTION =
@@ -35,7 +35,13 @@ export async function generateMetadata({
     if (!access.ok) {
       return { title: fallback, description: DESCRIPTION };
     }
-    const lead = await findLeadById(parsedLeadId);
+    // Name only: nothing else on this server render reads the lead (the
+    // workspace loads from the client), so findLeadById's history, emails and
+    // files would be fetched on every open just for a tab title.
+    const lead = await prisma.lead.findUnique({
+      where: { id: parsedLeadId },
+      select: { name: true },
+    });
     return {
       title: lead?.name ? `${lead.name} — Offer` : fallback,
       description: DESCRIPTION,
