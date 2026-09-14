@@ -1,15 +1,22 @@
+import { OFFER_TABLE_HEADERS } from "@/components/offers/offer-table-columns";
 import { MetricCardSkeleton, PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+
+// One skeleton column per real column, from the table's own list. A hard-coded
+// ten drifted from the eleven the table renders.
+const tableGrid = {
+  gridTemplateColumns: `repeat(${OFFER_TABLE_HEADERS.length}, minmax(0, 1fr))`,
+};
 
 export default function OfferPageSkeleton() {
   return (
     <PageSkeleton label="Loading offers" className="space-y-6">
-      <div className="rounded-lg border border-border/70 bg-card p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/60 p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-2">
-            <Skeleton className="h-5 w-56" />
-            <Skeleton className="h-4 w-80 max-w-full" />
+            <Skeleton className="h-5 w-56 bg-royal-gold/15" />
+            <Skeleton className="h-4 w-80 max-w-full bg-royal-gold/15" />
           </div>
-          <Skeleton className="h-9 w-48 rounded-md" />
+          <Skeleton className="h-8 w-48 rounded-lg bg-royal-gold/20" />
         </div>
       </div>
 
@@ -20,7 +27,7 @@ export default function OfferPageSkeleton() {
       </div>
 
       <div className="rounded-lg border border-border/70 bg-card shadow-sm">
-        <div className="space-y-4 border-b px-6 py-5">
+        <div className="space-y-4 border-b px-5 py-4">
           <div className="flex flex-wrap gap-2">
             {Array.from({ length: 5 }).map((_, index) => (
               <Skeleton key={index} className="h-9 w-20 rounded-md" />
@@ -32,20 +39,24 @@ export default function OfferPageSkeleton() {
           </div>
         </div>
 
-        <div className="overflow-x-auto px-6 pb-6 pt-4">
+        <div className="overflow-x-auto px-5 py-4">
           <div className="min-w-180 overflow-hidden rounded-lg border">
-            <div className="grid grid-cols-10 gap-4 border-b bg-muted/40 px-4 py-4">
-              {Array.from({ length: 10 }).map((_, index) => (
-                <Skeleton key={index} className="h-4 w-full max-w-20" />
+            <div
+              className="grid gap-4 border-b bg-muted/40 px-4 py-4"
+              style={tableGrid}
+            >
+              {OFFER_TABLE_HEADERS.map((header) => (
+                <Skeleton key={header.label} className="h-4 w-full max-w-20" />
               ))}
             </div>
             {Array.from({ length: 5 }).map((_, row) => (
               <div
                 key={row}
-                className="grid grid-cols-10 gap-4 border-b px-4 py-5 last:border-0"
+                className="grid gap-4 border-b px-4 py-5 last:border-0"
+                style={tableGrid}
               >
-                {Array.from({ length: 10 }).map((_, col) => (
-                  <Skeleton key={col} className="h-4 w-full max-w-24" />
+                {OFFER_TABLE_HEADERS.map((header) => (
+                  <Skeleton key={header.label} className="h-4 w-full max-w-24" />
                 ))}
               </div>
             ))}
