@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
+import { shownSelection } from "@/lib/leads/lead-search-paging";
 import { ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -47,13 +48,21 @@ export function CreateOfferFileModal({
     }
   };
 
+  // A search can hide the chosen lead without clearing the choice, and opening
+  // it would create an offer for a lead the user can no longer see.
+  const chosenLeadId = shownSelection(
+    selectedLeadId,
+    leadSearch.items,
+    leadSearch.loading,
+  );
+
   const handleSubmit = () => {
-    if (!selectedLeadId) {
+    if (!chosenLeadId) {
       toast.error("Please select a lead to open its offer workspace.");
       return;
     }
     handleOpenChange(false);
-    router.push(`/offers/${selectedLeadId}`);
+    router.push(`/offers/${chosenLeadId}`);
   };
 
   useEffect(() => {
@@ -112,7 +121,7 @@ export function CreateOfferFileModal({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!selectedLeadId}
+            disabled={!chosenLeadId}
             className="h-10 rounded-[10px] bg-royal-gold-ink px-4 text-[12.5px] font-semibold text-white hover:bg-royal-gold-ink-hover"
           >
             Open Offer Workspace

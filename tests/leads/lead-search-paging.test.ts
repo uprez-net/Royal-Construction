@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   mergeLeadPage,
   pageAfterQueryChange,
+  shownSelection,
 } from "../../lib/leads/lead-search-paging";
 
 // The lead picker never went back to page 1 when the search changed. After
@@ -33,4 +34,14 @@ test("the same search keeps the scrolled-to page", () => {
 test("a different search starts again from page 1", () => {
   assert.equal(pageAfterQueryChange("", "Smith", 2), 1);
   assert.equal(pageAfterQueryChange("Smith", "", 4), 1);
+});
+
+// A new search hid the chosen lead but kept it chosen, so Open Offer Workspace
+// stayed enabled and opened (creating an Offer row for) a lead no longer shown.
+test("a chosen lead counts only while its card is shown", () => {
+  const shown = [lead(1), lead(2)];
+  assert.equal(shownSelection(2, shown, false), 2);
+  assert.equal(shownSelection(3, shown, false), null);
+  assert.equal(shownSelection(2, shown, true), null);
+  assert.equal(shownSelection(null, shown, false), null);
 });

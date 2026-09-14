@@ -61,6 +61,22 @@ test("the empty-state copy goes by the search the results came from", () => {
   }
 });
 
+test("confirming uses the chosen lead only while its card is shown", () => {
+  // A search hid the chosen lead but Open Offer Workspace stayed enabled and
+  // opened it, creating an Offer row for a lead the user could not see.
+  const offer = read("components/offers/create-offer-modal.tsx");
+  assert.match(offer, /const chosenLeadId = shownSelection\(\s*selectedLeadId,\s*leadSearch\.items,\s*leadSearch\.loading,?\s*\)/);
+  assert.match(offer, /disabled=\{!chosenLeadId\}/);
+  assert.match(offer, /router\.push\(`\/offers\/\$\{chosenLeadId\}`\)/);
+
+  const project = read("components/projects/create-project-modal.tsx");
+  const start = project.indexOf("const handleExtract = async () => {");
+  assert.ok(start >= 0, "handleExtract not found in create-project-modal");
+  const guard = project.slice(start, project.indexOf("return;", start));
+  assert.match(guard, /shownSelection\(selectedLeadId, leadSearch\.items, leadSearch\.loading\)/);
+  assert.match(guard, /if \(!selectedLeadId \|\| !shownLeadId\)/);
+});
+
 test("the no-leads message is announced from a live region that outlives the skeleton", () => {
   // The only role=status used to arrive with its text already in it when the
   // skeleton swapped out, and screen readers often skip a region like that.

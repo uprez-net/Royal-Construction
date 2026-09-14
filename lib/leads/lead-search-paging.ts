@@ -30,3 +30,19 @@ export function pageAfterQueryChange(
 ): number {
   return prevQuery.trim() === nextQuery.trim() ? page : 1;
 }
+
+/**
+ * The chosen lead, but only while its card is on screen. A new search can hide
+ * the chosen lead without clearing the choice, and confirming then opened a
+ * lead the user could no longer see (the offer workspace creates its Offer row
+ * on load). The skeleton hides every card while page 1 loads, so nothing
+ * counts as chosen then either.
+ */
+export function shownSelection(
+  selectedId: number | null,
+  items: { id: number }[],
+  loading: boolean,
+): number | null {
+  if (selectedId === null || loading) return null;
+  return items.some((lead) => lead.id === selectedId) ? selectedId : null;
+}
