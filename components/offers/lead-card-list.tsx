@@ -14,7 +14,14 @@ interface LeadCardListProps {
   selectedLeadId: number | null;
   setSelectedLeadId: (id: number | null, location: string | null) => void;
   setPage: (page: number) => void;
+  /** The list is its own scroll area, so each caller sizes it (max-h-*). */
+  className?: string;
 }
+
+// Shared by the list and its skeleton so the swap between them keeps the
+// dialog's layout still.
+const listClassName =
+  "grid max-h-[24vh] gap-3 overflow-y-auto overscroll-contain p-2 sm:grid-cols-2";
 
 function LeadCardSkeleton() {
   return (
@@ -37,13 +44,15 @@ function LeadCardSkeleton() {
   );
 }
 
-const skeletonGrid: React.ReactNode = (
-  <div className="grid max-h-[24vh] gap-3 overflow-y-auto p-2 scrollbar-thin sm:grid-cols-2">
-    {Array.from({ length: 10 }).map((_, i) => (
-      <LeadCardSkeleton key={i} />
-    ))}
-  </div>
-);
+function LeadCardListSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn(listClassName, className)}>
+      {Array.from({ length: 10 }).map((_, i) => (
+        <LeadCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
 
 export function LeadCardList({
   loading,
@@ -54,6 +63,7 @@ export function LeadCardList({
   selectedLeadId,
   setSelectedLeadId,
   setPage,
+  className,
 }: LeadCardListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -95,13 +105,10 @@ export function LeadCardList({
   const toggleLead = (lead: Lead) =>
     setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id, lead.location);
 
-  if (loading) return skeletonGrid;
+  if (loading) return <LeadCardListSkeleton className={className} />;
 
   return (
-    <div
-      ref={scrollContainerRef}
-      className="grid gap-3 sm:grid-cols-2 max-h-[24vh] scrollbar-thin overflow-y-auto p-2"
-    >
+    <div ref={scrollContainerRef} className={cn(listClassName, className)}>
       {items.map((lead) => (
         <Card
           key={lead.id}
