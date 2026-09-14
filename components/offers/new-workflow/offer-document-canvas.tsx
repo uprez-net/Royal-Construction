@@ -9,7 +9,7 @@ import type {
   OfferWorkspaceScopeItem,
 } from "@/lib/offer/workspace-model";
 import { formatOwnerNamesLine } from "@/lib/offer/workspace-model";
-import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import { getOfferDocumentExclusions } from "@/lib/offer/workspace-print-template";
 import type {
   ConsistencyFinding,
   ConsistencyFindingKind,
@@ -60,7 +60,6 @@ type OfferDocumentCanvasProps = {
 export function OfferDocumentCanvas({
   customerPrice,
   draft,
-  exclusions,
   job,
   onDraftChange,
   onDraftHighlights,
@@ -78,10 +77,7 @@ export function OfferDocumentCanvas({
   // whose summary is DEFINED, including a blank one being typed — blanks are
   // filtered out at print time, not here, so a half-written label is visible
   // while you write it.
-  const printedExclusions = getVisibleExclusions(draft, exclusions);
-  const scopeExclusionLabels = exclusions
-    .filter((item) => item.includedInOfferDocument)
-    .map((item) => item.label);
+  const printedExclusions = getOfferDocumentExclusions(draft);
 
   const patchEntry = (index: number, next: OfferInclusionEntry) =>
     onDraftChange({
@@ -308,18 +304,6 @@ export function OfferDocumentCanvas({
                   }
                 />
               </div>
-              {scopeExclusionLabels.length > 0 ? (
-                <div className="mt-1.5 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
-                  <ul className="grid gap-0.5 text-xs text-muted-foreground sm:grid-cols-2">
-                    {scopeExclusionLabels.map((label) => (
-                      <li key={label}>• {label}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    From the Scope step — printed too. Edit them there.
-                  </p>
-                </div>
-              ) : null}
               <p className="mt-1.5 px-1.5 text-xs text-muted-foreground">
                 {printedExclusions.length} will print on the document.
               </p>

@@ -4,7 +4,7 @@ import {
   checkOfferLists,
   draftHighlightsForOffer,
 } from "@/lib/data/offer-inclusion-check";
-import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import { getOfferDocumentExclusions } from "@/lib/offer/workspace-print-template";
 import type { ConsistencyFinding } from "@/lib/offer/inclusion-consistency-ai";
 import {
   INITIAL_ALLOWANCES,
@@ -584,7 +584,7 @@ export function NewOfferWorkspace({
           leadId,
           estimated: getIncludedOfferTenderLineItems(lines),
           scheduled: draft.inclusionSchedule.map((entry) => entry.spec),
-          excluded: getVisibleExclusions(draft, exclusions),
+          excluded: getOfferDocumentExclusions(draft),
           offered: draft.inclusionHighlights,
         });
         if (!result.ok) {
