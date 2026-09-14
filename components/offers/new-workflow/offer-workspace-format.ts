@@ -15,6 +15,21 @@ export function formatCurrency(
   }).format(value);
 }
 
+// Sub-dollar money deltas keep their cents. The send gate compares prices to the
+// cent, so a 37-cent override blocks Send and must not print as "$0".
+export function moneyDeltaFractionDigits(delta: number): number {
+  return delta !== 0 && Math.abs(delta) < 1 ? 2 : 0;
+}
+
+// A signed money delta, "+$0.37" or "-$50,000", for the override chip and the
+// Variance line.
+export function formatMoneyDelta(delta: number): string {
+  const sign = delta > 0 ? "+" : delta < 0 ? "-" : "";
+  return `${sign}${formatCurrency(Math.abs(delta), {
+    maximumFractionDigits: moneyDeltaFractionDigits(delta),
+  })}`;
+}
+
 // Value for a numeric <input>. A zero renders as an empty field (with a "0"
 // placeholder) rather than a literal "0": a "0" sitting in the box collides with
 // typing — the caret lands beside it and "400" becomes "4000", and any value not
@@ -44,5 +59,7 @@ export function getMarginStatusLabel(status: MarginStatus): string {
       return "Acceptable";
     case "below_minimum":
       return "Below minimum";
+    case "not_priced":
+      return "Not priced";
   }
 }
