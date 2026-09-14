@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  decideContractGrannyExclusionGate,
   describeGrannyExclusionConflicts,
   findGrannyExclusionConflicts,
   isGrannyOutOfScopeLine,
@@ -17,7 +18,9 @@ import {
 // Every new offer is seeded with the exclusion "Granny flat (not in current
 // scope)", and admin content can carry it too. An estimator who then added a
 // granny flat sent a proposal, Tender and Contract that priced the granny flat
-// and excluded it in the same document.
+// and excluded it in the same document. The Contract send then refused such an
+// offer with "Create a revision", which the app locks once the Tender is signed,
+// so a deal whose Tender went out before the check could never get its Contract.
 
 const SEEDED_LINE = "Granny flat (not in current scope)";
 
@@ -109,7 +112,7 @@ test("matching is narrow: the line must be the granny flat alone, said to be out
   }
 });
 
-test("the refusal names the line and the step, and a locked stage asks for a revision", () => {
+test("the refusal names the line and the step, and the Tender send asks for a revision", () => {
   const conflicts = findGrannyExclusionConflicts(offer());
 
   const inPlace = describeGrannyExclusionConflicts(conflicts, { revisionNeeded: false });
@@ -119,6 +122,32 @@ test("the refusal names the line and the step, and a locked stage asks for a rev
 
   const locked = describeGrannyExclusionConflicts(conflicts, { revisionNeeded: true });
   assert.match(locked, /Create a revision/);
+});
+
+test("a Contract whose Tender went out before the check carries what the customer signed", () => {
+  const gate = decideContractGrannyExclusionGate({
+    conflicts: findGrannyExclusionConflicts(offer()),
+    tenderSentWithCheck: false,
+  });
+
+  assert.ok(gate.kind === "as-signed", `expected as-signed, got ${gate.kind}`);
+  assert.match(gate.warning, /"Granny flat \(not in current scope\)"/);
+});
+
+test("the Contract refusal never asks for a revision, which a signed Tender cannot have", () => {
+  const conflicts = findGrannyExclusionConflicts(offer());
+  const gate = decideContractGrannyExclusionGate({
+    conflicts,
+    tenderSentWithCheck: true,
+  });
+
+  assert.ok(gate.kind === "refuse", `expected refuse, got ${gate.kind}`);
+  assert.match(gate.error, /"Granny flat \(not in current scope\)"/);
+  assert.doesNotMatch(gate.error, /create a revision/i);
+  assert.equal(
+    decideContractGrannyExclusionGate({ conflicts: [], tenderSentWithCheck: true }).kind,
+    "clear",
+  );
 });
 
 test("the readiness strip blocks the send and jumps to the step that holds the line", () => {

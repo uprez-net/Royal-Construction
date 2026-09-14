@@ -56,7 +56,7 @@ import {
 } from "@/lib/offer/contract-payment-source";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 import {
-  describeGrannyExclusionConflicts,
+  decideContractGrannyExclusionGate,
   findGrannyExclusionConflicts,
 } from "@/lib/offer/granny-exclusion";
 
@@ -137,18 +137,6 @@ export async function sendContractForSignature(input: {
       error: `Complete the owner details before sending the Contract: ${contractOwnerIssues.join(" ")}`,
     };
   }
-  // A granny flat priced on one page and excluded on another. Checked on the
-  // agreed snapshot the BC4 exclusions are filled from; it is frozen, so the fix
-  // is a revision.
-  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
-  if (grannyConflicts.length > 0) {
-    return {
-      ok: false,
-      error: describeGrannyExclusionConflicts(grannyConflicts, {
-        revisionNeeded: true,
-      }),
-    };
-  }
   const customerEmail = resolveOfferCustomerEmail({
     overrideEmail: input.customerEmail,
     jobEmail: job.clientEmail,
@@ -191,6 +179,20 @@ export async function sendContractForSignature(input: {
   });
   if (priceMismatch) {
     return { ok: false, error: priceMismatch };
+  }
+  // A granny flat priced on one page and excluded on another, checked on the
+  // agreed snapshot the BC4 exclusions are filled from. The stamped terms
+  // (tender-terms) come from the same Tender send that refuses this conflict,
+  // so without them the signed Tender predates the check.
+  const grannyGate = decideContractGrannyExclusionGate({
+    conflicts: findGrannyExclusionConflicts(snapshot),
+    tenderSentWithCheck: payment.source === "tender-terms",
+  });
+  if (grannyGate.kind === "refuse") {
+    return { ok: false, error: grannyGate.error };
+  }
+  if (grannyGate.kind === "as-signed") {
+    console.warn(`[offer] contract for offer ${offer.id}: ${grannyGate.warning}`);
   }
 
   // Owner parties (ADR 0003). The BC4 form has a single OWNER(S) area, so every
