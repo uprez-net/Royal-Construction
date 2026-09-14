@@ -25,3 +25,28 @@ export function isBlobStorageUrl(url: unknown): boolean {
     parsed.hostname.toLowerCase().endsWith(BLOB_HOST_SUFFIX)
   );
 }
+
+// The store a Vercel Blob read-write token writes to, read the way
+// @vercel/blob reads it: vercel_blob_rw_<storeId>_<secret>. Null when the
+// token is missing or malformed.
+export function blobStoreIdFromToken(token: string | null | undefined): string | null {
+  if (typeof token !== "string") {
+    return null;
+  }
+  const [, , , storeId = ""] = token.trim().split("_");
+  return /^[a-z0-9-]+$/i.test(storeId) ? storeId.toLowerCase() : null;
+}
+
+// Whether a URL is a public file in one particular Blob store.
+//
+// isBlobStorageUrl accepts every Vercel Blob store, so anyone with a free
+// account can host a file that passes it. Server code that only takes files
+// this deployment uploaded pins the store instead, passing the id from
+// BLOB_READ_WRITE_TOKEN. The offer image rule cannot: it also runs in the
+// browser, where there is no token.
+export function isBlobStoreUrl(url: unknown, storeId: string | null | undefined): boolean {
+  if (!storeId || !isBlobStorageUrl(url)) {
+    return false;
+  }
+  return new URL(url as string).hostname.toLowerCase() === `${storeId.toLowerCase()}${BLOB_HOST_SUFFIX}`;
+}

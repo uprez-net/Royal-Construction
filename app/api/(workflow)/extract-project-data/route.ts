@@ -14,7 +14,7 @@ import {
 } from "@/utils/validators/response";
 import { auth } from "@clerk/nextjs/server";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
-import { isBlobStorageUrl } from "@/lib/blob-url";
+import { blobStoreIdFromToken, isBlobStoreUrl } from "@/lib/blob-url";
 import z from "zod";
 
 const tenderExtractionSchema = z.object({
@@ -52,9 +52,12 @@ export async function POST(request: Request) {
     if (!access.ok) {
         return forbiddenResponse(access.error);
     }
-    // The wizard uploads both PDFs through /api/upload before it gets here, so
-    // anything outside Blob storage did not come from it.
-    if (!isBlobStorageUrl(input.tenderUrl) || !isBlobStorageUrl(input.contractUrl)) {
+    // The wizard uploads both PDFs through /api/upload before it gets here, and
+    // that route signs every upload with BLOB_READ_WRITE_TOKEN, so both live in
+    // that token's store. Anything else, another Vercel Blob store included,
+    // did not come from it.
+    const storeId = blobStoreIdFromToken(process.env.BLOB_READ_WRITE_TOKEN);
+    if (!isBlobStoreUrl(input.tenderUrl, storeId) || !isBlobStoreUrl(input.contractUrl, storeId)) {
         return badRequestResponse("The tender and contract must be uploaded files.");
     }
 

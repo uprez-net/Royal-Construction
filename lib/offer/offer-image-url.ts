@@ -10,8 +10,9 @@ import { isBlobStorageUrl } from "../blob-url";
 //
 // Every legitimate image path — the upload button, the Dropbox import and the AI
 // generator — ends in a public Vercel Blob put(), so Blob storage is the whole
-// allowlist. The host rule itself lives in lib/blob-url.ts, shared with the
-// tender/contract extraction.
+// allowlist. The host rule itself lives in lib/blob-url.ts. It accepts any Blob
+// store rather than pinning ours, as the tender/contract extraction does,
+// because this check also runs in the browser, which has no store token.
 export function isAllowedOfferImageUrl(url: unknown): boolean {
   return isBlobStorageUrl(url);
 }
