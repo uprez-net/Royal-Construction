@@ -27,6 +27,8 @@ interface LeadCardListProps {
 const listClassName =
   "grid max-h-[24vh] gap-3 overflow-y-auto overscroll-contain p-2 sm:grid-cols-2";
 
+const emptyHint = "Only leads that don't have a project yet appear here.";
+
 function LeadCardSkeleton() {
   return (
     <Card className="overflow-hidden">
@@ -114,130 +116,152 @@ export function LeadCardList({
   const toggleLead = (lead: Lead) =>
     setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id, lead.location);
 
-  if (loading) return <LeadCardListSkeleton className={className} />;
+  // One live region for both branches, so it stays mounted while the skeleton
+  // swaps out. A region inserted with its text already in it is often not
+  // read out, and a search with no matches would pass in silence. Errors need
+  // no help: role=alert is announced on insertion.
+  const liveRegion = (
+    <p role="status" className="sr-only">
+      {!loading && !error && items.length === 0
+        ? `${emptyMessage} ${emptyHint}`
+        : ""}
+    </p>
+  );
+
+  if (loading) {
+    return (
+      <>
+        {liveRegion}
+        <LeadCardListSkeleton className={className} />
+      </>
+    );
+  }
 
   return (
-    <div ref={scrollContainerRef} className={cn(listClassName, className)}>
-      {items.map((lead) => (
-        <Card
-          key={lead.id}
-          // A toggle button, so the picker works from the keyboard and a
-          // screen reader hears which lead is chosen. The card holds no
-          // controls of its own, so nothing interactive ends up nested.
-          role="button"
-          tabIndex={0}
-          aria-pressed={lead.id === selectedLeadId}
-          // No outline-none: in Tailwind 4 it sets --tw-outline-style to none,
-          // which focus-visible:outline-2 then reads, so the focus ring never
-          // drew. A mouse click doesn't match :focus-visible anyway.
-          className={cn(
-            "relative cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-            lead.id === selectedLeadId &&
-              "border-royal-gold-ink ring-2 ring-royal-gold-ink",
-            lead.stage === "Quoted" && "opacity-75",
-          )}
-          onClick={() => toggleLead(lead)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
-            // Space would otherwise scroll the list, and a held key would
-            // flip the selection on every repeat.
-            event.preventDefault();
-            if (!event.repeat) toggleLead(lead);
-          }}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-3">
-              {(lead.creatingOffer ||
-                lead.stage === "Quoted" ||
-                lead.runId ||
-                lead.runStatus) && (
-                <div className="absolute top-7.5 right-10">
-                  {lead.stage === "Quoted" ? (
-                    <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
-                      <Send className="mr-1.5 h-4 w-4" />
-                      Quoted - Awaiting Feedback
-                    </span>
-                  ) : lead.creatingOffer ? (
-                    <span className="inline-flex items-center justify-center rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
-                      <Pencil className="mr-1.5 h-4 w-4" />
-                      Update Offer
-                    </span>
-                  ) : lead.runStatus === "RUNNING" ? (
-                    <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
-                      Generating Offer
-                    </span>
-                  ) : lead.runStatus === "COMPLETED" ? (
-                    <span className="inline-flex items-center justify-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                      <Sparkles className="mr-1.5 h-4 w-4" />
-                      Offer Generated
-                    </span>
-                  ) : lead.runStatus === "FAILED" ? (
-                    <span className="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                      <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
-                      Offer Generation Failed
-                    </span>
-                  ) : null}
+    <>
+      {liveRegion}
+      <div ref={scrollContainerRef} className={cn(listClassName, className)}>
+        {items.map((lead) => (
+          <Card
+            key={lead.id}
+            // A toggle button, so the picker works from the keyboard and a
+            // screen reader hears which lead is chosen. The card holds no
+            // controls of its own, so nothing interactive ends up nested.
+            role="button"
+            tabIndex={0}
+            aria-pressed={lead.id === selectedLeadId}
+            // No outline-none: in Tailwind 4 it sets --tw-outline-style to none,
+            // which focus-visible:outline-2 then reads, so the focus ring never
+            // drew. A mouse click doesn't match :focus-visible anyway.
+            className={cn(
+              "relative cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+              lead.id === selectedLeadId &&
+                "border-royal-gold-ink ring-2 ring-royal-gold-ink",
+              lead.stage === "Quoted" && "opacity-75",
+            )}
+            onClick={() => toggleLead(lead)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              // Space would otherwise scroll the list, and a held key would
+              // flip the selection on every repeat.
+              event.preventDefault();
+              if (!event.repeat) toggleLead(lead);
+            }}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                {(lead.creatingOffer ||
+                  lead.stage === "Quoted" ||
+                  lead.runId ||
+                  lead.runStatus) && (
+                  <div className="absolute top-7.5 right-10">
+                    {lead.stage === "Quoted" ? (
+                      <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
+                        <Send className="mr-1.5 h-4 w-4" />
+                        Quoted - Awaiting Feedback
+                      </span>
+                    ) : lead.creatingOffer ? (
+                      <span className="inline-flex items-center justify-center rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
+                        <Pencil className="mr-1.5 h-4 w-4" />
+                        Update Offer
+                      </span>
+                    ) : lead.runStatus === "RUNNING" ? (
+                      <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
+                        Generating Offer
+                      </span>
+                    ) : lead.runStatus === "COMPLETED" ? (
+                      <span className="inline-flex items-center justify-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        <Sparkles className="mr-1.5 h-4 w-4" />
+                        Offer Generated
+                      </span>
+                    ) : lead.runStatus === "FAILED" ? (
+                      <span className="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
+                        Offer Generation Failed
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+                <div>
+                  <p className="font-medium text-slate-950">{lead.name}</p>
+                  <p className="text-sm text-muted-foreground">{lead.location}</p>
                 </div>
-              )}
-              <div>
-                <p className="font-medium text-slate-950">{lead.name}</p>
-                <p className="text-sm text-muted-foreground">{lead.location}</p>
+                {/* The check marks the selection without relying on the ring's
+                    colour alone. */}
+                {lead.id === selectedLeadId ? (
+                  <Check aria-hidden className="size-4 text-royal-gold-ink" />
+                ) : (
+                  <List aria-hidden className="size-4 text-muted-foreground" />
+                )}
               </div>
-              {/* The check marks the selection without relying on the ring's
-                  colour alone. */}
-              {lead.id === selectedLeadId ? (
-                <Check aria-hidden className="size-4 text-royal-gold-ink" />
-              ) : (
-                <List aria-hidden className="size-4 text-muted-foreground" />
-              )}
-            </div>
-            <div className="mt-3 space-y-1 text-sm text-slate-700">
-              <p>{lead.type}</p>
-              <p>{lead.phone}</p>
-              <p>{lead.email}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-
-      {/* After the cards, so a failed next page shows where the user has
-          scrolled to. A failed first page has no cards above it. */}
-      {error && (
-        <div
-          role="alert"
-          className="col-span-full rounded-lg border border-destructive/30 bg-destructive-light px-4 py-3 text-sm"
-        >
-          <p className="font-medium text-destructive-ink">{error}</p>
-          <p className="mt-1 text-muted-foreground">
-            Change the search or reload the page to try again.
-          </p>
-        </div>
-      )}
-
-      {!error && items.length === 0 && (
-        <div role="status" className="col-span-full px-4 py-8 text-center text-sm">
-          <p className="font-medium text-foreground">{emptyMessage}</p>
-          <p className="mt-1 text-muted-foreground">
-            Only leads that don&apos;t have a project yet appear here.
-          </p>
-        </div>
-      )}
-
-      {/* Sentinel: observed by IntersectionObserver to trigger next page */}
-      <div ref={sentinelRef} className="col-span-full h-1" aria-hidden />
-
-      {/* "Load more" skeleton row — shown while fetching the next page */}
-      {loadingMore &&
-        Array.from({ length: 2 }).map((_, i) => (
-          <LeadCardSkeleton key={`more-${i}`} />
+              <div className="mt-3 space-y-1 text-sm text-slate-700">
+                <p>{lead.type}</p>
+                <p>{lead.phone}</p>
+                <p>{lead.email}</p>
+              </div>
+            </CardContent>
+          </Card>
         ))}
 
-      {!error && items.length > 0 && currentPage >= totalPages && totalPages > 0 && (
-        <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
-          You&apos;ve reached the end of the list.
-        </p>
-      )}
-    </div>
+        {/* After the cards, so a failed next page shows where the user has
+            scrolled to. A failed first page has no cards above it. */}
+        {error && (
+          <div
+            role="alert"
+            className="col-span-full rounded-lg border border-destructive/30 bg-destructive-light px-4 py-3 text-sm"
+          >
+            <p className="font-medium text-destructive-ink">{error}</p>
+            <p className="mt-1 text-muted-foreground">
+              Change the search or reload the page to try again.
+            </p>
+          </div>
+        )}
+
+        {!error && items.length === 0 && (
+          <div className="col-span-full px-4 py-8 text-center text-sm">
+            <p className="font-medium text-foreground">{emptyMessage}</p>
+            <p className="mt-1 text-muted-foreground">
+              {emptyHint}
+            </p>
+          </div>
+        )}
+
+        {/* Sentinel: observed by IntersectionObserver to trigger next page */}
+        <div ref={sentinelRef} className="col-span-full h-1" aria-hidden />
+
+        {/* "Load more" skeleton row — shown while fetching the next page */}
+        {loadingMore &&
+          Array.from({ length: 2 }).map((_, i) => (
+            <LeadCardSkeleton key={`more-${i}`} />
+          ))}
+
+        {!error && items.length > 0 && currentPage >= totalPages && totalPages > 0 && (
+          <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
+            You&apos;ve reached the end of the list.
+          </p>
+        )}
+      </div>
+    </>
   );
 }

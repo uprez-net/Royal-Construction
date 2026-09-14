@@ -95,7 +95,7 @@ export function CreateOfferFileModal({
             loadingMore={leadSearch.loadingMore}
             error={leadSearch.error}
             emptyMessage={
-              search.trim()
+              leadSearch.resultQuery
                 ? "No leads match your search."
                 : "No leads are ready for an offer."
             }

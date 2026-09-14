@@ -757,7 +757,7 @@ export function CreateProjectModal({
               loadingMore={leadSearch.loadingMore}
               error={leadSearch.error}
               emptyMessage={
-                search.trim()
+                leadSearch.resultQuery
                   ? "No leads match your search."
                   : "No leads are waiting for a project."
               }

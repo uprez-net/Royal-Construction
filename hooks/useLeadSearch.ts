@@ -20,6 +20,11 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // The search the items on screen came from. The pickers pick their
+    // empty-state copy from it: the input box runs ahead of the results until
+    // the debounce and request finish, so going by the box briefly showed,
+    // and announced, the wrong message.
+    const [resultQuery, setResultQuery] = useState(initialQuery.trim());
     const [pageInfo, setPageInfo] = useState<Omit<PaginatedLeadsResult, 'items'>>({
         page: initialPage,
         limit: DEFAULT_LIMIT,
@@ -82,6 +87,7 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
                     totalCount: data.totalCount,
                     totalPages: data.totalPages,
                 });
+                setResultQuery(searchTerm);
             } catch (err) {
                 // Aborted or overtaken because the search changed or the picker
                 // closed. The request that replaced it reports its own outcome,
@@ -111,5 +117,5 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
         };
     }, [searchTerm, page, getLeadsWithoutProject]);
 
-    return { query, setQuery, items, loading, error, pageInfo, setPage, loadingMore } as const;
+    return { query, setQuery, items, resultQuery, loading, error, pageInfo, setPage, loadingMore } as const;
 }

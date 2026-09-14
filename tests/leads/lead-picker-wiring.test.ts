@@ -46,6 +46,30 @@ test("a response that lands after the search changed is dropped", () => {
   assert.match(hook, /finally \{[\s\S]*?if \(!superseded\(\)\) \{/);
 });
 
+test("the empty-state copy goes by the search the results came from", () => {
+  // It read the input box, which runs ahead of the results: clearing a search
+  // that matched nothing showed and announced "No leads are ready for an
+  // offer." until the full list loaded.
+  assert.match(hook, /setPageInfo\(\{[\s\S]*?\}\);\s*setResultQuery\(searchTerm\);/);
+  for (const path of [
+    "components/offers/create-offer-modal.tsx",
+    "components/projects/create-project-modal.tsx",
+  ]) {
+    const modal = read(path);
+    assert.match(modal, /emptyMessage=\{\s*leadSearch\.resultQuery\s*\?/, path);
+    assert.doesNotMatch(modal, /emptyMessage=\{\s*search\./, path);
+  }
+});
+
+test("the no-leads message is announced from a live region that outlives the skeleton", () => {
+  // The only role=status used to arrive with its text already in it when the
+  // skeleton swapped out, and screen readers often skip a region like that.
+  assert.equal(cards.match(/role="status"/g)?.length, 1);
+  assert.match(cards, /const liveRegion = \(\s*<p role="status"/);
+  assert.match(cards, /if \(loading\) \{\s*return \(\s*<>\s*\{liveRegion\}\s*<LeadCardListSkeleton/);
+  assert.match(cards, /return \(\s*<>\s*\{liveRegion\}\s*<div ref=\{scrollContainerRef\}/);
+});
+
 test("the lead cards' keyboard focus ring is not cancelled by outline-none", () => {
   // In Tailwind 4, outline-none sets --tw-outline-style to none and
   // focus-visible:outline-2 reads that variable. Cards with both classes never
