@@ -35,7 +35,7 @@ export function OfferContentHeader({
                 type="button"
                 aria-current={isCurrent ? "true" : undefined}
                 onClick={() => onTabChange(tab.id)}
-                className="group flex w-full cursor-pointer flex-col items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                className="group flex w-full cursor-pointer flex-col items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-royal-gold-ink"
               >
                 <div
                   aria-hidden="true"
@@ -45,14 +45,14 @@ export function OfferContentHeader({
                     className={cn(
                       "relative flex size-8 items-center justify-center rounded-full bg-background font-mono text-xs font-medium transition-shadow",
                       isCurrent
-                        ? "border-2 border-royal-gold shadow-[0_0_0_6px_var(--royal-gold-light)]"
+                        ? "border-2 border-royal-gold-ink shadow-[0_0_0_6px_var(--royal-gold-light)]"
                         : "border border-royal-gold/50 text-foreground group-hover:border-royal-gold group-hover:shadow-[0_0_0_5px_var(--royal-gold-light)]",
                     )}
                   >
                     {isCurrent ? (
                       <>
                         <span className="absolute size-5 rounded-full bg-royal-gold/35 motion-safe:animate-ping" />
-                        <span className="relative size-2.5 rounded-full bg-royal-gold" />
+                        <span className="relative size-2.5 rounded-full bg-royal-gold-ink" />
                       </>
                     ) : (
                       index + 1
@@ -64,7 +64,7 @@ export function OfferContentHeader({
                 </div>
                 <span
                   className={cn(
-                    "mt-2 text-center text-sm text-foreground transition-colors group-hover:text-royal-gold-dark",
+                    "mt-2 text-center text-sm text-foreground transition-colors group-hover:text-royal-gold-ink",
                     isCurrent ? "font-semibold" : "font-medium",
                   )}
                 >
