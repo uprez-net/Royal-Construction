@@ -59,7 +59,7 @@ export function ScopePanel({
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="Control the allowances and exclusions that appear on the one-page Offer document without exposing internal calculation rows."
+          description="Control Offer allowances and Tender exclusions without exposing internal calculation rows."
           icon={<ListChecks className="size-4" aria-hidden="true" />}
           singleLineDescription
           title="Allowances and exclusions"
@@ -78,6 +78,7 @@ export function ScopePanel({
           items={allowances}
           title="PC allowances"
           singular="Allowance"
+          documentLabel="Show on Offer document"
           addLabel="Add allowance"
           emptyLabel="No allowances yet. Add prime-cost or provisional-sum items to show on the Offer."
           onItemChange={onAllowanceChange}
@@ -89,11 +90,12 @@ export function ScopePanel({
           banner={{
             tone: "info",
             icon: <Info className="size-4 shrink-0" aria-hidden="true" />,
-            text: "Items explicitly excluded from the fixed-price scope. These clarify what the client should not expect in the base contract.",
+            text: "Items explicitly excluded from the fixed-price scope. Add the client-facing wording in the Offer document phase; these detailed rows are carried by the Tender.",
           }}
           items={exclusions}
           title="Exclusions"
           singular="Exclusion"
+          documentLabel="Show on Tender document"
           addLabel="Add exclusion"
           emptyLabel="No exclusions yet. Add anything outside the fixed-price building scope."
           onItemChange={onExclusionChange}
@@ -122,6 +124,7 @@ function ScopeList({
   onRemoveItem,
   title,
   singular,
+  documentLabel,
   addLabel,
   emptyLabel,
 }: {
@@ -140,6 +143,7 @@ function ScopeList({
   readonly onRemoveItem: (itemId: string) => void;
   readonly title: string;
   readonly singular: string;
+  readonly documentLabel: string;
   readonly addLabel: string;
   readonly emptyLabel: string;
 }) {
@@ -281,7 +285,7 @@ function ScopeList({
                         })
                       }
                     />
-                    Show on Offer document
+                    {documentLabel}
                   </label>
                 </div>
 
