@@ -1,20 +1,37 @@
 import { NextResponse } from "next/server";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
-import { put } from "@vercel/blob";
 import {
   EnvelopeDocType,
   EnvelopeStatus,
   OfferStatus,
+  Prisma,
   Role,
   SignerStatus,
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
-import { getDocusignConfig } from "@/lib/docusign/config";
-import { createDocusignContext } from "@/lib/docusign/client";
 import { verifyConnectSignature } from "@/lib/docusign/connect-signature";
-import { downloadCombinedDocument } from "@/lib/docusign/tender-envelope";
+import {
+  archiveExecuted,
+  archiveUnexpectedCompletion,
+  type ExecutedParent,
+} from "@/lib/docusign/archive-executed";
+import {
+  classifyCompletion,
+  completedEventNote,
+  completedEventNotePrefix,
+  isArchivedForEnvelope,
+  legacyCompletedEventNote,
+  unexpectedCompletionNote,
+  unexpectedCompletionNotePrefix,
+  unexpectedDeclineNote,
+  unexpectedDeclineNotePrefix,
+} from "@/lib/docusign/completion-classifier";
+import {
+  envelopeStatusRank,
+  LIVE_ENVELOPE_STATUSES,
+} from "@/lib/docusign/envelope-status";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 import { signerStatusesBelow } from "@/lib/offer/signing-status";
@@ -23,7 +40,8 @@ import { signerStatusesBelow } from "@/lib/offer/signing-status";
 // step with signing progress, and on completion archives the executed PDF and
 // advances the offer (TENDER_SENT → TENDER_SIGNED / CONTRACT_SENT →
 // CONTRACT_SIGNED). Always answers 200 for events we don't track so DocuSign
-// doesn't retry them forever.
+// doesn't retry them forever. An executed PDF that could not be archived answers
+// 500, so DocuSign redelivers until it is on file (issue #90).
 export async function POST(request: Request): Promise<NextResponse> {
   const raw = await request.text();
 
@@ -73,6 +91,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
+  const offerId =
+    envelope.tender?.offerId ?? envelope.contract?.offerId ?? envelope.offer?.id;
   try {
     await syncRecipients(envelope.id, envelope.signatures, payload);
     await syncEnvelopeStatus(envelope, event, payload);
@@ -80,21 +100,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.error("[docusign] Connect processing failed:", error);
     // 500 → DocuSign retries with backoff, which is what we want here.
     return NextResponse.json({ error: "Processing failed" }, { status: 500 });
-  }
-
-  // This webhook advances offer status (TENDER_SENT → TENDER_SIGNED, etc.) and
-  // per-signer state, but nothing invalidated the caches keyed on the offer —
-  // every other writer (send/sign actions) does. Cached surfaces could therefore
-  // keep serving a pre-signature view. Best-effort: the work is already
-  // committed, so a revalidation failure must not turn into a 500 and make
-  // DocuSign redeliver an event we have applied.
-  const offerId =
-    envelope.tender?.offerId ?? envelope.contract?.offerId ?? envelope.offer?.id;
-  if (offerId) {
-    try {
-      revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
-    } catch (error) {
-      console.error("[docusign] revalidate after Connect sync failed:", error);
+  } finally {
+    // This webhook advances offer status (TENDER_SENT → TENDER_SIGNED, etc.)
+    // and per-signer state, but nothing invalidated the caches keyed on the
+    // offer — every other writer (send/sign actions) does. In a finally because
+    // an archive failure still returns 500 after the status has moved, and the
+    // cached view must not keep showing the offer as unsigned. Best-effort: a
+    // revalidation failure must not change the response DocuSign gets.
+    if (offerId) {
+      try {
+        revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
+      } catch (error) {
+        console.error("[docusign] revalidate after Connect sync failed:", error);
+      }
     }
   }
 
@@ -187,23 +205,6 @@ const ENVELOPE_STATUS: Record<string, EnvelopeStatus> = {
   "envelope-voided": EnvelopeStatus.VOIDED,
 };
 
-// Monotonic rank for forward-only status: an out-of-order or replayed event
-// must never drag a terminal envelope (COMPLETED/DECLINED/VOIDED) backwards.
-function envelopeStatusRank(status: EnvelopeStatus): number {
-  switch (status) {
-    case EnvelopeStatus.SENT:
-      return 1;
-    case EnvelopeStatus.DELIVERED:
-      return 2;
-    case EnvelopeStatus.COMPLETED:
-    case EnvelopeStatus.DECLINED:
-    case EnvelopeStatus.VOIDED:
-      return 3;
-    default:
-      return 0;
-  }
-}
-
 // The envelope shape the webhook loads. An envelope hangs off exactly one parent:
 // a Tender, a Contract, or — for an OFFER-type acceptance (ADR 0004) — the Offer
 // directly.
@@ -223,11 +224,12 @@ type ConnectEnvelope = {
 type EnvelopeTarget = {
   offerId: string;
   executedPdfUrl: string | null;
-  archivePrefix: "tender" | "contract" | "offer";
+  parent: ExecutedParent;
+  // How the document is named in audit notes and notifications.
+  documentLabel: string;
   signedStatus: OfferStatus;
   declinedStatus: OfferStatus;
   expectedFromStatus: OfferStatus;
-  writeExecutedPdf: (url: string) => Promise<unknown>;
   // Only a fully-executed Contract nudges the admins to create the project.
   notifyContractSigned: boolean;
   // Matches this envelope's siblings, so a decline only moves the offer when it
@@ -245,15 +247,11 @@ function resolveEnvelopeTarget(envelope: ConnectEnvelope): EnvelopeTarget | null
       return {
         offerId: envelope.tender.offerId,
         executedPdfUrl: envelope.tender.executedPdfUrl,
-        archivePrefix: "tender",
+        parent: { kind: "tender", id: envelope.tender.id },
+        documentLabel: "Tender",
         signedStatus: OfferStatus.TENDER_SIGNED,
         declinedStatus: OfferStatus.TENDER_DECLINED,
         expectedFromStatus: OfferStatus.TENDER_SENT,
-        writeExecutedPdf: (url) =>
-          prisma.tender.update({
-            where: { id: envelope.tender!.id },
-            data: { executedPdfUrl: url },
-          }),
         notifyContractSigned: false,
         siblingEnvelopeWhere: { tenderId: envelope.tender.id },
       };
@@ -262,15 +260,11 @@ function resolveEnvelopeTarget(envelope: ConnectEnvelope): EnvelopeTarget | null
       return {
         offerId: envelope.contract.offerId,
         executedPdfUrl: envelope.contract.executedPdfUrl,
-        archivePrefix: "contract",
+        parent: { kind: "contract", id: envelope.contract.id },
+        documentLabel: "Contract",
         signedStatus: OfferStatus.CONTRACT_SIGNED,
         declinedStatus: OfferStatus.CONTRACT_DECLINED,
         expectedFromStatus: OfferStatus.CONTRACT_SENT,
-        writeExecutedPdf: (url) =>
-          prisma.contract.update({
-            where: { id: envelope.contract!.id },
-            data: { executedPdfUrl: url },
-          }),
         notifyContractSigned: true,
         siblingEnvelopeWhere: { contractId: envelope.contract.id },
       };
@@ -283,15 +277,11 @@ function resolveEnvelopeTarget(envelope: ConnectEnvelope): EnvelopeTarget | null
       return {
         offerId: envelope.offer.id,
         executedPdfUrl: envelope.offer.executedPdfUrl,
-        archivePrefix: "offer",
+        parent: { kind: "offer", id: envelope.offer.id },
+        documentLabel: "Offer acceptance",
         signedStatus: OfferStatus.OFFER_SIGNED,
         declinedStatus: OfferStatus.OFFER_DECLINED,
         expectedFromStatus: OfferStatus.OFFER_SENT,
-        writeExecutedPdf: (url) =>
-          prisma.offer.update({
-            where: { id: envelope.offer!.id },
-            data: { executedPdfUrl: url },
-          }),
         notifyContractSigned: false,
         siblingEnvelopeWhere: { offerId: envelope.offer.id },
       };
@@ -336,8 +326,36 @@ async function syncEnvelopeStatus(
     return;
   }
 
+  await handleCompletion(envelope);
+}
+
+const completionOfferSelect = {
+  id: true,
+  offerStatus: true,
+  isActive: true,
+  baseReference: true,
+  revisionNumber: true,
+  leadId: true,
+  agreedSnapshot: true,
+  workspaceState: true,
+  lead: { select: { name: true } },
+} satisfies Prisma.OfferSelect;
+
+type CompletionOffer = Prisma.OfferGetPayload<{
+  select: typeof completionOfferSelect;
+}>;
+
+// A completion is classified BEFORE anything is filed. Archiving first is how a
+// recalled envelope that DocuSign still completed ended up as the executed
+// Tender.
+//
+// Every delivery runs this, not just the first, and each branch is idempotent,
+// so a retry after a mid-way failure still finishes the work instead of
+// short-circuiting on the already-COMPLETED envelope.
+async function handleCompletion(envelope: ConnectEnvelope): Promise<void> {
   const target = resolveEnvelopeTarget(envelope);
-  if (!target) {
+  const docusignId = envelope.docusignId;
+  if (!target || !docusignId) {
     return;
   }
 
@@ -346,122 +364,307 @@ async function syncEnvelopeStatus(
     orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
     select: { id: true },
   });
-  if (!latestEnvelope || latestEnvelope.id !== envelope.id) {
+  // The offer is read BEFORE its events. The advance writes the new status and
+  // its event in one transaction, so in this order a concurrent delivery sees
+  // either the offer still waiting (advance) or the new status with its event
+  // (replay). The other order could see the status without the event and raise
+  // a false alarm.
+  const offer = await prisma.offer.findUnique({
+    where: { id: target.offerId },
+    select: completionOfferSelect,
+  });
+  if (!offer) {
     return;
   }
+  const advanceEvent = await prisma.offerStatusEvent.findFirst({
+    where: {
+      offerId: offer.id,
+      OR: [
+        { note: { startsWith: completedEventNotePrefix(docusignId) } },
+        { note: legacyCompletedEventNote(docusignId) },
+      ],
+    },
+    select: { id: true },
+  });
 
-  // The completion side-effects below run on EVERY completion event (not just
-  // the first), each guarded to be idempotent, so a retry after a mid-way
-  // failure still advances the offer instead of short-circuiting on the
-  // already-COMPLETED envelope. Archive only if not already archived — a
-  // download failure must not block the offer advance (DocuSign retains it).
-  if (envelope.docusignId && !target.executedPdfUrl) {
-    try {
-      const context = await createDocusignContext(getDocusignConfig());
-      const executed = await downloadCombinedDocument(
-        context,
-        envelope.docusignId,
+  const completion = classifyCompletion({
+    isLatest: latestEnvelope?.id === envelope.id,
+    isActive: offer.isActive,
+    offerStatus: offer.offerStatus,
+    expectedFromStatus: target.expectedFromStatus,
+    envelopeDbStatusBefore: envelope.status,
+    advancedByThisEnvelope: advanceEvent !== null,
+  });
+
+  let archived = true;
+  switch (completion) {
+    case "stale-sibling":
+      console.warn(
+        `[docusign] envelope ${docusignId} completed, but a newer ${target.documentLabel} envelope exists; nothing was filed.`,
       );
-      const blob = await put(
-        `offer-signed/${target.archivePrefix}-${envelope.docusignId}.pdf`,
-        executed,
-        {
-          access: "public",
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          contentType: "application/pdf",
-        },
+      return;
+    case "advance":
+      if (
+        !isArchivedForEnvelope(target.executedPdfUrl, target.parent.kind, docusignId)
+      ) {
+        archived = await tryArchive(docusignId, () =>
+          archiveExecuted(target.parent, docusignId),
+        );
+      }
+      await advanceOfferOnCompletion(envelope, target, offer, docusignId);
+      break;
+    case "legit-replay":
+      // Usually the redelivery after an archive failure: the offer moved on,
+      // but its PDF is missing or still the previous envelope's.
+      if (
+        !isArchivedForEnvelope(target.executedPdfUrl, target.parent.kind, docusignId)
+      ) {
+        archived = await tryArchive(docusignId, () =>
+          archiveExecuted(target.parent, docusignId),
+        );
+      }
+      break;
+    case "unexpected":
+      archived = await recordUnexpectedCompletion(
+        envelope,
+        target,
+        offer,
+        docusignId,
       );
-      await target.writeExecutedPdf(blob.url);
-    } catch (error) {
-      console.error("[docusign] Failed to archive executed PDF:", error);
-    }
+      break;
   }
 
+  // Thrown only now, after the status move, the lead sync and any notification
+  // (issue #90). Swallowing it returned 200 with executedPdfUrl still null, so
+  // DocuSign never redelivered. The 500 makes it redeliver; the retry finds the
+  // offer moved on, classifies as a replay and files the PDF without repeating
+  // anything else. An unexpected completion re-classifies the same way, and its
+  // event is deduplicated.
+  if (!archived) {
+    throw new Error(
+      `The executed PDF for DocuSign envelope ${docusignId} was not archived.`,
+    );
+  }
+}
+
+async function tryArchive(
+  docusignId: string,
+  store: () => Promise<string>,
+): Promise<boolean> {
+  try {
+    await store();
+    return true;
+  } catch (error) {
+    console.error(
+      `[docusign] Failed to archive the executed PDF for envelope ${docusignId}:`,
+      error,
+    );
+    return false;
+  }
+}
+
+function offerReferenceOf(offer: CompletionOffer): string {
+  return `${offer.baseReference}-R${offer.revisionNumber}`;
+}
+
+function customerNameOf(offer: CompletionOffer): string {
+  const snapshot = (offer.agreedSnapshot ?? offer.workspaceState) as {
+    job?: { clientNames?: string };
+  } | null;
+  return snapshot?.job?.clientNames || offer.lead.name || "the client";
+}
+
+function siteAddressOf(offer: CompletionOffer): string {
+  const snapshot = (offer.agreedSnapshot ?? offer.workspaceState) as {
+    job?: { siteAddress?: string };
+  } | null;
+  return snapshot?.job?.siteAddress ?? "";
+}
+
+async function notifyAdmins(
+  notification: ReturnType<typeof createNotification>,
+): Promise<void> {
+  const admins = await prisma.user.findMany({
+    where: { role: Role.ADMIN },
+    select: { id: true },
+  });
+  await triggerNotification(
+    admins.map((admin) => admin.id),
+    notification,
+  );
+}
+
+async function advanceOfferOnCompletion(
+  envelope: ConnectEnvelope,
+  target: EnvelopeTarget,
+  offer: CompletionOffer,
+  docusignId: string,
+): Promise<void> {
   // Forward-only: transition solely from the matching SENT state so a
   // replayed completion event can't drag an offer that has already moved on
   // (e.g. to PROJECT, or past OFFER_SIGNED to AGREED) back to the signed state.
-  const offer = await prisma.offer.findUnique({
-    where: { id: target.offerId },
-    select: {
-      id: true,
-      offerStatus: true,
-      baseReference: true,
-      revisionNumber: true,
-      leadId: true,
-      agreedSnapshot: true,
-      workspaceState: true,
-      lead: { select: { name: true } },
-    },
-  });
-  if (offer && offer.offerStatus === target.expectedFromStatus) {
-    const claimed = await prisma.$transaction(async (tx) => {
-      const latest = await tx.envelope.findFirst({
-        where: target.siblingEnvelopeWhere,
-        orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
-        select: { id: true },
-      });
-      if (!latest || latest.id !== envelope.id) {
-        return false;
-      }
-      const updated = await tx.offer.updateMany({
-        where: {
-          id: offer.id,
-          isActive: true,
-          offerStatus: target.expectedFromStatus,
-        },
-        data: { offerStatus: target.signedStatus },
-      });
-      if (updated.count === 0) {
-        return false;
-      }
-      await tx.offerStatusEvent.create({
-        data: {
-          offerId: offer.id,
-          fromStatus: target.expectedFromStatus,
-          toStatus: target.signedStatus,
-          note: `DocuSign envelope ${envelope.docusignId} completed`,
-        },
-      });
-      return true;
+  const claimed = await prisma.$transaction(async (tx) => {
+    const latest = await tx.envelope.findFirst({
+      where: target.siblingEnvelopeWhere,
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
     });
-
-    // Deliberately AFTER the transaction, never inside it. A failure in here
-    // must not be able to roll back the signature — see the note on
-    // syncLeadStageForOffer for why swallowing an error inside a transaction
-    // silently discards the whole thing.
-    if (claimed) {
-      await syncLeadStageForOffer(offer.id);
+    if (!latest || latest.id !== envelope.id) {
+      return false;
     }
+    const updated = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        isActive: true,
+        offerStatus: target.expectedFromStatus,
+      },
+      data: { offerStatus: target.signedStatus },
+    });
+    if (updated.count === 0) {
+      return false;
+    }
+    await tx.offerStatusEvent.create({
+      data: {
+        offerId: offer.id,
+        fromStatus: target.expectedFromStatus,
+        toStatus: target.signedStatus,
+        // The prefix is what lets a later delivery recognise itself as a
+        // replay of this advance.
+        note: completedEventNote(docusignId),
+      },
+    });
+    return true;
+  });
 
-    // Contract fully executed → nudge the admins to create the project.
-    // Project creation stays a deliberate click (kickoff dates, site manager,
-    // and booking warnings need a human), so the nudge is the automation.
-    if (claimed && target.notifyContractSigned) {
-      try {
-        const admins = await prisma.user.findMany({
-          where: { role: Role.ADMIN },
-          select: { id: true },
-        });
-        const snapshot = (offer.agreedSnapshot ?? offer.workspaceState) as {
-          job?: { siteAddress?: string; clientNames?: string };
-        } | null;
-        await triggerNotification(
-          admins.map((admin) => admin.id),
-          createNotification("contractSigned", {
-            leadId: String(offer.leadId),
-            offerReference: `${offer.baseReference}-R${offer.revisionNumber}`,
-            customerName: snapshot?.job?.clientNames || offer.lead?.name || "the client",
-            siteAddress: snapshot?.job?.siteAddress ?? "",
-          }),
-        );
-      } catch (error) {
-        // The nudge must never fail the webhook — DocuSign would retry the
-        // whole event and re-run the status transition path.
-        console.error("[docusign] contract-signed notification failed:", error);
-      }
+  // Deliberately AFTER the transaction, never inside it. A failure in here
+  // must not be able to roll back the signature — see the note on
+  // syncLeadStageForOffer for why swallowing an error inside a transaction
+  // silently discards the whole thing.
+  if (claimed) {
+    await syncLeadStageForOffer(offer.id);
+  }
+
+  // Contract fully executed → nudge the admins to create the project.
+  // Project creation stays a deliberate click (kickoff dates, site manager,
+  // and booking warnings need a human), so the nudge is the automation.
+  if (claimed && target.notifyContractSigned) {
+    try {
+      await notifyAdmins(
+        createNotification("contractSigned", {
+          leadId: String(offer.leadId),
+          offerReference: offerReferenceOf(offer),
+          customerName: customerNameOf(offer),
+          siteAddress: siteAddressOf(offer),
+        }),
+      );
+    } catch (error) {
+      // The nudge must never fail the webhook — DocuSign would retry the
+      // whole event and re-run the status transition path.
+      console.error("[docusign] contract-signed notification failed:", error);
     }
   }
+}
+
+// DocuSign completed an envelope the app had recalled, voided or replaced. The
+// signed copy is kept apart from the document, the event is recorded once and
+// the admins are told once. The parent and the offer are left exactly as they
+// were: a withdrawn document must never become the executed one.
+//
+// Returns whether the signed copy was stored, so the caller can ask DocuSign to
+// redeliver when it was not.
+async function recordUnexpectedCompletion(
+  envelope: ConnectEnvelope,
+  target: EnvelopeTarget,
+  offer: CompletionOffer,
+  docusignId: string,
+): Promise<boolean> {
+  // Our row must say what DocuSign says. The only place a VOIDED envelope may
+  // become COMPLETED: here nothing reads it as executed, because the parent's
+  // URL is never written.
+  await prisma.envelope.updateMany({
+    where: {
+      id: envelope.id,
+      status: { in: [...LIVE_ENVELOPE_STATUSES, EnvelopeStatus.VOIDED] },
+    },
+    data: { status: EnvelopeStatus.COMPLETED, completedAt: new Date() },
+  });
+
+  const archived = await tryArchive(docusignId, () =>
+    archiveUnexpectedCompletion(target.parent.kind, docusignId),
+  );
+
+  const recorded = await recordUnexpectedEvent(
+    offer.id,
+    unexpectedCompletionNotePrefix(docusignId),
+    unexpectedCompletionNote(docusignId, target.documentLabel),
+  );
+  console.warn(
+    `[docusign] envelope ${docusignId} completed after it was recalled or replaced; recorded on offer ${offer.id}, not filed as the executed ${target.documentLabel}.`,
+  );
+
+  // Only on the delivery that wrote the event, so a redelivery (including the
+  // one an archive failure asks for) does not notify again.
+  if (recorded) {
+    try {
+      await notifyAdmins(
+        createNotification("unexpectedEnvelopeCompletion", {
+          leadId: String(offer.leadId),
+          offerReference: offerReferenceOf(offer),
+          documentLabel: target.documentLabel,
+          envelopeId: docusignId,
+          customerName: customerNameOf(offer),
+        }),
+      );
+    } catch (error) {
+      console.error(
+        "[docusign] unexpected-completion notification failed:",
+        error,
+      );
+    }
+  }
+  return archived;
+}
+
+// Writes the audit note once per envelope. Returns whether this call wrote it.
+async function recordUnexpectedEvent(
+  offerId: string,
+  notePrefix: string,
+  note: string,
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    // Lock the offer row, so two deliveries of the same event cannot both find
+    // no note and both write one.
+    const locked = await tx.$queryRaw<{ id: string }[]>(
+      Prisma.sql`SELECT "id" FROM "Offer" WHERE "id" = ${offerId} FOR UPDATE`,
+    );
+    if (locked.length === 0) {
+      return false;
+    }
+    const existing = await tx.offerStatusEvent.findFirst({
+      where: { offerId, note: { startsWith: notePrefix } },
+      select: { id: true },
+    });
+    if (existing) {
+      return false;
+    }
+    const current = await tx.offer.findUnique({
+      where: { id: offerId },
+      select: { offerStatus: true },
+    });
+    if (!current) {
+      return false;
+    }
+    // fromStatus == toStatus: an audit note, not a transition.
+    await tx.offerStatusEvent.create({
+      data: {
+        offerId,
+        fromStatus: current.offerStatus,
+        toStatus: current.offerStatus,
+        note,
+      },
+    });
+    return true;
+  });
 }
 
 // A decline (envelope-declined) moves the offer to a revise-ready stage —
@@ -524,5 +727,58 @@ async function advanceOfferOnDecline(
   // NEGOTIATING. Outside the transaction, same reasoning as the signed path.
   if (declined) {
     await syncLeadStageForOffer(target.offerId);
+    return;
   }
+
+  await flagUnexpectedDecline(envelope, target);
+}
+
+// A decline that moved nothing. On an envelope the app had recalled or replaced
+// it is still worth a note: the customer is refusing a document the estimator
+// withdrew. There is nothing to file, so only the deduplicated event is written.
+async function flagUnexpectedDecline(
+  envelope: ConnectEnvelope,
+  target: EnvelopeTarget,
+): Promise<void> {
+  const docusignId = envelope.docusignId;
+  if (!docusignId) {
+    return;
+  }
+  const latestEnvelope = await prisma.envelope.findFirst({
+    where: target.siblingEnvelopeWhere,
+    orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true },
+  });
+  const offer = await prisma.offer.findUnique({
+    where: { id: target.offerId },
+    select: { offerStatus: true, isActive: true },
+  });
+  const current = await prisma.envelope.findUnique({
+    where: { id: envelope.id },
+    select: { status: true },
+  });
+  if (!offer || !current) {
+    return;
+  }
+  const kind = classifyCompletion({
+    isLatest: latestEnvelope?.id === envelope.id,
+    isActive: offer.isActive,
+    offerStatus: offer.offerStatus,
+    expectedFromStatus: target.expectedFromStatus,
+    envelopeDbStatusBefore: envelope.status,
+    // The decline note carries no envelope id, so the envelope row stands in
+    // for it. A row that now reads DECLINED was live when this or an earlier
+    // delivery reached it: the decline was of a document still out, and this is
+    // a replay or a race with the delivery that moved the offer. A recalled or
+    // replaced envelope stays VOIDED, because a decline does not outrank it.
+    advancedByThisEnvelope: current.status === EnvelopeStatus.DECLINED,
+  });
+  if (kind !== "unexpected") {
+    return;
+  }
+  await recordUnexpectedEvent(
+    target.offerId,
+    unexpectedDeclineNotePrefix(docusignId),
+    unexpectedDeclineNote(docusignId, target.documentLabel),
+  );
 }
