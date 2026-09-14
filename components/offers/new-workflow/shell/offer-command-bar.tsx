@@ -37,6 +37,7 @@ type OfferCommandBarProps = {
   readonly saveState: OfferSaveState;
   readonly status: OfferWorkspaceStatus;
   readonly onDownloadPreview: () => void;
+  readonly onRetrySave: () => void;
 };
 
 export function OfferCommandBar({
@@ -47,6 +48,7 @@ export function OfferCommandBar({
   saveState,
   status,
   onDownloadPreview,
+  onRetrySave,
 }: OfferCommandBarProps) {
   const activeRevisionNumber =
     Number.parseInt(job.revision.replace(/\D/g, ""), 10) || 1;
@@ -88,7 +90,7 @@ export function OfferCommandBar({
             {formatCurrency(customerPrice.selectedContractValueIncGst)}
           </p>
           <div className="mt-1 flex justify-end">
-            <SaveIndicator state={saveState} />
+            <SaveIndicator state={saveState} onRetry={onRetrySave} />
           </div>
         </div>
         <Button

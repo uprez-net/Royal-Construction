@@ -96,7 +96,10 @@ import type {
   OfferSendBlocker,
 } from "@/lib/offer/offer-readiness";
 
-export type OfferSaveState = "idle" | "saving" | "saved" | "error";
+import type { OfferSaveState } from "@/lib/offer/workspace-save-state";
+
+// Re-exported for the chrome that already imports it from here.
+export type { OfferSaveState };
 
 type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
@@ -132,6 +135,8 @@ type OfferWorkspaceScreenProps = {
   readonly status: OfferWorkspaceStatus;
   readonly offerExpiry: OfferExpiry | null;
   readonly saveState: OfferSaveState;
+  // The "Not saved" chip's Retry.
+  readonly onRetrySave: () => void;
   readonly sendBlockers: readonly OfferSendBlocker[];
   readonly tenderGate: TenderGateState;
   readonly onTenderGateChange: (patch: Partial<TenderGateState>) => void;
@@ -259,6 +264,7 @@ export function OfferWorkspaceScreen({
   status,
   offerExpiry,
   saveState,
+  onRetrySave,
   sendBlockers,
   tenderGate,
   onTenderGateChange,
@@ -562,6 +568,7 @@ export function OfferWorkspaceScreen({
         offerExpiry={offerExpiry}
         saveState={saveState}
         onDownloadPreview={onDownloadOffer}
+        onRetrySave={onRetrySave}
       />
       <div className="flex min-h-0 flex-1">
         <OfferStepRail

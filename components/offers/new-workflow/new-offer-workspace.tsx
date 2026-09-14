@@ -98,6 +98,10 @@ import {
 } from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import {
+  isUnsafeToLeave,
+  type OfferSaveState,
+} from "@/lib/offer/workspace-save-state";
+import {
   collectOfferSendBlockers,
   describeOfferExpiry,
 } from "@/lib/offer/offer-readiness";
@@ -320,9 +324,7 @@ export function NewOfferWorkspace({
   );
   // Autosave chrome: makes the debounced persistence visible and surfaces a
   // failure instead of swallowing it. "idle" until the first save is attempted.
-  const [saveState, setSaveState] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [saveState, setSaveState] = useState<OfferSaveState>("idle");
   // Clock for offer-expiry rendering. Lazily seeded (same calendar day on the
   // server pass and hydration, so the chip label matches), then ticked each
   // minute so "expires in N days" stays honest without a reload.
@@ -369,7 +371,7 @@ export function NewOfferWorkspace({
   }, [job, areaCalculator, leadId, calcVersion, status]);
 
   useEffect(() => {
-    if (saveState !== "saving") return;
+    if (!isUnsafeToLeave(saveState)) return;
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -1057,7 +1059,9 @@ export function NewOfferWorkspace({
                 setSaveState("error");
                 return "error";
               }
-              setSaveState("error");
+              // Not "error": nothing is left unsaved, the tab now shows the
+              // live copy. It still needs saying, since an edit may be gone.
+              setSaveState("reconciled");
               return "reconciled";
             }
             // "invalid": the server refused the snapshot's shape, and saving
@@ -1335,6 +1339,28 @@ export function NewOfferWorkspace({
     leadId,
     flushContractParticulars,
   ]);
+
+  // The "Not saved" chip's Retry. Before it, the only way to retry a failed save
+  // was to make another edit. It also lifts an autosave halt and allows one more
+  // reload on a "locked" refusal, because the estimator asked for this attempt.
+  const retrySave = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      return;
+    }
+    autosaveHaltedRef.current = false;
+    lockedReloadRef.current = false;
+    void (async () => {
+      const workspace = await flushWorkspace(offerId);
+      const particulars =
+        status === "contract_draft"
+          ? await flushContractParticulars(offerId)
+          : { ok: true as const };
+      if (workspace === "clean" && particulars.ok) {
+        setSaveState("saved");
+      }
+    })();
+  }, [leadId, status, flushWorkspace, flushContractParticulars]);
 
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
@@ -1816,6 +1842,7 @@ export function NewOfferWorkspace({
         status={status}
         offerExpiry={offerExpiry}
         saveState={saveState}
+        onRetrySave={retrySave}
         sendBlockers={sendBlockers}
         tenderGate={tenderGate}
         onTenderGateChange={updateTenderGate}
