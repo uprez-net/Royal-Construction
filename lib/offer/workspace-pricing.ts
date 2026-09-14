@@ -11,7 +11,9 @@ export type {
 export type MarginStatus =
   | "at_target"
   | "acceptable_below_target"
-  | "below_minimum";
+  | "below_minimum"
+  // No cost to measure against yet, so there is no margin to judge.
+  | "not_priced";
 
 // Default HBCF *base* rate (ex GST & stamp duty) for H01 New Dwelling,
 // metro — matches icare rates effective 1 Nov 2025. The premium helper below
@@ -393,11 +395,16 @@ export function calculateEffectiveMargin({
   readonly gstRate: number;
   readonly targetFeePct: number;
 }): EffectiveMargin {
+  // A blank offer, and every offer for the moment before it hydrates, has no
+  // cost yet. Reading that as a 0% markup painted a red "Below minimum" badge on
+  // something nobody had priced.
+  if (!(costBeforeFee > 0)) {
+    return { effectiveMarkupPct: 0, marginStatus: "not_priced" };
+  }
   const sellingExGst = roundCurrency(sellingContractValueIncGst / (1 + gstRate));
-  const effectiveMarkupPct =
-    costBeforeFee > 0
-      ? roundRate((sellingExGst - costBeforeFee) / costBeforeFee)
-      : 0;
+  const effectiveMarkupPct = roundRate(
+    (sellingExGst - costBeforeFee) / costBeforeFee,
+  );
 
   // Green at/above the target fee, amber while still profitable below it, red
   // once the selling price is at or below cost. The minimum is a strictly

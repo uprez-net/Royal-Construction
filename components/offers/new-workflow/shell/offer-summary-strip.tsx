@@ -35,6 +35,8 @@ function marginToneClass(status: MarginStatus): string {
       return "bg-warning-light text-warning-ink";
     case "below_minimum":
       return "bg-destructive-light text-destructive-ink";
+    case "not_priced":
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -58,6 +60,7 @@ export function OfferSummaryStrip({
   // discover the gap on the document.
   const overridden = Math.round(selected) !== Math.round(computed);
   const perSqm = totalAreaSqm > 0 ? selected / totalAreaSqm : 0;
+  const priced = effectiveMargin.marginStatus !== "not_priced";
 
   const cells: readonly (readonly [string, string])[] = [
     ["Building area", totalAreaSqm > 0 ? `${totalAreaSqm} m²` : "—"],
@@ -98,13 +101,16 @@ export function OfferSummaryStrip({
             marginToneClass(effectiveMargin.marginStatus),
           )}
         >
-          {effectiveMargin.marginStatus === "at_target" ? (
+          {/* Unpriced has no margin, so no verdict icon and no 0% beside it. */}
+          {!priced ? null : effectiveMargin.marginStatus === "at_target" ? (
             <Check className="size-3" aria-hidden="true" />
           ) : (
             <TriangleAlert className="size-3" aria-hidden="true" />
           )}
-          {getMarginStatusLabel(effectiveMargin.marginStatus)} ·{" "}
-          {formatPercent(effectiveMargin.effectiveMarkupPct)}
+          {getMarginStatusLabel(effectiveMargin.marginStatus)}
+          {priced
+            ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)}`
+            : null}
         </span>
         <p className="font-heading text-lg font-semibold tabular-nums">
           <span className="sr-only">Contract value including GST: </span>

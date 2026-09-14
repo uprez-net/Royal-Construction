@@ -44,5 +44,7 @@ export function getMarginStatusLabel(status: MarginStatus): string {
       return "Acceptable";
     case "below_minimum":
       return "Below minimum";
+    case "not_priced":
+      return "Not priced";
   }
 }

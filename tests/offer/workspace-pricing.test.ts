@@ -111,6 +111,26 @@ assert.deepEqual(
   }),
   { effectiveMarkupPct: 0.17, marginStatus: "acceptable_below_target" },
 );
+// No cost yet → not_priced, never below_minimum. A fresh offer (and a priced one
+// for the instant before it hydrates) has costBeforeFee 0, which used to read as
+// a 0% markup and paint a red "Below minimum 0%" badge. An override-only price
+// with no cost behind it has no margin to judge either.
+assert.deepEqual(
+  calculateEffectiveMargin({
+    ...marginSettings,
+    costBeforeFee: 0,
+    sellingContractValueIncGst: 0,
+  }),
+  { effectiveMarkupPct: 0, marginStatus: "not_priced" },
+);
+assert.deepEqual(
+  calculateEffectiveMargin({
+    ...marginSettings,
+    costBeforeFee: 0,
+    sellingContractValueIncGst: 900000,
+  }),
+  { effectiveMarkupPct: 0, marginStatus: "not_priced" },
+);
 
 assert.equal(
   calculateDirectTotal([
