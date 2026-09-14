@@ -54,6 +54,7 @@
   --color-destructive-light: var(--destructive-light);
   --color-destructive-ink: var(--destructive-ink);
   --color-royal-gold-ink: var(--royal-gold-ink);
+  --color-royal-gold-ink-hover: var(--royal-gold-ink-hover);
   --color-accent-purple: var(--accent-purple);
   --color-accent-purple-light: var(--accent-purple-light);
   --color-popover-foreground: var(--popover-foreground);
@@ -136,6 +137,10 @@
   --destructive-light: oklch(0.936 0.031 17.7);
   --destructive-ink: oklch(0.534 0.23 28.5);
   --royal-gold-ink: oklch(0.530 0.12 77.3);
+  /* The fill behind white text on gold CTAs (Button variant "royal"). White
+     on base --royal-gold is 2.77:1; on the ink 5.37:1 and on this hover step
+     6.93:1, measured in tests/design/brand-contrast.test.ts. */
+  --royal-gold-ink-hover: oklch(0.470 0.12 77.3);
 
   /* Pipeline stage ramp — cool grey through gold as likelihood rises, then
      green for banked stages. The colour encodes progression, so the chart
@@ -190,6 +195,9 @@
   --info-ink: oklch(0.616 0.16 262.9);
   --destructive-ink: oklch(0.632 0.16 28.5);
   --royal-gold-ink: oklch(0.616 0.1 77.3);
+  /* A darker step, as in light: any lighter gold drops the royal variant's
+     white text further below AA (this measures 4.80:1). */
+  --royal-gold-ink-hover: oklch(0.556 0.1 77.3);
 
   /* Stage ramp, dark theme — same progression, lifted for contrast. */
   --stage-1: oklch(0.5 0.02 253);
@@ -261,6 +269,14 @@
   html,
   body {
     background: white !important;
+  }
+
+  /* Keep the offer template's cover and table fills when the print dialog's
+     "Background graphics" is off; without this the cover's white text printed
+     on white. The emailed PDF sets the same property in its own HTML. */
+  [data-offer-print-template] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* These rules promote the live offer's hidden print template into THE printed

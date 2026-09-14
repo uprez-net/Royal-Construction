@@ -185,8 +185,8 @@ export function OfferWorkspaceImages({
                     src={url}
                   />
                 ) : (
-                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center font-mono text-[10px] uppercase tracking-wide text-royal-gold-dark">
-                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image"}
+                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image yet"}
                   </span>
                 )}
                 {isAi ? (
@@ -199,7 +199,7 @@ export function OfferWorkspaceImages({
                 {slot.label}
               </p>
               <div className="mt-auto flex flex-wrap items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-dark">
+                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover">
                   {url ? "Replace" : "Upload"}
                   <input
                     accept="image/png,image/jpeg,image/webp"

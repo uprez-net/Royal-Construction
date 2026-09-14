@@ -110,7 +110,7 @@ function ImportSummary({
   return (
     <div className="grid gap-3 rounded-lg border border-border bg-background/70 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className="bg-royal-gold text-white">
+        <Badge className="bg-royal-gold-ink text-white">
           {importResult.costLines.length} Offer rows
         </Badge>
         <Badge variant="outline">{importResult.sourceName}</Badge>

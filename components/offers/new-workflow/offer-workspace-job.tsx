@@ -30,8 +30,8 @@ import {
   rawTotalAreaSqm,
 } from "@/lib/offer/workspace-area";
 import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
+import { formatArea } from "@/lib/offer/workspace-print-template";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { cn } from "@/lib/utils";
 import {
   ClipboardList,
   Home,
@@ -108,184 +108,199 @@ export function JobSetupPanel({
             ) : null}
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 pt-4">
+        <CardContent className="grid gap-6">
           <PrefillBanner result={prefillResult} />
           <OwnersSection owners={owners} onOwnersChange={emitOwners} />
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Field label="Build type">
-              <Input
-                value={job.buildType}
-                onChange={(event) =>
-                  onJobChange({ buildType: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Façade">
-              <Select
-                value={job.facade || "__none__"}
-                onValueChange={(value) =>
-                  onJobChange({ facade: value === "__none__" ? "" : value })
-                }
+          <section className="grid gap-3">
+            <h4 className={GROUP_HEADING_CLASS}>Job & validity</h4>
+            <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
+              <Field label="Build type">
+                <Input
+                  value={job.buildType}
+                  onChange={(event) =>
+                    onJobChange({ buildType: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Façade">
+                <Select
+                  value={job.facade || "__none__"}
+                  onValueChange={(value) =>
+                    onJobChange({ facade: value === "__none__" ? "" : value })
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a façade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Not selected</SelectItem>
+                    {FACADE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Valid until">
+                <Input
+                  type="date"
+                  value={job.validUntil}
+                  onChange={(event) =>
+                    onJobChange({ validUntil: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Prepared by">
+                <Input
+                  value={job.preparedBy}
+                  onChange={(event) =>
+                    onJobChange({ preparedBy: event.target.value })
+                  }
+                />
+              </Field>
+              <Field
+                className="@xl/pane:col-span-2 @5xl/pane:col-span-4"
+                label="Build scope (one feature per line — shown on the proposal snapshot)"
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a façade" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Not selected</SelectItem>
-                  {FACADE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field className="md:col-span-2" label="Site Location">
-              <AddressAutocomplete
-                placeholder="Construction site address"
-                value={job.siteAddress}
-                onChange={(siteAddress) =>
-                  // A free-text edit invalidates the council/state/postcode from a
-                  // previously-picked suggestion — clear them so a hand-corrected
-                  // address can't ship a stale council to Project.council (codex
-                  // #6). onPick re-sets them when a suggestion is chosen.
-                  onJobChange({
-                    siteAddress,
-                    siteCouncil: "",
-                    siteState: "",
-                    sitePostcode: "",
-                  })
-                }
-                onPick={(pick) =>
-                  onJobChange({
-                    siteAddress: pick.address,
-                    siteCouncil: pick.council ?? "",
-                    siteState: pick.state ?? "",
-                    sitePostcode: pick.postcode ?? "",
-                  })
-                }
-              />
-            </Field>
-            <Field label="Council">
-              <Input
-                placeholder="Auto-filled from Site Location"
-                value={job.siteCouncil}
-                onChange={(event) =>
-                  onJobChange({ siteCouncil: event.target.value })
-                }
-              />
-            </Field>
-            {/* Site particulars. These print on the proposal snapshot and the
-                tender's Project Particulars table; without inputs they stayed at
-                the model defaults and every document shipped "Lot Area: 0 m²". */}
-            <AreaField
-              label="Lot area sqm"
-              value={job.lotAreaSqm}
-              onChange={(lotAreaSqm) => onJobChange({ lotAreaSqm })}
-            />
-            <Field label="DP / title reference">
-              <Input
-                placeholder="e.g. Lot 12 DP 1234567"
-                value={job.dpNumber}
-                onChange={(event) =>
-                  onJobChange({ dpNumber: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Zoning">
-              <Input
-                placeholder="e.g. R2 Low Density Residential"
-                value={job.zoning}
-                onChange={(event) =>
-                  onJobChange({ zoning: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Valid until">
-              <Input
-                type="date"
-                value={job.validUntil}
-                onChange={(event) =>
-                  onJobChange({ validUntil: event.target.value })
-                }
-              />
-            </Field>
-            <Field label="Prepared by">
-              <Input
-                value={job.preparedBy}
-                onChange={(event) =>
-                  onJobChange({ preparedBy: event.target.value })
-                }
-              />
-            </Field>
-            <Field
-              className="md:col-span-2 xl:col-span-4"
-              label="Build scope (one feature per line — shown on the proposal snapshot)"
-            >
-              <Textarea
-                className="min-h-19"
-                value={job.buildScope.join("\n")}
-                placeholder="4 Bedrooms + Study&#10;Double Garage&#10;Alfresco"
-                onChange={(event) =>
-                  onJobChange({ buildScope: event.target.value.split("\n") })
-                }
-              />
-            </Field>
-            <AreaField
-              label="Ground floor sqm"
-              value={job.groundFloorSqm}
-              onChange={(groundFloorSqm) => onJobChange({ groundFloorSqm })}
-            />
-            <AreaField
-              label="Void sqm"
-              value={job.voidSqm}
-              onChange={(voidSqm) => onJobChange({ voidSqm })}
-            />
-            <AreaField
-              label="First floor sqm"
-              value={job.firstFloorSqm}
-              onChange={(firstFloorSqm) => onJobChange({ firstFloorSqm })}
-            />
-            <AreaField
-              label="Garage sqm"
-              value={job.garageSqm}
-              onChange={(garageSqm) => onJobChange({ garageSqm })}
-            />
-            <AreaField
-              label="Alfresco sqm"
-              value={job.alfrescoPorchSqm}
-              onChange={(alfrescoPorchSqm) => onJobChange({ alfrescoPorchSqm })}
-            />
-            <AreaField
-              label="Porch sqm"
-              value={job.porchSqm}
-              onChange={(porchSqm) => onJobChange({ porchSqm })}
-            />
-            {/* The area and the "Includes a granny home" toggle used to be
-                independent, so an offer could carry granny square metres — which
-                count toward the slab and the printed total — while every granny
-                section was suppressed. Under v2 the field only exists when the
-                toggle says it should. v1 offers keep the old layout so nothing
-                already quoted changes shape. */}
-            {showGrannyArea ? (
-              <AreaField
-                label="Granny flat sqm"
-                value={job.grannyFlatSqm}
-                onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
-              />
-            ) : null}
-            <AreaField
-              label="Balcony sqm"
-              value={job.balconySqm}
-              onChange={(balconySqm) => onJobChange({ balconySqm })}
-            />
-            <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
-              <p className={FIELD_LABEL_CLASS}>
-                Total building area
-              </p>
-              <p className="font-mono text-lg font-semibold">{totalArea} sqm</p>
+                <Textarea
+                  className="min-h-19"
+                  value={job.buildScope.join("\n")}
+                  placeholder="4 Bedrooms + Study&#10;Double Garage&#10;Alfresco"
+                  onChange={(event) =>
+                    onJobChange({ buildScope: event.target.value.split("\n") })
+                  }
+                />
+              </Field>
             </div>
-          </div>
+          </section>
+          <section className="grid gap-3">
+            <h4 className={GROUP_HEADING_CLASS}>Site particulars</h4>
+            <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
+              <Field className="@xl/pane:col-span-2" label="Site Location">
+                <AddressAutocomplete
+                  placeholder="Construction site address"
+                  value={job.siteAddress}
+                  onChange={(siteAddress) =>
+                    // A free-text edit invalidates the council/state/postcode from a
+                    // previously-picked suggestion — clear them so a hand-corrected
+                    // address can't ship a stale council to Project.council (codex
+                    // #6). onPick re-sets them when a suggestion is chosen.
+                    onJobChange({
+                      siteAddress,
+                      siteCouncil: "",
+                      siteState: "",
+                      sitePostcode: "",
+                    })
+                  }
+                  onPick={(pick) =>
+                    onJobChange({
+                      siteAddress: pick.address,
+                      siteCouncil: pick.council ?? "",
+                      siteState: pick.state ?? "",
+                      sitePostcode: pick.postcode ?? "",
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Council">
+                <Input
+                  placeholder="Auto-filled from Site Location"
+                  value={job.siteCouncil}
+                  onChange={(event) =>
+                    onJobChange({ siteCouncil: event.target.value })
+                  }
+                />
+              </Field>
+              {/* Site particulars. These print on the proposal snapshot and the
+                  tender's Project Particulars table; without inputs they stayed at
+                  the model defaults and every document shipped "Lot Area: 0 m²". */}
+              <AreaField
+                label="Lot area sqm"
+                value={job.lotAreaSqm}
+                onChange={(lotAreaSqm) => onJobChange({ lotAreaSqm })}
+              />
+              <Field label="DP / title reference">
+                <Input
+                  placeholder="e.g. Lot 12 DP 1234567"
+                  value={job.dpNumber}
+                  onChange={(event) =>
+                    onJobChange({ dpNumber: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Zoning">
+                <Input
+                  placeholder="e.g. R2 Low Density Residential"
+                  value={job.zoning}
+                  onChange={(event) =>
+                    onJobChange({ zoning: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
+          </section>
+          <section className="grid gap-3">
+            <h4 className={GROUP_HEADING_CLASS}>Floor areas</h4>
+            <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
+              <AreaField
+                label="Ground floor sqm"
+                value={job.groundFloorSqm}
+                onChange={(groundFloorSqm) => onJobChange({ groundFloorSqm })}
+              />
+              <AreaField
+                label="Void sqm"
+                value={job.voidSqm}
+                onChange={(voidSqm) => onJobChange({ voidSqm })}
+              />
+              <AreaField
+                label="First floor sqm"
+                value={job.firstFloorSqm}
+                onChange={(firstFloorSqm) => onJobChange({ firstFloorSqm })}
+              />
+              <AreaField
+                label="Garage sqm"
+                value={job.garageSqm}
+                onChange={(garageSqm) => onJobChange({ garageSqm })}
+              />
+              <AreaField
+                label="Alfresco sqm"
+                value={job.alfrescoPorchSqm}
+                onChange={(alfrescoPorchSqm) => onJobChange({ alfrescoPorchSqm })}
+              />
+              <AreaField
+                label="Porch sqm"
+                value={job.porchSqm}
+                onChange={(porchSqm) => onJobChange({ porchSqm })}
+              />
+              {/* The area and the "Includes a granny home" toggle used to be
+                  independent, so an offer could carry granny square metres — which
+                  count toward the slab and the printed total — while every granny
+                  section was suppressed. Under v2 the field only exists when the
+                  toggle says it should. v1 offers keep the old layout so nothing
+                  already quoted changes shape. */}
+              {showGrannyArea ? (
+                <AreaField
+                  label="Granny flat sqm"
+                  value={job.grannyFlatSqm}
+                  onChange={(grannyFlatSqm) => onJobChange({ grannyFlatSqm })}
+                />
+              ) : null}
+              <AreaField
+                label="Balcony sqm"
+                value={job.balconySqm}
+                onChange={(balconySqm) => onJobChange({ balconySqm })}
+              />
+              <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
+                <p className={FIELD_LABEL_CLASS}>
+                  Total building area
+                </p>
+                <p className="font-mono text-lg font-semibold">
+                  {formatArea(totalArea)}
+                </p>
+              </div>
+            </div>
+          </section>
         </CardContent>
       </Card>
 
@@ -300,7 +315,7 @@ export function JobSetupPanel({
             title="Major House Specifications"
           />
         </CardHeader>
-        <CardContent className="grid gap-4 pt-4">
+        <CardContent className="grid gap-4">
           <SpecFields
             bathrooms={job.bathrooms}
             bedrooms={job.bedrooms}
@@ -337,7 +352,7 @@ export function JobSetupPanel({
               title="Granny Home Specifications"
             />
           </CardHeader>
-          <CardContent className="grid gap-4 pt-4">
+          <CardContent className="grid gap-4">
             <SpecFields
               bathrooms={job.grannyBathrooms}
               bedrooms={job.grannyBedrooms}
@@ -377,7 +392,7 @@ function SpecFields({
   readonly onGarageSpacesChange: (value: number) => void;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
       {/* These three print on the Offer snapshot and the Tender's Project
           Particulars, so a typo lands on contract text. They previously took
           `parseFloat(...) || 0`, which accepts a negative (parseFloat("-1") is
@@ -421,8 +436,6 @@ function YesNoQuestion({
   readonly onChange: (value: boolean) => void;
   readonly value: boolean;
 }) {
-  const selected =
-    "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark";
   return (
     <div className="grid gap-2">
       {/* A yes/no question labels its control exactly as Field does, so it
@@ -432,8 +445,7 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value ? "default" : "outline"}
-          className={cn(value ? selected : "")}
+          variant={value ? "royal" : "outline"}
           onClick={() => onChange(true)}
         >
           Yes
@@ -441,8 +453,7 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value ? "outline" : "default"}
-          className={cn(value ? "" : selected)}
+          variant={value ? "outline" : "royal"}
           onClick={() => onChange(false)}
         >
           No
@@ -716,7 +727,7 @@ function OwnersSection({
                   onClick={() => setKind(index, kind)}
                   className={`rounded px-2.5 py-1 text-xs font-medium capitalize ${
                     owner.kind === kind
-                      ? "bg-royal-gold text-white"
+                      ? "bg-royal-gold-ink text-white"
                       : "text-muted-foreground"
                   }`}
                 >
@@ -738,7 +749,7 @@ function OwnersSection({
           </div>
 
           {owner.kind === "individual" ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
               <Field label="Owner name">
                 <Input
                   value={owner.displayName}
@@ -773,7 +784,7 @@ function OwnersSection({
                 />
               </Field>
               <Field
-                className="md:col-span-2 xl:col-span-4"
+                className="@xl/pane:col-span-2 @5xl/pane:col-span-4"
                 label="Current Location"
               >
                 <AddressAutocomplete
@@ -787,7 +798,7 @@ function OwnersSection({
             </div>
           ) : (
             <div className="grid gap-3">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
                 <Field label="Company name">
                   <Input
                     value={owner.displayName}
@@ -805,7 +816,7 @@ function OwnersSection({
                   />
                 </Field>
                 <Field
-                  className="md:col-span-2"
+                  className="@xl/pane:col-span-2"
                   label="Registered office (Current Location)"
                 >
                   <AddressAutocomplete
@@ -835,7 +846,7 @@ function OwnersSection({
                 {owner.signatories.map((director, sigIndex) => (
                   <div
                     key={director.id}
-                    className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+                    className="grid gap-2 @3xl/pane:grid-cols-[1fr_1fr_1fr_1fr_auto]"
                   >
                     {/* Repeated rows carry an explicit accessible name each — a
                         placeholder is not a label, and every row otherwise
