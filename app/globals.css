@@ -271,6 +271,14 @@
     background: white !important;
   }
 
+  /* Keep the offer template's cover and table fills when the print dialog's
+     "Background graphics" is off; without this the cover's white text printed
+     on white. The emailed PDF sets the same property in its own HTML. */
+  [data-offer-print-template] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* These rules promote the live offer's hidden print template into THE printed
      document. They are switched off whenever the read-only revision viewer is
      open, keyed on the [data-offer-revision-viewer] marker the viewer's dialog

@@ -107,3 +107,32 @@ test("no line pairs a base --royal-gold fill with white text", () => {
     'gold that carries text belongs on bg-royal-gold-ink or <Button variant="royal">',
   );
 });
+
+// With "Background graphics" off, browsers drop background fills, so the
+// Download cover printed its white text on white. The emailed PDF forces fills
+// in its own HTML; the in-app print template takes them from globals.css.
+test("the offer print template keeps its fills when background graphics are off", () => {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const printBlocks: string[] = [];
+  for (const match of bare.matchAll(/@media print \{/g)) {
+    let depth = 0;
+    for (let i = (match.index ?? 0) + match[0].length - 1; i < bare.length; i++) {
+      if (bare[i] === "{") {
+        depth += 1;
+      } else if (bare[i] === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          printBlocks.push(bare.slice(match.index, i));
+          break;
+        }
+      }
+    }
+  }
+  const rule =
+    printBlocks
+      .join("\n")
+      .match(/\[data-offer-print-template\]\s*\{([^}]*)\}/)?.[1] ?? "";
+
+  assert.match(rule, /(?:^|[\s;])print-color-adjust:\s*exact/);
+  assert.match(rule, /-webkit-print-color-adjust:\s*exact/);
+});
