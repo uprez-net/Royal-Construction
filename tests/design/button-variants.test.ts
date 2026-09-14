@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buttonVariants } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import {
   WHITE,
   contrastRatio,
@@ -56,4 +57,42 @@ test("the royal variant hovers onto the ink hover token", () => {
   assert.ok(classes.includes("bg-royal-gold-ink"));
   assert.ok(classes.includes("text-white"));
   assert.ok(classes.includes("hover:bg-royal-gold-ink-hover"));
+});
+
+// Pins the royal focus ring. It was ring-royal-gold/40, 1.46:1 against a white
+// page and fainter than the teal ring these gold CTAs had before. An opaque ring
+// clears 3:1 against the page, and Tailwind's white offset gap keeps it from
+// merging into the ink fill when the ring shares its colour.
+const NON_TEXT = 3;
+
+test("the royal focus ring stands out from the page and from its own fill", () => {
+  const classes = cn(buttonVariants({ variant: "royal" })).split(/\s+/);
+  const rings = classes
+    .map(
+      (name) =>
+        name.match(/^focus-visible:ring-(?!offset-)([a-z][\w-]*(?:\/\d+)?)$/)?.[1],
+    )
+    .filter((name): name is string => name !== undefined);
+  const ring = rings[rings.length - 1];
+  assert.ok(ring, `the royal variant has no focus ring colour: ${classes.join(" ")}`);
+  assert.doesNotMatch(
+    ring,
+    /\//,
+    `focus-visible:ring-${ring} is translucent, so its contrast depends on what sits under it`,
+  );
+
+  const css = readGlobalsCss();
+  const colour = themeColour(css, ":root", `--${ring}`);
+  const page = themeColour(css, ":root", "--background");
+  const fill = themeColour(css, ":root", "--royal-gold-ink");
+  assert.ok(
+    contrastRatio(WHITE, colour) >= NON_TEXT &&
+      contrastRatio(page, colour) >= NON_TEXT,
+    `the focus ring measures ${contrastRatio(WHITE, colour).toFixed(2)}:1 on white and ${contrastRatio(page, colour).toFixed(2)}:1 on --background`,
+  );
+  assert.ok(
+    classes.some((name) => /^focus-visible:ring-offset-[1-9]\d*$/.test(name)),
+    "without a ring offset the ring touches the ink fill",
+  );
+  assert.ok(contrastRatio(WHITE, fill) >= NON_TEXT);
 });
