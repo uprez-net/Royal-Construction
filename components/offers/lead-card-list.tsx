@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { cn } from "@/lib/utils";
-import { List, Pencil, Send, Sparkles } from "lucide-react";
+import { Check, List, Pencil, Send, Sparkles } from "lucide-react";
 import type { Lead } from "@/lib/leads/types";
 import { useEffect, useRef, useEffectEvent } from "react";
 
@@ -92,6 +92,9 @@ export function LeadCardList({
     // EffectEvent, not a dependency.
   }, [loading, totalPages]);
 
+  const toggleLead = (lead: Lead) =>
+    setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id, lead.location);
+
   if (loading) return skeletonGrid;
 
   return (
@@ -102,15 +105,26 @@ export function LeadCardList({
       {items.map((lead) => (
         <Card
           key={lead.id}
+          // A toggle button, so the picker works from the keyboard and a
+          // screen reader hears which lead is chosen. The card holds no
+          // controls of its own, so nothing interactive ends up nested.
+          role="button"
+          tabIndex={0}
+          aria-pressed={lead.id === selectedLeadId}
           className={cn(
-            "relative cursor-pointer transition-colors",
+            "relative cursor-pointer outline-none transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
             lead.id === selectedLeadId &&
-              "border-teal-700 ring-2 ring-teal-700",
+              "border-royal-gold-ink ring-2 ring-royal-gold-ink",
             lead.stage === "Quoted" && "opacity-75",
           )}
-          onClick={() =>
-            setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id, lead.location)
-          }
+          onClick={() => toggleLead(lead)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            // Space would otherwise scroll the list, and a held key would
+            // flip the selection on every repeat.
+            event.preventDefault();
+            if (!event.repeat) toggleLead(lead);
+          }}
         >
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-3">
@@ -125,7 +139,7 @@ export function LeadCardList({
                       Quoted - Awaiting Feedback
                     </span>
                   ) : lead.creatingOffer ? (
-                    <span className="inline-flex items-center justify-center rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
+                    <span className="inline-flex items-center justify-center rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
                       <Pencil className="mr-1.5 h-4 w-4" />
                       Update Offer
                     </span>
@@ -151,7 +165,13 @@ export function LeadCardList({
                 <p className="font-medium text-slate-950">{lead.name}</p>
                 <p className="text-sm text-muted-foreground">{lead.location}</p>
               </div>
-              <List className="size-4 text-teal-700" />
+              {/* The check marks the selection without relying on the ring's
+                  colour alone. */}
+              {lead.id === selectedLeadId ? (
+                <Check aria-hidden className="size-4 text-royal-gold-ink" />
+              ) : (
+                <List aria-hidden className="size-4 text-muted-foreground" />
+              )}
             </div>
             <div className="mt-3 space-y-1 text-sm text-slate-700">
               <p>{lead.type}</p>
