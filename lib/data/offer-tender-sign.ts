@@ -212,6 +212,31 @@ export async function sendTenderForSignature(input: {
       owners,
     });
   } catch (error) {
+    const reason = describeDocusignError(error);
+    // Logged and recorded before the claim is released. The release puts the
+    // offer back exactly where it was and the refusal reaches only whoever
+    // clicked, so otherwise nothing showed that a send was tried and rejected.
+    console.error(
+      `[offer] tender envelope creation failed for offer ${offer.id}; claim released:`,
+      reason,
+      error,
+    );
+    await prisma.offerStatusEvent
+      .create({
+        data: {
+          offerId: offer.id,
+          fromStatus: offer.offerStatus,
+          toStatus: offer.offerStatus,
+          note: `DocuSign rejected the Tender envelope: ${reason}`,
+          actorId: access.user.id,
+        },
+      })
+      .catch((eventError) =>
+        console.error(
+          "[offer] recording the rejected tender envelope failed:",
+          eventError,
+        ),
+      );
     // Release the claim so the builder can retry.
     await prisma.offer.updateMany({
       where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
