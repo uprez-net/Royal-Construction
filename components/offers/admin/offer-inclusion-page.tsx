@@ -61,7 +61,8 @@ export function OfferInclusionsPage() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveOfferContent())}
+          onSave={() => dispatch(saveOfferContent()).unwrap()}
+          successMessage="Inclusion schedule saved."
         />
       </CardFooter>
     </Card>

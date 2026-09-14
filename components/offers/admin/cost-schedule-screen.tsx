@@ -257,7 +257,8 @@ export function OfferCostScheduleScreen() {
           dirty={dirty}
           saving={saving}
           disabled={anyFormulaInvalid}
-          onSave={() => dispatch(saveCostSchedule())}
+          onSave={() => dispatch(saveCostSchedule()).unwrap()}
+          successMessage="Cost schedule saved."
         />
       </CardFooter>
     </Card>

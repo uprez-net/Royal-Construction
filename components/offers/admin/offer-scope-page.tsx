@@ -148,7 +148,8 @@ export function OfferScopePage() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveOfferScope())}
+          onSave={() => dispatch(saveOfferScope()).unwrap()}
+          successMessage="Allowances and exclusions saved."
         />
       </CardFooter>
     </Card>

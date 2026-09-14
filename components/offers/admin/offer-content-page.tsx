@@ -118,7 +118,8 @@ export function OfferContentPage() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveOfferContent())}
+          onSave={() => dispatch(saveOfferContent()).unwrap()}
+          successMessage="Offer document saved."
         />
       </CardFooter>
     </Card>
