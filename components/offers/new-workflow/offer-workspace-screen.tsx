@@ -971,7 +971,10 @@ export function OfferWorkspaceScreen({
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
+              {/* While another action runs the transition guard would drop
+                  the confirm, closing the dialog with nothing done. */}
               <AlertDialogAction
+                disabled={transitioning}
                 variant={confirmCopy.voidsEnvelope ? "destructive" : "default"}
                 onClick={onConfirmPending}
               >
