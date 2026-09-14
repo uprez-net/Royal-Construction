@@ -74,9 +74,15 @@ export function toOfferListRow(
   };
 }
 
-// Lead ids are Postgres int4; a longer "OF-" number must not reach Prisma,
-// which rejects an out-of-range Int instead of matching nothing.
-const MAX_LEAD_ID = 2_147_483_647;
+// Lead ids and revision numbers are Postgres int4; a longer number typed into
+// search must not reach Prisma, which rejects an out-of-range Int instead of
+// matching nothing.
+const MAX_INT4 = 2_147_483_647;
+
+function toInt4(digits: string): number | null {
+  const value = Number(digits);
+  return Number.isSafeInteger(value) && value <= MAX_INT4 ? value : null;
+}
 
 /**
  * The OR'd search terms for the offers listing. `q` is already trimmed.
@@ -95,10 +101,28 @@ export function offerSearchClauses(q: string): Prisma.LeadWhereInput[] {
     { offers: { some: { baseReference: { contains: q, mode: "insensitive" } } } },
   ];
 
+  // Every PDF, email and envelope quotes the revision's full reference,
+  // `${baseReference}-R${revisionNumber}`, and only the base is stored, so the
+  // reference a client actually quotes never matched the clause above.
+  const revisionReference = /^(.+)-R(\d+)$/i.exec(q);
+  if (revisionReference) {
+    const revisionNumber = toInt4(revisionReference[2]);
+    if (revisionNumber !== null) {
+      clauses.push({
+        offers: {
+          some: {
+            baseReference: { contains: revisionReference[1], mode: "insensitive" },
+            revisionNumber,
+          },
+        },
+      });
+    }
+  }
+
   const fallbackReference = /^OF-(\d+)$/i.exec(q);
   if (fallbackReference) {
-    const id = Number(fallbackReference[1]);
-    if (Number.isSafeInteger(id) && id <= MAX_LEAD_ID) {
+    const id = toInt4(fallbackReference[1]);
+    if (id !== null) {
       clauses.push({ id });
     }
   }
