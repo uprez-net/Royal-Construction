@@ -12,6 +12,7 @@ import {
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { voidEnvelope } from "@/lib/docusign/void-envelope";
+import { LIVE_ENVELOPE_STATUSES } from "@/lib/docusign/envelope-status";
 import {
   CURRENT_CALC_VERSION,
   LEGACY_CALC_VERSION,
@@ -953,8 +954,9 @@ function envelopeScopeFilter(
  * hand. Voiding in DocuSign is irreversible, so each VOIDED status is committed
  * in its own write immediately rather than inside a caller's transaction — if
  * that transaction rolls back, the DB must not keep an envelope SENT while it
- * is dead in DocuSign. The SENT-only guard avoids clobbering a terminal status
- * a webhook has already set.
+ * is dead in DocuSign. The live-status guard avoids clobbering a terminal status
+ * a webhook has already set. "Live" includes DELIVERED: an envelope the customer
+ * has opened is still signable.
  *
  * Returns the ids of every envelope that WAS live (whether or not DocuSign
  * accepted the void) so a caller can re-assert the VOIDED status inside its own
@@ -971,7 +973,7 @@ async function voidLiveOfferEnvelopes(
 ): Promise<{ readonly ids: readonly string[]; readonly warnings: readonly string[] }> {
   const liveEnvelopes = await prisma.envelope.findMany({
     where: {
-      status: EnvelopeStatus.SENT,
+      status: { in: LIVE_ENVELOPE_STATUSES },
       OR: envelopeScopeFilter(offerId, scope),
     },
     select: { id: true, docusignId: true },
@@ -991,7 +993,7 @@ async function voidLiveOfferEnvelopes(
       try {
         await voidEnvelope(context, env.docusignId, reason);
         await prisma.envelope.updateMany({
-          where: { id: env.id, status: EnvelopeStatus.SENT },
+          where: { id: env.id, status: { in: LIVE_ENVELOPE_STATUSES } },
           data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
         });
       } catch {
@@ -1115,13 +1117,13 @@ export async function createOfferRevision(input: {
     }
 
     if (liveEnvelopeIds.length > 0) {
-      // Only void rows that are still SENT — if a webhook marked one completed
+      // Only void rows that are still live — if a webhook marked one completed
       // between our read and here, don't clobber that terminal state.
       await tx.envelope.updateMany({
         where: {
           // Prisma's `in` wants a mutable array; the helper returns readonly.
           id: { in: [...liveEnvelopeIds] },
-          status: EnvelopeStatus.SENT,
+          status: { in: LIVE_ENVELOPE_STATUSES },
         },
         data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
       });
