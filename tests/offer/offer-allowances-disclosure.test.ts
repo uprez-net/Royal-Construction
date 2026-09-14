@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
 import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
 import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
@@ -281,4 +282,49 @@ test("both offer renderers count every allowance page in their footer", () => {
     chunkCount - 1,
     "the React template did not render one page per chunk",
   );
+});
+
+// ─── The Tender ─────────────────────────────────────────────────────────────
+// The Tender's Important Notes made the fixed price "subject only to written
+// variations and the provisional/prime-cost allowances noted in the inclusions
+// schedule" — and the Tender printed no such list. The client signed a price
+// subject to allowances the document never stated.
+
+function tenderWith(allowances: readonly OfferWorkspaceScopeItem[]): string {
+  return buildTenderHtml(buildProposalInput(snapshotWith(allowances)));
+}
+
+test("the Tender prints a prime cost and provisional sums page", () => {
+  const html = tenderWith(INITIAL_ALLOWANCES);
+  const data = buildOfferPrintTemplateData(
+    buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)),
+  );
+  assert.ok(html.includes("Prime Cost &amp; Provisional Sums"));
+  for (const row of data.scopeRows) {
+    assert.ok(html.includes(row.label), `the Tender never names "${row.label}"`);
+    assert.ok(
+      html.includes(row.amountLabel),
+      `the Tender never states the ${row.label} allowance of ${row.amountLabel}`,
+    );
+  }
+  assert.match(html, /allowances set out in this Tender/);
+});
+
+test("the Tender counts its allowances page in the footer", () => {
+  assert.equal(
+    declaredPageTotal(tenderWith(INITIAL_ALLOWANCES)) -
+      declaredPageTotal(tenderWith(hidden)),
+    1,
+  );
+  assert.equal(
+    declaredPageTotal(tenderWith(manyLongAllowances)) -
+      declaredPageTotal(tenderWith(hidden)),
+    chunkAllowanceRows(manyLongAllowances).length,
+  );
+});
+
+test("a Tender with no allowances neither prints nor cites them", () => {
+  const html = tenderWith(hidden);
+  assert.equal(html.includes("Prime Cost &amp; Provisional Sums"), false);
+  assert.doesNotMatch(html, /allowances (noted|set out)/);
 });
