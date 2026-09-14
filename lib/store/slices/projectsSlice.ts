@@ -60,7 +60,8 @@ import type {
 } from "@/utils/validators/compliance";
 import type { DeveloperApprovalDocument } from "@/constants/complianceDocuments";
 import type { MilestoneCreationData, AddMaterialInput, MilestoneUpdateData, MilestonePictureUploadData, ProjectDetailTabKey, CreateTradieScheduleInput } from "@/utils/validators";
-import { createProjectWithLeadAction, CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
+import { createProjectWithLeadAction } from "@/lib/actions/projects";
+import type { CreateProjectWithLeadInput } from "@/lib/data/projectsWrite";
 import {
   toCreateProjectFailure,
   type CreateProjectFailure,

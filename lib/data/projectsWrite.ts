@@ -1,4 +1,5 @@
-"use server";
+import "server-only";
+
 import prisma from "@/lib/prisma";
 import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
@@ -27,10 +28,6 @@ import {
   ProjectDateBlockerError,
 } from "./projectReadiness";
 import { normalizeDateString } from "@/utils/date";
-import {
-  failureFromThrownError,
-  type CreateProjectResult,
-} from "@/lib/projects/create-project-errors";
 
 /**
  * Creates a new project from manually entered project data.
@@ -277,6 +274,10 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
  *
  * This is the preferred project creation workflow as it guarantees data
  * consistency between leads, customers, projects, milestones, and activity logs.
+ *
+ * Authorizes nobody: the caller must already have checked that the signed-in
+ * user may open `leadId`. The browser reaches it only through
+ * `createProjectWithLeadAction` in lib/actions/projects.ts, which does.
  *
  * The entire creation process is executed inside a database transaction and
  * performs the following operations:
@@ -618,32 +619,5 @@ export async function createProjectWithLead({
     else {
       throw new Error("An unknown error occurred while creating the project.");
     }
-  }
-}
-
-
-/**
- * Result-returning wrapper around {@link createProjectWithLead} for client
- * callers (the create-project wizard).
- *
- * `createProjectWithLead` communicates failure by throwing, which is right for
- * server-to-server callers such as the offer handoff but useless across the
- * server-action boundary: Next replaces a thrown message with an opaque digest
- * in production, and `ProjectDateBlockerError` arrives as a bare object with
- * neither its prototype nor its `blockers` array. This wrapper converts the
- * throw into a serializable {@link CreateProjectResult} so the wizard can bind
- * each problem to the form field that caused it.
- *
- * Never throws for an expected failure — inspect `result.ok` instead.
- */
-export async function createProjectWithLeadAction(
-  input: CreateProjectWithLeadInput,
-): Promise<CreateProjectResult> {
-  try {
-    const project = await createProjectWithLead(input);
-    return { ok: true, project };
-  } catch (error) {
-    // `createProjectWithLead` already logged the raw error with its stack.
-    return { ok: false, failure: failureFromThrownError(error) };
   }
 }
