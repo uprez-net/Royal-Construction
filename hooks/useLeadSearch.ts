@@ -47,6 +47,13 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
 
     useEffect(() => {
         const controller = new AbortController();
+        // The pickers call setQuery from an effect, so a response can land
+        // after the search has changed but before this effect's cleanup aborts
+        // it. Written then, its page number would overwrite the reset to page
+        // 1, and the next request would fetch that page of the new search and
+        // append it to the old list.
+        const superseded = () =>
+            controller.signal.aborted || queryRef.current.trim() !== searchTerm;
         const timer = setTimeout(async () => {
             // Page 1 is a new result set and replaces the list; later pages
             // load under the list the user is already scrolling.
@@ -67,6 +74,7 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
                     "Failed to fetch leads",
                     controller.signal
                 );
+                if (superseded()) return;
                 setItems((prev) => mergeLeadPage(prev, data.items, page));
                 setPageInfo({
                     page: data.page,
@@ -75,10 +83,10 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
                     totalPages: data.totalPages,
                 });
             } catch (err) {
-                // Aborted because the search changed or the picker closed. The
-                // request that replaced it reports its own outcome, so this
-                // one must not flash the browser's abort message.
-                if (controller.signal.aborted) return;
+                // Aborted or overtaken because the search changed or the picker
+                // closed. The request that replaced it reports its own outcome,
+                // so this one must not flash the browser's abort message.
+                if (superseded()) return;
                 // A failed first page leaves nothing valid on screen: the
                 // leads there belong to the previous search.
                 if (page === 1) setItems([]);
@@ -87,7 +95,10 @@ export function useLeadSearch(initialQuery = "", initialPage = 1, getLeadsWithou
                 // nothing to the user.
                 setError(err instanceof FetchError ? err.message : "Failed to fetch leads");
             } finally {
-                if (!controller.signal.aborted) {
+                // An overtaken request leaves the flags to the one replacing
+                // it, whose effect is certain to run: the committed search
+                // will differ from this one's.
+                if (!superseded()) {
                     setLoading(false);
                     setLoadingMore(false);
                 }
