@@ -97,7 +97,7 @@ export function ProjectHandoffPanel({
           {isCreated && projectId ? (
             <Button
               asChild
-              className="bg-royal-gold-ink text-white hover:bg-royal-gold-ink/90"
+              variant="royal"
               size="sm"
             >
               <Link href={`/projects/${projectId}`}>Open Project</Link>
@@ -108,7 +108,7 @@ export function ProjectHandoffPanel({
             </Button>
           ) : (
             <Button
-              className="bg-royal-gold-ink text-white hover:bg-royal-gold-ink/90"
+              variant="royal"
               disabled={projectCreating}
               size="sm"
               type="button"

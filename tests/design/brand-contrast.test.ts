@@ -149,6 +149,33 @@ test("no class list pairs a base --royal-gold fill with white text", () => {
   );
 });
 
+// Before --royal-gold-ink-hover existed, ink buttons hovered onto a color-mix()
+// or a translucent /90 step. The translucent step lightens toward the page, so
+// white text loses contrast exactly where the pointer is.
+const INK_HOVER_STAND_IN =
+  /hover:bg-royal-gold-ink\/\d+|color-mix\(in_oklab,var\(--royal-gold-ink\)/;
+
+test("ink hovers use the hover token rather than a stand-in", () => {
+  const offenders: string[] = [];
+  for (const root of ["app", "components"]) {
+    for (const file of sourceFiles(join(process.cwd(), root))) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          if (INK_HOVER_STAND_IN.test(line)) {
+            offenders.push(`${relative(process.cwd(), file)}:${index + 1}`);
+          }
+        });
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'hover onto hover:bg-royal-gold-ink-hover or use <Button variant="royal">',
+  );
+});
+
 // With "Background graphics" off, browsers drop background fills, so the
 // Download cover printed its white text on white. The emailed PDF forces fills
 // in its own HTML; the in-app print template takes them from globals.css.
