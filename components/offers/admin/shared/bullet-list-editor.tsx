@@ -4,11 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, XIcon } from "lucide-react";
-import { InclusionScheduleRow } from "@/types/admin-offer-content";
 
 interface BulletListEditorProps {
-  value: string[] | InclusionScheduleRow[];
-  onChange: (v: string[] | InclusionScheduleRow[]) => void;
+  value: string[];
+  onChange: (v: string[]) => void;
   addLabel?: string;
   placeholder?: string;
 }
@@ -19,25 +18,18 @@ export function BulletListEditor({
   addLabel = "Add bullet",
   placeholder = "Bullet text",
 }: BulletListEditorProps) {
-  const [draft, setDraft] = useState<string | InclusionScheduleRow>("");
+  const [draft, setDraft] = useState("");
 
   const commitDraft = () => {
-    const trimmed = typeof draft === "string" ? draft.trim() : draft.spec.trim();
+    const trimmed = draft.trim();
     if (!trimmed) return;
-    if (typeof draft === "string") {
-      onChange([...(value as string[]), trimmed]);
-    } else {
-      onChange([
-        ...(value as InclusionScheduleRow[]),
-        { spec: trimmed, category: draft.category },
-      ]);
-    }
+    onChange([...value, trimmed]);
     setDraft("");
   };
 
   const updateAt = (index: number, text: string) => {
     const next = value.slice();
-    next[index] = typeof next[index] === "string" ? text : { ...next[index], spec: text };
+    next[index] = text;
     onChange(next);
   };
 
@@ -58,7 +50,7 @@ export function BulletListEditor({
                 className="size-1.5 shrink-0 rounded-full bg-royal-gold"
               />
               <Input
-                value={typeof bullet === "string" ? bullet : bullet.spec}
+                value={bullet}
                 onChange={(e) => updateAt(index, e.target.value)}
                 placeholder={placeholder}
                 className="flex-1"
@@ -78,7 +70,7 @@ export function BulletListEditor({
       )}
       <div className="flex items-center gap-2">
         <Input
-          value={typeof draft === "string" ? draft : draft.spec}
+          value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {

@@ -83,7 +83,7 @@ export function OfferContentPage() {
           <FieldLabel>Inclusion bullets</FieldLabel>
           <BulletListEditor
             value={inclusions}
-            onChange={(lines) => dispatch(inclusionsChanged(lines as string[]))}
+            onChange={(lines) => dispatch(inclusionsChanged(lines))}
             addLabel="Add bullet"
             placeholder="Inclusion text"
           />
@@ -92,7 +92,7 @@ export function OfferContentPage() {
           <FieldLabel>Exclusion bullets</FieldLabel>
           <BulletListEditor
             value={exclusions}
-            onChange={(lines) => dispatch(exclusionsListChanged(lines as string[]))}
+            onChange={(lines) => dispatch(exclusionsListChanged(lines))}
             addLabel="Add bullet"
             placeholder="Exclusion text"
           />
