@@ -1,4 +1,4 @@
-import type { OfferStatus } from "@prisma/client";
+import type { OfferStatus, Prisma } from "@prisma/client";
 import type { OfferListRow } from "@/types/offer";
 import { resolveOfferPriceSplit } from "./offer-contract-value";
 
@@ -72,4 +72,36 @@ export function toOfferListRow(
     updatedAt: offer.updatedAt,
     version,
   };
+}
+
+// Lead ids are Postgres int4; a longer "OF-" number must not reach Prisma,
+// which rejects an out-of-range Int instead of matching nothing.
+const MAX_LEAD_ID = 2_147_483_647;
+
+/**
+ * The OR'd search terms for the offers listing. `q` is already trimmed.
+ *
+ * The listing shows each lead by its offer reference, but only the lead's own
+ * columns were searched, so pasting the reference a client quoted found
+ * nothing. It also matches every revision's baseReference, and the `OF-<id>`
+ * fallback the table shows for a lead whose offer has none.
+ */
+export function offerSearchClauses(q: string): Prisma.LeadWhereInput[] {
+  const clauses: Prisma.LeadWhereInput[] = [
+    { name: { contains: q, mode: "insensitive" } },
+    { email: { contains: q, mode: "insensitive" } },
+    { phone: { contains: q, mode: "insensitive" } },
+    { location: { contains: q, mode: "insensitive" } },
+    { offers: { some: { baseReference: { contains: q, mode: "insensitive" } } } },
+  ];
+
+  const fallbackReference = /^OF-(\d+)$/i.exec(q);
+  if (fallbackReference) {
+    const id = Number(fallbackReference[1]);
+    if (Number.isSafeInteger(id) && id <= MAX_LEAD_ID) {
+      clauses.push({ id });
+    }
+  }
+
+  return clauses;
 }

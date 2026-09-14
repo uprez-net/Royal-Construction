@@ -3,7 +3,7 @@ import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { Input } from "../ui/input";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchOffers } from "@/lib/store/slices/offerSlice";
 import type { OfferStatusBucket } from "@/types/offer";
@@ -23,6 +23,8 @@ interface OfferFilterProps {
 
 const TABS = ["all", "pending", "approved", "rejected", "sent"] as const;
 
+const SEARCH_DEBOUNCE_MS = 300;
+
 export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   const dispatch = useAppDispatch();
   const { offers, filters } = useAppSelector((state) => state.offers);
@@ -30,10 +32,23 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   // Seed from the store so a re-mount after a client-side fetch (e.g. navigating
   // into an offer and back via the browser) keeps the active tab selected.
   const [tabId, setTabId] = useState<OfferStatusBucket>(filters.status);
+  // The box updates on every keystroke; the fetch waits for a pause in typing,
+  // so a name costs one request rather than one per letter.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
 
   const handleTabChange = (tab: OfferStatusBucket) => {
     if (tab === tabId) return;
     setTabId(tab);
+    // This fetch already carries the current search text. A search still
+    // waiting on its debounce would refetch the previous tab over it.
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     // A tab change starts a fresh filtered view on page 1, carrying the current
     // search term so the two filters compose.
     dispatch(
@@ -49,17 +64,21 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchInput(query);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     // Re-fetch on every change *including clear*: the old guard returned early
     // on an empty string, so clearing the box left the filtered results on
     // screen. An empty string maps to "no query" server-side.
-    dispatch(
-      fetchOffers({
-        q: query,
-        status: tabId,
-        page: 1,
-        limit: offers.limit || 10,
-      }),
-    );
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      dispatch(
+        fetchOffers({
+          q: query,
+          status: tabId,
+          page: 1,
+          limit: offers.limit || 10,
+        }),
+      );
+    }, SEARCH_DEBOUNCE_MS);
   };
 
   return (
@@ -116,7 +135,7 @@ export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
             <Input
               id="search"
               className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
-              placeholder="Search offers..."
+              placeholder="Search offer #, client, email, phone or suburb"
               value={searchInput}
               onChange={handleSearchChange}
             />

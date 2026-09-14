@@ -12,7 +12,7 @@ import type {
 } from "@/types/offer";
 import { calculateTrend } from "@/utils/formatters";
 import type { LeadListScope } from "@/lib/offer/access";
-import { toOfferListRow } from "@/lib/offer/offer-listing-query";
+import { offerSearchClauses, toOfferListRow } from "@/lib/offer/offer-listing-query";
 import { OFFER_STATUS_BUCKETS } from "@/lib/offer/offer-status-buckets";
 
 // The offers listing's queries. Deliberately not a "use server" module: every
@@ -116,16 +116,7 @@ export async function queryOfferGroups(
             offers: { some: {} },
             ...(scope.assignedId !== null ? { assignedId: scope.assignedId } : {}),
             ...(leadIdsInBucket !== null ? { id: { in: leadIdsInBucket } } : {}),
-            ...(safeQuery
-                ? {
-                    OR: [
-                        { name: { contains: safeQuery, mode: "insensitive" } },
-                        { email: { contains: safeQuery, mode: "insensitive" } },
-                        { phone: { contains: safeQuery, mode: "insensitive" } },
-                        { location: { contains: safeQuery, mode: "insensitive" } },
-                    ],
-                }
-                : {}),
+            ...(safeQuery ? { OR: offerSearchClauses(safeQuery) } : {}),
         };
 
         const [leads, totalCount, totalOfferCount] = await Promise.all([

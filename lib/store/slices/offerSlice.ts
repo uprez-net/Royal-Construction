@@ -16,6 +16,13 @@ interface OffersState {
     };
     loading: boolean;
     error: string | null;
+    /**
+     * The requestId of the newest fetchOffers. Searches go out as the user
+     * types and can resolve out of order on a slow link, so only the newest
+     * request may write rows and filters. Otherwise the table can end on the
+     * results for a query the search box no longer shows.
+     */
+    latestRequestId: string | null;
 }
 
 const initialState: OffersState = {
@@ -33,6 +40,7 @@ const initialState: OffersState = {
     },
     loading: false,
     error: null,
+    latestRequestId: null,
 };
 
 export const fetchOffers = createAsyncThunk(
@@ -70,11 +78,13 @@ const offersSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(fetchOffers.pending, (state) => {
+            .addCase(fetchOffers.pending, (state, action) => {
+                state.latestRequestId = action.meta.requestId;
                 state.loading = true;
                 state.error = null;
             })
             .addCase(fetchOffers.fulfilled, (state, action) => {
+                if (action.meta.requestId !== state.latestRequestId) return;
                 state.loading = false;
                 state.offers = action.payload;
                 // Persist the filters that produced this result so a later page
@@ -89,6 +99,7 @@ const offersSlice = createSlice({
                 }
             })
             .addCase(fetchOffers.rejected, (state, action) => {
+                if (action.meta.requestId !== state.latestRequestId) return;
                 state.loading = false;
                 state.error = action.payload as string;
             })
