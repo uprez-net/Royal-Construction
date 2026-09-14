@@ -528,6 +528,7 @@ export function OfferWorkspaceScreen({
         images,
         status,
         sendBlockers,
+        tenderGateStatus,
       }),
     [
       job,
@@ -542,6 +543,7 @@ export function OfferWorkspaceScreen({
       status,
       sendBlockers,
       phaseUnlocked,
+      tenderGateStatus,
     ],
   );
 

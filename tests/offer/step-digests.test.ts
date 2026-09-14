@@ -59,7 +59,15 @@ const BASE: OfferStepDigestInput = {
     contract: false,
     project: false,
   },
+  tenderGateStatus: "unanswered",
 };
+
+const ALL_UNLOCKED = {
+  "tender-gate": true,
+  tender: true,
+  contract: true,
+  project: true,
+} as const;
 
 test("each step reports its own number, not a Complete/Incomplete chip", () => {
   const d = buildOfferStepDigests(BASE);
@@ -150,9 +158,70 @@ test("a gated phase stops describing its gate once the gate is open", () => {
   });
   // An agreed offer's own current row must not say "unlocks once agreed".
   assert.notEqual(agreed["tender-gate"], "Unlocks once the offer is agreed");
-  assert.equal(agreed["tender-gate"], "Agreed");
+  assert.equal(agreed["tender-gate"], "Awaiting tender access");
+  assert.equal(
+    buildOfferStepDigests({
+      ...BASE,
+      status: "agreed",
+      phaseUnlocked: { ...BASE.phaseUnlocked, "tender-gate": true, tender: true },
+      tenderGateStatus: "unlocked",
+    })["tender-gate"],
+    "Tender access granted",
+  );
   // Later phases still shut still describe their gate.
   assert.equal(agreed.contract, "Unlocks when the tender is signed");
+});
+
+test("the open late phases each say where their own step stands", () => {
+  // Every open row used to print the offer's status, so at contract_sent the
+  // gate, Tender and Contract rows all read "Contract sent".
+  const contractSent = buildOfferStepDigests({
+    ...BASE,
+    status: "contract_sent",
+    phaseUnlocked: { ...ALL_UNLOCKED, project: false },
+  });
+  assert.equal(contractSent["tender-gate"], "Tender access granted");
+  assert.equal(contractSent.tender, "Tender signed");
+  assert.equal(contractSent.contract, "Contract sent");
+  const midway = [
+    contractSent["tender-gate"],
+    contractSent.tender,
+    contractSent.contract,
+  ];
+  assert.equal(new Set(midway).size, midway.length);
+
+  const project = buildOfferStepDigests({
+    ...BASE,
+    status: "project",
+    phaseUnlocked: ALL_UNLOCKED,
+  });
+  const late = [
+    project["tender-gate"],
+    project.tender,
+    project.contract,
+    project.project,
+  ];
+  assert.deepEqual(late, [
+    "Tender access granted",
+    "Tender signed",
+    "Contract signed",
+    "Project created",
+  ]);
+  assert.equal(new Set(late).size, late.length);
+
+  assert.equal(
+    buildOfferStepDigests({
+      ...BASE,
+      status: "contract_signed",
+      phaseUnlocked: ALL_UNLOCKED,
+    }).project,
+    "Ready to create",
+  );
+});
+
+test("the job digest prints the area without a floating-point tail", () => {
+  const d = buildOfferStepDigests({ ...BASE, totalAreaSqm: 180.1 + 20.2 });
+  assert.equal(d["job-setup"], "5 bed · 3 bath · 200.3 m²");
 });
 
 test("every step has a digest, so no rail row can render blank", () => {
