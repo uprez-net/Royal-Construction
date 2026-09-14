@@ -1,4 +1,4 @@
-import { OfferStatus, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { cacheLife, cacheTag } from "next/cache";
 import { startOfWeek, subWeeks } from "date-fns";
 import prisma from "@/lib/prisma";
@@ -13,27 +13,13 @@ import type {
 import { calculateTrend } from "@/utils/formatters";
 import type { LeadListScope } from "@/lib/offer/access";
 import { toOfferListRow } from "@/lib/offer/offer-listing-query";
+import { OFFER_STATUS_BUCKETS } from "@/lib/offer/offer-status-buckets";
 
 // The offers listing's queries. Deliberately not a "use server" module: every
 // function here takes the caller's lead scope as an argument, and exporting one
 // as a Server Action would let the browser pick its own scope. The browser
 // reaches these only through getOfferGroups in lib/data/offers.ts, which
 // derives the scope from the session.
-
-/**
- * Maps a filter tab to the set of `OfferStatus` values its representative
- * revision may be in. `all` is the absence of a status filter. The memberships
- * are duplicated from `queryOfferKPIs`'s raw SQL on purpose: the tab counts come
- * from the KPI cards, so a lead must land in the same bucket whether it is
- * counted (KPI) or filtered (table). The buckets overlap (e.g. TENDER_SENT is
- * both sent and approved) to match the KPI query exactly.
- */
-const OFFER_STATUS_BUCKETS: Record<Exclude<OfferStatusBucket, "all">, OfferStatus[]> = {
-    pending: ["PENDING"],
-    approved: ["ACCEPTED", "AGREED", "TENDER_DRAFT", "TENDER_SENT", "TENDER_SIGNED", "CONTRACT_DRAFT", "CONTRACT_SENT", "CONTRACT_SIGNED", "PROJECT"],
-    rejected: ["REJECTED", "OFFER_DECLINED", "TENDER_DECLINED", "CONTRACT_DECLINED"],
-    sent: ["SENT", "TENDER_SENT", "CONTRACT_SENT"],
-};
 
 /**
  * The scope as a join for the raw queries, which cannot reuse a Prisma where.
@@ -274,6 +260,11 @@ export async function queryOfferKPIs(scope: LeadListScope): Promise<OfferKPIs> {
 
         const previousWeekStart = subWeeks(currentWeekStart, 1);
 
+        const pending = Prisma.join(OFFER_STATUS_BUCKETS.pending);
+        const approved = Prisma.join(OFFER_STATUS_BUCKETS.approved);
+        const rejected = Prisma.join(OFFER_STATUS_BUCKETS.rejected);
+        const sent = Prisma.join(OFFER_STATUS_BUCKETS.sent);
+
         const [result] = await prisma.$queryRaw<OfferKPIQueryResult[]>`
             WITH representative AS (
                 SELECT DISTINCT ON (o."leadId") o.*
@@ -287,19 +278,19 @@ export async function queryOfferKPIs(scope: LeadListScope): Promise<OfferKPIs> {
                 COUNT(*) AS all_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'PENDING'
+                    WHERE "offerStatus" IN (${pending})
                 ) AS pending_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('ACCEPTED', 'AGREED', 'TENDER_DRAFT', 'TENDER_SENT', 'TENDER_SIGNED', 'CONTRACT_DRAFT', 'CONTRACT_SENT', 'CONTRACT_SIGNED', 'PROJECT')
+                    WHERE "offerStatus" IN (${approved})
                 ) AS approved_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('REJECTED', 'OFFER_DECLINED', 'TENDER_DECLINED', 'CONTRACT_DECLINED')
+                    WHERE "offerStatus" IN (${rejected})
                 ) AS rejected_offers,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('SENT', 'TENDER_SENT', 'CONTRACT_SENT')
+                    WHERE "offerStatus" IN (${sent})
                 ) AS sent_offers,
 
                 COUNT(*) FILTER (
@@ -312,46 +303,46 @@ export async function queryOfferKPIs(scope: LeadListScope): Promise<OfferKPIs> {
                 ) AS all_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'PENDING'
+                    WHERE "offerStatus" IN (${pending})
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS pending_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" = 'PENDING'
+                    WHERE "offerStatus" IN (${pending})
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS pending_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('ACCEPTED', 'AGREED', 'TENDER_DRAFT', 'TENDER_SENT', 'TENDER_SIGNED', 'CONTRACT_DRAFT', 'CONTRACT_SENT', 'CONTRACT_SIGNED', 'PROJECT')
+                    WHERE "offerStatus" IN (${approved})
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS approved_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('ACCEPTED', 'AGREED', 'TENDER_DRAFT', 'TENDER_SENT', 'TENDER_SIGNED', 'CONTRACT_DRAFT', 'CONTRACT_SENT', 'CONTRACT_SIGNED', 'PROJECT')
+                    WHERE "offerStatus" IN (${approved})
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS approved_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('REJECTED', 'OFFER_DECLINED', 'TENDER_DECLINED', 'CONTRACT_DECLINED')
+                    WHERE "offerStatus" IN (${rejected})
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS rejected_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('REJECTED', 'OFFER_DECLINED', 'TENDER_DECLINED', 'CONTRACT_DECLINED')
+                    WHERE "offerStatus" IN (${rejected})
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS rejected_current_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('SENT', 'TENDER_SENT', 'CONTRACT_SENT')
+                    WHERE "offerStatus" IN (${sent})
                     AND "updatedAt" >= ${previousWeekStart}
                     AND "updatedAt" < ${currentWeekStart}
                 ) AS sent_previous_week,
 
                 COUNT(*) FILTER (
-                    WHERE "offerStatus" in ('SENT', 'TENDER_SENT', 'CONTRACT_SENT')
+                    WHERE "offerStatus" IN (${sent})
                     AND "updatedAt" >= ${currentWeekStart}
                 ) AS sent_current_week
             FROM representative
