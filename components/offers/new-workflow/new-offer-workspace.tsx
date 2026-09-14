@@ -1340,9 +1340,13 @@ export function NewOfferWorkspace({
               scope: recallScope,
               toStatus: next.toUpperCase() as OfferStatus,
             });
-            // A recall DocuSign does not confirm is refused by the server: it
-            // throws with the status unchanged, and the catch below shows why.
-            // voidWarnings is empty in practice; the check is harmless.
+            // A refused recall (DocuSign did not confirm the void) leaves the
+            // status unchanged and comes back as data, because a thrown server
+            // message is hidden in production. Rethrow it so the catch below
+            // shows why and resyncs. voidWarnings is empty in practice.
+            if (!recalled.ok) {
+              throw new Error(recalled.error);
+            }
             if (recalled.voidWarnings.length > 0) {
               setTransitionError(recalled.voidWarnings.join(" "));
             }
@@ -1427,7 +1431,9 @@ export function NewOfferWorkspace({
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
           setRevisionNotice(
-            "This offer is locked — changes need a contract variation, not a new offer revision.",
+            result.reason === "refused"
+              ? result.error
+              : "This offer is locked — changes need a contract variation, not a new offer revision.",
           );
           return;
         }

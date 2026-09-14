@@ -971,7 +971,11 @@ export type CreateOfferRevisionResult =
     }
   // An executed Contract can't be revised — a change there is a contract
   // variation, a separate instrument, not a new offer revision.
-  | { ok: false; reason: "locked" };
+  | { ok: false; reason: "locked" }
+  // Nothing was forked: DocuSign did not confirm every void, or a document went
+  // out for signature meanwhile. Returned, not thrown, because Next hides a
+  // thrown message in production and `error` is what the estimator acts on.
+  | { ok: false; reason: "refused"; error: string };
 
 /**
  * Void every envelope in `scope` that is still out for signature, so a customer
@@ -1081,6 +1085,10 @@ async function voidLiveOfferEnvelopes(
  * derived from the offer's own status and the call is refused unless the
  * client's values agree. `toStatus` is kept in the input only so the client is
  * unchanged.
+ *
+ * A refusal is returned, not thrown. Next replaces a thrown message with a
+ * generic one in production, and the estimator needs to know which envelope is
+ * still out and what to do about it.
  */
 export async function recallOfferEnvelope(input: {
   offerId: string;
@@ -1088,11 +1096,10 @@ export async function recallOfferEnvelope(input: {
   toStatus: OfferStatus;
   actorId?: string;
   note?: string;
-}): Promise<{
-  ok: true;
-  status: OfferStatus;
-  voidWarnings: readonly string[];
-}> {
+}): Promise<
+  | { ok: true; status: OfferStatus; voidWarnings: readonly string[] }
+  | { ok: false; error: string }
+> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
     throw new Error(access.error);
@@ -1111,7 +1118,7 @@ export async function recallOfferEnvelope(input: {
     offer.isActive,
   );
   if (!recall.ok) {
-    throw new Error(recall.error);
+    return { ok: false, error: recall.error };
   }
 
   // Void FIRST, and move the status only once DocuSign has confirmed every void.
@@ -1125,13 +1132,14 @@ export async function recallOfferEnvelope(input: {
     recall.scope,
   );
   if (!decideRecallPullBack(voids).proceed) {
-    throw new Error(
-      describeUnconfirmedVoid({
+    return {
+      ok: false,
+      error: describeUnconfirmedVoid({
         failedEnvelopeIds: voids.failedDocusignIds,
         voidedCount: voids.voidedIds.length,
         action: "recall",
       }),
-    );
+    };
   }
 
   // No owner gate: the offer passed it when it was sent, and it cannot be
@@ -1148,13 +1156,14 @@ export async function recallOfferEnvelope(input: {
     note: input.note,
   });
   if (!committed) {
-    throw new Error(
-      `${voids.voidedIds.length > 0 ? "The DocuSign envelope was voided and stays voided, but the" : "The"} offer's status changed before the recall could move it back. Refresh to see where it is now.`,
-    );
+    return {
+      ok: false,
+      error: `${voids.voidedIds.length > 0 ? "The DocuSign envelope was voided and stays voided, but the" : "The"} offer's status changed before the recall could move it back. Refresh to see where it is now.`,
+    };
   }
 
   // Kept for the client's existing check; a recall with anything to warn about
-  // now throws instead.
+  // is now refused instead.
   return { ok: true, status: recall.to, voidWarnings: [] };
 }
 
@@ -1198,13 +1207,15 @@ export async function createOfferRevision(input: {
     "all",
   );
   if (!decideRecallPullBack(voids).proceed) {
-    throw new Error(
-      describeUnconfirmedVoid({
+    return {
+      ok: false,
+      reason: "refused",
+      error: describeUnconfirmedVoid({
         failedEnvelopeIds: voids.failedDocusignIds,
         voidedCount: voids.voidedIds.length,
         action: "revision",
       }),
-    );
+    };
   }
 
   const created = await prisma.$transaction(async (tx) => {
@@ -1251,9 +1262,7 @@ export async function createOfferRevision(input: {
       },
     });
     if (sentMeanwhile > 0) {
-      throw new Error(
-        "No revision was created: a document on this offer was sent for signature while the revision was being prepared. Refresh and try again.",
-      );
+      return "sent-meanwhile" as const;
     }
 
     await tx.offer.update({
@@ -1301,6 +1310,15 @@ export async function createOfferRevision(input: {
 
     return next;
   });
+  if (created === "sent-meanwhile") {
+    // A live envelope outside the confirmed voids appeared after they ran.
+    return {
+      ok: false,
+      reason: "refused",
+      error:
+        "No revision was created: a document on this offer was sent for signature while the revision was being prepared. Refresh and try again.",
+    };
+  }
   if (!created) {
     return { ok: false, reason: "locked" };
   }
