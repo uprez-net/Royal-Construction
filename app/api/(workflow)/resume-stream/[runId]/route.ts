@@ -2,9 +2,8 @@ import { OfferCreationStatus } from "@/types/offer";
 import { getRun } from "workflow/api";
 import { NextRequest, connection } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-// import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-// import { LeadAccessError, assertCanAccessLead } from "@/lib/offer/access";
+import { verifyRunCapability } from "@/lib/workflow/run-capability";
 import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
 import { ComplianceChecklistStreamEvent } from "@/types/compliance-workflow";
 
@@ -36,30 +35,19 @@ export async function GET(
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { runId } = await params;
-    if (!runId.trim()) {
+    const { runId: capability } = await params;
+    if (!capability.trim()) {
         return Response.json({ error: "Invalid runId" }, { status: 400 });
     }
 
-    // const lead = await prisma.lead.findFirst({
-    //     where: { runId },
-    //     select: { id: true },
-    // });
-    // if (!lead) {
-    //     return Response.json({ error: "Workflow run not found" }, { status: 404 });
-    // }
-
-    // try {
-    //     await assertCanAccessLead(user, lead.id);
-    // } catch (error) {
-    //     if (error instanceof LeadAccessError) {
-    //         return Response.json(
-    //             { error: error.status === 404 ? "Workflow run not found" : error.message },
-    //             { status: error.status },
-    //         );
-    //     }
-    //     throw error;
-    // }
+    // The path segment is the capability the starting route issued, not a bare
+    // run id: a session alone used to be enough to stream anyone's run. A token
+    // for another user, a forged one, and a raw run id all look like a missing
+    // run, so the refusal says nothing about whether the run exists.
+    const runId = verifyRunCapability(capability, user.id);
+    if (!runId) {
+        return Response.json({ error: "Workflow run not found" }, { status: 404 });
+    }
 
     const { searchParams } = new URL(request.url);
     const startIndexParam = searchParams.get("startIndex");

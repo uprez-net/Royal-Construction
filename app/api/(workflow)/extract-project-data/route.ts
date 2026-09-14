@@ -1,6 +1,11 @@
 import { start } from "workflow/api";
 import { extractTenderAndContractDocuments } from "@/lib/workflow/project";
 import {
+    RUN_CAPABILITY_SECRET_ENV,
+    runCapabilitySecret,
+    signRunCapability,
+} from "@/lib/workflow/run-capability";
+import {
     badRequestResponse,
     errorResponse,
     successResponse,
@@ -41,6 +46,13 @@ export async function POST(request: Request) {
         return badRequestResponse("Invalid request body");
     }
 
+    // Checked before start(): without the secret no one could follow the run,
+    // and it would still spend the whole extraction.
+    if (!runCapabilitySecret()) {
+        console.error(`${RUN_CAPABILITY_SECRET_ENV} is not set; not starting tender extraction`);
+        return errorResponse("Failed to start offer creation workflow.");
+    }
+
     try {
         // Executes asynchronously and doesn't block your app
         const run = await start(extractTenderAndContractDocuments, [validationResult.data]);
@@ -48,7 +60,9 @@ export async function POST(request: Request) {
         console.log("Started run", run.runId);
 
         return successResponse({
-            runId: run.runId,
+            // The client only hands this to /api/resume-stream, which accepts
+            // nothing but a capability issued to the same user.
+            runId: signRunCapability({ runId: run.runId, userId: user.id }),
             message: "Creating offer workflow started",
         });
     } catch (error) {
