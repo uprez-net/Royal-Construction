@@ -97,6 +97,7 @@ import {
   isSupportedCalcVersion,
 } from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
+import type { ContractTerms } from "@/lib/offer/contract-terms";
 import {
   isUnsafeToLeave,
   type OfferSaveState,
@@ -333,6 +334,11 @@ export function NewOfferWorkspace({
     useState<ProjectHandoffResult | null>(null);
   // The handed-off project, from the handoff or from the loader after a reload.
   const [projectId, setProjectId] = useState<string | null>(null);
+  // What the BC4 carries, from the loader, so the Contract preview shows the
+  // signed Tender's terms rather than this tab's payment schedule.
+  const [contractTerms, setContractTerms] = useState<ContractTerms | null>(
+    null,
+  );
   const [prefilling, setPrefilling] = useState(false);
   const [checking, setChecking] = useState(false);
   const [draftingHighlights, setDraftingHighlights] = useState(false);
@@ -1093,6 +1099,7 @@ export function NewOfferWorkspace({
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
                 setHydrated(true);
                 setSignerStatuses(loaded.signerStatuses ?? []);
+                setContractTerms(loaded.contractTerms ?? null);
                 if (loaded.snapshot) {
                   hydrateSnapshot(
                     loaded.snapshot,
@@ -1166,6 +1173,7 @@ export function NewOfferWorkspace({
       // untouched — that is the case worth telling the operator about.
       setAdminContentStale(loaded.adminContentStale === true);
       setSignerStatuses(loaded.signerStatuses ?? []);
+      setContractTerms(loaded.contractTerms ?? null);
       setProjectId(loaded.projectId ?? null);
       // The customer declined the last envelope — tell the operator why (the
       // reason comes straight from DocuSign) and point them at a new revision.
@@ -1299,6 +1307,9 @@ export function NewOfferWorkspace({
         }
         if (result.ok) {
           setSignerStatuses(result.signerStatuses);
+          if (result.contractTerms) {
+            setContractTerms(result.contractTerms);
+          }
           stateVersionRef.current = result.stateVersion;
           const next = result.status.toLowerCase() as OfferWorkspaceStatus;
           if (next !== status) {
@@ -1498,6 +1509,7 @@ export function NewOfferWorkspace({
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
+            setContractTerms(loaded.contractTerms ?? null);
             if (loaded.snapshot) {
               hydrateSnapshot(
                 loaded.snapshot,
@@ -1572,6 +1584,7 @@ export function NewOfferWorkspace({
         autosaveHaltedRef.current = false;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
         setSignerStatuses(loaded.signerStatuses ?? []);
+        setContractTerms(loaded.contractTerms ?? null);
         setProjectId(loaded.projectId ?? null);
         // A forked revision starts with no contract — clear any in-memory
         // particulars so they can't be saved onto the new revision's contract.
@@ -1684,6 +1697,7 @@ export function NewOfferWorkspace({
               stateVersionRef.current = loaded.stateVersion;
               setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
               setSignerStatuses(loaded.signerStatuses ?? []);
+              setContractTerms(loaded.contractTerms ?? null);
             } catch {
               // Reload failed — leave the UI as-is; the error message still shows.
             }
@@ -1702,6 +1716,7 @@ export function NewOfferWorkspace({
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
+            setContractTerms(loaded.contractTerms ?? null);
           } catch {
             // Reload failed too — leave the UI as-is.
           }
@@ -1991,6 +2006,7 @@ export function NewOfferWorkspace({
         sentInfo={sentInfo}
         transitionError={transitionError}
         signerStatuses={signerStatuses}
+        contractTerms={contractTerms}
         onSendOfferForSignature={sendOfferAccept}
         offerSignSending={offerSignSending}
         offerSignError={offerSignError}

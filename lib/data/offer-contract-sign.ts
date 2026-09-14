@@ -15,7 +15,6 @@ import {
   deserializeWorkspace,
   parseWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
-import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 // import { generatePDF } from "@/lib/utils/generatePDF";
 // import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
@@ -44,16 +43,12 @@ import {
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 
+import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
+import { describeTenderPriceMismatch } from "@/lib/offer/contract-payment-source";
 import {
-  formatContractMoney,
-  paymentScheduleLine as buildPaymentScheduleLine,
-  stageAmount,
-  tenderExclusionLines,
-} from "@/lib/offer/project-handoff-commercials";
-import {
-  describeTenderPriceMismatch,
-  resolveContractPaymentSource,
-} from "@/lib/offer/contract-payment-source";
+  CONTRACT_STAGE_SLOTS,
+  resolveContractTerms,
+} from "@/lib/offer/contract-terms";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 import {
   decideContractGrannyExclusionGate,
@@ -149,21 +144,17 @@ export async function sendContractForSignature(input: {
         "No valid client email found on the offer or lead — set the client email in Job setup before sending the Contract.",
     };
   }
-  // Resolve the price through the same path the Tender used — a blank override
-  // round-trips to "0", so Number(...) would lock a $0.00 contract (the signed
-  // Tender showed the computed value). buildProposalInput runs
-  // resolveOptionalPriceInput + the computed-value fallback.
-  const contractValue =
-    buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
 
   // The payment schedule and deposit come from the Tender the customer signed;
   // the price stays the agreed snapshot's. A Tender that printed a different
-  // price is refused rather than reconciled, before the send is claimed.
-  const payment = resolveContractPaymentSource({
+  // price is refused rather than reconciled, before the send is claimed. The
+  // Contract step previews the same terms, so it shows what the BC4 carries.
+  const { payment, terms: contractTerms } = resolveContractTerms({
     tenderDocumentData: offer.tender?.documentData ?? null,
-    agreedPaymentSchedule: snapshot.paymentSchedule,
+    agreedSnapshot: snapshot,
   });
+  const contractValue = contractTerms.contractValueIncGst;
   if (payment.source === "agreed-snapshot") {
     console.warn(
       `[offer] contract for offer ${offer.id}: no payment schedule on the Tender row, using the agreed snapshot's`,
@@ -305,10 +296,10 @@ export async function sendContractForSignature(input: {
   // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
   // silently drop validated stages past the 7th, which would send a contract
   // whose payment schedule doesn't sum to the contract value.
-  if (payment.paymentSchedule.length > 7) {
+  if (payment.paymentSchedule.length > CONTRACT_STAGE_SLOTS) {
     return {
       ok: false,
-      error: `The contract template supports up to 7 payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
+      error: `The contract template supports up to ${CONTRACT_STAGE_SLOTS} payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
     };
   }
 
@@ -339,12 +330,7 @@ export async function sendContractForSignature(input: {
   }
 
   const parsedParticulars = parseContractParticulars(claim.particulars);
-  const stageRows = payment.paymentSchedule.slice(0, 7);
-  const paymentScheduleLine = buildPaymentScheduleLine(stageRows, contractValue);
-  const depositRow = payment.deposit;
-  // The exclusions the Tender printed, Scope exclusions included — the bullets
-  // alone left out every ticked Scope exclusion the customer had signed.
-  const exclusions = tenderExclusionLines(snapshot);
+  const exclusions = contractTerms.exclusions;
 
   // Owner address/contact for the single BC4 owner lines. Current Location (from
   // Job setup) supersedes the hand-typed owner-address particular as the source
@@ -409,13 +395,8 @@ export async function sendContractForSignature(input: {
     locked("ownerEmail", primaryOwnerEmail),
     locked("siteAddress", job.siteAddress),
     locked("variationPercent", "10%"),
-    locked("paymentSchedule", paymentScheduleLine),
-    locked(
-      "depositAmount",
-      depositRow
-        ? formatContractMoney(stageAmount(contractValue, depositRow.percentOfContract))
-        : "",
-    ),
+    locked("paymentSchedule", contractTerms.paymentScheduleLine),
+    locked("depositAmount", contractTerms.depositAmount),
     locked("excludedDays", "Saturdays, Sundays and NSW Public Holidays"),
     locked("defectsLiabilityWeeks", "12 Weeks"),
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
+import type { ContractTerms } from "@/lib/offer/contract-terms";
+import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
 import {
   collectOfferSigners,
   formatOwnerNamesLine,
@@ -52,7 +53,8 @@ type ContractPanelProps = {
   readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
+  // What the BC4 carries (see ContractTerms). Null until the loader returns it.
+  readonly contractTerms: ContractTerms | null;
   readonly contractParticulars: ContractParticulars;
   readonly onContractParticularsChange: (
     patch: Partial<ContractParticulars>,
@@ -71,7 +73,7 @@ export function ContractPanel({
   signerStatuses,
   customerPrice,
   draft,
-  paymentSchedule,
+  contractTerms,
   contractParticulars,
   onContractParticularsChange,
   onGenerateContract,
@@ -115,7 +117,7 @@ export function ContractPanel({
             customerPrice={customerPrice}
             draft={draft}
             job={job}
-            paymentSchedule={paymentSchedule}
+            contractTerms={contractTerms}
             state={isSigned ? "signed" : isSent ? "sent" : "draft"}
           />
         ) : null}
@@ -530,13 +532,13 @@ function ContractPreview({
   job,
   customerPrice,
   draft,
-  paymentSchedule,
+  contractTerms,
   state,
 }: {
   readonly job: OfferWorkspaceJob;
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
+  readonly contractTerms: ContractTerms | null;
   readonly state: "draft" | "sent" | "signed";
 }) {
   const contractSum = customerPrice.selectedContractValueIncGst;
@@ -585,34 +587,77 @@ function ContractPreview({
         </p>
       </div>
 
+      {/* The schedule, deposit and exclusions the send fills the BC4 with, not
+          this tab's schedule: the Contract takes them from the signed Tender. */}
       <div>
         <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
           Progress payments
         </p>
-        <div className="overflow-hidden rounded-lg border border-border/70">
-          <table className="w-full text-[13px]">
-            <tbody>
-              {paymentSchedule.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-border/60 last:border-b-0"
-                >
-                  <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                    {formatPercent(row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
-                    {formatCurrency(contractSum * row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    {row.trigger}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {contractTerms ? (
+          <div className="grid gap-2">
+            <div className="overflow-hidden rounded-lg border border-border/70">
+              <table className="w-full text-[13px]">
+                <tbody>
+                  {contractTerms.paymentSchedule.map((row, index) => (
+                    <tr
+                      key={`${index}-${row.id}`}
+                      className="border-b border-border/60 last:border-b-0"
+                    >
+                      <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                        {formatPercent(row.percentOfContract)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono">
+                        {formatContractMoney(row.amount)}
+                      </td>
+                      <td className="px-3 py-1.5 text-muted-foreground">
+                        {row.trigger}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Deposit:{" "}
+              <span className="font-medium text-foreground">
+                {contractTerms.deposit
+                  ? `${contractTerms.deposit.stageName}, ${formatPercent(contractTerms.deposit.percentOfContract)} — ${contractTerms.depositAmount}`
+                  : "None"}
+              </span>
+            </p>
+            {contractTerms.source === "agreed-snapshot" ? (
+              <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                The signed Tender has no stored payment schedule, so the
+                Contract takes these terms from the agreed offer.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground/80">
+            Reload the page to show the payment schedule the Contract takes from
+            the signed Tender.
+          </p>
+        )}
       </div>
+
+      {contractTerms ? (
+        <div>
+          <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Exclusions</p>
+          {contractTerms.exclusions.length > 0 ? (
+            <ul className="grid list-disc gap-1 pl-5 text-[13px]">
+              {contractTerms.exclusions.map((line, index) => (
+                <li key={`${index}-${line}`}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground/80">
+              No exclusions are listed on the Contract.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       <p className="text-xs text-muted-foreground">
         {draft.termsSummary} Scope, inclusions and exclusions are as set out in

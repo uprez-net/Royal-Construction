@@ -31,6 +31,7 @@ import {
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
+import type { ContractTerms } from "@/lib/offer/contract-terms";
 import {
   deriveTenderGateStatus,
   type TenderGateState,
@@ -230,6 +231,8 @@ type OfferWorkspaceScreenProps = {
   readonly transitionError: string | null;
   // Per-recipient DocuSign status for the signing trackers (#121/#123).
   readonly signerStatuses: readonly OfferSignerStatus[];
+  // The terms the BC4 carries, resolved on the server from the signed Tender.
+  readonly contractTerms: ContractTerms | null;
   // Offer-document acceptance signing (ADR 0004) — customer-only DocuSign send.
   readonly onSendOfferForSignature: () => void;
   readonly offerSignSending?: boolean;
@@ -347,6 +350,7 @@ export function OfferWorkspaceScreen({
   sentInfo,
   transitionError,
   signerStatuses,
+  contractTerms,
   onSendOfferForSignature,
   offerSignSending,
   offerSignError,
@@ -917,7 +921,7 @@ export function OfferWorkspaceScreen({
               customerPrice={customerPrice}
               draft={draft}
               job={job}
-              paymentSchedule={paymentSchedule}
+              contractTerms={contractTerms}
               status={status}
               contractParticulars={contractParticulars}
               onContractParticularsChange={onContractParticularsChange}
