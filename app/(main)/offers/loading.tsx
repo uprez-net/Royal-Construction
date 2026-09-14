@@ -10,11 +10,15 @@ const tableGrid = {
 export default function OfferPageSkeleton() {
   return (
     <PageSkeleton label="Loading offers" className="space-y-6">
-      <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/60 p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-56 bg-royal-gold/15" />
-            <Skeleton className="h-4 w-80 max-w-full bg-royal-gold/15" />
+      {/* Same surface and geometry as PageHeroCard: Card's py-4 plus
+          CardContent's p-6 is px-6 py-10, and the title and description line
+          boxes are 28px and 20px. Anything else flashes and jumps on the swap. */}
+      <div className="relative overflow-hidden rounded-lg border border-royal-gold/20 bg-linear-to-br from-royal-gold-light to-card px-6 py-10 shadow-sm">
+        <div className="pointer-events-none absolute -right-12 -top-10 size-40 rounded-full bg-royal-gold/10" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <Skeleton className="h-7 w-56 max-w-full bg-royal-gold/15" />
+            <Skeleton className="h-5 w-80 max-w-full bg-royal-gold/15" />
           </div>
           <Skeleton className="h-8 w-48 rounded-lg bg-royal-gold/20" />
         </div>
