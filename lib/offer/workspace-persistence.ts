@@ -7,7 +7,9 @@ import {
   type OfferWorkspaceJob,
   type OfferWorkspaceScopeItem,
   type OfferDocumentDraft,
+  type OfferWorkspaceStatus,
 } from "./workspace-model";
+import { keepFrozenSlices, lockedSnapshotChanges } from "./offer-editability";
 import { INITIAL_AREA_CALCULATOR, type OfferAreaCalculator } from "./workspace-area";
 import {
   withDerivedHbcfPremium,
@@ -882,16 +884,38 @@ export function deserializeWorkspace(
   };
 }
 
-// A stored snapshot in the form a tab that opened it saves it back in: the
-// workspace hydrates from deserializeWorkspace and saves through
-// serializeWorkspace. The save lock compares an incoming snapshot against this,
-// never against the raw row, whose legacy shape (pre-migration keys, a missing
-// derived field) would otherwise read as an edit nobody made. Throws when the
-// read parse refuses the row.
-export function canonicalStoredWorkspace(
-  raw: unknown,
-): PersistedOfferWorkspaceState {
-  return serializeWorkspace(deserializeWorkspace(parseWorkspaceState(raw)));
+// A snapshot as it reads back once hydration has nothing left to fill in. The
+// save lock compares both sides in this form. A tab holds the frozen parts
+// either as the row stored them or as it hydrated them, and the two differ with
+// no edit made: a legacy row gains a reverse-filled HBCF contract value on its
+// first hydrate and a premium re-derived from it on its second, and a workbook
+// premium kept to the cent re-derives a cent off. Hydration is stable after two
+// passes. Throws when the read parse refuses the snapshot.
+export function settledWorkspace(state: unknown): PersistedOfferWorkspaceState {
+  const once = serializeWorkspace(deserializeWorkspace(parseWorkspaceState(state)));
+  return serializeWorkspace(deserializeWorkspace(once));
+}
+
+// What saveOfferWorkspace does with a validated incoming snapshot: refuse it
+// when it changes a slice frozen at the offer's stored status, otherwise write
+// it with those slices kept as stored. `stored` is the parsed stored row, null
+// when the offer has never been saved.
+export function planWorkspaceSave(
+  status: OfferWorkspaceStatus,
+  stored: PersistedOfferWorkspaceState | null,
+  incoming: PersistedOfferWorkspaceState,
+):
+  | { ok: true; state: PersistedOfferWorkspaceState }
+  | { ok: false; changes: readonly string[] } {
+  const changes = lockedSnapshotChanges(
+    status,
+    stored === null ? null : settledWorkspace(stored),
+    settledWorkspace(incoming),
+  );
+  if (changes.length > 0) {
+    return { ok: false, changes };
+  }
+  return { ok: true, state: keepFrozenSlices(status, stored, incoming) };
 }
 
 

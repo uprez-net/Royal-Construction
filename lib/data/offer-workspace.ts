@@ -27,9 +27,9 @@ import {
 import {
   CURRENT_CALC_VERSION,
   LEGACY_CALC_VERSION,
-  canonicalStoredWorkspace,
   deserializeWorkspace,
   parseWorkspaceState,
+  planWorkspaceSave,
   serializeWorkspace,
   validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
@@ -39,10 +39,7 @@ import {
   applyAdminPrefillToSnapshot,
   buildAdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
-import {
-  isOfferBuildStepEditable,
-  lockedSnapshotChanges,
-} from "@/lib/offer/offer-editability";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   resolveOfferContractValue,
@@ -583,13 +580,13 @@ export async function saveOfferWorkspace(input: {
   // The workspace locks a step's controls once the offer is issued, but this
   // action writes the whole snapshot it is given. A tab still showing the offer
   // as pending after another tab sent it could otherwise change the cost lines
-  // and reprice an issued offer. Compared in persisted form, against the stored
-  // row as a tab that opened it would save it back.
+  // and reprice an issued offer. An accepted save still writes the frozen parts
+  // as stored, so a tab's hydrated form of them never moves the price.
   const storedStatus = storedRow.offerStatus.toLowerCase() as OfferWorkspaceStatus;
-  let storedCanonical: PersistedOfferWorkspaceState | null = null;
+  let storedState: PersistedOfferWorkspaceState | null = null;
   if (storedRow.workspaceState !== null) {
     try {
-      storedCanonical = canonicalStoredWorkspace(storedRow.workspaceState);
+      storedState = parseWorkspaceState(storedRow.workspaceState);
     } catch (error) {
       // Unreadable, so nothing can be compared. A pending offer has no issued
       // record to protect and the save repairs the row; an issued one keeps it.
@@ -602,22 +599,21 @@ export async function saveOfferWorkspace(input: {
       }
     }
   }
-  const frozenChanges = lockedSnapshotChanges(
-    storedStatus,
-    storedCanonical,
-    validated.state,
-  );
-  if (frozenChanges.length > 0) {
+  const plan = planWorkspaceSave(storedStatus, storedState, validated.state);
+  if (!plan.ok) {
     return { ok: false, reason: "locked" };
   }
+  const saved = plan.state;
+  const savedSnapshot = deserializeWorkspace(saved);
   // Resolve the price through the same path the Tender/Contract and the project
   // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
   // blank override serialises to 0 cents — so reading it here stamped $0 on every
   // offer priced the normal way, which is what the Versions timeline displayed.
   const selectedContractValueIncGst = buildProposalInput(
-    // Deliberately the pinned state, not input.snapshot: the money columns must
-    // agree with what was actually persisted, including its calculation rules.
-    deserializeWorkspace(persisted),
+    // Deliberately the written state, not input.snapshot: the money columns must
+    // agree with what was actually persisted, including its calculation rules
+    // and, once issued, its stored frozen slices.
+    savedSnapshot,
   ).customerPrice.selectedContractValueIncGst;
   const contractValue = new Prisma.Decimal(selectedContractValueIncGst);
   // The three money columns the Offers list prints (amount / GST / total) were
@@ -627,7 +623,7 @@ export async function saveOfferWorkspace(input: {
   // disagree — see splitContractValueByGst for why GST is a back-solve.
   const priceSplit = splitContractValueByGst({
     contractValueIncGst: selectedContractValueIncGst,
-    gstRate: input.snapshot.workspacePricingSettings.gstRate,
+    gstRate: savedSnapshot.workspacePricingSettings.gstRate,
   });
   const amount = new Prisma.Decimal(priceSplit.amountExGst);
   const gstAmount = new Prisma.Decimal(priceSplit.gstAmount);
@@ -652,7 +648,7 @@ export async function saveOfferWorkspace(input: {
       stateVersion: input.expectedStateVersion,
     },
     data: {
-      workspaceState: persisted as unknown as Prisma.InputJsonValue,
+      workspaceState: saved as unknown as Prisma.InputJsonValue,
       amount,
       gstAmount,
       totalAmount,

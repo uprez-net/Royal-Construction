@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { lockedSnapshotChanges } from "../../lib/offer/offer-editability";
+import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
@@ -14,13 +17,18 @@ import {
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import {
+  reverseHbcfTotalContractValue,
+  withDerivedHbcfPremium,
+} from "../../lib/offer/workspace-pricing";
+import {
   CURRENT_CALC_VERSION,
   INITIAL_TENDER_GATE,
   LEGACY_CALC_VERSION,
-  canonicalStoredWorkspace,
   deserializeWorkspace,
   parseWorkspaceState,
+  planWorkspaceSave,
   serializeWorkspace,
+  settledWorkspace,
   validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
   type PersistedOfferWorkspaceState,
@@ -31,6 +39,12 @@ import {
 // change a cost line, and the save repriced an issued offer in place, money
 // columns included. The server now refuses a save that changes a step frozen
 // at the offer's stored status; these pin which steps freeze when.
+//
+// The first version of that lock compared the tab's snapshot with the stored
+// row re-hydrated, then wrote the tab's copy. A tab holding a legacy or
+// workbook HBCF premium had its second edit refused and thrown away, and a
+// legacy offer's price moved a cent on its first save. These also pin that a
+// same-tab edit goes through and an issued offer's price stays put.
 
 const BLOB_URL =
   "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/offer/hero.png";
@@ -56,26 +70,83 @@ const BASE: OfferWorkspaceSnapshot = {
   calcVersion: CURRENT_CALC_VERSION,
 };
 
-// A row as Prisma hands it back: plain JSON.
-function storedRow(snapshot: OfferWorkspaceSnapshot): unknown {
-  return JSON.parse(JSON.stringify(serializeWorkspace(snapshot)));
-}
-
-// What the server compares for an incoming save: the client's snapshot after
-// the save's own validation.
-function incoming(snapshot: OfferWorkspaceSnapshot): PersistedOfferWorkspaceState {
-  const result = validatePersistedWorkspace(storedRow(snapshot));
-  assert.ok(result.ok, result.ok ? "" : result.error);
-  return result.state;
-}
-
-const STORED = canonicalStoredWorkspace(storedRow(BASE));
+const ISSUED_SAVE_STATUSES = ["sent", "agreed", "tender_draft"] as const;
 const SAVE_STATUSES: readonly OfferWorkspaceStatus[] = [
   "pending",
-  "sent",
-  "agreed",
-  "tender_draft",
+  ...ISSUED_SAVE_STATUSES,
 ];
+
+// A row as Prisma hands it back: plain JSON.
+function row(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const STORED = row(serializeWorkspace(BASE));
+
+// What saveOfferWorkspace does with a tab's snapshot: validate it, then plan
+// the write against the parsed stored row (null when never saved).
+function save(
+  status: OfferWorkspaceStatus,
+  storedRow: unknown,
+  snapshot: OfferWorkspaceSnapshot,
+) {
+  const incoming = validatePersistedWorkspace(row(serializeWorkspace(snapshot)));
+  assert.ok(incoming.ok, incoming.ok ? "" : incoming.error);
+  return planWorkspaceSave(
+    status,
+    storedRow === null ? null : parseWorkspaceState(storedRow),
+    incoming.state,
+  );
+}
+
+// The frozen slices a save was refused for; empty when it went through.
+function refused(
+  status: OfferWorkspaceStatus,
+  storedRow: unknown,
+  snapshot: OfferWorkspaceSnapshot,
+): readonly string[] {
+  const plan = save(status, storedRow, snapshot);
+  return plan.ok ? [] : plan.changes;
+}
+
+// The row a save that went through leaves behind.
+function written(
+  status: OfferWorkspaceStatus,
+  storedRow: unknown,
+  snapshot: OfferWorkspaceSnapshot,
+): unknown {
+  const plan = save(status, storedRow, snapshot);
+  assert.ok(plan.ok, plan.ok ? "" : `refused: ${plan.changes.join(", ")}`);
+  return row(plan.state);
+}
+
+// A stored row as the loader hands it to the workspace.
+function open(storedRow: unknown): OfferWorkspaceSnapshot {
+  return deserializeWorkspace(parseWorkspaceState(storedRow));
+}
+
+// The contract value a stored row prints and fills the money columns with.
+function printedPrice(storedRow: unknown): number {
+  return buildProposalInput(open(storedRow)).customerPrice
+    .selectedContractValueIncGst;
+}
+
+// An edit each issued status still accepts: the offer document while sent, the
+// payment schedule once agreed.
+function allowedEdit(
+  status: (typeof ISSUED_SAVE_STATUSES)[number],
+  snapshot: OfferWorkspaceSnapshot,
+  text: string,
+): OfferWorkspaceSnapshot {
+  return status === "sent"
+    ? { ...snapshot, draft: { ...snapshot.draft, headline: text } }
+    : {
+        ...snapshot,
+        paymentSchedule: snapshot.paymentSchedule.map((scheduleRow, index) =>
+          index === 0 ? { ...scheduleRow, trigger: text } : scheduleRow,
+        ),
+      };
+}
 
 const withFirstLineCost = (costExGst: number): OfferWorkspaceSnapshot => ({
   ...BASE,
@@ -86,61 +157,61 @@ const withFirstLineCost = (costExGst: number): OfferWorkspaceSnapshot => ({
 
 test("an unchanged snapshot saves at every status the workspace saves at", () => {
   for (const status of SAVE_STATUSES) {
-    assert.deepEqual(lockedSnapshotChanges(status, STORED, incoming(BASE)), [], status);
+    assert.deepEqual(refused(status, STORED, BASE), [], status);
   }
 });
 
 test("a cost line change is refused once the offer is issued", () => {
-  const changed = incoming(withFirstLineCost(BASE.lines[0].costExGst + 12_345));
+  const changed = withFirstLineCost(BASE.lines[0].costExGst + 12_345);
 
-  assert.deepEqual(lockedSnapshotChanges("pending", STORED, changed), []);
-  for (const status of ["sent", "agreed", "tender_draft"] as const) {
-    assert.deepEqual(
-      lockedSnapshotChanges(status, STORED, changed),
-      ["costLines"],
-      status,
-    );
+  assert.deepEqual(refused("pending", STORED, changed), []);
+  for (const status of ISSUED_SAVE_STATUSES) {
+    assert.deepEqual(refused(status, STORED, changed), ["costLines"], status);
   }
 });
 
 test("the offer document stays editable while sent and freezes once agreed", () => {
-  const changed = incoming({
+  const changed = {
     ...BASE,
     draft: { ...BASE.draft, headline: "A revised headline" },
-  });
+  };
 
-  assert.deepEqual(lockedSnapshotChanges("sent", STORED, changed), []);
-  assert.deepEqual(lockedSnapshotChanges("agreed", STORED, changed), ["draft"]);
+  assert.deepEqual(refused("sent", STORED, changed), []);
+  assert.deepEqual(refused("agreed", STORED, changed), ["draft"]);
 });
 
 test("the payment schedule and tender access stay writable until the Tender is sent", () => {
-  const changed = incoming({
-    ...BASE,
-    paymentSchedule: BASE.paymentSchedule.map((row, index) =>
-      index === 0 ? { ...row, trigger: "On signing the Tender" } : row,
-    ),
+  const changed = {
+    ...allowedEdit("agreed", BASE, "On signing the Tender"),
     tenderGate: { ...BASE.tenderGate, needsArchitecturalPlan: false },
-  });
+  };
 
   for (const status of ["agreed", "tender_draft"] as const) {
-    assert.deepEqual(lockedSnapshotChanges(status, STORED, changed), [], status);
+    assert.deepEqual(refused(status, STORED, changed), [], status);
+    const saved = written(status, STORED, changed) as PersistedOfferWorkspaceState;
+    assert.equal(saved.paymentSchedule[0].trigger, "On signing the Tender");
+    assert.equal(saved.tenderGate.needsArchitecturalPlan, false);
   }
 });
 
 test("the revision label the workspace stamps on load is not a job edit", () => {
-  const relabelled = incoming({
+  const relabelled = {
     ...BASE,
     job: { ...BASE.job, reference: "RC-Q-2026-002", revision: "R2" },
-  });
-  assert.deepEqual(lockedSnapshotChanges("sent", STORED, relabelled), []);
+  };
+  assert.deepEqual(refused("sent", STORED, relabelled), []);
+  const saved = written("sent", STORED, relabelled) as PersistedOfferWorkspaceState;
+  assert.equal(saved.job.revision, "R2");
 
-  const areaEdit = incoming({ ...BASE, job: { ...BASE.job, groundFloorSqm: 999 } });
-  assert.deepEqual(lockedSnapshotChanges("sent", STORED, areaEdit), ["job"]);
+  const areaEdit = { ...BASE, job: { ...BASE.job, groundFloorSqm: 999 } };
+  assert.deepEqual(refused("sent", STORED, areaEdit), ["job"]);
 });
 
 test("nothing is saved once the Tender is out, changed or not", () => {
-  const changed = incoming({ ...BASE, paymentSchedule: [] });
-  assert.deepEqual(lockedSnapshotChanges("tender_sent", STORED, changed), ["status"]);
+  assert.deepEqual(
+    refused("tender_sent", STORED, { ...BASE, paymentSchedule: [] }),
+    ["status"],
+  );
 
   for (const status of [
     "offer_sent",
@@ -157,27 +228,24 @@ test("nothing is saved once the Tender is out, changed or not", () => {
     "rejected",
     "superseded",
   ] as const) {
-    assert.deepEqual(
-      lockedSnapshotChanges(status, STORED, incoming(BASE)),
-      ["status"],
-      status,
-    );
+    assert.deepEqual(refused(status, STORED, BASE), ["status"], status);
   }
 });
 
 test("a pinned version moving is refused even though no step owns it", () => {
-  const repinned = incoming({ ...BASE, calcVersion: LEGACY_CALC_VERSION });
-  assert.deepEqual(lockedSnapshotChanges("sent", STORED, repinned), ["calcVersion"]);
-
-  const restamped = incoming({ ...BASE, adminContentVersion: 4 });
-  assert.deepEqual(lockedSnapshotChanges("agreed", STORED, restamped), [
+  assert.deepEqual(
+    refused("sent", STORED, { ...BASE, calcVersion: LEGACY_CALC_VERSION }),
+    ["calcVersion"],
+  );
+  assert.deepEqual(refused("agreed", STORED, { ...BASE, adminContentVersion: 4 }), [
     "adminContentVersion",
   ]);
 });
 
 test("nothing saved yet means nothing to protect", () => {
-  const changed = incoming(withFirstLineCost(1));
-  assert.deepEqual(lockedSnapshotChanges("sent", null, changed), []);
+  const changed = withFirstLineCost(1);
+  const saved = written("sent", null, changed) as PersistedOfferWorkspaceState;
+  assert.equal(saved.costLines[0].costExGstCents, 100);
 });
 
 test("a stored row with its keys in another order is not a change", () => {
@@ -194,19 +262,24 @@ test("a stored row with its keys in another order is not a change", () => {
     }
     return value;
   };
-  const shuffled = reorder(STORED) as PersistedOfferWorkspaceState;
-  assert.notEqual(Object.keys(shuffled)[0], Object.keys(STORED)[0]);
+  const stored = settledWorkspace(STORED);
+  const shuffled = reorder(stored) as PersistedOfferWorkspaceState;
+  assert.notEqual(Object.keys(shuffled)[0], Object.keys(stored)[0]);
 
   for (const status of SAVE_STATUSES) {
-    assert.deepEqual(lockedSnapshotChanges(status, shuffled, incoming(BASE)), [], status);
+    assert.deepEqual(
+      lockedSnapshotChanges(status, shuffled, settledWorkspace(STORED)),
+      [],
+      status,
+    );
   }
 });
 
-test("a legacy row reads back as no change when a tab that opened it saves", () => {
-  // The shape of an offer saved before calcVersion, admin versioning, the
-  // tender gate and the stored HBCF contract value: pre-v6 schedule entries, a
-  // bare-string image, and no derived pricing keys.
-  const legacy = storedRow(BASE) as Record<string, unknown>;
+// An offer saved before calcVersion, admin versioning, the tender gate and the
+// stored HBCF contract value: pre-v6 schedule entries, a bare-string image, and
+// a dollar premium with nothing to derive it from.
+function legacyRow(): Record<string, unknown> {
+  const legacy = row(serializeWorkspace(BASE)) as Record<string, unknown>;
   delete legacy.calcVersion;
   delete legacy.adminContentVersion;
   delete legacy.tenderGate;
@@ -216,36 +289,164 @@ test("a legacy row reads back as no change when a tab that opened it saves", () 
   delete pricing.hbcfTotalContractValue;
   delete pricing.royalConstructionOverheadPct;
   delete pricing.loadingChargePercentage;
+  pricing.homeWarrantyHbcfFixed = 5000;
   legacy.pricingSettings = pricing;
+  return legacy;
+}
 
-  // The tab hydrates from the loader's snapshot and saves it back unedited,
-  // including the formula the workspace attaches to admin cost lines, which is
-  // never part of the stored state.
-  const opened = deserializeWorkspace(parseWorkspaceState(legacy));
-  const saved = incoming({
+test("a tab keeps saving edits to an issued legacy offer, and its price does not move", () => {
+  const legacy = legacyRow();
+  // The tab's hydrated premium re-derives a cent off the stored one, which is
+  // what the lock used to read as a pricing edit.
+  assert.notEqual(settledWorkspace(legacy).pricingSettings.homeWarrantyHbcfFixed, 5000);
+
+  for (const status of ISSUED_SAVE_STATUSES) {
+    // The tab opens the offer, carrying the formula the workspace attaches to
+    // admin cost lines, which is never part of the stored state.
+    const opened = open(legacy);
+    const tab = {
+      ...opened,
+      lines: opened.lines.map((line, index) =>
+        index === 0 ? { ...line, formula: "TOTAL_AREA * 10" } : line,
+      ),
+    };
+
+    const first = allowedEdit(status, tab, "first edit");
+    const afterFirst = written(status, legacy, first);
+    // Same tab, no reload in between.
+    const second = allowedEdit(status, first, "second edit");
+    assert.deepEqual(refused(status, afterFirst, second), [], status);
+    const afterSecond = written(status, afterFirst, second);
+
+    assert.equal(printedPrice(afterFirst), printedPrice(legacy), status);
+    assert.equal(printedPrice(afterSecond), printedPrice(legacy), status);
+    assert.deepEqual(
+      (afterSecond as PersistedOfferWorkspaceState).pricingSettings,
+      parseWorkspaceState(legacy).pricingSettings,
+      status,
+    );
+  }
+});
+
+test("a tab that imported a workbook premium can edit the offer after sending it", () => {
+  // A workbook import with no loading charge keeps the workbook's dollar premium
+  // and reverse-fills the contract value, rather than re-deriving a cent off.
+  const premium = 1053.48;
+  const tab: OfferWorkspaceSnapshot = {
+    ...BASE,
+    workspacePricingSettings: {
+      ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
+      homeWarrantyHbcfFixed: premium,
+      hbcfTotalContractValue: reverseHbcfTotalContractValue(
+        premium,
+        DEFAULT_WORKSPACE_PRICING_SETTINGS.hbcfRate,
+      ),
+      loadingChargePercentage: 0,
+    },
+  };
+  const savedAtPending = written("pending", STORED, tab);
+  assert.notEqual(
+    settledWorkspace(savedAtPending).pricingSettings.homeWarrantyHbcfFixed,
+    premium,
+  );
+
+  // Sending does not reload the tab, so it edits from the same state.
+  for (const status of ISSUED_SAVE_STATUSES) {
+    const edited = allowedEdit(status, tab, "after sending");
+    assert.deepEqual(refused(status, savedAtPending, edited), [], status);
+    assert.equal(
+      printedPrice(written(status, savedAtPending, edited)),
+      printedPrice(savedAtPending),
+      status,
+    );
+  }
+});
+
+test("a pending tab that took the admin loading charge can edit the offer after sending it", () => {
+  const stored = row(
+    serializeWorkspace({
+      ...BASE,
+      workspacePricingSettings: withDerivedHbcfPremium({
+        ...DEFAULT_WORKSPACE_PRICING_SETTINGS,
+        hbcfTotalContractValue: 800_000,
+        loadingChargePercentage: 0,
+      }),
+    }),
+  );
+  // Opening a pending offer swaps in the admin loading charge without
+  // re-deriving the premium, and autosave stores that.
+  const opened = open(stored);
+  const tab = {
     ...opened,
-    lines: opened.lines.map((line, index) =>
-      index === 0 ? { ...line, formula: "TOTAL_AREA * 10" } : line,
-    ),
-  });
+    workspacePricingSettings: {
+      ...opened.workspacePricingSettings,
+      loadingChargePercentage: 5,
+    },
+  };
+  const savedAtPending = written("pending", stored, tab);
+  assert.notEqual(
+    settledWorkspace(savedAtPending).pricingSettings.homeWarrantyHbcfFixed,
+    tab.workspacePricingSettings.homeWarrantyHbcfFixed,
+  );
 
-  const stored = canonicalStoredWorkspace(legacy);
-  for (const status of SAVE_STATUSES) {
-    assert.deepEqual(lockedSnapshotChanges(status, stored, saved), [], status);
+  for (const status of ISSUED_SAVE_STATUSES) {
+    assert.deepEqual(
+      refused(status, savedAtPending, allowedEdit(status, tab, "after sending")),
+      [],
+      status,
+    );
+  }
+});
+
+test("a stale tab's HBCF contract value change is still refused on a legacy offer", () => {
+  const legacy = legacyRow();
+  const opened = open(legacy);
+  const repriced = {
+    ...opened,
+    workspacePricingSettings: withDerivedHbcfPremium({
+      ...opened.workspacePricingSettings,
+      hbcfTotalContractValue: 900_000,
+    }),
+  };
+
+  for (const status of ISSUED_SAVE_STATUSES) {
+    assert.deepEqual(refused(status, legacy, repriced), ["pricingSettings"], status);
   }
 });
 
 test("a save naming an image outside Blob storage is refused, not written", () => {
-  const persisted = storedRow({
-    ...BASE,
-    images: { hero: { url: "http://169.254.169.254/latest/meta-data/", source: "upload" } },
-  });
+  const persisted = row(
+    serializeWorkspace({
+      ...BASE,
+      images: {
+        hero: { url: "http://169.254.169.254/latest/meta-data/", source: "upload" },
+      },
+    }),
+  );
   const result = validatePersistedWorkspace(persisted);
   assert.equal(result.ok, false);
 });
 
 test("a save that would write a row the read parse refuses is invalid", () => {
-  const persisted = storedRow(BASE) as Record<string, unknown>;
+  const persisted = row(serializeWorkspace(BASE)) as Record<string, unknown>;
   persisted.costLines = "not a list";
   assert.equal(validatePersistedWorkspace(persisted).ok, false);
+});
+
+test("the save action writes the plan and prices the money columns from it", () => {
+  // saveOfferWorkspace is "use server" and loads Prisma, so no test can call it.
+  // Writing the tab's own copy instead of the plan is what moved a legacy
+  // offer's price, and every test above would stay green.
+  const text = readFileSync(
+    join(process.cwd(), "lib/data/offer-workspace.ts"),
+    "utf8",
+  );
+  const start = text.indexOf("async function saveOfferWorkspace(");
+  assert.ok(start >= 0, "saveOfferWorkspace not found");
+  const body = text.slice(start, text.indexOf("\n}\n", start));
+
+  assert.match(body, /planWorkspaceSave\(/);
+  assert.match(body, /workspaceState:\s*saved\b/);
+  assert.match(body, /buildProposalInput\([^)]*\bsavedSnapshot\b/);
+  assert.doesNotMatch(body, /input\.snapshot\.workspacePricingSettings/);
 });

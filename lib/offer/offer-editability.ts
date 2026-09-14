@@ -130,8 +130,9 @@ const STEP_SLICES: Readonly<
  * before writing, and it asks isOfferBuildStepEditable, so the server refuses
  * exactly what the UI locks.
  *
- * Both snapshots must already be in persisted form. Key order is ignored.
- * Returns ["status"] for a status the workspace never saves at.
+ * Both snapshots must be in the same persisted form; the save compares them
+ * settled (see settledWorkspace). Key order is ignored. Returns ["status"] for
+ * a status the workspace never saves at.
  */
 export function lockedSnapshotChanges(
   status: OfferWorkspaceStatus,
@@ -169,6 +170,46 @@ export function lockedSnapshotChanges(
     }
   }
   return changed;
+}
+
+/**
+ * The snapshot a save writes: the incoming one, with every slice frozen at this
+ * status taken from the stored row instead.
+ *
+ * A tab holds the frozen parts in whatever form it last hydrated or imported,
+ * and that form does not always read back as the same price. A legacy row's
+ * dollar HBCF premium, for one, is re-derived from the contract value the tab
+ * fills in. Writing the stored row's own slices keeps an issued offer's stored
+ * and printed price exactly where it was, whatever the tab sent.
+ */
+export function keepFrozenSlices(
+  status: OfferWorkspaceStatus,
+  stored: PersistedOfferWorkspaceState | null,
+  incoming: PersistedOfferWorkspaceState,
+): PersistedOfferWorkspaceState {
+  if (stored === null || status === "pending") {
+    return incoming;
+  }
+  const next: Record<string, unknown> = { ...incoming };
+  const steps = Object.keys(STEP_SLICES) as OfferBuildStep[];
+  for (const step of steps) {
+    if (isOfferBuildStepEditable(step, status)) {
+      continue;
+    }
+    for (const slice of STEP_SLICES[step]) {
+      next[slice] =
+        slice === "job"
+          ? {
+              ...stored.job,
+              reference: incoming.job.reference,
+              revision: incoming.job.revision,
+            }
+          : stored[slice];
+    }
+  }
+  next.calcVersion = stored.calcVersion;
+  next.adminContentVersion = stored.adminContentVersion;
+  return next as PersistedOfferWorkspaceState;
 }
 
 function withoutJobLabel(
