@@ -174,6 +174,22 @@ test("the grid cells add up to the printed total", () => {
   }
 });
 
+test("an area value never splits from its unit when void and granny flat both show", () => {
+  // Seven cells share the 174mm grid once both are set. The printed copy's
+  // padded cells left ~61px for a value and "187.35 m²" is ~76px of monospace,
+  // so it broke at the space and printed "m²" on a line of its own.
+  const job = { ...AREAS, groundFloorSqm: 147.35, grannyFlatSqm: 40 };
+  const values = [
+    ...printed(job).matchAll(/<\/p><p class="([^"]*)">[\d.,]+ m²<\/p>/g),
+  ];
+  assert.equal(values.length, 7, "expected all seven area cells");
+  assert.ok(values.some((match) => match[0].includes("187.35 m²")));
+  for (const [cell, className] of values) {
+    assert.ok(className.split(" ").includes("whitespace-nowrap"), `wraps: ${cell}`);
+  }
+  assert.match(emailed(job), /\.areatable \.num \{[^}]*white-space: nowrap/);
+});
+
 test("the printed snapshot carries the dwelling specifications the emailed one does", () => {
   const single = printed(AREAS);
   assert.match(single, /Major House Specifications/);

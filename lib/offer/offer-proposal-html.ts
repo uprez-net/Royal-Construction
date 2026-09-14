@@ -276,7 +276,7 @@ export function buildProposalHtml(
   .areatable > div:last-child { border-right: none; background: ${NAVY}; color: #fff; }
   .areatable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
   .areatable > div:last-child .cap { color: #cfd6e6; }
-  .areatable .num { font-family: monospace; font-weight: 700; margin-top: 6px; }
+  .areatable .num { font-family: monospace; font-weight: 700; margin-top: 6px; white-space: nowrap; }
   .spechead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; margin-top: 22px; }
   .spectable { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid ${BORDER}; margin-top: 8px; text-align: center; }
   .spectable > div { padding: 12px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
