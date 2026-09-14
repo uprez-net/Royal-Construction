@@ -108,6 +108,9 @@ type LoadedOfferWorkspace = {
   // The offer was still editable, so the current admin defaults were re-applied
   // and the returned snapshot + stateVersion are the refreshed ones.
   adminContentRefreshed?: boolean;
+  // The project a handed-off (PROJECT) offer created, so Open Project links to
+  // it after a reload. Null when there is none; absent below PROJECT.
+  projectId?: string | null;
 };
 
 type OfferRow = {
@@ -335,6 +338,22 @@ async function attachContractParticulars(
   };
 }
 
+// The handoff creates the project against the lead, and only the tab that ran it
+// ever learned its id, so after a reload Open Project had nowhere to go.
+async function attachProjectId(
+  loaded: LoadedOfferWorkspace,
+  leadId: number,
+): Promise<LoadedOfferWorkspace> {
+  if (loaded.status !== OfferStatus.PROJECT) {
+    return loaded;
+  }
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { project: { select: { id: true } } },
+  });
+  return { ...loaded, projectId: lead?.project?.id ?? null };
+}
+
 // Mint the next base reference (RC-Q-YYYY-NNN) inside a transaction.
 async function mintOfferReference(
   tx: Prisma.TransactionClient,
@@ -377,20 +396,26 @@ export async function loadActiveOfferWorkspace(
         });
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-      return attachSignerStatus(
-        await attachContractParticulars(
-          await attachDeclineReason(
-            await reapplyAdminContentIfStale(toLoaded(healed)),
+      return attachProjectId(
+        await attachSignerStatus(
+          await attachContractParticulars(
+            await attachDeclineReason(
+              await reapplyAdminContentIfStale(toLoaded(healed)),
+            ),
           ),
         ),
+        leadId,
       );
     }
-    return attachSignerStatus(
-      await attachContractParticulars(
-        await attachDeclineReason(
-          await reapplyAdminContentIfStale(toLoaded(existing)),
+    return attachProjectId(
+      await attachSignerStatus(
+        await attachContractParticulars(
+          await attachDeclineReason(
+            await reapplyAdminContentIfStale(toLoaded(existing)),
+          ),
         ),
       ),
+      leadId,
     );
   }
 

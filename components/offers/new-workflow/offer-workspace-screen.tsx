@@ -253,6 +253,7 @@ type OfferWorkspaceScreenProps = {
   readonly projectResult?:
     | import("@/lib/data/offer-project-handoff").ProjectHandoffResult
     | null;
+  readonly projectId?: string | null;
   readonly onOverrideReasonChange: (value: string) => void;
   readonly onPaymentScheduleChange: (
     rows: readonly OfferPaymentScheduleRow[],
@@ -362,6 +363,7 @@ export function OfferWorkspaceScreen({
   onCreateProject,
   projectCreating,
   projectResult,
+  projectId,
   onOverrideReasonChange,
   onPaymentScheduleChange,
   onPriceAdjustmentLabelChange,
@@ -888,6 +890,7 @@ export function OfferWorkspaceScreen({
               onCreateProject={onCreateProject}
               projectCreating={projectCreating}
               projectResult={projectResult}
+              projectId={projectId}
             />
           </StepPane>
           </div>

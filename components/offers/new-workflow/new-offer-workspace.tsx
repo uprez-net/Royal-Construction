@@ -320,6 +320,8 @@ export function NewOfferWorkspace({
   const [projectCreating, setProjectCreating] = useState(false);
   const [projectResult, setProjectResult] =
     useState<ProjectHandoffResult | null>(null);
+  // The handed-off project, from the handoff or from the loader after a reload.
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [prefilling, setPrefilling] = useState(false);
   const [checking, setChecking] = useState(false);
   const [draftingHighlights, setDraftingHighlights] = useState(false);
@@ -1118,6 +1120,7 @@ export function NewOfferWorkspace({
       // untouched — that is the case worth telling the operator about.
       setAdminContentStale(loaded.adminContentStale === true);
       setSignerStatuses(loaded.signerStatuses ?? []);
+      setProjectId(loaded.projectId ?? null);
       // The customer declined the last envelope — tell the operator why (the
       // reason comes straight from DocuSign) and point them at a new revision.
       if (loaded.declineReason) {
@@ -1513,6 +1516,7 @@ export function NewOfferWorkspace({
         autosaveHaltedRef.current = false;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
         setSignerStatuses(loaded.signerStatuses ?? []);
+        setProjectId(loaded.projectId ?? null);
         // A forked revision starts with no contract — clear any in-memory
         // particulars so they can't be saved onto the new revision's contract.
         const revisionParticulars =
@@ -1791,6 +1795,7 @@ export function NewOfferWorkspace({
         setProjectResult(result);
         if (result.ok) {
           setStatus("project");
+          setProjectId(result.projectId);
         }
       } catch (error) {
         console.error("[offer] project handoff failed:", error);
@@ -1962,6 +1967,7 @@ export function NewOfferWorkspace({
         onCreateProject={createProject}
         projectCreating={projectCreating}
         projectResult={projectResult}
+        projectId={projectId}
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}
