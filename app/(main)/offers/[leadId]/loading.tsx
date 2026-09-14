@@ -43,8 +43,14 @@ export default function OfferWorkspaceSkeleton() {
               return (
                 <div key={phase.id}>
                   <hr className="mx-3 my-2 border-border/70 lg:hidden" />
-                  <div className="hidden h-7.5 items-end px-4 pb-1.5 lg:flex">
-                    <Skeleton className="h-2 w-14" />
+                  {/* Each bar sits in a 1lh box carrying the real text's
+                      size, so headings and rows are as tall as the rail's
+                      and step 10 does not slide down when the workspace
+                      arrives. */}
+                  <div className="hidden px-4 pb-1 pt-3 text-[0.625rem] lg:block">
+                    <div className="flex h-[1lh] items-center">
+                      <Skeleton className="h-2 w-14" />
+                    </div>
                   </div>
                   {steps.map((step) => (
                     <div
@@ -52,9 +58,13 @@ export default function OfferWorkspaceSkeleton() {
                       className="flex items-center gap-2.5 px-4 py-2"
                     >
                       <Skeleton className="size-5 shrink-0 rounded-full" />
-                      <div className="hidden min-w-0 flex-1 space-y-1.5 lg:block">
-                        <Skeleton className="h-3.5 w-24" />
-                        <Skeleton className="h-3 w-36 max-w-full" />
+                      <div className="hidden min-w-0 flex-1 lg:block">
+                        <div className="flex h-[1lh] items-center text-sm leading-tight">
+                          <Skeleton className="h-3.5 w-24" />
+                        </div>
+                        <div className="mt-0.5 flex h-[1lh] items-center text-xs">
+                          <Skeleton className="h-3 w-36 max-w-full" />
+                        </div>
                       </div>
                     </div>
                   ))}
