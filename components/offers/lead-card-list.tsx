@@ -127,8 +127,11 @@ export function LeadCardList({
           role="button"
           tabIndex={0}
           aria-pressed={lead.id === selectedLeadId}
+          // No outline-none: in Tailwind 4 it sets --tw-outline-style to none,
+          // which focus-visible:outline-2 then reads, so the focus ring never
+          // drew. A mouse click doesn't match :focus-visible anyway.
           className={cn(
-            "relative cursor-pointer outline-none transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+            "relative cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
             lead.id === selectedLeadId &&
               "border-royal-gold-ink ring-2 ring-royal-gold-ink",
             lead.stage === "Quoted" && "opacity-75",
