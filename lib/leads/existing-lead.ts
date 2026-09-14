@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 
 import prisma from '@/lib/prisma';
+import { isOwnMailbox } from '@/lib/graph/mailbox';
 
 /**
  * Checks whether a lead already exists by matching:
@@ -25,12 +26,20 @@ export async function checkLeadPresentWithEmailPhone(
 ): Promise<boolean> {
   const orConditions: Prisma.LeadWhereInput[] = [];
 
-  const normalizedFromEmail = fromEmail?.trim().toLowerCase();
+  // Our own mailbox is never a lead identity. It appears as the sender on
+  // every website form notification and as a recipient on essentially all
+  // inbound mail, so matching on it would make one lead swallow the entire
+  // inbox — which is exactly what happened when one lead's email was
+  // wrongly saved as our own address.
+  const normalizedFromEmail = isOwnMailbox(fromEmail)
+    ? undefined
+    : fromEmail?.trim().toLowerCase();
   const normalizedContactNo = contactNo?.trim();
 
   const normalizedToEmails = toEmails
     .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((email) => !isOwnMailbox(email));
 
   if (normalizedFromEmail) {
     orConditions.push({
