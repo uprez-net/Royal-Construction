@@ -9,7 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        // An opaque darker teal (6.35:1 with white). The old [a]:hover only fired
+        // on a Button rendered as a link, and a translucent /90 would drop below AA.
+        default:
+          "bg-primary text-primary-foreground hover:bg-[oklch(0.46_0.118_183.6)]",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
