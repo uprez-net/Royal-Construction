@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   costScheduleRowUpserted,
   costScheduleRowRemoved,
+  costScheduleRowRestored,
   rateConstantChanged,
   saveCostSchedule,
 } from "@/lib/store/slices/adminOfferContentSlice";
@@ -135,6 +137,19 @@ export function OfferCostScheduleScreen() {
     // would otherwise keep Save disabled with nothing left on screen to fix.
     if (row.priceMode !== "formula") forgetFormulaValidity(row.id);
   };
+  const removeRow = (id: string) => {
+    const index = rows.findIndex((r) => r.id === id);
+    if (index === -1) return;
+    const row = rows[index];
+    dispatch(costScheduleRowRemoved(id));
+    forgetFormulaValidity(id);
+    toast("Task removed", {
+      action: {
+        label: "Undo",
+        onClick: () => dispatch(costScheduleRowRestored({ row, index })),
+      },
+    });
+  };
   const renamePhase = (oldPhase: string, newPhase: string) => {
     for (const row of rows) {
       if (row.phase === oldPhase) {
@@ -219,10 +234,7 @@ export function OfferCostScheduleScreen() {
                   onFormulaValidation={handleFormulaValidation}
                   onRenamePhase={(next) => renamePhase(phase, next)}
                   onUpdateRow={updateRow}
-                  onRemoveRow={(id) => {
-                    dispatch(costScheduleRowRemoved(id));
-                    forgetFormulaValidity(id);
-                  }}
+                  onRemoveRow={removeRow}
                   onAddTask={() =>
                     dispatch(costScheduleRowUpserted(newRow(phase)))
                   }
@@ -375,7 +387,7 @@ function PhaseGroup({
                 type="button"
                 aria-label="Remove task"
                 onClick={() => onRemoveRow(row.id)}
-                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
               </button>

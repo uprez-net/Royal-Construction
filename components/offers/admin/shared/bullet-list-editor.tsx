@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, XIcon } from "lucide-react";
+import { insertAt } from "@/lib/store/slices/admin-offer-content-list";
 
 interface BulletListEditorProps {
   value: string[];
@@ -19,6 +21,12 @@ export function BulletListEditor({
   placeholder = "Bullet text",
 }: BulletListEditorProps) {
   const [draft, setDraft] = useState("");
+  // Undo fires seconds after the delete. Restoring into the list as it is by
+  // then, rather than a snapshot taken at delete time, keeps edits made since.
+  const latestValue = useRef(value);
+  useEffect(() => {
+    latestValue.current = value;
+  }, [value]);
 
   const commitDraft = () => {
     const trimmed = draft.trim();
@@ -34,9 +42,16 @@ export function BulletListEditor({
   };
 
   const removeAt = (index: number) => {
+    const removed = value[index];
     const next = value.slice();
     next.splice(index, 1);
     onChange(next);
+    toast("Bullet removed", {
+      action: {
+        label: "Undo",
+        onClick: () => onChange(insertAt(latestValue.current, removed, index)),
+      },
+    });
   };
 
   return (
@@ -60,7 +75,7 @@ export function BulletListEditor({
                 type="button"
                 aria-label="Remove bullet"
                 onClick={() => removeAt(index)}
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
               >
                 <XIcon className="size-4" aria-hidden="true" />
               </button>

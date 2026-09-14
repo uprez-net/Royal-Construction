@@ -27,6 +27,7 @@ import {
   type AdminOfferContentSection,
   type AdminOfferContentState,
 } from "./admin-offer-content-hydrate";
+import { insertAt } from "./admin-offer-content-list";
 
 type Section = AdminOfferContentSection;
 
@@ -203,6 +204,18 @@ const slice = createSlice({
       state.dirty.costSchedule = true;
       state.error.costSchedule = null;
     },
+    costScheduleRowRestored(
+      state,
+      action: PayloadAction<{ row: CostScheduleRow; index: number }>,
+    ) {
+      const { row, index } = action.payload;
+      const list = state.data.costSchedule.rows;
+      // Undo lives on a toast; a second click must not duplicate the item.
+      if (list.some((existing) => existing.id === row.id)) return;
+      state.data.costSchedule.rows = insertAt(list, row, index);
+      state.dirty.costSchedule = true;
+      state.error.costSchedule = null;
+    },
     rateConstantChanged(
       state,
       action: PayloadAction<{ key: string; value: number }>,
@@ -229,6 +242,18 @@ const slice = createSlice({
       state.dirty.offerScope = true;
       state.error.offerScope = null;
     },
+    allowanceRestored(
+      state,
+      action: PayloadAction<{ item: OfferAllowance; index: number }>,
+    ) {
+      const { item, index } = action.payload;
+      const list = state.data.offerScope.allowances;
+      // Undo lives on a toast; a second click must not duplicate the item.
+      if (list.some((existing) => existing.id === item.id)) return;
+      state.data.offerScope.allowances = insertAt(list, item, index);
+      state.dirty.offerScope = true;
+      state.error.offerScope = null;
+    },
     exclusionUpserted(state, action: PayloadAction<OfferExclusion>) {
       state.data.offerScope.exclusions = upsertExclusion(
         state.data.offerScope.exclusions,
@@ -241,6 +266,18 @@ const slice = createSlice({
       state.data.offerScope.exclusions = state.data.offerScope.exclusions.filter(
         (e) => e.id !== action.payload,
       );
+      state.dirty.offerScope = true;
+      state.error.offerScope = null;
+    },
+    exclusionRestored(
+      state,
+      action: PayloadAction<{ item: OfferExclusion; index: number }>,
+    ) {
+      const { item, index } = action.payload;
+      const list = state.data.offerScope.exclusions;
+      // Undo lives on a toast; a second click must not duplicate the item.
+      if (list.some((existing) => existing.id === item.id)) return;
+      state.data.offerScope.exclusions = insertAt(list, item, index);
       state.dirty.offerScope = true;
       state.error.offerScope = null;
     },
@@ -335,11 +372,14 @@ export const {
   buildScopeChanged,
   costScheduleRowUpserted,
   costScheduleRowRemoved,
+  costScheduleRowRestored,
   rateConstantChanged,
   allowanceUpserted,
   allowanceRemoved,
+  allowanceRestored,
   exclusionUpserted,
   exclusionRemoved,
+  exclusionRestored,
   exclusionsListChanged,
   inclusionsChanged,
   inclusionsScheduleChanged,

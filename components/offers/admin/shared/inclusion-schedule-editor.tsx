@@ -1,10 +1,12 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { toast } from "sonner";
 import { PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { insertAt } from "@/lib/store/slices/admin-offer-content-list";
 import type { InclusionScheduleRow } from "@/types/admin-offer-content";
 import { INCLUSION_CATEGORY_SUGGESTIONS } from "./inclusion-schedule";
 
@@ -29,6 +31,12 @@ export function InclusionScheduleEditor({
   const draftCategoryId = `${id}-draft-category`;
   const [draftSpec, setDraftSpec] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
+  // Undo fires seconds after the delete. Restoring into the list as it is by
+  // then, rather than a snapshot taken at delete time, keeps edits made since.
+  const latestValue = useRef(value);
+  useEffect(() => {
+    latestValue.current = value;
+  }, [value]);
 
   const commitDraft = () => {
     const spec = draftSpec.trim();
@@ -46,9 +54,16 @@ export function InclusionScheduleEditor({
   };
 
   const removeAt = (index: number) => {
+    const removed = value[index];
     const next = value.slice();
     next.splice(index, 1);
     onChange(next);
+    toast("Inclusion removed", {
+      action: {
+        label: "Undo",
+        onClick: () => onChange(insertAt(latestValue.current, removed, index)),
+      },
+    });
   };
 
   const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -101,7 +116,7 @@ export function InclusionScheduleEditor({
                   type="button"
                   aria-label={`Remove inclusion ${index + 1}`}
                   onClick={() => removeAt(index)}
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
                 >
                   <XIcon className="size-4" aria-hidden="true" />
                 </button>
