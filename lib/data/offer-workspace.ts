@@ -53,9 +53,10 @@ import {
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 import {
-  resolveContractTerms,
-  type ContractTerms,
+  contractPreviewTerms,
+  type ContractPreviewTerms,
 } from "@/lib/offer/contract-terms";
+import { hasContractTerms } from "@/lib/offer/contract-terms-status";
 import type {
   OfferSignerStatus,
   OfferSignerStatusValue,
@@ -112,11 +113,11 @@ type LoadedOfferWorkspace = {
   // The project a handed-off (PROJECT) offer created, so Open Project links to
   // it after a reload. Null when there is none; absent below PROJECT.
   projectId?: string | null;
-  // The payment schedule, deposit and exclusions the BC4 carries, resolved from
-  // the signed Tender the way the contract send resolves them, so the Contract
-  // step previews those rather than the workspace's own schedule. Null before
-  // TENDER_SIGNED or when the stored state cannot be read.
-  contractTerms?: ContractTerms | null;
+  // The payment schedule, deposit and exclusions the Contract step shows: until
+  // the BC4 is sent, resolved from the signed Tender the way the send resolves
+  // them; after, the tab values the sent BC4 carried. Null before TENDER_SIGNED
+  // or when the stored state cannot be read.
+  contractTerms?: ContractPreviewTerms | null;
 };
 
 type OfferRow = {
@@ -360,24 +361,14 @@ async function attachProjectId(
   return { ...loaded, projectId: lead?.project?.id ?? null };
 }
 
-// The Contract step exists from TENDER_SIGNED on.
-const CONTRACT_TERMS_STATUSES: ReadonlySet<OfferStatus> = new Set([
-  OfferStatus.TENDER_SIGNED,
-  OfferStatus.CONTRACT_DRAFT,
-  OfferStatus.CONTRACT_SENT,
-  OfferStatus.CONTRACT_SIGNED,
-  OfferStatus.CONTRACT_DECLINED,
-  OfferStatus.PROJECT,
-]);
-
-// Reads the same rows sendContractForSignature reads and resolves them with the
-// same function. The Tender's documentData is the whole render input, so only
-// the resolved terms are returned.
+// Reads the rows sendContractForSignature reads, plus the sent Contract's tabs,
+// and returns only the terms: the Tender's documentData is the whole render
+// input and stays on the server.
 async function loadContractTerms(
   offerId: string,
   status: OfferStatus,
-): Promise<ContractTerms | null> {
-  if (!CONTRACT_TERMS_STATUSES.has(status)) {
+): Promise<ContractPreviewTerms | null> {
+  if (!hasContractTerms(status)) {
     return null;
   }
   const offer = await prisma.offer.findUnique({
@@ -386,17 +377,14 @@ async function loadContractTerms(
       agreedSnapshot: true,
       workspaceState: true,
       tender: { select: { documentData: true } },
+      contract: { select: { documentData: true } },
     },
   });
-  const state = offer?.agreedSnapshot ?? offer?.workspaceState;
-  if (!offer || !state) {
+  if (!offer) {
     return null;
   }
   try {
-    return resolveContractTerms({
-      tenderDocumentData: offer.tender?.documentData ?? null,
-      agreedSnapshot: deserializeWorkspace(parseWorkspaceState(state)),
-    }).terms;
+    return contractPreviewTerms({ status, row: offer });
   } catch (error) {
     // Opening the workspace must not fail on the preview; the send resolves the
     // terms again and refuses on its own.
@@ -526,8 +514,8 @@ export type OfferSigningStatusPoll =
       stateVersion: number;
       signerStatuses: OfferSignerStatus[];
       declineReason: string | null;
-      // Set only on the poll that sees TENDER_SIGNED; see loadContractTerms.
-      contractTerms: ContractTerms | null;
+      // Null unless the caller asked with needsContractTerms.
+      contractTerms: ContractPreviewTerms | null;
     }
   | { ok: false; error: string };
 
@@ -541,6 +529,10 @@ export type OfferSigningStatusPoll =
 // status rather than erroring.
 export async function pollOfferSigningStatus(input: {
   offerId: string;
+  // The workspace holds no Contract terms for the offer's status, which it
+  // reached without a load. Not sent on the signing ticks: the terms are two
+  // stored documents, too heavy to re-read every few seconds.
+  needsContractTerms?: boolean;
 }): Promise<OfferSigningStatusPoll> {
   const access = await authorizeOfferAccess(input.offerId, {
     allowInactive: true,
@@ -558,10 +550,7 @@ export async function pollOfferSigningStatus(input: {
   const [signerStatuses, declineReason, contractTerms] = await Promise.all([
     loadOfferSignerStatuses(input.offerId),
     loadDeclineReason(input.offerId, offer.offerStatus),
-    // A poll runs only while an envelope is out, so a tab that watched the
-    // Tender get signed would reach the Contract step without the terms. Later
-    // statuses were loaded with them, and are not re-read on every tick.
-    offer.offerStatus === OfferStatus.TENDER_SIGNED
+    input.needsContractTerms === true
       ? loadContractTerms(input.offerId, offer.offerStatus)
       : null,
   ]);

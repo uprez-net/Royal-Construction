@@ -31,7 +31,7 @@ import {
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
-import type { ContractTerms } from "@/lib/offer/contract-terms";
+import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
 import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import {
   deriveTenderGateStatus,
@@ -232,8 +232,9 @@ type OfferWorkspaceScreenProps = {
   readonly transitionError: string | null;
   // Per-recipient DocuSign status for the signing trackers (#121/#123).
   readonly signerStatuses: readonly OfferSignerStatus[];
-  // The terms the BC4 carries, resolved on the server from the signed Tender.
-  readonly contractTerms: ContractTerms | null;
+  // The terms the BC4 carries: resolved on the server from the signed Tender,
+  // or read back from the Contract once it is sent.
+  readonly contractTerms: ContractPreviewTerms | null;
   // Offer-document acceptance signing (ADR 0004) — customer-only DocuSign send.
   readonly onSendOfferForSignature: () => void;
   readonly offerSignSending?: boolean;

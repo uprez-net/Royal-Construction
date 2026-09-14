@@ -97,7 +97,8 @@ import {
   isSupportedCalcVersion,
 } from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
-import type { ContractTerms } from "@/lib/offer/contract-terms";
+import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
+import { hasContractTerms } from "@/lib/offer/contract-terms-status";
 import {
   lifecycleActionFor,
   type LifecycleAction,
@@ -342,10 +343,10 @@ export function NewOfferWorkspace({
   // The handed-off project, from the handoff or from the loader after a reload.
   const [projectId, setProjectId] = useState<string | null>(null);
   // What the BC4 carries, from the loader, so the Contract preview shows the
-  // signed Tender's terms rather than this tab's payment schedule.
-  const [contractTerms, setContractTerms] = useState<ContractTerms | null>(
-    null,
-  );
+  // signed Tender's terms (or the sent Contract's) rather than this tab's
+  // payment schedule.
+  const [contractTerms, setContractTerms] =
+    useState<ContractPreviewTerms | null>(null);
   const [prefilling, setPrefilling] = useState(false);
   const [checking, setChecking] = useState(false);
   const [draftingHighlights, setDraftingHighlights] = useState(false);
@@ -1262,6 +1263,46 @@ export function NewOfferWorkspace({
     };
   }, [leadId, hydrateSnapshot, adoptOffer]);
 
+  // Every load brings the Contract step's terms. A status reached without one,
+  // a signing poll that saw the Tender signed or a lifecycle click, asks once:
+  // the preview otherwise sat on "reload the page", and the signing ticks do
+  // not re-read the terms.
+  useEffect(() => {
+    if (
+      leadId === undefined ||
+      contractTerms !== null ||
+      !hasContractTerms(status)
+    ) {
+      return;
+    }
+    const offerId = offerIdRef.current;
+    if (offerId === null) {
+      return;
+    }
+    let cancelled = false;
+    void pollOfferSigningStatus({ offerId, needsContractTerms: true })
+      .then((result) => {
+        // The same identity check as the signing poll: a revision forked
+        // meanwhile must not take this offer's terms.
+        if (
+          !cancelled &&
+          offerIdRef.current === offerId &&
+          result.ok &&
+          result.contractTerms
+        ) {
+          setContractTerms(result.contractTerms);
+        }
+      })
+      .catch((error) => {
+        // Best effort: the preview says the terms can't be shown, and the send
+        // resolves them again itself.
+        console.error("[offer] loading the contract terms failed:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, status, contractTerms]);
+
   // Live signing updates. While an envelope is out for signature, the DocuSign
   // Connect webhook updates the database in the background, but an already-open
   // tab holds React state that only re-hydrates on a user action — so a signature
@@ -1314,9 +1355,6 @@ export function NewOfferWorkspace({
         }
         if (result.ok) {
           setSignerStatuses(result.signerStatuses);
-          if (result.contractTerms) {
-            setContractTerms(result.contractTerms);
-          }
           stateVersionRef.current = result.stateVersion;
           const next = result.status.toLowerCase() as OfferWorkspaceStatus;
           if (next !== status) {

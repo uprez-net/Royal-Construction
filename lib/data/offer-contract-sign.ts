@@ -11,10 +11,6 @@ import {
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
-import {
-  deserializeWorkspace,
-  parseWorkspaceState,
-} from "@/lib/offer/workspace-persistence";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 // import { generatePDF } from "@/lib/utils/generatePDF";
 // import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
@@ -44,9 +40,8 @@ import {
 } from "@/lib/offer/contract-particulars";
 
 import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
-import { describeTenderPriceMismatch } from "@/lib/offer/contract-payment-source";
 import {
-  CONTRACT_STAGE_SLOTS,
+  contractTermsInput,
   resolveContractTerms,
 } from "@/lib/offer/contract-terms";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
@@ -100,8 +95,10 @@ export async function sendContractForSignature(input: {
       error: `The Contract can only be sent once the Tender is signed (current status: ${offer.offerStatus}).`,
     };
   }
-  const state = offer.agreedSnapshot ?? offer.workspaceState;
-  if (!state) {
+  // Through the helper the Contract step's loader uses, so the preview and the
+  // BC4 resolve from the same copy of the offer.
+  const termsInput = contractTermsInput(offer);
+  if (!termsInput) {
     return { ok: false, error: "No agreed offer snapshot found." };
   }
 
@@ -119,7 +116,7 @@ export async function sendContractForSignature(input: {
     };
   }
 
-  const snapshot = deserializeWorkspace(parseWorkspaceState(state));
+  const snapshot = termsInput.agreedSnapshot;
   const job = snapshot.job;
   // Server-side owner gate (PR #124): re-validate owner completeness, especially
   // UNIQUE signer emails — a shared address makes the Contract completion webhook
@@ -147,13 +144,11 @@ export async function sendContractForSignature(input: {
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
 
   // The payment schedule and deposit come from the Tender the customer signed;
-  // the price stays the agreed snapshot's. A Tender that printed a different
-  // price is refused rather than reconciled, before the send is claimed. The
-  // Contract step previews the same terms, so it shows what the BC4 carries.
-  const { payment, terms: contractTerms } = resolveContractTerms({
-    tenderDocumentData: offer.tender?.documentData ?? null,
-    agreedSnapshot: snapshot,
-  });
+  // the price stays the agreed snapshot's. Terms the BC4 cannot carry, a Tender
+  // that printed another price or more stages than the template has, are
+  // refused before the send is claimed. The Contract step previews the same
+  // terms and the same refusal, so it shows what the BC4 carries.
+  const { payment, terms: contractTerms } = resolveContractTerms(termsInput);
   const contractValue = contractTerms.contractValueIncGst;
   if (payment.source === "agreed-snapshot") {
     console.warn(
@@ -164,12 +159,8 @@ export async function sendContractForSignature(input: {
       `[offer] contract for offer ${offer.id}: payment schedule from the signed Tender (${payment.source})`,
     );
   }
-  const priceMismatch = describeTenderPriceMismatch({
-    tenderContractValueIncGst: payment.tenderContractValueIncGst,
-    agreedContractValueIncGst: contractValue,
-  });
-  if (priceMismatch) {
-    return { ok: false, error: priceMismatch };
+  if (contractTerms.refusal) {
+    return { ok: false, error: contractTerms.refusal };
   }
   // A granny flat priced on one page and excluded on another, checked on the
   // agreed snapshot the BC4 exclusions are filled from. The stamped terms
@@ -293,15 +284,6 @@ export async function sendContractForSignature(input: {
   const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
 
   const priceLabel = formatContractMoney(contractValue);
-  // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
-  // silently drop validated stages past the 7th, which would send a contract
-  // whose payment schedule doesn't sum to the contract value.
-  if (payment.paymentSchedule.length > CONTRACT_STAGE_SLOTS) {
-    return {
-      ok: false,
-      error: `The contract template supports up to ${CONTRACT_STAGE_SLOTS} payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
-    };
-  }
 
   const claim = await prisma.$transaction(async (tx) => {
     const updated = await tx.offer.updateMany({

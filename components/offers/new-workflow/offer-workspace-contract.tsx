@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { ContractTerms } from "@/lib/offer/contract-terms";
+import type {
+  ContractPreviewTerms,
+  ContractTerms,
+  SentContractTerms,
+} from "@/lib/offer/contract-terms";
 import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
 import {
@@ -54,8 +58,8 @@ type ContractPanelProps = {
   readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  // What the BC4 carries (see ContractTerms). Null until the loader returns it.
-  readonly contractTerms: ContractTerms | null;
+  // What the BC4 carries (see contractPreviewTerms). Null until it is loaded.
+  readonly contractTerms: ContractPreviewTerms | null;
   readonly contractParticulars: ContractParticulars;
   readonly onContractParticularsChange: (
     patch: Partial<ContractParticulars>,
@@ -542,6 +546,116 @@ function ContractActions({
   );
 }
 
+// The terms the send will fill the BC4 with.
+function ContractScheduleToSend({
+  terms,
+  showRefusal,
+}: {
+  readonly terms: ContractTerms;
+  readonly showRefusal: boolean;
+}) {
+  return (
+    <div className="grid gap-2">
+      {showRefusal && terms.refusal ? (
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>{terms.refusal}</span>
+        </p>
+      ) : null}
+      <div className="overflow-hidden rounded-lg border border-border/70">
+        <table className="w-full text-[13px]">
+          <tbody>
+            {terms.paymentSchedule.map((row, index) => (
+              <tr
+                key={`${index}-${row.id}`}
+                className="border-b border-border/60 last:border-b-0"
+              >
+                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                  {formatPercent(row.percentOfContract)}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono">
+                  {formatContractMoney(row.amount)}
+                </td>
+                <td className="px-3 py-1.5 text-muted-foreground">
+                  {row.trigger}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Deposit:{" "}
+        <span className="font-medium text-foreground">
+          {terms.deposit
+            ? `${terms.deposit.stageName}, ${formatPercent(terms.deposit.percentOfContract)} — ${terms.depositAmount}`
+            : "None"}
+        </span>
+      </p>
+      {terms.source === "agreed-snapshot" ? (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          The signed Tender has no stored payment schedule, so the Contract
+          takes these terms from the agreed offer.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// The tab values a sent BC4 carried, as printed.
+function SentContractSchedule({
+  terms,
+}: {
+  readonly terms: SentContractTerms;
+}) {
+  return (
+    <div className="grid gap-2">
+      <div className="overflow-hidden rounded-lg border border-border/70">
+        <table className="w-full text-[13px]">
+          <tbody>
+            {terms.paymentSchedule.map((row, index) => (
+              <tr
+                key={`${index}-${row.stageName}`}
+                className="border-b border-border/60 last:border-b-0"
+              >
+                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                  {row.percent}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono">
+                  {row.amount}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Deposit:{" "}
+        <span className="font-medium text-foreground">
+          {terms.depositAmount || "None"}
+        </span>
+      </p>
+      {terms.scheduleSource === null ? (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          This Contract was sent before contracts took their terms from the
+          signed Tender. These are the terms it carried, which can differ from
+          the Tender&apos;s.
+        </p>
+      ) : terms.scheduleSource === "agreed-snapshot" ? (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          The signed Tender had no stored payment schedule, so this Contract
+          took its terms from the agreed offer.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ContractPreview({
   job,
   customerPrice,
@@ -552,7 +666,7 @@ function ContractPreview({
   readonly job: OfferWorkspaceJob;
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  readonly contractTerms: ContractTerms | null;
+  readonly contractTerms: ContractPreviewTerms | null;
   readonly state: "draft" | "sent" | "signed";
 }) {
   const contractSum = customerPrice.selectedContractValueIncGst;
@@ -601,58 +715,25 @@ function ContractPreview({
         </p>
       </div>
 
-      {/* The schedule, deposit and exclusions the send fills the BC4 with, not
-          this tab's schedule: the Contract takes them from the signed Tender. */}
+      {/* The schedule, deposit and exclusions the BC4 carries, not this tab's
+          schedule: the send takes them from the signed Tender, and a sent
+          Contract shows the values it went out with. */}
       <div>
         <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
           Progress payments
         </p>
-        {contractTerms ? (
-          <div className="grid gap-2">
-            <div className="overflow-hidden rounded-lg border border-border/70">
-              <table className="w-full text-[13px]">
-                <tbody>
-                  {contractTerms.paymentSchedule.map((row, index) => (
-                    <tr
-                      key={`${index}-${row.id}`}
-                      className="border-b border-border/60 last:border-b-0"
-                    >
-                      <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                        {formatPercent(row.percentOfContract)}
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-mono">
-                        {formatContractMoney(row.amount)}
-                      </td>
-                      <td className="px-3 py-1.5 text-muted-foreground">
-                        {row.trigger}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Deposit:{" "}
-              <span className="font-medium text-foreground">
-                {contractTerms.deposit
-                  ? `${contractTerms.deposit.stageName}, ${formatPercent(contractTerms.deposit.percentOfContract)} — ${contractTerms.depositAmount}`
-                  : "None"}
-              </span>
-            </p>
-            {contractTerms.source === "agreed-snapshot" ? (
-              <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                The signed Tender has no stored payment schedule, so the
-                Contract takes these terms from the agreed offer.
-              </p>
-            ) : null}
-          </div>
-        ) : (
+        {contractTerms === null ? (
           <p className="text-sm text-muted-foreground/80">
-            Reload the page to show the payment schedule the Contract takes from
-            the signed Tender.
+            The payment schedule the Contract takes from the signed Tender
+            can&apos;t be shown. Sending checks it before the Contract goes out.
           </p>
+        ) : contractTerms.source === "sent-contract" ? (
+          <SentContractSchedule terms={contractTerms} />
+        ) : (
+          <ContractScheduleToSend
+            terms={contractTerms}
+            showRefusal={state === "draft"}
+          />
         )}
       </div>
 
