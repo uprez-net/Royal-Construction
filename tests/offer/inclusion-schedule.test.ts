@@ -20,6 +20,7 @@ import {
 } from "../../lib/offer/workspace-model";
 import {
   buildOfferPrintTemplateData,
+  getOfferDocumentExclusions,
   getVisibleExclusionRows,
   getVisibleExclusions,
 } from "../../lib/offer/workspace-print-template";
@@ -211,6 +212,31 @@ test("a label duplicated across a bullet and a scope item prints once", () => {
   };
 
   assert.deepEqual(getVisibleExclusions(draft, [dupe]), ["Pool fencing"]);
+});
+
+test("the offer document uses only the exclusions set in the Offer phase", () => {
+  const draft = {
+    ...INITIAL_OFFER_DRAFT,
+    exclusionBullets: ["Client-facing exclusion"],
+  };
+  const scopeItem = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-not-on-offer",
+    label: "Removed from the Offer document",
+    includedInOfferDocument: true,
+  };
+
+  assert.deepEqual(getOfferDocumentExclusions(draft), ["Client-facing exclusion"]);
+  assert.deepEqual(
+    buildOfferPrintTemplateData(
+      buildProposalInput({
+        ...snapshotWithSchedule([]),
+        draft,
+        exclusions: [scopeItem],
+      } as OfferWorkspaceSnapshot),
+    ).exclusionBullets,
+    ["Client-facing exclusion"],
+  );
 });
 
 // ─── Rendering ───
@@ -725,7 +751,7 @@ test("a scope item's detail wins over a bare bullet of the same label", () => {
   assert.equal(rows[0].description, "Not in the building scope.");
 });
 
-test("the tender prints the exclusion detail; the offer keeps its short list", () => {
+test("the tender prints Scope exclusion detail; the offer uses its short list", () => {
   const snapshot = snapshotWithSchedule([{ spec: "S", category: "C" }]);
   const withDetail = {
     ...snapshot,
@@ -747,7 +773,11 @@ test("the tender prints the exclusion detail; the offer keeps its short list", (
 
   assert.match(tender, /Priced separately on request\./);
   assert.match(tender, /<th class="c-exc-means">What this means<\/th>/);
-  assert.match(offer, /Pool and spa/, "the offer still names the exclusion");
+  assert.doesNotMatch(
+    offer,
+    /Pool and spa/,
+    "a Scope exclusion must not repopulate the Offer list",
+  );
   assert.doesNotMatch(
     offer,
     /Priced separately on request\./,
