@@ -25,6 +25,10 @@ import {
 import { getGraphConfig } from "@/lib/graph/config";
 import { createGraphContext } from "@/lib/graph/client";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
+import {
+  canEmailOfferProposal,
+  PROPOSAL_STAGE_PASSED_ERROR,
+} from "@/lib/offer/offer-send-guards";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -117,6 +121,11 @@ export async function sendOfferDocument(input: {
   });
   if (!offer) {
     return { ok: false, error: "Offer not found." };
+  }
+  // Before any recipient lookup or PDF render: past the negotiation window the
+  // proposal would quote a workspace the Tender or Contract no longer matches.
+  if (!canEmailOfferProposal(offer.offerStatus)) {
+    return { ok: false, error: PROPOSAL_STAGE_PASSED_ERROR };
   }
   if (!offer.workspaceState) {
     return { ok: false, error: "Add and save offer content before sending." };
