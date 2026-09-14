@@ -1134,9 +1134,11 @@ export function NewOfferWorkspace({
         // Previously unguarded: a failed load left offerIdRef null, which
         // silently disables autosave — the estimator keeps editing a workspace
         // that can never persist, and only finds out when the tab is closed.
+        // The pane now shows the failure in place of the steps, so nothing can
+        // be edited. It is not a failed save: that state offered a Retry with no
+        // offer behind it and prompted on the very reload the pane asks for.
         console.error("[offer] failed to load the workspace:", error);
         if (!cancelled) {
-          setSaveState("error");
           setLoadFailed(true);
         }
         return;
