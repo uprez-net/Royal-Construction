@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  canCreateRevision,
   isOfferBuildStepEditable,
   isOfferIssued,
   offerDocumentStillEditableWhileIssued,
@@ -96,5 +97,26 @@ assert.equal(isOfferBuildStepEditable("cost-schedule", "sent"), false);
 assert.equal(isOfferBuildStepEditable("job-setup", "sent"), false);
 assert.equal(isOfferBuildStepEditable("offer-document", "offer_sent"), false);
 assert.equal(isOfferBuildStepEditable("offer-document", "agreed"), false);
+
+// ── Create revision used to be offered everywhere except contract_signed and
+//    project, so the button stayed live from a signed Tender through the
+//    Contract, where createOfferRevision refuses it, and on superseded history.
+//    It must match the server's locked statuses exactly. ──
+const REVISION_REFUSED: ReadonlySet<OfferWorkspaceStatus> = new Set([
+  "tender_signed",
+  "contract_draft",
+  "contract_sent",
+  "contract_declined",
+  "contract_signed",
+  "project",
+  "superseded",
+]);
+for (const status of ALL_STATUSES) {
+  assert.equal(
+    canCreateRevision(status),
+    !REVISION_REFUSED.has(status),
+    `canCreateRevision failed at ${status}`,
+  );
+}
 
 console.log("offer-editability: all assertions passed");

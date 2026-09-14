@@ -38,6 +38,16 @@ import {
 import { formatOfferReference } from "./offer-workspace-format";
 import { Lock } from "lucide-react";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -100,6 +110,17 @@ import type { OfferSaveState } from "@/lib/offer/workspace-save-state";
 
 // Re-exported for the chrome that already imports it from here.
 export type { OfferSaveState };
+
+// A recall or revision waiting on the estimator's confirmation. Recall carries
+// the envelope scope and the status it steps back to, exactly as transition()
+// takes them.
+export type OfferPendingConfirm =
+  | {
+      readonly kind: "recall";
+      readonly scope: "offer" | "tender" | "contract";
+      readonly next: OfferWorkspaceStatus;
+    }
+  | { readonly kind: "revision" };
 
 type OfferWorkspaceScreenProps = {
   readonly allowances: readonly OfferWorkspaceScopeItem[];
@@ -191,6 +212,9 @@ type OfferWorkspaceScreenProps = {
   readonly onMarkRejected: () => void;
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
+  readonly pendingConfirm: OfferPendingConfirm | null;
+  readonly onConfirmPending: () => void;
+  readonly onCancelPending: () => void;
   readonly revising: boolean;
   readonly revisionNotice: string | null;
   readonly revisionExecuted: boolean;
@@ -303,6 +327,9 @@ export function OfferWorkspaceScreen({
   onMarkRejected,
   onCreateRevision,
   canRevise,
+  pendingConfirm,
+  onConfirmPending,
+  onCancelPending,
   revising,
   revisionNotice,
   revisionExecuted,
@@ -439,6 +466,10 @@ export function OfferWorkspaceScreen({
   }, [activeStepId]);
 
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const confirmCopy =
+    pendingConfirm === null
+      ? null
+      : describePendingConfirm(pendingConfirm, status);
 
   // Panel state that must outlive its panel. Only the active step is mounted,
   // so anything a panel kept in local useState was wiped on every step change.
@@ -866,8 +897,78 @@ export function OfferWorkspaceScreen({
         pricing={pricing}
         totalAreaSqm={rawTotalAreaSqm(areaBasis)}
       />
+      {/* One confirmation for every recall and revision control, whichever
+          step it sits on. */}
+      <AlertDialog
+        open={pendingConfirm !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            onCancelPending();
+          }
+        }}
+      >
+        {confirmCopy ? (
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{confirmCopy.title}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmCopy.description}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant={confirmCopy.voidsEnvelope ? "destructive" : "default"}
+                onClick={onConfirmPending}
+              >
+                {confirmCopy.action}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        ) : null}
+      </AlertDialog>
     </div>
   );
+}
+
+const RECALL_DOCUMENT_NAME = {
+  offer: "offer",
+  tender: "Tender",
+  contract: "Contract",
+} as const;
+
+const VOIDS_ENVELOPE_COPY =
+  "This voids the DocuSign envelope. The customer's signing link stops working and you'll need to send a new envelope.";
+
+function describePendingConfirm(
+  confirm: OfferPendingConfirm,
+  status: OfferWorkspaceStatus,
+): {
+  readonly title: string;
+  readonly description: string;
+  readonly action: string;
+  readonly voidsEnvelope: boolean;
+} {
+  if (confirm.kind === "recall") {
+    return {
+      title: `Recall the ${RECALL_DOCUMENT_NAME[confirm.scope]}?`,
+      description: VOIDS_ENVELOPE_COPY,
+      action: "Recall",
+      voidsEnvelope: true,
+    };
+  }
+  // Only these two statuses have an envelope out that a revision would void.
+  const voidsEnvelope = status === "offer_sent" || status === "tender_sent";
+  const supersedes =
+    "This supersedes the current revision; it stays readable in Versions.";
+  return {
+    title: "Create a new revision?",
+    description: voidsEnvelope
+      ? `${supersedes} ${VOIDS_ENVELOPE_COPY}`
+      : supersedes,
+    action: "Create revision",
+    voidsEnvelope,
+  };
 }
 
 // Statuses at which the Send & negotiate step has actually succeeded. Everything

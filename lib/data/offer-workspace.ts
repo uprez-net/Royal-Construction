@@ -348,9 +348,11 @@ async function mintOfferReference(
   return `RC-Q-${year}-${String(counter.lastSeq).padStart(3, "0")}`;
 }
 
+// No actor argument on this or any action below: each is a Server Action, so a
+// caller-supplied id could put anyone's name on the offer or its audit trail.
+// The actor is always the user the access check signed in.
 export async function loadActiveOfferWorkspace(
   leadId: number,
-  actorId?: string,
 ): Promise<LoadedOfferWorkspace> {
   const access = await authorizeLeadAccess(leadId);
   if (!access.ok) {
@@ -402,7 +404,7 @@ export async function loadActiveOfferWorkspace(
         baseReference,
         revisionNumber: 1,
         isActive: true,
-        createdById: actorId,
+        createdById: access.user.id,
         offerStatus: OfferStatus.PENDING,
         amount: new Prisma.Decimal(0),
         gstAmount: new Prisma.Decimal(0),
@@ -723,7 +725,6 @@ function sameMoney(
 export async function transitionOfferStatus(input: {
   offerId: string;
   toStatus: OfferStatus;
-  actorId?: string;
   note?: string;
 }): Promise<{ ok: true; status: OfferStatus }> {
   const access = await authorizeOfferAccess(input.offerId);
@@ -779,7 +780,7 @@ export async function transitionOfferStatus(input: {
     to: input.toStatus,
     skipOwnerGate: false,
     stampSentAt: input.toStatus === OfferStatus.SENT,
-    actorId: input.actorId,
+    actorId: access.user.id,
     note: input.note,
   });
   if (!committed) {
@@ -1249,7 +1250,6 @@ export async function recallOfferEnvelope(input: {
   offerId: string;
   scope: "offer" | "tender" | "contract";
   toStatus: OfferStatus;
-  actorId?: string;
   note?: string;
 }): Promise<
   | { ok: true; status: OfferStatus; voidWarnings: readonly string[] }
@@ -1307,7 +1307,7 @@ export async function recallOfferEnvelope(input: {
     to: recall.to,
     skipOwnerGate: true,
     stampSentAt: false,
-    actorId: input.actorId,
+    actorId: access.user.id,
     note: input.note,
   });
   if (!committed) {
@@ -1329,7 +1329,6 @@ export async function recallOfferEnvelope(input: {
 // unless DocuSign confirmed every void.
 export async function createOfferRevision(input: {
   offerId: string;
-  actorId?: string;
 }): Promise<CreateOfferRevisionResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
@@ -1438,7 +1437,7 @@ export async function createOfferRevision(input: {
         baseReference: currentRow.baseReference,
         revisionNumber: currentRow.revisionNumber + 1,
         isActive: true,
-        createdById: input.actorId,
+        createdById: access.user.id,
         offerStatus: OfferStatus.PENDING,
         // Derive rather than copy: the parent's columns may predate the fix
         // that wrote the resolved price, and inheriting them would carry that

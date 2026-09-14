@@ -113,7 +113,11 @@ import {
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
-import { OfferWorkspaceScreen } from "./offer-workspace-screen";
+import { canCreateRevision } from "@/lib/offer/offer-editability";
+import {
+  OfferWorkspaceScreen,
+  type OfferPendingConfirm,
+} from "./offer-workspace-screen";
 
 function contractDefaultsFromWorkspace(
   job: OfferWorkspaceJob,
@@ -282,6 +286,9 @@ export function NewOfferWorkspace({
   const [adminContentStale, setAdminContentStale] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
+  // A recall or revision the estimator has clicked but not yet confirmed.
+  const [pendingConfirm, setPendingConfirm] =
+    useState<OfferPendingConfirm | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
@@ -1545,6 +1552,23 @@ export function NewOfferWorkspace({
     })();
   }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer]);
 
+  // Recall and Create revision void live DocuSign envelopes, which can't be
+  // undone, and a revision supersedes the offer. Their buttons acted on the
+  // first click; now they only open the confirmation, and this runs whichever
+  // action was confirmed.
+  const confirmPending = useCallback(() => {
+    const confirmed = pendingConfirm;
+    setPendingConfirm(null);
+    if (confirmed === null) {
+      return;
+    }
+    if (confirmed.kind === "recall") {
+      transition(confirmed.next, confirmed.scope);
+    } else {
+      createRevision();
+    }
+  }, [pendingConfirm, transition, createRevision]);
+
   // Email the proposal PDF to the client. Flushes the latest edits first so the
   // generated PDF matches the workspace, then routes through sendOfferDocument.
   const sendOffer = useCallback(
@@ -1880,12 +1904,12 @@ export function NewOfferWorkspace({
         // rejects an incomplete party set, so don't leave the button actionable.
         canMarkAgreed={ownersComplete}
         onMarkRejected={() => transition("rejected")}
-        onCreateRevision={createRevision}
-        canRevise={
-          leadId !== undefined &&
-          status !== "contract_signed" &&
-          status !== "project"
-        }
+        onCreateRevision={() => setPendingConfirm({ kind: "revision" })}
+        // The server's locked statuses, not a hand-kept subset of them.
+        canRevise={leadId !== undefined && canCreateRevision(status)}
+        pendingConfirm={pendingConfirm}
+        onConfirmPending={confirmPending}
+        onCancelPending={() => setPendingConfirm(null)}
         revising={revising}
         revisionNotice={revisionNotice}
         revisionExecuted={status === "contract_signed" || status === "project"}
@@ -1903,7 +1927,9 @@ export function NewOfferWorkspace({
         onSendOfferForSignature={sendOfferAccept}
         offerSignSending={offerSignSending}
         offerSignError={offerSignError}
-        onRecallOffer={() => transition("sent", "offer")}
+        onRecallOffer={() =>
+          setPendingConfirm({ kind: "recall", scope: "offer", next: "sent" })
+        }
         // Dev-only simulate (guarded server-side): the real OFFER_SIGNED comes
         // from the DocuSign completion webhook.
         onMarkOfferSigned={() => transition("offer_signed")}
@@ -1911,7 +1937,13 @@ export function NewOfferWorkspace({
         onSendTender={sendTender}
         tenderSending={tenderSending}
         tenderSendError={tenderSendError}
-        onRecallTender={() => transition("tender_draft", "tender")}
+        onRecallTender={() =>
+          setPendingConfirm({
+            kind: "recall",
+            scope: "tender",
+            next: "tender_draft",
+          })
+        }
         onMarkTenderSigned={() => transition("tender_signed")}
         onGenerateContract={() => transition("contract_draft")}
         onSendContract={sendContract}
@@ -1919,7 +1951,13 @@ export function NewOfferWorkspace({
         contractSendError={contractSendError}
         contractParticulars={contractParticulars}
         onContractParticularsChange={updateContractParticulars}
-        onRecallContract={() => transition("contract_draft", "contract")}
+        onRecallContract={() =>
+          setPendingConfirm({
+            kind: "recall",
+            scope: "contract",
+            next: "contract_draft",
+          })
+        }
         onMarkContractSigned={() => transition("contract_signed")}
         onCreateProject={createProject}
         projectCreating={projectCreating}

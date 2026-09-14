@@ -67,6 +67,25 @@ export function offerDocumentStillEditableWhileIssued(
   return isOfferIssued(status) && isOfferBuildStepEditable("offer-document", status);
 }
 
+// Statuses a new revision can't be forked from. Once the Tender is signed the
+// job is under contract and a change is a contract variation, and a superseded
+// revision is history. createOfferRevision refuses the first six on the server
+// and never reaches a superseded row (it is no longer the live revision); the
+// workspace asks this so its Create revision button agrees with both.
+const REVISION_LOCKED_STATUSES: ReadonlySet<OfferWorkspaceStatus> = new Set([
+  "tender_signed",
+  "contract_draft",
+  "contract_sent",
+  "contract_declined",
+  "contract_signed",
+  "project",
+  "superseded",
+]);
+
+export function canCreateRevision(status: OfferWorkspaceStatus): boolean {
+  return !REVISION_LOCKED_STATUSES.has(status);
+}
+
 // The statuses at which the workspace snapshot is saved at all. The payment
 // schedule is edited after AGREED and the Tender is built from it, so the
 // snapshot stays writable until the Tender is sent; the tender access answers
