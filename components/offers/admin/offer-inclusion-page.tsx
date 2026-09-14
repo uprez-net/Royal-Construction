@@ -10,6 +10,7 @@ import { SaveChangesButton } from "./shared/save-changes-button";
 import { OfferCardHeading } from "../new-workflow/offer-workspace-card-heading";
 import {
   inclusionsScheduleChanged,
+  inclusionScheduleRowRestored,
   saveOfferContent,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { InclusionScheduleEditor } from "./shared/inclusion-schedule-editor";
@@ -48,6 +49,9 @@ export function OfferInclusionsPage() {
             value={inclusionSchedule}
             onChange={(rows) =>
               dispatch(inclusionsScheduleChanged(normaliseScheduleRows(rows)))
+            }
+            onRestore={(row, index) =>
+              dispatch(inclusionScheduleRowRestored({ row, index }))
             }
           />
         </div>

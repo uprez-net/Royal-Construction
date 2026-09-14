@@ -15,7 +15,9 @@ import {
   termsAndConditionsChanged,
   saveOfferContent,
   inclusionsChanged,
-  exclusionsListChanged
+  inclusionBulletRestored,
+  exclusionsListChanged,
+  exclusionBulletRestored,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { OfferCardHeading } from "@/components/offers/new-workflow/offer-workspace-card-heading";
 import { FilePenLine } from "lucide-react";
@@ -84,6 +86,9 @@ export function OfferContentPage() {
           <BulletListEditor
             value={inclusions}
             onChange={(lines) => dispatch(inclusionsChanged(lines))}
+            onRestore={(bullet, index) =>
+              dispatch(inclusionBulletRestored({ bullet, index }))
+            }
             addLabel="Add bullet"
             placeholder="Inclusion text"
           />
@@ -93,6 +98,9 @@ export function OfferContentPage() {
           <BulletListEditor
             value={exclusions}
             onChange={(lines) => dispatch(exclusionsListChanged(lines))}
+            onRestore={(bullet, index) =>
+              dispatch(exclusionBulletRestored({ bullet, index }))
+            }
             addLabel="Add bullet"
             placeholder="Exclusion text"
           />

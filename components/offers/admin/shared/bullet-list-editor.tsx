@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusIcon, XIcon } from "lucide-react";
-import { insertAt } from "@/lib/store/slices/admin-offer-content-list";
 
 interface BulletListEditorProps {
   value: string[];
   onChange: (v: string[]) => void;
+  onRestore: (bullet: string, index: number) => void;
   addLabel?: string;
   placeholder?: string;
 }
@@ -17,16 +17,11 @@ interface BulletListEditorProps {
 export function BulletListEditor({
   value,
   onChange,
+  onRestore,
   addLabel = "Add bullet",
   placeholder = "Bullet text",
 }: BulletListEditorProps) {
   const [draft, setDraft] = useState("");
-  // Undo fires seconds after the delete. Restoring into the list as it is by
-  // then, rather than a snapshot taken at delete time, keeps edits made since.
-  const latestValue = useRef(value);
-  useEffect(() => {
-    latestValue.current = value;
-  }, [value]);
 
   const commitDraft = () => {
     const trimmed = draft.trim();
@@ -41,6 +36,10 @@ export function BulletListEditor({
     onChange(next);
   };
 
+  // The toast outlives this editor: switching admin tabs unmounts it while
+  // Undo is still on screen. The restore therefore goes through the store,
+  // which inserts into the list as it is when Undo is clicked, not as this
+  // instance last saw it.
   const removeAt = (index: number) => {
     const removed = value[index];
     const next = value.slice();
@@ -49,7 +48,7 @@ export function BulletListEditor({
     toast("Bullet removed", {
       action: {
         label: "Undo",
-        onClick: () => onChange(insertAt(latestValue.current, removed, index)),
+        onClick: () => onRestore(removed, index),
       },
     });
   };

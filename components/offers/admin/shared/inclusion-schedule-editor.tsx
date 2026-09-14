@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 import { PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { insertAt } from "@/lib/store/slices/admin-offer-content-list";
 import type { InclusionScheduleRow } from "@/types/admin-offer-content";
 import { INCLUSION_CATEGORY_SUGGESTIONS } from "./inclusion-schedule";
 
 interface InclusionScheduleEditorProps {
   value: InclusionScheduleRow[];
   onChange: (rows: InclusionScheduleRow[]) => void;
+  onRestore: (row: InclusionScheduleRow, index: number) => void;
 }
 
 // An emptied category drops the key rather than storing "", so a cleared row
@@ -24,6 +24,7 @@ function withCategory(row: InclusionScheduleRow, category: string): InclusionSch
 export function InclusionScheduleEditor({
   value,
   onChange,
+  onRestore,
 }: InclusionScheduleEditorProps) {
   const id = useId();
   const categoryListId = `${id}-categories`;
@@ -31,12 +32,6 @@ export function InclusionScheduleEditor({
   const draftCategoryId = `${id}-draft-category`;
   const [draftSpec, setDraftSpec] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
-  // Undo fires seconds after the delete. Restoring into the list as it is by
-  // then, rather than a snapshot taken at delete time, keeps edits made since.
-  const latestValue = useRef(value);
-  useEffect(() => {
-    latestValue.current = value;
-  }, [value]);
 
   const commitDraft = () => {
     const spec = draftSpec.trim();
@@ -53,6 +48,10 @@ export function InclusionScheduleEditor({
     onChange(next);
   };
 
+  // The toast outlives this editor: switching admin tabs unmounts it while
+  // Undo is still on screen. The restore therefore goes through the store,
+  // which inserts into the list as it is when Undo is clicked, not as this
+  // instance last saw it.
   const removeAt = (index: number) => {
     const removed = value[index];
     const next = value.slice();
@@ -61,7 +60,7 @@ export function InclusionScheduleEditor({
     toast("Inclusion removed", {
       action: {
         label: "Undo",
-        onClick: () => onChange(insertAt(latestValue.current, removed, index)),
+        onClick: () => onRestore(removed, index),
       },
     });
   };

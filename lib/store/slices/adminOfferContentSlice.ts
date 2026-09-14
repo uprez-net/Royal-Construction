@@ -293,8 +293,48 @@ const slice = createSlice({
       state.data.offerContent.inclusions = action.payload;
       markSectionEdited(state, "offerContent");
     },
+    // Bullet and schedule Undo toasts outlive the editor that raised them, so
+    // they restore into the current list here rather than one the editor held.
+    // Plain bullets have no id to dedupe on; the toast closes on its first
+    // Undo click.
+    inclusionBulletRestored(
+      state,
+      action: PayloadAction<{ bullet: string; index: number }>,
+    ) {
+      const { bullet, index } = action.payload;
+      state.data.offerContent.inclusions = insertAt(
+        state.data.offerContent.inclusions,
+        bullet,
+        index,
+      );
+      markSectionEdited(state, "offerContent");
+    },
+    exclusionBulletRestored(
+      state,
+      action: PayloadAction<{ bullet: string; index: number }>,
+    ) {
+      const { bullet, index } = action.payload;
+      state.data.offerContent.exclusions = insertAt(
+        state.data.offerContent.exclusions,
+        bullet,
+        index,
+      );
+      markSectionEdited(state, "offerContent");
+    },
     inclusionsScheduleChanged(state, action: PayloadAction<InclusionScheduleRow[]>) {
       state.data.offerContent.inclusionSchedule = action.payload;
+      markSectionEdited(state, "offerContent");
+    },
+    inclusionScheduleRowRestored(
+      state,
+      action: PayloadAction<{ row: InclusionScheduleRow; index: number }>,
+    ) {
+      const { row, index } = action.payload;
+      state.data.offerContent.inclusionSchedule = insertAt(
+        state.data.offerContent.inclusionSchedule,
+        row,
+        index,
+      );
       markSectionEdited(state, "offerContent");
     },
     headlineChanged(state, action: PayloadAction<string>) {
@@ -380,8 +420,11 @@ export const {
   exclusionRemoved,
   exclusionRestored,
   exclusionsListChanged,
+  exclusionBulletRestored,
   inclusionsChanged,
+  inclusionBulletRestored,
   inclusionsScheduleChanged,
+  inclusionScheduleRowRestored,
   headlineChanged,
   introTextChanged,
   termsAndConditionsChanged,
