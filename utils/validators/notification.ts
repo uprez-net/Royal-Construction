@@ -322,4 +322,58 @@ export const notificationSchemas = {
         projectName: z.string(),
     }),
 
+    /**
+     * The estate developer's answer on the bushfire report.
+     *
+     * One notification for both verdicts rather than two, because both are news
+     * and both send the reader to the same block. What differs is only the
+     * sentence, which the template builds off `decision`.
+     */
+    complianceDeveloperDecision: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        decision: z.string(),
+        reason: z.string(),
+        estate: z.string(),
+    }),
+
+    complianceDeveloperResent: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        party: z.string(),
+        documentLabel: z.string(),
+    }),
+
+    /**
+     * The certifier has issued the construction certificate.
+     *
+     * The end of the compliance file, and the one notification here that is
+     * unambiguously good news — which is why it says what happens next rather
+     * than only what happened.
+     */
+    complianceCertificateIssued: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+    }),
+
+    complianceCompleted: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+    }),
+
+    /**
+     * The council has come back on the development application asking for more.
+     *
+     * Counted rather than listed: a portal email routinely asks for six things
+     * and rejects two, and a notification that names all eight is one nobody
+     * reads to the end.
+     */
+    complianceDaItemsRequested: z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        requestedCount: z.number(),
+        rejectedCount: z.number(),
+    }),
+
+
 } as const;

@@ -14,6 +14,7 @@
 import { z } from "zod";
 import { activityLogSchemas } from "@/utils/validators";
 import { v4 as uuidv4 } from "uuid";
+import { dateFormat } from "@/utils/formatters";
 
 
 /**
@@ -291,10 +292,141 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
-    compliancePlanningCertificateUpdated: (data) => ({
+    complianceExternalApplicationUpdated: (data) => ({
         id: uuidv4(),
-        type: "compliancePlanningCertificateUpdated",
-        message: `${data.recordedBy} updated the planning certificate (${data.step})`,
+        type: "complianceExternalApplicationUpdated",
+        message: `${data.recordedBy} updated the ${data.kind} application (${data.step})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    compliancePrincipalCertifierAppointed: (data) => ({
+        id: uuidv4(),
+        type: "compliancePrincipalCertifierAppointed",
+        // The reference is named where there is one, because this is the entry
+        // somebody reads when the appointment has to be chased on the portal and
+        // nobody remembers which of two certifiers was named.
+        message: `${data.recordedByName} recorded the principal certifier appointment on ${dateFormat.format(new Date(data.appointedAt))}${data.appointmentRef ? ` (${data.appointmentRef})` : ""}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceChecklistMapped: (data) => ({
+        id: uuidv4(),
+        type: "complianceChecklistMapped",
+        message: `${data.mappedCount} checklist item${data.mappedCount === 1 ? "" : "s"} answered from documents already on the file (${data.documentTypes.join(", ")})`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceWasteManagementRequested: (data) => ({
+        id: uuidv4(),
+        type: "complianceWasteManagementRequested",
+        message: `${data.requestedBy} asked the architect for the waste management plan with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDeveloperDecision: (data) => ({
+        id: uuidv4(),
+        type: "complianceDeveloperDecision",
+        message: `${data.estate ?? "The estate developer"} ${
+            data.decision === "APPROVED" ? "approved" : "rejected"
+        } the bushfire report${
+            data.channel === "ADMIN"
+                ? ` — recorded by ${data.decidedBy ?? "an admin"}`
+                : " — read off their reply"
+        }${data.reason ? `: "${data.reason}"` : ""}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceBushfireRevisionRequested: (data) => ({
+        id: uuidv4(),
+        type: "complianceBushfireRevisionRequested",
+        message: `Sent the developer's reasons to the bushfire consultant and asked for a revised report: "${data.reason}"`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceArchitectRevisionRequested: (data) => ({
+        id: uuidv4(),
+        type: "complianceArchitectRevisionRequested",
+        message: `Sent the developer's reasons to the architect and asked for a revised architectural design: "${data.reason}"`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceBushfireRevisionReceived: (data) => ({
+        id: uuidv4(),
+        type: "complianceBushfireRevisionReceived",
+        message: "A revised bushfire report came back from the consultant",
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDeveloperResent: (data) => ({
+        id: uuidv4(),
+        type: "complianceDeveloperResent",
+        message: `${data.requestedBy ?? "An admin"} sent the bushfire report back to the developer with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceDeveloperApprovalRequirementSet: (data) => ({
+        id: uuidv4(),
+        type: "complianceDeveloperApprovalRequirementSet",
+        message: `${data.answeredBy ?? "An admin"} recorded that this lot ${
+            data.required ? "needs" : "does not need"
+        } the estate developer's approval on the bushfire report`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceCertificateIssued: (data) => ({
+        id: uuidv4(),
+        type: "complianceCertificateIssued",
+        message: "The certifier issued the construction certificate",
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceCompleted: (data) => ({
+        id: uuidv4(),
+        type: "complianceCompleted",
+        message: "Compliance complete — the construction certificate and the HBCF cover are both on the file",
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
+    complianceIssuedItemsRecorded: (data) => ({
+        id: uuidv4(),
+        type: "complianceIssuedItemsRecorded",
+        message: [
+            data.requestedCount > 0
+                ? `The ${data.assessor} asked for ${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"}`
+                : null,
+            data.rejectedCount > 0
+                ? `sent back ${data.rejectedCount}`
+                : null,
+            data.unmatched.length > 0
+                ? `and refused ${data.unmatched.join(", ")}, which could not be matched to a row on the file`
+                : null,
+        ]
+            .filter(Boolean)
+            .join(", "),
         authorId: "system",
         timestamp: new Date().toISOString(),
         projectId: data.projectId,

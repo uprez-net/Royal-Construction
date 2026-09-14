@@ -1,7 +1,10 @@
 import {
+  ComplianceAlertSource,
   ComplianceAlertStatus,
   ComplianceAlertType,
+  ComplianceApprovalDecision,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceMeetingStatus,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -35,6 +38,15 @@ export const certifierEngagementInclude = {
     include: {
       emails: { orderBy: { sentAt: "asc" } },
       /**
+       * What this party was asked for, and which checklist line asked.
+       *
+       * One row per document rather than the single column it replaced, which
+       * is what lets a structural engineer answer three lines off one
+       * engagement. Loaded here because both the row that offers the connect
+       * control and the reply that files a document read it.
+       */
+      deliverables: true,
+      /**
        * The architect's client meetings, newest first.
        *
        * Every one of them, including the reschedules. The tab only ever renders
@@ -53,18 +65,43 @@ export const certifierEngagementInclude = {
        * found off the same array.
        */
       revisions: { orderBy: { requestedAt: "desc" } },
+      /**
+       * What the estate developer has been asked to approve, and what they said.
+       *
+       * DEVELOPER rows only and empty on every other party, loaded on the main
+       * read because the two documents under covenant gate two different things
+       * — the portal lodgement and the development application — and a gate that
+       * has to fetch before it can decide whether to refuse is a button that
+       * flickers through enabled on every render.
+       *
+       * At most two rows per file, so loading them whole costs nothing.
+       */
+      developerApprovals: true,
     },
     orderBy: { createdAt: "asc" },
   },
   /**
-   * The 10.7 certificate as a thing being obtained.
+   * Every application to an outside body on this file.
    *
-   * Null until somebody answers "do you already have it?". Included on the main
-   * read rather than fetched by the council block on its own: it decides which
-   * of four states that block renders, and a card that has to fetch before it
-   * can decide what it is flickers through all four.
+   * The 10.7 certificate, the road opening permit, the long service levy, the
+   * mine subsidence approval, and the development application itself. Included
+   * on the main read rather than fetched per block: each one decides which of
+   * five states its block renders, and a card that has to fetch before it can
+   * decide what it is flickers through all five.
    */
-  planningCertificate: true,
+  externalApplications: {
+    include: {
+      /**
+       * Every round this application has been lodged in, newest first.
+       *
+       * Loaded whole rather than filtered to the latest. The block shows how
+       * many rounds a DA has been through, which is the honest answer to "why
+       * is this still not determined", and the sweep reads the newest off the
+       * same array — the same trade `revisions` above makes.
+       */
+      submissions: { orderBy: { round: "desc" } },
+    },
+  },
   /**
    * Open first, then newest.
    *
@@ -86,6 +123,76 @@ export type ComplianceDocumentWithFiles =
 
 export type CertifierEmailRecord = CertifierEngagementDetail["emails"][number];
 
+/**
+ * One file on the engagement, offered as something a message could carry.
+ *
+ * `documentLabel` first and the filename second, which is the order somebody
+ * looking for one of these thinks in: a compliance file holds thirty documents
+ * with names like "scan_0043.pdf" and "WhatsApp Image 2026-03-02 at
+ * 11.14.02.jpeg", and picking by filename alone is guesswork. What the reader
+ * knows is that they want the survey.
+ */
+export type VaultAttachmentOption = {
+  fileId: string;
+  filename: string;
+  documentType: ComplianceDocumentType;
+  documentLabel: string;
+};
+
+/**
+ * The types that are never worth offering as an attachment.
+ *
+ * The two issued-item types are lines rather than documents -- what hangs off
+ * a checklist item is whatever answered it, and it is already on the file under
+ * its own type as well, so offering both puts the same PDF in the list twice
+ * under a name the recipient would not recognise. UNKNOWN is worse: it is by
+ * definition a document nobody has identified, and attaching one to an outbound
+ * email means sending a third party something we cannot describe.
+ */
+const NOT_ATTACHABLE_FROM_VAULT: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.UNKNOWN,
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
+]);
+
+/**
+ * Everything on the file that a message could sensibly carry.
+ *
+ * One helper rather than each modal filtering the document rows itself, because
+ * the exclusions above are a judgement rather than a detail and four copies of
+ * it would not stay in step. Sorted by label so the list reads alphabetically
+ * by what a document *is*, which is the only ordering anybody can predict --
+ * `order` is the pack's assembly order and means nothing to a person hunting
+ * for the title search.
+ *
+ * `label` is passed through for the row that has one, so a mapped or extracted
+ * row shows the wording it was given rather than a generic type name.
+ */
+export function vaultAttachmentOptions(
+  engagement: Pick<CertifierEngagementDetail, "documents"> | null | undefined,
+  labelFor: (
+    documentType: ComplianceDocumentType,
+    label?: string | null,
+  ) => string,
+): VaultAttachmentOption[] {
+  const options = (engagement?.documents ?? [])
+    .filter((document) => !NOT_ATTACHABLE_FROM_VAULT.has(document.documentType))
+    .flatMap((document) =>
+      document.files.map((file) => ({
+        fileId: file.id,
+        filename: file.filename,
+        documentType: document.documentType,
+        documentLabel: labelFor(document.documentType, document.label),
+      })),
+    );
+
+  return options.sort(
+    (a, b) =>
+      a.documentLabel.localeCompare(b.documentLabel) ||
+      a.filename.localeCompare(b.filename),
+  );
+}
+
 /** One party's engagement plus its own mail trail, meetings and revisions. */
 export type ComplianceOutreachDetail =
   CertifierEngagementDetail["outreaches"][number];
@@ -96,12 +203,94 @@ export type ComplianceMeetingRecord =
 export type CompliancePlanRevisionRecord =
   ComplianceOutreachDetail["revisions"][number];
 
-/** The 10.7 certificate application, or null before the question is answered. */
-export type PlanningCertificateRecord =
-  CertifierEngagementDetail["planningCertificate"];
+/** One application to an outside body, as the tab reads it. */
+/**
+ * The round an application's clock currently runs from.
+ *
+ * The newest submission, falling back to `appliedAt` for a row written before
+ * the rounds table existed and never resubmitted since. Both are needed: the
+ * fallback is what keeps every application already on the system measuring
+ * against something, and the round is what stops a resubmitted DA reading as
+ * late because of when it first went in.
+ */
+export function latestSubmission(
+  application: ComplianceExternalApplicationRecord | null | undefined,
+): { submittedAt: Date; round: number; applicationRef: string | null } | null {
+  if (!application) return null;
 
-export type ComplianceAlertRecord =
-  CertifierEngagementDetail["alerts"][number];
+  // Ordered newest-first by the include above, so the first is the latest. Not
+  // re-sorted here: a caller that has ordered them differently is a bug worth
+  // finding rather than one worth papering over.
+  const newest = application.submissions?.[0];
+  if (newest) {
+    return {
+      submittedAt: newest.submittedAt,
+      round: newest.round,
+      applicationRef: newest.applicationRef ?? application.applicationRef,
+    };
+  }
+
+  if (application.appliedAt) {
+    return {
+      submittedAt: application.appliedAt,
+      round: 1,
+      applicationRef: application.applicationRef,
+    };
+  }
+
+  return null;
+}
+
+export type ComplianceExternalApplicationRecord =
+  CertifierEngagementDetail["externalApplications"][number];
+
+/**
+ * One kind of application on this file, or null before it is started.
+ *
+ * Null is the ordinary state for four of the five: nobody has answered "do we
+ * already have this?" yet, and until somebody does there is no row.
+ */
+export function externalApplication(
+  engagement:
+    | Pick<CertifierEngagementDetail, "externalApplications">
+    | null
+    | undefined,
+  kind: ComplianceExternalApplicationKind,
+): ComplianceExternalApplicationRecord | null {
+  return (
+    engagement?.externalApplications.find(
+      (application) => application.kind === kind,
+    ) ?? null
+  );
+}
+
+/** The 10.7 certificate application, or null before the question is answered. */
+export function planningCertificate(
+  engagement:
+    | Pick<CertifierEngagementDetail, "externalApplications">
+    | null
+    | undefined,
+): ComplianceExternalApplicationRecord | null {
+  return externalApplication(
+    engagement,
+    ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
+  );
+}
+
+/** The development application, or null before anything has been lodged. */
+export function developmentApplication(
+  engagement:
+    | Pick<CertifierEngagementDetail, "externalApplications">
+    | null
+    | undefined,
+): ComplianceExternalApplicationRecord | null {
+  return externalApplication(
+    engagement,
+    ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+  );
+}
+
+export type ComplianceAlertRecord = CertifierEngagementDetail["alerts"][number];
 
 /**
  * The outreach for one party, or undefined.
@@ -167,17 +356,114 @@ export function hasOpenAlert(
 }
 
 /**
- * Whether the planning certificate is still part of this file.
+ * Whether this job is going through as a development application.
  *
- * An open DA_APPROVAL_REQUIRED takes it out: a development application is
- * assessed by the council itself, so ordering a 10.7 certificate to hand to a
- * certifier is no longer the path this job is on. It comes back if the alert
- * is resolved as not applying after all.
+ * True from the moment somebody says so — the architect on a reply, the
+ * certifier on their checklist, an admin by hand — and true afterwards for as
+ * long as there is anything to show. The alert answers the first half and
+ * closes when the consent lands; the application row answers the second, so a
+ * job whose DA came through last month still has its DA block, its lodgement
+ * date and its reference number on the tab rather than reverting to a screen
+ * that never mentions the council.
+ *
+ * Deliberately not the same question as `requiresPlanningCertificate` below,
+ * though they were one predicate for a while. That one asks whether the
+ * certifier's pack still wants the 10.7 and goes back to true when the consent
+ * arrives; this one asks whether the file has a development application on it
+ * at all, and never goes back.
+ */
+export function hasDevelopmentApplication(
+  engagement:
+    | Pick<CertifierEngagementDetail, "alerts" | "externalApplications">
+    | null
+    | undefined,
+): boolean {
+  return (
+    hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED) ||
+    developmentApplication(engagement) !== null
+  );
+}
+
+/**
+ * Whether the development consent is on the file.
+ *
+ * The document, not the tick. Somebody marking the application received is
+ * reporting it; the notice of determination being on the row is proving it —
+ * and this is what unfreezes a checklist, so the stronger evidence is the one
+ * that counts. A certifier asked to assess a job on the strength of a ticked
+ * box has nothing to read.
+ */
+export function hasDevelopmentConsent(
+  engagement: Pick<CertifierEngagementDetail, "documents"> | null | undefined,
+): boolean {
+  return (engagement?.documents ?? []).some(
+    (document) =>
+      document.documentType === ComplianceDocumentType.DEVELOPMENT_CONSENT &&
+      document.files.length > 0,
+  );
+}
+
+/**
+ * Why the checklist cannot be worked on yet, or null.
+ *
+ * One condition today, and it is absolute rather than partial: a certifier who
+ * has said the job needs development approval has nothing to assess until the
+ * council has approved it. Every document on the checklist is evidence for an
+ * assessment that cannot start, so collecting it now is work that may be thrown
+ * away — the council routinely grants consent with conditions that change the
+ * design, and every consultant report drawn against the old one is redone.
+ *
+ * The two halves of the file are not exclusive, which is the point. The DA runs
+ * beside the checklist rather than instead of it: the DA list stays live so its
+ * documents can be collected, and those of them the checklist also asks for
+ * fill its rows as they land. What is frozen is only the checklist's own
+ * controls and the send that would put the file in front of the certifier.
+ *
+ * Returns the sentence rather than a boolean, in the shape `partyBlockedReason`
+ * and `packSendBlockedReason` already use, so the banner on the card and the
+ * refusal from the review send are the same words.
+ */
+export function checklistBlockedReason(
+  engagement:
+    | Pick<CertifierEngagementDetail, "alerts" | "documents">
+    | null
+    | undefined,
+): string | null {
+  if (!hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED)) {
+    return null;
+  }
+  if (hasDevelopmentConsent(engagement)) {
+    // Belt and braces. The consent arriving resolves the alert on its own, so
+    // reaching here means the resolve has not landed yet — a sweep that has not
+    // run, or an upload whose after() is still in flight. Reading the document
+    // as well means the checklist unfreezes on the upload rather than on the
+    // bookkeeping that follows it.
+    return null;
+  }
+  return "This job needs development approval before the certifier can assess anything. Collect the development application below; the checklist opens when the consent is on the file.";
+}
+
+/**
+ * Whether the certifier's pack still wants the planning certificate.
+ *
+ * An open DA_APPROVAL_REQUIRED takes it out of the pack: the pack is what asks
+ * a certifier to assess the job as complying development, and that question is
+ * no longer being asked. It comes back if the alert is resolved as not applying
+ * after all.
+ *
+ * Deliberately narrower than "is the certificate wanted at all", which it used
+ * to be read as. A development application needs the same 10.7 certificate the
+ * CDC path did — the council assesses against the same zoning and the same
+ * overlays — so the certificate is not dropped when the job changes path, it
+ * moves. The council block on the pack goes read-only and the block that
+ * actually orders it appears on the development application, which is where the
+ * document is now needed. Reading this as "not wanted" is what left a job on the
+ * DA path with a council section saying the certificate had been replaced and
+ * no way anywhere on the tab to order one.
  *
  * One predicate rather than the condition repeated, because it is read by the
- * section that renders the row, the progress count beside it, and the outreach
- * that refuses to send an incomplete pack — and any two of those disagreeing
- * strands the engagement.
+ * progress count on the pack, and by the outreach that refuses to send an
+ * incomplete pack — and the two disagreeing strands the engagement.
  */
 export function requiresPlanningCertificate(
   engagement: Pick<CertifierEngagementDetail, "alerts"> | null | undefined,
@@ -186,7 +472,7 @@ export function requiresPlanningCertificate(
 }
 
 /**
- * Which step the planning certificate block is on.
+ * Which step an application block is on.
  *
  * A derived value rather than a stored column, because every one of these is
  * already implied by the fields underneath it and a second, stored account of
@@ -197,22 +483,42 @@ export function requiresPlanningCertificate(
  * - `held` — they do; the row is just waiting for the file.
  * - `to-order` — they do not, and nothing has been lodged. This is the portal
  *   link.
- * - `lodged` — an application is with the portal. This is where the three-to-
- *   five-day clock runs.
+ * - `lodged` — an application is with the body. This is where the clock runs.
+ * - `determined` — the body has decided it and sent no document. The clock has
+ *   stopped and the file holds nothing.
  * - `received` — it has come back, whether or not the file is on the row yet.
+ *
+ * The same six steps for all seven kinds. A development application never
+ * reaches `held` — nobody turns up already holding a DA for the house they
+ * have not built — but the step is derived rather than declared per kind, and
+ * an answer of false to a question the DA block never asks costs nothing.
+ *
+ * `determined` is the addition, and it is between `lodged` and `received` rather
+ * than a flag on either because it is genuinely its own step: the NSW Planning
+ * Portal determines a CDC, a construction certificate or a development
+ * application and emails to say so without attaching anything. Before this, such
+ * a file stayed on `lodged` — so the block went on reporting how many working
+ * days the portal had had it, counting up, on an application that had already been
+ * approved. Reading it as `received` was the other option and is worse: every
+ * consumer of that step treats it as the document being here or imminent.
  */
-export type PlanningCertificateStep =
+export type ExternalApplicationStep =
   | "unanswered"
   | "held"
   | "to-order"
   | "lodged"
+  | "determined"
   | "received";
 
-export function planningCertificateStep(
-  application: PlanningCertificateRecord,
-): PlanningCertificateStep {
+export function externalApplicationStep(
+  application: ComplianceExternalApplicationRecord | null,
+): ExternalApplicationStep {
   if (!application || application.alreadyHeld === null) return "unanswered";
+  // Ahead of `determined`, because `receivedAt` is the stronger claim of the two
+  // and a row can carry both — a determination recorded off the portal email on
+  // the Monday, the document ticked through on the Thursday.
   if (application.receivedAt) return "received";
+  if (application.approvalNotifiedAt) return "determined";
   if (application.alreadyHeld) return "held";
   return application.appliedAt ? "lodged" : "to-order";
 }
@@ -255,13 +561,10 @@ export function meetingHeldAt(
 
   // The earliest one. A second meeting after the plans have been through a
   // round of revisions must not restart a clock that the first meeting began.
-  return held.reduce<Date>(
-    (earliest, meeting) => {
-      const at = meeting.heldAt ?? meeting.scheduledFor;
-      return at < earliest ? at : earliest;
-    },
-    held[0].heldAt ?? held[0].scheduledFor,
-  );
+  return held.reduce<Date>((earliest, meeting) => {
+    const at = meeting.heldAt ?? meeting.scheduledFor;
+    return at < earliest ? at : earliest;
+  }, held[0].heldAt ?? held[0].scheduledFor);
 }
 
 /**
@@ -275,8 +578,182 @@ export function outstandingRevision(
   outreach: Pick<ComplianceOutreachDetail, "revisions"> | null | undefined,
 ): CompliancePlanRevisionRecord | null {
   return (
-    (outreach?.revisions ?? []).find((revision) => !revision.respondedAt) ?? null
+    (outreach?.revisions ?? []).find(
+      (revision) =>
+        !revision.respondedAt &&
+        // The client's rounds only. A developer's objection to the plans is
+        // written against the same architect outreach, and counting it here made
+        // it read as the client asking for changes — which put it in the rounds
+        // the card reports and under ARCHITECT_REVISION_OVERDUE's clock, a
+        // different wait with a different party behind it. Null is the client,
+        // which is every row written before the column existed.
+        revision.requestedBySource !== ComplianceAlertSource.DEVELOPER,
+    ) ?? null
   );
+}
+
+/**
+ * The round of developer objections still waiting on a redraw, or null.
+ *
+ * The counterpart of `outstandingRevision` over the same table, split by who
+ * asked. Both exist because the architect's outreach now carries two independent
+ * revision loops: the client's, which is the original, and the estate
+ * developer's, which is a covenant refusal and goes back through the architect
+ * in exactly the same way.
+ */
+export function outstandingDeveloperRevision(
+  outreach: Pick<ComplianceOutreachDetail, "revisions"> | null | undefined,
+): CompliancePlanRevisionRecord | null {
+  return (
+    (outreach?.revisions ?? []).find(
+      (revision) =>
+        !revision.respondedAt &&
+        revision.requestedBySource === ComplianceAlertSource.DEVELOPER,
+    ) ?? null
+  );
+}
+
+export type ComplianceDeveloperApprovalRecord =
+  ComplianceOutreachDetail["developerApprovals"][number];
+
+/**
+ * What the developer was asked about one document, or null.
+ *
+ * Null means the document has not been put to them — which is different from
+ * their not having answered, and the difference is what the overdue clock reads:
+ * a row exists from the moment the request goes out, so "with the developer since
+ * Tuesday" is a fact the file holds rather than one inferred from silence.
+ */
+export function developerApprovalFor(
+  engagement:
+    | Pick<CertifierEngagementDetail, "outreaches">
+    | null
+    | undefined,
+  documentType: ComplianceDocumentType,
+): ComplianceDeveloperApprovalRecord | null {
+  const developer = outreachForParty(
+    engagement,
+    CompliancePartyType.DEVELOPER,
+  );
+  if (!developer) return null;
+
+  // `?? []` for the same reason `revisions` and `meetings` are read that way: the
+  // include guarantees the array, and a caller that projected the outreach without
+  // it should get "nothing was put to them" rather than a crash.
+  const row = (developer.developerApprovals ?? []).find(
+    (approval) => approval.documentType === documentType,
+  );
+  if (row) return row;
+
+  /**
+   * The fallback onto the outreach's own columns.
+   *
+   * Every verdict recorded before `ComplianceDeveloperApproval` existed lives on
+   * five columns of the outreach row, and all of them are about the bushfire
+   * report — it was the only document under covenant at the time. The migration
+   * copies them across, so this should never fire; it is here for the window
+   * between `migrate deploy` and the deploy that follows it, during which new
+   * code reads rows the backfill has written and old rows it has not.
+   *
+   * Synthesised rather than returned raw, so every caller sees one shape. Nothing
+   * writes these columns any more.
+   */
+  if (
+    documentType === ComplianceDocumentType.BUSHFIRE_REPORT &&
+    developer.approvalDecision
+  ) {
+    return {
+      id: `legacy:${developer.id}`,
+      outreachId: developer.id,
+      documentType,
+      requestedAt: developer.sentAt ?? developer.createdAt,
+      decision: developer.approvalDecision,
+      decidedAt: developer.approvalDecidedAt,
+      channel: developer.approvalChannel,
+      reason: developer.approvalReason,
+      round: 1,
+      recordedById: developer.approvalDecidedById,
+      createdAt: developer.createdAt,
+      updatedAt: developer.updatedAt,
+    } satisfies ComplianceDeveloperApprovalRecord;
+  }
+
+  return null;
+}
+
+/**
+ * Whether the developer has approved one document.
+ *
+ * Deliberately not "have they answered". A rejection is an answer and is not an
+ * approval, and every gate that reads this is asking the second question: a
+ * refused set of plans must not let an application through to the portal.
+ */
+export function hasDeveloperApproval(
+  engagement:
+    | Pick<CertifierEngagementDetail, "outreaches">
+    | null
+    | undefined,
+  documentType: ComplianceDocumentType,
+): boolean {
+  return (
+    developerApprovalFor(engagement, documentType)?.decision ===
+    ComplianceApprovalDecision.APPROVED
+  );
+}
+
+/**
+ * Why the developer's covenant blocks a lodgement on the plans, or null.
+ *
+ * The gate on both the CDC lodgement and the development application, which is
+ * the whole of why the architectural design was brought under the covenant: a
+ * pack lodged against plans the estate has not approved comes straight back, and
+ * by then the application fee is spent and the clock has been running for a
+ * fortnight.
+ *
+ * Null on the great majority of jobs, and there are two quite different reasons
+ * for that which this collapses on purpose. A lot with no covenant on it is not
+ * gated; neither is a lot whose developer has signed off. Both are "nothing is in
+ * the way", and a caller that had to tell them apart would be a caller about to
+ * explain a covenant to somebody who does not have one.
+ *
+ * Reads `developerApprovalRequired` first, which is the question the banner on
+ * the tab asks. Null there means nobody has been asked yet — and that does *not*
+ * block, deliberately: the answer is collected at the top of the engagement and a
+ * file that somehow reached the portal without it should not be held up by a
+ * question about an estate that probably does not exist. The banner is what
+ * chases it.
+ */
+export function developerPlansBlockedReason(
+  engagement:
+    | Pick<CertifierEngagementDetail, "outreaches" | "documents"> & {
+        developerApprovalRequired: boolean | null;
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!engagement?.developerApprovalRequired) return null;
+
+  const approval = developerApprovalFor(
+    engagement,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  );
+
+  if (approval?.decision === ComplianceApprovalDecision.APPROVED) return null;
+
+  if (approval && approval.decision === ComplianceApprovalDecision.REJECTED) {
+    // Their words, because "the developer said no" is not something anybody can
+    // act on — the same reason the rejection is quoted into the mail that goes
+    // back to the architect.
+    return approval.reason
+      ? `The estate developer has not approved the architectural design: "${approval.reason}" The plans have to be revised and re-approved before the application is lodged.`
+      : "The estate developer rejected the architectural design. The plans have to be revised and re-approved before the application is lodged.";
+  }
+
+  if (approval) {
+    return "The architectural design is with the estate developer for approval. Their covenant has to be satisfied before the application is lodged.";
+  }
+
+  return "This lot is in an estate whose developer has to approve the architectural design. Send the plans to them from the developer block before lodging the application.";
 }
 
 /**
@@ -425,7 +902,9 @@ function stringList(value: unknown): string[] {
  * Returns null when there is nothing worth showing, so a caller can test the
  * result rather than testing each field.
  */
-export function checklistItemDetail(value: unknown): ChecklistItemDetail | null {
+export function checklistItemDetail(
+  value: unknown,
+): ChecklistItemDetail | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }

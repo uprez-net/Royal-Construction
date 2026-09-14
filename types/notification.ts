@@ -281,6 +281,56 @@ export const notificationTemplates: NotificationTemplateFactory = {
     message: `Every compliance document has been approved. The section is now closed.`,
     url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
+
+  complianceDeveloperDecision: (data) => ({
+    title:
+      data.decision === "APPROVED"
+        ? `Developer Approved: ${data.projectName}`
+        : `Developer Rejected: ${data.projectName}`,
+    message:
+      data.decision === "APPROVED"
+        ? `${data.estate || "The estate developer"} approved the bushfire report`
+        : // The reasons, in the notification itself. They are what the
+          // consultant has already been sent, and somebody reading this on a
+          // phone wants to know whether it is a wording change or a redesign.
+          `${data.estate || "The estate developer"} rejected the bushfire report: ${data.reason}`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDeveloperResent: (data) => ({
+    title: `Sent Back to the Developer: ${data.projectName}`,
+    message: `The revised ${data.documentLabel.toLowerCase()} has gone back to the ${data.party.toLowerCase()} for approval`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceCertificateIssued: (data) => ({
+    title: `Construction Certificate Issued: ${data.projectName}`,
+    message:
+      "The certifier has issued the construction certificate. Upload the HBCF certificate to finish the compliance file.",
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceCompleted: (data) => ({
+    title: `Compliance Complete: ${data.projectName}`,
+    message:
+      "The construction certificate and the HBCF cover are both on the file. The build can start.",
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDaItemsRequested: (data) => ({
+    title: `Council Came Back: ${data.projectName}`,
+    message: [
+      data.requestedCount > 0
+        ? `${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"} requested`
+        : null,
+      data.rejectedCount > 0
+        ? `${data.rejectedCount} sent back`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(", ") || "The council has come back on the development application",
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
 };
 
 /**

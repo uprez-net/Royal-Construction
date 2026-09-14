@@ -11,7 +11,14 @@ import {
 import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
+import { readAssessorCorrespondence } from "@/lib/agent/assessorCorrespondenceAgent";
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
+import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
+import {
+  closeComplianceIfComplete,
+  recordCertificateIssued,
+} from "@/lib/data/compliance-certificate";
+import { isCertificateDocument } from "@/lib/compliance/portal-certificates";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
 import {
@@ -75,6 +82,19 @@ const INBOUND_CLASSIFIABLE: ReadonlySet<ComplianceDocumentType> = new Set([
   ComplianceDocumentType.FEE_PROPOSAL,
   ComplianceDocumentType.CDC_FORM,
   ComplianceDocumentType.CHECKLIST,
+  // Either certificate, where the certifier sends it rather than leaving it on
+  // the portal for us to fetch.
+  //
+  // Not the ordinary route and kept here because of how much the exception
+  // costs. The certificate is determined on the NSW Planning Portal and
+  // downloaded from it, so the normal path is an upload by hand and the
+  // classifier never sees one. But a certifier who has just determined an
+  // application routinely forwards it on this thread as a courtesy — and since
+  // this is the document that ends the compliance file, leaving it unclassified
+  // would strand a finished job one step from done with its certificate sitting
+  // in the needs-identifying queue.
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -364,11 +384,20 @@ async function archiveAttachments(
 async function classifyStoredDocuments(
   engagementId: string,
   stored: { documentId: string; name: string; url: string }[],
-): Promise<{ labelled: number; checklistDocumentId: string | null }> {
+): Promise<{
+  labelled: number;
+  checklistDocumentId: string | null;
+  certificateArrived: boolean;
+}> {
   "use step";
 
   let labelled = 0;
   let checklistDocumentId: string | null = null;
+  // The end of the file. Reported back so the workflow can move the engagement
+  // and open the insurance step, which is a write against other rows and
+  // belongs in its own retryable step rather than in the middle of a loop that
+  // is still classifying attachments.
+  let certificateArrived = false;
 
   for (const item of stored) {
     try {
@@ -412,12 +441,20 @@ async function classifyStoredDocuments(
       ) {
         checklistDocumentId = placed.documentId;
       }
+
+      // Either certificate counts. Read through `isCertificateDocument` rather
+      // than compared against one type, because which of the two a file ends on
+      // depends on the route it took and this workflow has no business knowing
+      // which — see `certificateKindFor`.
+      if (isCertificateDocument(result.documentType)) {
+        certificateArrived = true;
+      }
     } catch (error) {
       console.error(`  Failed to classify "${item.name}":`, error);
     }
   }
 
-  return { labelled, checklistDocumentId };
+  return { labelled, checklistDocumentId, certificateArrived };
 }
 
 /**
@@ -461,6 +498,80 @@ async function raiseAlertsFromCertifierMessage(
   }
 
   return raised;
+}
+
+/**
+ * Reads the certifier's reply for what they have sent back off their checklist.
+ *
+ * The counterpart to the council branch in lib/workflow/party-email.ts, reading
+ * the same three things with the same extraction. A certifier reviewing the
+ * evidence sent against their checklist says "item 7 will not do, the BASIX
+ * certificate has expired" in prose, and before this the only record that they
+ * had was the email — an admin had to read it and press Reject on each row.
+ *
+ * That button is still there and is still the better path when somebody is
+ * watching. This is for the reply that lands overnight, and for the certifier
+ * who sends back four items in one message.
+ *
+ * Its own step so a model failure retries alone, and idempotent underneath: a
+ * rejection already on the row it names changes nothing, so a retry after a
+ * partial run finishes rather than duplicating.
+ */
+async function recordCertifierVerdicts(
+  engagement: { id: string; projectId: string },
+  message: InboundCertifierMessage,
+): Promise<{ created: number; rejected: number }> {
+  "use step";
+
+  const correspondence = await readAssessorCorrespondence({
+    assessor: "certifier",
+    subject: message.subject,
+    body: message.body,
+  });
+
+  if (
+    correspondence.requested.length === 0 &&
+    correspondence.rejected.length === 0
+  ) {
+    return { created: 0, rejected: 0 };
+  }
+
+  const outcome = await applyAssessorCorrespondence({
+    projectId: engagement.projectId,
+    engagementId: engagement.id,
+    assessor: "certifier",
+    requested: correspondence.requested,
+    rejected: correspondence.rejected,
+  });
+
+  if (outcome.unmatched.length > 0) {
+    console.log(
+      `  Certifier rejection(s) with no matching checklist row: ${outcome.unmatched.join(", ")}`,
+    );
+  }
+
+  return { created: outcome.created, rejected: outcome.rejected };
+}
+
+/**
+ * Moves the engagement on when the construction certificate arrives.
+ *
+ * Its own step because it is a write against the engagement rather than against
+ * the documents, and because what it opens -- the insurance question -- is the
+ * last thing anybody has to do on this file. A classification that succeeded
+ * and a status move that did not would leave the certificate on the row with
+ * the tab still showing a checklist nobody can act on.
+ */
+async function closeOutCertificate(engagement: {
+  id: string;
+  projectId: string;
+}): Promise<void> {
+  "use step";
+  await recordCertificateIssued(engagement);
+  await closeComplianceIfComplete({
+    projectId: engagement.projectId,
+    engagementId: engagement.id,
+  });
 }
 
 /**
@@ -578,6 +689,20 @@ export const processInboundCertifierEmail = async (
     checklistDocumentId = classification.checklistDocumentId;
     console.log(
       `  Classified ${classification.labelled} of ${stored.length} certifier document(s).`,
+    );
+
+    if (classification.certificateArrived) {
+      await closeOutCertificate(engagement);
+    }
+  }
+
+  // What they sent back off their own checklist. After the documents, because
+  // a reply that both encloses a revised checklist and rejects two items should
+  // have the checklist in place before the rejections look for their rows.
+  const verdicts = await recordCertifierVerdicts(engagement, message);
+  if (verdicts.created > 0 || verdicts.rejected > 0) {
+    console.log(
+      `  Certifier asked for ${verdicts.created} more document(s) and sent back ${verdicts.rejected}.`,
     );
   }
 

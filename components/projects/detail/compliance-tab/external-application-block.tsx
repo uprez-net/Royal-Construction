@@ -1,5 +1,6 @@
 "use client";
 
+import { ComplianceExternalApplicationKind } from "@prisma/client";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -8,44 +9,50 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NSW_PLANNING_PORTAL_URL } from "@/constants/complianceDocuments";
+import { EXTERNAL_APPLICATION_COPY } from "@/constants/complianceDocuments";
+import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
-  recordPlanningCertificate,
+  recordExternalApplication,
   selectComplianceMutation,
 } from "@/lib/store/slices/projectsSlice";
 import {
-  planningCertificateStep,
-  type PlanningCertificateRecord,
+  externalApplicationStep,
+  type ComplianceExternalApplicationRecord,
 } from "@/types/compliance";
 import { dateFormat } from "@/utils/formatters";
-import type { PlanningCertificateRequest } from "@/utils/validators/compliance";
+import type { ExternalApplicationRequest } from "@/utils/validators/compliance";
 
 /**
- * The 10.7(2) & (5) certificate, from "do we have one?" through to the file.
+ * Anything bought from an outside body, from "do we have one?" to the file.
  *
- * This block used to be a yes/no held in `useState` on the section around it.
- * That was honest while the only two outcomes were "upload it" and "go and buy
- * one" — but buying one takes the NSW Planning Portal three to five working
- * days, and nothing recorded that an application existed. So a job where
- * somebody had lodged one on Monday looked exactly like a job where nobody had
- * done anything at all, the answer was forgotten the moment the tab was left,
- * and there was no date for anything to be late against.
+ * This block used to be a yes/no held in `useState` on the section around it,
+ * for the 10.7 certificate alone. That was honest while the only two outcomes
+ * were "upload it" and "go and buy one" — but buying one takes the NSW Planning
+ * Portal three to five working days, and nothing recorded that an application
+ * existed. So a job where somebody had lodged one on Monday looked exactly like
+ * a job where nobody had done anything at all, the answer was forgotten the
+ * moment the tab was left, and there was no date for anything to be late
+ * against.
+ *
+ * Four more of exactly that shape arrived with the development application: a
+ * road opening and vehicle crossing permit, a long service levy receipt, a mine
+ * subsidence approval, and the DA itself. Rather than four more cards that
+ * would each drift from this one, the block took a `kind` — everything that
+ * differs between them is a row of `EXTERNAL_APPLICATION_COPY`, and the five
+ * steps are the same five steps.
  *
  * Every answer here is persisted, which is what makes the daily sweep possible:
  * an application with a lodgement date is a clock, and a clock is the only
  * thing an alert can be raised off.
  *
  * The steps are derived from the row rather than held here — see
- * `planningCertificateStep`. The only local state is the two disclosures: a
- * form somebody has opened and not submitted, which is a fact about this
- * render and nothing else.
+ * `externalApplicationStep`. The only local state is the two disclosures: a
+ * form somebody has opened and not submitted, which is a fact about this render
+ * and nothing else.
  */
-
-/** The turnaround the portal quotes, and what the copy on this block says. */
-const PORTAL_BUSINESS_DAYS = 5;
 
 /**
  * The controls on this block that write, named so a spinner can find its own.
@@ -55,25 +62,60 @@ const PORTAL_BUSINESS_DAYS = 5;
  * the moment a save lands, so a single "busy" flag has no way of saying what it
  * was busy with.
  */
-type PendingControl = "yes" | "no" | "applied" | "received";
+type PendingControl = "yes" | "no" | "applied" | "received" | "determined";
 
-type CouncilCertificateBlockProps = {
+type ExternalApplicationBlockProps = {
   projectId: string;
-  application: PlanningCertificateRecord;
-  /** The certificate's own document row, rendered once it can be uploaded. */
+  kind: ComplianceExternalApplicationKind;
+  application: ComplianceExternalApplicationRecord | null;
+  /** The document's own row, rendered once it can be uploaded. */
   documentRows: ReactNode;
+  /**
+   * Where to go and get it, overriding the table.
+   *
+   * Only the road opening permit uses this, and it is why the table's `url` is
+   * nullable: there is no NSW-wide road opening application, so the link is
+   * resolved from the project's council by the caller.
+   */
+  portalUrl?: string | null;
+  /**
+   * Whether the reader can still change anything.
+   *
+   * The one case is the 10.7 certificate on a job that has moved to a
+   * development application. The certificate is still wanted, but it is ordered
+   * from the DA block now — so the copy on the pack goes read-only rather than
+   * offering the same three controls in a second place, where the two would
+   * then disagree about whether an application had been lodged.
+   */
+  readOnly?: boolean;
 };
 
-export function CouncilCertificateBlock({
+export function ExternalApplicationBlock({
   projectId,
+  kind,
   application,
   documentRows,
-}: CouncilCertificateBlockProps) {
+  portalUrl,
+  readOnly = false,
+}: ExternalApplicationBlockProps) {
   const dispatch = useAppDispatch();
   const mutation = useAppSelector(
-    selectComplianceMutation(complianceScope.planningCertificate),
+    selectComplianceMutation(complianceScope.application(kind)),
   );
-  const isBusy = mutation.status === "pending";
+  const copy = EXTERNAL_APPLICATION_COPY[kind];
+  const url = portalUrl ?? copy.url;
+  const isBusy = mutation.status === "pending" || readOnly;
+
+  /**
+   * Whether this kind is determined by an email that carries no document.
+   *
+   * Read off `PORTAL_DOWNLOAD_ALERT` rather than listed here, because having that
+   * table decide it is what keeps this control and the alert it produces in step:
+   * a kind that offers the tick and raises no alert would be a determination
+   * recorded with nothing anywhere telling anybody to go and fetch the document,
+   * which is the exact failure the whole step exists to prevent.
+   */
+  const notifiesDetermination = Boolean(PORTAL_DOWNLOAD_ALERT[kind]);
 
   /**
    * Whether the lodgement form is open.
@@ -102,17 +144,23 @@ export function CouncilCertificateBlock({
    */
   const [pending, setPending] = useState<PendingControl | null>(null);
 
-  const step = planningCertificateStep(application);
+  const step = externalApplicationStep(application);
+
+  /** When it was lodged, formatted, or null. Read by the read-only branch and
+   *  by the lodged step below, which is why it is derived once here. */
+  const appliedAtLabel = application?.appliedAt
+    ? dateFormat.format(new Date(application.appliedAt))
+    : null;
 
   const save = async (
     control: PendingControl,
-    payload: PlanningCertificateRequest,
+    payload: ExternalApplicationRequest,
     success: string,
   ) => {
     setPending(control);
     try {
       await dispatch(
-        recordPlanningCertificate({ projectId, ...payload }),
+        recordExternalApplication({ projectId, ...payload }),
       ).unwrap();
       toast.success(success);
       return true;
@@ -120,7 +168,7 @@ export function CouncilCertificateBlock({
       toast.error(
         error instanceof Error
           ? error.message
-          : "Could not save that against the planning certificate.",
+          : `Could not save that against the ${copy.label.toLowerCase()}.`,
       );
       return false;
     } finally {
@@ -129,13 +177,44 @@ export function CouncilCertificateBlock({
   };
 
   // -----------------------------------------------------------------
+  // Read-only — the block is somewhere else on this job.
+  //
+  // Ahead of the steps rather than folded into them, because a disabled
+  // control is not the same thing as a control that belongs elsewhere. The one
+  // case is the 10.7 certificate after a job moves to a development
+  // application: the certificate is still needed, the DA block is where it is
+  // now ordered, and two Yes/No buttons greyed out here with no explanation
+  // read as a step that has broken rather than one that has moved.
+  // -----------------------------------------------------------------
+  if (readOnly) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">
+          Ordered from the development application below, so that the same
+          certificate is not applied for in two places.
+        </p>
+        {step === "lodged" && appliedAtLabel ? (
+          <p className="text-xs text-muted-foreground">
+            Lodged {appliedAtLabel}
+            {application?.applicationRef
+              ? ` under ${application.applicationRef}`
+              : ""}
+            .
+          </p>
+        ) : null}
+        {documentRows}
+      </div>
+    );
+  }
+
+  // -----------------------------------------------------------------
   // Step 1 — nobody has been asked yet.
   // -----------------------------------------------------------------
   if (step === "unanswered") {
     return (
       <>
         <p className="font-medium text-foreground">
-          Do you already have the planning certificate?
+          Do you already have the {copy.label.toLowerCase()}?
         </p>
         {/* Both disabled while either is in flight — this is one question with
             two answers, and a second click on the other one mid-save would
@@ -150,8 +229,8 @@ export function CouncilCertificateBlock({
             onClick={() =>
               void save(
                 "yes",
-                { step: "answer", alreadyHeld: true },
-                "Noted — upload the certificate below.",
+                { step: "answer", kind, alreadyHeld: true },
+                "Noted — upload it below.",
               )
             }
           >
@@ -168,8 +247,8 @@ export function CouncilCertificateBlock({
             onClick={() =>
               void save(
                 "no",
-                { step: "answer", alreadyHeld: false },
-                "Noted — order it on the portal when you can.",
+                { step: "answer", kind, alreadyHeld: false },
+                `Noted — apply through ${copy.portal} when you can.`,
               )
             }
           >
@@ -184,22 +263,31 @@ export function CouncilCertificateBlock({
   }
 
   // -----------------------------------------------------------------
-  // Steps 2 and 5 — there is a certificate to put on the file.
+  // Steps 2 and 5 — there is a document to put on the file.
   //
   // The same rendering for "we already had one" and "it came back", because
   // from here they are the same thing: a document to upload. What differs is
   // only what is said above the row.
   // -----------------------------------------------------------------
-  if (step === "held" || step === "received") {
+  if (step === "held" || step === "received" || step === "determined") {
     return (
       <>
         {/* The caller renders the rows on their own once a file has landed, so
             this branch only ever runs while the row is still empty — which is
-            why the line above it always asks for one. */}
+            why the line above it always asks for one.
+
+            `determined` joins the two because from here all three are the same
+            thing: a document to put on the file. What differs is only what is
+            said above the row — and on a determination that sentence has to say
+            where the document is, because unlike the other two nobody is holding
+            it. It is on the portal, and a reader who does not know that goes
+            looking through their inbox for an attachment that was never sent. */}
         <p className="mb-2 text-sm text-muted-foreground">
-          {step === "received"
-            ? "Marked as received. Upload the certificate to put it on the file."
-            : "Upload the certificate you are holding."}
+          {step === "determined"
+            ? `${copy.portal} has determined this application. Download the ${copy.label.toLowerCase()} from the portal and upload it here — the approval email does not carry it.`
+            : step === "received"
+              ? "Marked as received. Upload it to put it on the file."
+              : "Upload the copy you are holding."}
         </p>
         {documentRows}
       </>
@@ -213,17 +301,18 @@ export function CouncilCertificateBlock({
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Order the Section 10.7(2) &amp; (5) certificate for this lot on the NSW
-          Planning Portal, then record the application here.{" "}
-          <a
-            href={NSW_PLANNING_PORTAL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-          >
-            NSW Planning Portal
-            <ExternalLink className="size-3" aria-hidden="true" />
-          </a>
+          {copy.instruction}{" "}
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+            >
+              {copy.portal}
+              <ExternalLink className="size-3" aria-hidden="true" />
+            </a>
+          ) : null}
         </p>
 
         {/* This one writes nothing on its own — it opens the form below, and
@@ -237,28 +326,29 @@ export function CouncilCertificateBlock({
             onCheckedChange={(checked) => setIsLodgementOpen(checked === true)}
             disabled={isBusy}
           />
-          Applied for the planning certificate
+          Applied for it
         </label>
 
         {isLodgementOpen ? (
           <LodgementForm
+            kind={kind}
             isBusy={isBusy}
             isSaving={pending === "applied"}
             application={application}
             onSubmit={async (values) => {
               const saved = await save(
                 "applied",
-                { step: "applied", ...values },
-                "Application recorded — we will flag it if the portal takes too long.",
+                { step: "applied", kind, ...values },
+                "Application recorded — we will flag it if it takes too long.",
               );
               if (saved) setIsLodgementOpen(false);
             }}
           />
         ) : (
           <p className="text-xs text-muted-foreground">
-            Tick this once it is lodged. The portal usually answers within three
-            to five working days — recording the date is what lets us tell you
-            when it has not.
+            Tick this once it is lodged. {copy.portal} usually answers within{" "}
+            {copy.turnaround} — recording the date is what lets us tell you when
+            it has not.
           </p>
         )}
       </div>
@@ -272,15 +362,12 @@ export function CouncilCertificateBlock({
     ? new Date(application.appliedAt)
     : null;
   const elapsed = appliedAt ? businessDaysSince(appliedAt) : 0;
-  const isOverdue = elapsed > PORTAL_BUSINESS_DAYS;
+  const isOverdue = elapsed > copy.businessDays;
 
   return (
     <div className="space-y-3">
       <dl className="space-y-1 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm">
-        <DetailRow
-          label="Lodged"
-          value={appliedAt ? dateFormat.format(appliedAt) : "—"}
-        />
+        <DetailRow label="Lodged" value={appliedAtLabel ?? "—"} />
         {application?.applicationRef ? (
           <DetailRow
             label="Application"
@@ -303,10 +390,10 @@ export function CouncilCertificateBlock({
         }
       >
         {elapsed === 0
-          ? "Lodged today. The portal usually answers within three to five working days."
+          ? `Lodged today. ${copy.portal} usually answers within ${copy.turnaround}.`
           : isOverdue
-            ? `${elapsed} working days with the portal — past the three to five it usually takes. Chase it with the council using the application number.`
-            : `${elapsed} working day${elapsed === 1 ? "" : "s"} with the portal, of the three to five it usually takes.`}
+            ? `${elapsed} working days with ${copy.portal} — past the ${copy.turnaround} it usually takes. Chase it using the application number above.`
+            : `${elapsed} working day${elapsed === 1 ? "" : "s"} with ${copy.portal}, against ${copy.turnaround}.`}
       </p>
 
       {/* Ticked the moment it is clicked, and held ticked until the save comes
@@ -323,12 +410,12 @@ export function CouncilCertificateBlock({
             if (checked !== true) return;
             void save(
               "received",
-              { step: "received", received: true },
-              "Marked as received — upload the certificate below.",
+              { step: "received", kind, received: true },
+              "Marked as received — upload it below.",
             );
           }}
         />
-        Received the planning certificate
+        Received it
         {pending === "received" ? (
           <Loader2
             className="size-4 animate-spin text-muted-foreground"
@@ -336,6 +423,56 @@ export function CouncilCertificateBlock({
           />
         ) : null}
       </label>
+
+      {/* -------------------------------------------------------------
+          Approved, and nothing attached.
+
+          A second control beside "Received it" on the three kinds the portal
+          determines by email — a CDC, a construction certificate and a
+          development application — and absent on the permits, which either send
+          the document or are downloaded off a screen the moment they are ready.
+
+          It exists because the two are different facts and the file needs both.
+          "Received it" is somebody saying the document is here; this is somebody
+          saying the decision is made and the document is still on the portal,
+          which is the state the approval email actually leaves behind. Folding
+          them together is what had an admin ticking "received" off an email that
+          carried nothing, against a row that then sat empty with the stage above
+          it reading as finished.
+
+          Below "Received it" rather than above, because on a file where the
+          document is in hand the first control is the one to reach for.
+      ------------------------------------------------------------- */}
+      {notifiesDetermination ? (
+        <label className="flex items-start gap-2 text-sm font-medium text-foreground">
+          <Checkbox
+            className="mt-0.5"
+            checked={pending === "determined"}
+            disabled={isBusy}
+            onCheckedChange={(checked) => {
+              if (checked !== true) return;
+              void save(
+                "determined",
+                { step: "determined", kind },
+                "Determination recorded — download it from the portal and upload it here.",
+              );
+            }}
+          />
+          <span>
+            Approved on the portal, not downloaded yet
+            {pending === "determined" ? (
+              <Loader2
+                className="ml-2 inline size-4 animate-spin text-muted-foreground align-text-bottom"
+                aria-hidden="true"
+              />
+            ) : null}
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+              Tick this off the portal&apos;s approval email. It stops us chasing{" "}
+              {copy.portal} and puts the download on the alert panel.
+            </span>
+          </span>
+        </label>
+      ) : null}
 
       <button
         type="button"
@@ -348,13 +485,14 @@ export function CouncilCertificateBlock({
 
       {isLodgementOpen ? (
         <LodgementForm
+          kind={kind}
           isBusy={isBusy}
           isSaving={pending === "applied"}
           application={application}
           onSubmit={async (values) => {
             const saved = await save(
               "applied",
-              { step: "applied", ...values },
+              { step: "applied", kind, ...values },
               "Application details updated.",
             );
             if (saved) setIsLodgementOpen(false);
@@ -386,19 +524,29 @@ function DetailRow({ label, value }: { label: string; value: string }) {
  * add later from the same form.
  */
 function LodgementForm({
+  kind,
   application,
   isBusy,
   isSaving,
   onSubmit,
 }: {
-  application: PlanningCertificateRecord;
+  /**
+   * Which application this form is for, used to key its field ids.
+   *
+   * Necessary rather than decorative: the development application list renders
+   * three of these blocks at once, and three forms sharing `id="applied-at"`
+   * means every label points at the first one. Clicking "Date submitted" on the
+   * long service levy would focus the road opening permit's field.
+   */
+  kind: ComplianceExternalApplicationKind;
+  application: ComplianceExternalApplicationRecord | null;
   /** Anything on the block is writing — every field is frozen. */
   isBusy: boolean;
   /**
    * This form in particular is writing.
    *
    * Separate from `isBusy` because the two are not the same while the form sits
-   * open on the lodged step: ticking "Received the planning certificate" makes
+   * open on the lodged step: ticking "Received it" makes
    * the block busy, and a Save button spinning underneath that would claim the
    * form had been submitted when it had not.
    */
@@ -425,6 +573,10 @@ function LodgementForm({
     application?.applicationRef ?? "",
   );
   const [lodgedWith, setLodgedWith] = useState(application?.lodgedWith ?? "");
+  // The body this normally goes to, as a hint rather than a default. A
+  // prefilled answer that is usually right and occasionally wrong is worse than
+  // an empty one — see the column's own note in the schema.
+  const copyPortal = EXTERNAL_APPLICATION_COPY[kind].portal;
 
   return (
     <form
@@ -444,9 +596,9 @@ function LodgementForm({
       }}
     >
       <div className="space-y-1.5">
-        <Label htmlFor="planning-applied-at">Date submitted</Label>
+        <Label htmlFor={`${kind}-applied-at`}>Date submitted</Label>
         <Input
-          id="planning-applied-at"
+          id={`${kind}-applied-at`}
           type="date"
           value={appliedAt}
           max={asInputDate(today)}
@@ -457,12 +609,12 @@ function LodgementForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="planning-application-ref">
+        <Label htmlFor={`${kind}-application-ref`}>
           Application number{" "}
           <span className="font-normal text-muted-foreground">(optional)</span>
         </Label>
         <Input
-          id="planning-application-ref"
+          id={`${kind}-application-ref`}
           value={applicationRef}
           onChange={(event) => setApplicationRef(event.target.value)}
           placeholder="From the portal receipt"
@@ -471,15 +623,15 @@ function LodgementForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="planning-lodged-with">
-          Council or portal{" "}
+        <Label htmlFor={`${kind}-lodged-with`}>
+          Lodged with{" "}
           <span className="font-normal text-muted-foreground">(optional)</span>
         </Label>
         <Input
-          id="planning-lodged-with"
+          id={`${kind}-lodged-with`}
           value={lodgedWith}
           onChange={(event) => setLodgedWith(event.target.value)}
-          placeholder="NSW Planning Portal"
+          placeholder={copyPortal}
           disabled={isBusy}
         />
       </div>

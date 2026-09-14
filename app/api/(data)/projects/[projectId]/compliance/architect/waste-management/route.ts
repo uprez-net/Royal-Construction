@@ -4,7 +4,7 @@ import {
   complianceAccessResponse,
   requireComplianceAccess,
 } from "@/lib/compliance/access";
-import { recordPlanningCertificate } from "@/lib/data/compliance-council";
+import { requestWasteManagementPlan } from "@/lib/data/compliance-architect";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -12,15 +12,16 @@ import {
   projectParamSchema,
   successResponse,
 } from "@/utils/validators";
-import { planningCertificateSchema } from "@/utils/validators/compliance";
+import { wasteManagementRequestSchema } from "@/utils/validators/compliance";
 
 /**
- * Records where the 10.7(2) & (5) certificate has got to.
+ * Asks the architect for the waste management plan.
  *
- * One route for all three steps of the council block, because they are three
- * answers about one row and the alternative was three endpoints that must agree
- * about which of them may write which column. The step is explicit in the body;
- * see `planningCertificateSchema` for why it is not inferred from the fields.
+ * Under `architect/` rather than under `parties/`, because nobody is being
+ * engaged: the plan is drawn against the design this architect already
+ * produced, on the thread they have been on since the plans were commissioned.
+ * A route under `parties/` would read as opening a second engagement, and the
+ * unique index on [engagementId, party] would then refuse it.
  */
 export async function POST(
   request: NextRequest,
@@ -32,28 +33,31 @@ export async function POST(
   );
   if (!routeParams.success) return routeParams.response;
 
-  const body = await parseBodyWithResponse(request, planningCertificateSchema);
+  const body = await parseBodyWithResponse(
+    request,
+    wasteManagementRequestSchema,
+  );
   if (!body.success) return body.response;
 
   const { projectId } = routeParams.data;
 
   try {
     const { user } = await requireComplianceAccess(projectId);
-    const engagement = await recordPlanningCertificate(
+    const engagement = await requestWasteManagementPlan(
       projectId,
       body.data,
       user.name,
     );
-    return successResponse(engagement);
+    return successResponse(engagement, { status: 201 });
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
-    console.error("Failed to record the planning certificate", error);
+    console.error("Failed to request the waste management plan", error);
     return errorResponse(
       error instanceof Error
         ? error.message
-        : "Failed to record the planning certificate.",
-      { status: 400, code: "PLANNING_CERTIFICATE_FAILED" },
+        : "Failed to request the waste management plan.",
+      { status: 400, code: "WASTE_MANAGEMENT_REQUEST_FAILED" },
     );
   }
 }

@@ -4,6 +4,11 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +21,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -39,10 +45,16 @@ import {
  */
 export function ReviewPlansModal({
   projectId,
+  vaultOptions,
   open,
   onOpenChange,
 }: {
   projectId: string;
+  /**
+   * What is on the file already, for the attach control's "From the file"
+   * picker. Resolved by the caller with `vaultAttachmentOptions`.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -54,6 +66,15 @@ export function ReviewPlansModal({
 
   const [approved, setApproved] = useState<"yes" | "no">("yes");
   const [feedback, setFeedback] = useState("");
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those attachments is still transferring.
+   *
+   * Reported by the control rather than inferred here, and part of the
+   * submit gate: pressing Send mid-upload sent the ids that had landed and
+   * left the rest behind, with a success toast on top of it.
+   */
+  const [isAttaching, setIsAttaching] = useState(false);
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +87,7 @@ export function ReviewPlansModal({
           projectId,
           approved: isApproved,
           feedback: isApproved ? undefined : feedback.trim(),
+          extraAttachmentIds: extraAttachmentIds(extras),
         }),
       ).unwrap();
       toast.success(
@@ -84,7 +106,9 @@ export function ReviewPlansModal({
   };
 
   const canSubmit =
-    !isPending && (approved === "yes" || Boolean(feedback.trim()));
+    !isPending &&
+    !isAttaching &&
+    (approved === "yes" || Boolean(feedback.trim()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,7 +127,15 @@ export function ReviewPlansModal({
             <RadioGroup
               value={approved}
               onValueChange={(value) => setApproved(value as "yes" | "no")}
-              disabled={isPending}
+              // Held while an attachment is transferring, because the control
+              // below only renders on the rejection: switching to "Yes" mid
+              // upload unmounts it, and the fresh instance that comes back on a
+              // switch to "No" starts its own counter at zero. It would then
+              // report "not uploading" over a transfer that is still running,
+              // which is precisely the send-goes-out-short failure the counter
+              // exists to prevent -- and the unmount cleanup, which is what
+              // stops the dialog sticking, is what makes that reachable.
+              disabled={isPending || isAttaching}
               className="gap-3"
             >
               <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 p-3">
@@ -150,6 +182,28 @@ export function ReviewPlansModal({
               </div>
             ) : null}
           </div>
+
+          {/* Only on the rejection, because only the rejection sends anything.
+              `reviewArchitectPlans` reads `extraAttachmentIds` inside its else
+              branch alone -- an approval writes `clientPlansApprovedAt` and
+              posts no mail -- so a sender who answered "Yes", attached the
+              marked-up printout and pressed Record approval got a success toast
+              over a file that went nowhere. The hint is written for the
+              rejection case, which is the other half of the same tell.
+
+              `ResolveMeetingModal` already gates its control on the branch that
+              sends; this is the same gate. */}
+          {approved === "no" ? (
+            <ExtraAttachmentsField
+              onUploadingChange={setIsAttaching}
+              projectId={projectId}
+              value={extras}
+              onChange={setExtras}
+              vaultOptions={vaultOptions}
+              disabled={isPending}
+              hint="A photograph of the marked-up printout, a sketch — anything that says what the client wants better than the words do."
+            />
+          ) : null}
 
           <DialogFooter>
             <Button

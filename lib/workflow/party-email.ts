@@ -4,6 +4,8 @@ import {
   CertifierEmailDirection,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceApprovalChannel,
+  ComplianceExternalApplicationKind,
   ComplianceOutreachStatus,
   CompliancePartyType,
   Prisma,
@@ -12,17 +14,37 @@ import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
 import { detectComplianceAlerts } from "@/lib/agent/complianceAlertAgent";
+import { readAssessorCorrespondence } from "@/lib/agent/assessorCorrespondenceAgent";
+import { detectDeveloperVerdict } from "@/lib/agent/developerApprovalAgent";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
-import { PARTY_INBOUND_DOCUMENT_TYPES, PARTY_LABEL } from "@/constants/complianceDocuments";
+import {
+  PARTY_INBOUND_DOCUMENT_TYPES,
+  PARTY_LABEL,
+  partyDeliverables,
+} from "@/constants/complianceDocuments";
 import {
   discardSupersededFiles,
   placeConsultantDeliverable,
   placeInboundDocument,
 } from "@/lib/compliance/document-replacement";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
-import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
+import {
+  recordPreliminaryPlansArrival,
+  recordWasteManagementPlanArrival,
+} from "@/lib/data/compliance-architect";
+import { applyAssessorCorrespondence } from "@/lib/data/compliance-issued-items";
+import {
+  recordArchitecturalDesignRevisionArrival,
+  recordBushfireRevisionArrival,
+  recordDeveloperDecision,
+} from "@/lib/data/compliance-developer";
+import { recordPortalDetermination } from "@/lib/data/compliance-applications";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { createGraphContext } from "@/lib/graph/client";
+import {
+  planningReferencesIn,
+  readPortalDetermination,
+} from "@/lib/graph/planning-portal";
 import { getGraphConfig } from "@/lib/graph/config";
 import {
   collectLeadAttachments,
@@ -119,8 +141,16 @@ async function findOutreach(refToken: string) {
       party: true,
       engagementId: true,
       // The checklist line a consultant was engaged against, so what they send
-      // back can answer it rather than becoming a document of its own.
+      // back can answer it rather than becoming a document of its own. Read
+      // only as a fallback for the rows written before deliverables existed --
+      // see `checklistLineFor` below.
       checklistDocumentId: true,
+      // Which line each of this party's documents answers. A structural
+      // engineer answers three, and the reply that carries two PDFs has to file
+      // each of them against the line that asked for that one.
+      deliverables: {
+        select: { documentType: true, checklistDocumentId: true },
+      },
       engagement: { select: { projectId: true } },
     },
   });
@@ -358,26 +388,45 @@ async function classifyStoredDocuments(
   party: CompliancePartyType,
   stored: { documentId: string; name: string; url: string }[],
   /**
-   * The checklist line a consultant's reply answers, where there is one.
+   * What this party was asked for, and which checklist line asked for each.
    *
-   * Present only for the two consultant parties. What a BASIX consultant sends
-   * back is not a document on the file in its own right — it exists because a
-   * checklist item asked for it, and the certifier is going to tick that item
-   * when they see it. Filing it as a BASIX_CERTIFICATE row beside a checklist
-   * line still reading "Not supplied yet" is the document being on the file
-   * and the file still being incomplete.
+   * Present only for a consultant party. What a BASIX consultant sends back is
+   * not a document on the file in its own right — it exists because a checklist
+   * item asked for it, and the certifier is going to tick that item when they
+   * see it. Filing it as a BASIX_CERTIFICATE row beside a checklist line still
+   * reading "Not supplied yet" is the document being on the file and the file
+   * still being incomplete.
+   *
+   * Passed as rows rather than as the resolver built from them, which is not a
+   * stylistic choice: step arguments are serialized into the event log so they
+   * can be replayed, and a function is not serializable. It is also what keeps
+   * `partyDeliverables` — and through it the whole Prisma client — out of the
+   * workflow sandbox; see `checklistLineResolver`.
    */
-  checklistDocumentId: string | null,
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId: string | null;
+  }[],
+  /** The single-line fallback, for outreaches written before the table above. */
+  fallbackChecklistDocumentId: string | null,
 ): Promise<{
   labelled: number;
   titleSearches: { url: string; name: string }[];
   preliminaryPlans: number;
+  wasteManagementPlans: number;
+  bushfireReports: number;
+  architecturalDesigns: number;
 }> {
   "use step";
 
   const allowed = new Set<ComplianceDocumentType>(
     PARTY_INBOUND_DOCUMENT_TYPES[party],
   );
+  const checklistLineFor = checklistLineResolver({
+    party,
+    checklistDocumentId: fallbackChecklistDocumentId,
+    deliverables,
+  });
   let labelled = 0;
   // Reported back rather than checked here: the owner comparison is a model
   // call of its own and belongs in its own retryable step, so a timeout reading
@@ -387,6 +436,16 @@ async function classifyStoredDocuments(
   // architect alerts. Read off what was actually placed rather than off the
   // party, because an architect's covering email carries other things too.
   let preliminaryPlans = 0;
+  // Counted separately from the plans above, because the two are different
+  // waits on the same party: a redraw of the elevations does not answer a
+  // request for a waste management plan, and either closing the other's alert
+  // would credit the architect with work they have not started.
+  let wasteManagementPlans = 0;
+  // Counted for the same reason as the two above and against a different
+  // clock: a bushfire report landing is what closes the round the estate
+  // developer's refusal opened.
+  let bushfireReports = 0;
+  let architecturalDesigns = 0;
 
   for (const item of stored) {
     try {
@@ -404,6 +463,7 @@ async function classifyStoredDocuments(
       // when the checklist row has gone, which is what a checklist re-extracted
       // between the outreach and the reply leaves behind — worse than the
       // checklist row, and much better than dropping the certificate.
+      const checklistDocumentId = checklistLineFor(result.documentType);
       const placed = checklistDocumentId
         ? ((await placeConsultantDeliverable({
             engagementId,
@@ -437,6 +497,23 @@ async function classifyStoredDocuments(
       }
 
       if (
+        result.documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
+      ) {
+        wasteManagementPlans += 1;
+      }
+
+      if (result.documentType === ComplianceDocumentType.BUSHFIRE_REPORT) {
+        bushfireReports += 1;
+      }
+
+      if (
+        result.documentType ===
+        ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+      ) {
+        architecturalDesigns += 1;
+      }
+
+      if (
         result.documentType ===
         ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
       ) {
@@ -447,7 +524,14 @@ async function classifyStoredDocuments(
     }
   }
 
-  return { labelled, titleSearches, preliminaryPlans };
+  return {
+    labelled,
+    titleSearches,
+    preliminaryPlans,
+    wasteManagementPlans,
+    bushfireReports,
+    architecturalDesigns,
+  };
 }
 
 /**
@@ -492,6 +576,203 @@ async function closePlansLoop(params: {
 }): Promise<void> {
   "use step";
   await recordPreliminaryPlansArrival(params);
+}
+
+/**
+ * Closes the waste management wait when the plan arrives on the thread.
+ *
+ * Its own step beside `closePlansLoop` rather than folded into it, because they
+ * close different alerts off different clocks and only one of them ever fires
+ * on a given reply.
+ */
+async function closeWasteManagementLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordWasteManagementPlanArrival(params);
+}
+
+/**
+ * Closes the developer's revision round when a revised report arrives.
+ *
+ * Its own step beside the two above, and the same shape: the consultant's reply
+ * carrying a fresh bushfire assessment ends the wait that the developer's
+ * refusal started. It also clears the stale verdict, so the block goes back to
+ * offering the send rather than showing a rejection against a report that has
+ * since been redone.
+ */
+async function closeBushfireRevisionLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordBushfireRevisionArrival(params);
+}
+
+async function closeArchitecturalDesignRevisionLoop(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  "use step";
+  await recordArchitecturalDesignRevisionArrival(params);
+}
+
+/**
+ * Reads a developer's reply for their verdict, and records it.
+ *
+ * The one inbound message on this file that carries a decision rather than a
+ * document. Everybody else answers with an attachment and the classifier above
+ * records their answer; a developer writes "approved, thanks" and attaches
+ * nothing, so without this the file waits out the SLA and then chases somebody
+ * who has already replied.
+ *
+ * Its own step for the reason every model call here is: it can fail on its own
+ * without costing the reply, which is already stored and already on the thread
+ * by the time this runs. The verdict is a courtesy on top of that — an admin
+ * can record the same answer in one click, and the block goes on offering both
+ * buttons whether or not this succeeded.
+ *
+ * Never overrides a person. `recordDeveloperDecision` refuses an INBOUND_EMAIL
+ * verdict on a row an admin has already decided, so a second pass over the same
+ * thread cannot undo somebody who had read it properly.
+ */
+async function recordDeveloperVerdict(
+  params: { projectId: string },
+  message: InboundPartyMessage,
+): Promise<"approved" | "rejected" | "none"> {
+  "use step";
+
+  const verdict = await detectDeveloperVerdict({
+    subject: message.subject,
+    body: message.body,
+  });
+
+  if (!verdict.decision) {
+    return "none";
+  }
+
+  await recordDeveloperDecision({
+    projectId: params.projectId,
+    decision: verdict.decision,
+    reason: verdict.reason || null,
+    channel: ComplianceApprovalChannel.INBOUND_EMAIL,
+  });
+
+  return verdict.decision === "APPROVED" ? "approved" : "rejected";
+}
+
+/**
+ * Reads a council's message for what they are asking for, and records it.
+ *
+ * The council's counterpart to the developer verdict above, and it exists for
+ * the same reason: what arrives is prose rather than a document, so the
+ * classification pipeline sees nothing. A council writes asking for a shadow
+ * diagram and rejecting two of the drawings, and before this the only record
+ * that it had done so was the email itself.
+ *
+ * Its own step so a model failure retries alone. Everything it writes is
+ * idempotent — a request already on the list is not written twice, and a
+ * rejection already on the row it names changes nothing — so a retry after a
+ * partial run finishes the job rather than duplicating it.
+ *
+ * Runs on every council message, not only ones about the development
+ * application. The 10.7 certificate rides the same thread, and a council
+ * acknowledging a certificate request asks for nothing — which is the answer
+ * the extraction is built to give and gives most of the time.
+ */
+async function recordCouncilRequests(
+  params: { projectId: string; engagementId: string },
+  message: InboundPartyMessage,
+): Promise<{ created: number; rejected: number }> {
+  "use step";
+
+  const correspondence = await readAssessorCorrespondence({
+    assessor: "council",
+    subject: message.subject,
+    body: message.body,
+  });
+
+  if (
+    correspondence.requested.length === 0 &&
+    correspondence.rejected.length === 0
+  ) {
+    return { created: 0, rejected: 0 };
+  }
+
+  const outcome = await applyAssessorCorrespondence({
+    projectId: params.projectId,
+    engagementId: params.engagementId,
+    assessor: "council",
+    requested: correspondence.requested,
+    rejected: correspondence.rejected,
+  });
+
+  if (outcome.unmatched.length > 0) {
+    // Logged rather than guessed at. A rejection landed on the wrong row sends
+    // a row that was accepted back to outstanding and leaves the one that was
+    // actually refused reading as fine; the message is on the thread, and the
+    // activity entry says which objection could not be placed.
+    console.log(
+      `  Council rejection(s) with no matching row: ${outcome.unmatched.join(", ")}`,
+    );
+  }
+
+  return { created: outcome.created, rejected: outcome.rejected };
+}
+
+/**
+ * Reads a council message for a determination, and records it.
+ *
+ * The step that turns "your application has been approved, log in to download
+ * it" into something on the screen. Without it that email was the least useful
+ * message on the thread: the one that said the wait was over, carrying nothing the
+ * document pipeline could file, on a file that went on counting days against the
+ * portal.
+ *
+ * Deterministic rather than a model call, which is the one place this differs from
+ * the two steps either side of it. `recordCouncilRequests` and the alert detection
+ * both read prose for things a person would otherwise have to notice, and being
+ * occasionally wrong costs a row somebody corrects. This decides that a clock
+ * stops and a green alert goes up, and a refusal misread as an approval would put
+ * "approved, ready to download" on a job that has just been knocked back. So the
+ * reading is a string comparison with an explicit disqualifier list — see
+ * `readPortalDetermination`.
+ *
+ * Still its own step, for the reason the others are: it writes against rows this
+ * run has already touched and must not be able to cost them.
+ *
+ * Returns what it placed, or null — which is the answer on nearly every council
+ * message, and on every one it cannot read with confidence.
+ */
+async function recordCouncilDetermination(
+  params: { projectId: string; engagementId: string },
+  message: InboundPartyMessage,
+): Promise<ComplianceExternalApplicationKind | null> {
+  "use step";
+
+  const subject = readPortalDetermination(message.subject, message.body);
+  if (!subject) return null;
+
+  const kind = ComplianceExternalApplicationKind[subject];
+
+  const recorded = await recordPortalDetermination({
+    projectId: params.projectId,
+    engagementId: params.engagementId,
+    kind,
+    // The guard against the same notification twice — a resend, a cc, a replayed
+    // webhook — re-raising a download alert somebody has already closed by
+    // uploading the certificate.
+    messageId: message.messageId,
+    determinedAt: parseEmailDate(message.receivedDateTime) ?? new Date(),
+    // Whichever reference the message quotes, where it quotes one we can place.
+    // Only used to fill a row that has none; the lodgement's own reference is not
+    // overwritten, since a council quoting a case number is not a council renaming
+    // our application.
+    applicationRef: [...planningReferencesIn(message.subject, message.body)][0] ?? null,
+  });
+
+  return recorded ? kind : null;
 }
 
 /**
@@ -591,6 +872,54 @@ async function advanceAndNotify(
   );
 }
 
+/**
+ * Which checklist line a given document type from this party answers.
+ *
+ * Deliverables are the answer wherever they exist; where they do not — a
+ * consultant engaged before that table existed, or one the backfill could not
+ * reach — the single `checklistDocumentId` column is used, but only for the
+ * party's own deliverable. Without that narrowing, a BASIX consultant who
+ * attached the survey they were sent would have had the survey filed onto the
+ * checklist line asking for a BASIX certificate.
+ *
+ * Called from inside `classifyStoredDocuments`, and it has to stay that way.
+ * This function reads `partyDeliverables` out of constants/complianceDocuments,
+ * which imports `@prisma/client` for its enums — and in workflow mode the
+ * compiler guts step bodies but keeps everything the orchestrator can reach, so
+ * a plain helper called from the workflow body drags that module into the
+ * sandbox. The sandbox is a `vm` context with no `require`, and Prisma's
+ * generated client is CommonJS, so the whole flow bundle dies on evaluation
+ * with "require is not defined" before any workflow runs at all. Called from a
+ * step instead, it is tree-shaken out of the sandbox bundle entirely, which is
+ * how `graphClient` and `deterministicFileId` above stay legal.
+ */
+function checklistLineResolver(outreach: {
+  party: CompliancePartyType;
+  checklistDocumentId: string | null;
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId: string | null;
+  }[];
+}): (documentType: ComplianceDocumentType) => string | null {
+  const byType = new Map(
+    outreach.deliverables.map((deliverable) => [
+      deliverable.documentType,
+      deliverable.checklistDocumentId,
+    ]),
+  );
+
+  const ownDeliverables = new Set(partyDeliverables(outreach.party));
+
+  return (documentType) => {
+    if (byType.has(documentType)) {
+      return byType.get(documentType) ?? null;
+    }
+    return ownDeliverables.has(documentType)
+      ? outreach.checklistDocumentId
+      : null;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Workflow
 // ---------------------------------------------------------------------------
@@ -648,6 +977,7 @@ export const processInboundPartyEmail = async (
       outreach.engagementId,
       outreach.party,
       stored,
+      outreach.deliverables,
       outreach.checklistDocumentId,
     );
     console.log(
@@ -671,6 +1001,85 @@ export const processInboundPartyEmail = async (
     // not be able to cost the classification that produced them.
     if (classification.preliminaryPlans > 0) {
       await closePlansLoop({ projectId, engagementId: outreach.engagementId });
+    }
+
+    if (classification.wasteManagementPlans > 0) {
+      await closeWasteManagementLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
+    }
+
+    // A bushfire report arriving on the consultant's thread. Read off what was
+    // actually placed rather than off the party, exactly as the two above are:
+    // a consultant's covering email carries other things, and the round only
+    // closes on the document that answers it.
+    //
+    // Guarded on the party as well, because BUSHFIRE_REPORT is a type the
+    // developer's own thread may carry too -- they routinely return the report
+    // stamped -- and a developer sending back the copy they just approved must
+    // not read as the consultant having redone it.
+    if (
+      classification.bushfireReports > 0 &&
+      outreach.party === CompliancePartyType.BUSHFIRE_CONSULTANT
+    ) {
+      await closeBushfireRevisionLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
+    }
+
+    if (
+      classification.architecturalDesigns > 0 &&
+      outreach.party === CompliancePartyType.ARCHITECT
+    ) {
+      await closeArchitecturalDesignRevisionLoop({
+        projectId,
+        engagementId: outreach.engagementId,
+      });
+    }
+  }
+
+  // What the council is asking for, where this is their thread. After the
+  // documents for the same reason the verdict is: a determination arrives as a
+  // notice of determination attached to the message, and the rows this writes
+  // should be written against a file that already holds it.
+  if (outreach.party === CompliancePartyType.COUNCIL) {
+    const requests = await recordCouncilRequests(
+      { projectId, engagementId: outreach.engagementId },
+      message,
+    );
+    if (requests.created > 0 || requests.rejected > 0) {
+      console.log(
+        `  Council asked for ${requests.created} more document(s) and sent back ${requests.rejected}.`,
+      );
+    }
+
+    // A determination that carried no document, which is the ordinary shape of
+    // one. The portal emails to say the application is approved and tells the
+    // applicant to log in and fetch the certificate, so by this point in the run
+    // the classifier has placed nothing and there is nothing on the row — and
+    // without this the file went on reading as "with the portal" until somebody
+    // opened their inbox.
+    //
+    // After the requests rather than before, because a single council message can
+    // be both: approved with conditions, and here are three things we still want.
+    const determined = await recordCouncilDetermination(
+      { projectId, engagementId: outreach.engagementId },
+      message,
+    );
+    if (determined) {
+      console.log(`  Portal determined the ${determined} application.`);
+    }
+  }
+
+  // The developer's verdict, where this is their thread. After the documents,
+  // because a rejection opens a revision round and mails the consultant, and
+  // that should happen against a file whose attachments have already landed.
+  if (outreach.party === CompliancePartyType.DEVELOPER) {
+    const verdict = await recordDeveloperVerdict({ projectId }, message);
+    if (verdict !== "none") {
+      console.log(`  Developer ${verdict} the bushfire report.`);
     }
   }
 

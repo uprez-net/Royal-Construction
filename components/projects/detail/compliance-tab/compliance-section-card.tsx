@@ -38,6 +38,32 @@ type ComplianceSectionCardProps = {
   /** Marks the block the flow is currently waiting on. */
   isActive?: boolean;
   /**
+   * Whether anything in this block is past its quoted turnaround.
+   *
+   * On the header rather than only on the rows, because a collapsed card is the
+   * state most of these are in most of the time: seven blocks, one open, and a
+   * badge that can only be seen by opening the card is a badge nobody reads
+   * until they already knew to look.
+   */
+  overdue?: boolean;
+  /**
+   * Whether this block is holding something approved and unfetched.
+   *
+   * The positive counterpart of `overdue`, and a separate flag rather than a
+   * third tone on one prop because the two are independent: the portal block can
+   * hold a determined certificate to download while a second application on the
+   * same file is past its days, and a reader needs to be told both.
+   *
+   * Only the portal and development application blocks ever set it. It exists
+   * because a collapsed card showing "1/2" and nothing else gave no hint that the
+   * remaining half was a two-minute download rather than a fortnight's wait on
+   * somebody else — which is the difference between a job that finishes this
+   * afternoon and one that does not.
+   */
+  ready?: boolean;
+  /** What the green badge says. Defaults to the portal case. */
+  readyLabel?: string;
+  /**
    * The step has not been reached yet.
    *
    * Locked blocks stay on the page rather than being dropped from it. A stage
@@ -112,6 +138,9 @@ export function ComplianceSectionCard({
   open,
   onOpenChange,
   isActive = false,
+  overdue = false,
+  ready = false,
+  readyLabel = "Ready to download",
   locked = false,
   lockMessage,
   lockActions,
@@ -159,6 +188,28 @@ export function ComplianceSectionCard({
             </StatusPill>
           ) : null}
 
+          {/* Before "Now" and after the count. A block can be the step the
+              flow is on *and* late, and those are different facts — the first
+              says where to work, the second says somebody has to be chased —
+              so neither replaces the other. Never on a locked block: a step
+              that has not been reached has nobody running late on it. */}
+          {overdue && !locked ? (
+            <StatusPill tone="danger">Overdue</StatusPill>
+          ) : null}
+
+          {/* The green counterpart, and the only badge on a card that says
+              something good. A portal determination waiting to be fetched is not
+              a block anybody is behind on and not a block to scroll past either
+              — it is the one card on the tab with a single obvious action left,
+              and amber would have said the opposite.
+
+              Beside "Overdue" rather than instead of it, because a file can hold
+              a certificate to download and a second application past its days at
+              the same moment, and the reader needs both. */}
+          {ready && !locked ? (
+            <StatusPill tone="success">{readyLabel}</StatusPill>
+          ) : null}
+
           {isActive && !locked ? (
             <StatusPill tone="primary">Now</StatusPill>
           ) : null}
@@ -181,7 +232,11 @@ export function ComplianceSectionCard({
             <span
               className={cn(
                 "block h-full rounded-full transition-all",
-                complete ? "bg-success-ink" : "bg-primary",
+                overdue
+                  ? "bg-destructive"
+                  : complete
+                    ? "bg-success-ink"
+                    : "bg-primary",
               )}
               style={{
                 width: `${Math.round((progress.done / progress.total) * 100)}%`,
@@ -256,6 +311,13 @@ export function ComplianceSectionCard({
           // not inherit the height of a twelve-row one sitting beside it.
           "self-start",
           isActive && "border-primary/50 ring-1 ring-primary/20",
+          // Ready beats "Now", because a card that is merely current is where the
+          // work is and a card holding an approved certificate is where the work
+          // *finishes* — across a screen of seven blocks that is the one to find.
+          ready && "border-success/50 ring-1 ring-success/25",
+          // Overdue wins the border outright. All three can be true at once, and
+          // of them the one worth finding first is the one somebody is late on.
+          overdue && "border-destructive/50 ring-1 ring-destructive/20",
           className,
         )}
       >

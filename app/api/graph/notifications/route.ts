@@ -13,6 +13,11 @@ import {
   subjectMentionsSiteAddress,
 } from '@/lib/graph/certifier-subject';
 import { extractPartyRefToken } from '@/lib/graph/party-subject';
+import {
+  looksLikePlanningNotification,
+  normaliseReference,
+  planningReferencesIn,
+} from '@/lib/graph/planning-portal';
 import { isMachineGenerated } from '@/lib/graph/offer-reply-classify';
 import { normalizeEmailAddress } from '@/utils/formatters';
 import { CertifierEmailDirection, CompliancePartyType } from '@prisma/client';
@@ -118,6 +123,15 @@ interface PartyMatch {
 async function matchPartyOutreach(
   subject: string | undefined | null,
   fromEmail: string | undefined | null,
+  /**
+   * The message body, for the planning branch only.
+   *
+   * A portal notification routinely has a subject as bare as "Case PAN-123456
+   * updated" and puts the application number, the address and what it wants in
+   * the body. Every other correlation here reads the subject alone, because
+   * every other correspondent is replying on a thread whose subject we wrote.
+   */
+  body?: string | null,
 ): Promise<PartyMatch | null> {
   const token = extractPartyRefToken(subject);
   if (token) {
@@ -134,18 +148,23 @@ async function matchPartyOutreach(
     return null;
   }
 
-  const planningPortalAddress = normalizeEmailAddress(
-    process.env.NSW_PLANNING_PORTAL_EMAIL ?? '',
-  );
-  const isPlanningPortal =
-    planningPortalAddress.length > 0 && sender === planningPortalAddress;
+  // The portal and the councils, which are the one correspondent here that
+  // writes to us without ever having been written to -- and, unlike every
+  // other party, without a fixed address to recognise them by. Three
+  // deterministic layers, all of which have to hold: an authority domain, the
+  // vocabulary of a planning matter, and a reference or an address naming
+  // exactly one of our jobs. See lib/graph/planning-portal.ts.
+  const isPlanningPortal = looksLikePlanningNotification({
+    fromEmail: sender,
+    domain,
+    subject,
+    body,
+  });
 
   const candidates = await prisma.complianceOutreach.findMany({
     where: isPlanningPortal
-      ? // The portal writes to us without ever having been written to, so the
-        // only thing correlating its mail is the address in the subject. Held
-        // to council rows so a portal notification cannot be filed against a
-        // surveyor thread on the same job.
+      ? // Held to council rows so a portal notification cannot be filed against
+        // a surveyor thread on the same job.
         { party: CompliancePartyType.COUNCIL }
       : {
           contactEmail: isPublicMailDomain(domain)
@@ -164,13 +183,48 @@ async function matchPartyOutreach(
       id: true,
       party: true,
       refToken: true,
-      engagement: { select: { subjectAddress: true } },
+      engagement: {
+        select: {
+          subjectAddress: true,
+          // The references we recorded when each application was lodged. Read
+          // only on the planning branch, and the strongest layer there: unlike
+          // an address, an application number is a value we wrote down
+          // ourselves, and it names one job rather than one street.
+          externalApplications: { select: { applicationRef: true } },
+        },
+      },
     },
   });
 
-  const matches = candidates.filter((candidate) =>
-    subjectMentionsSiteAddress(subject, candidate.engagement.subjectAddress),
-  );
+  // What the message quotes, normalised once rather than per candidate.
+  const quotedRefs = isPlanningPortal
+    ? planningReferencesIn(subject, body)
+    : new Set<string>();
+
+  const matches = candidates.filter((candidate) => {
+    if (isPlanningPortal && quotedRefs.size > 0) {
+      // The reference route, where the message carries one. It is checked
+      // first and on its own, because a council quoting our DA number has
+      // identified the job beyond argument -- and its subject often does not
+      // carry the site address at all, so falling through to the address
+      // comparison would lose a message that had already told us exactly what
+      // it was about.
+      const ours = candidate.engagement.externalApplications
+        .map((application) => application.applicationRef)
+        .filter((ref): ref is string => Boolean(ref))
+        .map(normaliseReference)
+        .filter((ref) => ref.length >= 6);
+
+      if (ours.some((ref) => quotedRefs.has(ref))) {
+        return true;
+      }
+    }
+
+    return subjectMentionsSiteAddress(
+      subject,
+      candidate.engagement.subjectAddress,
+    );
+  });
 
   if (matches.length !== 1) {
     if (matches.length > 1) {
@@ -405,6 +459,10 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           const partyMatch = await matchPartyOutreach(
             message.subject,
             message.from,
+            // Read only by the planning branch, whose subjects are routinely
+            // bare — "Case PAN-123456 updated" — with the application number
+            // and the address in the message instead.
+            content,
           );
           if (partyMatch) {
             const { refToken: partyToken, outreach } = partyMatch;

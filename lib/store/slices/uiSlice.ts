@@ -41,23 +41,38 @@ export type ModalType =
   | "complianceComplete"
   | "complianceReject"
   | "connectComplianceParty"
+  | "developerDecision"
+  | "developerResend"
+  | "resubmitApplication"
   | "resolveComplianceAlert"
   | "scheduleComplianceMeeting"
   | "resolveComplianceMeeting"
+  | "complianceApplication"
+  | "requestWasteManagementPlan"
   | "reviewArchitectPlans"
   | null;
 
 export type UIModalPayload = Record<string, unknown> | null;
 
 /**
- * The status the project list opens on. Delivery works out of the in-flight
- * projects, so a completed one is noise until someone asks for it by pressing
- * the "Completed" chip.
+ * The status the project list opens on.
  *
- * Anything that resets the filters has to come back here rather than to `null`,
- * or the default would only ever apply to a freshly created store.
+ * "ACTIVE" until the project ladder existed, on the reading that delivery works
+ * out of the in-flight projects and a completed one is noise. That was sound
+ * while every project was created ACTIVE and the word meant "not finished". It
+ * stopped being sound the moment a project could be DRAFT, COMPLIANCE_STARTED
+ * or COMPLIANCE_COMPLETED: those are the jobs somebody is working on right now,
+ * and the list would have opened with every one of them hidden.
+ *
+ * Null — every project — rather than a new "not completed" filter, because the
+ * chips already answer that question and the cost of the alternative is
+ * backwards: a finished job on the list is a row to scroll past, while a job in
+ * compliance that is not on the list is a job nobody can find.
+ *
+ * Anything that resets the filters has to come back here, so it stays a named
+ * constant even though the value is now null.
  */
-export const DEFAULT_PROJECT_STATUS_FILTER = "ACTIVE";
+export const DEFAULT_PROJECT_STATUS_FILTER = null;
 
 export interface UIState {
   modal: {

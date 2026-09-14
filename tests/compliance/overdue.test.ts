@@ -6,6 +6,7 @@ import {
   ComplianceAlertType,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   ComplianceMeetingStatus,
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
@@ -54,9 +55,28 @@ function engagement(overrides: Overrides = {}): CertifierEngagementDetail {
     outreaches: [],
     alerts: [],
     emails: [],
-    planningCertificate: null,
+    externalApplications: [],
     ...overrides,
   } as unknown as CertifierEngagementDetail;
+}
+
+/**
+ * One application to an outside body.
+ *
+ * The 10.7 certificate by default, because it is the one four of these tests
+ * are about and naming it in each of them would bury what they vary.
+ */
+function application(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "application-1",
+    kind: ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7,
+    alreadyHeld: false,
+    appliedAt: null,
+    applicationRef: null,
+    lodgedWith: null,
+    receivedAt: null,
+    ...overrides,
+  };
 }
 
 function outreach(
@@ -74,9 +94,11 @@ function outreach(
     checklistDocumentId: null,
     clientPlansApprovedAt: null,
     lastFollowUpAt: null,
+    wasteManagementRequestedAt: null,
     emails: [],
     meetings: [],
     revisions: [],
+    deliverables: [],
     ...overrides,
   };
 }
@@ -189,12 +211,9 @@ test("documents the client supplied leave nobody to chase", () => {
 
 test("a lodged application past the portal's turnaround is flagged", () => {
   const file = engagement({
-    planningCertificate: {
-      alreadyHeld: false,
-      appliedAt: MONDAY,
-      applicationRef: "PC-123",
-      receivedAt: null,
-    } as never,
+    externalApplications: [
+      application({ appliedAt: MONDAY, applicationRef: "PC-123" }),
+    ] as never,
   });
 
   // Six working days: the portal quotes three to five.
@@ -219,11 +238,7 @@ test("a lodged application past the portal's turnaround is flagged", () => {
 
 test("a certificate on the file closes the wait even if nobody ticked it", () => {
   const file = engagement({
-    planningCertificate: {
-      alreadyHeld: false,
-      appliedAt: MONDAY,
-      receivedAt: null,
-    } as never,
+    externalApplications: [application({ appliedAt: MONDAY })] as never,
     documents: [
       document(ComplianceDocumentType.PLANNING_CERTIFICATE_10_7),
     ] as never,
@@ -238,21 +253,16 @@ test("a certificate on the file closes the wait even if nobody ticked it", () =>
   );
 });
 
-test("a DA takes the certificate out of the pack, so it cannot be late", () => {
-  const file = engagement({
-    planningCertificate: {
-      alreadyHeld: false,
-      appliedAt: MONDAY,
-      receivedAt: null,
-    } as never,
-    alerts: [
-      {
-        id: "alert-da",
-        type: ComplianceAlertType.DA_APPROVAL_REQUIRED,
-        status: ComplianceAlertStatus.OPEN,
-      },
-    ] as never,
-  });
+const daAlert = [
+  {
+    id: "alert-da",
+    type: ComplianceAlertType.DA_APPROVAL_REQUIRED,
+    status: ComplianceAlertStatus.OPEN,
+  },
+];
+
+test("a DA with no certificate ordered has nothing to chase", () => {
+  const file = engagement({ alerts: daAlert as never });
 
   const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
 
@@ -260,6 +270,79 @@ test("a DA takes the certificate out of the pack, so it cannot be late", () => {
     resolvedTypes(result).includes(
       ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
     ),
+  );
+});
+
+test("a certificate lodged for a DA is still chased when it runs late", () => {
+  // The correction the DA work made. The certificate leaves the certifier's
+  // pack when a job changes path, and it used to leave the file with it — so a
+  // 10.7 lodged for the development application itself sat with the portal for
+  // a month with nothing anywhere saying so. The council assesses a DA against
+  // the same zoning and the same overlays; the certificate moved, it did not go.
+  const file = engagement({
+    alerts: daAlert as never,
+    externalApplications: [application({ appliedAt: MONDAY })] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The other three portals, and the development application itself
+// ---------------------------------------------------------------------------
+
+test("each portal application is chased against its own turnaround", () => {
+  // Ten working days. Past the levy's five and inside the road opening's ten,
+  // which is the pair worth pinning: a shared threshold would have flagged both
+  // or neither, and the whole point of the table is that they differ.
+  const file = engagement({
+    externalApplications: [
+      application({
+        kind: ComplianceExternalApplicationKind.LONG_SERVICE_LEVY,
+        appliedAt: MONDAY,
+      }),
+      application({
+        kind: ComplianceExternalApplicationKind.ROAD_OPENING,
+        appliedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, sydney("2026-06-16T09:00:00"));
+
+  assert.ok(
+    raisedTypes(result).includes(ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED),
+  );
+  assert.equal(
+    raisedTypes(result).includes(ComplianceAlertType.ROAD_OPENING_DELAYED),
+    false,
+  );
+});
+
+test("a development application is not late at eleven working days", () => {
+  // The threshold that keeps the panel readable. Every other wait on this file
+  // is eleven days or fewer; a DA runs weeks to months, and an alert on the
+  // consultants' threshold would be open on every application ever lodged.
+  const file = engagement({
+    externalApplications: [
+      application({
+        kind: ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+        appliedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.equal(
+    raisedTypes(result).includes(ComplianceAlertType.DA_DETERMINATION_OVERDUE),
+    false,
   );
 });
 
@@ -432,6 +515,111 @@ test("a checklist line marked not required finishes with the consultant", () => 
   );
 });
 
+test("a consultant engaged off the development application is still chased", () => {
+  // The silent one. A consultant commissioned from the DA list has no certifier
+  // checklist to hang a line on, so `startPartyOutreach` writes deliverables
+  // carrying a document type and a null `checklistDocumentId`. Reading only the
+  // checklist rows produced an empty target set, `[].every()` returned true,
+  // and the sweep closed the alert with "Their documents came through" over a
+  // consultant who had sent nothing at all — which is the one failure on this
+  // file with nothing left on screen to contradict it.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.TRAFFIC_CONSULTANT, {
+        checklistDocumentId: null,
+        deliverables: [
+          {
+            id: "deliverable-1",
+            documentType: ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+            checklistDocumentId: null,
+          },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE),
+  );
+  assert.equal(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a type-only deliverable is settled by a document of that type", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.TRAFFIC_CONSULTANT, {
+        checklistDocumentId: null,
+        deliverables: [
+          {
+            id: "deliverable-1",
+            documentType: ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+            checklistDocumentId: null,
+          },
+        ],
+      }),
+    ] as never,
+    documents: [
+      document(ComplianceDocumentType.TRAFFIC_CONTROL_PLAN),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("one outstanding deliverable of three keeps the consultant late", () => {
+  // A structural engineer answers three lines off one engagement. Two in and
+  // one missing is still late, which is the whole reason the deliverables table
+  // replaced the single column.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.STRUCTURAL_ENGINEER, {
+        checklistDocumentId: null,
+        deliverables: [
+          {
+            id: "d-1",
+            documentType: ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+            checklistDocumentId: "item-drawings",
+          },
+          {
+            id: "d-2",
+            documentType: ComplianceDocumentType.GEOTECH_REPORT,
+            checklistDocumentId: "item-geotech",
+          },
+        ],
+      }),
+    ] as never,
+    documents: [
+      document(ComplianceDocumentType.CHECKLIST_ITEM, { id: "item-drawings" }),
+      document(ComplianceDocumentType.CHECKLIST_ITEM, {
+        id: "item-geotech",
+        status: ComplianceDocumentStatus.PENDING,
+        files: [],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
 test("a checklist line that has gone since the outreach is not chased forever", () => {
   // A checklist re-extracted between engaging the consultant and their reply
   // rewrites its items. There is nothing on screen to chase against, so an
@@ -449,4 +637,402 @@ test("a checklist line that has gone since the outreach is not chased forever", 
   assert.ok(
     resolvedTypes(result).includes(ComplianceAlertType.BASIX_RESPONSE_OVERDUE),
   );
+});
+
+// ---------------------------------------------------------------------------
+// The estate developer, and the rework a refusal from them causes
+//
+// Three clocks now, and the shape is what changed. The covenant turns out to
+// cover the full architectural design as well as the bushfire report, so the
+// developer is waited on twice over -- and because the plans come off the
+// architect's board months before a bushfire consultant is engaged off a
+// checklist line, the two waits start at quite different times. One clock read
+// off `outreach.sentAt` had the second document overdue on the day it was sent.
+//
+// So each wait is measured from its own `ComplianceDeveloperApproval` row, and
+// the interesting cases are the handovers: a rejection has to stop chasing the
+// developer and start chasing whoever redoes the document, and the two documents
+// must be able to be late independently.
+// ---------------------------------------------------------------------------
+
+/** One document put to the developer, as the sweep reads it. */
+function developerApproval(
+  documentType: ComplianceDocumentType,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    id: `approval-${documentType}`,
+    outreachId: "outreach-DEVELOPER",
+    documentType,
+    requestedAt: MONDAY,
+    decision: null,
+    decidedAt: null,
+    channel: null,
+    reason: null,
+    round: 1,
+    recordedById: null,
+    ...overrides,
+  };
+}
+
+test("a developer inside their quoted turnaround is not chased", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, ELEVEN_WORKING_DAYS_LATER);
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a developer past their turnaround with no verdict is chased", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("a developer who has approved is not chased", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT, {
+            decision: "APPROVED",
+            decidedAt: MONDAY,
+          }),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("a developer who has rejected is not chased either", () => {
+  // The handover. A rejection is still an answer, and the wait has moved to the
+  // consultant — chasing the developer here points the alert at the one party
+  // who has already done what was asked of them.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT, {
+            decision: "REJECTED",
+            decidedAt: MONDAY,
+            reason: "Roof material is not compliant at BAL-29.",
+          }),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a verdict recorded before the approval table still counts", () => {
+  // The fallback onto the outreach's own five columns. Every verdict recorded
+  // before ComplianceDeveloperApproval existed lives there, and the migration
+  // copies them across -- so this is the window between `migrate deploy` and the
+  // deploy that follows it, during which new code reads rows the backfill has
+  // written and old rows it has not. A developer who approved the report in March
+  // must not start being chased again by tonight's sweep.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [],
+        approvalDecision: "APPROVED",
+        approvalDecidedAt: MONDAY,
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+  );
+});
+
+test("the plans and the report are late independently", () => {
+  /**
+   * The whole reason DEVELOPER_PLANS_OVERDUE is its own type.
+   *
+   * At most one alert of a type is open per file, so folding both documents into
+   * DEVELOPER_RESPONSE_OVERDUE meant a job could only ever say one of them out
+   * loud -- and the chase that went out named whichever document the copy
+   * happened to mention rather than the one actually outstanding.
+   *
+   * Here the plans went over on the Monday and are late; the report went over
+   * eleven working days later and is not. Both readings have to be available at
+   * once.
+   */
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN, {
+            requestedAt: MONDAY,
+          }),
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT, {
+            requestedAt: ELEVEN_WORKING_DAYS_LATER,
+          }),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(ComplianceAlertType.DEVELOPER_PLANS_OVERDUE),
+    "the plans are twelve working days old and should be chased",
+  );
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+    "the report went over yesterday and is not late",
+  );
+});
+
+test("a design nobody has put to the developer is not chased", () => {
+  // No row means it was never sent, which is different from their not having
+  // answered -- and the difference is what the clock reads. A file whose
+  // architect has not finished the drawings must not be chasing a developer who
+  // has been given nothing.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.DEVELOPER, {
+        developerApprovals: [
+          developerApproval(ComplianceDocumentType.BUSHFIRE_REPORT),
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_PLANS_OVERDUE,
+    ),
+  );
+});
+
+test("a bushfire revision past its threshold chases the consultant", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.BUSHFIRE_CONSULTANT, {
+        revisions: [{ id: "round-1", requestedAt: MONDAY, respondedAt: null }],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+  );
+});
+
+test("the revision clock runs from the refusal, not from the engagement", () => {
+  // The reason the round is a row rather than a flag. This consultant was
+  // engaged on the Monday and the developer refused the report on the Monday
+  // twelve working days later; the rework is one day old and is not late,
+  // however long ago the engagement was.
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.BUSHFIRE_CONSULTANT, {
+        sentAt: MONDAY,
+        revisions: [
+          {
+            id: "round-1",
+            requestedAt: TWELVE_WORKING_DAYS_LATER,
+            respondedAt: null,
+          },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(
+    file,
+    sydney("2026-06-19T09:00:00"),
+  );
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+    false,
+  );
+});
+
+test("a revision that has been answered stops being chased", () => {
+  const file = engagement({
+    outreaches: [
+      outreach(CompliancePartyType.BUSHFIRE_CONSULTANT, {
+        revisions: [
+          {
+            id: "round-1",
+            requestedAt: MONDAY,
+            respondedAt: ELEVEN_WORKING_DAYS_LATER,
+          },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    resolvedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+  );
+});
+
+test("a file with no developer raises neither of their alerts", () => {
+  // Most jobs. The lot is not in a covenanted estate, nobody is ever asked, and
+  // an alert here would be permanent on every project in the system.
+  const result = assessOverdueConditions(engagement(), TWELVE_WORKING_DAYS_LATER);
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE,
+    ),
+    false,
+  );
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
+    ),
+    false,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Resubmission rounds
+//
+// The reason the rounds are a table. An application that was sent back and
+// lodged again is under assessment from the day it went back in, and measuring
+// from the original lodgement had every resubmitted DA permanently overdue from
+// the moment somebody acted on the council's request.
+// ---------------------------------------------------------------------------
+
+test("an application with no rounds still measures from its lodgement date", () => {
+  // Every application already on the system. The rounds table did not exist
+  // when they were lodged, so the fallback is what keeps their clocks running
+  // at all.
+  const file = engagement({
+    externalApplications: [
+      application({ appliedAt: MONDAY, submissions: [] }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  assert.ok(
+    raisedTypes(result).includes(
+      ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    ),
+  );
+});
+
+test("the clock restarts from the round the application was last lodged in", () => {
+  // Lodged on the Monday and resubmitted twelve working days later. The
+  // certificate is one day into round two and is not late, however long ago
+  // round one went in.
+  const file = engagement({
+    externalApplications: [
+      application({
+        appliedAt: MONDAY,
+        submissions: [
+          { round: 2, submittedAt: TWELVE_WORKING_DAYS_LATER, applicationRef: null },
+          { round: 1, submittedAt: MONDAY, applicationRef: null },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, sydney("2026-06-19T09:00:00"));
+
+  assert.equal(
+    raisedTypes(result).includes(
+      ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    ),
+    false,
+  );
+});
+
+test("a late round says which round it is", () => {
+  // So the chase reads as "round 2 is late" rather than implying the council
+  // has sat on one application since March.
+  const file = engagement({
+    externalApplications: [
+      application({
+        appliedAt: sydney("2026-01-05T09:00:00"),
+        submissions: [
+          { round: 2, submittedAt: MONDAY, applicationRef: "PC-2026/778" },
+        ],
+      }),
+    ] as never,
+  });
+
+  const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
+
+  const alert = result.raise.find(
+    (entry) => entry.type === ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+  );
+  assert.ok(alert);
+  assert.match(alert.detail, /Resubmitted \(round 2\)/);
+  assert.match(alert.detail, /PC-2026\/778/);
 });

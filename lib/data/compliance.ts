@@ -40,8 +40,22 @@ import {
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
 import { packSendBlockedReason } from "@/lib/compliance/prerequisites";
-import { recordPreliminaryPlansArrival } from "@/lib/data/compliance-architect";
-import { recordPlanningCertificateArrival } from "@/lib/data/compliance-council";
+import {
+  recordPreliminaryPlansArrival,
+  recordWasteManagementPlanArrival,
+} from "@/lib/data/compliance-architect";
+import { recordExternalApplicationArrival } from "@/lib/data/compliance-applications";
+import {
+  recordArchitecturalDesignRevisionArrival,
+  recordEstateDeveloperFromDeed,
+} from "@/lib/data/compliance-developer";
+import {
+  closeComplianceIfComplete,
+  recordComplianceStarted,
+  recordCertificateIssued,
+} from "@/lib/data/compliance-certificate";
+import { fillChecklistLinesFor } from "@/lib/compliance/checklist-mapping";
+import { isCertificateDocument } from "@/lib/compliance/portal-certificates";
 import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
@@ -50,6 +64,7 @@ import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   certifierEngagementInclude,
+  checklistBlockedReason,
   type CertifierEmailAttachment,
   type CertifierEngagementDetail,
 } from "@/types/compliance";
@@ -148,7 +163,17 @@ export async function startCertifierEngagement(
     include: engagementInclude,
   });
 
-  after(() => revalidateEngagement(projectId));
+  after(async () => {
+    revalidateEngagement(projectId);
+    // The project stops being a draft here.
+    //
+    // Engaging the certifier is the first thing on this whole flow that
+    // involves anybody outside the office — everything before it is collecting
+    // documents, and a job that has collected two documents is not meaningfully
+    // under way. It is also the point a person would name if asked when the
+    // project started, which is what the list is trying to answer.
+    await recordComplianceStarted(projectId);
+  });
 
   return engagement;
 }
@@ -726,7 +751,6 @@ export async function attachComplianceDocumentFile(params: {
   }
 
   after(async () => {
-    revalidateEngagement(params.projectId);
     await logAction(
       createActivityLogEntry("complianceDocumentUploaded", {
         projectId: params.projectId,
@@ -769,16 +793,74 @@ export async function attachComplianceDocumentFile(params: {
     });
   }
 
-  // The certificate arriving is what the council block's whole state machine is
+  if (
+    document.documentType ===
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+  ) {
+    after(async () => {
+      await recordArchitecturalDesignRevisionArrival({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
+    });
+  }
+
+  // A document arriving is what an application block's whole state machine is
   // waiting for, and an upload says so more strongly than the tick box does:
   // one is somebody reporting it, the other is somebody proving it. Without
   // this a certificate could sit on the file with an overdue alert still open
   // underneath it, because nobody went back to tick the box.
-  if (
-    document.documentType === ComplianceDocumentType.PLANNING_CERTIFICATE_10_7
-  ) {
+  //
+  // Called for every upload rather than behind a type check, because the four
+  // types this covers are a lookup inside it — the 10.7 certificate, the road
+  // opening approval, the levy receipt and the mine subsidence approval — and
+  // a condition here would be a fifth place to remember when a fifth
+  // application is added.
+  after(async () => {
+    await recordExternalApplicationArrival({
+      projectId: params.projectId,
+      engagementId: params.engagementId,
+      documentType: document.documentType,
+    });
+  });
+
+  // The checklist lines asking for what just landed.
+  //
+  // Runs on every upload rather than behind a type check, because the set it
+  // covers is a question for the mapper and a condition here would be a second
+  // place to remember. The case it is really for is the development
+  // application: a DA is assessed on very nearly the same evidence as a CDC, so
+  // a structural drawing supplied on the DA list is the same drawing the
+  // certifier asked for on their checklist, and collecting it twice is what
+  // this stops. It also catches the ordinary case the extraction cannot — a
+  // document that arrives weeks after the checklist was read.
+  //
+  // The revalidation rides on this callback rather than its own, and that is
+  // the ordering that matters. `after()` callbacks run on a queue with no
+  // concurrency limit, so a revalidation registered separately could — and did
+  // — invalidate the cache before these rows were written, and the next read
+  // repopulated it from a checklist that had not been filled in yet. The
+  // upload then showed rows still asking for the document it had just supplied.
+  //
+  // In a `finally` so a mapping that throws still clears the cache. A stale
+  // cache is the one failure here nobody can see or clear from the screen.
+  after(async () => {
+    try {
+      await fillChecklistLinesFor({
+        engagementId: params.engagementId,
+        documentType: document.documentType,
+      });
+    } finally {
+      revalidateEngagement(params.projectId);
+    }
+  });
+
+  // The waste management plan is the architect's, on their existing thread, and
+  // its clock is its own — so its alert closes on its own too. Nothing else the
+  // architect sends answers it, and it answers nothing else of theirs.
+  if (document.documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN) {
     after(async () => {
-      await recordPlanningCertificateArrival({
+      await recordWasteManagementPlanArrival({
         projectId: params.projectId,
         engagementId: params.engagementId,
       });
@@ -799,6 +881,77 @@ export async function attachComplianceDocumentFile(params: {
         projectId: params.projectId,
         engagementId: params.engagementId,
         file: { url: file.url, filename: file.filename },
+      });
+    });
+  }
+
+  // The estate developer, read off the deed.
+  //
+  // The deed is the document that names whoever released the land, and it is
+  // already here: it is uploaded so it can be sent to the surveyor, long before
+  // anybody has to answer whether this lot carries a covenant. So the parse is
+  // free in the sense that matters — no extra document is asked for — and it fills
+  // in a question that otherwise has to be put to a person who may not know.
+  //
+  // `recordEstateDeveloperFromDeed` is the one that decides whether to look at
+  // all: a file whose developer somebody has already answered for is skipped
+  // there rather than here, because the skip has to hold on the inbound path too
+  // and the condition belongs with the rule rather than with one of its callers.
+  if (document.documentType === ComplianceDocumentType.LAND_DEED) {
+    after(async () => {
+      await recordEstateDeveloperFromDeed({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+        file: { url: file.url, filename: file.filename },
+      });
+    });
+  }
+
+  // The certificate, put on the file by hand — which is now the ordinary route
+  // rather than the exception.
+  //
+  // This branch was written for the certifier who posts the certificate or hands
+  // it over at a site meeting, on the understanding that the inbound workflow
+  // normally classified it off their reply. That is backwards: a CDC or a
+  // construction certificate is determined on the NSW Planning Portal and
+  // downloaded from it, so an upload is how it reaches the file nearly every
+  // time, and the inbound path is the courtesy case.
+  //
+  // Either certificate, read through the one predicate that knows there are two.
+  const isCertificate = isCertificateDocument(document.documentType);
+
+  if (isCertificate) {
+    // Chained rather than left to the queue. `after()` runs its callbacks with
+    // no concurrency limit, so the close below could win the race: it would set
+    // the engagement to COMPLETED first, `recordCertificateIssued` would
+    // then update zero rows against its own status guard, and CERTIFICATE_ISSUED
+    // — with its activity entry and its notification — would be skipped
+    // entirely on the one upload that is supposed to produce it.
+    after(async () => {
+      await recordCertificateIssued({
+        id: params.engagementId,
+        projectId: params.projectId,
+      });
+      await closeComplianceIfComplete({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
+      });
+    });
+  } else {
+    // Whether that was the last thing this file was waiting for.
+    //
+    // Run on every other upload rather than behind a type check, and it reads
+    // both documents rather than trusting the one that triggered it. The
+    // certificate and the HBCF cover arrive in either order — a builder who
+    // raised the cover months ago has it on the file long before the certifier
+    // issues anything — so "whichever lands last closes it" is the only rule
+    // that works from both ends, and a condition here would have to encode
+    // both. The certificate's own branch above runs the same check, after the
+    // stage move it depends on.
+    after(async () => {
+      await closeComplianceIfComplete({
+        projectId: params.projectId,
+        engagementId: params.engagementId,
       });
     });
   }
@@ -1174,6 +1327,15 @@ export async function sendComplianceForReview(engagementId: string) {
   // builder supplied is already on this thread — the required pack came with
   // the outreach, the signed copies with their own send — so the review is the
   // one message that carries what the certifier has not seen.
+  // Nothing to assess. A certifier who has said the job needs development
+  // approval cannot start until the council has granted it, so the file must
+  // not go over — the tab freezes the checklist for the same reason, and this
+  // is the same sentence read from the other end so the two cannot disagree.
+  const blocked = checklistBlockedReason(engagement);
+  if (blocked) {
+    throw new Error(blocked);
+  }
+
   const evidence = engagement.documents.filter((doc) =>
     isReviewSubmissionType(doc.documentType),
   );

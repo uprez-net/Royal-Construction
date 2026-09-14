@@ -98,6 +98,46 @@ type ComplianceDocumentRowProps = {
    * where the control belongs and leaves what it is to the caller.
    */
   consultantAction?: ReactNode;
+  /**
+   * Where this row's document came from, when nobody uploaded it here.
+   *
+   * Set only on a checklist line the extraction answered from a document the
+   * file already held — "the surveyor", "the planning certificate". The row
+   * looks otherwise identical to one somebody filled in by hand, and that is
+   * the problem it solves: the first question anybody asks about a line that
+   * answered itself is where it got that from, and a filename alone does not
+   * say.
+   */
+  mappedFrom?: string | null;
+  /**
+   * Who sent this row back, where somebody did.
+   *
+   * "the certifier" was hard-coded here while they were the only body that
+   * rejected anything. A council rejects individual drawings on a development
+   * application, and telling a reader that the certifier refused their
+   * stormwater plan sends them to the wrong thread to find out why.
+   *
+   * Defaults to the certifier rather than to nothing, because every rejection
+   * recorded before the column existed is theirs by definition — and a row
+   * reading "Sent back:" with no author is worse than one that names the right
+   * body for every case but the historical ones.
+   */
+  rejectedBy?: string | null;
+  /**
+   * Whether somebody is past their quoted turnaround on this row.
+   *
+   * A fact about the wait rather than about the document, which is why it is
+   * its own pill rather than a seventh `ComplianceDocumentStatus`. The row is
+   * still PENDING; what has changed is that the eleven working days the
+   * surveyor quoted ran out four days ago, and the status pill has no way to
+   * say that.
+   *
+   * Passed in rather than worked out here. A row cannot see the outreach that
+   * asked for it, the checklist line it answers, or the alert the nightly sweep
+   * raised — and a second set of clocks on this side would go red on rows the
+   * sweep had already decided nobody was waiting for.
+   */
+  overdue?: boolean;
 };
 
 /**
@@ -237,6 +277,9 @@ export function ComplianceDocumentRow({
   onReject,
   onSetNotRequired,
   consultantAction,
+  mappedFrom,
+  rejectedBy,
+  overdue = false,
   onPreviewFile,
 }: ComplianceDocumentRowProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -263,6 +306,7 @@ export function ComplianceDocumentRow({
    * without a marker of their own.
    */
   const sentBack = Boolean(document?.rejectionReason);
+  const sentBackBy = rejectedBy?.trim() || "the certifier";
 
   const requirements = detail?.requirements ?? [];
   const references = detail?.references ?? [];
@@ -299,6 +343,19 @@ export function ComplianceDocumentRow({
           <StatusPill tone={STATUS_TONE[status]}>
             {STATUS_LABEL[status]}
           </StatusPill>
+          {/* Beside the status rather than replacing it. "Outstanding" and
+              "Overdue" are two different facts — what the row holds, and
+              whether anybody is late with it — and a row that swapped one for
+              the other would lose the first at exactly the moment somebody
+              needs to know whether anything at all has arrived.
+
+              Suppressed once the line is settled, which the badge cannot check
+              for itself: a document that landed this morning after three weeks
+              late is not late any more, and the alert behind this closes on the
+              same event. */}
+          {overdue && !notRequired ? (
+            <StatusPill tone="danger">Overdue</StatusPill>
+          ) : null}
         </div>
 
         {files.length > 0 ? (
@@ -343,7 +400,8 @@ export function ComplianceDocumentRow({
                       <p className="break-all">{file.filename}</p>
                       {sentBack ? (
                         <p className="border-t border-background/25 pt-1 text-background/80">
-                          Sent back: {document?.rejectionReason}
+                          Sent back by {sentBackBy}:{" "}
+                          {document?.rejectionReason}
                         </p>
                       ) : null}
                     </TooltipContent>
@@ -361,6 +419,15 @@ export function ComplianceDocumentRow({
           </p>
         ) : null}
 
+        {/* Under the filename rather than beside the label, because it is a
+            fact about the file and not about the line: the certifier asked for
+            a survey, and this is which survey answered them. */}
+        {mappedFrom && files.length > 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Already on the file, from {mappedFrom}.
+          </p>
+        ) : null}
+
         {hasDisclosure ? (
           <RequirementDisclosure
             requirements={requirements}
@@ -372,7 +439,7 @@ export function ComplianceDocumentRow({
             only thing telling the admin what to change before re-uploading. */}
         {document?.rejectionReason ? (
           <p className="mt-1 text-sm text-destructive-ink">
-            Sent back by the certifier: {document.rejectionReason}
+            Sent back by {sentBackBy}: {document.rejectionReason}
           </p>
         ) : null}
       </div>

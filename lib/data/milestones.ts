@@ -357,11 +357,34 @@ export async function updateMilestone(milestoneId: string, updateData: Milestone
     const pendingMilestones = await prisma.milestone.count({
       where: { projectId: updated.projectId, status: "PENDING" },
     });
+    // What this milestone update means for the project's own status.
+    //
+    // This used to be `pendingMilestones > 0 ? "ACTIVE" : "COMPLETED"`, which
+    // was defensible while every project was created ACTIVE: the first branch
+    // could only ever re-assert what was already true. It stopped being
+    // defensible when projects started life as DRAFT and climbed a compliance
+    // ladder before the build — editing a milestone's budget on a project whose
+    // certifier had not been engaged would have declared the build under way,
+    // and it would have quietly cleared a NEEDS_ATTENTION flag somebody had put
+    // there on purpose.
+    //
+    // So the two ends are stated separately and neither infers the other. No
+    // pending milestones means the build is finished. A milestone actually
+    // being started means it has begun — the one event that ends the compliance
+    // stage — and every other update leaves the status alone, because a spend
+    // correction is not a statement about where the job is up to.
+    const projectStatus =
+      pendingMilestones === 0
+        ? ("COMPLETED" as const)
+        : updateData.status === "ACTIVE"
+          ? ("ACTIVE" as const)
+          : undefined;
+
     const projectUpdate = await prisma.project.update({
       where: { id: updated.projectId },
       data: {
         spent: allParentMilestoneSpent._sum.spend ?? undefined,
-        status: pendingMilestones > 0 ? "ACTIVE" : "COMPLETED",
+        ...(projectStatus ? { status: projectStatus } : {}),
       },
     });
 

@@ -214,13 +214,82 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
   [ComplianceDocumentType.SIGNED_FEE_PROPOSAL]: [["signed"], ["fee", "proposal"]],
   [ComplianceDocumentType.SIGNED_CDC_FORM]: [["signed"], ["cdc"]],
   [ComplianceDocumentType.CHECKLIST_ITEM]: [],
+  // A line of a council's request for more information, written by the DA
+  // extraction rather than found on disk -- the same reason CHECKLIST_ITEM
+  // above matches nothing.
+  [ComplianceDocumentType.DA_ITEM]: [],
   [ComplianceDocumentType.HOME_INSURANCE]: [["hbcf", "home warranty", "home building compensation"]],
   [ComplianceDocumentType.BASIX_CERTIFICATE]: [["basix"]],
+  // Deliberately demanding two hits. "Certificate" alone appears in the
+  // filename of half the documents on a compliance file, and reading a BASIX
+  // certificate as the construction certificate would mark the job finished.
+  [ComplianceDocumentType.CONSTRUCTION_CERTIFICATE]: [
+    ["construction"],
+    ["certificate", "cc "],
+  ],
+  // The same two-hit demand, for the same reason and with one more: "cdc" on
+  // its own is also the CDC *application form*, which is a document the file
+  // holds from the other end of the engagement entirely. Reading the form as the
+  // issued certificate would mark a job finished before it had been lodged.
+  [ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE]: [
+    ["complying development", "cdc"],
+    ["certificate", "cdc "],
+  ],
   [ComplianceDocumentType.BUSHFIRE_REPORT]: [
-    ["bushfire", "bush fire", "bal ", "bal-"],
+    ["bushfire", "bush fire", "bal ", "bal-", "bal report", "bal rating"],
+  ],
+  // Never found by discovery — the loop only ever asks about the six required
+  // documents. Listed because the record is exhaustive over the enum, which is
+  // what makes a new document type a compile error here rather than a silently
+  // unmatchable one, and because `matchesByName` is the same function the
+  // needs-identifying queue could use later.
+  [ComplianceDocumentType.STRUCTURAL_DRAWINGS]: [
+    ["structural"],
+    ["drawing", "plan", "design", "certificate", "detail"],
+  ],
+  [ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS]: [
+    ["hydraulic", "stormwater", "storm water", "drainage"],
+  ],
+  [ComplianceDocumentType.GEOTECH_REPORT]: [
+    ["geotech", "geotechnical", "soil classification", "soil report"],
+  ],
+  [ComplianceDocumentType.WATER_SERVICING_APPROVAL]: [
+    ["tap in", "tap-in", "water servicing", "servicing coordinator", "wsc"],
+  ],
+  [ComplianceDocumentType.SECTION_73_NOTICE]: [
+    ["section 73", "s73", "notice of requirements"],
+  ],
+  [ComplianceDocumentType.ROAD_OPENING_PERMIT]: [
+    ["road opening", "vehicle crossing", "driveway crossing", "kerb"],
+  ],
+  [ComplianceDocumentType.LONG_SERVICE_LEVY]: [
+    ["long service"],
+  ],
+  [ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL]: [
+    ["mine subsidence", "subsidence advisory"],
+  ],
+  [ComplianceDocumentType.WASTE_MANAGEMENT_PLAN]: [
+    ["waste"],
+    ["management", "plan", "wmp"],
+  ],
+  [ComplianceDocumentType.TRAFFIC_CONTROL_PLAN]: [
+    ["traffic"],
+    ["control", "management", "plan", "tcp"],
+  ],
+  [ComplianceDocumentType.BUILD_COST_SUMMARY]: [
+    ["cost"],
+    ["summary", "estimate", "breakdown", "schedule", "works"],
+  ],
+  [ComplianceDocumentType.OWNER_CONSENT_FORM]: [
+    ["owner", "owners"],
+    ["consent"],
+  ],
+  [ComplianceDocumentType.DEVELOPMENT_CONSENT]: [
+    ["development consent", "notice of determination", "da approval", "da consent"],
   ],
   [ComplianceDocumentType.UNKNOWN]: [],
 };
+
 
 function matchesByName(
   filename: string,

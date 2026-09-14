@@ -13,11 +13,14 @@ import { after } from "next/server";
 
 import {
   complianceDocumentLabel,
+  isApprovalParty,
   isConsultantParty,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
   partyDeliverables,
 } from "@/constants/complianceDocuments";
+import { developerByKey } from "@/constants/complianceDevelopers";
+import { resolveExtraAttachments } from "@/lib/compliance/party-mail";
 import { partyBlockedReason } from "@/lib/compliance/prerequisites";
 import {
   buildPartySubject,
@@ -186,6 +189,8 @@ function partyOutreachBody(
   contactName: string | null,
   subjectAddress: string,
   note: string | null,
+  /** The estate, for the one party who is asked about one. */
+  estate: string | null,
   /**
    * Who the client is, for the parties that have to deal with them directly.
    *
@@ -198,6 +203,21 @@ function partyOutreachBody(
   client: OutreachClientDetails | null,
 ): string {
   const greeting = contactName ? `Hi ${contactName},` : "Hi,";
+
+  // The one party who is sent something to pass judgement on rather than a list
+  // of things to produce. `partyDeliverables` is empty for them, so the shared
+  // body below would ask them to prepare and send through nothing at all --
+  // which is not a formatting problem but a mail that reads as a mistake, sent
+  // to somebody whose answer the whole job is then waiting on.
+  if (isApprovalParty(party)) {
+    return developerApprovalBody({
+      greeting,
+      subjectAddress,
+      estate,
+      note,
+    });
+  }
+
   const wanted = partyDeliverables(party).map((type) =>
     complianceDocumentLabel(type),
   );
@@ -210,6 +230,46 @@ function partyOutreachBody(
     client ? clientDetailsBlock(client) : "",
     note ? `<p>${escapeEmailHtml(note)}</p>` : "",
     "<p>Anything you need to work from is attached.</p>",
+    "<p>Please keep the reference in the subject line on any reply, so it stays with this job.</p>",
+    "<p>Kind regards,<br/>Royal Constructions</p>",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * The approval request that goes to an estate developer.
+ *
+ * A different mail from every other outreach here, because it asks a different
+ * question. Everybody else is asked to produce something and answers with a
+ * document; a developer is asked to look at a report somebody else produced and
+ * answer yes or no.
+ *
+ * Three things it does that the shared body does not. It names the estate, so
+ * the covenant it is being asked about is unambiguous to somebody administering
+ * approvals across four releases. It asks for the answer in the reply itself
+ * rather than as an attachment, because that is what is read back on the way in
+ * -- a developer who replies "approved" closes this loop without anybody
+ * touching the screen. And it asks for reasons on a refusal, in as many words,
+ * because those reasons are quoted straight to the consultant who has to redo
+ * the report and "does not comply" costs another round.
+ */
+function developerApprovalBody(params: {
+  greeting: string;
+  subjectAddress: string;
+  estate: string | null;
+  note: string | null;
+}): string {
+  const { greeting, subjectAddress, estate, note } = params;
+
+  return [
+    `<p>${greeting}</p>`,
+    `<p>We are building at <strong>${escapeEmailHtml(subjectAddress)}</strong>${
+      estate ? ` in <strong>${escapeEmailHtml(estate)}</strong>` : ""
+    }, and the lot is subject to your bushfire approval before we lodge.</p>`,
+    "<p>The bushfire attack level assessment is attached, along with the plans and the survey it was prepared against.</p>",
+    "<p>Could you let us know whether you approve it? A reply saying approved or not approved is all we need — if it is not approved, please tell us what has to change, and we will send that straight to the consultant.</p>",
+    note ? `<p>${escapeEmailHtml(note)}</p>` : "",
     "<p>Please keep the reference in the subject line on any reply, so it stays with this job.</p>",
     "<p>Kind regards,<br/>Royal Constructions</p>",
   ]
@@ -348,6 +408,29 @@ export async function startPartyOutreach(
     throw new Error(blocked);
   }
 
+  /**
+   * Which of the supplied checklist ids are actually rows on this file.
+   *
+   * The route validates them as ids and authorises the project; the foreign key
+   * checks only that a `ComplianceDocument` with that id exists. Neither asks
+   * whether it belongs to *this* engagement, so an id lifted from another job
+   * was accepted and stored on the deliverable.
+   *
+   * Nothing then fails loudly. The inbound workflow refuses a target whose
+   * `engagementId` does not match and files the reply by type instead, so the
+   * line that asked for the report stays outstanding for good while a
+   * deliverable row on this job points at somebody else's checklist.
+   *
+   * Unknown ids are dropped rather than refused, which is also what a checklist
+   * re-extracted between opening the modal and pressing send leaves behind. The
+   * engagement is still the right one to open; it simply answers no line.
+   */
+  const ownDocumentIds = new Set(
+    engagement.documents.map((document) => document.id),
+  );
+  const ownChecklistId = (id: string | null | undefined) =>
+    id && ownDocumentIds.has(id) ? id : null;
+
   const contactEmail = normalizeEmailAddress(input.contactEmail);
   const contact = {
     tradieId: input.tradieId ?? null,
@@ -358,9 +441,20 @@ export async function startPartyOutreach(
     // the outreach opens rather than matched when the reply lands: what a BASIX
     // consultant sends back satisfies the item that asked for it, and by then
     // there may be three items mentioning BASIX.
-    checklistDocumentId: isConsultantParty(party)
-      ? (input.checklistDocumentId ?? null)
-      : null,
+    //
+    // Superseded by the deliverables written below and kept for the consultants
+    // that produce exactly one thing, which is every row this system wrote
+    // before the deliverables table existed. A structural engineer answers
+    // three lines and this column can only name one, so it is left null for
+    // them rather than made to pick a favourite.
+    checklistDocumentId:
+      isConsultantParty(party) && input.deliverables.length <= 1
+        ? ownChecklistId(input.checklistDocumentId)
+        : null,
+    // Which estate was picked, for a developer. Not the contact -- the address
+    // is `contactEmail` above like everybody else's, because the list holds an
+    // address for some estates and not others and the picker lets it be typed.
+    developerKey: isApprovalParty(party) ? (input.developerKey ?? null) : null,
   };
 
   const outreach = existing
@@ -382,6 +476,32 @@ export async function startPartyOutreach(
         },
       });
 
+  // Which checklist lines this engagement answers.
+  //
+  // Written before the mail rather than after it, for the same reason the row
+  // itself is: a send that succeeds against a row with no deliverables on it is
+  // a reply nobody can file, while deliverables with no mail behind them are
+  // visible, obviously incomplete, and retryable.
+  //
+  // Replaced rather than merged, because the request carries the whole set. A
+  // retry of a send that failed halfway is the same engagement described again,
+  // not a second set of things to ask for.
+  if (input.deliverables.length > 0) {
+    await prisma.$transaction([
+      prisma.complianceOutreachDeliverable.deleteMany({
+        where: { outreachId: outreach.id },
+      }),
+      prisma.complianceOutreachDeliverable.createMany({
+        data: input.deliverables.map((deliverable) => ({
+          outreachId: outreach.id,
+          documentType: deliverable.documentType,
+          checklistDocumentId: ownChecklistId(deliverable.checklistDocumentId),
+        })),
+        skipDuplicates: true,
+      }),
+    ]);
+  }
+
   // What this party is given to work from. The surveyor's deed was uploaded in
   // the modal moments ago and the architect's set is whatever the surveyor
   // produced -- both resolved off the document rows rather than passed in, so
@@ -390,9 +510,28 @@ export async function startPartyOutreach(
   const attachmentTypes = new Set<ComplianceDocumentType>(
     PARTY_OUTREACH_ATTACHMENTS[party],
   );
-  const files = engagement.documents
+  const packFiles = engagement.documents
     .filter((document) => attachmentTypes.has(document.documentType))
     .flatMap((document) => document.files);
+
+  // What the sender added on top, resolved from ids against this project. The
+  // table above is what a party always needs; this is the covenant schedule,
+  // the neighbour's consent, the photograph of the pegs -- the things nobody
+  // could have listed in advance, which turn out to come up on most of these.
+  const extraFiles = await resolveExtraAttachments(
+    projectId,
+    input.extraAttachmentIds,
+  );
+
+  // De-duplicated against the table's own, because the picker offers everything
+  // on the file and the obvious thing to reach for is the document the party
+  // was going to be sent anyway. Sending it twice is not fatal and does look
+  // like we do not know what we already sent.
+  const packIds = new Set(packFiles.map((file) => file.id));
+  const files = [
+    ...packFiles,
+    ...extraFiles.filter((file) => !packIds.has(file.id)),
+  ];
 
   const config = getGraphConfig();
   const client = await createGraphContext(config);
@@ -405,6 +544,7 @@ export async function startPartyOutreach(
     outreach.contactName,
     engagement.subjectAddress,
     input.note ?? null,
+    developerByKey(outreach.developerKey)?.estate ?? null,
     await outreachClientDetails(projectId, party),
   );
 

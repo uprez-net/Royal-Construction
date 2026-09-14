@@ -215,17 +215,176 @@ export const activityLogSchemas = {
     }),
 
     /**
-     * The four steps of getting a 10.7 certificate, under one entry.
+     * Every step of every application to an outside body, under one entry.
      *
-     * `step` rather than four entry types: the trail is read as a story about
-     * one document, and four kinds of line for one row's four states makes it
-     * harder to follow rather than easier.
+     * `kind` and `step` rather than an entry type per application per state:
+     * the trail is read as a story about one document, and fifteen kinds of
+     * line for five rows' three states makes it harder to follow rather than
+     * easier.
      */
-    compliancePlanningCertificateUpdated: z.object({
+    complianceExternalApplicationUpdated: z.object({
         projectId: z.string(),
         engagementId: z.string(),
+        kind: z.string(),
         step: z.string(),
         recordedBy: z.string(),
+    }),
+
+    /**
+     * The certifier being appointed principal certifier on the portal.
+     *
+     * Its own entry rather than a step on the application above, because it is a
+     * fact about the engagement rather than about a lodgement — one appointment
+     * per job, and a job that has to relodge a CDC appoints nobody twice. It is
+     * also the one gate on the CDC lodgement that nothing else on the file
+     * records, so "why could we not lodge on the Tuesday" is a question only this
+     * line can answer.
+     */
+    compliancePrincipalCertifierAppointed: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        appointedAt: z.string(),
+        appointmentRef: z.string().nullable(),
+        recordedById: z.string(),
+        recordedByName: z.string(),
+    }),
+
+    /**
+     * A consultant, or a portal, satisfying a checklist line from what the file
+     * already held.
+     *
+     * Logged because it is the one thing on this tab that happens without
+     * anybody clicking anything. An admin who opens the checklist and finds six
+     * lines already answered is owed a record of what did that and where each
+     * document came from — otherwise the only honest response to "why is item 4
+     * ticked" is to go and read the code.
+     */
+    complianceChecklistMapped: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        mappedCount: z.number(),
+        documentTypes: z.array(z.string()),
+    }),
+
+    /**
+     * The architect being asked for the waste management plan.
+     *
+     * Its own entry rather than a party outreach, because nobody is engaged:
+     * the request goes on a thread that has been open since the plans were
+     * commissioned, and reading it as a new engagement would put a second
+     * architect on the file.
+     */
+    complianceWasteManagementRequested: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        // No contactEmail. It is an external party's personal address, and this
+        // log is persisted and rendered in the project feed -- `outreachId`
+        // identifies the thread, and the outreach row holds the address for
+        // anybody who actually needs it.
+        outreachId: z.string(),
+        attachmentCount: z.number(),
+        requestedBy: z.string(),
+    }),
+
+    // --- The estate developer's sign-off ---------------------------------
+    //
+    // Four entries for one loop, because the loop can go round more than once
+    // and the trail has to say which lap it is on. A file that reads "rejected"
+    // then "revision requested" then "sent again" then "approved" is legible;
+    // one that reads "approved" with no account of the fortnight before it is
+    // not, and that fortnight is the part anybody asks about later.
+
+    /**
+     * The developer's answer.
+     *
+     * `channel` is the field that earns this entry its keep. An approval read
+     * off an email by a model and one a person recorded after reading the same
+     * email are the same fact with very different provenance, and the only
+     * place that distinction survives is here.
+     */
+    complianceDeveloperDecision: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        decision: z.string(),
+        channel: z.string(),
+        reason: z.string().nullable(),
+        decidedBy: z.string().nullable(),
+        estate: z.string().nullable(),
+    }),
+
+    complianceBushfireRevisionRequested: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        revisionId: z.string(),
+        reason: z.string(),
+    }),
+
+    complianceArchitectRevisionRequested: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        revisionId: z.string(),
+        reason: z.string(),
+    }),
+
+    complianceBushfireRevisionReceived: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+    }),
+
+    complianceDeveloperResent: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        outreachId: z.string(),
+        attachmentCount: z.number(),
+        requestedBy: z.string().nullable(),
+    }),
+
+    /**
+     * Whether this estate needs a developer's approval at all.
+     *
+     * Logged because a "no" here opens the development application gate, and it
+     * is answered by one person from memory of a contract of sale. If a pack
+     * later comes back for want of an approval, this is the line that says who
+     * said it was not needed and when.
+     */
+    complianceDeveloperApprovalRequirementSet: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        required: z.boolean(),
+        answeredBy: z.string().nullable(),
+    }),
+
+    /**
+     * What a council came back with on a development application.
+     *
+     * `unmatched` is the field worth having. A rejection we could not land on a
+     * row is not a failure worth throwing on — the message is on the thread and
+     * a person can place it — but it is the one thing here nobody would
+     * otherwise know had happened.
+     */
+    /** The certifier issued the construction certificate. */
+    complianceCertificateIssued: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+    }),
+
+    /** The certificate and the HBCF cover are both on the file. */
+    complianceCompleted: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+    }),
+
+    complianceIssuedItemsRecorded: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        /** Which body wrote it, so the trail can say whose list grew. */
+        assessor: z.string(),
+        requestedCount: z.number(),
+        rejectedCount: z.number(),
+        unmatched: z.array(z.string()),
     }),
 
     complianceMeetingScheduled: z.object({

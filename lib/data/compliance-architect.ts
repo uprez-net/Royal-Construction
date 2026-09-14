@@ -2,7 +2,9 @@
 
 import {
   ComplianceAlertType,
+  ComplianceDocumentType,
   ComplianceMeetingStatus,
+  ComplianceOutreachMode,
   CompliancePartyType,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
@@ -11,6 +13,7 @@ import { after } from "next/server";
 import { PARTY_LABEL } from "@/constants/complianceDocuments";
 import {
   escapeEmailHtml,
+  resolveExtraAttachments,
   sendOnPartyThread,
   sydneyMeetingTime,
 } from "@/lib/compliance/party-mail";
@@ -30,6 +33,7 @@ import type {
   ResolveComplianceMeetingInput,
   ReviewArchitectPlansInput,
   ScheduleComplianceMeetingInput,
+  WasteManagementInput,
 } from "@/utils/validators/compliance";
 import { logAction } from "./actionLog";
 
@@ -49,6 +53,23 @@ import { logAction } from "./actionLog";
  * working days after the feedback, and the daily sweep can only raise an alert
  * against a date that exists.
  */
+
+/**
+ * What the sender attached by hand, as a send wants it.
+ *
+ * A thin wrapper over `resolveExtraAttachments` so the three calls below read
+ * the same and none of them has to remember that ids are resolved against the
+ * project rather than trusted. The check itself is in that function: a caller
+ * who could name a url could put anything on the storage account onto an
+ * outbound email.
+ */
+async function extraAttachments(
+  projectId: string,
+  fileIds: readonly string[] | undefined,
+) {
+  const files = await resolveExtraAttachments(projectId, fileIds ?? []);
+  return files.map((file) => ({ name: file.filename, url: file.url }));
+}
 
 function revalidateEngagement(projectId: string) {
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
@@ -195,6 +216,10 @@ export async function scheduleClientMeeting(
       note: input.note ?? null,
       isReschedule: false,
     }),
+    // The one message on this file both the client and the architect receive,
+    // and therefore the one place an agenda or the client's own sketches reach
+    // both of them at once.
+    attachments: await extraAttachments(projectId, input.extraAttachmentIds),
   });
 
   after(async () => {
@@ -307,6 +332,7 @@ export async function resolveClientMeeting(
       note: input.note ?? null,
       isReschedule: true,
     }),
+    attachments: await extraAttachments(projectId, input.extraAttachmentIds),
   });
 
   after(async () => {
@@ -423,6 +449,10 @@ export async function reviewArchitectPlans(
         feedback,
         round,
       }),
+      // A client rejecting a set of plans routinely marks them up -- a
+      // photograph of the printout, a sketch on the back of an envelope -- and
+      // the words alone lose exactly the part the architect needs most.
+      attachments: await extraAttachments(projectId, input.extraAttachmentIds),
     });
   }
 
@@ -493,5 +523,243 @@ export async function recordPreliminaryPlansArrival(params: {
     });
   } catch (error) {
     console.error("  Failed to record the preliminary plans' arrival:", error);
+  }
+}
+
+/**
+ * Asks the architect for the waste management plan.
+ *
+ * The one document on this file that is commissioned from somebody already
+ * engaged. Every other consultant needs a firm picked, a contact snapshotted
+ * and a thread opened; the architect has all three from the day the plans were
+ * commissioned, and the waste management plan is drawn against the design they
+ * themselves produced. Sending it to a stranger would mean sending them the
+ * whole set to read first.
+ *
+ * So this is a send rather than an engagement: it rides the existing thread,
+ * attaches the plans they already have as the thing to draw against, and stamps
+ * a clock of its own. The clock is the reason the column exists — the outreach
+ * that engaged them may be months old, and an SLA read off that would be past
+ * on the day the plan was asked for.
+ *
+ * Refuses where there is nothing to send on. A file whose plans the client
+ * supplied themselves has a SELF_SUPPLIED architect row with no address, and a
+ * request that silently did nothing would leave a row marked as asked for that
+ * nobody was ever asked for.
+ */
+export async function requestWasteManagementPlan(
+  projectId: string,
+  input: WasteManagementInput,
+  requestedBy: string,
+): Promise<CertifierEngagementDetail> {
+  const engagement = await requireEngagement(projectId);
+  const outreach = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
+
+  if (!outreach) {
+    throw new Error(
+      "No architect has been engaged on this job — there is nobody to ask for a waste management plan.",
+    );
+  }
+  if (
+    !outreach.contactEmail ||
+    outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
+  ) {
+    throw new Error(
+      "The architectural plans were supplied by the client, so there is no architect thread here. This one has to be asked for by hand.",
+    );
+  }
+
+  // What they are being asked to draw against. Resolved off the document rows
+  // rather than passed in, exactly as the opening outreach does it, so the mail
+  // carries the current copy of the design rather than whatever the browser
+  // happened to be showing. The full set where there is one, and the
+  // preliminary set where there is not — a waste management plan can honestly
+  // be drawn off either, and holding the request until the full design lands
+  // would stall a development application that is otherwise ready.
+  const attachmentTypes: readonly ComplianceDocumentType[] = [
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+  ];
+  const planFiles = attachmentTypes.flatMap((type) =>
+    engagement.documents
+      .filter((document) => document.documentType === type)
+      .flatMap((document) =>
+        document.files.map((file) => ({
+          id: file.id,
+          name: file.filename,
+          url: file.url,
+        })),
+      ),
+  );
+
+  /**
+   * The checklist line this request answers, if it is one of ours.
+   *
+   * The route authorises the project and validates the shape of the id, and the
+   * foreign key checks only that the document exists — so an id belonging to
+   * another engagement was accepted and stored. Nothing loud follows: the
+   * inbound workflow cannot resolve a target outside this engagement, so it
+   * files the architect's reply under its own type instead and the line that
+   * asked stays outstanding forever, with a deliverable row pointing at
+   * somebody else's job.
+   *
+   * Dropped rather than refused. A stale id is what a re-extracted checklist
+   * leaves behind, and the request itself is still the right thing to send.
+   */
+  const checklistDocumentId =
+    input.checklistDocumentId &&
+    engagement.documents.some(
+      (document) => document.id === input.checklistDocumentId,
+    )
+      ? input.checklistDocumentId
+      : null;
+
+  // What the sender added on top -- the certifier's own wording on the line
+  // that asked for the plan, most often, which saves the architect being told
+  // second-hand what a waste management plan has to say on this council.
+  const extras = await resolveExtraAttachments(
+    projectId,
+    input.extraAttachmentIds ?? [],
+  );
+  const planIds = new Set(planFiles.map((file) => file.id));
+  const attachments = [
+    ...planFiles.map((file) => ({ name: file.name, url: file.url })),
+    // De-duplicated against the plans, because the picker offers everything on
+    // the file and the obvious thing to reach for is the design they were going
+    // to be sent anyway.
+    ...extras
+      .filter((file) => !planIds.has(file.id))
+      .map((file) => ({ name: file.filename, url: file.url })),
+  ];
+
+  await sendOnPartyThread({
+    engagement,
+    outreach,
+    body: wasteManagementBody({
+      contactName: outreach.contactName,
+      subjectAddress: engagement.subjectAddress,
+      note: input.note ?? null,
+      hasAttachments: attachments.length > 0,
+    }),
+    attachments,
+  });
+
+  await prisma.$transaction(async (tx) => {
+    // Stamped rather than upserted onto a fresh row: the clock starts at the
+    // first ask. A second request a fortnight later is a chase, and moving the
+    // date would mean an overdue plan resetting itself every time somebody
+    // chased it — which is the exact failure `sentAt` was separated from
+    // `updatedAt` to avoid.
+    await tx.complianceOutreach.updateMany({
+      where: { id: outreach.id, wasteManagementRequestedAt: null },
+      data: { wasteManagementRequestedAt: new Date() },
+    });
+
+    // Recorded as a deliverable so the reply can be filed against the checklist
+    // line that asked, the same way a consultant's is. Skipped where there is
+    // no line — on the development application path the plan is filed under its
+    // own type, which is the right answer when nothing asked for it by name.
+    await tx.complianceOutreachDeliverable.upsert({
+      where: {
+        outreachId_documentType: {
+          outreachId: outreach.id,
+          documentType: ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+        },
+      },
+      create: {
+        outreachId: outreach.id,
+        documentType: ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+        checklistDocumentId,
+      },
+      // A second request that names a checklist line where the first named
+      // none fills it in; one that names none leaves what is there alone.
+      update: checklistDocumentId ? { checklistDocumentId } : {},
+    });
+  });
+
+  after(async () => {
+    revalidateEngagement(projectId);
+    await logAction(
+      // No `contactEmail`. It is an external party's personal address and the
+      // activity log is persisted and rendered in the project feed, so writing
+      // it there puts PII in a long-lived record for no gain: `outreachId`
+      // already identifies the thread, and the outreach row holds the address
+      // for anybody who needs it.
+      createActivityLogEntry("complianceWasteManagementRequested", {
+        projectId,
+        engagementId: engagement.id,
+        outreachId: outreach.id,
+        attachmentCount: attachments.length,
+        requestedBy,
+      }),
+    );
+  });
+
+  return requireEngagement(projectId);
+}
+
+/**
+ * The body of the request.
+ *
+ * Short, and specific about the one thing that makes it answerable: which
+ * design the plan is for. An architect with four jobs on gets "can you do us a
+ * waste management plan" from three of them a month, and the address plus the
+ * attached set is the difference between a reply and a phone call.
+ */
+function wasteManagementBody(params: {
+  contactName: string | null;
+  subjectAddress: string;
+  note: string | null;
+  hasAttachments: boolean;
+}): string {
+  const greeting = params.contactName
+    ? `Hi ${escapeEmailHtml(params.contactName)},`
+    : "Hi,";
+
+  return [
+    `<p>${greeting}</p>`,
+    `<p>Could you put together a waste management plan for <strong>${escapeEmailHtml(
+      params.subjectAddress,
+    )}</strong>, against the design you did for us?</p>`,
+    "<p>It needs to cover the demolition and construction waste — what is generated, how much of it, and where each stream goes — in the format the council accepts.</p>",
+    params.hasAttachments
+      ? "<p>The current set is attached so you are working from the same drawings we are.</p>"
+      : "",
+    params.note ? `<p>${escapeEmailHtml(params.note)}</p>` : "",
+    "<p>Please keep the reference in the subject line on any reply, so it stays with this job.</p>",
+    "<p>Kind regards,<br/>Royal Constructions</p>",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Closes the waste management wait when the plan lands.
+ *
+ * The counterpart of `recordPreliminaryPlansArrival` above, and separate from
+ * it for the reason the two clocks are separate: a revised set of plans is not
+ * a waste management plan, and letting either close the other's alert would
+ * mean an architect who redrew the elevations being credited with a document
+ * they have not started.
+ *
+ * Never throws. It runs behind an upload or a classification that has already
+ * succeeded.
+ */
+export async function recordWasteManagementPlanArrival(params: {
+  projectId: string;
+  engagementId: string;
+}): Promise<void> {
+  try {
+    await resolveComplianceAlertBySystem({
+      projectId: params.projectId,
+      engagementId: params.engagementId,
+      type: ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE,
+      resolutionNote: "The waste management plan arrived.",
+    });
+  } catch (error) {
+    console.error(
+      "  Failed to record the waste management plan's arrival:",
+      error,
+    );
   }
 }

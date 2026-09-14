@@ -69,6 +69,42 @@ const ALERT_TITLE: Readonly<Record<ComplianceAlertType, string>> = {
     "BASIX certificate pending — send a follow up",
   [ComplianceAlertType.BUSHFIRE_RESPONSE_OVERDUE]:
     "Bushfire assessment pending — send a follow up",
+  [ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE]:
+    "Structural engineer response pending — send a follow up",
+  [ComplianceAlertType.WATER_AUTHORITY_RESPONSE_OVERDUE]:
+    "Water servicing approval pending — send a follow up",
+  [ComplianceAlertType.TRAFFIC_RESPONSE_OVERDUE]:
+    "Traffic control plan pending — send a follow up",
+  [ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE]:
+    "Waste management plan pending — follow up with the architect",
+  [ComplianceAlertType.DEVELOPER_RESPONSE_OVERDUE]:
+    "Developer approval pending — send a follow up",
+  [ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE]:
+    "Revised bushfire report pending — follow up with the consultant",
+  [ComplianceAlertType.ROAD_OPENING_DELAYED]:
+    "Road opening approval taking longer than usual",
+  [ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED]:
+    "Long service levy receipt outstanding",
+  [ComplianceAlertType.MINE_SUBSIDENCE_DELAYED]:
+    "Mine subsidence approval taking longer than usual",
+  [ComplianceAlertType.DA_DETERMINATION_OVERDUE]:
+    "Development application still undetermined",
+  [ComplianceAlertType.CDC_DETERMINATION_OVERDUE]: "CDC still undetermined",
+  [ComplianceAlertType.CC_DETERMINATION_OVERDUE]:
+    "Construction certificate still undetermined",
+  [ComplianceAlertType.DEVELOPER_PLANS_OVERDUE]:
+    "Developer approval of the plans pending — send a follow up",
+
+  // The three that are good news, and the only titles here that say what to do
+  // rather than what is wrong. A notification carrying "CDC approved" with no
+  // instruction is how a certificate sits on the portal undownloaded: the
+  // approval is the easy half to notice and the download is the half nobody
+  // thinks of, so the title carries it.
+  [ComplianceAlertType.CDC_DOWNLOAD_READY]: "CDC approved — ready to download",
+  [ComplianceAlertType.CC_DOWNLOAD_READY]:
+    "Construction certificate approved — ready to download",
+  [ComplianceAlertType.DA_DOWNLOAD_READY]:
+    "Development consent granted — ready to download",
 };
 
 export async function complianceAlertTitle(

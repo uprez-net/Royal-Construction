@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { ComplianceAlertType } from "@prisma/client";
 
-import { COMPLIANCE_ALERT_COPY } from "../../components/projects/detail/compliance-tab/compliance-alerts-panel";
+import { COMPLIANCE_ALERT_COPY } from "../../constants/complianceAlerts";
 import { COMPLIANCE_ALERT_PARTY } from "../../lib/compliance/alert-parties";
 
 /**
@@ -17,8 +17,8 @@ import { COMPLIANCE_ALERT_PARTY } from "../../lib/compliance/alert-parties";
  *
  * The third table — `ALERT_TITLE` in lib/data/compliance-alerts.ts — is
  * deliberately a separate copy of the titles rather than an import, because
- * that module is `"use server"` and pulling a client component into it would
- * drag React into the nightly cron. This is the cheaper half of that trade: the
+ * that module is `"use server"` and importing across that line drags the whole
+ * action module along with it. This is the cheaper half of that trade: the
  * duplication is allowed, and it is checked.
  */
 

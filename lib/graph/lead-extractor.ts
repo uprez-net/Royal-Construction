@@ -6,11 +6,17 @@ import {
   EMPTY_LEAD_ATTACHMENTS,
   type LeadAttachmentSet,
 } from './lead-attachments';
+import { normalizeContactNumber } from './contact-number';
 
 export interface LeadExtraction {
   Name: string;
   Email: string;
-  ContactNo: number;
+  /**
+   * Text, not a number. An Australian mobile is "0433100349" and the leading
+   * zero is part of it — the moment this was numeric, every one of them lost
+   * that digit on the way in.
+   */
+  ContactNo: string;
   Address: string;
   Status: boolean;
   Type: string[];
@@ -137,16 +143,6 @@ async function runWithRateLimit<T>(task: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return result;
-}
-
-function normalizeContactNumber(value: string): number {
-  const digits = value.replace(/\D/g, '');
-  if (!digits) {
-    return 0;
-  }
-
-  const parsed = Number(digits);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function normalizeProjectTypes(

@@ -2,14 +2,14 @@
 
 import {
   CertifierEngagementStatus,
+  ComplianceApprovalDecision,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
-  ComplianceOutreachMode,
+  ComplianceExternalApplicationKind,
   CompliancePartyType,
 } from "@prisma/client";
 import {
   ClipboardList,
-  ExternalLink,
   HelpCircle,
   Inbox,
   Loader2,
@@ -40,7 +40,10 @@ import {
   COMPLIANCE_PARTY_SECTIONS,
   complianceDocumentLabel,
   consultantForDocumentType,
-  HBCF_INSURANCE_URL,
+  CONSULTANT_DELIVERABLES,
+  externalApplicationForDocumentType,
+  mappedDocumentSource,
+  roadOpeningUrlForCouncil,
   isApprovableDocumentType,
   isNotRequired,
   isOutstandingEvidence,
@@ -51,6 +54,7 @@ import {
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
   SIGNED_COPY_DOCUMENTS,
+  WASTE_MANAGEMENT_PLAN_PARTY,
 } from "@/constants/complianceDocuments";
 import {
   applicableRequiredDocuments,
@@ -64,7 +68,14 @@ import {
   packSendBlockedReason,
   partyBlockedReason,
 } from "@/lib/compliance/prerequisites";
-import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
+import {
+  isDocumentOverdue,
+  overdueComplianceDocuments,
+} from "@/lib/compliance/overdue-documents";
+import {
+  complianceStageFlow,
+  type ComplianceStageId,
+} from "@/lib/compliance/stage-flow";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -72,31 +83,48 @@ import {
   complianceScope,
   identifyComplianceDocument,
   resolveComplianceDocument,
+  selectDeveloperPendingDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
-  sendComplianceFollowUp,
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
+  setDeveloperApprovalRequired,
   uploadComplianceDocument,
   type ComplianceScope,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
+import { DEVELOPER_APPROVAL_DOCUMENTS } from "@/constants/complianceDocuments";
+import { developerByKey } from "@/constants/complianceDevelopers";
 import {
+  PortalCertificateBlock,
+  portalCertificateValues,
+} from "./portal-certificate-block";
+import {
+  DeveloperApprovalBlock,
+  type DeveloperApprovalItem,
+} from "./developer-approval-block";
+import {
+  checklistBlockedReason,
   checklistItemDetail,
+  developerApprovalFor,
+  developerPlansBlockedReason,
+  outstandingDeveloperRevision,
+  developmentApplication,
+  hasDevelopmentApplication,
+  externalApplication,
   outreachForParty,
+  planningCertificate,
+  outstandingRevision,
   requiresPlanningCertificate,
+  vaultAttachmentOptions,
   type CertifierEngagementDetail,
-  type ComplianceAlertRecord,
   type ComplianceDocumentWithFiles,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
-import {
-  COMPLIANCE_ALERT_COPY,
-  ComplianceAlertsPanel,
-} from "./compliance-alerts-panel";
 import { ArchitectWorkflow } from "./architect-workflow";
+import { ChecklistApplicationAction } from "./checklist-application-action";
 import { ChecklistConsultantAction } from "./checklist-consultant-action";
 import { ComplianceThreadsModal } from "./compliance-threads-modal";
 import { DaApprovalSection } from "./da-approval-section";
@@ -105,6 +133,8 @@ import { ComplianceDocumentRow } from "./compliance-document-row";
 import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
 import { ComplianceSectionCard } from "./compliance-section-card";
+import { ComplianceStageFlow } from "./compliance-stage-flow";
+import { EstateDeveloperBanner } from "./estate-developer-banner";
 
 /**
  * Statuses that mean the signed copies have already gone to the certifier.
@@ -169,6 +199,14 @@ function isReadyForReview(engagement: CertifierEngagementDetail): boolean {
     return false;
   }
 
+  // There is nothing for the certifier to assess while the job is waiting on
+  // development approval, and `sendComplianceForReview` refuses on the same
+  // reading — so the prompt that opens when the last document lands must not
+  // offer a send the server would throw out.
+  if (checklistBlockedReason(engagement)) {
+    return false;
+  }
+
   const submission = reviewSubmission(engagement);
   const hasChecklist = submission.some(
     (document) =>
@@ -193,7 +231,29 @@ type SectionKey =
   | "unidentified"
   | "response"
   | "checklist"
+  | "development-application"
+  | "planning-portal"
+  | "certificate"
   | "vault";
+
+/**
+ * Which block each stage of the flow opens.
+ *
+ * The header and the cards are two views of one sequence, so clicking a node
+ * has to land on the block that node is about. Every stage has one — the map is
+ * total rather than partial — because a node that looks clickable and does
+ * nothing is worse than one that is not clickable at all.
+ */
+const SECTION_FOR_STAGE: Readonly<Record<ComplianceStageId, SectionKey>> = {
+  SURVEYOR: CompliancePartyType.SURVEYOR,
+  ARCHITECT: CompliancePartyType.ARCHITECT,
+  COUNCIL: CompliancePartyType.COUNCIL,
+  CERTIFIER: "response",
+  DEVELOPMENT_APPLICATION: "development-application",
+  CHECKLIST: "checklist",
+  PLANNING_PORTAL: "planning-portal",
+  CERTIFICATE: "certificate",
+};
 
 type ProjectComplianceTabProps = {
   project: ProjectDetail;
@@ -206,6 +266,9 @@ export function ProjectComplianceTab({
 }: ProjectComplianceTabProps) {
   const dispatch = useAppDispatch();
   const complianceMutations = useAppSelector(selectComplianceMutations);
+  const developerPendingDocument = useAppSelector(
+    selectDeveloperPendingDocument,
+  );
   const { uploadFile, isUploading } = useComplianceUpload(project.id);
 
   /**
@@ -240,9 +303,6 @@ export function ProjectComplianceTab({
       documentId: document?.id,
       documentType,
     });
-  const [insuranceAnswer, setInsuranceAnswer] = useState<"yes" | "no" | null>(
-    null,
-  );
   const [isThreadOpen, setIsThreadOpen] = useState(false);
   /**
    * Which blocks the reader has opened or shut by hand.
@@ -355,6 +415,19 @@ export function ProjectComplianceTab({
   ): "upload" | "resolve" | "frozen" => {
     if (document?.status === ComplianceDocumentStatus.APPROVED) return "frozen";
 
+    // Nothing on the checklist moves while the job is waiting on development
+    // approval. Every row is evidence for an assessment that cannot start, and
+    // the council routinely grants consent with conditions that change the
+    // design — so a report collected now is a report that may be redone. The
+    // documents the DA itself needs are still collected, on the DA list, and
+    // those of them the certifier also asked for fill these rows as they land.
+    if (
+      checklistBlocked &&
+      document?.documentType === ComplianceDocumentType.CHECKLIST_ITEM
+    ) {
+      return "frozen";
+    }
+
     // Settled without a document behind it. The row keeps the control that puts
     // it back, which the row renders itself; it offers nothing else.
     if (document && isNotRequired(document.status)) return "frozen";
@@ -446,7 +519,7 @@ export function ProjectComplianceTab({
     // Only an upload that is part of the send can be the one that completes it.
     // Without this the prompt fired on any upload at all once the set happened
     // to be whole — replacing a required document while the checklist was live
-    // opened "Compliance and Certification complete" over a document that has
+    // opened "Checklist pack ready for certifier review" over a document that has
     // nothing to do with the send.
     if (!isReviewSubmissionType(uploadedType)) return;
     if (!next || !isReadyForReview(next)) return;
@@ -636,6 +709,326 @@ export function ProjectComplianceTab({
           subjectAddress: engagement?.subjectAddress ?? project.location,
           prefilled,
           checklistDocumentId,
+          deliverables: deliverablesForParty(party, checklistDocumentId),
+          // Read only by the developer picker, which orders the estate list by
+          // how likely each one is to be this lot's. Both are hints and neither
+          // filters -- see `developersForArea`.
+          council: project.council,
+          location: project.location,
+          // What the "From the file" control offers. Resolved here for the same
+          // reason `prefilled` is: the modal knows how to send a request and
+          // nothing about which documents exist.
+          vaultOptions,
+        },
+      }),
+    );
+  };
+
+  /**
+   * What the council has asked for since the application was lodged.
+   *
+   * Ordered the way they were asked for rather than by wording, which is the
+   * order somebody works through them in: round three sits under round two.
+   */
+  const daItems = (engagement?.documents ?? [])
+    .filter(
+      (document) => document.documentType === ComplianceDocumentType.DA_ITEM,
+    )
+    .sort((a, b) => a.order - b.order);
+
+  // -------------------------------------------------------------------
+  // The estate developer.
+  //
+  // Three writes and two modals, all keyed on one scope: unlike the party
+  // sections, no two of these controls are ever on screen together, so a shared
+  // key freezes exactly the control that is showing.
+  // -------------------------------------------------------------------
+  const developerOutreach = outreachForParty(
+    engagement,
+    CompliancePartyType.DEVELOPER,
+  );
+  const bushfireRow = documentsByType.get(
+    ComplianceDocumentType.BUSHFIRE_REPORT,
+  );
+
+  /**
+   * Whether the developer question is live at all.
+   *
+   * Only where a bushfire report is actually wanted. A job whose bushfire row
+   * has been marked as not applying is not in a bushfire-prone area, so there
+   * is nothing for a covenant to be about — and asking the question anyway
+   * would put a permanent unanswered gate on the majority of jobs.
+   */
+  const needsBushfireReport = !(
+    bushfireRow && isNotRequired(bushfireRow.status)
+  );
+
+  /**
+   * The documents under covenant, with what was asked and what came back.
+   *
+   * Built here rather than inside the block because two of the three facts per
+   * document are not about the developer at all: the row itself comes off the
+   * document map, and whether a replacement has landed since a refusal comes off
+   * a third party's revision rounds — the bushfire consultant's for the report,
+   * the architect's for the plans.
+   *
+   * "Has a replacement landed" is read off those rounds rather than off the
+   * document's own timestamps, which is the same distinction
+   * `outstandingRevision` draws for the architect: a file replaced for an
+   * unrelated reason must not read as an answer to an objection nobody addressed.
+   *
+   * And off `outstandingDeveloperRevision` for the plans specifically, because the
+   * architect's outreach carries two independent revision loops — the client's and
+   * the developer's — and the client asking for a bigger kitchen is not the
+   * developer's objection being answered.
+   */
+  const developerItems = DEVELOPER_APPROVAL_DOCUMENTS.map((documentType) => {
+    const document = documentsByType.get(documentType);
+    const approval = developerApprovalFor(engagement, documentType);
+
+    const producer = outreachForParty(
+      engagement,
+      documentType === ComplianceDocumentType.BUSHFIRE_REPORT
+        ? CompliancePartyType.BUSHFIRE_CONSULTANT
+        : CompliancePartyType.ARCHITECT,
+    );
+
+    const outstanding =
+      documentType === ComplianceDocumentType.BUSHFIRE_REPORT
+        ? outstandingRevision(producer)
+        : outstandingDeveloperRevision(producer);
+
+    return {
+      documentType,
+      document,
+      approval,
+      hasRevised: Boolean(
+        approval?.decision === ComplianceApprovalDecision.REJECTED &&
+          document?.files.length &&
+          !outstanding,
+      ),
+    } satisfies DeveloperApprovalItem;
+  });
+
+  /**
+   * Whether the banner at the top of the tab still has a question to ask.
+   *
+   * Only while nobody has answered. The answer is one column, so a job answered
+   * from the block below, from the banner, or off the land deed all hide it for
+   * good — which is the point: the banner is a prompt rather than a permanent
+   * fixture, and a prompt that survives being answered is one people learn to
+   * scroll past.
+   *
+   * Deliberately not gated on the bushfire report the way the block below is. The
+   * block asks because a covenant is about to hold the lodgement; the banner asks
+   * at the start of the engagement, before anybody knows whether the job is in a
+   * bushfire-prone area, and the architectural design needs the same approval
+   * either way.
+   */
+  const needsEstateDeveloperAnswer =
+    // Optional, because this sits above the early return that narrows the
+    // engagement — as every derivation in this block does. A project with no
+    // compliance file has no banner to show, and `undefined === null` is false,
+    // which is the answer that wants.
+    engagement?.developerApprovalRequired === null;
+
+  /**
+   * Why the bushfire report's own covenant blocks the DA lodgement, or null.
+   *
+   * The counterpart of `developerPlansBlockedReason`, which covers the
+   * architectural design and is read by the portal block as well as here. This one
+   * is read by the development application alone, because that is the only
+   * lodgement the report holds up: a CDC is assessed by a certifier who wants the
+   * report itself rather than the estate's opinion of it, and the council is who
+   * insists on the covenant being satisfied.
+   *
+   * Null where no bushfire report is wanted, which is most jobs. A lot outside a
+   * bushfire-prone area has nothing for a covenant to be about, and a gate that
+   * can never be cleared would hold the majority of applications shut.
+   */
+  const bushfireDeveloperBlockedReason = (() => {
+    if (!needsBushfireReport) return null;
+    if (engagement?.developerApprovalRequired === null) {
+      return "Say whether this estate's developer has to approve the bushfire report before the application can be lodged.";
+    }
+    if (!engagement?.developerApprovalRequired) return null;
+
+    const approval = developerApprovalFor(
+      engagement,
+      ComplianceDocumentType.BUSHFIRE_REPORT,
+    );
+    if (approval?.decision === ComplianceApprovalDecision.APPROVED) return null;
+    if (approval?.decision === ComplianceApprovalDecision.REJECTED) {
+      return "The estate developer rejected the bushfire report. Lodging it as it stands means the council assessing a report the developer has already refused.";
+    }
+    return "The bushfire report is still waiting on the estate developer's approval.";
+  })();
+
+  const handleSetDeveloperRequired = async (required: boolean) => {
+    try {
+      await dispatch(
+        setDeveloperApprovalRequired({ projectId: project.id, required }),
+      ).unwrap();
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not record that answer.",
+      );
+    }
+  };
+
+  /**
+   * Everything on the file a message could carry, for every modal that sends
+   * one.
+   *
+   * Not wrapped in `useMemo`, unlike the derivations above it. Passing an
+   * imported function through as an argument is a shape the React Compiler
+   * cannot prove it is safe to preserve, so the manual memo made it bail out of
+   * optimising this component altogether — which costs far more than the sort
+   * it was saving. The compiler memoises this on its own.
+   */
+  const vaultOptions = vaultAttachmentOptions(
+    engagement,
+    complianceDocumentLabel,
+  );
+
+  /**
+   * Every checklist line this engagement will be answering.
+   *
+   * The reason one checklist line is no longer enough to describe an
+   * engagement. A bushfire assessor answers the line the button was pressed on;
+   * a structural engineer answers that line and, usually, two others sitting
+   * further down the same checklist — the hydraulic set and the geotechnical
+   * report are separate items and land weeks apart.
+   *
+   * Matched here rather than on the server because only the tab has read the
+   * checklist: the extraction has already worked out what each line asks for,
+   * and re-deriving that from labels in the data layer would be the same guess
+   * made twice with two chances of disagreeing.
+   *
+   * The line the button was pressed on is included whatever its type says, so a
+   * row the extraction could not label still gets answered by the consultant
+   * somebody deliberately engaged from it.
+   */
+  const deliverablesForParty = (
+    party: CompliancePartyType,
+    pressedOn?: string,
+  ) => {
+    const produces = CONSULTANT_DELIVERABLES[party] ?? [];
+
+    return produces.map((documentType) => {
+      const line = checklistItems.find(
+        (item) => checklistLineType(item) === documentType,
+      );
+      return {
+        documentType,
+        checklistDocumentId:
+          line?.id ??
+          // Only for the party's single deliverable, and only where the button
+          // was pressed on a row: attaching an unlabelled line to all three of a
+          // structural engineer's documents would file whichever arrived first
+          // onto a line asking for something else.
+          (produces.length === 1 ? pressedOn : undefined),
+      };
+    });
+  };
+
+  /**
+   * What one checklist line is asking for.
+   *
+   * The extraction's answer, which is the only one the browser has: the keyword
+   * fallback that backs it up runs on the server, and its results are already
+   * on the row by the time the tab renders. A line neither of them could label
+   * is an ordinary row, which is the right failure to have.
+   */
+  const checklistLineType = (item: ComplianceDocumentWithFiles) =>
+    checklistItemDetail(item.detail)?.mapsToType ?? null;
+
+  /**
+   * Where a mapped checklist line's document came from, or undefined.
+   *
+   * The one thing a mapped row cannot say for itself. The extraction answers
+   * around six lines of a twenty-line checklist from documents collected weeks
+   * earlier, and those rows look identical to ones somebody filled in by hand —
+   * so the first question anybody asks is where the file came from, and a
+   * filename does not answer it.
+   *
+   * Read off the two marks the mapper stamps, and named by the line's own type
+   * rather than by looking the source row up: the two agree by construction,
+   * and the type is what the reader is actually being told.
+   *
+   * Both marks, because a source is one of two things. `mappedFromDocumentId`
+   * names a document on the compliance file; `mappedFromProject` says it came
+   * from the project's own HBCF certificate, which has no compliance row to
+   * point at. Reading the id alone meant the one line answered that way carried
+   * no provenance at all — and `mappedDocumentSource` has had the sentence for
+   * it, "the project's HBCF cover", sitting unreachable ever since.
+   */
+  const mappedSourceFor = (item: ComplianceDocumentWithFiles) => {
+    if (!item.mappedFromDocumentId && !item.mappedFromProject) return undefined;
+    const type = checklistLineType(item);
+    return type ? mappedDocumentSource(type) : undefined;
+  };
+
+  /**
+   * Opens the block that records an application to an outside body.
+   *
+   * A dialog rather than the inline block the council certificate gets, because
+   * this one is offered from a checklist row: twenty rows each carrying a small
+   * state machine is a list nobody can scan. The same block either way — see
+   * `ApplicationModal`.
+   */
+  const handleRecordApplication = (kind: ComplianceExternalApplicationKind) => {
+    dispatch(
+      openModal({
+        type: "complianceApplication",
+        payload: {
+          projectId: project.id,
+          kind,
+          application: externalApplication(engagement, kind),
+          portalUrl:
+            kind === ComplianceExternalApplicationKind.ROAD_OPENING
+              ? roadOpeningUrl
+              : undefined,
+        },
+      }),
+    );
+  };
+
+  /**
+   * Opens the request for the waste management plan.
+   *
+   * The one document commissioned from somebody already engaged, so it is not
+   * the connect modal: the architect who drew the plans has a thread and an
+   * address on this file, and the plan is drawn against their own design.
+   */
+  const handleRequestWasteManagementPlan = (checklistDocumentId?: string) => {
+    const architect = outreachForParty(engagement, WASTE_MANAGEMENT_PLAN_PARTY);
+    const drawingTypes = new Set<ComplianceDocumentType>([
+      ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+      ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ]);
+
+    dispatch(
+      openModal({
+        type: "requestWasteManagementPlan",
+        payload: {
+          projectId: project.id,
+          contactName: architect?.contactName ?? null,
+          contactEmail: architect?.contactEmail ?? null,
+          attachments: (engagement?.documents ?? [])
+            .filter((document) => drawingTypes.has(document.documentType))
+            .flatMap((document) =>
+              document.files.map((file) => ({
+                name: file.filename,
+                url: file.url,
+              })),
+            ),
+          checklistDocumentId,
+          vaultOptions,
         },
       }),
     );
@@ -675,19 +1068,6 @@ export function ProjectComplianceTab({
    * this screen. It does not resolve anything: asking is not fixing, and every
    * one of these closes itself when the thing it is waiting for arrives.
    */
-  const handleFollowUp = async (alert: ComplianceAlertRecord) => {
-    try {
-      await dispatch(
-        sendComplianceFollowUp({ projectId: project.id, alertId: alert.id }),
-      ).unwrap();
-      toast.success("Follow-up sent.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not send the follow-up.",
-      );
-    }
-  };
-
   /**
    * The consultant control on one checklist line, or nothing.
    *
@@ -703,35 +1083,94 @@ export function ProjectComplianceTab({
    * that line asks for the same thing. There is one BASIX consultant on a job,
    * not one per line that mentions BASIX.
    */
-  const renderConsultantAction = (item: ComplianceDocumentWithFiles) => {
-    const party = consultantForDocumentType(
-      checklistItemDetail(item.detail)?.mapsToType,
-    );
+  const renderChecklistAction = (item: ComplianceDocumentWithFiles) => {
+    // Frozen means frozen. The same control is on the development application
+    // list, which is where these documents are commissioned while the DA is
+    // outstanding — offering it in both places would open two threads with the
+    // same firm about the same report.
+    if (checklistBlocked) return null;
+
+    const isSupplied = item.files.length > 0 || isNotRequired(item.status);
+    return renderActionForType(checklistLineType(item), isSupplied, item.id);
+  };
+
+  /**
+   * How a line gets what it is asking for, or nothing.
+   *
+   * Three answers and a fourth that is the common one. A line naming a
+   * consultant's deliverable offers to engage them; a line naming something
+   * bought from a portal offers the link and the lodgement form; the waste
+   * management plan offers to ask the architect already on the file. Everything
+   * else — most lines — offers nothing here and keeps its Upload button, which
+   * is the right failure for a line nobody can name.
+   *
+   * Shared between the checklist and the development application list, because
+   * the two ask for the same documents from the same people. A second copy of
+   * this on the DA list is how the two would come to disagree about who
+   * produces a geotechnical report.
+   */
+  const renderActionForType = (
+    documentType: ComplianceDocumentType | null,
+    isSupplied: boolean,
+    /** The checklist line this is offered from, where there is one. */
+    checklistDocumentId?: string,
+  ) => {
+    if (!documentType) return null;
+
+    if (documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN) {
+      const architect = outreachForParty(
+        engagement,
+        WASTE_MANAGEMENT_PLAN_PARTY,
+      );
+      return (
+        <ChecklistConsultantAction
+          party={WASTE_MANAGEMENT_PLAN_PARTY}
+          outreach={architect}
+          isSupplied={isSupplied}
+          isBusy={isScopeBusy(
+            complianceScope.party(WASTE_MANAGEMENT_PLAN_PARTY),
+          )}
+          // Its own clock, and its own label. The architect is engaged already,
+          // so "Connect with the architect" would be an offer to do something
+          // that happened months ago.
+          tracksOwnRequest
+          requestedAt={architect?.wasteManagementRequestedAt ?? null}
+          actionLabel="Ask the architect"
+          onConnect={() =>
+            handleRequestWasteManagementPlan(checklistDocumentId)
+          }
+        />
+      );
+    }
+
+    const kind = externalApplicationForDocumentType(documentType);
+    if (kind) {
+      return (
+        <ChecklistApplicationAction
+          kind={kind}
+          application={externalApplication(engagement, kind)}
+          isSupplied={isSupplied}
+          portalUrl={
+            kind === ComplianceExternalApplicationKind.ROAD_OPENING
+              ? roadOpeningUrl
+              : undefined
+          }
+          onRecord={() => handleRecordApplication(kind)}
+        />
+      );
+    }
+
+    const party = consultantForDocumentType(documentType);
     if (!party) return null;
 
     return (
       <ChecklistConsultantAction
         party={party}
         outreach={outreachForParty(engagement, party)}
-        isSupplied={item.files.length > 0 || isNotRequired(item.status)}
+        isSupplied={isSupplied}
         isBusy={isScopeBusy(complianceScope.party(party))}
-        onConnect={() => handleConnectParty(party, item.id)}
+        onConnect={() => handleConnectParty(party, checklistDocumentId)}
       />
-    );
-  };
-
-  const handleResolveAlert = (alert: ComplianceAlertRecord) => {
-    const copy = COMPLIANCE_ALERT_COPY[alert.type];
-    dispatch(
-      openModal({
-        type: "resolveComplianceAlert",
-        payload: {
-          projectId: project.id,
-          alertId: alert.id,
-          alertTitle: copy.title,
-          guidance: copy.guidance,
-        },
-      }),
     );
   };
 
@@ -874,14 +1313,22 @@ export function ProjectComplianceTab({
   }
 
   // ---------------------------------------------------------------------
-  // Everything approved — the finished file, straight away.
+  // The finished file, straight away.
   //
   // It used to sit behind a "View final document list" button on a card whose
   // only other content restated what the final page says in its own header.
   // A closed engagement has one thing left to look at, so this shows it.
+  //
+  // Keyed on COMPLETED rather than on APPROVED, which is where it used to be
+  // and where it stopped being right. APPROVED means every checklist line has
+  // passed, which was the end of the file when the file ended at the checklist;
+  // it is now the point at which the certifier goes away and issues the
+  // construction certificate, with the HBCF cover following that. Returning the
+  // final page here would hide both of them behind a screen announcing that the
+  // job was finished.
   // ---------------------------------------------------------------------
 
-  if (engagement.status === CertifierEngagementStatus.APPROVED) {
+  if (engagement.status === CertifierEngagementStatus.COMPLETED) {
     return (
       <ComplianceFinalPage
         documents={engagement.documents}
@@ -932,10 +1379,6 @@ export function ProjectComplianceTab({
   const checklistDocument = documentsByType.get(
     ComplianceDocumentType.CHECKLIST,
   );
-  // Gates the insurance question. A waved-off line must not hold it shut —
-  // that is the whole point of being able to wave one off.
-  const allChecklistUploaded =
-    checklistItems.length > 0 && !checklistItems.some(isOutstandingEvidence);
   const insuranceDocument = documentsByType.get(
     ComplianceDocumentType.HOME_INSURANCE,
   );
@@ -974,14 +1417,73 @@ export function ProjectComplianceTab({
     applicableRequiredDocuments(engagement).map((required) => required.type),
   );
 
+  /**
+   * Whether the job is going through as a development application.
+   *
+   * Read here rather than further down because the council's block depends on
+   * it: on the DA path the 10.7 certificate is ordered from the DA list, and
+   * this section shows it read-only so the same certificate is not applied for
+   * in two places by two people.
+   */
+  const orderedFromDa = !requiresPlanningCertificate(engagement);
+
+  /**
+   * Whether the file has a development application on it at all.
+   *
+   * Not the same question as `orderedFromDa`, which asks whether the 10.7 has
+   * moved and goes back to false the moment consent is granted. This one stays
+   * true afterwards, so a job whose DA came through last month keeps its DA
+   * block, its lodgement date and its reference number instead of reverting to
+   * a tab that never mentions the council.
+   */
+  const hasDa = hasDevelopmentApplication(engagement);
+
+  /**
+   * Why the checklist is frozen, or null.
+   *
+   * The same sentence `sendComplianceForReview` refuses with, read off the same
+   * function — a card that explains one thing while the server says another is
+   * the bug this codebase keeps writing a shared predicate to avoid.
+   */
+  const checklistBlocked = checklistBlockedReason(engagement);
+
+  /**
+   * Where this project's council takes a road opening application.
+   *
+   * Resolved once here and threaded down, because there is no NSW-wide road
+   * opening form — the road belongs to the council and each of them runs its
+   * own. Falls back to the council directory for one we have no page for.
+   */
+  const roadOpeningUrl = roadOpeningUrlForCouncil(project.council);
+
   const partySections = COMPLIANCE_PARTY_SECTIONS.map((section) => {
-    // A DA takes the 10.7 certificate out of the pack, which empties the
-    // council's section entirely. It stays on screen — its heading is how the
-    // reader learns the certificate is no longer wanted — but it is complete
-    // by having nothing left to want.
-    const types = section.types.filter((type) => requiredTypesInPlay.has(type));
+    // A DA takes the 10.7 certificate out of the pack. The council's section is
+    // the only one that can empty, and what happens to it depends on why.
+    //
+    // On the DA path the certificate is not gone, it has moved: the council
+    // assesses the application against the same zoning and overlays, so it is
+    // still wanted and is now ordered from the DA block. The row stays here,
+    // read-only, so the reader can see the certificate on the file — and it is
+    // excluded from the counts by the same filter, because what this section's
+    // progress measures is the pack going to the certifier.
+    const types = orderedFromDa
+      ? section.types
+      : section.types.filter((type) => requiredTypesInPlay.has(type));
     const documents = types.map((type) => documentsByType.get(type));
-    const outstanding = types.filter(
+
+    /**
+     * What the progress pill actually counts.
+     *
+     * The pack filter on every path, which is what the comment above always
+     * claimed and the line above did not do: on the DA path `types` keeps the
+     * 10.7 so the row can render read-only, and counting it left the council
+     * card showing 0/1 for a certificate that is ordered from the DA block —
+     * the permanently unfillable count this filter exists to avoid.
+     */
+    const countedTypes = section.types.filter((type) =>
+      requiredTypesInPlay.has(type),
+    );
+    const outstanding = countedTypes.filter(
       (type) => !documentsByType.get(type)?.files.length,
     );
 
@@ -989,6 +1491,7 @@ export function ProjectComplianceTab({
       section,
       party: section.party,
       types,
+      countedTypes,
       documents,
       outreach: outreachForParty(engagement, section.party),
       // Only what the outreach actually waits for. The full architectural
@@ -998,6 +1501,11 @@ export function ProjectComplianceTab({
       // certifier was never going to wait for.
       isComplete: outstanding.every(isOptionalForOutreach),
       outstanding: outstanding.filter((type) => !isOptionalForOutreach(type)),
+      // The council's block hands its controls to the DA once the job changes
+      // path. Never true for the other two: a surveyor and an architect are
+      // engaged the same way whichever route the job takes.
+      orderedFromDa:
+        section.party === CompliancePartyType.COUNCIL && orderedFromDa,
     };
   });
 
@@ -1077,19 +1585,79 @@ export function ProjectComplianceTab({
   // pack is where the engagement starts. Cards the reader has not touched
   // follow this, so the tab re-points itself as the engagement moves on.
   // -------------------------------------------------------------------
+  /**
+   * Whether the certifier has finished passing the checklist.
+   *
+   * The two statuses between the last item being approved and the file being
+   * finished. COMPLETED is deliberately absent: it returns the final page
+   * above, so a job that reaches here has not got there yet.
+   *
+   * Read by the section that closes the file and by the marker below, so the
+   * card that unlocks and the card the tab opens on cannot disagree.
+   */
+  const checklistPassed =
+    engagement.status === CertifierEngagementStatus.APPROVED ||
+    engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED;
+
+  /**
+   * Which certificate this file closes on, and the application behind it.
+   *
+   * Derived rather than stored, and derived here once rather than in each of the
+   * three places that want it: the portal block, the certificate block and the
+   * marker below all have to agree about whether this is a CDC job or a
+   * construction certificate job, and two readings of that question is a tab
+   * showing a CDC application above a construction certificate row.
+   */
+  /**
+   * Why the application cannot be lodged, in the server's own words.
+   *
+   * Read off the same function the route refuses with, so a locked block and a
+   * rejected request cannot give two accounts of one condition. The developer's
+   * covenant is passed in rather than read inside it, because whether the estate
+   * developer has signed off the plans is a fact about an outreach and
+   * `portal-certificates.ts` deliberately knows nothing about parties.
+   */
+  const portalCertificate = portalCertificateValues({
+    engagement,
+    documentsByType,
+    developerBlocked: developerPlansBlockedReason(engagement),
+  });
+  const { certificateHeld } = portalCertificate;
+
   const activeSection: SectionKey =
     unidentified.length > 0
       ? "unidentified"
-      : checklistItems.length > 0
-        ? "checklist"
-        : hasResponse
-          ? "response"
-          // The collection half now has three blocks rather than one, so
-          // "where the engagement starts" is the first party that still owes
-          // something. Falls back to the surveyor, which is where a file with
-          // nothing outstanding began and where a finished one reads fine.
-          : (partySections.find((section) => !section.isComplete)?.party ??
-            CompliancePartyType.SURVEYOR);
+      : // Once the certifier has passed the checklist the remaining work is the
+        // lodgement and then the two documents that close the file — so the
+        // marker comes off a twenty-row list nobody has anything more to do with.
+        //
+        // The portal first and the certificate only once one is on the file. The
+        // order matters more than it looks: between the checklist passing and the
+        // certificate arriving there is a lodgement, an appointment and a
+        // fortnight's determination, and pointing the marker at "Certificate and
+        // cover" through all of that sent a reader to a block whose only row is
+        // one nobody can fill yet.
+        checklistPassed
+        ? certificateHeld
+          ? "certificate"
+          : "planning-portal"
+        : // A job waiting on development approval has a checklist it cannot work
+          // on, so the DA is where the work is — and only while that is true.
+          // Once the consent lands the checklist unfreezes and takes the marker
+          // back, which is the order the job is actually done in.
+          checklistBlocked
+          ? "development-application"
+          : checklistItems.length > 0
+            ? "checklist"
+            : hasResponse
+              ? "response"
+              : // The collection half now has three blocks rather than one, so
+                // "where the engagement starts" is the first party that still
+                // owes something. Falls back to the surveyor, which is where a
+                // file with nothing outstanding began and where a finished one
+                // reads fine.
+                (partySections.find((section) => !section.isComplete)?.party ??
+                CompliancePartyType.SURVEYOR);
 
   const isOpen = (key: SectionKey) => sections[key] ?? key === activeSection;
   const toggleSection = (key: SectionKey) => (open: boolean) =>
@@ -1108,29 +1676,38 @@ export function ProjectComplianceTab({
   const responseLocked = !hasResponse;
   const checklistLocked = checklistItems.length === 0;
 
-  // Resolved alerts stay listed: what was raised and settled on a job is
-  // exactly what somebody auditing it later is looking for, and a list that
-  // empties itself as things are fixed leaves no trace that anything was.
-  const alerts = engagement.alerts;
-  const hasDaAlert = !requiresPlanningCertificate(engagement);
+  /**
+   * The route this file takes, how long it has been on each step, and who is
+   * behind each one.
+   *
+   * The alerts themselves are no longer here — they moved above the tabs, where
+   * a trade reminder and a compliance condition are one list, because they are
+   * the same thing to whoever is reading. What is left on this tab is the half
+   * that only means anything beside the blocks it describes: which stage the
+   * flow is on, what its clock says, which rows are late, and which firms are
+   * still owing.
+   *
+   * Carries the development approval on every job now, dormant on the ones that
+   * have not taken it. The drawing puts it on a branch off the main run rather
+   * than in the row — which is what it is, and which the row could not say.
+   */
+  const stages = complianceStageFlow(engagement);
 
   /**
-   * Whether one alert has anybody to chase.
+   * The rows an open alert is actually about.
    *
-   * The same reading the server takes before it refuses the send — which party
-   * the condition belongs to, and whether that party has a live thread — so a
-   * button that offers a chase and a request that refuses one cannot disagree.
-   * A button that can only fail is worse than no button.
+   * Derived from the alerts the nightly sweep raised rather than from a second
+   * set of clocks on this side. The sweep is the one thing that knows a
+   * checklist line was marked not required, that the client supplied the
+   * survey, that a DA took the certificate out of the pack — a badge computed
+   * here from dates alone would go red on a row the sweep had already written
+   * off.
    */
-  const canChaseAlert = (alert: ComplianceAlertRecord) => {
-    const party = COMPLIANCE_ALERT_PARTY[alert.type];
-    if (!party) return false;
-    const outreach = outreachForParty(engagement, party);
-    return Boolean(
-      outreach?.contactEmail &&
-        outreach.mode === ComplianceOutreachMode.OUTREACH,
-    );
-  };
+  const overdue = overdueComplianceDocuments(engagement);
+  const isRowOverdue = (
+    document: ComplianceDocumentWithFiles | undefined,
+    documentType?: ComplianceDocumentType,
+  ) => isDocumentOverdue(overdue, document, documentType);
 
   /**
    * How many of these are done with.
@@ -1217,26 +1794,54 @@ export function ProjectComplianceTab({
       </div>
 
       {/* ---------------------------------------------------------------
-          What has been raised on this file.
+          Where the file is up to, drawn.
 
-          Above the blocks rather than inside one, because that is the shape of
-          what these do: a stale title search is about the surveyor's section
-          and a DA requirement removes a row from the council's, so filing
-          either under a single block would hide it from the section it
-          actually changes.
+          Above the blocks rather than inside one, for the reason the alerts
+          used to be: no single block can say it. A stale title search is about
+          the surveyor's section and a DA requirement removes a row from the
+          council's, and the question this answers — which step is the job
+          actually on, is anything past its quote, and who is still owing — is
+          about all of them at once.
+
+          Clicking a stage opens its block and shuts nothing else. A header
+          that collapsed the others would make finding the step you wanted cost
+          you the one you had open.
+
+          A dormant approval branch is not clickable and does not reach here:
+          the block it would open is not on this tab on a job with no
+          development application. The guard is repeated on this side anyway,
+          because the two conditions live in different files and the failure —
+          a section key toggled for a card that is not rendered — is silent.
       --------------------------------------------------------------- */}
-      <ComplianceAlertsPanel
-        alerts={alerts}
-        onResolve={handleResolveAlert}
-        onFollowUp={handleFollowUp}
-        // Which alerts have somebody to chase, decided per alert rather than
-        // once. A file whose surveyor documents the client supplied has nobody
-        // to write to about a title search, and may at the same time have a
-        // live architect thread with a redraw overdue on it — one flag for the
-        // whole panel got that wrong in both directions.
-        canFollowUp={canChaseAlert}
-        isBusy={(alertId) => isScopeBusy(complianceScope.alert(alertId))}
+      <ComplianceStageFlow
+        stages={stages}
+        onSelectStage={(stage) => {
+          if (!stage.isActive) return;
+          setSections((current) => ({
+            ...current,
+            [SECTION_FOR_STAGE[stage.id]]: true,
+          }));
+        }}
       />
+
+      {/* ---------------------------------------------------------------
+          The one question nothing on this file can answer for itself.
+
+          Above the blocks and below the route, which is where a prompt about the
+          whole job belongs: it is not a step of the flow and it is not a document,
+          it is a fact about the land that changes what two of the lodgements below
+          will accept.
+
+          Rendered only while unanswered. The answer is one column, so answering it
+          here, answering it on the development application block, or uploading a
+          land deed that names the developer all take the banner away for good.
+      --------------------------------------------------------------- */}
+      {needsEstateDeveloperAnswer ? (
+        <EstateDeveloperBanner
+          projectId={project.id}
+          address={engagement.subjectAddress}
+        />
+      ) : null}
 
       {/* ---------------------------------------------------------------
           The document blocks, on a recessed panel.
@@ -1344,24 +1949,29 @@ export function ProjectComplianceTab({
                 open={isOpen(entry.party)}
                 onOpenChange={toggleSection(entry.party)}
                 progress={{
-                  done: countSupplied(entry.documents),
-                  total: entry.types.length,
+                  done: countSupplied(
+                    entry.countedTypes.map((type) => documentsByType.get(type)),
+                  ),
+                  total: entry.countedTypes.length,
                 }}
                 isBusy={isScopeBusy(complianceScope.party(entry.party))}
+                orderedFromDa={entry.orderedFromDa}
                 rowMode={rowMode}
                 isRowBusy={(document, documentType) =>
                   isScopeBusy(scopeOf(document, documentType))
                 }
+                isRowOverdue={isRowOverdue}
                 onConnect={() => handleConnectParty(entry.party)}
                 onSelfSupplied={() => void handleSelfSupplied(entry.party)}
                 onUpload={(file, target) => void attachEvidence(file, target)}
                 onPreviewFile={handlePreviewFile}
                 projectId={project.id}
-                planningCertificate={engagement.planningCertificate}
+                planningCertificate={planningCertificate(engagement)}
                 architectWorkflow={
                   entry.party === CompliancePartyType.ARCHITECT ? (
                     <ArchitectWorkflow
                       projectId={project.id}
+                      vaultOptions={vaultOptions}
                       outreach={entry.outreach}
                       hasPreliminaryPlans={Boolean(
                         documentsByType.get(
@@ -1543,153 +2153,243 @@ export function ProjectComplianceTab({
               rather than sitting somewhere else on the page, because it is
               the same step of the job reached by the other route.
           ----------------------------------------------------------- */}
-          {hasDaAlert ? (
-            <DaApprovalSection className="md:col-span-2" />
-          ) : (
-            <ComplianceSectionCard
-              title="Checklist"
-              description="One document per item the certifier asked for."
-              icon={ClipboardList}
-              progress={{
-                done: countSupplied(checklistItems),
-                total: checklistItems.length,
-              }}
-              open={isOpen("checklist")}
-              onOpenChange={toggleSection("checklist")}
-              isActive={activeSection === "checklist"}
-              locked={checklistLocked}
-              lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
-              // Across both columns. Each row can open its own requirements
-              // and references, and at half the width every one of those
-              // wrapped into a paragraph.
+          {/* -----------------------------------------------------------
+              The development application, beside the checklist rather than
+              instead of it.
+
+              These were exclusive for one release, on the reading that a job is
+              either a CDC or a DA. It is both: a certifier says the proposal
+              needs development approval *on the checklist they have just
+              issued*, so the checklist exists, its rows are real, and most of
+              what the DA needs is on it. Rendering one or the other meant a job
+              that changed path lost a twenty-item list nobody had finished, and
+              a job that had not yet changed path had nowhere to start the DA.
+
+              So both are on screen and the DA leads: its documents feed the
+              checklist as they land, and the checklist itself is frozen until
+              the consent arrives.
+          ----------------------------------------------------------- */}
+          {hasDa ? (
+            <DaApprovalSection
               className="md:col-span-2"
-            >
-              <ul>
-                {checklistItems.map((item) => (
-                  <ComplianceDocumentRow
-                    key={item.id}
-                    label={complianceDocumentLabel(item.documentType, item.label)}
-                    document={item}
-                    detail={checklistItemDetail(item.detail)}
-                    helperText={
-                      item.files.length ? undefined : "Not supplied yet"
-                    }
-                    mode={rowMode(item)}
-                    isBusy={
-                      isScopeBusy(
-                        scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
-                      ) || submissionClaimed
-                    }
-                    onUpload={(file) =>
-                      void attachEvidence(file, {
-                        documentId: item.id,
-                        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-                      })
-                    }
-                    onApprove={() => void handleApprove(item)}
-                    onReject={() => handleReject(item)}
-                    // Offered to an admin, and only while the file is still
-                    // being assembled. Once it is with the certifier the answer
-                    // to "is this needed" is theirs, and it comes back as an
-                    // approval or a rejection rather than as a row nobody has
-                    // to fill in any more.
-                    onSetNotRequired={
-                      isAdmin && !inReview
-                        ? (notRequired) =>
-                            void handleSetNotRequired(item, notRequired)
-                        : undefined
-                    }
-                    onPreviewFile={handlePreviewFile}
-                    consultantAction={renderConsultantAction(item)}
-                  />
-                ))}
-              </ul>
-
-              {/* -------------------------------------------------------
-                  Home insurance
-              ------------------------------------------------------- */}
-              {allChecklistUploaded ? (
-                <div className="mt-4 rounded-lg border border-border/70 bg-muted/40 p-4">
-                  {insuranceDocument?.files.length ? (
-                    <ul>
-                      <ComplianceDocumentRow
-                        label="Home Insurance"
-                        document={insuranceDocument}
-                        mode={rowMode(insuranceDocument)}
-                        isBusy={isScopeBusy(insuranceScope) || submissionClaimed}
-                        onUpload={(file) =>
-                          void attachEvidence(file, insuranceUpload)
-                        }
-                        onApprove={() => void handleApprove(insuranceDocument)}
-                        onReject={() => handleReject(insuranceDocument)}
-                        onPreviewFile={handlePreviewFile}
-                      />
-                    </ul>
-                  ) : (
-                    <>
-                      <p className="font-medium text-foreground">
-                        Have you raised the home insurance?
-                      </p>
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          type="button"
-                          variant={
-                            insuranceAnswer === "yes" ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setInsuranceAnswer("yes")}
-                        >
-                          Yes
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={
-                            insuranceAnswer === "no" ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setInsuranceAnswer("no")}
-                        >
-                          No
-                        </Button>
-                      </div>
-
-                      {insuranceAnswer === "yes" ? (
-                        <ul className="mt-2">
-                          <ComplianceDocumentRow
-                            label="Home Insurance"
-                            helperText="Upload the certificate of insurance"
-                            mode="upload"
-                            isBusy={
-                              isScopeBusy(insuranceScope) || submissionClaimed
-                            }
-                            onUpload={(file) =>
-                              void attachEvidence(file, insuranceUpload)
-                            }
-                          />
-                        </ul>
-                      ) : null}
-
-                      {insuranceAnswer === "no" ? (
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          Raise Home Building Compensation Fund cover with icare,
-                          then come back and upload the certificate.{" "}
-                          <a
-                            href={HBCF_INSURANCE_URL}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                          >
-                            icare HBCF
-                            <ExternalLink className="size-3" aria-hidden="true" />
-                          </a>
-                        </p>
-                      ) : null}
-                    </>
+              projectId={project.id}
+              documentsByType={documentsByType}
+              application={developmentApplication(engagement)}
+              applicationFor={(kind) => externalApplication(engagement, kind)}
+              renderAction={(document) => {
+                // The DA list and the checklist ask for the same documents from
+                // the same people, so they offer the same control. The line id
+                // is deliberately absent here: on this path there is no
+                // certifier checklist, so what comes back is filed under its
+                // own type rather than onto a row that asked for it.
+                const row = documentsByType.get(document.type);
+                const isSupplied = Boolean(
+                  row && (row.files.length > 0 || isNotRequired(row.status)),
+                );
+                return renderActionForType(document.type, isSupplied);
+              }}
+              rowMode={rowMode}
+              isRowBusy={(document, documentType) =>
+                isScopeBusy(scopeOf(document, documentType))
+              }
+              isRowOverdue={isRowOverdue}
+              onUpload={(file, target) => void attachEvidence(file, target)}
+              onSetNotRequired={
+                isAdmin
+                  ? (document, notRequired) =>
+                      void handleSetNotRequired(document, notRequired)
+                  : undefined
+              }
+              onPreviewFile={handlePreviewFile}
+              isActive={activeSection === "development-application"}
+              open={isOpen("development-application")}
+              onOpenChange={toggleSection("development-application")}
+              daItems={daItems}
+              onApproveItem={(item) => void handleApprove(item)}
+              onRejectItem={(item) => handleReject(item)}
+              onResubmit={() => {
+                const da = developmentApplication(engagement);
+                dispatch(
+                  openModal({
+                    type: "resubmitApplication",
+                    payload: {
+                      projectId: project.id,
+                      kind: ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+                      // The round this will be, worked out here because the
+                      // dialog only needs to say it and the server assigns the
+                      // real one off what is already recorded.
+                      nextRound: (da?.submissions?.length ?? 1) + 1,
+                      applicationRef: da?.applicationRef ?? null,
+                    },
+                  }),
+                );
+              }}
+              developerBlock={
+                // Rendered on every job whose lot might be in an estate, which is
+                // wider than it used to be. It was gated on a bushfire report
+                // being wanted, on the reading that a covenant is about bushfire
+                // construction standards — and the covenant also binds the
+                // architectural design, which every job has. So a lot that is not
+                // bushfire prone still needs the question asked; what drops away
+                // on such a job is the report's own panel, not the block.
+                <DeveloperApprovalBlock
+                  outreach={developerOutreach}
+                  required={engagement.developerApprovalRequired}
+                  developerName={engagement.estateDeveloperName}
+                  // The report's panel is dropped where the row is marked as not
+                  // applying: there is nothing for a covenant to be about on a lot
+                  // outside a bushfire-prone area, and a panel that can never be
+                  // satisfied is a gate nobody can clear.
+                  items={developerItems.filter(
+                    (item) =>
+                      item.documentType !==
+                        ComplianceDocumentType.BUSHFIRE_REPORT ||
+                      needsBushfireReport,
                   )}
-                </div>
-              ) : null}
-            </ComplianceSectionCard>
-          )}
+                  isBusy={isScopeBusy(complianceScope.developer)}
+                  pendingDocumentType={developerPendingDocument}
+                  onSetRequired={(required) =>
+                    void handleSetDeveloperRequired(required)
+                  }
+                  onEngage={() =>
+                    handleConnectParty(CompliancePartyType.DEVELOPER)
+                  }
+                  onDecide={(documentType, decision) =>
+                    dispatch(
+                      openModal({
+                        type: "developerDecision",
+                        payload: {
+                          projectId: project.id,
+                          documentType,
+                          decision,
+                          estate:
+                            developerByKey(developerOutreach?.developerKey)
+                              ?.estate ?? null,
+                        },
+                      }),
+                    )
+                  }
+                  onResend={(documentType) =>
+                    dispatch(
+                      openModal({
+                        type: "developerResend",
+                        payload: {
+                          projectId: project.id,
+                          documentType,
+                          // This document's own objection, not whatever the row
+                          // last held. Quoting a refusal of the plans into a mail
+                          // about the report is the confusion the per-document
+                          // rows exist to prevent.
+                          previousReason:
+                            developerApprovalFor(engagement, documentType)
+                              ?.reason ?? null,
+                          vaultOptions,
+                        },
+                      }),
+                    )
+                  }
+                />
+              }
+              blockedReason={developerPlansBlockedReason(engagement) ?? bushfireDeveloperBlockedReason}
+            />
+          ) : null}
+
+          <ComplianceSectionCard
+            title="Checklist"
+            description="One document per item the certifier asked for."
+            icon={ClipboardList}
+            progress={{
+              done: countSupplied(checklistItems),
+              total: checklistItems.length,
+            }}
+            open={isOpen("checklist")}
+            onOpenChange={toggleSection("checklist")}
+            isActive={activeSection === "checklist"}
+            overdue={checklistItems.some((item) => isRowOverdue(item))}
+            locked={checklistLocked}
+            lockMessage="Unlocks when the certifier issues their checklist — one row per item they ask for."
+            // Across both columns. Each row can open its own requirements
+            // and references, and at half the width every one of those
+            // wrapped into a paragraph.
+            className="md:col-span-2"
+          >
+            {/* Said above the rows rather than in place of them. The list is
+                the certifier's own wording and is worth reading while the DA
+                runs — half of it is what the council wants too — so it stays
+                legible and stops being editable. */}
+            {checklistBlocked ? (
+              <p className="mb-3 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-sm text-foreground">
+                {checklistBlocked}
+              </p>
+            ) : null}
+
+            <ul>
+              {checklistItems.map((item) => (
+                <ComplianceDocumentRow
+                  key={item.id}
+                  label={complianceDocumentLabel(item.documentType, item.label)}
+                  document={item}
+                  detail={checklistItemDetail(item.detail)}
+                  helperText={
+                    item.files.length ? undefined : "Not supplied yet"
+                  }
+                  mode={rowMode(item)}
+                  isBusy={
+                    isScopeBusy(
+                      scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+                    ) || submissionClaimed
+                  }
+                  // By id, not by type. Twenty lines share CHECKLIST_ITEM, so
+                  // the consultant three weeks late on the geotechnical report
+                  // reddens that line and not the other nineteen.
+                  overdue={isRowOverdue(item)}
+                  onUpload={(file) =>
+                    void attachEvidence(file, {
+                      documentId: item.id,
+                      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+                    })
+                  }
+                  onApprove={() => void handleApprove(item)}
+                  onReject={() => handleReject(item)}
+                  // Offered to an admin, and only while the file is still
+                  // being assembled. Once it is with the certifier the answer
+                  // to "is this needed" is theirs, and it comes back as an
+                  // approval or a rejection rather than as a row nobody has
+                  // to fill in any more.
+                  onSetNotRequired={
+                    isAdmin && !inReview && !checklistBlocked
+                      ? (notRequired) =>
+                          void handleSetNotRequired(item, notRequired)
+                      : undefined
+                  }
+                  onPreviewFile={handlePreviewFile}
+                  consultantAction={renderChecklistAction(item)}
+                  mappedFrom={mappedSourceFor(item)}
+                />
+              ))}
+            </ul>
+
+          </ComplianceSectionCard>
+
+          <PortalCertificateBlock
+            projectId={project.id}
+            engagement={engagement}
+            values={portalCertificate}
+            insurance={insuranceDocument}
+            checklistPassed={checklistPassed}
+            rowMode={rowMode}
+            isRowBusy={(document, documentType) =>
+              isScopeBusy(scopeOf(document, documentType))
+            }
+            onUpload={(file, target) => void attachEvidence(file, target)}
+            onPreviewFile={handlePreviewFile}
+            portalIsActive={activeSection === "planning-portal"}
+            portalOpen={isOpen("planning-portal")}
+            onPortalOpenChange={toggleSection("planning-portal")}
+            certificateIsActive={activeSection === "certificate"}
+            certificateOpen={isOpen("certificate")}
+            onCertificateOpenChange={toggleSection("certificate")}
+          />
         </div>
 
         {/* -------------------------------------------------------------
@@ -1704,7 +2404,7 @@ export function ProjectComplianceTab({
         {allEvidenceIn ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success-light px-4 py-3">
             <p className="flex-1 font-medium text-foreground">
-              Compliance and Certification complete
+              Checklist pack ready for certifier review
             </p>
             <Button
               type="button"

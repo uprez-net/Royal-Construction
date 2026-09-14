@@ -1,8 +1,15 @@
 import {
+  ComplianceAlertType,
   CompliancePartyType,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
 } from "@prisma/client";
+
+// Safe to import from here, unlike constants/tradieTypes: the developer list is
+// plain data with no icons behind it, so it does not drag a React icon library
+// into the nightly sweep or into the `"use server"` modules that read this one.
+import { DEVELOPER_RESPONSE_BUSINESS_DAYS } from "@/constants/complianceDevelopers";
 
 /**
  * The documents the certifier is sent before anything else can happen.
@@ -40,8 +47,7 @@ export const REQUIRED_COMPLIANCE_DOCUMENTS = [
 export type RequiredComplianceDocument =
   (typeof REQUIRED_COMPLIANCE_DOCUMENTS)[number];
 
-export type RequiredComplianceDocumentType =
-  RequiredComplianceDocument["type"];
+export type RequiredComplianceDocumentType = RequiredComplianceDocument["type"];
 
 /**
  * The required pack, split by who actually supplies it.
@@ -110,8 +116,7 @@ type _EveryRequiredDocumentIsSectioned =
     : ["Required document in no party section:", UnsectionedRequiredDocument];
 // Referenced so the check is not dropped as unused. The assignment is what
 // fails to compile when a required document has no section.
-export const REQUIRED_DOCUMENTS_ARE_SECTIONED: _EveryRequiredDocumentIsSectioned =
-  true;
+export const REQUIRED_DOCUMENTS_ARE_SECTIONED: _EveryRequiredDocumentIsSectioned = true;
 
 /** Which party supplies a given required document, if any. */
 const PARTY_BY_DOCUMENT_TYPE = new Map<
@@ -154,11 +159,7 @@ export function documentTypesForParty(
 export function partyDeliverables(
   party: CompliancePartyType,
 ): readonly ComplianceDocumentType[] {
-  const consultantDeliverable = CONSULTANT_DELIVERABLE[party];
-  if (consultantDeliverable) {
-    return [consultantDeliverable];
-  }
-  return documentTypesForParty(party);
+  return CONSULTANT_DELIVERABLES[party] ?? documentTypesForParty(party);
 }
 
 /**
@@ -198,6 +199,17 @@ export const PARTY_PREREQUISITES: Readonly<
   [CompliancePartyType.COUNCIL]: [CompliancePartyType.SURVEYOR],
   [CompliancePartyType.BASIX_CONSULTANT]: [],
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: [],
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: [],
+  [CompliancePartyType.WATER_AUTHORITY]: [],
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: [],
+  // The developer waits on a document rather than on a party, which is why
+  // there is nothing to put here. There is no point asking them to approve a
+  // bushfire assessment that does not exist yet, but the assessment can arrive
+  // from a consultant we engaged, from a consultant the client engaged, or on
+  // the client's own paperwork -- and only the first of those is a party. The
+  // gate is `developerBlockedReason` in lib/compliance/prerequisites.ts, which
+  // reads the document.
+  [CompliancePartyType.DEVELOPER]: [],
 };
 
 /**
@@ -213,10 +225,38 @@ export const PARTY_PREREQUISITES: Readonly<
 export const CONSULTANT_PARTIES: readonly CompliancePartyType[] = [
   CompliancePartyType.BASIX_CONSULTANT,
   CompliancePartyType.BUSHFIRE_CONSULTANT,
+  CompliancePartyType.STRUCTURAL_ENGINEER,
+  CompliancePartyType.WATER_AUTHORITY,
+  CompliancePartyType.TRAFFIC_CONSULTANT,
 ];
 
 export function isConsultantParty(party: CompliancePartyType): boolean {
   return CONSULTANT_PARTIES.includes(party);
+}
+
+/**
+ * The parties picked from a list in the codebase rather than from the tradie
+ * directory.
+ *
+ * One today. A developer is not engaged, not paid and not scheduled -- they are
+ * asked once for a yes or a no on somebody else's report -- so putting them in
+ * the directory would put them in every trade picker on the system to serve one
+ * dropdown. See constants/complianceDevelopers.ts.
+ */
+export function isDirectoryParty(party: CompliancePartyType): boolean {
+  return PARTY_TRADE_LABEL[party] !== null;
+}
+
+/**
+ * The parties who are asked to approve something rather than to produce it.
+ *
+ * Again one. It is a predicate rather than an equality check at the four call
+ * sites that need it, because what each of them actually means is "does a reply
+ * from this party carry a verdict" -- and that is the question a second
+ * approving party would also answer yes to.
+ */
+export function isApprovalParty(party: CompliancePartyType): boolean {
+  return party === CompliancePartyType.DEVELOPER;
 }
 
 /**
@@ -226,33 +266,66 @@ export function isConsultantParty(party: CompliancePartyType): boolean {
  * carries `mapsToType`, and if that type is one of these then the row knows
  * which consultant to offer, the outreach knows what to ask for, and the reply
  * knows which line it answers.
+ *
+ * A list per party rather than a single type, which is the change the
+ * structural engineer forced. A BASIX consultant sends one certificate back; a
+ * structural engineer is engaged once and answers three separate checklist
+ * lines — the drawings and their design certificate, the hydraulic and
+ * stormwater set and its certificate, and the geotechnical report. Each lands
+ * separately and the certifier ticks each separately, so the engagement has to
+ * be able to say it is waiting on three things rather than one.
  */
-export const CONSULTANT_DELIVERABLE: Readonly<
-  Partial<Record<CompliancePartyType, ComplianceDocumentType>>
+export const CONSULTANT_DELIVERABLES: Readonly<
+  Partial<Record<CompliancePartyType, readonly ComplianceDocumentType[]>>
 > = {
-  [CompliancePartyType.BASIX_CONSULTANT]: ComplianceDocumentType.BASIX_CERTIFICATE,
-  [CompliancePartyType.BUSHFIRE_CONSULTANT]: ComplianceDocumentType.BUSHFIRE_REPORT,
+  [CompliancePartyType.BASIX_CONSULTANT]: [
+    ComplianceDocumentType.BASIX_CERTIFICATE,
+  ],
+  [CompliancePartyType.BUSHFIRE_CONSULTANT]: [
+    ComplianceDocumentType.BUSHFIRE_REPORT,
+  ],
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: [
+    ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+    ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS,
+    ComplianceDocumentType.GEOTECH_REPORT,
+  ],
+  [CompliancePartyType.WATER_AUTHORITY]: [
+    ComplianceDocumentType.WATER_SERVICING_APPROVAL,
+    ComplianceDocumentType.SECTION_73_NOTICE,
+  ],
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: [
+    ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+  ],
+  // The architect is not a consultant party — they are engaged off the pack,
+  // long before any of this — but the waste management plan is theirs and is
+  // asked for the same way. It is deliberately absent from this table: adding
+  // it would put the architect in CONSULTANT_PARTIES and unpick the
+  // prerequisite chain the pack depends on. See WASTE_MANAGEMENT_PLAN_PARTY.
 };
 
 const CONSULTANT_BY_DELIVERABLE = new Map<
   ComplianceDocumentType,
   CompliancePartyType
 >(
-  Object.entries(CONSULTANT_DELIVERABLE).map(
-    ([party, type]) =>
-      [type, party as CompliancePartyType] as [
-        ComplianceDocumentType,
-        CompliancePartyType,
-      ],
+  Object.entries(CONSULTANT_DELIVERABLES).flatMap(([party, types]) =>
+    (types ?? []).map(
+      (type) =>
+        [type, party as CompliancePartyType] as [
+          ComplianceDocumentType,
+          CompliancePartyType,
+        ],
+    ),
   ),
 );
 
 /**
  * Which consultant a checklist line needs, if any.
  *
- * Null is the overwhelmingly common answer: most checklist lines ask for
- * something already on the file or something the builder produces, and only a
- * BASIX certificate and a bushfire assessment need somebody outside engaged.
+ * Null is still the common answer — most checklist lines ask for something
+ * already on the file or something the builder produces — but it is no longer
+ * the overwhelming one. Between the two consultants, the structural engineer's
+ * three, the water coordinator's two and the traffic plan, eight of the types
+ * a checklist can name have somebody to ring.
  */
 export function consultantForDocumentType(
   documentType: ComplianceDocumentType | undefined | null,
@@ -262,10 +335,79 @@ export function consultantForDocumentType(
 }
 
 /**
+ * The waste management plan comes from the architect who drew the plans.
+ *
+ * Not from a consultant table, and that is the point: there is nobody new to
+ * engage. The architect already has an outreach, a thread and a contact on
+ * this file, and the plan is drawn against the design they produced — sending
+ * it to a stranger would mean sending them the whole set to read first. So the
+ * request rides the thread that already exists, and what it needs is a modal
+ * and a send rather than a contact picker.
+ */
+export const WASTE_MANAGEMENT_PLAN_PARTY = CompliancePartyType.ARCHITECT;
+
+/**
+ * How long the architect has on a waste management plan.
+ *
+ * Its own clock rather than their response SLA, because it starts somewhere
+ * else. The plan is asked for off a checklist line or off the development
+ * application, months after the outreach that engaged them, and a threshold
+ * measured from that outreach would be past on the day it was requested.
+ */
+export const WASTE_MANAGEMENT_BUSINESS_DAYS = 11;
+
+/**
+ * The documents a developer's approval is sought on.
+ *
+ * Two, and it was one. The step was built for a covenant about bushfire
+ * construction standards specifically, and that reading was too narrow: what an
+ * estate covenant actually protects is the house as it will be built, so the
+ * developer approves the full architectural design as well — the siting, the
+ * facade, the roof pitch, the materials. A builder who had the bushfire report
+ * signed off and lodged against unapproved plans had satisfied half a condition.
+ *
+ * Still a named list rather than "somebody senior signs off the pack", for the
+ * reason the single constant was named: these are the two documents a covenant
+ * binds, and leaving the set open would invite every future reviewer to be added
+ * to it.
+ *
+ * Order is the order they are asked for, which is the order they are produced
+ * in: the plans come off the architect's board long before a bushfire consultant
+ * is engaged off a checklist line.
+ */
+export const DEVELOPER_APPROVAL_DOCUMENTS = [
+  ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  ComplianceDocumentType.BUSHFIRE_REPORT,
+] as const;
+
+export type DeveloperApprovalDocument =
+  (typeof DEVELOPER_APPROVAL_DOCUMENTS)[number];
+
+/**
+ * The bushfire report, still named on its own.
+ *
+ * Kept because the existing bushfire loop reads it in a dozen places and every
+ * one of them is specifically about that report: the consultant who redoes it,
+ * the revision round the rejection opens, the alert that measures the redraw.
+ * None of those generalise to the architectural design, which is revised by the
+ * architect through a loop of its own that already exists.
+ */
+export const DEVELOPER_APPROVAL_DOCUMENT =
+  ComplianceDocumentType.BUSHFIRE_REPORT;
+
+/**
  * The trade each party is picked from in the tradie directory.
  *
  * Labels, not keys: `Tradie.trade` stores "Surveying", not "SURVEYOR", which is
  * what TradeTypeCombobox writes.
+ *
+ * Written out rather than read from TRADIE_TYPES, though every one of these is
+ * a value in that table. That module carries an icon per trade and therefore
+ * imports lucide-react, and this one is read by the nightly overdue sweep and
+ * by every `"use server"` module in the compliance flow — importing it would
+ * pull a React icon library into a cron job. The values are asserted equal in
+ * tests/compliance/party-sections.test.ts, which is the cheaper half of that
+ * trade and the same one `ALERT_TITLE` makes.
  */
 export const PARTY_TRADE_LABEL: Readonly<
   Record<CompliancePartyType, string | null>
@@ -277,6 +419,15 @@ export const PARTY_TRADE_LABEL: Readonly<
   [CompliancePartyType.COUNCIL]: null,
   [CompliancePartyType.BASIX_CONSULTANT]: "BASIX Assessment",
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: "Bushfire Assessment",
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: "Structural Engineering",
+  [CompliancePartyType.WATER_AUTHORITY]: "Sydney Water",
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: "Traffic Control",
+  // Not picked from the directory either, and for a different reason from the
+  // council's. There is somebody to write to here, but they are an estate
+  // developer rather than a trade -- picked from AREA_DEVELOPERS in
+  // constants/complianceDevelopers.ts, which is keyed by the estate the lot
+  // sits in rather than by what the firm does.
+  [CompliancePartyType.DEVELOPER]: null,
 };
 
 /** How each party is named in headings, buttons and thread tabs. */
@@ -286,6 +437,17 @@ export const PARTY_LABEL: Readonly<Record<CompliancePartyType, string>> = {
   [CompliancePartyType.COUNCIL]: "NSW Planning",
   [CompliancePartyType.BASIX_CONSULTANT]: "BASIX consultant",
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: "Bushfire consultant",
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: "Structural engineer",
+  // Named for the role rather than for Sydney Water itself. The approval comes
+  // from an accredited water servicing coordinator, who is a private firm in
+  // the directory — writing "Sydney Water" on the button would send somebody
+  // looking for a utility's switchboard.
+  [CompliancePartyType.WATER_AUTHORITY]: "Water servicing coordinator",
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: "Traffic control consultant",
+  // Named for the role rather than for the estate. Which estate it is appears
+  // beside the thread, off the outreach's own snapshot -- the heading has to
+  // read the same on every job.
+  [CompliancePartyType.DEVELOPER]: "Estate developer",
 };
 
 /**
@@ -308,6 +470,15 @@ export const PARTY_RESPONSE_BUSINESS_DAYS: Readonly<
   [CompliancePartyType.COUNCIL]: 5,
   [CompliancePartyType.BASIX_CONSULTANT]: 11,
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: 11,
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: 11,
+  [CompliancePartyType.WATER_AUTHORITY]: 11,
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: 11,
+  // The same figure as the consultants and not the same number: a developer's
+  // approval goes out to a consultant of theirs and comes back through their
+  // customer service desk, which is the ten to eleven working days they quote.
+  // It lives beside the list it belongs to and is re-exported here so the sweep
+  // can read one table -- see DEVELOPER_RESPONSE_BUSINESS_DAYS.
+  [CompliancePartyType.DEVELOPER]: DEVELOPER_RESPONSE_BUSINESS_DAYS,
 };
 
 /**
@@ -372,6 +543,47 @@ export const PARTY_OUTREACH_ATTACHMENTS: Readonly<
     ComplianceDocumentType.SURVEY,
     ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
   ],
+  // The engineer designs to the drawn building and the measured ground, so
+  // they get the full architectural set rather than the preliminary one -- a
+  // structural design against a sketch is a design that gets redone -- plus
+  // the survey for levels and the certificate for the flood and land-slip
+  // overlays that decide what the footings have to do.
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: [
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ComplianceDocumentType.SURVEY,
+    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  ],
+  // A servicing coordinator works off the lot and what is being built on it:
+  // the deposited plan says where the mains and easements are, the survey says
+  // where the ground is, and the plans say what is going over the top of them.
+  [CompliancePartyType.WATER_AUTHORITY]: [
+    ComplianceDocumentType.DEPOSITED_PLAN,
+    ComplianceDocumentType.SURVEY,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  ],
+  // A traffic control plan is about the street, not the house. The survey and
+  // the site plan are what show the frontage, the crossing and where a truck
+  // can stand.
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: [
+    ComplianceDocumentType.SURVEY,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  ],
+  // The one party sent something to pass judgement on rather than to work from.
+  // The report is the thing being approved; the plans and the survey are what
+  // make it assessable, because a developer's consultant is checking the
+  // construction standard against where the building actually sits on the lot.
+  //
+  // Deliberately a short list. Everything else on the file is available through
+  // the modal's own attach control, which exists because an estate that wants
+  // its covenant schedule or the contract of sale quoted back is a request
+  // nobody can anticipate here.
+  [CompliancePartyType.DEVELOPER]: [
+    ComplianceDocumentType.BUSHFIRE_REPORT,
+    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+    ComplianceDocumentType.SURVEY,
+  ],
 };
 
 /**
@@ -390,12 +602,23 @@ export const PARTY_INBOUND_DOCUMENT_TYPES: Readonly<
     ...documentTypesForParty(CompliancePartyType.SURVEYOR),
     ComplianceDocumentType.LAND_DEED,
   ],
-  [CompliancePartyType.ARCHITECT]: documentTypesForParty(
-    CompliancePartyType.ARCHITECT,
-  ),
-  [CompliancePartyType.COUNCIL]: documentTypesForParty(
-    CompliancePartyType.COUNCIL,
-  ),
+  // Their two pack documents plus the waste management plan, which is the one
+  // thing they are asked for that is not part of the pack at all. It is on
+  // this list rather than left UNKNOWN because it comes back on the same
+  // thread as a redraw and nobody would think to place it by hand.
+  [CompliancePartyType.ARCHITECT]: [
+    ...documentTypesForParty(CompliancePartyType.ARCHITECT),
+    ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+  ],
+  // The certificate they were applied to for, plus the notice of determination
+  // -- which arrives on this same thread and is the document the whole rest of
+  // the tab is waiting on. Reading it as anything else, or leaving it
+  // unidentified, holds a certifier's checklist frozen behind a consent that is
+  // sitting on the file.
+  [CompliancePartyType.COUNCIL]: [
+    ...documentTypesForParty(CompliancePartyType.COUNCIL),
+    ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  ],
   // Narrower than any of the above: a consultant sends back one thing. A BASIX
   // assessor routinely attaches the plans they were sent as a courtesy, and
   // reading those as the architect's preliminary set would overwrite the
@@ -406,6 +629,24 @@ export const PARTY_INBOUND_DOCUMENT_TYPES: Readonly<
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: [
     ComplianceDocumentType.BUSHFIRE_REPORT,
   ],
+  // Narrowed to what each was asked for, which is the same rule the two above
+  // follow and the same reason: every one of these parties is sent the plans
+  // as material to work from, and routinely attaches them back on their reply.
+  // Reading those as the architect's set would overwrite the authoritative
+  // copy of the design with a forwarded one.
+  [CompliancePartyType.STRUCTURAL_ENGINEER]:
+    CONSULTANT_DELIVERABLES[CompliancePartyType.STRUCTURAL_ENGINEER] ?? [],
+  [CompliancePartyType.WATER_AUTHORITY]:
+    CONSULTANT_DELIVERABLES[CompliancePartyType.WATER_AUTHORITY] ?? [],
+  [CompliancePartyType.TRAFFIC_CONSULTANT]:
+    CONSULTANT_DELIVERABLES[CompliancePartyType.TRAFFIC_CONSULTANT] ?? [],
+  // A developer sends back a verdict, not a document -- which is read off the
+  // message body rather than off an attachment. The one exception is the report
+  // itself: an approving developer routinely returns it stamped or endorsed,
+  // and that copy is the one that should go to the council, so it is allowed to
+  // replace what is on the row. Everything else they attach stays UNKNOWN for
+  // somebody to place, which is the right answer for a covenant schedule.
+  [CompliancePartyType.DEVELOPER]: [ComplianceDocumentType.BUSHFIRE_REPORT],
 };
 
 /**
@@ -514,7 +755,41 @@ export function isReviewSubmissionType(
 export function isApprovableDocumentType(
   documentType: ComplianceDocumentType,
 ): boolean {
-  return documentType === ComplianceDocumentType.CHECKLIST_ITEM;
+  return APPROVABLE_TYPES.has(documentType);
+}
+
+/**
+ * The two kinds of line an outside body sits in judgement on.
+ *
+ * A checklist item is the certifier's; a DA item is the council's. They are the
+ * same act by two different bodies -- somebody outside asked for a specific
+ * piece of evidence, we supplied it, and they said yes or no -- and everything
+ * that reads this treats them identically: both get a decision pair on the row,
+ * both keep a rejection reason, and both are counted as outstanding while the
+ * body has not passed them.
+ *
+ * Still deliberately narrower than "the builder supplied it". The required pack
+ * went to the certifier to open the engagement and the signed copies are their
+ * own forms come back signed; neither is something anybody was ever going to
+ * sit in judgement on, and a decision pair on one of those rows is a way to
+ * freeze a document nobody can then re-upload.
+ */
+const APPROVABLE_TYPES: ReadonlySet<ComplianceDocumentType> = new Set([
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
+]);
+
+/**
+ * Whether a row is one line of a list an outside body issued.
+ *
+ * The counterpart to the above, for the places that need to know a row carries
+ * its own wording rather than a fixed label -- the two extractions write these,
+ * and only these, with a `label` and a `detail`.
+ */
+export function isIssuedItemType(
+  documentType: ComplianceDocumentType,
+): boolean {
+  return APPROVABLE_TYPES.has(documentType);
 }
 
 /**
@@ -533,6 +808,40 @@ export const CLASSIFIABLE_DOCUMENT_TYPES = [
   // this list.
   ComplianceDocumentType.BASIX_CERTIFICATE,
   ComplianceDocumentType.BUSHFIRE_REPORT,
+  // Everything the other consultants send back, plus the two the builder and
+  // the owners produce. All classifiable for the same reason the two above
+  // are: they arrive as attachments like everything else, and what keeps a
+  // geotechnical report from being read off a surveyor's email is the
+  // per-party narrowing above rather than this list.
+  //
+  // The three portal documents are here too. Nobody emails those to us on a
+  // correlated thread, but they are uploaded by hand and the same classifier
+  // runs over the needs-identifying queue.
+  ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+  ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS,
+  ComplianceDocumentType.GEOTECH_REPORT,
+  ComplianceDocumentType.WATER_SERVICING_APPROVAL,
+  ComplianceDocumentType.SECTION_73_NOTICE,
+  ComplianceDocumentType.ROAD_OPENING_PERMIT,
+  ComplianceDocumentType.LONG_SERVICE_LEVY,
+  ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL,
+  ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+  ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+  ComplianceDocumentType.BUILD_COST_SUMMARY,
+  ComplianceDocumentType.OWNER_CONSENT_FORM,
+  ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  // The two certificates that end the file. Classifiable even though neither
+  // normally arrives by mail: both are downloaded off the portal and uploaded by
+  // hand, which is not a path the classifier sees at all.
+  //
+  // Kept classifiable for the case that is left, which is common enough to
+  // matter: a certifier who has just determined an application routinely
+  // forwards the certificate on the thread as a courtesy, ahead of or instead of
+  // the applicant fetching it. Leaving either unreadable would put the one
+  // document the file is waiting on into the needs-identifying queue, with the
+  // job reading as unfinished beside it.
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
   // Not part of the pack, but a surveyor routinely quotes the deed back on
   // their reply, and a copy the classifier cannot name lands in the
   // needs-identifying queue for somebody to place by hand.
@@ -559,6 +868,10 @@ export const MAPPABLE_DOCUMENT_TYPES = Object.values(
 ).filter(
   (type) =>
     type !== ComplianceDocumentType.CHECKLIST_ITEM &&
+    // A council's request for more information is a line of its own list, the
+    // same way a checklist item is, and neither can be what another line is
+    // asking for.
+    type !== ComplianceDocumentType.DA_ITEM &&
     type !== ComplianceDocumentType.UNKNOWN,
 ) as [ComplianceDocumentType, ...ComplianceDocumentType[]];
 
@@ -576,6 +889,43 @@ const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {
   [ComplianceDocumentType.BUSHFIRE_REPORT]: "Bushfire Assessment Report",
   [ComplianceDocumentType.CHECKLIST_ITEM]: "Checklist item",
   [ComplianceDocumentType.UNKNOWN]: "Unidentified document",
+
+  // The consultants' and portals' documents. Worded the way a certifier's
+  // checklist words them, because these labels are what a mapped row shows
+  // beside the certifier's own wording and the two reading differently is how
+  // somebody concludes we have mapped the wrong thing.
+  [ComplianceDocumentType.STRUCTURAL_DRAWINGS]:
+    "Structural drawings & design certificate",
+  [ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS]:
+    "Hydraulic/stormwater drawings & design certificate",
+  [ComplianceDocumentType.GEOTECH_REPORT]: "Geotechnical report",
+  [ComplianceDocumentType.WATER_SERVICING_APPROVAL]:
+    "Tap-in or Water Servicing Coordinator approval",
+  [ComplianceDocumentType.SECTION_73_NOTICE]:
+    "Section 73 notice of requirements",
+  [ComplianceDocumentType.ROAD_OPENING_PERMIT]:
+    "Road opening & vehicle crossing approval",
+  [ComplianceDocumentType.LONG_SERVICE_LEVY]: "Long Service Levy receipt",
+  [ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL]: "Mine subsidence approval",
+  [ComplianceDocumentType.WASTE_MANAGEMENT_PLAN]: "Waste management plan",
+  [ComplianceDocumentType.TRAFFIC_CONTROL_PLAN]: "Traffic control plan",
+  [ComplianceDocumentType.BUILD_COST_SUMMARY]: "Build cost summary",
+  [ComplianceDocumentType.OWNER_CONSENT_FORM]: "Owner consent form",
+  [ComplianceDocumentType.DEVELOPMENT_CONSENT]:
+    "Development consent (DA approval)",
+  // Both of these carry the issuing body's own wording in `label` and reach
+  // this fallback only on a row written before one was captured. Worded as the
+  // body would word it, for the same reason as the block above.
+  [ComplianceDocumentType.DA_ITEM]: "Development application item",
+  [ComplianceDocumentType.CONSTRUCTION_CERTIFICATE]: "Construction Certificate",
+  // Spelt out with the initials after it, which is the one label in this table
+  // that carries both. "CDC" is what everybody on the job says and what the
+  // portal calls the application; "Complying Development Certificate" is what is
+  // printed on the document. A row showing only the initials reads as the CDC
+  // *form* the certifier sent back at the start of the engagement, which is a
+  // different document on the same file.
+  [ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE]:
+    "Complying Development Certificate (CDC)",
 };
 
 /**
@@ -706,6 +1056,30 @@ export const COMPLIANCE_DOCUMENT_SECTIONS: readonly {
     types: [
       ComplianceDocumentType.BASIX_CERTIFICATE,
       ComplianceDocumentType.BUSHFIRE_REPORT,
+      ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+      ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS,
+      ComplianceDocumentType.GEOTECH_REPORT,
+      ComplianceDocumentType.WATER_SERVICING_APPROVAL,
+      ComplianceDocumentType.SECTION_73_NOTICE,
+      ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+      ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+    ],
+  },
+  {
+    heading: "Permits and approvals",
+    description: "Bought or lodged with an outside body, not asked of anybody.",
+    types: [
+      ComplianceDocumentType.ROAD_OPENING_PERMIT,
+      ComplianceDocumentType.LONG_SERVICE_LEVY,
+      ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL,
+    ],
+  },
+  {
+    heading: "Development application",
+    description: "What the council needs that the certifier never asked for.",
+    types: [
+      ComplianceDocumentType.BUILD_COST_SUMMARY,
+      ComplianceDocumentType.OWNER_CONSENT_FORM,
     ],
   },
   {
@@ -727,3 +1101,663 @@ export const SECTIONED_DOCUMENT_TYPES: ReadonlySet<ComplianceDocumentType> =
  */
 export const HBCF_INSURANCE_URL =
   "https://www.icare.nsw.gov.au/builders-and-homeowners/home-building-compensation";
+
+// ===========================================================================
+// Applications to outside bodies
+//
+// Four things on a compliance file are not asked of anybody and not produced
+// by anybody here: they are bought. A 10.7 certificate from the NSW Planning
+// Portal, a road opening and vehicle crossing approval from the council, a
+// long service levy receipt from the Long Service Corporation, and a mine
+// subsidence approval from Subsidence Advisory. The development application
+// itself is lodged the same way and waited on the same way, which is why it is
+// the fifth kind rather than a table of its own.
+//
+// Every one has the same four facts — where you go, what it is called, how
+// long it normally takes, and which alert says it has taken longer — so they
+// are one table rather than four cards that would drift apart.
+// ===========================================================================
+
+/**
+ * The document each application ends up producing.
+ *
+ * The development application produces the council's notice of determination,
+ * and that document does more work than any other on this file: while a
+ * certifier has said the job needs development approval there is nothing they
+ * can assess, so the checklist is frozen until it arrives. It used to be null
+ * here on the reasoning that a DA comes back as a consent for the whole job
+ * rather than as a row on a list — true, and beside the point, because the
+ * consent is a PDF somebody has to hold and the certifier asks for it by name.
+ */
+export const EXTERNAL_APPLICATION_DOCUMENT_TYPE: Readonly<
+  Record<ComplianceExternalApplicationKind, ComplianceDocumentType | null>
+> = {
+  [ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7]:
+    ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+  [ComplianceExternalApplicationKind.ROAD_OPENING]:
+    ComplianceDocumentType.ROAD_OPENING_PERMIT,
+  [ComplianceExternalApplicationKind.LONG_SERVICE_LEVY]:
+    ComplianceDocumentType.LONG_SERVICE_LEVY,
+  [ComplianceExternalApplicationKind.MINE_SUBSIDENCE]:
+    ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL,
+  [ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION]:
+    ComplianceDocumentType.DEVELOPMENT_CONSENT,
+  [ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE]:
+    ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
+  [ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE]:
+    ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+};
+
+const EXTERNAL_APPLICATION_BY_DOCUMENT_TYPE = new Map<
+  ComplianceDocumentType,
+  ComplianceExternalApplicationKind
+>(
+  Object.entries(EXTERNAL_APPLICATION_DOCUMENT_TYPE).flatMap(([kind, type]) =>
+    type ? [[type, kind as ComplianceExternalApplicationKind] as const] : [],
+  ),
+);
+
+/**
+ * Which application a document comes out of, if any.
+ *
+ * The counterpart of `consultantForDocumentType`, and read in the same place: a
+ * checklist line that maps to one of these needs a portal block rather than a
+ * "Connect with…" button, because there is nobody to write to.
+ */
+export function externalApplicationForDocumentType(
+  documentType: ComplianceDocumentType | undefined | null,
+): ComplianceExternalApplicationKind | null {
+  if (!documentType) return null;
+  return EXTERNAL_APPLICATION_BY_DOCUMENT_TYPE.get(documentType) ?? null;
+}
+
+/**
+ * How long a residential development application takes to be determined.
+ *
+ * Working days, and deliberately an order of magnitude above everything else in
+ * this file. A DA runs weeks to months; the threshold exists to catch a council
+ * that has genuinely lost one, not to describe the normal case. An alert at the
+ * eleven days the consultants get would be open on every DA ever lodged, which
+ * is the fastest way to teach people to stop reading the panel.
+ */
+export const DA_DETERMINATION_BUSINESS_DAYS = 60;
+
+/**
+ * How long the two certificate determinations take, in working days.
+ *
+ * The only two thresholds in this file derived from a published statutory figure
+ * rather than from what a firm quotes, and the conversion is the part worth
+ * spelling out. The regulation counts **calendar** days; every clock in this
+ * system counts NSW **business** days, because that is the unit a builder chases
+ * in and the one `businessDaysSince` measures. So the statutory number has to be
+ * converted, not copied.
+ *
+ *  - A complying development certificate is to be determined within **20
+ *    calendar days** of a complete application (NSW DPE, complying development
+ *    pathway). Twenty calendar days spans four weekends, leaving 14 working days.
+ *  - A construction certificate has a **40 calendar day** deemed-refusal period
+ *    (cl. 119, EP&A (Development Certification and Fire Safety) Regulation
+ *    2021). Forty calendar days leaves 28.
+ *
+ * Copying 20 and 40 across as working days was the first cut and it is wrong in
+ * the one direction that matters: 20 working days is 28 calendar days, so the CDC
+ * alert would not have fired until more than a week after the statutory
+ * determination date had already passed — on the one wait where the date is a
+ * legal entitlement rather than a courtesy.
+ *
+ * Both are a floor rather than a promise, for a reason neither figure shows: the
+ * clock stops while a certifier's request for further information is outstanding.
+ * So an application legitimately past these days is common, and the alert says to
+ * check the portal for an RFI before ringing anybody. It is still worth raising —
+ * an RFI sitting unanswered is exactly the thing that goes unnoticed.
+ */
+export const CDC_DETERMINATION_BUSINESS_DAYS = 14;
+export const CC_DETERMINATION_BUSINESS_DAYS = 28;
+
+/**
+ * Everything one application needs to render itself and to be chased.
+ *
+ * The `instruction` is the load-bearing field. Every one of these is a website
+ * somebody has to go to, and an admin shown a row reading "Long Service Levy —
+ * not supplied" and nothing else has to go and find out what that is, who takes
+ * the money, and how much. The sentence is what the row exists to say.
+ */
+export const EXTERNAL_APPLICATION_COPY: Readonly<
+  Record<
+    ComplianceExternalApplicationKind,
+    {
+      /** What the thing is called on the block's heading. */
+      label: string;
+      /** The body it is lodged with, as the link is labelled. */
+      portal: string;
+      /**
+       * Where to go, or null where it depends on the project.
+       *
+       * Null for the road opening permit, which is applied for on the local
+       * council's own site — see `roadOpeningUrlForCouncil`.
+       */
+      url: string | null;
+      /** How long it normally takes, in NSW business days. */
+      businessDays: number;
+      /** The alert raised when it has taken longer than that. */
+      alertType: ComplianceAlertType;
+      /** What to actually do, in the reader's terms. */
+      instruction: string;
+      /** The quoted turnaround, as the copy under the clock words it. */
+      turnaround: string;
+    }
+  >
+> = {
+  [ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7]: {
+    label: "Section 10.7(2) & (5) Planning Certificate",
+    portal: "NSW Planning Portal",
+    url: NSW_PLANNING_PORTAL_URL,
+    businessDays: PARTY_RESPONSE_BUSINESS_DAYS[CompliancePartyType.COUNCIL],
+    alertType: ComplianceAlertType.PLANNING_CERTIFICATE_DELAYED,
+    instruction:
+      "Order the Section 10.7(2) & (5) certificate for this lot on the NSW Planning Portal, then record the application here.",
+    turnaround: "three to five working days",
+  },
+  [ComplianceExternalApplicationKind.ROAD_OPENING]: {
+    label: "Road opening & vehicle crossing approval",
+    portal: "the council",
+    // Filled in per project — every council runs its own application.
+    url: null,
+    businessDays: 10,
+    alertType: ComplianceAlertType.ROAD_OPENING_DELAYED,
+    instruction:
+      "Apply to the council for the road opening permit and the vehicle crossing approval, then record the application here.",
+    turnaround: "around two weeks",
+  },
+  [ComplianceExternalApplicationKind.LONG_SERVICE_LEVY]: {
+    label: "Long Service Levy",
+    portal: "Long Service Corporation",
+    url: "https://www.longservice.nsw.gov.au/bci/levy",
+    businessDays: 5,
+    alertType: ComplianceAlertType.LONG_SERVICE_LEVY_DELAYED,
+    instruction:
+      "Pay the long service levy on the construction cost with the Long Service Corporation, then record the payment here and upload the receipt.",
+    turnaround: "a few working days",
+  },
+  [ComplianceExternalApplicationKind.MINE_SUBSIDENCE]: {
+    label: "Mine subsidence approval",
+    portal: "Subsidence Advisory NSW",
+    url: "https://www.subsidenceadvisory.nsw.gov.au/development-approvals",
+    businessDays: 15,
+    alertType: ComplianceAlertType.MINE_SUBSIDENCE_DELAYED,
+    instruction:
+      "If the lot sits in a declared mine subsidence district, apply to Subsidence Advisory NSW for approval and record the application here. Mark it not required if it does not.",
+    turnaround: "around three weeks",
+  },
+  [ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION]: {
+    label: "Development application",
+    portal: "NSW Planning Portal",
+    url: "https://www.planningportal.nsw.gov.au/development-applications",
+    businessDays: DA_DETERMINATION_BUSINESS_DAYS,
+    alertType: ComplianceAlertType.DA_DETERMINATION_OVERDUE,
+    instruction:
+      "Lodge the development application on the NSW Planning Portal with the documents above, then record the DA number here.",
+    turnaround: "weeks to months",
+  },
+
+  // -------------------------------------------------------------------
+  // The two certificates.
+  //
+  // The same five fields as every permit above, which is the whole reason they
+  // are in this table rather than in a block of their own: a certificate
+  // application is a portal, a date, a reference and a wait, and the existing
+  // block renders all of that already.
+  //
+  // What is unlike the permits is who answers. A 10.7 or a levy receipt comes
+  // back from a website; these come back from the registered certifier already on
+  // the thread, which is why both turnarounds name the statute rather than
+  // "usually" — the builder is entitled to the determination, and saying so is
+  // what makes chasing it reasonable.
+  // -------------------------------------------------------------------
+
+  [ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE]: {
+    label: "Complying development certificate",
+    portal: "NSW Planning Portal",
+    url: "https://www.planningportal.nsw.gov.au/onlinecdc",
+    businessDays: CDC_DETERMINATION_BUSINESS_DAYS,
+    alertType: ComplianceAlertType.CDC_DETERMINATION_OVERDUE,
+    instruction:
+      "Lodge the CDC application on the NSW Planning Portal with the approved checklist pack, and appoint the certifier as principal certifier in the same sitting. Record the date and the application number here.",
+    turnaround: "the 20 calendar days the regulation allows, about 14 working days",
+  },
+  [ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE]: {
+    label: "Construction certificate",
+    portal: "NSW Planning Portal",
+    url: "https://www.planningportal.nsw.gov.au/development-and-assessment/post-consent-certificates/construction-certificate",
+    businessDays: CC_DETERMINATION_BUSINESS_DAYS,
+    alertType: ComplianceAlertType.CC_DETERMINATION_OVERDUE,
+    instruction:
+      "Lodge the construction certificate application on the NSW Planning Portal with the consent and the approved checklist pack. Record the date and the application number here.",
+    turnaround: "the 40 calendar days before a deemed refusal, about 28 working days",
+  },
+};
+
+/**
+ * Where each council takes a road opening and vehicle crossing application.
+ *
+ * Per council rather than one NSW link, because there is no NSW-wide road
+ * opening application: the road belongs to the council, and each of them runs
+ * its own form, its own fee and its own turnaround. A single generic link would
+ * mean whoever is doing the job searching for the same page on every build.
+ *
+ * Keyed on `Project.council` exactly as it is stored. Not exhaustive and not
+ * meant to be — the fallback below is a working answer for a council that is
+ * not here yet, and adding one is a line rather than a change.
+ *
+ * Every entry was fetched and read in September 2026. The first set was not,
+ * and nine of the ten had moved: councils reorganise their sites, and a link
+ * that 404s here sends somebody to a search box on a day they are trying to
+ * lodge something. Each one lands on the page that carries the road opening
+ * permit and the vehicle crossing application, because that is the one
+ * `ComplianceExternalApplicationKind.ROAD_OPENING` covers.
+ *
+ * Worth re-checking when one is reported dead rather than on a schedule — the
+ * fallback below means a stale entry costs a hop, not a dead end.
+ */
+export const COUNCIL_ROAD_OPENING_URL: Readonly<Record<string, string>> = {
+  // Not the `Stage-4-apply` path of the same name, which still resolves and is
+  // titled "... -OLD". Two live pages one word apart is exactly the trap a
+  // checked link table is for.
+  "Blacktown City Council":
+    "https://www.blacktown.nsw.gov.au/Plan-build/Stage-4-Apply-for-a-certificate-or-application/Roads-openings-driveways-and-footpath-works",
+  "Camden Council":
+    "https://www.camden.nsw.gov.au/resident-information/traffic-and-transport/public-road-activity",
+  "Campbelltown City Council":
+    "https://www.campbelltown.nsw.gov.au/Build-and-Develop/Obtaining-Approval-to-Build/Section-138-Applications",
+  "City of Parramatta":
+    "https://www.cityofparramatta.nsw.gov.au/development/forms-and-documents/road-and-footpath-works",
+  "Cumberland City Council":
+    "https://www.cumberland.nsw.gov.au/build/works-within-roads-and-footpaths",
+  // The forms directory rather than a page about the works. Liverpool has no
+  // landing page for this -- what it has is one list carrying the road opening
+  // form, the section 138 road reserve form and the vehicular crossing form,
+  // which is the whole of what somebody comes here for.
+  "Liverpool City Council":
+    "https://www.liverpool.nsw.gov.au/council/Fees-Forms-Policies-and-Enforcement/forms",
+  // The engineering hub rather than the driveway page under it: the driveway
+  // page is only the crossing half, and the road opening permit sits beside it
+  // rather than on it.
+  "Northern Beaches Council":
+    "https://www.northernbeaches.nsw.gov.au/planning-and-development/permits-and-certification",
+  "Penrith City Council":
+    "https://www.penrithcity.nsw.gov.au/services/other-services/roads-paths-driveways",
+  "Sydney City Council":
+    "https://www.cityofsydney.nsw.gov.au/construction-permits-approvals/get-permit-dig-public-road-footpath",
+  "The Hills Shire Council":
+    "https://www.thehills.nsw.gov.au/Council/Application-Form-Directory/Road-Opening-Permit",
+};
+
+/**
+ * Where to send somebody for a council this table has never seen.
+ *
+ * The directory rather than a search result: it lists every NSW council with a
+ * link to its own site, which is one hop from the right page and is never
+ * wrong.
+ */
+export const NSW_COUNCIL_DIRECTORY_URL =
+  "https://www.olg.nsw.gov.au/public/find-my-council/";
+
+export function roadOpeningUrlForCouncil(
+  council: string | null | undefined,
+): string {
+  if (!council) return NSW_COUNCIL_DIRECTORY_URL;
+  return COUNCIL_ROAD_OPENING_URL[council.trim()] ?? NSW_COUNCIL_DIRECTORY_URL;
+}
+
+/**
+ * Where the owners' consent form comes from.
+ *
+ * A fixed NSW template rather than something anybody drafts: the council will
+ * only accept their own wording, so the builder downloads it, has the owners
+ * sign it, and uploads it back. That download-sign-upload round trip is the
+ * whole reason this row carries a link as well as an upload button.
+ */
+export const OWNER_CONSENT_FORM_URL =
+  "https://www.planningportal.nsw.gov.au/development-applications/da-forms-and-templates";
+
+// ===========================================================================
+// Answering a checklist line from what the file already holds
+// ===========================================================================
+
+/**
+ * The types a checklist line can be answered from without anybody uploading
+ * anything.
+ *
+ * Six documents, and the reason for the list is that a certifier's checklist
+ * asks for all six by name. It opens with the deposited plan, the title search
+ * and the survey; it asks for the architectural drawings; it asks for the 10.7
+ * certificate; and it asks for the HBCF warranty. Every one of those was
+ * collected before the certifier was ever written to, and before this an admin
+ * was finding each of them and uploading it a second time against a row sitting
+ * inches below the row that already had it.
+ *
+ * Deliberately not "every type on the file". The preliminary architectural
+ * plans are excluded because a certifier asking for architectural drawings
+ * means the drawings the job is being assessed on, and answering that line with
+ * a superseded sketch set is worse than leaving it empty — it looks answered.
+ * The certifier's own documents are excluded for the obvious reason: handing
+ * back their fee proposal as evidence against their own checklist is not
+ * evidence of anything.
+ */
+const NOT_CHECKLIST_MAPPABLE: ReadonlySet<ComplianceDocumentType> = new Set([
+  // A superseded set must not answer a line asking for the current one. A
+  // certifier asking for architectural drawings means the drawings the job is
+  // assessed on, and filling that line with the sketch set the architect
+  // produced first looks answered and is not — which is worse than empty.
+  ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS,
+
+  // The certifier's own documents. Handing their fee proposal back as evidence
+  // against their own checklist is not evidence of anything.
+  ComplianceDocumentType.INVOICE,
+  ComplianceDocumentType.FEE_PROPOSAL,
+  ComplianceDocumentType.CDC_FORM,
+  ComplianceDocumentType.CHECKLIST,
+
+  // An input to the surveyor rather than an output of anybody. Nothing on a
+  // checklist asks for it, and a line about a certificate of title means the
+  // title search.
+  ComplianceDocumentType.LAND_DEED,
+
+  // A line cannot be answered by a line, and "we could not tell" answers
+  // nothing.
+  ComplianceDocumentType.CHECKLIST_ITEM,
+  ComplianceDocumentType.DA_ITEM,
+  ComplianceDocumentType.UNKNOWN,
+
+  // The two certificates the file ends on. A line on the checklist cannot be
+  // answered by a document that only exists once the checklist has passed and
+  // the application built on it has been determined -- the dependency runs
+  // entirely the other way.
+  ComplianceDocumentType.CONSTRUCTION_CERTIFICATE,
+  ComplianceDocumentType.COMPLYING_DEVELOPMENT_CERTIFICATE,
+]);
+
+/**
+ * The types a checklist line can be answered from without anybody uploading
+ * anything.
+ *
+ * An exclusion rather than a list, and that is the change the development
+ * application forced. It began as the six the required pack collects, because
+ * those were the only documents a checklist could ask for that the file already
+ * held. A DA is assessed against very nearly the same evidence as a CDC, so
+ * every consultant report and every permit on the DA list is now also a line on
+ * the certifier's checklist — and collecting one twice is the thing this whole
+ * mechanism exists to stop.
+ *
+ * Written as "everything except" so that a document type added later is
+ * mappable by default. That is the right default: new types on this file are
+ * consultant deliverables and permits, which are exactly the shared ones. The
+ * exclusions above are the arguable cases, and each says why.
+ */
+export const CHECKLIST_MAPPABLE_TYPES: ReadonlySet<ComplianceDocumentType> =
+  new Set(
+    Object.values(ComplianceDocumentType).filter(
+      (type) => !NOT_CHECKLIST_MAPPABLE.has(type),
+    ),
+  );
+
+/**
+ * Whether a checklist line asking for this type can be answered from the file.
+ *
+ * Read by the extraction, which does the mapping, and by the row, which says
+ * where the document came from. One predicate so the two cannot disagree about
+ * which lines are eligible.
+ */
+export function isChecklistMappableType(
+  documentType: ComplianceDocumentType | undefined | null,
+): boolean {
+  return documentType ? CHECKLIST_MAPPABLE_TYPES.has(documentType) : false;
+}
+
+/**
+ * Which section of the tab a mapped document was taken from.
+ *
+ * Shown on the mapped row — "Already on the file, from the surveyor" — because
+ * the whole value of the mapping is somebody being able to see at a glance that
+ * the line is answered and answered from the right place. A row that simply
+ * showed a filename would be indistinguishable from one an admin uploaded, and
+ * the first question anybody asks about an automatic action is where it got
+ * that from.
+ */
+export function mappedDocumentSource(
+  documentType: ComplianceDocumentType,
+): string {
+  const party = partyForDocumentType(documentType);
+  if (party === CompliancePartyType.COUNCIL) {
+    return "the planning certificate";
+  }
+  if (party) {
+    return `the ${PARTY_LABEL[party].toLowerCase()}`;
+  }
+  if (documentType === ComplianceDocumentType.HOME_INSURANCE) {
+    return "the project's HBCF cover";
+  }
+  if (documentType === ComplianceDocumentType.DEVELOPMENT_CONSENT) {
+    return "the development approval";
+  }
+
+  // Commissioned from somebody, or bought. Named by who produces it rather than
+  // by the list it appears on, because "from the development application" would
+  // be true of a dozen rows and useful about none of them — what the reader
+  // wants to know is whether the right person supplied it.
+  const consultant = consultantForDocumentType(documentType);
+  if (consultant) {
+    return `the ${PARTY_LABEL[consultant].toLowerCase()}`;
+  }
+  if (externalApplicationForDocumentType(documentType)) {
+    return "the permits already applied for";
+  }
+  if (isSignedCopyType(documentType)) {
+    return "the signed forms";
+  }
+  return "the documents already collected";
+}
+
+// ===========================================================================
+// The development application
+// ===========================================================================
+
+/**
+ * How a document on the development application list is obtained.
+ *
+ * The list is not one kind of thing. Five rows are documents the pack already
+ * collected and the DA also wants, which must be read-only here — a plan that
+ * can be replaced in two places is a plan two people can disagree about. Two
+ * are produced by the builder and the owners. The rest are the same consultant
+ * and portal documents the CDC checklist asks for, obtained the same way.
+ *
+ * Stored as a discriminator on each row rather than worked out from the type,
+ * because the same type is a carry-over here and a checklist line there, and
+ * the row has to know which of those it is.
+ */
+export type DaDocumentSource =
+  /** Collected in the required pack. Shown, never edited from here. */
+  | "pack"
+  /** The builder writes it, or has it signed, and uploads it. */
+  | "upload"
+  /** Commissioned from a consultant, with a thread and a clock. */
+  | "consultant"
+  /** Bought or lodged with an outside body. */
+  | "application";
+
+export type DaDocument = {
+  type: ComplianceDocumentType;
+  source: DaDocumentSource;
+  /** The group heading it sits under. */
+  group: string;
+  /**
+   * What the row says when it is empty.
+   *
+   * Written per row rather than derived, because "not supplied yet" is useless
+   * on a list where every row is obtained a different way. The owner consent
+   * form has to say it is downloaded and signed; the build cost summary has to
+   * say who writes it.
+   */
+  helper?: string;
+};
+
+/**
+ * Everything a development application needs, in the order it is assembled.
+ *
+ * Inferred from the CDC checklist rather than invented: a DA and a CDC ask for
+ * very nearly the same evidence about the same house, which is why a job that
+ * has been through the checklist arrives at the DA with most of this already
+ * done. What the DA adds is the two forms at the end — the council wants a cost
+ * summary and the owners' written consent, and a certifier never asks for
+ * either.
+ *
+ * Everything with `source: "pack"` is deliberately at the top and deliberately
+ * read-only. Those five rows are the same documents the surveyor, architect and
+ * council blocks hold; offering a Replace button here as well would mean the
+ * same file could be changed in two places, and the two would then disagree
+ * about which copy the council was sent.
+ */
+export const DA_DOCUMENTS: readonly DaDocument[] = [
+  // -- Carried over from the required pack ---------------------------------
+  {
+    type: ComplianceDocumentType.DEPOSITED_PLAN,
+    source: "pack",
+    group: "Already collected",
+  },
+  {
+    type: ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL,
+    source: "pack",
+    group: "Already collected",
+  },
+  {
+    type: ComplianceDocumentType.SURVEY,
+    source: "pack",
+    group: "Already collected",
+  },
+  {
+    type: ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+    source: "pack",
+    group: "Already collected",
+  },
+  {
+    type: ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
+    source: "pack",
+    group: "Already collected",
+  },
+
+  // -- The builder's and the owners' own ------------------------------------
+  {
+    type: ComplianceDocumentType.BUILD_COST_SUMMARY,
+    source: "upload",
+    group: "From the builder",
+    helper:
+      "The estimated cost of works, broken down. The council sets the DA fee off this figure.",
+  },
+  {
+    type: ComplianceDocumentType.OWNER_CONSENT_FORM,
+    source: "upload",
+    group: "From the builder",
+    helper:
+      "Download the NSW form, have every registered owner sign it, and upload it back.",
+  },
+
+  // -- Commissioned ---------------------------------------------------------
+  {
+    type: ComplianceDocumentType.BASIX_CERTIFICATE,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+  {
+    type: ComplianceDocumentType.BUSHFIRE_REPORT,
+    source: "consultant",
+    group: "Consultant reports",
+    helper:
+      "Only where the lot is bushfire prone — the 10.7 certificate says whether it is.",
+  },
+  {
+    type: ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+  {
+    type: ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+  {
+    type: ComplianceDocumentType.GEOTECH_REPORT,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+  {
+    type: ComplianceDocumentType.WATER_SERVICING_APPROVAL,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+  {
+    type: ComplianceDocumentType.SECTION_73_NOTICE,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+  {
+    type: ComplianceDocumentType.WASTE_MANAGEMENT_PLAN,
+    source: "consultant",
+    group: "Consultant reports",
+    helper:
+      "Drawn by the architect who did the plans — the request goes on the thread they are already on.",
+  },
+  {
+    type: ComplianceDocumentType.TRAFFIC_CONTROL_PLAN,
+    source: "consultant",
+    group: "Consultant reports",
+  },
+
+  // -- Bought ---------------------------------------------------------------
+  {
+    type: ComplianceDocumentType.ROAD_OPENING_PERMIT,
+    source: "application",
+    group: "Permits and approvals",
+  },
+  {
+    type: ComplianceDocumentType.LONG_SERVICE_LEVY,
+    source: "application",
+    group: "Permits and approvals",
+  },
+  {
+    type: ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL,
+    source: "application",
+    group: "Permits and approvals",
+  },
+];
+
+/** The DA list grouped by heading, in list order, for rendering. */
+export const DA_DOCUMENT_GROUPS: readonly {
+  heading: string;
+  documents: readonly DaDocument[];
+}[] = DA_DOCUMENTS.reduce<{ heading: string; documents: DaDocument[] }[]>(
+  (groups, document) => {
+    const last = groups.at(-1);
+    if (last && last.heading === document.group) {
+      last.documents.push(document);
+      return groups;
+    }
+    groups.push({ heading: document.group, documents: [document] });
+    return groups;
+  },
+  [],
+);
+
+/**
+ * The types the DA carries over from the pack, and therefore must not edit.
+ *
+ * Read by the DA list, which renders them read-only, and by the pack rows
+ * themselves, which stay the one place a carried-over document can be
+ * replaced. Both sides read this rather than each listing five types, because
+ * the failure it prevents is exactly the two of them disagreeing.
+ */
+export const DA_PACK_CARRYOVER_TYPES: ReadonlySet<ComplianceDocumentType> =
+  new Set(
+    DA_DOCUMENTS.filter((document) => document.source === "pack").map(
+      (document) => document.type,
+    ),
+  );

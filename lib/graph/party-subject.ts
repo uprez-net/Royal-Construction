@@ -22,6 +22,10 @@ const PARTY_TOKEN_PREFIX: Readonly<Record<CompliancePartyType, string>> = {
   [CompliancePartyType.COUNCIL]: "RCCOUN",
   [CompliancePartyType.BASIX_CONSULTANT]: "RCBSIX",
   [CompliancePartyType.BUSHFIRE_CONSULTANT]: "RCBUSH",
+  [CompliancePartyType.STRUCTURAL_ENGINEER]: "RCSTRU",
+  [CompliancePartyType.WATER_AUTHORITY]: "RCWATR",
+  [CompliancePartyType.TRAFFIC_CONSULTANT]: "RCTRAF",
+  [CompliancePartyType.DEVELOPER]: "RCDEVL",
 };
 
 const PARTY_BY_PREFIX: ReadonlyMap<string, CompliancePartyType> = new Map(
@@ -41,7 +45,7 @@ const PARTY_BY_PREFIX: ReadonlyMap<string, CompliancePartyType> = new Map(
  * change.
  */
 const PARTY_TOKEN_RE =
-  /\[((?:RCSURV|RCARCH|RCCOUN|RCBSIX|RCBUSH)-[0-9A-F]{12})\]/i;
+  /\[((?:RCSURV|RCARCH|RCCOUN|RCBSIX|RCBUSH|RCSTRU|RCWATR|RCTRAF|RCDEVL)-[0-9A-F]{12})\]/i;
 
 /**
  * The party token in a subject, upper-cased, or null.

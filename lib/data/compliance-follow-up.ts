@@ -3,6 +3,7 @@
 import {
   ComplianceAlertStatus,
   ComplianceAlertType,
+  ComplianceDocumentType,
   ComplianceOutreachMode,
   CompliancePartyType,
 } from "@prisma/client";
@@ -12,6 +13,7 @@ import { after } from "next/server";
 import {
   complianceDocumentLabel,
   documentTypesForParty,
+  isNotRequired,
   PARTY_LABEL,
   partyDeliverables,
 } from "@/constants/complianceDocuments";
@@ -69,6 +71,8 @@ function followUpBody(params: {
   alert: ComplianceAlertRecord;
   outreach: ComplianceOutreachDetail;
   subjectAddress: string;
+  /** The file, for working out what is actually still outstanding. */
+  engagement: CertifierEngagementDetail;
 }): string {
   const { alert, outreach, subjectAddress } = params;
   const greeting = outreach.contactName
@@ -123,17 +127,63 @@ function followUpBody(params: {
         ...sign,
       ].join("\n");
 
+    case ComplianceAlertType.WASTE_MANAGEMENT_PLAN_OVERDUE:
+      // The architect's third chase, and the only one that is not about a
+      // document they were engaged for. Written out rather than falling through
+      // to the list below, because that list would read off the architect's
+      // pack deliverables and chase them for the plans they delivered months
+      // ago instead of the plan they have not started.
+      return [
+        `<p>${greeting}</p>`,
+        `<p>Following up on the waste management plan for ${address}.</p>`,
+        "<p>Could you let us know where it is up to, or when we can expect it? The application cannot be lodged without it.</p>",
+        ...sign,
+      ].join("\n");
+
     default: {
-      // The three "we asked and nothing came back" cases — the surveyor and
-      // both consultants — which differ only in what was asked for. Read off
-      // the party's deliverables rather than written out three times, so a
-      // document moving between parties cannot leave a chase asking the wrong
-      // firm for it.
-      const wanted = (
+      // The "we asked and nothing came back" cases — the surveyor and every
+      // consultant — which differ only in what was asked for. Read off the
+      // party's deliverables rather than written out per party, so a document
+      // moving between parties cannot leave a chase asking the wrong firm for
+      // it.
+      //
+      // Narrowed to what is actually still outstanding, which matters most for
+      // the parties that produce several things: a structural engineer who sent
+      // the drawings three weeks ago and still owes the geotechnical report
+      // should be asked for the report, not handed their own delivery back as
+      // though nothing had arrived.
+      const deliverables =
         outreach.party === CompliancePartyType.SURVEYOR
           ? documentTypesForParty(outreach.party)
-          : partyDeliverables(outreach.party)
-      ).map((type) => complianceDocumentLabel(type));
+          : partyDeliverables(outreach.party);
+
+      const outstanding = deliverables.filter(
+        (type) => !isSuppliedOnFile(params.engagement, type, outreach),
+      );
+
+      // Nothing left to ask for. The fallback here used to be the whole list,
+      // on the reading that an empty `outstanding` meant "none of it has
+      // landed" -- which is exactly backwards: with nothing supplied,
+      // `outstanding` is the whole list already, so the fallback could only
+      // ever be reached when every deliverable was on the file. It then sent
+      // the party a chase listing documents they had already delivered.
+      //
+      // The window is real. `sendComplianceFollowUp` only requires the alert to
+      // be OPEN, and the sweep does not close it until its next run, so an
+      // admin can press the chase in the hours between the last document
+      // arriving and the alert clearing. Refusing is the honest answer, and it
+      // is thrown for the same reason the two refusals in `sendComplianceFollow
+      // Up` are: the sentence is what tells the reader the wait is actually
+      // over, where silence would read as a send that failed.
+      if (outstanding.length === 0) {
+        throw new Error(
+          `Everything we asked ${PARTY_LABEL[outreach.party].toLowerCase()} for is on the file — there is nothing left to chase. The alert closes on tonight's sweep.`,
+        );
+      }
+
+      const wanted = outstanding.map((type) =>
+        complianceDocumentLabel(type),
+      );
 
       return [
         `<p>${greeting}</p>`,
@@ -144,6 +194,33 @@ function followUpBody(params: {
       ].join("\n");
     }
   }
+}
+
+/**
+ * Whether one of a party's deliverables has actually landed.
+ *
+ * Two places to look, because a consultant's document can be on the file under
+ * either name. Where the engagement was raised off a checklist line, what they
+ * sent satisfies that line and is filed as a CHECKLIST_ITEM with the
+ * certifier's own wording on it — so a search by document type would find
+ * nothing and the chase would ask for something already supplied. Where there
+ * was no line, it is filed under its own type.
+ */
+function isSuppliedOnFile(
+  engagement: CertifierEngagementDetail,
+  documentType: ComplianceDocumentType,
+  outreach: ComplianceOutreachDetail,
+): boolean {
+  const lineId = outreach.deliverables.find(
+    (deliverable) => deliverable.documentType === documentType,
+  )?.checklistDocumentId;
+
+  return engagement.documents.some((document) => {
+    if (document.files.length === 0 && !isNotRequired(document.status)) {
+      return false;
+    }
+    return lineId ? document.id === lineId : document.documentType === documentType;
+  });
 }
 
 async function requireEngagement(
@@ -210,6 +287,7 @@ export async function sendComplianceFollowUp(
       alert,
       outreach,
       subjectAddress: engagement.subjectAddress,
+      engagement,
     }),
   });
 

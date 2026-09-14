@@ -1,6 +1,6 @@
 "use client";
 
-import { CompliancePartyType } from "@prisma/client";
+import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
 import { FileText, Loader2, Paperclip, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +9,15 @@ import {
   ContactPicker,
   type ContactOption,
 } from "@/components/modals/compliance/contact-picker";
+import {
+  DeveloperPicker,
+  type DeveloperOption,
+} from "@/components/modals/compliance/developer-picker";
+import {
+  ExtraAttachmentsField,
+  extraAttachmentIds,
+  type ExtraAttachment,
+} from "@/components/modals/compliance/extra-attachments-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +32,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   complianceDocumentLabel,
+  isApprovalParty,
   isConsultantParty,
   LAND_DEED_DOCUMENT,
   PARTY_LABEL,
@@ -30,6 +40,7 @@ import {
   partyDeliverables,
 } from "@/constants/complianceDocuments";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
+import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -40,6 +51,19 @@ import {
 
 /** A file already on the compliance file that this outreach will carry. */
 export type PrefilledAttachment = { name: string; url: string };
+
+/**
+ * "a, b and c" — the list as a sentence reads it.
+ *
+ * A join with " and " was right while every consultant produced one thing and
+ * the surveyor produced three. A structural engineer produces three, and
+ * "structural drawings and hydraulic drawings and a geotechnical report" reads
+ * like a transcription error.
+ */
+function listSentence(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
 
 type ConnectPartyModalProps = {
   projectId: string;
@@ -58,12 +82,48 @@ type ConnectPartyModalProps = {
   /**
    * The checklist line this consultant is being engaged against.
    *
-   * Only set for the two consultant parties, and carried straight through to
-   * the outreach so what they send back can answer the item that asked for it.
-   * A surveyor is engaged against the job; a bushfire consultant is engaged
+   * Only set for a consultant party, and carried straight through to the
+   * outreach so what they send back can answer the item that asked for it. A
+   * surveyor is engaged against the job; a bushfire consultant is engaged
    * against item 9.
    */
   checklistDocumentId?: string;
+  /**
+   * Every line this engagement is meant to answer, one per document.
+   *
+   * The reason `checklistDocumentId` alone stopped being enough. A bushfire
+   * assessor answers one line and a structural engineer answers three — the
+   * drawings, the hydraulic set and the geotechnical report — off a single
+   * engagement, and the reply that carries two PDFs has to file each against
+   * the line that asked for it.
+   *
+   * Resolved by the caller off the checklist rather than here, because only the
+   * tab can see which of the certifier's lines ask for which of the three.
+   */
+  deliverables: {
+    documentType: ComplianceDocumentType;
+    checklistDocumentId?: string;
+  }[];
+  /**
+   * The project's council and address, for the developer picker only.
+   *
+   * Used to put the estate this lot is probably in at the top of the list. Both
+   * are optional and both are only ever hints — see `developersForArea`, which
+   * orders rather than filters, because every way of recognising an estate from
+   * a project row is wrong often enough to hide the right answer.
+   */
+  council?: string | null;
+  location?: string | null;
+  /**
+   * What is already on the file, for the attach control's "From the file"
+   * picker.
+   *
+   * Resolved by the caller off the engagement rather than here, for the reason
+   * `prefilled` is: this modal knows how to send a request and nothing about
+   * which documents exist. Built with `vaultAttachmentOptions`, which is what
+   * drops the rows nobody should be attaching.
+   */
+  vaultOptions?: readonly VaultAttachmentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -83,6 +143,10 @@ export function ConnectPartyModal({
   subjectAddress,
   prefilled,
   checklistDocumentId,
+  deliverables,
+  council,
+  location,
+  vaultOptions,
   open,
   onOpenChange,
 }: ConnectPartyModalProps) {
@@ -101,6 +165,28 @@ export function ConnectPartyModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [contact, setContact] = useState<ContactOption | null>(null);
   const [note, setNote] = useState("");
+  /**
+   * Which estate, for a developer.
+   *
+   * Held separately from `contact` rather than folded into it, because the two
+   * are picked from different places and carry different things: a contact is a
+   * tradie row with an id this outreach records, and this is an entry in a list
+   * in the codebase whose address may well be blank. What they have in common
+   * is only that both end up as a name and an address on the send, which is
+   * what `resolvedContact` below does with them.
+   */
+  const [developer, setDeveloper] = useState<DeveloperOption | null>(null);
+  /** Anything the sender attached by hand. See ExtraAttachmentsField. */
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  /**
+   * Whether one of those is still transferring.
+   *
+   * Named apart from `isAttachingDeed` because they are two uploads on one
+   * dialog and both gate the send. The deed already had this and the extras did
+   * not, so a sender could press Send with a covenant schedule mid-flight and
+   * the outreach went out without it.
+   */
+  const [isAttachingExtras, setIsAttachingExtras] = useState(false);
   const [deed, setDeed] = useState<PrefilledAttachment | null>(null);
   /**
    * The deed upload, from the first byte to the row being linked.
@@ -129,10 +215,39 @@ export function ConnectPartyModal({
   const trade = PARTY_TRADE_LABEL[party];
   const needsDeed = party === CompliancePartyType.SURVEYOR;
   const isConsultant = isConsultantParty(party);
+  const isApproval = isApprovalParty(party);
+
+  /**
+   * Who this is being sent to, whichever picker supplied them.
+   *
+   * One shape for the submit, so the send does not have to know which of the
+   * two ways of choosing a correspondent was used. `tradieId` is absent for a
+   * developer by definition — they are not in the directory, which is the whole
+   * reason the second picker exists.
+   */
+  const resolvedContact = isApproval
+    ? developer && developer.email.trim()
+      ? {
+          tradieId: undefined,
+          name: developer.name,
+          email: developer.email,
+          phone: developer.phone ?? undefined,
+        }
+      : null
+    : contact
+      ? {
+          tradieId: contact.tradieId,
+          name: contact.name || undefined,
+          email: contact.email,
+          phone: contact.phone ?? undefined,
+        }
+      : null;
   /** What this party is being asked to produce, in the reader's words. */
-  const wanted = partyDeliverables(party)
-    .map((type) => complianceDocumentLabel(type).toLowerCase())
-    .join(" and ");
+  const wanted = listSentence(
+    partyDeliverables(party).map((type) =>
+      complianceDocumentLabel(type).toLowerCase(),
+    ),
+  );
 
   /**
    * The deed is attached to the file before the outreach is sent, not with it.
@@ -175,19 +290,22 @@ export function ConnectPartyModal({
 
   const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!contact) return;
+    if (!resolvedContact) return;
 
     try {
       await dispatch(
         startPartyOutreach({
           projectId,
           party,
-          tradieId: contact.tradieId,
-          contactName: contact.name || undefined,
-          contactEmail: contact.email.trim().toLowerCase(),
-          contactPhone: contact.phone ?? undefined,
+          tradieId: resolvedContact.tradieId,
+          contactName: resolvedContact.name || undefined,
+          contactEmail: resolvedContact.email.trim().toLowerCase(),
+          contactPhone: resolvedContact.phone,
           note: note.trim() || undefined,
           checklistDocumentId,
+          deliverables,
+          extraAttachmentIds: extraAttachmentIds(extras),
+          developerKey: developer?.key,
         }),
       ).unwrap();
       toast.success(`${label} engaged.`);
@@ -201,7 +319,11 @@ export function ConnectPartyModal({
 
   const attachments = needsDeed ? (deed ? [deed] : []) : prefilled;
   const canSubmit =
-    Boolean(contact) && !isPending && !isDeedBusy && (!needsDeed || Boolean(deed));
+    Boolean(resolvedContact) &&
+    !isPending &&
+    !isDeedBusy &&
+    !isAttachingExtras &&
+    (!needsDeed || Boolean(deed));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -216,10 +338,19 @@ export function ConnectPartyModal({
                   documents: they are being commissioned for one deliverable,
                   and what is attached is only the material to assess it
                   against. */}
-              {needsDeed
+              {isApproval
+                ? "They are sent the bushfire report with the plans and the survey it was assessed against, and asked to approve it. A reply saying yes or no is read off the thread and recorded here; you can also record their answer by hand."
+                : needsDeed
                 ? "They are sent the land deed and asked for the deposited plan, title search and survey. Their reply is matched back by the reference in the subject line."
                 : isConsultant
-                  ? `They are sent the plans, the survey and the planning certificate, and asked for the ${wanted}. What they send back answers the checklist item this was raised from.`
+                  ? // What they are sent is listed below rather than described
+                    // here, because it now differs per consultant: a bushfire
+                    // assessor reads the certificate, a structural engineer
+                    // reads the full design, and a sentence naming one of those
+                    // sets would be wrong for the other.
+                    `They are asked for the ${wanted}, with what they need to work from attached. What they send back answers the checklist ${
+                      deliverables.length > 1 ? "items" : "item"
+                    } this was raised from.`
                   : "They are sent the surveyor's set and the planning certificate, the client's details so they can sit down with the owners, and asked for the plans. Their reply is matched back by the reference in the subject line."}
             </DialogDescription>
           </DialogHeader>
@@ -227,7 +358,18 @@ export function ConnectPartyModal({
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>{label}</Label>
-              {trade ? (
+              {isApproval ? (
+                // Its own picker rather than the directory's. A developer is
+                // not a trade, is never scheduled and is never paid, and the
+                // list they come from is keyed by the estate a lot sits in.
+                <DeveloperPicker
+                  council={council}
+                  location={location}
+                  value={developer}
+                  onChange={setDeveloper}
+                  disabled={isPending}
+                />
+              ) : trade ? (
                 <ContactPicker
                   trade={trade}
                   label={label}
@@ -328,6 +470,20 @@ export function ConnectPartyModal({
                 )}
               </div>
             ) : null}
+
+            <ExtraAttachmentsField
+              onUploadingChange={setIsAttachingExtras}
+              projectId={projectId}
+              value={extras}
+              onChange={setExtras}
+              vaultOptions={vaultOptions}
+              disabled={isPending}
+              hint={
+                isApproval
+                  ? "The covenant schedule, the contract of sale — anything the estate asks to see alongside the report."
+                  : "Anything else this request should carry, on top of what is listed above."
+              }
+            />
 
             <div className="space-y-2">
               <Label htmlFor="party-note">Anything to add</Label>
