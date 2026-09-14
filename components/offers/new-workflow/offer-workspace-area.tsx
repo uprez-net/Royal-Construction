@@ -110,7 +110,7 @@ export function AreaCalculatorPanel({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-5 pt-4">
+      <CardContent className="grid gap-5">
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
             <h4 className={GROUP_HEADING_CLASS}>

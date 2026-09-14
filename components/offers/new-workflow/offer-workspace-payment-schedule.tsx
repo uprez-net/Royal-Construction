@@ -62,7 +62,7 @@ export function PaymentSchedulePanel({
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 pt-4">
+      <CardContent className="grid gap-3">
         <ScheduleLock locked={locked}>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full min-w-[680px] text-sm">

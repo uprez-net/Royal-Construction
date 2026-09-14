@@ -101,7 +101,7 @@ export function ContractPanel({
           title="Contract"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
+      <CardContent className="grid gap-4">
         <ContractStatusBanner
           isDeclined={isDeclined}
           isDraft={isDraft}

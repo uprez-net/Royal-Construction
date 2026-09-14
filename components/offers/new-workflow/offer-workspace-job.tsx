@@ -107,7 +107,7 @@ export function JobSetupPanel({
             ) : null}
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4 pt-4">
+        <CardContent className="grid gap-4">
           <PrefillBanner result={prefillResult} />
           <OwnersSection owners={owners} onOwnersChange={emitOwners} />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -299,7 +299,7 @@ export function JobSetupPanel({
             title="Major House Specifications"
           />
         </CardHeader>
-        <CardContent className="grid gap-4 pt-4">
+        <CardContent className="grid gap-4">
           <SpecFields
             bathrooms={job.bathrooms}
             bedrooms={job.bedrooms}
@@ -336,7 +336,7 @@ export function JobSetupPanel({
               title="Granny Home Specifications"
             />
           </CardHeader>
-          <CardContent className="grid gap-4 pt-4">
+          <CardContent className="grid gap-4">
             <SpecFields
               bathrooms={job.grannyBathrooms}
               bedrooms={job.grannyBedrooms}

@@ -64,7 +64,7 @@ export function TenderGatePanel({
           title="Tender access"
         />
       </CardHeader>
-      <CardContent className="grid gap-5 pt-4">
+      <CardContent className="grid gap-5">
         {gatePassed ? (
           <Banner tone="success">
             Tender access unlocked — proceed to the Tender step below.

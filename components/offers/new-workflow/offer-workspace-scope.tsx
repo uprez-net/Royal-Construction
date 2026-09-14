@@ -65,7 +65,7 @@ export function ScopePanel({
           title="Allowances and exclusions"
         />
       </CardHeader>
-      <CardContent className="flex flex-col gap-8 pt-6">
+      <CardContent className="flex flex-col gap-8">
         <ScopeList
           icon={<Coins className="size-4 text-amber-600" aria-hidden="true" />}
           banner={{

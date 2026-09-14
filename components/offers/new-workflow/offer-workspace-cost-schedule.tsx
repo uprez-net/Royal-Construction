@@ -152,7 +152,7 @@ export function CostSchedulePanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 pt-4">
+      <CardContent className="grid gap-3">
         <WorkbookImportControl
           importResult={importResult}
           onImported={onImported}

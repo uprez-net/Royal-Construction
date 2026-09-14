@@ -98,7 +98,7 @@ export function OfferDocumentCanvas({
             title="Inclusions schedule"
           />
         </CardHeader>
-        <CardContent className="pt-5">
+        <CardContent>
           <details open={schedule.length === 0}>
             <summary className="cursor-pointer text-sm font-medium text-muted-foreground marker:text-royal-gold">
               {schedule.length === 0
@@ -193,7 +193,7 @@ export function OfferDocumentCanvas({
           title="Offer document"
         />
       </CardHeader>
-      <CardContent className="pt-6">
+      <CardContent>
         <article className="rounded-lg border border-border bg-background px-5 py-6 sm:px-8">
           <header className="border-b border-border pb-3">
             <p className="px-1.5 font-mono text-xs text-muted-foreground">

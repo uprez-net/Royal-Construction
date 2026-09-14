@@ -149,7 +149,7 @@ export function SendNegotiatePanel({
           title="Send & negotiate"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
+      <CardContent className="grid gap-4">
         <StatusBanner
           isAgreedOrLater={isAgreedOrLater}
           isOfferSent={isOfferSent}
