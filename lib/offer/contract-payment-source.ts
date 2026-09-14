@@ -1,6 +1,7 @@
 import {
   findDepositRow,
   formatContractMoney,
+  paymentScheduleLine,
 } from "./project-handoff-commercials";
 import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
 
@@ -123,6 +124,51 @@ export function describeTenderPriceMismatch(input: {
     return null;
   }
   return `The signed Tender's contract price is ${formatContractMoney(tender)}, but the agreed offer's price is ${formatContractMoney(agreed)}. The Contract was not sent. Check which is right, then create a revision so the Tender and the Contract carry the same price.`;
+}
+
+// A Contract sent before this change records no paymentScheduleSource, and its
+// BC4 printed agreedSnapshot's first 7 stages. The project follows the signed
+// Tender, so where the two differ its payment stages disagree with the executed
+// Contract. The handoff warns rather than choosing: which schedule governs those
+// Contracts is the owner's call.
+export function describeLegacyContractScheduleDrift(input: {
+  readonly contractDocumentData: unknown;
+  readonly agreedPaymentSchedule: readonly OfferPaymentScheduleRow[];
+  readonly resolved: Pick<ContractPaymentSource, "paymentSchedule" | "source">;
+  readonly contractValueIncGst: number;
+}): string | null {
+  const data = asRecord(input.contractDocumentData);
+  if (!data || !asRecord(data.tabs) || "paymentScheduleSource" in data) {
+    return null;
+  }
+  if (input.resolved.source === "agreed-snapshot") {
+    return null;
+  }
+  const contractRows = input.agreedPaymentSchedule.slice(0, 7);
+  if (sameStages(contractRows, input.resolved.paymentSchedule)) {
+    return null;
+  }
+  const line = (rows: readonly OfferPaymentScheduleRow[]) =>
+    paymentScheduleLine(rows, input.contractValueIncGst);
+  return `The executed Contract was sent before contracts took their payment schedule from the signed Tender, and the two differ. Contract: ${line(contractRows)}. Signed Tender: ${line(input.resolved.paymentSchedule)}. The project's payment stages follow the signed Tender; check them against the executed Contract.`;
+}
+
+// Stage by stage, by name and by percent in basis points, the precision the
+// schedule is stored to.
+function sameStages(
+  a: readonly OfferPaymentScheduleRow[],
+  b: readonly OfferPaymentScheduleRow[],
+): boolean {
+  const basisPoints = (row: OfferPaymentScheduleRow) =>
+    Math.round(row.percentOfContract * 10000);
+  return (
+    a.length === b.length &&
+    a.every(
+      (row, index) =>
+        row.stageName === b[index].stageName &&
+        basisPoints(row) === basisPoints(b[index]),
+    )
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

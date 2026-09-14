@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  describeLegacyContractScheduleDrift,
   describeTenderPriceMismatch,
   resolveContractPaymentSource,
   withTenderPaymentTerms,
@@ -148,6 +149,72 @@ test("the same price in cents is not a mismatch, whatever the float path", () =>
     describeTenderPriceMismatch({
       tenderContractValueIncGst: null,
       agreedContractValueIncGst: 650_000,
+    }),
+    null,
+  );
+});
+
+// ─── A Contract sent before the schedule came from the Tender ───
+
+// Contract.documentData as the send wrote it before paymentScheduleSource: the
+// BC4 was filled from agreedSnapshot's schedule.
+const LEGACY_CONTRACT_DATA = {
+  templateId: "bc4",
+  tabs: { paymentSchedule: "(1) Deposit 5% $32,500.00" },
+};
+
+test("the handoff warns when a pre-change Contract printed a different schedule", () => {
+  const resolved = resolveContractPaymentSource({
+    tenderDocumentData: sentTenderDocumentData(tenderSnapshot()),
+    agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE,
+  });
+  const warning = describeLegacyContractScheduleDrift({
+    contractDocumentData: LEGACY_CONTRACT_DATA,
+    agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE,
+    resolved,
+    contractValueIncGst: 650_000,
+  });
+
+  assert.ok(warning);
+  assert.match(warning, /Contract: \(1\) \S.* 5% \$32,500\.00/);
+  assert.match(warning, /Signed Tender: \(1\) Deposit 2\.5% \$16,250\.00/);
+});
+
+test("no handoff warning when the Contract records its source or printed the same schedule", () => {
+  const resolved = resolveContractPaymentSource({
+    tenderDocumentData: sentTenderDocumentData(tenderSnapshot()),
+    agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE,
+  });
+  const base = { agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE, resolved, contractValueIncGst: 650_000 };
+
+  assert.equal(
+    describeLegacyContractScheduleDrift({
+      ...base,
+      contractDocumentData: { ...LEGACY_CONTRACT_DATA, paymentScheduleSource: "tender-terms" },
+    }),
+    null,
+  );
+  assert.equal(
+    describeLegacyContractScheduleDrift({
+      ...base,
+      contractDocumentData: LEGACY_CONTRACT_DATA,
+      // Stored with float noise, but the same stages.
+      agreedPaymentSchedule: SIGNED_SCHEDULE.map((row) => ({
+        ...row,
+        percentOfContract: row.percentOfContract + 1e-12,
+      })),
+    }),
+    null,
+  );
+  // Nothing on the Tender: the project took the agreed snapshot, as the Contract did.
+  assert.equal(
+    describeLegacyContractScheduleDrift({
+      ...base,
+      contractDocumentData: LEGACY_CONTRACT_DATA,
+      resolved: resolveContractPaymentSource({
+        tenderDocumentData: null,
+        agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE,
+      }),
     }),
     null,
   );

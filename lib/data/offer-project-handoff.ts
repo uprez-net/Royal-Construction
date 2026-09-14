@@ -18,6 +18,7 @@ import {
   type MissingExecutedDocument,
 } from "@/lib/offer/project-handoff-commercials";
 import {
+  describeLegacyContractScheduleDrift,
   resolveContractPaymentSource,
   type ContractPaymentSource,
 } from "@/lib/offer/contract-payment-source";
@@ -88,6 +89,7 @@ export async function createProjectFromOffer(input: {
         select: {
           id: true,
           executedPdfUrl: true,
+          documentData: true,
           envelopes: {
             orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
             take: 1,
@@ -303,6 +305,16 @@ export async function createProjectFromOffer(input: {
       console.info(
         `[offer] handoff for offer ${offer.id}: payment stages from the signed Tender (${payment.source})`,
       );
+    }
+    const scheduleDrift = describeLegacyContractScheduleDrift({
+      contractDocumentData: offer.contract?.documentData ?? null,
+      agreedPaymentSchedule: snapshot.paymentSchedule,
+      resolved: payment,
+      contractValueIncGst: contractValue,
+    });
+    if (scheduleDrift) {
+      console.warn(`[offer] handoff for offer ${offer.id}: ${scheduleDrift}`);
+      warnings.push(scheduleDrift);
     }
 
     const extraction = buildExtractionPayload(
