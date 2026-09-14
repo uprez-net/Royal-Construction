@@ -99,6 +99,10 @@ import {
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import type { ContractTerms } from "@/lib/offer/contract-terms";
 import {
+  lifecycleActionFor,
+  type LifecycleAction,
+} from "@/lib/offer/lifecycle-busy";
+import {
   isUnsafeToLeave,
   type OfferSaveState,
 } from "@/lib/offer/workspace-save-state";
@@ -304,10 +308,13 @@ export function NewOfferWorkspace({
   // because the pre-transition save reconciled to another tab or failed — without
   // it the button looked like a silent no-op (codex #4).
   const [transitionError, setTransitionError] = useState<string | null>(null);
-  // True while a status change or a revision is running. Double-clicking a
+  // The status change, recall or revision running, or null. Double-clicking a
   // lifecycle button used to fire its server action twice: the ref blocks
-  // re-entry synchronously, the state drives the screen's busy line.
-  const [transitioning, setTransitioning] = useState(false);
+  // re-entry synchronously, and the state drives the screen's busy line and
+  // disables every lifecycle button, marking the one that started.
+  const [lifecycleBusy, setLifecycleBusy] = useState<LifecycleAction | null>(
+    null,
+  );
   const transitioningRef = useRef(false);
   // The mount load failed, so there is no offer to show or save.
   const [loadFailed, setLoadFailed] = useState(false);
@@ -1444,7 +1451,7 @@ export function NewOfferWorkspace({
         return;
       }
       transitioningRef.current = true;
-      setTransitioning(true);
+      setLifecycleBusy(lifecycleActionFor(next, recallScope));
       setTransitionError(null);
       void (async () => {
         try {
@@ -1522,7 +1529,7 @@ export function NewOfferWorkspace({
           }
         } finally {
           transitioningRef.current = false;
-          setTransitioning(false);
+          setLifecycleBusy(null);
         }
       })();
     },
@@ -1549,7 +1556,7 @@ export function NewOfferWorkspace({
       return;
     }
     transitioningRef.current = true;
-    setTransitioning(true);
+    setLifecycleBusy("revision");
     setRevising(true);
     setRevisionNotice(null);
     void (async () => {
@@ -1623,7 +1630,7 @@ export function NewOfferWorkspace({
       } finally {
         setRevising(false);
         transitioningRef.current = false;
-        setTransitioning(false);
+        setLifecycleBusy(null);
       }
     })();
   }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer, stampRevisionLabel]);
@@ -1924,7 +1931,7 @@ export function NewOfferWorkspace({
         calcVersion={calcVersion}
         hydrated={hydrated}
         loadFailed={loadFailed}
-        transitioning={transitioning}
+        lifecycleBusy={lifecycleBusy}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}

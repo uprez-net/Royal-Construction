@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { ContractTerms } from "@/lib/offer/contract-terms";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
 import {
   collectOfferSigners,
@@ -65,6 +66,9 @@ type ContractPanelProps = {
   readonly contractSendError?: string | null;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function ContractPanel({
@@ -82,6 +86,7 @@ export function ContractPanel({
   contractSendError = null,
   onRecallContract,
   onMarkContractSigned,
+  lifecycleBusy,
 }: ContractPanelProps) {
   // The Contract phase begins once the Tender is signed.
   const isTenderSigned = status === "tender_signed";
@@ -151,6 +156,7 @@ export function ContractPanel({
           onMarkContractSigned={onMarkContractSigned}
           onRecallContract={onRecallContract}
           onSendContract={onSendContract}
+          lifecycleBusy={lifecycleBusy}
         />
       </CardContent>
     </Card>
@@ -355,6 +361,7 @@ function ContractActions({
   onSendContract,
   onRecallContract,
   onMarkContractSigned,
+  lifecycleBusy,
 }: {
   readonly isTenderSigned: boolean;
   readonly isDeclined: boolean;
@@ -377,6 +384,7 @@ function ContractActions({
   readonly onSendContract: () => void;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
+  readonly lifecycleBusy: LifecycleAction | null;
 }) {
   const [confirming, setConfirming] = useState(false);
 
@@ -437,6 +445,8 @@ function ContractActions({
       <div className="flex flex-wrap gap-2">
         {isTenderSigned ? (
           <Button
+            aria-busy={lifecycleBusy === "contract_draft" || undefined}
+            disabled={lifecycleBusy !== null}
             size="sm"
             type="button"
             variant="royal"
@@ -468,6 +478,8 @@ function ContractActions({
                 PDF (issue #90); the server action also rejects it there. */}
             {process.env.NODE_ENV === "development" ? (
               <Button
+                aria-busy={lifecycleBusy === "contract_signed" || undefined}
+                disabled={lifecycleBusy !== null}
                 size="sm"
                 type="button"
                 variant="royal"
@@ -478,6 +490,8 @@ function ContractActions({
               </Button>
             ) : null}
             <Button
+              aria-busy={lifecycleBusy === "recall-contract" || undefined}
+              disabled={lifecycleBusy !== null}
               size="sm"
               type="button"
               variant="outline"
