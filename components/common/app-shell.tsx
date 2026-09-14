@@ -17,7 +17,11 @@ import {
 import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/lib/store/hooks";
 import { isUUID } from "@/utils/parser";
-import { getScreenTitle } from "@/utils/uiHelper";
+import {
+  getScreenTitle,
+  getShellSectionSlug,
+  getShellTrail,
+} from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
 import { NotificationProvider } from "@/context/NotificationContext";
@@ -46,10 +50,9 @@ export function AppShell({
   const activeTradie = useAppSelector((state) => state.tradieManagement.selectedTradieDetails);
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
-  const activeSlug = isUUID(lastSegment)
-    ? "Loading..."
-    : (pathName.split("/").pop() ?? "dashboard");
-  const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(activeSlug);
+  const sectionSlug = getShellSectionSlug(pathName);
+  const titleSlug = isUUID(lastSegment) ? "Loading..." : lastSegment;
+  const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(titleSlug);
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -68,8 +71,8 @@ export function AppShell({
   }, []);
 
   const trail = useMemo(
-    () => breadcrumbs ?? ["Home", title],
-    [breadcrumbs, title],
+    () => breadcrumbs ?? getShellTrail(pathName, title),
+    [breadcrumbs, pathName, title],
   );
 
   return (
@@ -94,11 +97,11 @@ export function AppShell({
                 href={`/${item.slug}`}
                 className={cn(
                   "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-slate-100 hover:text-slate-900",
-                  item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]",
+                  item.slug === sectionSlug && "bg-[#C6923A]/10 text-[#C6923A]",
                   item.checkAdmin && !isAdmin && "hidden"
                 )}
                 aria-label={item.label}
-                aria-current={item.slug === activeSlug ? "page" : undefined}
+                aria-current={item.slug === sectionSlug ? "page" : undefined}
               >
                 {item.icon}
                 {/* Duplicate of the Link's aria-label; hide it from the a11y
@@ -163,11 +166,11 @@ export function AppShell({
                         onClick={() => setMobileNavOpen(false)}
                         href={`/${item.slug}`}
                         aria-current={
-                          item.slug === activeSlug ? "page" : undefined
+                          item.slug === sectionSlug ? "page" : undefined
                         }
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900",
-                          item.slug === activeSlug
+                          item.slug === sectionSlug
                             ? "bg-[#C6923A]/10 text-[#C6923A]"
                             : "text-slate-600",
                           item.checkAdmin && !isAdmin && "hidden"
@@ -175,7 +178,7 @@ export function AppShell({
                       >
                         <span aria-hidden="true" className={cn(
                           "grid size-9 place-items-center rounded-lg bg-slate-100 text-slate-500",
-                          item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]"
+                          item.slug === sectionSlug && "bg-[#C6923A]/10 text-[#C6923A]"
                         )}>
                           {item.icon}
                         </span>
