@@ -514,7 +514,7 @@ function BookingContent() {
                                 busy
                                   ? "cursor-not-allowed border-border bg-muted opacity-50"
                                   : isSelected
-                                    ? "border-royal-gold bg-royal-gold cursor-pointer"
+                                    ? "border-royal-gold-ink bg-royal-gold-ink cursor-pointer"
                                     : "border-border bg-card cursor-pointer hover:border-royal-gold",
                               )}
                             >

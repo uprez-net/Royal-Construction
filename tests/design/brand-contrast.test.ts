@@ -64,11 +64,13 @@ test("Tailwind exposes the hover token as a colour utility", () => {
   );
 });
 
-// Whole-repo guard: anything painting white text on base gold fails. --card is
-// oklch(1 0 0), so text-card is white too. Alpha forms such as text-white/90
-// match because "/" ends the name.
+// Whole-repo guard: a class list, or an element's children, painting white text
+// on base gold fails. --card is oklch(1 0 0), so text-card is white too. Alpha
+// forms such as text-white/90 match because "/" ends the name.
 const BASE_GOLD_FILL = /(?<![\w-])bg-royal-gold(?![\w-])/;
 const WHITE_TEXT = /(?<![\w-])text-(?:white|primary-foreground|card)(?![\w-])/;
+// A child that paints its own background is not sitting on the gold.
+const OWN_FILL = /(?<![\w-])bg-(?!royal-gold(?![\w-]))[\w[]/;
 
 const CLOSING: Readonly<Record<string, string>> = { "{": "}", "(": ")" };
 
@@ -101,6 +103,49 @@ function classListUnits(source: string): { start: number; text: string }[] {
   return units;
 }
 
+// Where the JSX opening tag starting at `open` ends, and whether it closes
+// itself. Braces are counted so an arrow's "=>" in an attribute does not end it.
+function openingTag(
+  source: string,
+  open: number,
+): { end: number; selfClosing: boolean } | null {
+  let depth = 0;
+  for (let i = open + 1; i < source.length; i++) {
+    if (source[i] === "{") {
+      depth += 1;
+    } else if (source[i] === "}") {
+      depth -= 1;
+    } else if (source[i] === ">" && depth === 0) {
+      return { end: i, selfClosing: source[i - 1] === "/" };
+    }
+  }
+  return null;
+}
+
+// The children of the element whose opening tag holds `offset`, or null when
+// it closes itself or cannot be read. The selected booking slot put its fill
+// on the <button> and text-card on the spans inside, which no single class
+// list shows.
+function elementChildren(source: string, offset: number): string | null {
+  const open = source.lastIndexOf("<", offset);
+  const name = /^<([A-Za-z][\w.]*)/.exec(source.slice(open, open + 80))?.[1];
+  const tag = name ? openingTag(source, open) : null;
+  if (!name || !tag || tag.selfClosing || tag.end < offset) {
+    return null;
+  }
+  const tags = new RegExp(`<(/?)${name.replace(/\./g, "\\.")}(?![\\w.])`, "g");
+  tags.lastIndex = tag.end + 1;
+  let depth = 1;
+  for (let match = tags.exec(source); match; match = tags.exec(source)) {
+    if (!match[1]) {
+      depth += openingTag(source, match.index)?.selfClosing ? 0 : 1;
+    } else if (--depth === 0) {
+      return source.slice(tag.end + 1, match.index);
+    }
+  }
+  return null;
+}
+
 function sourceFiles(dir: string): string[] {
   const files: string[] = [];
   for (const name of readdirSync(dir)) {
@@ -131,8 +176,19 @@ test("no class list pairs a base --royal-gold fill with white text", () => {
         BASE_GOLD_FILL.test(line) && WHITE_TEXT.test(line) ? [index] : [],
       );
       for (const unit of classListUnits(source)) {
-        if (BASE_GOLD_FILL.test(unit.text) && WHITE_TEXT.test(unit.text)) {
-          const fill = unit.start + unit.text.search(BASE_GOLD_FILL);
+        if (!BASE_GOLD_FILL.test(unit.text)) {
+          continue;
+        }
+        const fill = unit.start + unit.text.search(BASE_GOLD_FILL);
+        const children = WHITE_TEXT.test(unit.text)
+          ? null
+          : elementChildren(source, fill);
+        const whiteChild =
+          children !== null &&
+          classListUnits(children).some(
+            (child) => WHITE_TEXT.test(child.text) && !OWN_FILL.test(child.text),
+          );
+        if (WHITE_TEXT.test(unit.text) || whiteChild) {
           hits.push(source.slice(0, fill).split("\n").length - 1);
         }
       }
