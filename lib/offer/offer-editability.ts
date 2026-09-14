@@ -97,6 +97,10 @@ const WORKSPACE_SAVE_STATUSES: ReadonlySet<OfferWorkspaceStatus> = new Set([
   "tender_draft",
 ]);
 
+export function isWorkspaceSaveStatus(status: OfferWorkspaceStatus): boolean {
+  return WORKSPACE_SAVE_STATUSES.has(status);
+}
+
 // Which persisted slices each Offer-build step owns. The job's reference and
 // revision are left out on purpose: the workspace stamps the live revision's
 // label onto the job when it loads, which is not an edit to the priced job.

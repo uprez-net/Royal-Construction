@@ -113,7 +113,10 @@ import {
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
-import { canCreateRevision } from "@/lib/offer/offer-editability";
+import {
+  canCreateRevision,
+  isWorkspaceSaveStatus,
+} from "@/lib/offer/offer-editability";
 import {
   OfferWorkspaceScreen,
   type OfferPendingConfirm,
@@ -930,6 +933,10 @@ export function NewOfferWorkspace({
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   const hydrateSnapshot = useCallback(
     (s: OfferWorkspaceSnapshot, status: OfferWorkspaceStatus) => {
@@ -974,6 +981,20 @@ export function NewOfferWorkspace({
     [adminPrefill?.costLines, adminPrefill?.loadingChargePercentage],
   );
 
+  // A reload hands back the job as last saved, whose label can belong to the
+  // revision it was forked from. Show the loaded revision's own, as the mount
+  // load does.
+  const stampRevisionLabel = useCallback(
+    (loaded: { readonly reference: string; readonly revisionNumber: number }) => {
+      setJob((current) => ({
+        ...current,
+        reference: loaded.reference.replace(/-R\d+$/, ""),
+        revision: `R${loaded.revisionNumber}`,
+      }));
+    },
+    [],
+  );
+
   // Single-flight workspace autosave (fixes the overlapping-save clobber).
   //
   // Previously each debounced save fired independently with whatever
@@ -998,6 +1019,12 @@ export function NewOfferWorkspace({
         .catch(() => undefined)
         .then(async (): Promise<WorkspaceFlushResult> => {
           if (leadId === undefined) {
+            return "clean";
+          }
+          // The autosave gate, for explicit flushes too. Nothing is editable at
+          // any other status and the server refuses the save, so a flush there
+          // reloaded the tab and failed the recall or send that asked for it.
+          if (!isWorkspaceSaveStatus(statusRef.current)) {
             return "clean";
           }
           // Loop until the persisted state matches the latest snapshot, so edits
@@ -1063,6 +1090,7 @@ export function NewOfferWorkspace({
                     loaded.snapshot,
                     loaded.status.toLowerCase() as OfferWorkspaceStatus,
                   );
+                  stampRevisionLabel(loaded);
                   lastSavedRef.current = JSON.stringify(loaded.snapshot);
                 }
               } catch (error) {
@@ -1089,7 +1117,7 @@ export function NewOfferWorkspace({
       workspaceSaveChainRef.current = run;
       return run;
     },
-    [leadId, hydrateSnapshot, adoptOffer],
+    [leadId, hydrateSnapshot, adoptOffer, stampRevisionLabel],
   );
 
   // Load the active offer for the lead on mount.
@@ -1300,12 +1328,7 @@ export function NewOfferWorkspace({
     // silently drop those edits on reload. The agreed basis is preserved
     // separately in agreedSnapshot; workspaceState stays live until the Tender
     // envelope is sent.
-    if (
-      status !== "pending" &&
-      status !== "sent" &&
-      status !== "agreed" &&
-      status !== "tender_draft"
-    ) {
+    if (!isWorkspaceSaveStatus(status)) {
       return; // frozen once the Tender is sent
     }
     // The server kept refusing this snapshot even after a reload (see
@@ -1557,6 +1580,7 @@ export function NewOfferWorkspace({
             loaded.snapshot,
             loaded.status.toLowerCase() as OfferWorkspaceStatus,
           );
+          stampRevisionLabel(loaded);
           lastSavedRef.current = JSON.stringify(loaded.snapshot);
         } else {
           lastSavedRef.current = JSON.stringify(snapshotRef.current);
@@ -1579,7 +1603,7 @@ export function NewOfferWorkspace({
         setTransitioning(false);
       }
     })();
-  }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer]);
+  }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer, stampRevisionLabel]);
 
   // Recall and Create revision void live DocuSign envelopes, which can't be
   // undone, and a revision supersedes the offer. Their buttons acted on the
