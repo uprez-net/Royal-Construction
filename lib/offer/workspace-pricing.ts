@@ -203,6 +203,9 @@ export type OfferWorkspacePricing = {
   readonly gstAmount: number;
   readonly contractValueIncGst: number;
   readonly perSqm: number | null;
+  // Echoed from the settings so a figure derived on another price (the summary
+  // strip's GST on an overridden offer) splits at the rate this build-up used.
+  readonly gstRate: number;
 };
 
 // The full markup applied to costBeforeFee (overhead + fee). The margin badge's
@@ -375,6 +378,7 @@ export function calculateOfferWorkspacePricing({
     gstAmount,
     contractValueIncGst,
     perSqm,
+    gstRate: settings.gstRate,
   };
 }
 

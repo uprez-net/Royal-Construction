@@ -11,15 +11,20 @@
 // The hero figure is the SELECTED contract value, the number the customer's
 // document actually carries. The old rail showed the computed build-up total, so
 // the moment an estimator used the price override the largest, most persistent
-// number on screen stopped being the number on the offer.
+// number on screen stopped being the number on the offer. The cells beside it
+// are on that same price; see buildOfferSummaryFigures.
 
 import { Check, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatCurrency,
+  formatMoneyDelta,
   formatPercent,
   getMarginStatusLabel,
+  moneyDeltaFractionDigits,
 } from "@/components/offers/new-workflow/offer-workspace-format";
+import { buildOfferSummaryFigures } from "@/lib/offer/summary-strip";
+import { formatArea } from "@/lib/offer/workspace-print-template";
 import type {
   EffectiveMargin,
   MarginStatus,
@@ -54,20 +59,22 @@ export function OfferSummaryStrip({
   totalAreaSqm,
 }: OfferSummaryStripProps) {
   const selected = customerPrice.selectedContractValueIncGst;
-  const computed = pricing.contractValueIncGst;
-  // An override means the build-up and the offer disagree. Say so, rather than
-  // showing two large numbers in different places and letting the operator
-  // discover the gap on the document.
-  const overridden = Math.round(selected) !== Math.round(computed);
-  const perSqm = totalAreaSqm > 0 ? selected / totalAreaSqm : 0;
+  const figures = buildOfferSummaryFigures({
+    customerPrice,
+    pricing,
+    totalAreaSqm,
+  });
   const priced = effectiveMargin.marginStatus !== "not_priced";
 
   const cells: readonly (readonly [string, string])[] = [
-    ["Building area", totalAreaSqm > 0 ? `${totalAreaSqm} m²` : "—"],
+    ["Building area", totalAreaSqm > 0 ? formatArea(totalAreaSqm) : "—"],
     ["Direct total", formatCurrency(pricing.directTotal)],
     ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
-    ["GST", formatCurrency(pricing.gstAmount)],
-    ["Per m²", totalAreaSqm > 0 ? formatCurrency(perSqm) : "—"],
+    ["GST", formatCurrency(figures.gstOnOffer)],
+    [
+      "Per m² (offer price)",
+      figures.perSqm === null ? "—" : formatCurrency(figures.perSqm),
+    ],
   ];
 
   return (
@@ -89,10 +96,21 @@ export function OfferSummaryStrip({
       </dl>
 
       <div className="ml-auto flex items-center gap-3">
-        {overridden ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium text-warning-ink">
+        {/* An override means the build-up and the offer disagree. Say so, rather
+            than showing two large numbers in different places and letting the
+            operator discover the gap on the document. */}
+        {figures.overridden ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
             <TriangleAlert className="size-3" aria-hidden="true" />
-            Overridden from {formatCurrency(computed)}
+            {formatMoneyDelta(figures.overrideDeltaIncGst)} vs{" "}
+            {formatCurrency(customerPrice.computedContractValueIncGst, {
+              // A cents override would otherwise read "+$0.37 vs $950,000"
+              // beside a $950,000 hero, with nothing visibly different.
+              maximumFractionDigits: moneyDeltaFractionDigits(
+                figures.overrideDeltaIncGst,
+              ),
+            })}{" "}
+            build-up
           </span>
         ) : null}
         <span

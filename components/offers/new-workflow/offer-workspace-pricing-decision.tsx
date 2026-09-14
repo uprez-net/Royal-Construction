@@ -7,7 +7,7 @@ import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { AlertTriangle, BadgeDollarSign } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency } from "./offer-workspace-format";
+import { formatCurrency, formatMoneyDelta } from "./offer-workspace-format";
 import { FIELD_LABEL_CLASS, FieldLabel } from "./offer-workspace-fields";
 
 type PricingDecisionPanelProps = {
@@ -119,8 +119,8 @@ export function PricingDecisionPanel({
           <p className="font-mono text-lg font-semibold">
             {formatCurrency(customerPrice.computedContractValueIncGst)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Variance {formatCurrency(customerPrice.varianceIncGst)}
+          <p className="mt-1 font-mono text-xs tabular-nums text-muted-foreground">
+            Variance {formatMoneyDelta(customerPrice.varianceIncGst)}
           </p>
           {saving !== null && saving > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">

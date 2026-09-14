@@ -151,7 +151,7 @@ export function PriceBuildupPanel({
               strong
             />
             <SummaryRow
-              label="Per sqm"
+              label="Build-up per sqm"
               value={formatCurrency(pricing.perSqm, {
                 maximumFractionDigits: 2,
               })}

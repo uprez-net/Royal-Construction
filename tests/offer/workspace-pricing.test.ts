@@ -47,6 +47,7 @@ assert.deepEqual(pricing, {
   gstAmount: 60000,
   contractValueIncGst: 660000,
   perSqm: 3300,
+  gstRate: 0.1,
 });
 
 // Verified against real Royal workbooks. These jobs carried the whole markup on
