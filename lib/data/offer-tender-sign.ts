@@ -28,6 +28,7 @@ import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { createTenderEnvelope } from "@/lib/docusign/tender-envelope";
 import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
+import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -228,12 +229,15 @@ export async function sendTenderForSignature(input: {
     JSON.stringify(withTenderPaymentTerms(proposalInput)),
   );
 
-  await prisma.$transaction(async (tx) => {
+  const stillClaimed = await prisma.$transaction(async (tx) => {
     const tender = await tx.tender.upsert({
       where: { offerId: offer.id },
       update: {
         version: offer.revisionNumber,
         documentData,
+        // A new envelope replaces the document, so the last envelope's executed
+        // PDF no longer describes it. The webhook files this one's on completion.
+        executedPdfUrl: null,
       },
       create: {
         offerId: offer.id,
@@ -266,10 +270,22 @@ export async function sendTenderForSignature(input: {
         },
       },
     });
-    await tx.offer.update({
-      where: { id: offer.id },
+    // Only over the status this send claimed, on the live revision. A recall or
+    // Create revision that ran while DocuSign was creating the envelope has
+    // moved the offer on, and writing TENDER_SENT back put a recalled offer out
+    // for signature again. The envelope row is still written above, so the
+    // envelope stays on the audit trail and can be cancelled.
+    const stillSent = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        offerStatus: OfferStatus.TENDER_SENT,
+        isActive: true,
+      },
       data: { offerStatus: OfferStatus.TENDER_SENT },
     });
+    if (stillSent.count === 0) {
+      return false;
+    }
     await tx.offerStatusEvent.create({
       data: {
         offerId: offer.id,
@@ -281,6 +297,7 @@ export async function sendTenderForSignature(input: {
         note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
       },
     });
+    return true;
   })
     .catch((error) => {
       // The envelope is ALREADY with the client and cannot be un-sent, so this
@@ -297,6 +314,13 @@ export async function sendTenderForSignature(input: {
         `The Tender was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
       );
     });
+
+  // No *_SENT event and no lead sync: the offer is wherever the recall or
+  // revision left it.
+  if (!stillClaimed) {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    return cancelRacedSend(envelope.envelopeId);
+  }
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   // The status moved to *_SENT above; bring the lead with it. Best effort

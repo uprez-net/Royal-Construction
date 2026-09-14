@@ -54,6 +54,7 @@ import {
   describeTenderPriceMismatch,
   resolveContractPaymentSource,
 } from "@/lib/offer/contract-payment-source";
+import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -460,10 +461,12 @@ export async function sendContractForSignature(input: {
     paymentScheduleSource: payment.source,
   };
 
-  await prisma.$transaction(async (tx) => {
+  const stillClaimed = await prisma.$transaction(async (tx) => {
     const contract = await tx.contract.upsert({
       where: { offerId: offer.id },
-      update: { version: offer.revisionNumber, documentData },
+      // A new envelope replaces the document, so the last envelope's executed
+      // PDF no longer describes it. The webhook files this one's on completion.
+      update: { version: offer.revisionNumber, documentData, executedPdfUrl: null },
       create: { offerId: offer.id, version: offer.revisionNumber, documentData },
     });
     await tx.envelope.create({
@@ -491,10 +494,21 @@ export async function sendContractForSignature(input: {
         },
       },
     });
-    await tx.offer.update({
-      where: { id: offer.id },
+    // Only over the status this send claimed, on the live revision: a recall or
+    // revision during envelope creation must not be overwritten with
+    // CONTRACT_SENT. The envelope row above is still written so it can be
+    // cancelled and stays on the audit trail.
+    const stillSent = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        offerStatus: OfferStatus.CONTRACT_SENT,
+        isActive: true,
+      },
       data: { offerStatus: OfferStatus.CONTRACT_SENT },
     });
+    if (stillSent.count === 0) {
+      return false;
+    }
     await tx.offerStatusEvent.create({
       data: {
         offerId: offer.id,
@@ -507,6 +521,7 @@ export async function sendContractForSignature(input: {
         note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners.map((signer) => signer.email).join(", ")}`,
       },
     });
+    return true;
   })
     .catch((error) => {
       // Same invariant as the Tender: the executed contract envelope is already
@@ -521,6 +536,13 @@ export async function sendContractForSignature(input: {
         `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
       );
     });
+
+  // No *_SENT event and no lead sync: the offer is wherever the recall or
+  // revision left it.
+  if (!stillClaimed) {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    return cancelRacedSend(envelope.envelopeId);
+  }
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   // The status moved to *_SENT above; bring the lead with it. Best effort
