@@ -87,14 +87,16 @@ export function OfferStepRail({
         onClick={onToggleCollapsed}
         aria-label={collapsed ? "Expand step rail" : "Collapse step rail"}
         aria-expanded={!collapsed}
-        className="flex items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+        // Below lg the rail is icon-only whatever the toggle says, so there the
+        // button would change nothing but still sit in the tab order.
+        className="hidden items-center gap-2 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 lg:flex"
       >
         {collapsed ? (
           <ChevronRight className="size-4" aria-hidden="true" />
         ) : (
           <>
             <ChevronLeft className="size-4" aria-hidden="true" />
-            <span className="hidden lg:inline">Collapse</span>
+            <span>Collapse</span>
           </>
         )}
       </button>
