@@ -6,6 +6,7 @@ import { getUserByClerkIdCached } from '@/lib/data/user';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
 import { LeadAccessError, assertCanAccessLead } from '@/lib/offer/access';
+import { ProjectAccessError, assertCanEditProject } from '@/lib/data/project-access';
 
 export async function POST(request: Request): Promise<NextResponse> {
     try {
@@ -43,6 +44,26 @@ export async function POST(request: Request): Promise<NextResponse> {
                     } catch (error) {
                         if (error instanceof LeadAccessError) {
                             throw new Error(error.status === 404 ? 'Lead not found' : 'Forbidden');
+                        }
+                        throw error;
+                    }
+                }
+
+                // The project and milestone ids are the browser's too, and the
+                // completed upload writes a File row onto that project.
+                if (clientPayload.projectId || clientPayload.milestoneId) {
+                    const user = await getUserByClerkIdCached(userId);
+                    if (!user) {
+                        throw new Error('Unauthorized');
+                    }
+                    try {
+                        await assertCanEditProject(user, {
+                            projectId: clientPayload.projectId,
+                            milestoneId: clientPayload.milestoneId,
+                        });
+                    } catch (error) {
+                        if (error instanceof ProjectAccessError) {
+                            throw new Error(error.status === 404 ? 'Project not found' : 'Forbidden');
                         }
                         throw error;
                     }
@@ -134,6 +155,11 @@ export async function POST(request: Request): Promise<NextResponse> {
                 return errorResponse(message, {
                     status: 404,
                     code: 'UPLOAD_LEAD_NOT_FOUND',
+                });
+            case 'Project not found':
+                return errorResponse(message, {
+                    status: 404,
+                    code: 'UPLOAD_PROJECT_NOT_FOUND',
                 });
             case 'Invalid file metadata in payload':
             case 'Failed to save file metadata':
