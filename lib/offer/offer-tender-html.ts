@@ -4,6 +4,7 @@ import {
   formatDwellingSpec,
   grannyDwellingSpec,
   COMPANY_LINE,
+  type OfferPrintPaymentRow,
   type OfferPrintScopeRow,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
@@ -568,8 +569,15 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     return `<div class="rfoot">${esc(TENDER_FOOTER_BASE)}  |  Tender ${esc(reference)}  |  Page ${pageNo} of ${totalPages}</div>`;
   };
 
+  // The three "N% deposit" sentences quote the schedule's own deposit stage. With
+  // no stages there is no deposit to ask for, so the clause is dropped.
+  const deposit = depositRow(data.paymentRows);
+  const depositPercent = deposit
+    ? formatPercent(deposit.percentOfContract)
+    : null;
+
   const body = [
-    coverPage(input, data, foot()),
+    coverPage(input, data, depositPercent, foot()),
     particularsPage(
       input,
       totalArea,
@@ -582,7 +590,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     ...schedulePages.map((items, index) =>
       schedulePage(items, index === 0, foot()),
     ),
-    contractTermsPage(data, contractTermsSectionNo, foot()),
+    contractTermsPage(data, contractTermsSectionNo, depositPercent, foot()),
     exclusionsPage(data, foot()),
     ...allowancePages.map((rows, index) =>
       allowancesPage(rows, index > 0, foot()),
@@ -592,6 +600,7 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
         job,
         signers,
         rows,
+        depositPercent,
         index === 0,
         index === acceptanceChunks.length - 1,
         foot(),
@@ -603,6 +612,17 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
 }
 
 // ─── Document shells ────────────────────────────────────────────────────────
+
+// The deposit stage, by the rule the contract's deposit field already uses
+// (lib/data/offer-contract-sign.ts): the stage named for it, else the first.
+function depositRow(
+  rows: readonly OfferPrintPaymentRow[],
+): OfferPrintPaymentRow | undefined {
+  return (
+    rows.find((row) => row.stageName.toLowerCase().includes("deposit")) ??
+    rows[0]
+  );
+}
 
 // The TENDER shell. Forked from legalDocShell() so restyling the tender to the
 // Word template could not silently restyle the Contract annexure, which is a
@@ -814,6 +834,7 @@ export function legalDocShell(body: string): string {
 function coverPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
+  depositPercent: string | null,
   foot: string,
 ): string {
   const { job, customerPrice } = input;
@@ -847,7 +868,9 @@ function coverPage(
     `Below is an itemised list of inclusions which have been included in your tender price based on the preliminary drawings provided.`,
     `Should you wish to discuss any of the contents of this tender, please do not hesitate to contact me.`,
     `I trust the tender meets with your approval; we look forward to providing you with a high level of service in the construction of your new home.`,
-    `This tender will remain firm until ${esc(data.validUntilLabel)}, subject to your acceptance and 5% deposit.`,
+    depositPercent
+      ? `This tender will remain firm until ${esc(data.validUntilLabel)}, subject to your acceptance and ${depositPercent} deposit.`
+      : `This tender will remain firm until ${esc(data.validUntilLabel)}, subject to your acceptance.`,
   ];
   return tenderPage(
     `<div class="t-date">${esc(data.preparedDateLabel)}</div>
@@ -1041,6 +1064,7 @@ function inclusionRowHtml(row: TenderInclusionRow): string {
 function contractTermsPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   sectionNo: number,
+  depositPercent: string | null,
   foot: string,
 ): string {
   const term = (item: string, detail: string): string =>
@@ -1060,7 +1084,7 @@ function contractTermsPage(
       <tbody>
         ${term("Contract Documents", "This Tender, the approved plans and specifications, and the executed MBA fixed-price home building contract together form the agreement between the parties.")}
         ${term("Construction Period", "Approximately 8&ndash;10 months from slab pour to handover, subject to council approval timing and site conditions. Pre-construction and plan preparation time is additional. Final period to be confirmed in the MBA Building Contract.")}
-        ${term("Tender Validity", `This tender remains firm until ${esc(data.validUntilLabel)}, subject to acceptance and 5% deposit.`)}
+        ${term("Tender Validity", depositPercent ? `This tender remains firm until ${esc(data.validUntilLabel)}, subject to acceptance and ${depositPercent} deposit.` : `This tender remains firm until ${esc(data.validUntilLabel)}, subject to acceptance.`)}
         ${term("Site Conditions", "Priced on standard residential site conditions. Class H2/E soil, rock, or abnormal fill identified by geotechnical investigation is addressed by written variation before affected works proceed.")}
         ${term("Progress Payments", "Claims are payable within the period stated in the building contract on completion of each stage set out below.")}
         ${term("Variations", "No variation is carried out without a signed Variation Order. Owner-requested variations: $250 + GST admin fee plus cost of works. Variations may extend the contract period by a minimum of 2 weeks. Variation amounts are payable at the next progress claim.")}
@@ -1199,6 +1223,7 @@ function acceptancePage(
   job: OfferWorkspaceJob,
   signers: readonly OfferSignerContext[],
   rows: readonly AcceptanceRow[],
+  depositPercent: string | null,
   first: boolean,
   last: boolean,
   foot: string,
@@ -1212,7 +1237,7 @@ function acceptancePage(
     .join(" ");
   return tenderPage(
     `<h3 class="t-sub">Acceptance of Tender${first ? "" : " (cont.)"}</h3>
-    ${first ? `<p>Please read and acknowledge that you understand the above document by signing below. Once signed, please return along with the 5% deposit to proceed.</p>` : ""}
+    ${first ? `<p>Please read and acknowledge that you understand the above document by signing below. ${depositPercent ? `Once signed, please return along with the ${depositPercent} deposit to proceed.` : "Once signed, please return it to proceed."}</p>` : ""}
     <table class="t-accept">
       <thead><tr><th class="c-name">Print Full Name</th><th class="c-sign">Signature</th><th class="c-date">Date</th></tr></thead>
       <tbody>${rows.map((row) => row.html).join("")}</tbody>
