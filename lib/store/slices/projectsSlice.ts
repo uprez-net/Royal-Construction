@@ -25,6 +25,7 @@ import {
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
+import { reviveComplianceEngagementDates } from "@/lib/compliance/engagement-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.
@@ -475,7 +476,10 @@ async function replaceEngagement(
     { method: "GET" },
     fallbackMessage,
   );
-  return { projectId, engagement: refreshed.data };
+  return {
+    projectId,
+    engagement: reviveComplianceEngagementDates(refreshed.data),
+  };
 }
 
 const jsonPost = (body: unknown): RequestInit => ({
@@ -689,7 +693,10 @@ export const refreshCertifierEngagement = createAsyncThunk<
       { method: "GET" },
       "Unable to load the compliance file",
     );
-    return { projectId, engagement: response.data };
+    return {
+      projectId,
+      engagement: reviveComplianceEngagementDates(response.data),
+    };
   } catch (error) {
     return thunkApi.rejectWithValue(
       error instanceof Error ? error.message : "Unable to load the compliance file",
@@ -1729,7 +1736,8 @@ const projectsSlice = createSlice({
           error: null,
         };
         if (state.activeProject?.id === action.payload.projectId) {
-          state.activeProject.certifierEngagement = action.payload.engagement;
+          state.activeProject.certifierEngagement =
+            reviveComplianceEngagementDates(action.payload.engagement);
         }
       })
       .addMatcher(isDeveloperApprovalFinished, (state, action) => {
