@@ -167,7 +167,7 @@ export function CostSchedulePanel({
           {importedCount > 0 ? (
             <OfferSummaryBadge label="imported" value={importedCount} />
           ) : null}
-          <span className="rounded-md border border-border bg-background px-2 py-1 lg:hidden">
+          <span className="rounded-md border border-border bg-background px-2 py-1 @6xl/pane:hidden">
             Scroll sideways to review all columns
           </span>
         </div>
