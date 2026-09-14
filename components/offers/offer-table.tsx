@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import type { KeyboardEvent } from "react";
 import type {
   OfferGroup,
-  OfferWithLead,
+  OfferListRow,
   PaginatedOfferGroupResult,
 } from "@/types/offer";
 import {
@@ -404,7 +404,7 @@ function OfferRevisionRow({
   revision,
   onStatusChange,
 }: {
-  revision: OfferWithLead;
+  revision: OfferListRow;
   onStatusChange: (offerId: string, status: OfferStatus) => Promise<void>;
 }) {
   return (

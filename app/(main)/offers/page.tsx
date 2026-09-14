@@ -3,7 +3,15 @@ import { OfferHeader } from "@/components/offers/offer-header";
 import { OfferKPI } from "@/components/offers/offer-kpi";
 import { OfferTable } from "@/components/offers/offer-table";
 import { Card } from "@/components/ui/card";
-import { getOfferGroupsCached, getOfferKPIsCached } from "@/lib/data/offers";
+import {
+  emptyOfferGroupResult,
+  emptyOfferKPIs,
+  getOfferGroupsCached,
+  getOfferKPIsCached,
+} from "@/lib/data/offer-listing";
+import { getUserByClerkIdCached } from "@/lib/data/user";
+import { leadListScope } from "@/lib/offer/access";
+import { auth } from "@clerk/nextjs/server";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import OfferPageSkeleton from "./loading";
@@ -17,10 +25,18 @@ export const metadata: Metadata = {
 async function OfferPageClient() {
   // Prevent build-time prerender DB queries; render this page at request time.
   await connection();
-  const [offerKPIs, offers] = await Promise.all([
-    getOfferKPIsCached(),
-    getOfferGroupsCached(1, 10),
-  ]);
+  // The user is resolved here, outside the cached fetchers: a "use cache" scope
+  // cannot read the request, so the scope goes in as a cache-key argument. No
+  // internal user means no scope, and nothing is read.
+  const { userId } = await auth();
+  const user = userId ? await getUserByClerkIdCached(userId) : null;
+  const scope = user ? leadListScope(user) : null;
+  const [offerKPIs, offers] = scope
+    ? await Promise.all([
+      getOfferKPIsCached(scope),
+      getOfferGroupsCached(1, 10, "", "all", scope),
+    ])
+    : [emptyOfferKPIs(), emptyOfferGroupResult(1, 10)];
 
   return (
     <div className="space-y-6">
