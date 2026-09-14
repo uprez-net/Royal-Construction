@@ -14,10 +14,13 @@ import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   buildHandoffCommercials,
   describeMissingExecutedDocuments,
-  findDepositRow,
   tenderExclusionLines,
   type MissingExecutedDocument,
 } from "@/lib/offer/project-handoff-commercials";
+import {
+  resolveContractPaymentSource,
+  type ContractPaymentSource,
+} from "@/lib/offer/contract-payment-source";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -73,6 +76,7 @@ export async function createProjectFromOffer(input: {
         select: {
           id: true,
           executedPdfUrl: true,
+          documentData: true,
           envelopes: {
             orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
             take: 1,
@@ -285,7 +289,29 @@ export async function createProjectFromOffer(input: {
       contract: await docRef(executedContract.url, "contract"),
     };
 
-    const extraction = buildExtractionPayload(snapshot, contractValue, reference, sourceDocuments);
+    // Payment stages and deposit from the signed Tender, the same source the
+    // Contract was sent with; the price stays the agreed snapshot's.
+    const payment = resolveContractPaymentSource({
+      tenderDocumentData: offer.tender?.documentData ?? null,
+      agreedPaymentSchedule: snapshot.paymentSchedule,
+    });
+    if (payment.source === "agreed-snapshot") {
+      console.warn(
+        `[offer] handoff for offer ${offer.id}: no payment schedule on the Tender row, using the agreed snapshot's`,
+      );
+    } else {
+      console.info(
+        `[offer] handoff for offer ${offer.id}: payment stages from the signed Tender (${payment.source})`,
+      );
+    }
+
+    const extraction = buildExtractionPayload(
+      snapshot,
+      contractValue,
+      reference,
+      sourceDocuments,
+      payment,
+    );
 
     // The start date defaults to +14 days from today; the signed date written
     // by buildExtractionPayload is today's date. The start is therefore always
@@ -490,6 +516,7 @@ function buildExtractionPayload(
   contractValue: number,
   reference: string,
   sourceDocuments: { tender: ProjectSourceDocumentReference; contract: ProjectSourceDocumentReference },
+  payment: Pick<ContractPaymentSource, "paymentSchedule" | "deposit">,
 ): ProjectRequirementsPayload {
   const job = snapshot.job;
   // Owner contacts for the project-extraction legalAdministration block, now
@@ -518,8 +545,8 @@ function buildExtractionPayload(
   const { gstAmount, paymentStages, depositValue } = buildHandoffCommercials({
     contractValueIncGst: contractValue,
     gstRate: snapshot.workspacePricingSettings.gstRate,
-    paymentSchedule: snapshot.paymentSchedule,
-    deposit: findDepositRow(snapshot.paymentSchedule),
+    paymentSchedule: payment.paymentSchedule,
+    deposit: payment.deposit,
   });
 
   return {

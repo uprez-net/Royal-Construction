@@ -27,6 +27,7 @@ import {
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { createTenderEnvelope } from "@/lib/docusign/tender-envelope";
+import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -221,17 +222,23 @@ export async function sendTenderForSignature(input: {
     };
   }
 
+  // The render input the Tender was printed from, plus the payment terms on it:
+  // the Contract and the project take the signed schedule and deposit from here.
+  const documentData = JSON.parse(
+    JSON.stringify(withTenderPaymentTerms(proposalInput)),
+  );
+
   await prisma.$transaction(async (tx) => {
     const tender = await tx.tender.upsert({
       where: { offerId: offer.id },
       update: {
         version: offer.revisionNumber,
-        documentData: JSON.parse(JSON.stringify(proposalInput)),
+        documentData,
       },
       create: {
         offerId: offer.id,
         version: offer.revisionNumber,
-        documentData: JSON.parse(JSON.stringify(proposalInput)),
+        documentData,
       },
     });
     await tx.envelope.create({

@@ -45,12 +45,15 @@ import {
 } from "@/lib/offer/contract-particulars";
 
 import {
-  findDepositRow,
   formatContractMoney,
   paymentScheduleLine as buildPaymentScheduleLine,
   stageAmount,
   tenderExclusionLines,
 } from "@/lib/offer/project-handoff-commercials";
+import {
+  describeTenderPriceMismatch,
+  resolveContractPaymentSource,
+} from "@/lib/offer/contract-payment-source";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -82,6 +85,7 @@ export async function sendContractForSignature(input: {
       workspaceState: true,
       agreedSnapshot: true,
       lead: { select: { email: true } },
+      tender: { select: { documentData: true } },
     },
   });
   if (!offer) {
@@ -147,6 +151,30 @@ export async function sendContractForSignature(input: {
   const contractValue =
     buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
+
+  // The payment schedule and deposit come from the Tender the customer signed;
+  // the price stays the agreed snapshot's. A Tender that printed a different
+  // price is refused rather than reconciled, before the send is claimed.
+  const payment = resolveContractPaymentSource({
+    tenderDocumentData: offer.tender?.documentData ?? null,
+    agreedPaymentSchedule: snapshot.paymentSchedule,
+  });
+  if (payment.source === "agreed-snapshot") {
+    console.warn(
+      `[offer] contract for offer ${offer.id}: no payment schedule on the Tender row, using the agreed snapshot's`,
+    );
+  } else {
+    console.info(
+      `[offer] contract for offer ${offer.id}: payment schedule from the signed Tender (${payment.source})`,
+    );
+  }
+  const priceMismatch = describeTenderPriceMismatch({
+    tenderContractValueIncGst: payment.tenderContractValueIncGst,
+    agreedContractValueIncGst: contractValue,
+  });
+  if (priceMismatch) {
+    return { ok: false, error: priceMismatch };
+  }
 
   // Owner parties (ADR 0003). The BC4 form has a single OWNER(S) area, so every
   // owner is named on the ownerNames line (companies annotated with ABN/ACN),
@@ -258,10 +286,10 @@ export async function sendContractForSignature(input: {
   // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
   // silently drop validated stages past the 7th, which would send a contract
   // whose payment schedule doesn't sum to the contract value.
-  if (snapshot.paymentSchedule.length > 7) {
+  if (payment.paymentSchedule.length > 7) {
     return {
       ok: false,
-      error: `The contract template supports up to 7 payment stages, but this schedule has ${snapshot.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
+      error: `The contract template supports up to 7 payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
     };
   }
 
@@ -292,9 +320,9 @@ export async function sendContractForSignature(input: {
   }
 
   const parsedParticulars = parseContractParticulars(claim.particulars);
-  const stageRows = snapshot.paymentSchedule.slice(0, 7);
+  const stageRows = payment.paymentSchedule.slice(0, 7);
   const paymentScheduleLine = buildPaymentScheduleLine(stageRows, contractValue);
-  const depositRow = findDepositRow(stageRows);
+  const depositRow = payment.deposit;
   // The exclusions the Tender printed, Scope exclusions included — the bullets
   // alone left out every ticked Scope exclusion the customer had signed.
   const exclusions = tenderExclusionLines(snapshot);
@@ -428,6 +456,8 @@ export async function sendContractForSignature(input: {
   const documentData = {
     templateId: config.contractTemplateId,
     tabs: Object.fromEntries(ownerTextTabs.map((t) => [t.tabLabel, t.value])),
+    // Which copy of the schedule the contract went out on, for a dispute.
+    paymentScheduleSource: payment.source,
   };
 
   await prisma.$transaction(async (tx) => {
