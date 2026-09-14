@@ -3,13 +3,21 @@
 import { auth } from "@clerk/nextjs/server";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
-import { OfferStatus } from "@prisma/client";
+import { EnvelopeStatus, OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { getUserByClerkId } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
 import { createProjectWithLead } from "@/lib/data/projectsWrite";
+import { archiveExecuted } from "@/lib/docusign/archive-executed";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import {
+  buildHandoffCommercials,
+  describeMissingExecutedDocuments,
+  findDepositRow,
+  tenderExclusionLines,
+  type MissingExecutedDocument,
+} from "@/lib/offer/project-handoff-commercials";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -58,8 +66,31 @@ export async function createProjectFromOffer(input: {
       offerStatus: true,
       workspaceState: true,
       agreedSnapshot: true,
-      tender: { select: { executedPdfUrl: true } },
-      contract: { select: { executedPdfUrl: true } },
+      // Each document's latest-sent envelope: the one the Connect webhook treats
+      // as current. An older completed envelope was recalled or replaced and
+      // is never filed as the executed document.
+      tender: {
+        select: {
+          id: true,
+          executedPdfUrl: true,
+          envelopes: {
+            orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+            select: { docusignId: true, status: true },
+          },
+        },
+      },
+      contract: {
+        select: {
+          id: true,
+          executedPdfUrl: true,
+          envelopes: {
+            orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+            select: { docusignId: true, status: true },
+          },
+        },
+      },
       lead: { select: { id: true, name: true, email: true, phone: true, project: { select: { id: true } } } },
     },
   });
@@ -91,24 +122,25 @@ export async function createProjectFromOffer(input: {
     return { ok: false, error: "No agreed offer snapshot found." };
   }
 
-  // Both executed PDFs must be on file before a project can be created.
-  // executedPdfUrl is written only by the DocuSign completion webhook
-  // (app/api/docusign/connect/route.ts) after it archives the signed document;
-  // a null URL means the offer reached CONTRACT_SIGNED without a genuine
-  // completion (e.g. a manual status advance, or a completion webhook rejected
-  // at the HMAC gate), so there is no executed tender/contract to attach.
-  // Block here rather than creating a project with empty documents (issue #90).
+  // Both executed PDFs must be on file before a project can be created, rather
+  // than creating a project with empty documents (issue #90). The Connect
+  // webhook files them once it archives the signed document, but an archive can
+  // fail after the signature, so a null URL does not prove the document is
+  // unsigned: when DocuSign has the document's latest envelope completed, it is
+  // fetched and filed now. Only a document DocuSign has not completed blocks.
   // Runs before the claim below, so a failed gate needs no status rollback.
-  const missingExecutedDocs: string[] = [];
-  if (!offer.tender?.executedPdfUrl) missingExecutedDocs.push("tender");
-  if (!offer.contract?.executedPdfUrl) missingExecutedDocs.push("contract");
-  if (missingExecutedDocs.length > 0) {
-    return {
-      ok: false,
-      error: `Cannot create the project: no executed ${missingExecutedDocs.join(
-        " and ",
-      )} PDF is on file. Complete signing via DocuSign so the executed document is archived, then try again.`,
-    };
+  const executedTender = await ensureExecutedPdf("tender", offer.tender);
+  const executedContract = await ensureExecutedPdf("contract", offer.contract);
+  const missingExecutedDocs: MissingExecutedDocument[] = [];
+  if (!executedTender.url) {
+    missingExecutedDocs.push({ kind: "tender", signed: executedTender.signed });
+  }
+  if (!executedContract.url) {
+    missingExecutedDocs.push({ kind: "contract", signed: executedContract.signed });
+  }
+  const missingExecutedError = describeMissingExecutedDocuments(missingExecutedDocs);
+  if (missingExecutedError) {
+    return { ok: false, error: missingExecutedError };
   }
 
   // Atomically claim the handoff: flip CONTRACT_SIGNED → PROJECT in one
@@ -249,8 +281,8 @@ export async function createProjectFromOffer(input: {
       return { fileId: file.id, fileName, url, kind };
     };
     const sourceDocuments = {
-      tender: await docRef(offer.tender?.executedPdfUrl, "tender"),
-      contract: await docRef(offer.contract?.executedPdfUrl, "contract"),
+      tender: await docRef(executedTender.url, "tender"),
+      contract: await docRef(executedContract.url, "contract"),
     };
 
     const extraction = buildExtractionPayload(snapshot, contractValue, reference, sourceDocuments);
@@ -416,6 +448,41 @@ export async function createProjectFromOffer(input: {
   };
 }
 
+// The executed PDF for one document: the filed URL, or one fetched from
+// DocuSign now when the document's latest envelope completed but its archive
+// failed. `signed` says whether DocuSign completed it, which decides what the
+// estimator is told when no URL comes back. Not exported: this file is
+// "use server", and the caller has already authorized.
+async function ensureExecutedPdf(
+  kind: "tender" | "contract",
+  parent: {
+    id: string;
+    executedPdfUrl: string | null;
+    envelopes: { docusignId: string | null; status: EnvelopeStatus }[];
+  } | null,
+): Promise<{ url: string | null; signed: boolean }> {
+  if (!parent) {
+    return { url: null, signed: false };
+  }
+  if (parent.executedPdfUrl) {
+    return { url: parent.executedPdfUrl, signed: true };
+  }
+  const latest = parent.envelopes[0];
+  if (!latest?.docusignId || latest.status !== EnvelopeStatus.COMPLETED) {
+    return { url: null, signed: false };
+  }
+  try {
+    const url = await archiveExecuted({ kind, id: parent.id }, latest.docusignId);
+    return { url, signed: true };
+  } catch (error) {
+    console.error(
+      `[offer] handoff: fetching the executed ${kind} for envelope ${latest.docusignId} failed:`,
+      error,
+    );
+    return { url: null, signed: true };
+  }
+}
+
 // ─── Snapshot → ProjectRequirementsPayload ───
 
 function buildExtractionPayload(
@@ -446,13 +513,14 @@ function buildExtractionPayload(
       signers.map((signer) => signer.signatory.phone.trim()).filter(Boolean),
     ),
   );
-  const paymentStages = snapshot.paymentSchedule.map((row) => ({
-    label: row.stageName,
-    percentage: row.percentOfContract * 100,
-    amount: Math.round(contractValue * row.percentOfContract),
-  }));
-  const depositStage =
-    paymentStages.find((s) => s.label.toLowerCase().includes("deposit")) ?? paymentStages[0];
+  // GST and stage amounts to the cent, matching the offer's own GST split and
+  // the figures the BC4 contract printed.
+  const { gstAmount, paymentStages, depositValue } = buildHandoffCommercials({
+    contractValueIncGst: contractValue,
+    gstRate: snapshot.workspacePricingSettings.gstRate,
+    paymentSchedule: snapshot.paymentSchedule,
+    deposit: findDepositRow(snapshot.paymentSchedule),
+  });
 
   return {
     version: 1,
@@ -491,8 +559,8 @@ function buildExtractionPayload(
       tenderTotalPrice: contractValue,
       contractPrice: contractValue,
       gstIncluded: true,
-      gstAmount: Math.round(contractValue / 11),
-      depositValue: depositStage?.amount ?? null,
+      gstAmount,
+      depositValue,
       claimStageSlabPercentage: null,
       claimStageSlabDollarValue: null,
       variationAdminFee: null,
@@ -505,7 +573,7 @@ function buildExtractionPayload(
     },
     inclusionsAndExclusions: {
       inclusions: [...snapshot.draft.inclusionHighlights],
-      exclusions: [...snapshot.draft.exclusionBullets],
+      exclusions: tenderExclusionLines(snapshot),
     },
     utilityInfrastructure: {
       electricalPhase: null, communicationConduit: null, gasConnection: null,

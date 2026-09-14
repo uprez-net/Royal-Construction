@@ -44,17 +44,17 @@ import {
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 
+import {
+  findDepositRow,
+  formatContractMoney,
+  paymentScheduleLine as buildPaymentScheduleLine,
+  stageAmount,
+  tenderExclusionLines,
+} from "@/lib/offer/project-handoff-commercials";
+
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
   | { ok: false; error: string };
-
-function moneyWithCents(value: number): string {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-    minimumFractionDigits: 2,
-  }).format(value);
-}
 
 // Send the MBA BC4 building Contract for signature from the DocuSign template
 // (DOCUSIGN_CONTRACT_TEMPLATE_ID; roles + tab labels in
@@ -254,7 +254,7 @@ export async function sendContractForSignature(input: {
   // builder while signing) ──
   const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
 
-  const priceLabel = moneyWithCents(contractValue);
+  const priceLabel = formatContractMoney(contractValue);
   // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
   // silently drop validated stages past the 7th, which would send a contract
   // whose payment schedule doesn't sum to the contract value.
@@ -293,15 +293,11 @@ export async function sendContractForSignature(input: {
 
   const parsedParticulars = parseContractParticulars(claim.particulars);
   const stageRows = snapshot.paymentSchedule.slice(0, 7);
-  const paymentScheduleLine = stageRows
-    .map((row, index) => {
-      const pct = (row.percentOfContract * 100).toFixed(0);
-      return `(${index + 1}) ${row.stageName} ${pct}% ${moneyWithCents(contractValue * row.percentOfContract)}`;
-    })
-    .join("  |  ");
-  const depositRow =
-    stageRows.find((r) => r.stageName.toLowerCase().includes("deposit")) ?? stageRows[0];
-  const exclusions = snapshot.draft.exclusionBullets;
+  const paymentScheduleLine = buildPaymentScheduleLine(stageRows, contractValue);
+  const depositRow = findDepositRow(stageRows);
+  // The exclusions the Tender printed, Scope exclusions included — the bullets
+  // alone left out every ticked Scope exclusion the customer had signed.
+  const exclusions = tenderExclusionLines(snapshot);
 
   // Owner address/contact for the single BC4 owner lines. Current Location (from
   // Job setup) supersedes the hand-typed owner-address particular as the source
@@ -369,7 +365,9 @@ export async function sendContractForSignature(input: {
     locked("paymentSchedule", paymentScheduleLine),
     locked(
       "depositAmount",
-      depositRow ? moneyWithCents(contractValue * depositRow.percentOfContract) : "",
+      depositRow
+        ? formatContractMoney(stageAmount(contractValue, depositRow.percentOfContract))
+        : "",
     ),
     locked("excludedDays", "Saturdays, Sundays and NSW Public Holidays"),
     locked("defectsLiabilityWeeks", "12 Weeks"),

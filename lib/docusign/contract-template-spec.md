@@ -59,7 +59,7 @@ the template.
 | `excludedDays` | `days_not_included_value` | "Saturdays, Sundays and NSW Public Holidays" |
 | `defectsLiabilityWeeks` | `defects_liability_period_value` | "12 Weeks" |
 | `workDescription` | `description_of_the_work_to_be_completed_value` | buildType + buildScope |
-| `exclusionsList` | `exclusions_value` | tender exclusion bullets |
+| `exclusionsList` | `exclusions_value` | the Tender's exclusions: draft bullets plus Scope exclusions ticked for the document, deduplicated as the Tender prints them |
 | `ownerPrintName` | `acknowledgement_of_owner_docusign_0_name_value` | first owner (Owner role) |
 
 Checkboxes set by the action: `gstInclusive`, `hbcfIncluded`, `exclusionsYes`.
