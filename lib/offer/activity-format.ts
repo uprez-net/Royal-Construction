@@ -22,12 +22,18 @@ export function formatActivityWhen(iso: string, now: Date): string {
 const WEBHOOK_NOTE_TEXT: Readonly<Record<string, string>> = {
   DOCUSIGN_COMPLETED: "Signed in DocuSign",
   UNEXPECTED_COMPLETION:
-    "Signed after it was withdrawn — kept aside, not filed as the signed copy",
-  UNEXPECTED_DECLINE: "Declined after it was withdrawn",
+    "signed after it was withdrawn — kept aside, not filed as the signed copy",
+  UNEXPECTED_DECLINE: "declined after it was withdrawn",
 };
 
 const WEBHOOK_NOTE =
   /^(DOCUSIGN_COMPLETED|UNEXPECTED_COMPLETION|UNEXPECTED_DECLINE) ([^\s:]+)(?::|\s|$)/;
+
+// A withdrawn envelope's event is filed under the offer's current status, so a
+// Tender declined after the Contract was drafted sat under "Contract draft".
+// The note names the document ("this Tender envelope"); the sentence keeps it.
+const WITHDRAWN_DOCUMENT =
+  /: DocuSign reports this (.+?) envelope (?:signed|declined) after it was recalled or replaced/;
 
 export type ActivityNoteText = {
   readonly text: string;
@@ -40,5 +46,15 @@ export function formatActivityNote(note: string): ActivityNoteText {
   if (!match) {
     return { text: note, envelopeId: null };
   }
-  return { text: WEBHOOK_NOTE_TEXT[match[1]], envelopeId: match[2] };
+  const text = WEBHOOK_NOTE_TEXT[match[1]];
+  if (match[1] === "DOCUSIGN_COMPLETED") {
+    return { text, envelopeId: match[2] };
+  }
+  const document = WITHDRAWN_DOCUMENT.exec(note)?.[1];
+  return {
+    text: document
+      ? `${document} ${text}`
+      : `${text.charAt(0).toUpperCase()}${text.slice(1)}`,
+    envelopeId: match[2],
+  };
 }
