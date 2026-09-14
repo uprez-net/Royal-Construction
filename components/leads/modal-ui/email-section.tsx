@@ -110,7 +110,7 @@ export function LeadEmailSection({
                         className={cn(
                           "max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-5",
                           isSent
-                            ? "bg-royal-gold text-white rounded-br-sm"
+                            ? "bg-royal-gold-ink text-white rounded-br-sm"
                             : "bg-muted text-foreground rounded-bl-sm",
                         )}
                       >

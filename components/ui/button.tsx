@@ -19,6 +19,10 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // Gold CTAs. Text sits on the ink because white on base --royal-gold
+        // is 2.77:1.
+        royal:
+          "bg-royal-gold-ink text-white hover:bg-royal-gold-ink-hover focus-visible:border-royal-gold-ink focus-visible:ring-royal-gold/40",
       },
       size: {
         default:

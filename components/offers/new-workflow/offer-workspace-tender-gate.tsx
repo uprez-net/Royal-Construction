@@ -17,7 +17,6 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { cn } from "@/lib/utils";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // The one-off architectural-plan fee the gate waits on. Manual checkbox only —
@@ -238,12 +237,7 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value === true ? "default" : "outline"}
-          className={cn(
-            value === true
-              ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              : "",
-          )}
+          variant={value === true ? "royal" : "outline"}
           onClick={() => onChange(true)}
         >
           Yes
@@ -251,12 +245,7 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value === false ? "default" : "outline"}
-          className={cn(
-            value === false
-              ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              : "",
-          )}
+          variant={value === false ? "royal" : "outline"}
           onClick={() => onChange(false)}
         >
           No

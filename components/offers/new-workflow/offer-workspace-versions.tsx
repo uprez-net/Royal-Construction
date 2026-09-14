@@ -152,7 +152,7 @@ function VersionRow({
               {version.reference}
             </span>
             {isActive ? (
-              <Badge className="shrink-0 bg-royal-gold text-white">
+              <Badge className="shrink-0 bg-royal-gold-ink text-white">
                 Current
               </Badge>
             ) : null}

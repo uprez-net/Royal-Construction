@@ -318,9 +318,9 @@ function TenderActions({
       <div className="flex flex-wrap gap-2">
         {isAgreed ? (
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
             size="sm"
             type="button"
+            variant="royal"
             onClick={onGenerateTender}
           >
             <FileText className="size-4" aria-hidden="true" />
@@ -330,10 +330,10 @@ function TenderActions({
 
         {isDraft ? (
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
             disabled={sending || confirming || !scheduleBalanced}
             size="sm"
             type="button"
+            variant="royal"
             onClick={() => setConfirming(true)}
           >
             <Send className="size-4" aria-hidden="true" />
@@ -351,9 +351,9 @@ function TenderActions({
                 PDF (issue #90); the server action also rejects it there. */}
             {process.env.NODE_ENV === "development" ? (
               <Button
-                className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
                 size="sm"
                 type="button"
+                variant="royal"
                 onClick={onMarkTenderSigned}
               >
                 <ShieldCheck className="size-4" aria-hidden="true" />

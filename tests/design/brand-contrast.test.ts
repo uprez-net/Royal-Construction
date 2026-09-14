@@ -1,0 +1,109 @@
+import assert from "node:assert/strict";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { test } from "node:test";
+
+import {
+  WHITE,
+  contrastRatio,
+  readGlobalsCss,
+  themeColour,
+} from "./oklch-contrast";
+
+// Pins the gold CTA contrast fix. White text on --royal-gold measures 2.77:1
+// and on its --royal-gold-dark hover 3.86:1, so every gold "Send offer",
+// "Generate Tender" and error "Try again" button failed WCAG AA. Gold that
+// carries text now sits on --royal-gold-ink with a darker
+// --royal-gold-ink-hover. These checks measure the declared tokens rather than
+// trusting a ratio written in a comment.
+
+const AA_TEXT = 4.5;
+const css = readGlobalsCss();
+
+const ratio = (value: number) => `${value.toFixed(2)}:1`;
+
+test("white text on the royal ink clears AA at rest and on hover", () => {
+  const ink = themeColour(css, ":root", "--royal-gold-ink");
+  const hover = themeColour(css, ":root", "--royal-gold-ink-hover");
+
+  assert.ok(
+    contrastRatio(WHITE, ink) >= AA_TEXT,
+    `white on --royal-gold-ink measures ${ratio(contrastRatio(WHITE, ink))}`,
+  );
+  assert.ok(
+    contrastRatio(WHITE, hover) >= AA_TEXT,
+    `white on --royal-gold-ink-hover measures ${ratio(contrastRatio(WHITE, hover))}`,
+  );
+});
+
+test("the royal hover is a darker step of the ink", () => {
+  const ink = themeColour(css, ":root", "--royal-gold-ink");
+  const hover = themeColour(css, ":root", "--royal-gold-ink-hover");
+
+  assert.ok(hover.lightness < ink.lightness);
+});
+
+// The app ships light-only, but .dark must still define the token so the
+// utility never resolves to an undefined var, and its step must still carry
+// the variant's white text.
+test("the dark theme defines a royal hover that still carries white text", () => {
+  const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
+
+  assert.ok(
+    contrastRatio(WHITE, hover) >= AA_TEXT,
+    `white on the dark --royal-gold-ink-hover measures ${ratio(contrastRatio(WHITE, hover))}`,
+  );
+});
+
+test("Tailwind exposes the hover token as a colour utility", () => {
+  const theme = css.match(/^@theme inline \{([\s\S]*?)^\}/m)?.[1] ?? "";
+
+  assert.match(
+    theme,
+    /--color-royal-gold-ink-hover:\s*var\(--royal-gold-ink-hover\);/,
+  );
+});
+
+// Whole-repo guard. Gold sites are split across several batches, so this
+// passes once all of them have landed; until then it names the files still
+// painting white text on base gold.
+const BASE_GOLD_FILL = /(?<![\w-])bg-royal-gold(?![\w-])/;
+const WHITE_TEXT = /(?<![\w-])text-(?:white|primary-foreground)(?![\w-])/;
+
+function sourceFiles(dir: string): string[] {
+  const files: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    // The prototype is a frozen design reference, not shipped UI.
+    if (name.includes("prototype")) {
+      continue;
+    }
+    if (statSync(path).isDirectory()) {
+      files.push(...sourceFiles(path));
+    } else if (/\.tsx?$/.test(name)) {
+      files.push(path);
+    }
+  }
+  return files;
+}
+
+test("no line pairs a base --royal-gold fill with white text", () => {
+  const offenders: string[] = [];
+  for (const root of ["app", "components"]) {
+    for (const file of sourceFiles(join(process.cwd(), root))) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          if (BASE_GOLD_FILL.test(line) && WHITE_TEXT.test(line)) {
+            offenders.push(`${relative(process.cwd(), file)}:${index + 1}`);
+          }
+        });
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'gold that carries text belongs on bg-royal-gold-ink or <Button variant="royal">',
+  );
+});

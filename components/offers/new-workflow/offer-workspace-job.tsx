@@ -31,7 +31,6 @@ import {
 } from "@/lib/offer/workspace-area";
 import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
-import { cn } from "@/lib/utils";
 import {
   ClipboardList,
   Home,
@@ -421,8 +420,6 @@ function YesNoQuestion({
   readonly onChange: (value: boolean) => void;
   readonly value: boolean;
 }) {
-  const selected =
-    "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark";
   return (
     <div className="grid gap-2">
       {/* A yes/no question labels its control exactly as Field does, so it
@@ -432,8 +429,7 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value ? "default" : "outline"}
-          className={cn(value ? selected : "")}
+          variant={value ? "royal" : "outline"}
           onClick={() => onChange(true)}
         >
           Yes
@@ -441,8 +437,7 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value ? "outline" : "default"}
-          className={cn(value ? "" : selected)}
+          variant={value ? "outline" : "royal"}
           onClick={() => onChange(false)}
         >
           No
@@ -716,7 +711,7 @@ function OwnersSection({
                   onClick={() => setKind(index, kind)}
                   className={`rounded px-2.5 py-1 text-xs font-medium capitalize ${
                     owner.kind === kind
-                      ? "bg-royal-gold text-white"
+                      ? "bg-royal-gold-ink text-white"
                       : "text-muted-foreground"
                   }`}
                 >

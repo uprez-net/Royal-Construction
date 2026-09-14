@@ -435,9 +435,9 @@ function ContractActions({
       <div className="flex flex-wrap gap-2">
         {isTenderSigned ? (
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
             size="sm"
             type="button"
+            variant="royal"
             onClick={onGenerateContract}
           >
             <ScrollText className="size-4" aria-hidden="true" />
@@ -447,10 +447,10 @@ function ContractActions({
 
         {isDraft ? (
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
             disabled={sending || confirming}
             size="sm"
             type="button"
+            variant="royal"
             onClick={() => setConfirming(true)}
           >
             <Send className="size-4" aria-hidden="true" />
@@ -466,9 +466,9 @@ function ContractActions({
                 PDF (issue #90); the server action also rejects it there. */}
             {process.env.NODE_ENV === "development" ? (
               <Button
-                className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
                 size="sm"
                 type="button"
+                variant="royal"
                 onClick={onMarkContractSigned}
               >
                 <ShieldCheck className="size-4" aria-hidden="true" />
