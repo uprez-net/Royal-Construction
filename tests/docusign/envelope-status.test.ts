@@ -14,7 +14,7 @@ import {
 // document, matched nothing. Both actions reported success and voided nothing,
 // and the customer could still sign.
 
-const TERMINAL = [
+const TERMINAL: EnvelopeStatus[] = [
   EnvelopeStatus.COMPLETED,
   EnvelopeStatus.DECLINED,
   EnvelopeStatus.VOIDED,
