@@ -64,49 +64,11 @@ test("Tailwind exposes the hover token as a colour utility", () => {
   );
 });
 
-// Whole-repo guard. Gold sites are split across several batches; the ones this
-// batch does not own are listed in KNOWN_GAPS until their batch lands, and
-// anything else painting white text on base gold fails. --card is oklch(1 0 0),
-// so text-card is white too. Alpha forms such as text-white/90 match because "/" ends the name.
+// Whole-repo guard: anything painting white text on base gold fails. --card is
+// oklch(1 0 0), so text-card is white too. Alpha forms such as text-white/90
+// match because "/" ends the name.
 const BASE_GOLD_FILL = /(?<![\w-])bg-royal-gold(?![\w-])/;
 const WHITE_TEXT = /(?<![\w-])text-(?:white|primary-foreground|card)(?![\w-])/;
-
-// Gold sites outside this batch. The booking page's Try again and Book buttons
-// paint text-card on base gold (2.77:1); the offer sites below belong to the
-// admin shell, app shell, lead picker and workspace core batches. Each is
-// matched by its class list rather than excused by file, so a new gold site in
-// the same file still fails. Drop an entry once it moves to the ink.
-const KNOWN_GAPS: ReadonlyArray<readonly [file: string, classes: string]> = [
-  [
-    "app/book-consultation/page.tsx",
-    "bg-royal-gold text-card hover:bg-royal-gold-dark",
-  ],
-  [
-    "app/book-consultation/page.tsx",
-    "w-full gap-2 bg-royal-gold py-6 font-condensed text-[15px] font-medium uppercase tracking-wide text-card hover:bg-royal-gold-dark",
-  ],
-  ["components/offers/admin/admin-offer-page.tsx", "bg-royal-gold text-white"],
-  [
-    "components/offers/admin/offer-content-header.tsx",
-    "border-2 border-royal-gold bg-royal-gold text-white",
-  ],
-  [
-    "components/offers/create-offer-modal.tsx",
-    "h-10 rounded-[10px] bg-royal-gold px-4 text-[12.5px] font-semibold text-primary-foreground hover:bg-royal-gold-dark",
-  ],
-  [
-    "components/offers/new-workflow/offer-workspace-project-handoff.tsx",
-    "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark",
-  ],
-  [
-    "components/offers/new-workflow/shell/offer-command-bar.tsx",
-    "shrink-0 bg-royal-gold font-mono text-white",
-  ],
-  [
-    "components/offers/new-workflow/shell/offer-step-rail.tsx",
-    "bg-royal-gold text-white",
-  ],
-];
 
 const CLOSING: Readonly<Record<string, string>> = { "{": "}", "(": ")" };
 
@@ -175,13 +137,7 @@ test("no class list pairs a base --royal-gold fill with white text", () => {
         }
       }
       for (const index of hits) {
-        const known = KNOWN_GAPS.some(
-          ([gapFile, classes]) =>
-            gapFile === path && lines[index].includes(`"${classes}"`),
-        );
-        if (!known) {
-          offenders.add(`${path}:${index + 1}`);
-        }
+        offenders.add(`${path}:${index + 1}`);
       }
     }
   }
