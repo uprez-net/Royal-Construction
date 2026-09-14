@@ -321,6 +321,7 @@ export async function sendOfferDocument(input: {
             fromStatus: OfferStatus.PENDING,
             toStatus: OfferStatus.SENT,
             note: `Emailed to ${deliveredEmails.join(", ")}`,
+            actorId: access.user.id,
           },
         })
         .catch((error) =>

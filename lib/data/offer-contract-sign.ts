@@ -539,6 +539,7 @@ export async function sendContractForSignature(input: {
         offerId: offer.id,
         fromStatus: offer.offerStatus,
         toStatus: OfferStatus.CONTRACT_SENT,
+        actorId: access.user.id,
         // Record EVERY customer recipient the envelope routed to, not just the
         // primary — the contract fans out to each owner/director exactly like the
         // Tender does, and a single-address note misrepresents the audit trail

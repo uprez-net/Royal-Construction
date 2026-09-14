@@ -325,6 +325,7 @@ export async function sendOfferForSignature(input: {
           offerId: offer.id,
           fromStatus: offer.offerStatus,
           toStatus: OfferStatus.OFFER_SENT,
+          actorId: access.user.id,
           note: `DocuSign acceptance envelope ${envelope.envelopeId} sent to ${owners
             .map((owner) => owner.email)
             .join(", ")}`,
