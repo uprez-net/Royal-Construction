@@ -7,6 +7,7 @@ import {
   type OfferPrintScopeRow,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
+import { formatPercent } from "./format";
 import {
   offerAreaBasisFromJob,
   rawTotalAreaSqm,
@@ -1044,10 +1045,12 @@ function contractTermsPage(
 ): string {
   const term = (item: string, detail: string): string =>
     `<tr><td class="c-item"><b>${item}</b></td><td class="c-detail">${detail}</td></tr>`;
+  // formatPercent, as the React print path uses: toFixed(0) printed a 12.5% stage
+  // as 13% beside an amount computed from 12.5%.
   const pay = data.paymentRows
     .map(
       (row) =>
-        `<tr><td class="c-pay-stage"><b>${esc(row.stageName)}</b></td><td class="c-pay-pct">${(row.percentOfContract * 100).toFixed(0)}%</td><td class="c-pay-amt">${money(row.amount)}</td><td class="c-pay-trigger">${esc(row.trigger)}</td></tr>`,
+        `<tr><td class="c-pay-stage"><b>${esc(row.stageName)}</b></td><td class="c-pay-pct">${formatPercent(row.percentOfContract)}</td><td class="c-pay-amt">${money(row.amount)}</td><td class="c-pay-trigger">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
   return tenderPage(

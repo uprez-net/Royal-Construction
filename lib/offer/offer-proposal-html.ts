@@ -16,6 +16,7 @@ import {
   buildWelcomeParagraphs,
   OFFER_SPEC_FACTS,
 } from "./workspace-proposal-content";
+import { formatPercent } from "./format";
 import {
   getAttachedOfferImageSlots,
   offerImageCaption,
@@ -681,10 +682,12 @@ function termsPage(
   foot: string,
 ): string {
   const { job } = input;
+  // formatPercent, as the React print path uses: toFixed(0) printed a 12.5% stage
+  // as 13% beside an amount computed from 12.5%.
   const rows = data.paymentRows
     .map(
       (row) =>
-        `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${(row.percentOfContract * 100).toFixed(0)}% - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
+        `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${formatPercent(row.percentOfContract)} - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
   const acceptance = inlineBlocks
