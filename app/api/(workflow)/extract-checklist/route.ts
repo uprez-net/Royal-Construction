@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { start } from "workflow/api";
 
+import {
+    complianceAccessResponse,
+    requireComplianceAccess,
+} from "@/lib/compliance/access";
 import { getUserByClerkId } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
 import { extractComplianceChecklist } from "@/lib/workflow/compliance-checklist";
@@ -43,9 +47,21 @@ export async function POST(request: Request) {
 
     const input = validationResult.data;
 
+    // The caller must be allowed on the project, under the same gate as every
+    // other compliance route. Matching ids alone prove nothing: they are all
+    // visible to anyone who has seen the project.
+    try {
+        await requireComplianceAccess(input.projectId);
+    } catch (error) {
+        const refusal = complianceAccessResponse(error);
+        if (refusal) return refusal;
+        console.error("Failed to authorize checklist extraction", error);
+        return errorResponse("Failed to start the checklist extraction workflow.");
+    }
+
     // The three ids are checked against each other rather than trusted
-    // individually: without this, any signed-in user could point the extraction
-    // at a document on someone else's engagement by supplying a matching pair.
+    // individually: without this, a caller allowed on one project could point
+    // the extraction at a document on another project's engagement.
     const document = await prisma.complianceDocument.findFirst({
         where: {
             id: input.documentId,

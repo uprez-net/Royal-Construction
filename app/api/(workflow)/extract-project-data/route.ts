@@ -8,11 +8,13 @@ import {
 import {
     badRequestResponse,
     errorResponse,
+    forbiddenResponse,
     successResponse,
     unauthorizedResponse,
 } from "@/utils/validators/response";
 import { auth } from "@clerk/nextjs/server";
-import { getUserByClerkId } from "@/lib/data/user";
+import { authorizeLeadAccess } from "@/lib/data/offer-access";
+import { isBlobStorageUrl } from "@/lib/blob-url";
 import z from "zod";
 
 const tenderExtractionSchema = z.object({
@@ -29,11 +31,6 @@ export async function POST(request: Request) {
         return unauthorizedResponse();
     }
 
-    const user = await getUserByClerkId(userId);
-    if (!user) {
-        return unauthorizedResponse("User not found");
-    }
-
     let body: unknown;
     try {
         body = await request.json();
@@ -45,6 +42,21 @@ export async function POST(request: Request) {
     if (!validationResult.success) {
         return badRequestResponse("Invalid request body");
     }
+    const input = validationResult.data;
+
+    // Every field is the browser's. The run reads the lead into the model
+    // prompt and streams the result back, and the OCR step fetches both URLs,
+    // so unchecked a signed-in user could pull a lead they cannot open into a
+    // run they follow, or have us OCR any document on the internet.
+    const access = await authorizeLeadAccess(input.leadId);
+    if (!access.ok) {
+        return forbiddenResponse(access.error);
+    }
+    // The wizard uploads both PDFs through /api/upload before it gets here, so
+    // anything outside Blob storage did not come from it.
+    if (!isBlobStorageUrl(input.tenderUrl) || !isBlobStorageUrl(input.contractUrl)) {
+        return badRequestResponse("The tender and contract must be uploaded files.");
+    }
 
     // Checked before start(): without the secret no one could follow the run,
     // and it would still spend the whole extraction.
@@ -55,14 +67,14 @@ export async function POST(request: Request) {
 
     try {
         // Executes asynchronously and doesn't block your app
-        const run = await start(extractTenderAndContractDocuments, [validationResult.data]);
+        const run = await start(extractTenderAndContractDocuments, [input]);
 
         console.log("Started run", run.runId);
 
         return successResponse({
             // The client only hands this to /api/resume-stream, which accepts
             // nothing but a capability issued to the same user.
-            runId: signRunCapability({ runId: run.runId, userId: user.id }),
+            runId: signRunCapability({ runId: run.runId, userId: access.user.id }),
             message: "Creating offer workflow started",
         });
     } catch (error) {
