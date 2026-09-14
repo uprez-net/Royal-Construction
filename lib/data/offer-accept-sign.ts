@@ -28,6 +28,10 @@ import { createDocusignContext } from "@/lib/docusign/client";
 import { createOfferAcceptanceEnvelope } from "@/lib/docusign/offer-envelope";
 import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
+import {
+  describeGrannyExclusionConflicts,
+  findGrannyExclusionConflicts,
+} from "@/lib/offer/granny-exclusion";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -103,6 +107,18 @@ export async function sendOfferForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // A granny flat priced on one page and excluded on another. Checked on the
+  // saved workspace the acceptance PDF renders from; still editable at SENT.
+  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
+  if (grannyConflicts.length > 0) {
+    return {
+      ok: false,
+      error: describeGrannyExclusionConflicts(grannyConflicts, {
+        revisionNeeded: false,
+      }),
     };
   }
 

@@ -55,6 +55,10 @@ import {
   resolveContractPaymentSource,
 } from "@/lib/offer/contract-payment-source";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
+import {
+  describeGrannyExclusionConflicts,
+  findGrannyExclusionConflicts,
+} from "@/lib/offer/granny-exclusion";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -131,6 +135,18 @@ export async function sendContractForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending the Contract: ${contractOwnerIssues.join(" ")}`,
+    };
+  }
+  // A granny flat priced on one page and excluded on another. Checked on the
+  // agreed snapshot the BC4 exclusions are filled from; it is frozen, so the fix
+  // is a revision.
+  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
+  if (grannyConflicts.length > 0) {
+    return {
+      ok: false,
+      error: describeGrannyExclusionConflicts(grannyConflicts, {
+        revisionNeeded: true,
+      }),
     };
   }
   const customerEmail = resolveOfferCustomerEmail({

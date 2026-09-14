@@ -29,6 +29,10 @@ import {
   canEmailOfferProposal,
   PROPOSAL_STAGE_PASSED_ERROR,
 } from "@/lib/offer/offer-send-guards";
+import {
+  describeGrannyExclusionConflicts,
+  findGrannyExclusionConflicts,
+} from "@/lib/offer/granny-exclusion";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -151,6 +155,18 @@ export async function sendOfferDocument(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // A granny flat priced on one page and excluded on another. Checked on the
+  // saved workspace this email renders from.
+  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
+  if (grannyConflicts.length > 0) {
+    return {
+      ok: false,
+      error: describeGrannyExclusionConflicts(grannyConflicts, {
+        revisionNeeded: false,
+      }),
     };
   }
 
