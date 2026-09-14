@@ -557,10 +557,18 @@ export async function sendContractForSignature(input: {
         `[offer] contract envelope ${envelope.envelopeId} sent but persisting it failed:`,
         error,
       );
-      throw new Error(
-        `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
-      );
+      return { unrecorded: (error as Error).message } as const;
     });
+
+  // Returned rather than raised: Next replaces a Server Action's thrown
+  // message with a generic one in production, and the estimator needs the
+  // envelope id and the instruction not to resend.
+  if (typeof stillClaimed === "object") {
+    return {
+      ok: false,
+      error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${stillClaimed.unrecorded}. Do not resend — reconcile this envelope before continuing.`,
+    };
+  }
 
   // No *_SENT event and no lead sync: the offer is wherever the recall or
   // revision left it.
