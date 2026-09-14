@@ -7,15 +7,21 @@ import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflo
 import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
-import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
+import {
+  buildOfferPrintTemplateData,
+  type OfferPrintScopeRow,
+} from "../../lib/offer/workspace-print-template";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 import {
   ALLOWANCES_INTRO_LINES,
+  ALLOWANCES_LINES_PER_PAGE,
   allowanceRowLines,
+  CHARS_PER_LINE_ALLOWANCE_ITEM,
+  CHARS_PER_LINE_ALLOWANCE_RULE,
   chunkAllowanceRows,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
-  INCLUSIONS_LINES_PER_PAGE,
+  estimateWrappedLines,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
@@ -249,11 +255,84 @@ test("a long allowance list splits into pages that each fit their budget", () =>
   chunks.forEach((chunk, index) => {
     const budget =
       index === 0
-        ? INCLUSIONS_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES
-        : INCLUSIONS_LINES_PER_PAGE;
+        ? ALLOWANCES_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES
+        : ALLOWANCES_LINES_PER_PAGE;
     const used = chunk.reduce((sum, row) => sum + allowanceRowLines(row), 0);
     assert.ok(used <= budget, `page ${index + 1} uses ${used} of ${budget} lines`);
   });
+});
+
+// The Download copy (window.print) is laid out by the app's Tailwind build, which
+// no test can render, so the Chromium sheet counts cover only the emailed
+// proposal and the Tender. This spells out what PrintAllowancesPage's classes
+// make of a row and a page at zoom 1, the most cramped case. The first
+// pagination reused the inclusions' one chrome line and 40-line budget: eight
+// rows with four-line rules needed 840px of the ~804px a continued page has.
+// Wrapping uses the shared per-line estimates, so this pins the row chrome and
+// page budgets, not the character widths.
+const PX_PER_MM = 96 / 25.4;
+const DOWNLOAD_LINE_PX = 20; // text-sm, and the description's leading-5
+const DOWNLOAD_ROW_CHROME_PX = 25; // py-3 top and bottom, plus the 1px border-b
+const DOWNLOAD_DESCRIPTION_GAP_PX = 4; // mt-1
+// min-h-[297mm] less py-[13mm], then the masthead (25px), section heading
+// (108px), the table's mt-6 (24px), its header row (42px) and the footer (21px).
+const DOWNLOAD_ROWS_PX = (297 - 26) * PX_PER_MM - 220;
+// The first page's intro at leading-6, allowed four lines.
+const DOWNLOAD_INTRO_PX = 4 * 24;
+
+function downloadRowPx(row: OfferPrintScopeRow): number {
+  const lines = (text: string, charsPerLine: number) =>
+    estimateWrappedLines(text, charsPerLine) * DOWNLOAD_LINE_PX;
+  const item =
+    lines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
+    (row.description.trim()
+      ? DOWNLOAD_DESCRIPTION_GAP_PX +
+        lines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
+      : 0);
+  return (
+    Math.max(item, lines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE)) +
+    DOWNLOAD_ROW_CHROME_PX
+  );
+}
+
+test("every Download allowances page fits its A4 sheet", () => {
+  const seededRows = Array.from({ length: 40 }, (_, index) => ({
+    ...INITIAL_ALLOWANCES[index % INITIAL_ALLOWANCES.length],
+    id: `allowance-seeded-${index + 1}`,
+    includedInOfferDocument: true,
+  }));
+  // Short rows are where padding, not text, sets the height.
+  const oneLineRows = Array.from({ length: 40 }, (_, index) => ({
+    ...INITIAL_ALLOWANCES[0],
+    id: `allowance-short-${index + 1}`,
+    label: `PC item ${index + 1}`,
+    description: "",
+    variationRule: "By variation.",
+    includedInOfferDocument: true,
+  }));
+  const fixtures: ReadonlyArray<
+    readonly [string, readonly OfferWorkspaceScopeItem[]]
+  > = [
+    ["long variation rules", manyLongAllowances],
+    ["seeded-shaped rows", seededRows],
+    ["one-line rows", oneLineRows],
+  ];
+  for (const [label, allowances] of fixtures) {
+    const rows = buildOfferPrintTemplateData(
+      buildProposalInput(snapshotWith(allowances)),
+    ).scopeRows;
+    const chunks = chunkAllowanceRows(rows);
+    assert.ok(chunks.length > 1, `${label}: the fixture never paginates`);
+    chunks.forEach((chunk, index) => {
+      const available =
+        index === 0 ? DOWNLOAD_ROWS_PX - DOWNLOAD_INTRO_PX : DOWNLOAD_ROWS_PX;
+      const used = chunk.reduce((sum, row) => sum + downloadRowPx(row), 0);
+      assert.ok(
+        used <= available,
+        `${label}: page ${index + 1} needs ${used}px of ${Math.floor(available)}px`,
+      );
+    });
+  }
 });
 
 test("both offer renderers count every allowance page in their footer", () => {

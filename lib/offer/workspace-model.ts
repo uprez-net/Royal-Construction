@@ -1122,6 +1122,16 @@ export const CHARS_PER_LINE_ALLOWANCE_ITEM = 34;
 export const CHARS_PER_LINE_ALLOWANCE_RULE = 30;
 // The allowances intro runs a line longer than the inclusions one.
 export const ALLOWANCES_INTRO_LINES = 4;
+// The Download (window.print) copy is the tallest of the three renderers and the
+// one no Chromium test can measure. Its row carries 12px of padding top and
+// bottom, a 1px rule and a 4px gap above any description, against a 20px line:
+// 29px, which the inclusions' single chrome line (sized on the emailed 13px
+// table) under-counts by 9px a row.
+export const ALLOWANCE_ROW_CHROME_LINES = 1.5;
+// At 20px a line, 40 lines is 800px against the ~804px that page leaves for
+// rows: no headroom for a wrap estimate that runs short. 36 leaves ~80px. The
+// emailed proposal and the Tender just fit fewer rows on a page.
+export const ALLOWANCES_LINES_PER_PAGE = 36;
 
 type AllowanceRowText = {
   readonly label: string;
@@ -1141,7 +1151,7 @@ export function allowanceRowLines(row: AllowanceRowText): number {
     Math.max(
       itemLines,
       estimateWrappedLines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE),
-    ) + INCLUSION_ROW_CHROME_LINES
+    ) + ALLOWANCE_ROW_CHROME_LINES
   );
 }
 
@@ -1157,14 +1167,14 @@ export function chunkAllowanceRows<T extends AllowanceRowText>(
   }
   const firstBudget = Math.max(
     1,
-    INCLUSIONS_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES,
+    ALLOWANCES_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES,
   );
   const first =
     chunkByEstimatedHeight(rows, firstBudget, allowanceRowLines)[0] ?? [];
   const rest = rows.slice(first.length);
   return [
     first,
-    ...chunkByEstimatedHeight(rest, INCLUSIONS_LINES_PER_PAGE, allowanceRowLines),
+    ...chunkByEstimatedHeight(rest, ALLOWANCES_LINES_PER_PAGE, allowanceRowLines),
   ].filter((page) => page.length > 0);
 }
 

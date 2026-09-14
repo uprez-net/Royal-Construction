@@ -23,6 +23,7 @@ import {
   INITIAL_OFFER_JOB,
   MAX_OWNER_SIGNERS,
   type OfferOwner,
+  type OfferWorkspaceScopeItem,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
@@ -64,11 +65,14 @@ function declaredPageTotal(html: string): number {
   return Number(match[1]);
 }
 
-function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
+function snapshotWithOwners(
+  owners: OfferOwner[],
+  allowances: readonly OfferWorkspaceScopeItem[] = INITIAL_ALLOWANCES,
+): OfferWorkspaceSnapshot {
   return {
     job: { ...INITIAL_OFFER_JOB, owners },
     lines: INITIAL_COST_LINES,
-    allowances: INITIAL_ALLOWANCES,
+    allowances,
     exclusions: INITIAL_EXCLUSIONS,
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
@@ -301,6 +305,82 @@ test("Proposal prints exactly the number of pages it declares at max signers", a
     `Proposal printed ${printed} A4 pages but declares ${declared}`,
   );
 });
+
+// Allowance pages are sized from estimated text length, one chunking shared by
+// all three renderers, and no fixture above had more than the two seeded rows.
+// Two long lists: rules that wrap to four lines, and seeded-shaped rows whose
+// description stacks under the label.
+const LONG_VARIATION_RULE =
+  "Selections above this allowance are priced as a written variation before the affected works proceed on site.";
+const ALLOWANCE_CONFIGURATIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly allowances: readonly OfferWorkspaceScopeItem[];
+}> = [
+  {
+    label: "30 allowances with long variation rules",
+    allowances: Array.from({ length: 30 }, (_, i) => ({
+      ...INITIAL_ALLOWANCES[0],
+      id: `allowance-long-${i + 1}`,
+      label: `Allowance item ${i + 1}`,
+      variationRule: LONG_VARIATION_RULE,
+      includedInOfferDocument: true,
+    })),
+  },
+  {
+    label: "40 seeded-shaped allowances",
+    allowances: Array.from({ length: 40 }, (_, i) => ({
+      ...INITIAL_ALLOWANCES[i % INITIAL_ALLOWANCES.length],
+      id: `allowance-seeded-${i + 1}`,
+      includedInOfferDocument: true,
+    })),
+  },
+];
+
+for (const { label, allowances } of ALLOWANCE_CONFIGURATIONS) {
+  const snapshot = () => snapshotWithOwners([individualOwner(1)], allowances);
+
+  test(`Tender prints what it declares — ${label}`, async () => {
+    const html = buildTenderHtml(buildProposalInput(snapshot()));
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Tender printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  test(`Proposal prints what it declares — ${label}`, async () => {
+    const html = buildProposalHtml(
+      buildProposalInput(snapshot()),
+      EMPTY_OFFER_IMAGES,
+    );
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Proposal printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  test(`Browser print view paginates identically to the emailed PDF — ${label}`, () => {
+    const input = buildProposalInput(snapshot());
+    const emailed = buildProposalHtml(input, EMPTY_OFFER_IMAGES);
+    const browser = renderToStaticMarkup(
+      createElement(OfferWorkspacePrintTemplate, {
+        ...input,
+        images: EMPTY_OFFER_IMAGES,
+      }),
+    );
+    assert.equal(declaredPageTotal(browser), declaredPageTotal(emailed));
+    assert.equal(
+      (browser.match(/min-h-\[297mm\]/g) ?? []).length,
+      (emailed.match(/<div class="page">/g) ?? []).length,
+      `renderers emit a different number of pages (${label})`,
+    );
+  });
+}
 
 test("Contract annexure does not overflow its pages at max overflow signers", async () => {
   // The annexure carries MAX_OWNER_SIGNERS - 1 overflow signers and declares no
