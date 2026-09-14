@@ -5,7 +5,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
+import {
+  buildOfferPrintTemplateData,
+  formatDateDisplay,
+} from "../../lib/offer/workspace-print-template";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import {
   INITIAL_ALLOWANCES,
@@ -62,6 +65,22 @@ test("stamps the supplied prepared date instead of today", () => {
 
   // Then the document carries that date, not the date it was viewed
   assert.equal(data.preparedDateLabel, "17/03/2024");
+});
+
+test("a re-sent revision prints the date of its latest send", () => {
+  // The viewer dated every re-render by when the revision was created, so a
+  // revision emailed again weeks later printed a date the customer never saw.
+  // It now passes the latest send; that date is what the document must carry.
+  const createdAt = new Date(2026, 5, 2);
+  const lastSentAt = new Date(2026, 6, 21, 15, 40);
+
+  const data = buildOfferPrintTemplateData({
+    ...proposalInput,
+    preparedDate: lastSentAt,
+  });
+
+  assert.equal(data.preparedDateLabel, formatDateDisplay(lastSentAt));
+  assert.notEqual(data.preparedDateLabel, formatDateDisplay(createdAt));
 });
 
 test("falls back to today when no prepared date is supplied", () => {

@@ -993,6 +993,10 @@ export type LoadedOfferRevision =
       // Feeds the document's "prepared" date, so re-rendering an old revision
       // reproduces the date it was drawn up rather than today's.
       createdAt: string;
+      // When this revision's proposal was last emailed, or null if it never
+      // was. Preferred for the prepared date: it dates the copy the customer
+      // actually received.
+      lastSentAt: string | null;
       snapshot: OfferWorkspaceSnapshot;
     }
   // "empty": the revision was superseded before anything was saved onto it.
@@ -1018,6 +1022,11 @@ export async function loadOfferRevisionSnapshot(
       isActive: true,
       createdAt: true,
       workspaceState: true,
+      documentSends: {
+        select: { sentAt: true },
+        orderBy: { sentAt: "desc" },
+        take: 1,
+      },
     },
   });
 
@@ -1048,6 +1057,7 @@ export async function loadOfferRevisionSnapshot(
     status: offer.offerStatus,
     isActive: offer.isActive,
     createdAt: offer.createdAt.toISOString(),
+    lastSentAt: offer.documentSends[0]?.sentAt.toISOString() ?? null,
     snapshot,
   };
 }

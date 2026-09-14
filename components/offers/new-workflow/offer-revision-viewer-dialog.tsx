@@ -121,7 +121,10 @@ function ViewerBody({ state }: { readonly state: ViewerState }) {
       <>
         <ViewerHeader title="Loading version…" />
         <div className="flex items-center gap-2 px-4 py-10 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          <Loader2
+            className="size-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
           Loading…
         </div>
       </>
@@ -173,8 +176,11 @@ function ViewerBody({ state }: { readonly state: ViewerState }) {
           // buildProposalInput does not carry images; without this the cover
           // photo and the whole gallery page render blank.
           images={revision.snapshot.images}
-          // Stamp the date this revision was drawn up, not today.
-          preparedDate={new Date(revision.createdAt)}
+          // Date it by this revision's most recent send, the copy the customer
+          // received, not today. It used the creation date, so a revision
+          // re-sent weeks later printed a date the customer never saw. A
+          // revision never sent falls back to when it was drawn up.
+          preparedDate={new Date(revision.lastSentAt ?? revision.createdAt)}
           screen
         />
       </div>
