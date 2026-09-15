@@ -5,6 +5,14 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import {
+  Building2,
+  HardHat,
+  MailCheck,
+  MapPinned,
+  Ruler,
+  Users,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { ModalShell } from "@/components/common/modal-shell";
@@ -31,15 +39,57 @@ type SendInput = { body: string; attachments: CertifierReplyAttachment[] };
 type ThreadTab = {
   key: string;
   label: string;
+  icon: ThreadIconKind;
   emails: CertifierEmailRecord[];
   onSend: ((input: SendInput) => Promise<void>) | null;
   isSending: boolean;
 };
 
+type ThreadIconKind =
+  | "certifier"
+  | "surveyor"
+  | "architect"
+  | "council"
+  | "consultant";
+
+function threadIconKindForParty(
+  party: CompliancePartyType,
+): Exclude<ThreadIconKind, "certifier"> {
+  switch (party) {
+    case CompliancePartyType.SURVEYOR:
+      return "surveyor";
+    case CompliancePartyType.ARCHITECT:
+      return "architect";
+    case CompliancePartyType.COUNCIL:
+      return "council";
+    default:
+      return "consultant";
+  }
+}
+
+function ThreadTabIcon({ kind }: { kind: ThreadIconKind }) {
+  switch (kind) {
+    case "certifier":
+      return <MailCheck className="size-3.5" aria-hidden="true" />;
+    case "surveyor":
+      return <MapPinned className="size-3.5" aria-hidden="true" />;
+    case "architect":
+      return <Ruler className="size-3.5" aria-hidden="true" />;
+    case "council":
+      return <Building2 className="size-3.5" aria-hidden="true" />;
+    case "consultant":
+      return <HardHat className="size-3.5" aria-hidden="true" />;
+    default:
+      return <Users className="size-3.5" aria-hidden="true" />;
+  }
+}
+
 type ComplianceThreadsModalProps = {
   open: boolean;
   onClose: () => void;
   projectId: string;
+  /** Completed compliance files can inspect threads but must not send from them. */
+  readOnly?: boolean;
   /** The certifier's own thread — the engagement's, not an outreach's. */
   certifierEmails: CertifierEmailRecord[];
   isSendingToCertifier: boolean;
@@ -73,6 +123,7 @@ export function ComplianceThreadsModal({
   open,
   onClose,
   projectId,
+  readOnly = false,
   certifierEmails,
   isSendingToCertifier,
   onSendToCertifier,
@@ -108,10 +159,12 @@ export function ComplianceThreadsModal({
       .map((outreach) => ({
         key: outreach.id,
         label: PARTY_LABEL[outreach.party],
+        icon: threadIconKindForParty(outreach.party),
         emails: outreach.emails,
         // Nothing to reply to on a self-supplied row — there is no address —
         // and the planning portal is not a correspondent.
         onSend:
+          readOnly ||
           outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED ||
           outreach.party === CompliancePartyType.COUNCIL ||
           !outreach.contactEmail
@@ -124,8 +177,9 @@ export function ComplianceThreadsModal({
       {
         key: "certifier",
         label: "Certifier",
+        icon: "certifier",
         emails: certifierEmails,
-        onSend: onSendToCertifier,
+        onSend: readOnly ? null : onSendToCertifier,
         isSending: isSendingToCertifier,
       },
       ...partyTabs,
@@ -134,6 +188,7 @@ export function ComplianceThreadsModal({
     certifierEmails,
     isSendingToCertifier,
     onSendToCertifier,
+    readOnly,
     outreaches,
     isSendingToParty,
     onSendToParty,
@@ -150,7 +205,7 @@ export function ComplianceThreadsModal({
       open={open}
       onClose={onClose}
       title="Compliance threads"
-      subtitle={`${total} message${total === 1 ? "" : "s"} across ${tabs.length} conversation${tabs.length === 1 ? "" : "s"}`}
+      subtitle={`${total} message${total === 1 ? "" : "s"} across ${tabs.length} conversation${tabs.length === 1 ? "" : "s"}${readOnly ? " · Read-only" : ""}`}
       maxWidthClass="max-w-[820px]"
       isFullScreenable
       isFullScreen={isFullScreen}
@@ -178,6 +233,7 @@ export function ComplianceThreadsModal({
                   : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
+              <ThreadTabIcon kind={tab.icon} />
               {tab.label}
               {tab.emails.length > 0 ? (
                 <Badge variant="secondary">{tab.emails.length}</Badge>

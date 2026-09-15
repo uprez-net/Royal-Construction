@@ -9,9 +9,12 @@ import {
   CompliancePartyType,
 } from "@prisma/client";
 import {
+  Archive,
   ClipboardList,
+  FileArchive,
   HelpCircle,
   Inbox,
+  ListChecks,
   Loader2,
   MessagesSquare,
   ShieldCheck,
@@ -134,6 +137,7 @@ import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
 import { ComplianceSectionCard } from "./compliance-section-card";
 import { ComplianceStageFlow } from "./compliance-stage-flow";
+import { DevelopmentApplicationBanner } from "./development-application-banner";
 import { EstateDeveloperBanner } from "./estate-developer-banner";
 
 /**
@@ -1336,6 +1340,11 @@ export function ProjectComplianceTab({
         emails={engagement.emails}
         isSendingReply={isScopeBusy(complianceScope.reply)}
         onSendReply={handleReply}
+        outreaches={engagement.outreaches}
+        isSendingToParty={(outreachId) =>
+          isScopeBusy(complianceScope.partyReply(outreachId))
+        }
+        onSendToParty={handlePartyReply}
       />
     );
   }
@@ -1437,6 +1446,10 @@ export function ProjectComplianceTab({
    * a tab that never mentions the council.
    */
   const hasDa = hasDevelopmentApplication(engagement);
+
+  /** Show the DA question until it is answered or dismissed in this render. */
+  const needsDevelopmentApplicationAnswer =
+    engagement?.developmentApplicationRequired === null && !hasDa;
 
   /**
    * Why the checklist is frozen, or null.
@@ -1762,6 +1775,11 @@ export function ProjectComplianceTab({
     ),
     ...signedCopies.map((signed) => signed.document),
   ];
+  const totalFiles = engagement.documents.reduce(
+    (count, document) => count + document.files.length,
+    0,
+  );
+  const suppliedChecklistItems = countSupplied(checklistItems);
 
   return (
     <div className="space-y-4">
@@ -1769,7 +1787,7 @@ export function ProjectComplianceTab({
           Header — what this section is, and the one control that is not
           tied to a single block.
       --------------------------------------------------------------- */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3.5 shadow-sm">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
             <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
@@ -1824,6 +1842,10 @@ export function ProjectComplianceTab({
         }}
       />
 
+      {needsDevelopmentApplicationAnswer ? (
+        <DevelopmentApplicationBanner projectId={project.id} />
+      ) : null}
+
       {/* ---------------------------------------------------------------
           The one question nothing on this file can answer for itself.
 
@@ -1851,7 +1873,7 @@ export function ProjectComplianceTab({
           look like one thing with parts. The send bar and the vault sit on it
           too, for the same reason.
       --------------------------------------------------------------- */}
-      <div className="space-y-4 rounded-xl border border-border/70 bg-muted/40 p-4">
+      <div className="space-y-4 rounded-2xl border border-border/70 bg-gradient-to-br from-muted/60 via-background to-primary/[0.035] p-3 sm:p-4">
         {/* -------------------------------------------------------------
             Two columns, and the checklist across both.
 
@@ -2441,6 +2463,46 @@ export function ProjectComplianceTab({
           open={isOpen("vault")}
           onOpenChange={toggleSection("vault")}
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="flex items-center gap-2 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2.5">
+          <ListChecks className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="min-w-0 text-xs text-muted-foreground">
+            <strong className="block text-sm font-semibold text-foreground tabular-nums">
+              {suppliedChecklistItems}/{checklistItems.length || 0}
+            </strong>
+            checklist items
+          </span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-success/20 bg-success-light/55 px-3 py-2.5">
+          <FileArchive className="size-4 shrink-0 text-success-ink" aria-hidden="true" />
+          <span className="min-w-0 text-xs text-muted-foreground">
+            <strong className="block text-sm font-semibold text-foreground tabular-nums">
+              {totalFiles}
+            </strong>
+            files on file
+          </span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-warning/20 bg-warning-light/55 px-3 py-2.5">
+          <Archive className="size-4 shrink-0 text-warning-ink" aria-hidden="true" />
+          <span className="min-w-0 text-xs text-muted-foreground">
+            <strong className="block text-sm font-semibold text-foreground tabular-nums">
+              {partySections.filter((section) => section.isComplete).length}/
+              {partySections.length}
+            </strong>
+            supplier sections
+          </span>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/45 px-3 py-2.5">
+          <MessagesSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 text-xs text-muted-foreground">
+            <strong className="block text-sm font-semibold text-foreground tabular-nums">
+              {threadMessageCount}
+            </strong>
+            thread messages
+          </span>
+        </div>
       </div>
 
       <ComplianceThreadsModal
