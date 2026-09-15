@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
-  changesLeadAssignee,
   filtersForRequest,
   isDefaultOfferFilters,
   shouldAdoptServerOffers,
@@ -71,16 +70,6 @@ test("the server's page is adopted only for the unfiltered list on that page", (
   );
 });
 
-test("only a real change of assignee expires the offers list", () => {
-  assert.equal(changesLeadAssignee(undefined, "user-a"), false, "the update leaves the assignee alone");
-  assert.equal(changesLeadAssignee("user-a", "user-a"), false);
-  assert.equal(changesLeadAssignee("user-b", "user-a"), true);
-  assert.equal(changesLeadAssignee(null, "user-a"), true, "unassigning");
-  assert.equal(changesLeadAssignee("user-a", null), true, "assigning an unassigned lead");
-  assert.equal(changesLeadAssignee("   ", null), false, "a blank id means unassigned");
-  assert.equal(changesLeadAssignee(" user-a ", "user-a"), false, "updateLead trims the id");
-});
-
 test("the store and updateLead use these rules", () => {
   const slice = readFileSync("lib/store/slices/offerSlice.ts", "utf8");
   assert.match(slice, /fetchOffers\.pending[\s\S]{0,500}filtersForRequest\(/, "pending does not record the filters");
@@ -88,7 +77,7 @@ test("the store and updateLead use these rules", () => {
   const leads = readFileSync("lib/data/leads.ts", "utf8");
   assert.match(
     leads,
-    /changesLeadAssignee\(input\.assignedId, existingLead\?\.assignedId\)[\s\S]{0,120}revalidateTag\("offers"/,
+    /if \(input\.assignedId !== undefined\) \{[\s\S]{0,120}revalidateTag\("offers"/,
     "updateLead does not expire the offers list on reassignment",
   );
 });

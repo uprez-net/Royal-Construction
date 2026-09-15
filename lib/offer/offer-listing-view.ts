@@ -54,17 +54,3 @@ export function shouldAdoptServerOffers(
     current.limit === server.limit
   );
 }
-
-/**
- * Whether a lead update moves the lead to a different assignee. The offers list
- * is cached per assignee, so a reassignment has to expire it: the old owner must
- * stop seeing the lead and the new owner must start. updateLead trims the id and
- * stores a blank one as null, so the comparison does the same.
- */
-export function changesLeadAssignee(
-  requested: string | null | undefined,
-  current: string | null | undefined,
-): boolean {
-  if (requested === undefined) return false;
-  return (requested?.trim() || null) !== (current ?? null);
-}
