@@ -1338,6 +1338,13 @@ model CertifierEngagement {
 
   status CertifierEngagementStatus @default(NOT_STARTED)
 
+  /// Whether the compliance file needs a development application.
+  ///
+  /// Null means nobody has answered the question shown at the top of the
+  /// compliance tab. Both true and false are recorded answers; true also opens
+  /// the DA branch by raising a DA_APPROVAL_REQUIRED alert.
+  developmentApplicationRequired Boolean?
+
   /// Whether the lot sits in an estate whose developer has to approve the
   /// bushfire report before it is lodged.
   ///

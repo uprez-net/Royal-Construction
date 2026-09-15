@@ -29,9 +29,12 @@ import { reviveComplianceEngagementDates } from "@/lib/compliance/engagement-dat
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.
-import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
-import type {
+import {
+  ComplianceDocumentType,
   ComplianceExternalApplicationKind,
+  CompliancePartyType,
+} from "@prisma/client";
+import type {
   File as ProjectFiles,
 } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
@@ -43,6 +46,7 @@ import type {
   DeveloperDecisionInput,
   DeveloperRequirementInput,
   DeveloperResendInput,
+  DevelopmentApplicationRequirementInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
   EstateDeveloperRequest,
@@ -853,6 +857,31 @@ export const setEstateDeveloper = createAsyncThunk<
   },
 );
 
+/** Records whether this compliance file needs a Development Application. */
+export const setDevelopmentApplicationRequired = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & DevelopmentApplicationRequirementInput,
+  { rejectValue: string }
+>(
+  "projects/setDevelopmentApplicationRequired",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/development-application/requirement",
+        jsonPost(payload),
+        "Unable to record whether a Development Application is needed",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record whether a Development Application is needed",
+      );
+    }
+  },
+);
+
 /** Records that the client already had this party's documents. */
 export const recordPartySelfSupplied = createAsyncThunk<
   ComplianceResult,
@@ -1179,6 +1208,13 @@ const complianceOperations = [
     () => complianceScope.developer,
   ),
   complianceOperation(setEstateDeveloper, () => complianceScope.developer),
+  complianceOperation(
+    setDevelopmentApplicationRequired,
+    () =>
+      complianceScope.application(
+        ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+      ),
+  ),
   complianceOperation(recordExternalApplication, (arg) =>
     complianceScope.application(arg.kind),
   ),

@@ -267,6 +267,15 @@ export type EstateDeveloperInput = z.infer<typeof estateDeveloperSchema>;
 /** The browser's half — see `ExternalApplicationRequest`. */
 export type EstateDeveloperRequest = z.input<typeof estateDeveloperSchema>;
 
+/** Whether this compliance file needs a Development Application. */
+export const developmentApplicationRequirementSchema = z.object({
+  required: z.boolean(),
+});
+
+export type DevelopmentApplicationRequirementInput = z.infer<
+  typeof developmentApplicationRequirementSchema
+>;
+
 // ============================================================================
 // Applications to outside bodies
 // ============================================================================

@@ -137,6 +137,7 @@ import { ComplianceDocumentVault } from "./compliance-document-vault";
 import { ComplianceFinalPage } from "./compliance-final-page";
 import { ComplianceSectionCard } from "./compliance-section-card";
 import { ComplianceStageFlow } from "./compliance-stage-flow";
+import { DevelopmentApplicationBanner } from "./development-application-banner";
 import { EstateDeveloperBanner } from "./estate-developer-banner";
 
 /**
@@ -1446,6 +1447,10 @@ export function ProjectComplianceTab({
    */
   const hasDa = hasDevelopmentApplication(engagement);
 
+  /** Show the DA question until it is answered or dismissed in this render. */
+  const needsDevelopmentApplicationAnswer =
+    engagement?.developmentApplicationRequired === null && !hasDa;
+
   /**
    * Why the checklist is frozen, or null.
    *
@@ -1836,6 +1841,10 @@ export function ProjectComplianceTab({
           }));
         }}
       />
+
+      {needsDevelopmentApplicationAnswer ? (
+        <DevelopmentApplicationBanner projectId={project.id} />
+      ) : null}
 
       {/* ---------------------------------------------------------------
           The one question nothing on this file can answer for itself.
