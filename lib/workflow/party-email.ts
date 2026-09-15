@@ -7,9 +7,8 @@ import {
   ComplianceApprovalChannel,
   ComplianceExternalApplicationKind,
   ComplianceOutreachStatus,
-  CompliancePartyType,
-  Prisma,
 } from "@prisma/client";
+import type { CompliancePartyType, Prisma } from "@prisma/client";
 import { put } from "@vercel/blob";
 import { FatalError } from "workflow";
 
@@ -1021,7 +1020,7 @@ export const processInboundPartyEmail = async (
     // not read as the consultant having redone it.
     if (
       classification.bushfireReports > 0 &&
-      outreach.party === CompliancePartyType.BUSHFIRE_CONSULTANT
+      outreach.party === "BUSHFIRE_CONSULTANT"
     ) {
       await closeBushfireRevisionLoop({
         projectId,
@@ -1031,7 +1030,7 @@ export const processInboundPartyEmail = async (
 
     if (
       classification.architecturalDesigns > 0 &&
-      outreach.party === CompliancePartyType.ARCHITECT
+      outreach.party === "ARCHITECT"
     ) {
       await closeArchitecturalDesignRevisionLoop({
         projectId,
@@ -1044,7 +1043,7 @@ export const processInboundPartyEmail = async (
   // documents for the same reason the verdict is: a determination arrives as a
   // notice of determination attached to the message, and the rows this writes
   // should be written against a file that already holds it.
-  if (outreach.party === CompliancePartyType.COUNCIL) {
+  if (outreach.party === "COUNCIL") {
     const requests = await recordCouncilRequests(
       { projectId, engagementId: outreach.engagementId },
       message,
@@ -1076,7 +1075,7 @@ export const processInboundPartyEmail = async (
   // The developer's verdict, where this is their thread. After the documents,
   // because a rejection opens a revision round and mails the consultant, and
   // that should happen against a file whose attachments have already landed.
-  if (outreach.party === CompliancePartyType.DEVELOPER) {
+  if (outreach.party === "DEVELOPER") {
     const verdict = await recordDeveloperVerdict({ projectId }, message);
     if (verdict !== "none") {
       console.log(`  Developer ${verdict} the bushfire report.`);
