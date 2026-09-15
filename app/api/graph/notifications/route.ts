@@ -33,6 +33,7 @@ import { processInboundLead } from '@/lib/workflow/lead-extraction';
 import { start } from 'workflow/api';
 import { after } from 'next/server';
 import { isOwnMailbox } from '@/lib/graph/mailbox';
+import { graphResourceBelongsToMailbox } from '@/lib/graph/resource';
 
 // export const runtime = 'nodejs';
 
@@ -363,30 +364,6 @@ function handleValidationToken(request: Request): Response | null {
   return textResponse(200, validationToken);
 }
 
-function normalizedResource(resource: string | undefined): string {
-  return (resource ?? '')
-    .trim()
-    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0\//i, '')
-    .replace(/^\//, '')
-    .split('?')[0]
-    .replace(/\/$/, '')
-    .toLowerCase();
-}
-
-function resourceBelongsTo(
-  resource: string | undefined,
-  subscriptionResource: string | undefined,
-): boolean {
-  const messageResource = normalizedResource(resource);
-  const mailboxResource = normalizedResource(subscriptionResource);
-  return Boolean(
-    messageResource &&
-      mailboxResource &&
-      (messageResource === mailboxResource ||
-        messageResource.startsWith(`${mailboxResource}/`)),
-  );
-}
-
 /**
  * Client state is the mailbox routing secret. A resource match is checked
  * again after loading the role's config because a notification can contain a
@@ -456,7 +433,13 @@ async function processNotifications(notifications: GraphNotification[]): Promise
 
     if (!context) continue;
     const { config, client: graphClient } = context;
-    if (!resourceBelongsTo(notification.resource, config.webhookSubscriptionResource)) {
+    if (
+      !graphResourceBelongsToMailbox(
+        notification.resource,
+        config.webhookSubscriptionResource,
+        config.senderUpn,
+      )
+    ) {
       console.log(`Ignored ${mailbox} notification for an unexpected resource`);
       continue;
     }
