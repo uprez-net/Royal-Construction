@@ -270,7 +270,12 @@ export function buildAreaBreakdown(job: OfferWorkspaceJob): OfferAreaBreakdown {
   if (job.grannyFlatSqm !== 0) {
     cells.push({ label: "Granny Flat", sqm: job.grannyFlatSqm });
   }
-  return { cells, totalSqm: getTotalAreaSqm(job) };
+  // A base cell with no area (a single-storey job's First Floor, a job with no
+  // porch) is dropped like Void and Granny Flat above, so nothing prints "0 m²".
+  return {
+    cells: cells.filter((cell) => cell.sqm !== 0),
+    totalSqm: getTotalAreaSqm(job),
+  };
 }
 
 function getAreaLabel(totalAreaSqm: number): string {
