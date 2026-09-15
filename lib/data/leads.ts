@@ -1,5 +1,7 @@
 "use server";
+import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
+import { changesLeadAssignee } from "@/lib/offer/offer-listing-view";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
@@ -1189,6 +1191,19 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     }),
     ...reassignOpenTasks,
   ]);
+
+  // The offers list is cached per assignee (lib/data/offer-listing.ts), and only
+  // an offer status change used to expire it. Expire it on a reassignment too, so
+  // the previous owner stops seeing this lead's offers and the new owner starts,
+  // on their next load. The catch keeps a cache failure from failing the save,
+  // since revalidateTag throws outside a request.
+  if (changesLeadAssignee(input.assignedId, existingLead?.assignedId)) {
+    try {
+      revalidateTag("offers", { expire: 0 });
+    } catch (error) {
+      console.error(`[Lead ${id}] Failed to expire the offers list cache`, error);
+    }
+  }
 
   for (const annotation of annotationInputs) {
     try {

@@ -2,7 +2,7 @@ import { getOfferGroups, updateOfferStatus } from "@/lib/data/offers";
 import { PaginatedOfferGroupResult, OfferStatusBucket } from "@/types/offer";
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { OfferStatus } from "@prisma/client";
-import { isDefaultOfferFilters } from "@/lib/offer/offer-listing-view";
+import { filtersForRequest, shouldAdoptServerOffers } from "@/lib/offer/offer-listing-view";
 
 interface OffersState {
     offers: PaginatedOfferGroupResult;
@@ -96,6 +96,10 @@ const offersSlice = createSlice({
         builder
             .addCase(fetchOffers.pending, (state, action) => {
                 state.latestRequestId = action.meta.requestId;
+                // Record what the user asked for now, not when it resolves. A
+                // server refresh that lands while this is loading reads these
+                // filters, and must not re-fetch or adopt the view they left.
+                state.filters = filtersForRequest(state.filters, action.meta.arg);
                 state.loading = true;
                 state.error = null;
             })
@@ -108,12 +112,7 @@ const offersSlice = createSlice({
                 // change (dispatched from the table) re-applies them. Undefined
                 // means "leave the existing filter untouched", which lets the
                 // table re-fetch a page without redeclaring the active tab/q.
-                if (action.meta.arg.status !== undefined) {
-                    state.filters.status = action.meta.arg.status;
-                }
-                if (action.meta.arg.q !== undefined) {
-                    state.filters.q = action.meta.arg.q;
-                }
+                state.filters = filtersForRequest(state.filters, action.meta.arg);
             })
             .addCase(fetchOffers.rejected, (state, action) => {
                 if (action.meta.requestId !== state.latestRequestId) return;
@@ -165,7 +164,7 @@ export const syncServerOffers = createAsyncThunk<
     { state: { offers: OffersState } }
 >("offers/syncServerOffers", async (serverOffers, { dispatch, getState }) => {
     const { filters, offers } = getState().offers;
-    if (isDefaultOfferFilters(filters.status, filters.q)) {
+    if (shouldAdoptServerOffers(filters, offers, serverOffers)) {
         dispatch(setOffers(serverOffers));
         return;
     }
