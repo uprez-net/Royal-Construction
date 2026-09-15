@@ -61,6 +61,7 @@ function scopeItem(id: string, label: string): OfferWorkspaceScopeItem {
     unit: "",
     variationRule: "",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
 }
 

@@ -54,6 +54,10 @@ export type OfferPrintTemplateData = {
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
+  // The allowances the signed Tender lists: every one ticked "Show on Tender",
+  // whatever its Offer box says. The Tender makes its price subject to exactly
+  // these, so they are derived here with the offer's rows, not in the renderer.
+  readonly tenderScopeRows: readonly OfferPrintScopeRow[];
   // The "This price includes" list on the Investment Summary page, derived from
   // the inclusions schedule's summary labels. Derived HERE rather than in each
   // renderer — the three renderers have drifted before.
@@ -116,26 +120,34 @@ export function buildOfferPrintTemplateData({
     savingAmount,
     scopeRows: allowances
       .filter((item) => item.includedInOfferDocument)
-      .map((item) => ({
-        amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
-        // Estimators routinely put the same sentence in both fields — across
-        // real offers most rows have description === variationRule, and many
-        // leave the description blank. Printing it twice side by side on a
-        // fixed-price proposal reads as a rendering fault, so the duplicate is
-        // dropped HERE rather than in each renderer: the offer and the emailed
-        // PDF must not diverge on this.
-        description:
-          item.description.trim() === item.variationRule.trim()
-            ? ""
-            : item.description,
-        id: item.id,
-        label: item.label,
-        variationRule: item.variationRule,
-      })),
+      .map(toScopeRow),
     summaryInclusions: draft.inclusionHighlights
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
+    tenderScopeRows: allowances
+      .filter((item) => item.includedInTender)
+      .map(toScopeRow),
     validUntilLabel: formatDateDisplay(job.validUntil),
+  };
+}
+
+// One allowance as the offer documents and the Tender print it.
+function toScopeRow(item: OfferWorkspaceScopeItem): OfferPrintScopeRow {
+  return {
+    amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
+    // Estimators routinely put the same sentence in both fields — across
+    // real offers most rows have description === variationRule, and many
+    // leave the description blank. Printing it twice side by side on a
+    // fixed-price proposal reads as a rendering fault, so the duplicate is
+    // dropped HERE rather than in each renderer: the offer and the emailed
+    // PDF must not diverge on this.
+    description:
+      item.description.trim() === item.variationRule.trim()
+        ? ""
+        : item.description,
+    id: item.id,
+    label: item.label,
+    variationRule: item.variationRule,
   };
 }
 
@@ -236,6 +248,46 @@ export function getPrintFooterText(
 
 function getTotalAreaSqm(job: OfferWorkspaceJob): number {
   return rawTotalAreaSqm(offerAreaBasisFromJob(job));
+}
+
+export type OfferAreaCell = {
+  readonly label: string;
+  readonly sqm: number;
+};
+
+export type OfferAreaBreakdown = {
+  readonly cells: readonly OfferAreaCell[];
+  readonly totalSqm: number;
+};
+
+// The snapshot page's area grid, and the one total every document prints.
+//
+// Each renderer summed its own subset: the emailed PDF left out balcony and void,
+// the printed copy left out void and showed a Kitchen cell that was never in any
+// total, and the Tender and welcome letter left out both. A client could read
+// three different build areas across one proposal and its Tender. The cells here
+// partition rawTotalAreaSqm exactly — the figure the cover and the cost formulas
+// already use — so the grid adds up to the total beneath it. A cell is dropped
+// only when it contributes nothing to that total.
+export function buildAreaBreakdown(job: OfferWorkspaceJob): OfferAreaBreakdown {
+  const cells: OfferAreaCell[] = [
+    { label: "Ground Floor + Garage", sqm: job.groundFloorSqm + job.garageSqm },
+    { label: "First Floor", sqm: job.firstFloorSqm },
+    { label: "Alfresco + Balcony", sqm: job.alfrescoPorchSqm + job.balconySqm },
+    { label: "Porch", sqm: job.porchSqm },
+  ];
+  if (job.voidSqm !== 0) {
+    cells.push({ label: "Void", sqm: job.voidSqm });
+  }
+  if (job.grannyFlatSqm !== 0) {
+    cells.push({ label: "Granny Flat", sqm: job.grannyFlatSqm });
+  }
+  // A base cell with no area (a single-storey job's First Floor, a job with no
+  // porch) is dropped like Void and Granny Flat above, so nothing prints "0 m²".
+  return {
+    cells: cells.filter((cell) => cell.sqm !== 0),
+    totalSqm: getTotalAreaSqm(job),
+  };
 }
 
 function getAreaLabel(totalAreaSqm: number): string {

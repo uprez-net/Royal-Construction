@@ -182,6 +182,7 @@ test("visible exclusions union the draft bullets with the printed scope items", 
     id: "scope-1",
     label: "Scope only",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
 
   const result = getVisibleExclusions(draft, [scopeItem]);
@@ -197,6 +198,7 @@ test("a scope item hidden from the document does not print", () => {
     id: "scope-2",
     label: "Hidden item",
     includedInOfferDocument: false,
+    includedInTender: true,
   };
 
   assert.deepEqual(getVisibleExclusions(draft, [hidden]), []);
@@ -209,6 +211,7 @@ test("a label duplicated across a bullet and a scope item prints once", () => {
     id: "scope-3",
     label: "Pool fencing",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
 
   assert.deepEqual(getVisibleExclusions(draft, [dupe]), ["Pool fencing"]);
@@ -224,6 +227,7 @@ test("the offer document uses only the exclusions set in the Offer phase", () =>
     id: "scope-not-on-offer",
     label: "Removed from the Offer document",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
 
   assert.deepEqual(getOfferDocumentExclusions(draft), ["Client-facing exclusion"]);
@@ -714,6 +718,7 @@ test("a scope exclusion carries its detail through to print", () => {
     description: "Can be priced later as a separate package.",
     variationRule: "Priced as a written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
 
   assert.deepEqual(getVisibleExclusionRows(draft, [item]), [
@@ -744,6 +749,7 @@ test("a scope item's detail wins over a bare bullet of the same label", () => {
     description: "Not in the building scope.",
     variationRule: "Separate contract.",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
   const rows = getVisibleExclusionRows(draft, [item]);
 
@@ -763,6 +769,7 @@ test("the tender prints Scope exclusion detail; the offer uses its short list", 
         description: "Priced separately on request.",
         variationRule: "Written variation only.",
         includedInOfferDocument: true,
+        includedInTender: true,
       },
     ],
     draft: { ...snapshot.draft, exclusionBullets: [] },
