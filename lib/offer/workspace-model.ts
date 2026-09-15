@@ -177,6 +177,11 @@ export type OfferWorkspaceScopeItem = {
   readonly unit: string;
   readonly variationRule: string;
   readonly includedInOfferDocument: boolean;
+  // Allowances only: whether the signed Tender lists this item. Separate from
+  // includedInOfferDocument so the sales proposal can stay short while the
+  // document the customer signs still discloses every allowance in the price.
+  // Exclusions carry it too, but their single Scope box is includedInOfferDocument.
+  readonly includedInTender: boolean;
 };
 
 export type OfferScopeItemCategory =
@@ -940,7 +945,8 @@ export const INITIAL_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = [
     amount: 8500,
     unit: "package",
     variationRule: "Selections above allowance become a variation.",
-    includedInOfferDocument: true,
+    includedInOfferDocument: false,
+    includedInTender: true,
   },
   {
     id: "allowance-2",
@@ -951,7 +957,8 @@ export const INITIAL_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = [
     amount: 70,
     unit: "sqm",
     variationRule: "Tile selections above the rate are priced as a variation.",
-    includedInOfferDocument: true,
+    includedInOfferDocument: false,
+    includedInTender: true,
   },
 ];
 
@@ -966,6 +973,7 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
     unit: "",
     variationRule: "Can be priced later as a written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   },
   {
     id: "exclusion-2",
@@ -977,6 +985,7 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
     unit: "",
     variationRule: "Owner-supplied unless added by written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   },
 ];
 
@@ -1015,8 +1024,18 @@ export function createOfferScopeItem(
     amount: 0,
     unit: "",
     variationRule: "",
-    includedInOfferDocument: true,
+    // A new allowance stays off the sales proposal until the estimator ticks it,
+    // and is listed in the signed Tender unless they untick it. An exclusion
+    // keeps its single box, ticked.
+    includedInOfferDocument: !isAllowanceCategory(category),
+    includedInTender: true,
   };
+}
+
+// Prime-cost and provisional-sum items are allowances; the other categories are
+// exclusions and owner selections, which live in the Exclusions list.
+function isAllowanceCategory(category: OfferScopeItemCategory): boolean {
+  return category === "prime_cost" || category === "provisional_sum";
 }
 
 export function removeOfferScopeItem(

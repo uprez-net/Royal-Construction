@@ -54,6 +54,10 @@ export type OfferPrintTemplateData = {
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
+  // The allowances the signed Tender lists: every one ticked "Show on Tender",
+  // whatever its Offer box says. The Tender makes its price subject to exactly
+  // these, so they are derived here with the offer's rows, not in the renderer.
+  readonly tenderScopeRows: readonly OfferPrintScopeRow[];
   // The "This price includes" list on the Investment Summary page, derived from
   // the inclusions schedule's summary labels. Derived HERE rather than in each
   // renderer — the three renderers have drifted before.
@@ -116,26 +120,34 @@ export function buildOfferPrintTemplateData({
     savingAmount,
     scopeRows: allowances
       .filter((item) => item.includedInOfferDocument)
-      .map((item) => ({
-        amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
-        // Estimators routinely put the same sentence in both fields — across
-        // real offers most rows have description === variationRule, and many
-        // leave the description blank. Printing it twice side by side on a
-        // fixed-price proposal reads as a rendering fault, so the duplicate is
-        // dropped HERE rather than in each renderer: the offer and the emailed
-        // PDF must not diverge on this.
-        description:
-          item.description.trim() === item.variationRule.trim()
-            ? ""
-            : item.description,
-        id: item.id,
-        label: item.label,
-        variationRule: item.variationRule,
-      })),
+      .map(toScopeRow),
     summaryInclusions: draft.inclusionHighlights
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
+    tenderScopeRows: allowances
+      .filter((item) => item.includedInTender)
+      .map(toScopeRow),
     validUntilLabel: formatDateDisplay(job.validUntil),
+  };
+}
+
+// One allowance as the offer documents and the Tender print it.
+function toScopeRow(item: OfferWorkspaceScopeItem): OfferPrintScopeRow {
+  return {
+    amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
+    // Estimators routinely put the same sentence in both fields — across
+    // real offers most rows have description === variationRule, and many
+    // leave the description blank. Printing it twice side by side on a
+    // fixed-price proposal reads as a rendering fault, so the duplicate is
+    // dropped HERE rather than in each renderer: the offer and the emailed
+    // PDF must not diverge on this.
+    description:
+      item.description.trim() === item.variationRule.trim()
+        ? ""
+        : item.description,
+    id: item.id,
+    label: item.label,
+    variationRule: item.variationRule,
   };
 }
 
