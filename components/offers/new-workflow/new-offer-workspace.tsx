@@ -56,6 +56,7 @@ import {
   pollOfferSigningStatus,
   saveOfferWorkspace,
   transitionOfferStatus,
+  recallOfferEnvelope,
   createOfferRevision,
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
@@ -1301,8 +1302,16 @@ export function NewOfferWorkspace({
 
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
+  // `recallScope` turns a status step into a genuine recall: the live DocuSign
+  // envelope for that document is voided BEFORE the status moves, so an
+  // estimator who sees "Draft" can trust that the customer's signing link is
+  // dead. Without it these controls only ever flipped our own status while the
+  // superseded document stayed signable.
   const transition = useCallback(
-    (next: OfferWorkspaceStatus) => {
+    (
+      next: OfferWorkspaceStatus,
+      recallScope?: "offer" | "tender" | "contract",
+    ) => {
       const offerId = offerIdRef.current;
       if (leadId === undefined || offerId === null) {
         return;
@@ -1325,10 +1334,28 @@ export function NewOfferWorkspace({
             );
             return;
           }
-          await transitionOfferStatus({
-            offerId,
-            toStatus: next.toUpperCase() as OfferStatus,
-          });
+          if (recallScope) {
+            const recalled = await recallOfferEnvelope({
+              offerId,
+              scope: recallScope,
+              toStatus: next.toUpperCase() as OfferStatus,
+            });
+            // A refused recall (DocuSign did not confirm the void) leaves the
+            // status unchanged and comes back as data, because a thrown server
+            // message is hidden in production. Rethrow it so the catch below
+            // shows why and resyncs. voidWarnings is empty in practice.
+            if (!recalled.ok) {
+              throw new Error(recalled.error);
+            }
+            if (recalled.voidWarnings.length > 0) {
+              setTransitionError(recalled.voidWarnings.join(" "));
+            }
+          } else {
+            await transitionOfferStatus({
+              offerId,
+              toStatus: next.toUpperCase() as OfferStatus,
+            });
+          }
           if (next === "contract_draft") {
             setContractParticulars((current) =>
               reconcileContractParticularDefaults(
@@ -1404,7 +1431,9 @@ export function NewOfferWorkspace({
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
           setRevisionNotice(
-            "This offer is locked — changes need a contract variation, not a new offer revision.",
+            result.reason === "refused"
+              ? result.error
+              : "This offer is locked — changes need a contract variation, not a new offer revision.",
           );
           return;
         }
@@ -1809,7 +1838,7 @@ export function NewOfferWorkspace({
         onSendOfferForSignature={sendOfferAccept}
         offerSignSending={offerSignSending}
         offerSignError={offerSignError}
-        onRecallOffer={() => transition("sent")}
+        onRecallOffer={() => transition("sent", "offer")}
         // Dev-only simulate (guarded server-side): the real OFFER_SIGNED comes
         // from the DocuSign completion webhook.
         onMarkOfferSigned={() => transition("offer_signed")}
@@ -1817,7 +1846,7 @@ export function NewOfferWorkspace({
         onSendTender={sendTender}
         tenderSending={tenderSending}
         tenderSendError={tenderSendError}
-        onRecallTender={() => transition("tender_draft")}
+        onRecallTender={() => transition("tender_draft", "tender")}
         onMarkTenderSigned={() => transition("tender_signed")}
         onGenerateContract={() => transition("contract_draft")}
         onSendContract={sendContract}
@@ -1825,7 +1854,7 @@ export function NewOfferWorkspace({
         contractSendError={contractSendError}
         contractParticulars={contractParticulars}
         onContractParticularsChange={updateContractParticulars}
-        onRecallContract={() => transition("contract_draft")}
+        onRecallContract={() => transition("contract_draft", "contract")}
         onMarkContractSigned={() => transition("contract_signed")}
         onCreateProject={createProject}
         projectCreating={projectCreating}
