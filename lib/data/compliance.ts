@@ -3,6 +3,7 @@
 import {
   CertifierEmailDirection,
   CertifierEngagementStatus,
+  GraphMailbox,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   Prisma,
@@ -151,6 +152,7 @@ export async function startCertifierEngagement(
       certifierName: input.certifierName ?? null,
       certifierEmail: input.certifierEmail,
       certifierPhone: input.certifierPhone ?? null,
+      graphMailbox: GraphMailbox.ADMIN,
       status: CertifierEngagementStatus.COLLECTING_DOCS,
       documents: {
         create: REQUIRED_COMPLIANCE_DOCUMENTS.map((doc, index) => ({
@@ -241,6 +243,7 @@ async function recordOutboundEmail(params: {
   subject: string;
   body: string;
   attachments: CertifierEmailAttachment[];
+  graphMailbox: GraphMailbox;
 }): Promise<void> {
   const checksum = await generateEmailChecksum(
     params.subject,
@@ -259,6 +262,7 @@ async function recordOutboundEmail(params: {
         body: params.body,
         checksum,
         direction: CertifierEmailDirection.OUTBOUND,
+        graphMailbox: params.graphMailbox,
         attachments: params.attachments as unknown as Prisma.InputJsonValue,
         sentAt: new Date(),
       },
@@ -381,7 +385,9 @@ export async function sendCertifierOutreach(engagementId: string) {
     return sendUpdatedRequiredDocuments(engagement);
   }
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    engagement.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
   const subject = buildCertifierSubject(
     engagement.refToken,
@@ -404,6 +410,7 @@ export async function sendCertifierOutreach(engagementId: string) {
 
   await recordOutboundEmail({
     engagementId,
+    graphMailbox: engagement.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     emailTo: certifierEmail,
     subject,
@@ -531,7 +538,9 @@ export async function sendCertifierReply(
     throw new Error("This engagement has no certifier email address.");
   }
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    engagement.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
 
   // Rebuilt from the engagement rather than taken from the last message on the
@@ -602,6 +611,7 @@ export async function sendCertifierReply(
 
   await recordOutboundEmail({
     engagementId,
+    graphMailbox: engagement.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     emailTo: certifierEmail,
     subject,

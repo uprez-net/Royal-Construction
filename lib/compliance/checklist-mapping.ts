@@ -118,7 +118,13 @@ const LABEL_HINTS: Partial<Record<ComplianceDocumentType, string[][]>> = {
     ["10.7", "10-7", "planning certificate", "section 149"],
   ],
   [ComplianceDocumentType.HOME_INSURANCE]: [
-    ["hbcf", "home warranty", "home building compensation", "insurance"],
+    [
+      "hwi",
+      "hbcf",
+      "home warranty",
+      "home building compensation",
+      "insurance",
+    ],
   ],
 
   // The consultants' and the portals' work. Labelled here so an unlabelled line

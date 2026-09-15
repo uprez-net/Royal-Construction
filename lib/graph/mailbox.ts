@@ -30,9 +30,12 @@ export function ownMailboxes(): string[] {
   const configured = [
     process.env.BUSINESS_EMAIL,
     process.env.GRAPH_SENDER_UPN,
+    process.env.BUSINESS_ADMIN_EMAIL,
+    process.env.GRAPH_ADMIN_SENDER_UPN,
     // Comma-separated. The CC copy of our own outbound lands back in the
     // inbox looking exactly like an inbound enquiry.
     ...(process.env.MAIL_ID_CC ?? '').split(','),
+    ...(process.env.GRAPH_ADMIN_MAIL_CC ?? '').split(','),
     DEFAULT_BUSINESS_EMAIL,
   ];
 
