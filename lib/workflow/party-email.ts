@@ -7,6 +7,7 @@ import {
   ComplianceApprovalChannel,
   ComplianceExternalApplicationKind,
   ComplianceOutreachStatus,
+  GraphMailbox,
 } from "@prisma/client";
 import type { CompliancePartyType, Prisma } from "@prisma/client";
 import { put } from "@vercel/blob";
@@ -100,8 +101,10 @@ export type InboundPartyOutcome =
 // working, to save a structure neither of them would then own.
 // ---------------------------------------------------------------------------
 
-async function graphClient() {
-  return createGraphContext(getGraphConfig());
+async function graphClient(mailbox: GraphMailbox) {
+  return createGraphContext(
+    getGraphConfig(mailbox === GraphMailbox.ADMIN ? "admin" : "business"),
+  );
 }
 
 /**
@@ -139,6 +142,7 @@ async function findOutreach(refToken: string) {
       id: true,
       party: true,
       engagementId: true,
+      graphMailbox: true,
       // The checklist line a consultant was engaged against, so what they send
       // back can answer it rather than becoming a document of its own. Read
       // only as a fallback for the rows written before deliverables existed --
@@ -164,9 +168,10 @@ async function findOutreach(refToken: string) {
  */
 async function readAttachments(
   messageId: string,
+  mailbox: GraphMailbox,
 ): Promise<LeadAttachmentReport> {
   "use step";
-  const client = await graphClient();
+  const client = await graphClient(mailbox);
   const report = await collectLeadAttachments(client, messageId);
 
   if (report.names.length > 0) {
@@ -196,6 +201,7 @@ async function saveInboundEmails(
   outreachId: string,
   message: InboundPartyMessage,
   attachments: { name: string; url: string }[],
+  graphMailbox: GraphMailbox,
 ): Promise<number> {
   "use step";
 
@@ -223,6 +229,7 @@ async function saveInboundEmails(
       body: thread.body,
       checksum,
       direction: CertifierEmailDirection.INBOUND,
+      graphMailbox,
       // Only threads[0] is the message that just arrived; the quoted history
       // behind it already has its attachments on its own rows.
       attachments: (index === 0
@@ -260,6 +267,7 @@ async function archiveAttachments(
   projectId: string,
   messageId: string,
   report: LeadAttachmentReport,
+  mailbox: GraphMailbox,
 ): Promise<
   { documentId: string; fileId: string; name: string; url: string }[]
 > {
@@ -279,7 +287,7 @@ async function archiveAttachments(
     return [];
   }
 
-  const client = await graphClient();
+  const client = await graphClient(mailbox);
   const stored: {
     documentId: string;
     fileId: string;
@@ -955,13 +963,14 @@ export const processInboundPartyEmail = async (
 
   const projectId = outreach.engagement.projectId;
 
-  const report = await readAttachments(message.messageId);
+  const report = await readAttachments(message.messageId, outreach.graphMailbox);
   const stored = await archiveAttachments(
     outreach.id,
     outreach.engagementId,
     projectId,
     message.messageId,
     report,
+    outreach.graphMailbox,
   );
 
   await saveInboundEmails(
@@ -969,6 +978,7 @@ export const processInboundPartyEmail = async (
     outreach.id,
     message,
     stored.map((item) => ({ name: item.name, url: item.url })),
+    outreach.graphMailbox,
   );
 
   if (stored.length > 0) {

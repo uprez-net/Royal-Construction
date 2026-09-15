@@ -454,6 +454,11 @@ enum CertifierEmailDirection {
   OUTBOUND
 }
 
+enum GraphMailbox {
+  BUSINESS
+  ADMIN
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -1317,6 +1322,10 @@ model CertifierEngagement {
   certifierEmail String?
   certifierPhone String?
 
+  /// The Graph mailbox that owns this compliance thread. Existing rows are
+  /// business-mailbox rows; new compliance engagements use the admin mailbox.
+  graphMailbox GraphMailbox @default(BUSINESS)
+
   /// The Graph id of the most recent inbound message on this thread.
   ///
   /// Replies are built with Graph's createReply against it, which is the only
@@ -1565,6 +1574,9 @@ model CertifierEmail {
   /// are the same shape and are read by the same components, so they share the
   /// table rather than growing a near-identical one per party.
   outreachId String?
+
+  /// The mailbox in which this message was received or sent.
+  graphMailbox GraphMailbox @default(BUSINESS)
 
   createdAt DateTime @default(now())
 
@@ -1900,6 +1912,10 @@ model ComplianceOutreach {
   contactName  String?
   contactEmail String?
   contactPhone String?
+
+  /// The Graph mailbox that owns this outreach thread. Existing rows remain on
+  /// business so their stored message ids continue to resolve there.
+  graphMailbox GraphMailbox @default(BUSINESS)
 
   /// See CertifierEngagement.lastInboundMessageId -- Graph will not set
   /// In-Reply-To through internetMessageHeaders, so a reply has to be built

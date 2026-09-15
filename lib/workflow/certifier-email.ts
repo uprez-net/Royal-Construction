@@ -6,6 +6,7 @@ import {
   ComplianceAlertSource,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  GraphMailbox,
   Prisma,
 } from "@prisma/client";
 import { put } from "@vercel/blob";
@@ -107,8 +108,10 @@ const INBOUND_CLASSIFIABLE: ReadonlySet<ComplianceDocumentType> = new Set([
  * It holds a credential and a token cache — neither serializable, and neither
  * something to persist into an event log.
  */
-async function graphClient() {
-  return createGraphContext(getGraphConfig());
+async function graphClient(mailbox: GraphMailbox) {
+  return createGraphContext(
+    getGraphConfig(mailbox === GraphMailbox.ADMIN ? "admin" : "business"),
+  );
 }
 
 /**
@@ -146,7 +149,12 @@ async function findEngagement(refToken: string) {
   "use step";
   return prisma.certifierEngagement.findUnique({
     where: { refToken },
-    select: { id: true, projectId: true, subjectAddress: true },
+    select: {
+      id: true,
+      projectId: true,
+      subjectAddress: true,
+      graphMailbox: true,
+    },
   });
 }
 
@@ -159,9 +167,12 @@ async function findEngagement(refToken: string) {
  * inline signature images, unreadable formats) is identical, and a certifier
  * sends the same mix of PDFs and scans a client does.
  */
-async function readAttachments(messageId: string): Promise<LeadAttachmentReport> {
+async function readAttachments(
+  messageId: string,
+  mailbox: GraphMailbox,
+): Promise<LeadAttachmentReport> {
   "use step";
-  const client = await graphClient();
+  const client = await graphClient(mailbox);
   const report = await collectLeadAttachments(client, messageId);
 
   if (report.names.length > 0) {
@@ -191,6 +202,7 @@ async function saveInboundEmails(
   engagementId: string,
   message: InboundCertifierMessage,
   attachments: { name: string; url: string }[],
+  graphMailbox: GraphMailbox,
 ): Promise<number> {
   "use step";
 
@@ -223,6 +235,7 @@ async function saveInboundEmails(
       // quoted copy of one of those collides on checksum and is skipped, so
       // labelling the whole quoted tail INBOUND cannot flip an existing row.
       direction: CertifierEmailDirection.INBOUND,
+      graphMailbox,
       attachments: (index === 0
         ? attachments
         : []) as unknown as Prisma.InputJsonValue,
@@ -257,6 +270,7 @@ async function archiveAttachments(
   projectId: string,
   messageId: string,
   report: LeadAttachmentReport,
+  mailbox: GraphMailbox,
 ): Promise<{ documentId: string; fileId: string; name: string; url: string }[]> {
   "use step";
 
@@ -275,7 +289,7 @@ async function archiveAttachments(
     return [];
   }
 
-  const client = await graphClient();
+  const client = await graphClient(mailbox);
   const stored: {
     documentId: string;
     fileId: string;
@@ -669,18 +683,20 @@ export const processInboundCertifierEmail = async (
     return { status: "no-matching-engagement" };
   }
 
-  const report = await readAttachments(message.messageId);
+  const report = await readAttachments(message.messageId, engagement.graphMailbox);
   const stored = await archiveAttachments(
     engagement.id,
     engagement.projectId,
     message.messageId,
     report,
+    engagement.graphMailbox,
   );
 
   await saveInboundEmails(
     engagement.id,
     message,
     stored.map((item) => ({ name: item.name, url: item.url })),
+    engagement.graphMailbox,
   );
 
   let checklistDocumentId: string | null = null;

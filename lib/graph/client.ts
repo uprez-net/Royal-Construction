@@ -212,9 +212,13 @@ export interface GraphMessage {
 export interface GraphSubscription {
   id: string;
   expirationDateTime: string;
+  resource?: string;
+  notificationUrl?: string;
+  /** Graph omits this field from list responses for security. */
+  clientState?: string | null;
 }
 
-interface GraphContext {
+export interface GraphContext {
   sendMail(input: EmailInput): Promise<void>;
   /**
    * Sends a genuine reply to a message already in the mailbox.
@@ -233,6 +237,12 @@ interface GraphContext {
   listMessageAttachments(messageId: string): Promise<GraphAttachmentMetadata[]>;
   downloadMessageAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
   createMailboxSubscription(args: {
+    notificationUrl: string;
+    clientState: string;
+    expirationMinutes?: number;
+    resource?: string;
+  }): Promise<GraphSubscription>;
+  ensureMailboxSubscription(args: {
     notificationUrl: string;
     clientState: string;
     expirationMinutes?: number;
@@ -446,12 +456,24 @@ function buildGraphUrl(resource: string, select: string): string {
   return `${normalized}${separator}$select=${select}`;
 }
 
+function normalizeSubscriptionResource(resource: string | undefined): string {
+  return (resource ?? '')
+    .trim()
+    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0\//i, '')
+    .replace(/^\//, '')
+    .split('?')[0]
+    .replace(/\/$/, '')
+    .toLowerCase();
+}
+
 export async function createGraphContext(config: GraphConfig): Promise<GraphContext> {
   const normalizedSender = config.senderUpn?.trim();
+  const useExplicitMailbox = config.mode === 'app-only' || config.mailbox === 'admin';
 
-  if (config.mode === 'app-only' && !normalizedSender) {
+  if (useExplicitMailbox && !normalizedSender) {
     throw new Error(
-      'GRAPH_SENDER_UPN is required in app-only mode. Set it to the mailbox that will send mail.',
+      `${config.mailbox === 'admin' ? 'Admin Graph mailbox' : 'GRAPH_SENDER_UPN'} ` +
+        'is required for an explicit mailbox context.',
     );
   }
 
@@ -518,19 +540,19 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
   };
 
   const sendPath =
-    config.mode === 'delegated'
+    !useExplicitMailbox
       ? '/me/sendMail'
       : `/users/${encodeURIComponent(normalizedSender || '')}/sendMail`;
 
   const inboxPath =
-    config.mode === 'delegated'
+    !useExplicitMailbox
       ? '/me/mailFolders/inbox/messages'
       : `/users/${encodeURIComponent(normalizedSender || '')}/mailFolders/inbox/messages`;
 
   // Draft creation for the large-attachment path. Needs Mail.ReadWrite, which is
   // a separate grant from the Mail.Send used by the inline path.
   const messagesPath =
-    config.mode === 'delegated'
+    !useExplicitMailbox
       ? '/me/messages'
       : `/users/${encodeURIComponent(normalizedSender || '')}/messages`;
 
@@ -799,7 +821,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
         notificationUrl,
         resource:
           resource ??
-          (config.mode === 'delegated'
+          (!useExplicitMailbox
             ? "/me/mailFolders('Inbox')/messages"
             : `/users/${encodeURIComponent(normalizedSender || '')}/mailFolders('Inbox')/messages`),
         expirationDateTime: new Date(now + expirationMinutes * 60 * 1000).toISOString(),
@@ -814,6 +836,62 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       );
 
       return subscription;
+    },
+    ensureMailboxSubscription: async ({
+      notificationUrl,
+      clientState,
+      expirationMinutes = 60,
+      resource,
+    }) => {
+      const token = await getAccessToken();
+      const targetResource =
+        resource ??
+        (!useExplicitMailbox
+          ? "/me/mailFolders('Inbox')/messages"
+          : `/users/${encodeURIComponent(normalizedSender || '')}/mailFolders('Inbox')/messages`);
+      const subscriptions = await graphRequest<{ value?: GraphSubscription[] }>(
+        'GET',
+        'https://graph.microsoft.com/v1.0/subscriptions',
+        token,
+      );
+      const target = normalizeSubscriptionResource(targetResource);
+      const existing = (subscriptions.value ?? []).find(
+        (subscription) =>
+          normalizeSubscriptionResource(subscription.resource) === target,
+      );
+      const expirationDateTime = new Date(
+        Date.now() + expirationMinutes * 60 * 1000,
+      ).toISOString();
+
+      if (existing?.id) {
+        try {
+          return await graphRequest<GraphSubscription>(
+            'PATCH',
+            `https://graph.microsoft.com/v1.0/subscriptions/${encodeURIComponent(existing.id)}`,
+            token,
+            { expirationDateTime, notificationUrl },
+          );
+        } catch (error) {
+          // Graph removes expired subscriptions. A 404 means there is nothing
+          // left to renew, so recreate it; other failures must be visible.
+          if ((error as { status?: number })?.status !== 404) {
+            throw error;
+          }
+        }
+      }
+
+      return graphRequest<GraphSubscription>(
+        'POST',
+        'https://graph.microsoft.com/v1.0/subscriptions',
+        token,
+        {
+          changeType: 'created',
+          notificationUrl,
+          resource: targetResource,
+          expirationDateTime,
+          clientState,
+        },
+      );
     },
   };
 }

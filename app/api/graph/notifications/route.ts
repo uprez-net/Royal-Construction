@@ -1,6 +1,6 @@
 import { createGraphContext, GraphMessage } from '@/lib/graph/client';
 import { isLeadMessage } from "@/lib/graph/lead-subject";
-import { getGraphConfig } from '@/lib/graph/config';
+import { getGraphConfig, type GraphMailbox } from '@/lib/graph/config';
 import prisma from "@/lib/prisma";
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
@@ -20,7 +20,11 @@ import {
 } from '@/lib/graph/planning-portal';
 import { isMachineGenerated } from '@/lib/graph/offer-reply-classify';
 import { normalizeEmailAddress } from '@/utils/formatters';
-import { CertifierEmailDirection, CompliancePartyType } from '@prisma/client';
+import {
+  CertifierEmailDirection,
+  CompliancePartyType,
+  GraphMailbox as PrismaGraphMailbox,
+} from '@prisma/client';
 import { processInboundCertifierEmail } from '@/lib/workflow/certifier-email';
 import { processInboundPartyEmail } from '@/lib/workflow/party-email';
 import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
@@ -28,6 +32,7 @@ import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
 import { processInboundLead } from '@/lib/workflow/lead-extraction';
 import { start } from 'workflow/api';
 import { after } from 'next/server';
+import { isOwnMailbox } from '@/lib/graph/mailbox';
 
 // export const runtime = 'nodejs';
 
@@ -132,11 +137,15 @@ async function matchPartyOutreach(
    * every other correspondent is replying on a thread whose subject we wrote.
    */
   body?: string | null,
+  mailbox: GraphMailbox = 'business',
 ): Promise<PartyMatch | null> {
   const token = extractPartyRefToken(subject);
+  const graphMailbox = mailbox === 'admin'
+    ? PrismaGraphMailbox.ADMIN
+    : PrismaGraphMailbox.BUSINESS;
   if (token) {
-    const outreach = await prisma.complianceOutreach.findUnique({
-      where: { refToken: token },
+    const outreach = await prisma.complianceOutreach.findFirst({
+      where: { refToken: token, graphMailbox },
       select: { id: true, party: true },
     });
     return { refToken: token, outreach, matchedOn: 'token' };
@@ -165,8 +174,9 @@ async function matchPartyOutreach(
     where: isPlanningPortal
       ? // Held to council rows so a portal notification cannot be filed against
         // a surveyor thread on the same job.
-        { party: CompliancePartyType.COUNCIL }
+        { party: CompliancePartyType.COUNCIL, graphMailbox }
       : {
+          graphMailbox,
           contactEmail: isPublicMailDomain(domain)
             ? // Nothing about "@gmail.com" says this is the surveyor rather
               // than the homeowner writing about the same site, so the whole
@@ -275,11 +285,15 @@ async function matchPartyOutreach(
 async function matchCertifierEngagement(
   subject: string | undefined | null,
   fromEmail: string | undefined | null,
+  mailbox: GraphMailbox = 'business',
 ): Promise<CertifierMatch | null> {
   const token = extractCertifierRefToken(subject);
+  const graphMailbox = mailbox === 'admin'
+    ? PrismaGraphMailbox.ADMIN
+    : PrismaGraphMailbox.BUSINESS;
   if (token) {
-    const engagement = await prisma.certifierEngagement.findUnique({
-      where: { refToken: token },
+    const engagement = await prisma.certifierEngagement.findFirst({
+      where: { refToken: token, graphMailbox },
       select: { id: true },
     });
     return { refToken: token, engagement, matchedOn: 'token' };
@@ -293,6 +307,7 @@ async function matchCertifierEngagement(
 
   const candidates = await prisma.certifierEngagement.findMany({
     where: {
+      graphMailbox,
       certifierEmail: isPublicMailDomain(domain)
         ? // Nothing about "@gmail.com" says this is a certifier rather than the
           // homeowner writing about the same site, so the whole address has to
@@ -348,6 +363,51 @@ function handleValidationToken(request: Request): Response | null {
   return textResponse(200, validationToken);
 }
 
+function normalizedResource(resource: string | undefined): string {
+  return (resource ?? '')
+    .trim()
+    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0\//i, '')
+    .replace(/^\//, '')
+    .split('?')[0]
+    .replace(/\/$/, '')
+    .toLowerCase();
+}
+
+function resourceBelongsTo(
+  resource: string | undefined,
+  subscriptionResource: string | undefined,
+): boolean {
+  const messageResource = normalizedResource(resource);
+  const mailboxResource = normalizedResource(subscriptionResource);
+  return Boolean(
+    messageResource &&
+      mailboxResource &&
+      (messageResource === mailboxResource ||
+        messageResource.startsWith(`${mailboxResource}/`)),
+  );
+}
+
+/**
+ * Client state is the mailbox routing secret. A resource match is checked
+ * again after loading the role's config because a notification can contain a
+ * resource from another subscription in the same batch.
+ */
+function mailboxForNotification(notification: GraphNotification): GraphMailbox | null {
+  const clientState = notification.clientState;
+  if (!clientState) return null;
+
+  if (clientState === process.env.GRAPH_ADMIN_WEBHOOK_CLIENT_STATE) {
+    return 'admin';
+  }
+  if (
+    clientState ===
+    (process.env.GRAPH_WEBHOOK_CLIENT_STATE || 'royal-leadgen-webhook')
+  ) {
+    return 'business';
+  }
+  return null;
+}
+
 export async function GET(request: Request): Promise<Response> {
   const validation = handleValidationToken(request);
   if (validation) {
@@ -367,20 +427,37 @@ export async function GET(request: Request): Promise<Response> {
  * rather than giving up on the first transient error.
  */
 async function processNotifications(notifications: GraphNotification[]): Promise<void> {
-  const config = getGraphConfig();
-  let graphClient: Awaited<ReturnType<typeof createGraphContext>> | null = null;
-  try {
-    graphClient = await createGraphContext(config);
-  } catch (error) {
-    console.error('Graph auth failed for webhook fetch', error);
-  }
+  const contexts = new Map<
+    GraphMailbox,
+    { config: ReturnType<typeof getGraphConfig>; client: Awaited<ReturnType<typeof createGraphContext>> } | null
+  >();
 
   for (const notification of notifications) {
-    if (
-      config.webhookClientState &&
-      notification.clientState !== config.webhookClientState
-    ) {
-      console.log('Ignored notification with invalid clientState');
+    const mailbox = mailboxForNotification(notification);
+    if (!mailbox) {
+      console.log('Ignored notification with invalid or missing clientState');
+      continue;
+    }
+
+    let context = contexts.get(mailbox);
+    if (context === undefined) {
+      try {
+        const config = getGraphConfig(mailbox);
+        context = {
+          config,
+          client: await createGraphContext(config),
+        };
+      } catch (error) {
+        console.error(`Graph auth/config failed for ${mailbox} webhook fetch`, error);
+        context = null;
+      }
+      contexts.set(mailbox, context);
+    }
+
+    if (!context) continue;
+    const { config, client: graphClient } = context;
+    if (!resourceBelongsTo(notification.resource, config.webhookSubscriptionResource)) {
+      console.log(`Ignored ${mailbox} notification for an unexpected resource`);
       continue;
     }
 
@@ -418,6 +495,14 @@ async function processNotifications(notifications: GraphNotification[]): Promise
 
       if (message) {
         try {
+          // Outbound compliance mail is copied back into the watched inbox by
+          // Exchange. It is a message in the admin mailbox, but never an
+          // inbound party response and must not reach lead extraction.
+          if (mailbox === 'admin' && isOwnMailbox(message.from)) {
+            console.log(`  Ignored self-generated admin message ${message.id}`);
+            continue;
+          }
+
           const contentType = message.body?.contentType ?? 'text';
           const content = message.body?.content ?? message.bodyPreview ?? '';
           console.log(`  subject: ${message.subject}`);
@@ -429,7 +514,9 @@ async function processNotifications(notifications: GraphNotification[]): Promise
 
           // Offer proposal reply: the subject carries [RCOFR-…]. Correlate it
           // back to the send and stop — it is not a lead/tradie message.
-          const offerReplyToken = extractOfferReplyToken(message.subject);
+          const offerReplyToken = mailbox === 'business'
+            ? extractOfferReplyToken(message.subject)
+            : null;
           if (offerReplyToken) {
             const outcome = await recordOfferReply(offerReplyToken, message);
             // Log the negatives too. An "auto-generated" line here is a
@@ -463,6 +550,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             // bare — "Case PAN-123456 updated" — with the application number
             // and the address in the message instead.
             content,
+            mailbox,
           );
           if (partyMatch) {
             const { refToken: partyToken, outreach } = partyMatch;
@@ -498,7 +586,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                   from: message.from,
                   to:
                     message.to?.[0] ??
-                    process.env.BUSINESS_EMAIL ??
+                    config.senderUpn ??
                     'info@royalconstructions.com.au',
                   receivedDateTime: message.receivedDateTime,
                 },
@@ -518,6 +606,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           const certifierMatch = await matchCertifierEngagement(
             message.subject,
             message.from,
+            mailbox,
           );
           if (certifierMatch) {
             const { refToken: certifierToken, engagement } = certifierMatch;
@@ -558,7 +647,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                   from: message.from,
                   to:
                     message.to?.[0] ??
-                    process.env.BUSINESS_EMAIL ??
+                    config.senderUpn ??
                     'info@royalconstructions.com.au',
                   receivedDateTime: message.receivedDateTime,
                 },
@@ -568,6 +657,11 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                   `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
               );
             }
+            continue;
+          }
+
+          if (mailbox === 'admin') {
+            console.log(`  Ignored uncorrelated admin mailbox message ${message.id}`);
             continue;
           }
 
@@ -642,7 +736,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
             await saveLeadEmailTrail({
               from: message.from,
-              to: process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au',
+              to: config.senderUpn ?? 'info@royalconstructions.com.au',
               subject: message.subject,
               body: content,
               sentAt: new Date(message.receivedDateTime),
@@ -654,7 +748,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           if (!isLeadMessage(
             message.subject,
             message.from,
-            process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'
+            config.senderUpn ?? 'info@royalconstructions.com.au'
           )) {
             console.log(
               `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
