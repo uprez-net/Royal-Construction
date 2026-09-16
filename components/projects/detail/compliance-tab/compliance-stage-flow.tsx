@@ -1,14 +1,25 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Timer,
+} from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { COMPLIANCE_ALERT_COPY } from "@/constants/complianceAlerts";
 import { cn } from "@/lib/utils";
 import type {
   ComplianceStage,
@@ -93,31 +104,204 @@ const STAGE_DETAILS: Readonly<Record<ComplianceStageId, string>> = {
     "Collects the final certificate and cover so the compliance file can be closed.",
 };
 
-function stageProgress(stage: ComplianceStage) {
-  const engaged = stage.actors.some((actor) => actor.state !== "idle");
+const STAGE_DATE_FORMATTER = new Intl.DateTimeFormat("en-AU", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Australia/Sydney",
+});
 
-  if (
-    !stage.isActive ||
-    !engaged ||
-    stage.state === "done" ||
-    stage.slaBusinessDays === null ||
-    stage.elapsedBusinessDays === null
-  ) {
+const businessDays = (days: number) =>
+  `${days} business ${days === 1 ? "day" : "days"}`;
+
+function stageTimeline(stage: ComplianceStage) {
+  if (!stage.isActive || stage.elapsedBusinessDays === null) {
     return null;
   }
 
-  const progress = Math.min(
-    100,
-    Math.max(
-      0,
-      (stage.elapsedBusinessDays / Math.max(stage.slaBusinessDays, 1)) * 100,
-    ),
-  );
+  const percentUsed =
+    stage.slaBusinessDays === null
+      ? null
+      : Math.max(
+          0,
+          (stage.elapsedBusinessDays / Math.max(stage.slaBusinessDays, 1)) *
+            100,
+        );
+
   return {
-    progress,
+    progress:
+      percentUsed === null ? null : Math.min(100, Math.max(0, percentUsed)),
+    percentUsed,
+    elapsedBusinessDays: stage.elapsedBusinessDays,
     daysLeft: stage.daysLeft,
     slaBusinessDays: stage.slaBusinessDays,
+    startedAt: stage.startedAt,
+    isComplete: stage.state === "done",
   };
+}
+
+function timelineProgressColor(progress: number): string {
+  if (progress <= 60) {
+    const warning = (progress / 60) * 100;
+    return `color-mix(in oklab, var(--success) ${100 - warning}%, var(--warning) ${warning}%)`;
+  }
+
+  const destructive = ((progress - 60) / 40) * 100;
+  return `color-mix(in oklab, var(--warning) ${100 - destructive}%, var(--destructive) ${destructive}%)`;
+}
+
+function stageStatus(stage: ComplianceStage): {
+  label: string;
+  variant: "default" | "secondary" | "destructive" | "outline";
+  tone?: "warning";
+} {
+  if (!stage.isActive) return { label: "Optional route", variant: "outline" };
+  if (stage.isOverdue) {
+    return { label: "Needs attention", variant: "destructive" };
+  }
+  if (stage.daysLeft !== null && stage.daysLeft < 0) {
+    return { label: "SLA exceeded", variant: "outline", tone: "warning" };
+  }
+  if (stage.hasPortalDownload) {
+    return { label: "Ready to download", variant: "secondary" };
+  }
+  if (stage.state === "done") {
+    return { label: "Complete", variant: "secondary" };
+  }
+  if (stage.state === "current") {
+    return { label: "In progress", variant: "default" };
+  }
+  return { label: "Not started", variant: "outline" };
+}
+
+function remainingLabel(daysLeft: number | null, isComplete: boolean): string {
+  if (isComplete) return "Complete";
+  if (daysLeft === null) return "No SLA";
+  if (daysLeft < 0) return `${businessDays(Math.abs(daysLeft))} over`;
+  if (daysLeft === 0) return "Due today";
+  return `${businessDays(daysLeft)} left`;
+}
+
+function StageTimeline({ stage }: { stage: ComplianceStage }) {
+  const timeline = stageTimeline(stage);
+
+  if (!timeline) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-lg bg-background/10 px-3 py-2.5">
+        <Clock3
+          className="size-4 shrink-0 text-background/60"
+          aria-hidden="true"
+        />
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[11px] font-medium text-background/90">
+            {stage.isActive
+              ? "Timeline not started"
+              : "No timeline on this job"}
+          </span>
+          <span className="text-[10px] leading-relaxed text-background/55">
+            {stage.isActive
+              ? "The clock starts when this stage is engaged or lodged."
+              : "This route only starts if development approval is required."}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  const percentUsed =
+    timeline.percentUsed === null ? null : Math.round(timeline.percentUsed);
+  const isOverdue = timeline.daysLeft !== null && timeline.daysLeft < 0;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-background/80">
+          <Timer className="size-4" aria-hidden="true" />
+          <span className="text-[11px] font-semibold tracking-[0.08em] uppercase">
+            Timeline
+          </span>
+        </div>
+        {timeline.startedAt ? (
+          <span className="flex items-center gap-1.5 text-[10px] text-background/55">
+            <CalendarClock className="size-3" aria-hidden="true" />
+            Started {STAGE_DATE_FORMATTER.format(timeline.startedAt)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-0.5 rounded-lg bg-background/10 px-3 py-2.5">
+          <span className="text-lg leading-none font-semibold tabular-nums text-background">
+            {timeline.elapsedBusinessDays}
+          </span>
+          <span className="text-[10px] text-background/55">
+            {timeline.elapsedBusinessDays === 1
+              ? "business day"
+              : "business days"}{" "}
+            elapsed
+          </span>
+        </div>
+        <div
+          className={cn(
+            "flex flex-col gap-0.5 rounded-lg px-3 py-2.5",
+            isOverdue ? "bg-destructive/25" : "bg-background/10",
+          )}
+        >
+          <span
+            className={cn(
+              "text-sm leading-none font-semibold tabular-nums",
+              isOverdue ? "text-destructive-light" : "text-background",
+            )}
+          >
+            {remainingLabel(timeline.daysLeft, timeline.isComplete)}
+          </span>
+          <span className="text-[10px] text-background/55">
+            {timeline.isComplete
+              ? "timeline stopped"
+              : timeline.slaBusinessDays === null
+                ? "no quoted turnaround"
+                : "until quoted completion"}
+          </span>
+        </div>
+      </div>
+
+      {timeline.progress !== null && timeline.slaBusinessDays !== null ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3 text-[10px] text-background/60">
+            <span>SLA budget used</span>
+            <span className="tabular-nums">
+              {timeline.elapsedBusinessDays} / {timeline.slaBusinessDays} days ·{" "}
+              {percentUsed}%
+            </span>
+          </div>
+          <Progress
+            value={timeline.progress}
+            aria-label={`${stage.label} SLA time used`}
+            aria-valuetext={`${timeline.elapsedBusinessDays} of ${timeline.slaBusinessDays} business days used`}
+            className="h-2.5 bg-background/15 [&_[data-slot=progress-indicator]]:bg-(--sla-progress-color)"
+            style={
+              {
+                "--sla-progress-color": timelineProgressColor(
+                  timeline.progress,
+                ),
+              } as CSSProperties
+            }
+          />
+          <div className="flex justify-between text-[9px] font-medium tracking-wide text-background/45 uppercase">
+            <span>Started</span>
+            <span>Attention</span>
+            <span>SLA limit</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 rounded-lg border border-dashed border-background/15 px-3 py-2 text-[10px] leading-relaxed text-background/55">
+          <Clock3 className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          Elapsed time is tracked, but this stage has no published SLA to count
+          down against.
+        </div>
+      )}
+    </div>
+  );
 }
 
 function StageTooltip({
@@ -128,7 +312,10 @@ function StageTooltip({
   children: ReactNode;
 }) {
   const actors = stage.actors;
-  const progress = stageProgress(stage);
+  const status = stageStatus(stage);
+  const problemAlerts = stage.alerts.filter(
+    (alert) => COMPLIANCE_ALERT_COPY[alert.type].tone !== "positive",
+  );
 
   return (
     <Tooltip>
@@ -136,77 +323,92 @@ function StageTooltip({
       <TooltipContent
         side="top"
         sideOffset={10}
-        className="block w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl p-3.5"
+        className="block w-80 max-w-[calc(100vw-2rem)] rounded-xl p-0 shadow-xl"
       >
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-background">{stage.label}</p>
-          <p className="text-xs leading-relaxed text-background/75">
-            {STAGE_DETAILS[stage.id]}
-          </p>
-        </div>
-
-        {actors.length > 0 ? (
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-semibold tracking-[0.12em] text-background/55 uppercase">
-              Parties
+        <div className="flex flex-col gap-3.5 p-4">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold text-background">
+                {stage.label}
+              </p>
+              <Badge
+                variant={status.variant}
+                className={cn(
+                  "shrink-0",
+                  status.variant === "outline" &&
+                    "border-background/20 text-background",
+                  status.tone === "warning" &&
+                    "border-warning/40 bg-warning-light text-warning-ink",
+                )}
+              >
+                {status.label === "Complete" ? (
+                  <CheckCircle2 data-icon="inline-start" aria-hidden="true" />
+                ) : null}
+                {status.label}
+              </Badge>
+            </div>
+            <p className="text-xs leading-relaxed text-background/70">
+              {STAGE_DETAILS[stage.id]}
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {actors.map((actor) => (
-                <span
-                  key={actor.id}
-                  className="rounded-full border border-background/20 bg-background/10 px-2 py-1 text-[11px] text-background"
-                >
-                  {actor.label}
-                  <span className="ml-1 text-background/55">
-                    {actor.state === "outstanding"
-                      ? "· outstanding"
-                      : actor.state === "settled"
-                        ? "· settled"
-                        : "· not engaged"}
-                  </span>
-                </span>
-              ))}
-            </div>
           </div>
-        ) : (
-          <p className="text-xs text-background/60">
-            No parties are attached to this stage yet.
-          </p>
-        )}
 
-        {progress ? (
-          <div className="space-y-1.5 border-t border-background/15 pt-2.5">
-            <div className="flex items-center justify-between gap-3 text-[11px]">
-              <span className="font-medium text-background/80">SLA progress</span>
-              <span className="tabular-nums text-background/60">
-                {progress.daysLeft !== null && progress.daysLeft < 0
-                  ? `${Math.abs(progress.daysLeft)}d over`
-                  : progress.daysLeft === 0
-                    ? "Due today"
-                    : `${progress.daysLeft}d left`}
-              </span>
-            </div>
-            <div
-              role="progressbar"
-              aria-label={`${stage.label} SLA progress`}
-              aria-valuemin={0}
-              aria-valuemax={progress.slaBusinessDays}
-              aria-valuenow={stage.elapsedBusinessDays ?? 0}
-              className="h-1.5 overflow-hidden rounded-full bg-background/15"
-            >
-              <span
-                className="block h-full rounded-full transition-[width,background-color] duration-700"
-                style={{
-                  width: `${progress.progress}%`,
-                  backgroundColor: `color-mix(in oklab, var(--destructive) ${progress.progress}%, var(--primary))`,
-                }}
+          <Separator className="bg-background/15" />
+
+          <StageTimeline stage={stage} />
+
+          {problemAlerts.length > 0 ? (
+            <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/15 px-3 py-2.5">
+              <AlertTriangle
+                className="mt-0.5 size-3.5 shrink-0 text-destructive-light"
+                aria-hidden="true"
               />
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-[10px] font-semibold tracking-wide text-background/55 uppercase">
+                  Open alert
+                </span>
+                <span className="text-[11px] leading-relaxed text-background/85">
+                  {COMPLIANCE_ALERT_COPY[problemAlerts[0].type].title}
+                  {problemAlerts.length > 1
+                    ? ` + ${problemAlerts.length - 1} more`
+                    : ""}
+                </span>
+              </div>
             </div>
-            <p className="text-[10px] text-background/50">
-              {stage.elapsedBusinessDays} of {progress.slaBusinessDays} working days used
+          ) : null}
+
+          <Separator className="bg-background/15" />
+
+          {actors.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-[10px] font-semibold tracking-[0.12em] text-background/55 uppercase">
+                Parties
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {actors.map((actor) => (
+                  <Badge
+                    key={actor.id}
+                    variant="outline"
+                    className="h-auto border-background/20 bg-background/10 py-1 text-[11px] text-background"
+                  >
+                    {actor.label}
+                    <span className="text-background/55">
+                      ·{" "}
+                      {actor.state === "outstanding"
+                        ? "outstanding"
+                        : actor.state === "settled"
+                          ? "settled"
+                          : "not engaged"}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-background/60">
+              No parties are attached to this stage yet.
             </p>
-          </div>
-        ) : null}
+          )}
+        </div>
       </TooltipContent>
     </Tooltip>
   );
