@@ -277,7 +277,7 @@ export function DwellingBoard({
                 onClick={() => onActiveIdChange(d.id)}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2",
                   d.id === activeId
                     ? "bg-white text-foreground shadow-sm"
                     : "text-muted-foreground hover:bg-white/60",
@@ -293,7 +293,7 @@ export function DwellingBoard({
             <button
               type="button"
               onClick={addDwelling}
-              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               Add dwelling
@@ -585,7 +585,7 @@ function AddDwellingTile({ onClick }: { readonly onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="grid h-11 place-items-center self-start rounded-lg border border-dashed border-border bg-muted/20 text-sm font-medium text-muted-foreground transition-colors hover:border-royal-gold/50 hover:bg-royal-gold-light/40 hover:text-royal-gold-ink-text dark:hover:bg-royal-gold-ink dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+      className="grid h-11 place-items-center self-start rounded-lg border border-dashed border-border bg-muted/20 text-sm font-medium text-muted-foreground transition-colors hover:border-royal-gold/50 hover:bg-royal-gold-light/40 hover:text-royal-gold-ink-text dark:hover:bg-royal-gold-ink dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2"
     >
       <span className="flex items-center gap-2">
         <Plus className="size-4" aria-hidden="true" />

@@ -145,18 +145,6 @@ const KNOWN_GAPS: ReadonlyArray<readonly [file: string, classes: string]> = [
     "border-2 border-royal-gold bg-royal-gold text-white",
   ],
   [
-    "components/offers/create-offer-modal.tsx",
-    "h-10 rounded-[10px] bg-royal-gold px-4 text-[12.5px] font-semibold text-primary-foreground hover:bg-royal-gold-dark",
-  ],
-  [
-    "components/offers/new-workflow/offer-workspace-project-handoff.tsx",
-    "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark",
-  ],
-  [
-    "components/offers/new-workflow/shell/offer-command-bar.tsx",
-    "shrink-0 bg-royal-gold font-mono text-white",
-  ],
-  [
     "components/offers/new-workflow/shell/offer-step-rail.tsx",
     "bg-royal-gold text-white",
   ],
