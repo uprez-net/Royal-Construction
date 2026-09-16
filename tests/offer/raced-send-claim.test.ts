@@ -25,7 +25,9 @@ const PATHS = [
 for (const { path, model } of PATHS) {
   test(`${path}: the send claim is checked before the document is written`, () => {
     const source = read(path);
-    const transaction = source.slice(source.indexOf("const stillClaimed = await prisma"));
+    const start = source.indexOf("const stillClaimed = await prisma");
+    assert.ok(start > -1, "no send transaction found");
+    const transaction = source.slice(start);
     const claimAt = transaction.indexOf("tx.offer.updateMany");
     const upsertAt = transaction.indexOf(model);
     assert.ok(claimAt > -1, "no claim update found");
@@ -38,7 +40,9 @@ for (const { path, model } of PATHS) {
 
   test(`${path}: a raced send leaves the stored document alone`, () => {
     const source = read(path);
-    const transaction = source.slice(source.indexOf("const stillClaimed = await prisma"));
+    const start = source.indexOf("const stillClaimed = await prisma");
+    assert.ok(start > -1, "no send transaction found");
+    const transaction = source.slice(start);
     const upsert = transaction.slice(transaction.indexOf(model));
     const update = upsert.slice(0, upsert.indexOf("create:"));
     assert.match(update, /update: claimed/, "the upsert writes regardless of the claim");
