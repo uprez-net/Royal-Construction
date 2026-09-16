@@ -195,8 +195,9 @@
   --info-ink: oklch(0.616 0.16 262.9);
   --destructive-ink: oklch(0.632 0.16 28.5);
   --royal-gold-ink: oklch(0.560 0.1 77.3);
-  /* A darker step, as in light: any lighter gold drops the royal variant's
-     white text further below AA (this measures 4.80:1). */
+  /* A darker step, as in light. The rest token above measures 4.72:1 and this
+     hover 6.09:1; the rest state sat at 3.75:1 until the dark theme was checked
+     at rest and not only on hover. */
   --royal-gold-ink-hover: oklch(0.500 0.1 77.3);
 
   /* Stage ramp, dark theme — same progression, lifted for contrast. */
