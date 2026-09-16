@@ -1401,6 +1401,10 @@ export function NewOfferWorkspace({
     }
     autosaveHaltedRef.current = false;
     lockedReloadRef.current = false;
+    // Before the await, not after: the chip otherwise kept saying "Not saved"
+    // for the whole retry, so nothing showed the click had registered and the
+    // estimator could fire several retries at once.
+    setSaveState("saving");
     void (async () => {
       const workspace = await flushWorkspace(offerId);
       const particulars =

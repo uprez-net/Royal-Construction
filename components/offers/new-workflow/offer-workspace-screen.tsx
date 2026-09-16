@@ -614,6 +614,7 @@ export function OfferWorkspaceScreen({
         saveState={saveState}
         onDownloadPreview={onDownloadOffer}
         onRetrySave={onRetrySave}
+        awaitingOffer={awaitingOffer}
       />
       <div className="flex min-h-0 flex-1">
         <OfferStepRail
