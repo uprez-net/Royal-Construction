@@ -14,6 +14,7 @@ import {
   type LoadedOfferRevision,
 } from "@/lib/data/offer-workspace";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { revisionPreparedDate } from "@/lib/offer/revision-prepared-date";
 import {
   OFFER_STATUS_LABEL,
   type OfferWorkspaceStatus,
@@ -121,7 +122,10 @@ function ViewerBody({ state }: { readonly state: ViewerState }) {
       <>
         <ViewerHeader title="Loading version…" />
         <div className="flex items-center gap-2 px-4 py-10 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          <Loader2
+            className="size-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
           Loading…
         </div>
       </>
@@ -173,8 +177,7 @@ function ViewerBody({ state }: { readonly state: ViewerState }) {
           // buildProposalInput does not carry images; without this the cover
           // photo and the whole gallery page render blank.
           images={revision.snapshot.images}
-          // Stamp the date this revision was drawn up, not today.
-          preparedDate={new Date(revision.createdAt)}
+          preparedDate={revisionPreparedDate(revision)}
           screen
         />
       </div>

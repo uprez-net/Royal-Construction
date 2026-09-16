@@ -4,6 +4,11 @@ import { start } from "workflow/api";
 import { getUserByClerkId } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
 import { extractComplianceChecklist } from "@/lib/workflow/compliance-checklist";
+import {
+    RUN_CAPABILITY_SECRET_ENV,
+    runCapabilitySecret,
+    signRunCapability,
+} from "@/lib/workflow/run-capability";
 import { checklistExtractionRequestSchema } from "@/utils/validators/compliance";
 import {
     badRequestResponse,
@@ -53,6 +58,13 @@ export async function POST(request: Request) {
         return notFoundResponse("Checklist document not found on this project.");
     }
 
+    // Checked before start(): without the secret no one could follow the run,
+    // and it would still spend the whole extraction.
+    if (!runCapabilitySecret()) {
+        console.error(`${RUN_CAPABILITY_SECRET_ENV} is not set; not starting checklist extraction`);
+        return errorResponse("Failed to start the checklist extraction workflow.");
+    }
+
     try {
         // Executes asynchronously and doesn't block the response; the client
         // follows progress on /api/resume-stream/<runId>.
@@ -61,7 +73,9 @@ export async function POST(request: Request) {
         console.log("Started checklist extraction run", run.runId);
 
         return successResponse({
-            runId: run.runId,
+            // A capability bound to this user rather than the bare run id:
+            // resume-stream refuses anything else.
+            runId: signRunCapability({ runId: run.runId, userId: user.id }),
             message: "Checklist extraction workflow started",
         });
     } catch (error) {

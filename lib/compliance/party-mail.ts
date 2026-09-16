@@ -1,4 +1,4 @@
-import { CertifierEmailDirection, Prisma } from "@prisma/client";
+import { CertifierEmailDirection, GraphMailbox, Prisma } from "@prisma/client";
 
 import { createGraphContext, type EmailAttachment } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
@@ -153,6 +153,7 @@ export async function recordOutboundPartyEmail(params: {
   subject: string;
   body: string;
   attachments: CertifierEmailAttachment[];
+  graphMailbox: GraphMailbox;
 }): Promise<void> {
   const checksum = await generateEmailChecksum(
     params.subject,
@@ -172,6 +173,7 @@ export async function recordOutboundPartyEmail(params: {
         body: params.body,
         checksum,
         direction: CertifierEmailDirection.OUTBOUND,
+        graphMailbox: params.graphMailbox,
         attachments: params.attachments as unknown as Prisma.InputJsonValue,
         sentAt: new Date(),
       },
@@ -198,7 +200,7 @@ export async function sendOnPartyThread(params: {
   engagement: Pick<CertifierEngagementDetail, "id" | "subjectAddress">;
   outreach: Pick<
     ComplianceOutreachDetail,
-    "id" | "refToken" | "contactEmail" | "lastInboundMessageId"
+    "id" | "refToken" | "contactEmail" | "lastInboundMessageId" | "graphMailbox"
   >;
   body: string;
   /** Extra recipients on the same message — the client, for a meeting. */
@@ -212,7 +214,9 @@ export async function sendOnPartyThread(params: {
     );
   }
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    outreach.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
   const subject = buildPartySubject(
     outreach.refToken,
@@ -255,6 +259,7 @@ export async function sendOnPartyThread(params: {
   await recordOutboundPartyEmail({
     engagementId: engagement.id,
     outreachId: outreach.id,
+    graphMailbox: outreach.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     // The thread's own party, not the whole recipient list. The trail is a
     // conversation with them; a client copied on one message is on that

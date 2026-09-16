@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { resolveDraft } from "../../lib/offer/admin-offer-prefill";
+import { resolveAllowances, resolveDraft } from "../../lib/offer/admin-offer-prefill";
 import {
   EMPTY_ADMIN_OFFER_CONTENT,
   type AdminOfferContent,
@@ -141,4 +141,25 @@ test("a schedule row with a blank spec is dropped", () => {
     draft.inclusionSchedule.map((row) => row.spec),
     ["Real spec"],
   );
+});
+
+test("admin allowances start off the Offer document and on the Tender", () => {
+  const allowances = resolveAllowances({
+    ...EMPTY_ADMIN_OFFER_CONTENT,
+    offerScope: {
+      ...EMPTY_ADMIN_OFFER_CONTENT.offerScope,
+      allowances: [
+        {
+          id: "kitchen",
+          name: "Kitchen appliances",
+          category: "package",
+          amount: 8500,
+          variationRule: "Selections above allowance become a variation.",
+        },
+      ],
+    },
+  });
+  assert.equal(allowances.length, 1);
+  assert.equal(allowances[0].includedInOfferDocument, false);
+  assert.equal(allowances[0].includedInTender, true);
 });

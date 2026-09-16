@@ -357,6 +357,13 @@ export const activityLogSchemas = {
         answeredBy: z.string().nullable(),
     }),
 
+    complianceDevelopmentApplicationRequirementSet: z.object({
+        projectId: z.string(),
+        engagementId: z.string(),
+        required: z.boolean(),
+        answeredBy: z.string().nullable(),
+    }),
+
     /**
      * What a council came back with on a development application.
      *

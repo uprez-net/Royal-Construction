@@ -230,8 +230,8 @@ const actorSpoken = (actor: ComplianceStageActor) =>
  * A development application pulls in nine parties and a checklist that has not
  * arrived yet pulls in seven, and nine badges under a node in a row of six is a
  * wall rather than a picture. So the first few are drawn and the rest are a
- * count — with everybody's name on the group's title, because the count is only
- * useful if there is some way to find out who it is counting.
+ * count. The enclosing shadcn tooltip contains the full roster, so this compact
+ * caption does not also create a native browser tooltip over the same target.
  *
  * The ones still owing come first. That is the ordering that makes the badges
  * worth reading at all: on a stage half way through, "who is holding this up"
@@ -267,11 +267,6 @@ function StageActors({
         align === "center" ? "justify-center" : "w-full justify-start",
         dimmed && "opacity-60",
       )}
-      // The pointer's shortcut to the same roster, kept. It is no longer the
-      // only copy of it -- which is what was wrong with it -- and a hover that
-      // names eight firms is still the cheapest way for somebody with a mouse
-      // to read a row of eight-character pills.
-      title={ordered.map((actor) => actor.label).join(", ")}
     >
       {shown.map((actor) => (
         <span

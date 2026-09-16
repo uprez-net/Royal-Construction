@@ -1,5 +1,5 @@
 import { createGraphContext } from '@/lib/graph/client';
-import { getGraphConfig, type GraphMode } from '@/lib/graph/config';
+import { getGraphConfig, type GraphMailbox } from '@/lib/graph/config';
 import { requireAdminToken } from '@/lib/graph/route-utils';
 import { errorResponse, badRequestResponse } from '@/utils/validators';
 
@@ -10,30 +10,11 @@ import { errorResponse, badRequestResponse } from '@/utils/validators';
 // for any mailbox the app registration can read to an endpoint they control —
 // using our own credentials. Both now come from server config only.
 interface SubscribeBody {
-  clientState?: string;
+  mailbox?: GraphMailbox;
   expirationMinutes?: number;
 }
 
-function buildDefaultResource(mode: GraphMode, senderUpn?: string): string | undefined {
-  if (mode === 'delegated') {
-    return "/me/mailFolders('Inbox')/messages";
-  }
-
-  const trimmed = senderUpn?.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  return `/users/${encodeURIComponent(trimmed)}/mailFolders('Inbox')/messages`;
-}
-
 export async function POST(request: Request): Promise<Response> {
-  const config = getGraphConfig();
-  const guard = requireAdminToken(request, config.adminToken);
-  if (guard) {
-    return guard;
-  }
-
   let payload: SubscribeBody = {};
   try {
     payload = (await request.json()) as SubscribeBody;
@@ -41,36 +22,34 @@ export async function POST(request: Request): Promise<Response> {
     return badRequestResponse('Invalid JSON body');
   }
 
-  const notificationUrl = config.webhookNotificationUrl;
-  if (!notificationUrl) {
-    return badRequestResponse('Missing notification URL');
-  }
-
-  const clientState = payload.clientState || config.webhookClientState;
-  if (!clientState) {
-    return badRequestResponse('Missing client state');
-  }
-
-  const expirationMinutes = payload.expirationMinutes ?? config.webhookSubscriptionMinutes;
-  const resource =
-    config.webhookSubscriptionResource ||
-    buildDefaultResource(config.mode, config.senderUpn);
-
-  if (!resource) {
-    return badRequestResponse('Missing resource path');
+  const mailbox = payload.mailbox ?? 'business';
+  if (mailbox !== 'business' && mailbox !== 'admin') {
+    return badRequestResponse('mailbox must be business or admin');
   }
 
   try {
-    console.log(`Creating Graph subscription for resource: ${resource}`);
+    const config = getGraphConfig(mailbox);
+    const guard = requireAdminToken(request, config.adminToken);
+    if (guard) return guard;
+
+    const notificationUrl = config.webhookNotificationUrl;
+    if (!notificationUrl) return badRequestResponse('Missing notification URL');
+
+    const expirationMinutes =
+      payload.expirationMinutes ?? config.webhookSubscriptionMinutes;
+    const resource = config.webhookSubscriptionResource;
+    if (!resource) return badRequestResponse('Missing resource path');
+
+    console.log(`Ensuring ${mailbox} Graph subscription for resource: ${resource}`);
     const client = await createGraphContext(config);
-    const subscription = await client.createMailboxSubscription({
+    const subscription = await client.ensureMailboxSubscription({
       notificationUrl,
-      clientState,
       expirationMinutes,
       resource,
+      clientState: config.webhookClientState ?? '',
     });
 
-    return Response.json(subscription, { status: 201 });
+    return Response.json({ mailbox, subscription }, { status: 200 });
   } catch (error) {
     console.error('Graph subscription failed', error);
     const message = error instanceof Error ? error.message : 'Failed to create subscription';

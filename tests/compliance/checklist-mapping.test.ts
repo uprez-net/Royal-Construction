@@ -77,6 +77,7 @@ test("the six documents the file already holds are recognised by name", () => {
       ComplianceDocumentType.PLANNING_CERTIFICATE_10_7,
     ],
     ["HBCF Warranty", ComplianceDocumentType.HOME_INSURANCE],
+    ["HWI", ComplianceDocumentType.HOME_INSURANCE],
   ];
 
   for (const [label, expected] of cases) {

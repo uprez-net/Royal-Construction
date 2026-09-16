@@ -41,6 +41,7 @@ export type ModalType =
   | "complianceComplete"
   | "complianceReject"
   | "connectComplianceParty"
+  | "requestCompliancePartyRevision"
   | "developerDecision"
   | "developerResend"
   | "resubmitApplication"

@@ -48,10 +48,56 @@ import {
  * en dash, a double space, a changed capital.
  */
 function comparableLabel(value: string): string {
+  // HWI is the legacy name some certifiers still use for HBCF/home warranty
+  // insurance. Treat the aliases as one stable identity when a checklist is
+  // extracted again, while leaving the saved label in the certifier's own
+  // words for the UI and audit trail.
   return value
     .toLowerCase()
+    .replace(
+      /\b(?:hwi|hbcf|home\s+building\s+compensation(?:\s+fund)?|home\s+warranty(?:\s+insurance)?)\b/g,
+      "home warranty insurance",
+    )
     .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(?:insurance\s+)+insurance\b/g, "insurance")
     .trim();
+}
+
+/**
+ * Keeps the HBCF/HWI line connected to the project's existing HBCF source
+ * document even when the extraction model does not set `mapsToType` itself.
+ * The original label is intentionally untouched: it is evidence of what the
+ * certifier actually asked for.
+ */
+function normalizeChecklistInsuranceAlias(
+  item: ExtractedChecklistItem,
+): ExtractedChecklistItem {
+  const searchable = [
+    item.label,
+    item.detail?.description,
+    ...(item.detail?.requirements ?? []),
+    ...(item.detail?.references ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (
+    item.detail?.mapsToType ||
+    !/\b(?:hwi|hbcf|home\s+building\s+compensation|home\s+warranty\s+insurance)\b/i.test(
+      searchable,
+    )
+  ) {
+    return item;
+  }
+
+  return {
+    ...item,
+    detail: {
+      version: 1,
+      ...item.detail,
+      mapsToType: ComplianceDocumentType.HOME_INSURANCE,
+    },
+  };
 }
 
 // The wire contract lives in types/compliance-workflow.ts and is re-exported
@@ -258,7 +304,7 @@ async function saveChecklistItems(
       return byLabel ? claim(byLabel.id) : null;
     };
 
-    for (const item of items) {
+    for (const item of items.map(normalizeChecklistInsuranceAlias)) {
       const matchedId = matchExisting(item);
       const detail = (item.detail ?? null) as Prisma.InputJsonValue | null;
 

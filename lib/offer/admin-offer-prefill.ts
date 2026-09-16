@@ -6,7 +6,9 @@ import {
   type OfferWorkspaceCostLine,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceJob,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import {
   OFFER_SEQUENCE_MAPPINGS,
   type OfferSequenceMapping,
@@ -125,7 +127,7 @@ function resolveCostLines(
 }
 
 // Admin allowance category → runtime scope item category + amountType.
-function resolveAllowances(
+export function resolveAllowances(
   adminContent: AdminOfferContent,
 ): readonly OfferWorkspaceScopeItem[] {
   return adminContent.offerScope.allowances.map((a, index) => {
@@ -143,7 +145,9 @@ function resolveAllowances(
       amount: a.amount,
       unit: a.category === "per-sqm" ? "sqm" : a.category === "per-lm" ? "lm" : "package",
       variationRule: a.variationRule,
-      includedInOfferDocument: true,
+      // Off the sales proposal until the estimator ticks it; on the signed Tender.
+      includedInOfferDocument: false,
+      includedInTender: true,
     } satisfies OfferWorkspaceScopeItem;
   });
 }
@@ -163,6 +167,7 @@ function resolveExclusions(
     unit: "",
     variationRule: e.variationRule,
     includedInOfferDocument: true,
+    includedInTender: true,
   })) satisfies OfferWorkspaceScopeItem[];
 }
 
@@ -327,6 +332,22 @@ export function reevaluateFormulaCostLines(
       ? { ...line, costExGst: Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000 }
       : line,
   );
+}
+
+// The workspace calls this, not reevaluateFormulaCostLines. Its effect re-runs
+// whenever the job or the area calculator changes, and a reload changes both.
+// On an issued offer that re-priced formula lines from today's admin rate
+// constants, so the quoted price moved with nobody editing it. Lines are only
+// re-evaluated while the cost schedule is editable; otherwise they come back
+// untouched, same array.
+export function reevaluateFormulaCostLinesForStatus(
+  status: OfferWorkspaceStatus,
+  ...args: Parameters<typeof reevaluateFormulaCostLines>
+): readonly OfferWorkspaceCostLine[] {
+  if (!isOfferBuildStepEditable("cost-schedule", status)) {
+    return args[0];
+  }
+  return reevaluateFormulaCostLines(...args);
 }
 
 // Re-seed an EXISTING offer's admin-derived fields from the current admin

@@ -1,4 +1,5 @@
-"use server";
+import "server-only";
+
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 import puppeteerDev from "puppeteer";
