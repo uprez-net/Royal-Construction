@@ -55,10 +55,6 @@ import {
   resolveContractPaymentSource,
 } from "@/lib/offer/contract-payment-source";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
-import {
-  decideContractGrannyExclusionGate,
-  findGrannyExclusionConflicts,
-} from "@/lib/offer/granny-exclusion";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -179,20 +175,6 @@ export async function sendContractForSignature(input: {
   });
   if (priceMismatch) {
     return { ok: false, error: priceMismatch };
-  }
-  // A granny flat priced on one page and excluded on another, checked on the
-  // agreed snapshot the BC4 exclusions are filled from. The stamped terms
-  // (tender-terms) come from the same Tender send that refuses this conflict,
-  // so without them the signed Tender predates the check.
-  const grannyGate = decideContractGrannyExclusionGate({
-    conflicts: findGrannyExclusionConflicts(snapshot),
-    tenderSentWithCheck: payment.source === "tender-terms",
-  });
-  if (grannyGate.kind === "refuse") {
-    return { ok: false, error: grannyGate.error };
-  }
-  if (grannyGate.kind === "as-signed") {
-    console.warn(`[offer] contract for offer ${offer.id}: ${grannyGate.warning}`);
   }
 
   // Owner parties (ADR 0003). The BC4 form has a single OWNER(S) area, so every

@@ -11,6 +11,10 @@ import {
 } from "@/lib/offer/workspace-area";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
+import {
+  buildIncludesGrannyFlat,
+  withoutGrannyOutOfScopeLines,
+} from "./granny-exclusion";
 
 export const COMPANY_LINE =
   "ROYAL CONSTRUCTIONS PTY LTD | Licence No. 383992C | ABN 56 644 111 580 | MBA Accredited";
@@ -108,8 +112,19 @@ export function buildOfferPrintTemplateData({
     // exclusions remain available to the Tender via `exclusionRows` below,
     // but must not reappear here after an estimator removes them from the
     // Offer document.
-    exclusionBullets: getOfferDocumentExclusions(draft),
-    exclusionRows: getVisibleExclusionRows(draft, exclusions),
+    // A build that includes a granny flat never prints a line saying the
+    // granny flat is out of scope, whatever is stored on the offer. Covers a
+    // locked offer and an admin default, which the workspace cannot strip.
+    exclusionBullets: withoutGrannyOutOfScopeLines(
+      buildIncludesGrannyFlat(job),
+      getOfferDocumentExclusions(draft),
+      (line) => line,
+    ),
+    exclusionRows: withoutGrannyOutOfScopeLines(
+      buildIncludesGrannyFlat(job),
+      getVisibleExclusionRows(draft, exclusions),
+      (row) => [row.label, row.description, row.variationRule],
+    ),
     footerBase: `${job.siteAddress} | Prepared by ${job.preparedBy}`,
     paymentRows: paymentSchedule.map((row) => ({
       ...row,
