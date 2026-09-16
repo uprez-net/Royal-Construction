@@ -25,6 +25,19 @@ export function canAccessLead(
   return INTERNAL_ROLES.has(user.role) || lead.assignedId === user.id;
 }
 
+// canAccessLead's rule, expressed as a filter for list queries. A listing
+// cannot run the per-lead check on every row it returns, so it pushes the same
+// rule into the query: internal roles read every lead, anyone else only the
+// leads assigned to them. Keep the two in step, or a list shows a row whose
+// page then refuses to open.
+export type LeadListScope = { assignedId: string | null };
+
+export function leadListScope(user: Pick<User, "id" | "role">): LeadListScope {
+  return INTERNAL_ROLES.has(user.role)
+    ? { assignedId: null }
+    : { assignedId: user.id };
+}
+
 export async function assertCanAccessLead(
   user: Pick<User, "id" | "role">,
   leadId: number,

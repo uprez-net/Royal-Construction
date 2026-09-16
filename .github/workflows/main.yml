@@ -31,13 +31,18 @@ env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
   BUSINESS_EMAIL: "info@royalconstructions.com.au"
-  GRAPH_SENDER_UPN: "Dhrub@royalconstructions.com.au"
+  BUSINESS_ADMIN_EMAIL: "admin@royalconstructions.com.au"
+  GRAPH_SENDER_UPN: "info@royalconstructions.com.au"
+  GRAPH_ADMIN_SENDER_UPN: "admin@royalconstructions.com.au"
+  GRAPH_ADMIN_MAIL_CC: "nabeel.wasif+admin@uprez.net"
   GRAPH_MODE: "app-only"
   WEBHOOK_PATH: "/api/graph/notifications"
   WEBHOOK_PORT: "3000"
   GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
+  GRAPH_ADMIN_WEBHOOK_CLIENT_STATE: "royal-leadgen-admin-webhook"
   GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
   GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+  GRAPH_ADMIN_SUBSCRIPTION_RESOURCE: ${{ secrets.GRAPH_ADMIN_SUBSCRIPTION_RESOURCE }}
   NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
   NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
   MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}

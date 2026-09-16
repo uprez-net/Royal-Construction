@@ -24,6 +24,50 @@ export type OfferSignerStatusValue =
   | "SIGNED"
   | "DECLINED";
 
+const SIGNER_STATUS_VALUES: readonly OfferSignerStatusValue[] = [
+  "CREATED",
+  "SENT",
+  "DELIVERED",
+  "SIGNED",
+  "DECLINED",
+];
+
+// Forward-only rank for one recipient's status. DocuSign delivers Connect events
+// out of order and redelivers after a failure, so a late "delivered" arriving
+// after "completed" used to put a signed customer back to "awaiting". SIGNED and
+// DECLINED are both terminal, so neither may replace the other.
+export function signerStatusRank(status: OfferSignerStatusValue): number {
+  switch (status) {
+    case "CREATED":
+      return 0;
+    case "SENT":
+      return 1;
+    case "DELIVERED":
+      return 2;
+    case "SIGNED":
+    case "DECLINED":
+      return 3;
+  }
+}
+
+export function shouldApplySignerStatus(
+  current: OfferSignerStatusValue,
+  next: OfferSignerStatusValue,
+): boolean {
+  return signerStatusRank(next) > signerStatusRank(current);
+}
+
+// The statuses a recipient may move to `next` from. The webhook puts these in
+// its update's where clause, so the rank check and the write are one statement
+// and two concurrent deliveries cannot both apply.
+export function signerStatusesBelow(
+  next: OfferSignerStatusValue,
+): OfferSignerStatusValue[] {
+  return SIGNER_STATUS_VALUES.filter((status) =>
+    shouldApplySignerStatus(status, next),
+  );
+}
+
 // One persisted recipient of a sent envelope.
 export type OfferSignerStatus = {
   readonly docType: OfferSignerDocType;

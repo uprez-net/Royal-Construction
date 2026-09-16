@@ -15,12 +15,15 @@ import {
   termsAndConditionsChanged,
   saveOfferContent,
   inclusionsChanged,
-  exclusionsListChanged
+  inclusionBulletRestored,
+  exclusionsListChanged,
+  exclusionBulletRestored,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { OfferCardHeading } from "@/components/offers/new-workflow/offer-workspace-card-heading";
 import { FilePenLine } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
 import { BulletListEditor } from "./shared/bullet-list-editor";
+import { EXCLUSION_BULLET_UNDO_TOAST_ID, INCLUSION_BULLET_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -82,8 +85,12 @@ export function OfferContentPage() {
         <label>
           <FieldLabel>Inclusion bullets</FieldLabel>
           <BulletListEditor
+            undoToastId={INCLUSION_BULLET_UNDO_TOAST_ID}
             value={inclusions}
-            onChange={(lines) => dispatch(inclusionsChanged(lines as string[]))}
+            onChange={(lines) => dispatch(inclusionsChanged(lines))}
+            onRestore={(bullet, index) =>
+              dispatch(inclusionBulletRestored({ bullet, index }))
+            }
             addLabel="Add bullet"
             placeholder="Inclusion text"
           />
@@ -91,8 +98,12 @@ export function OfferContentPage() {
         <label>
           <FieldLabel>Exclusion bullets</FieldLabel>
           <BulletListEditor
+            undoToastId={EXCLUSION_BULLET_UNDO_TOAST_ID}
             value={exclusions}
-            onChange={(lines) => dispatch(exclusionsListChanged(lines as string[]))}
+            onChange={(lines) => dispatch(exclusionsListChanged(lines))}
+            onRestore={(bullet, index) =>
+              dispatch(exclusionBulletRestored({ bullet, index }))
+            }
             addLabel="Add bullet"
             placeholder="Exclusion text"
           />
@@ -118,7 +129,8 @@ export function OfferContentPage() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveOfferContent())}
+          onSave={() => dispatch(saveOfferContent()).unwrap()}
+          successMessage="Offer document saved."
         />
       </CardFooter>
     </Card>

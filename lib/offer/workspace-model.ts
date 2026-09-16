@@ -177,6 +177,11 @@ export type OfferWorkspaceScopeItem = {
   readonly unit: string;
   readonly variationRule: string;
   readonly includedInOfferDocument: boolean;
+  // Allowances only: whether the signed Tender lists this item. Separate from
+  // includedInOfferDocument so the sales proposal can stay short while the
+  // document the customer signs still discloses every allowance in the price.
+  // Exclusions carry it too, but their single Scope box is includedInOfferDocument.
+  readonly includedInTender: boolean;
 };
 
 export type OfferScopeItemCategory =
@@ -940,7 +945,8 @@ export const INITIAL_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = [
     amount: 8500,
     unit: "package",
     variationRule: "Selections above allowance become a variation.",
-    includedInOfferDocument: true,
+    includedInOfferDocument: false,
+    includedInTender: true,
   },
   {
     id: "allowance-2",
@@ -951,7 +957,8 @@ export const INITIAL_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = [
     amount: 70,
     unit: "sqm",
     variationRule: "Tile selections above the rate are priced as a variation.",
-    includedInOfferDocument: true,
+    includedInOfferDocument: false,
+    includedInTender: true,
   },
 ];
 
@@ -966,6 +973,7 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
     unit: "",
     variationRule: "Can be priced later as a written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   },
   {
     id: "exclusion-2",
@@ -977,6 +985,7 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
     unit: "",
     variationRule: "Owner-supplied unless added by written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   },
 ];
 
@@ -1015,8 +1024,18 @@ export function createOfferScopeItem(
     amount: 0,
     unit: "",
     variationRule: "",
-    includedInOfferDocument: true,
+    // A new allowance stays off the sales proposal until the estimator ticks it,
+    // and is listed in the signed Tender unless they untick it. An exclusion
+    // keeps its single box, ticked.
+    includedInOfferDocument: !isAllowanceCategory(category),
+    includedInTender: true,
   };
+}
+
+// Prime-cost and provisional-sum items are allowances; the other categories are
+// exclusions and owner selections, which live in the Exclusions list.
+function isAllowanceCategory(category: OfferScopeItemCategory): boolean {
+  return category === "prime_cost" || category === "provisional_sum";
 }
 
 export function removeOfferScopeItem(
@@ -1111,6 +1130,71 @@ export function inclusionPageStartIndexes(
     running += page.length;
   }
   return starts;
+}
+
+// The prime-cost and provisional-sum table's two text columns. Both offer
+// renderers give it a 30mm Allowance column and a 70mm "If the actual cost
+// differs" column, leaving ~74mm for the Item cell; net of padding that is about
+// 36 and 32 characters at the React template's 14px. Rounded DOWN, like every
+// CHARS_PER_LINE_* above, so a row's height is over-counted rather than under.
+export const CHARS_PER_LINE_ALLOWANCE_ITEM = 34;
+export const CHARS_PER_LINE_ALLOWANCE_RULE = 30;
+// The allowances intro runs a line longer than the inclusions one.
+export const ALLOWANCES_INTRO_LINES = 4;
+// The Download (window.print) copy is the tallest of the three renderers and the
+// one no Chromium test can measure. Its row carries 12px of padding top and
+// bottom, a 1px rule and a 4px gap above any description, against a 20px line:
+// 29px, which the inclusions' single chrome line (sized on the emailed 13px
+// table) under-counts by 9px a row.
+export const ALLOWANCE_ROW_CHROME_LINES = 1.5;
+// At 20px a line, 40 lines is 800px against the ~804px that page leaves for
+// rows: no headroom for a wrap estimate that runs short. 36 leaves ~80px. The
+// emailed proposal and the Tender just fit fewer rows on a page.
+export const ALLOWANCES_LINES_PER_PAGE = 36;
+
+type AllowanceRowText = {
+  readonly label: string;
+  readonly description: string;
+  readonly variationRule: string;
+};
+
+// The Item cell stacks the label over the description and the rule sits beside
+// them, so a row is as tall as the taller of the two, plus its own padding.
+export function allowanceRowLines(row: AllowanceRowText): number {
+  const itemLines =
+    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
+    (row.description.trim().length > 0
+      ? estimateWrappedLines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
+      : 0);
+  return (
+    Math.max(
+      itemLines,
+      estimateWrappedLines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE),
+    ) + ALLOWANCE_ROW_CHROME_LINES
+  );
+}
+
+// Pack the disclosed allowances into pages. Every row used to go on one
+// fixed-height page counted as one, so a long list ran past the footer onto a
+// sheet "Page N of M" never declared. Shared by the emailed proposal, the React
+// print template and the Tender so none of them can count it differently.
+export function chunkAllowanceRows<T extends AllowanceRowText>(
+  rows: readonly T[],
+): T[][] {
+  if (rows.length === 0) {
+    return [];
+  }
+  const firstBudget = Math.max(
+    1,
+    ALLOWANCES_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES,
+  );
+  const first =
+    chunkByEstimatedHeight(rows, firstBudget, allowanceRowLines)[0] ?? [];
+  const rest = rows.slice(first.length);
+  return [
+    first,
+    ...chunkByEstimatedHeight(rest, ALLOWANCES_LINES_PER_PAGE, allowanceRowLines),
+  ].filter((page) => page.length > 0);
 }
 
 export function getIncludedOfferTenderLineItems(

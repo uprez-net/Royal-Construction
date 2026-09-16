@@ -96,6 +96,7 @@ export async function logOfferChangeRequest(input: {
       fromStatus: offer.offerStatus,
       toStatus: offer.offerStatus,
       note: `${CHANGE_REQUEST_PREFIX} ${note}`,
+      actorId: access.user.id,
     },
   });
   return { ok: true };

@@ -291,11 +291,12 @@ export function DaApprovalSection({
                       documentType: entry.type,
                     })
                   }
-                  // Offered on everything the council might not want, and
-                  // withheld from the carry-overs: a deposited plan is not
-                  // something this job can decide it does not need.
+                  // Every DA row can be waived when it does not apply to this
+                  // job. Carry-over rows stay frozen for file replacement, but
+                  // marking the DA requirement as not required is a separate
+                  // decision and must remain available here.
                   onSetNotRequired={
-                    entry.source !== "pack" && row && onSetNotRequired
+                    row && onSetNotRequired
                       ? (notRequired) => onSetNotRequired(row, notRequired)
                       : undefined
                   }
