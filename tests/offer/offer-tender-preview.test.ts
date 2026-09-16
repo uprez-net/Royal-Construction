@@ -14,6 +14,7 @@ import {
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
+import type { OfferCustomerPrice } from "../../lib/offer/workspace-pricing";
 
 // The on-screen Tender listed inclusions and exclusions but no allowances, so
 // the estimator reviewing it before DocuSign never saw the prime-cost and
@@ -25,10 +26,16 @@ import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-tem
 // Offer document, reading scopeRows emptied the preview while the Tender PDF
 // still listed all three — a preview that contradicted the document it previews.
 
-const customerPrice = {
+// Typed, not cast: `as never` made this assignable to any prop, so the fixture
+// could omit required fields and the test would still render a shape the
+// component can never receive.
+const customerPrice: OfferCustomerPrice = {
+  computedContractValueIncGst: 850_000,
   selectedContractValueIncGst: 850_000,
+  varianceIncGst: 0,
   hasManualOverride: false,
-} as never;
+  needsOverrideReason: false,
+};
 
 function render(
   allowances: readonly OfferWorkspaceScopeItem[],
