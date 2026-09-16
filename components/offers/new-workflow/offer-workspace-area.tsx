@@ -110,7 +110,7 @@ export function AreaCalculatorPanel({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-5 pt-4">
+      <CardContent className="grid gap-5">
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
             <h4 className={GROUP_HEADING_CLASS}>
@@ -157,9 +157,9 @@ export function AreaCalculatorPanel({
             />
           </Field>
         </section>
-        <div className="grid gap-4 xl:grid-cols-4">
+        <div className="grid gap-4 @3xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
           <HelperSection title="Slab">
-            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+            <div className="flex flex-col gap-2 mb-auto">
               <NumberField
                 label="Drop edge beam surface area"
                 value={area.dropEdgeBeamSurfaceArea}
@@ -189,7 +189,7 @@ export function AreaCalculatorPanel({
           </HelperSection>
 
           <HelperSection title="Frame">
-            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+            <div className="flex flex-col gap-2 mb-auto">
               <NumberField
                 label="Steel Cost"
                 value={area.steel}
@@ -299,7 +299,7 @@ export function AreaCalculatorPanel({
           </HelperSection>
 
           <HelperSection title="Tiles">
-            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+            <div className="flex flex-col gap-2 mb-auto">
               <NumberField
                 label="Tiles required for Ground floor"
                 value={area.tilesGroundFloor}

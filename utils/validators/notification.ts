@@ -223,6 +223,18 @@ export const notificationSchemas = {
         siteAddress: z.string(),
     }),
 
+    /**
+     * DocuSign completed an envelope the app had recalled, voided or replaced.
+     * The signed copy is kept but never filed as the executed document.
+     */
+    unexpectedEnvelopeCompletion: z.object({
+        leadId: z.string(),
+        offerReference: z.string(),
+        documentLabel: z.string(),
+        envelopeId: z.string(),
+        customerName: z.string(),
+    }),
+
     milestoneStatusChanged: z.object({
         projectId: z.string(),
         milestoneId: z.string(),

@@ -1,11 +1,25 @@
 "use client";
 
 import type { ComplianceDocumentType } from "@prisma/client";
-import { FolderOpen } from "lucide-react";
-import { useMemo } from "react";
+import {
+  Archive,
+  ChevronDown,
+  ClipboardList,
+  FolderOpen,
+  FolderSearch,
+  ReceiptText,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { DataTable } from "@/components/common/data-table";
 import { ComplianceSectionCard } from "./compliance-section-card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   COMPLIANCE_DOCUMENT_SECTIONS,
   complianceDocumentLabel,
@@ -35,6 +49,23 @@ type VaultSection = {
   offset: number;
 };
 
+function VaultSectionIcon({ index }: { index: number }) {
+  switch (index % 6) {
+    case 0:
+      return <Archive className="size-4" aria-hidden="true" />;
+    case 1:
+      return <Users className="size-4" aria-hidden="true" />;
+    case 2:
+      return <ReceiptText className="size-4" aria-hidden="true" />;
+    case 3:
+      return <ClipboardList className="size-4" aria-hidden="true" />;
+    case 4:
+      return <ShieldCheck className="size-4" aria-hidden="true" />;
+    default:
+      return <FolderSearch className="size-4" aria-hidden="true" />;
+  }
+}
+
 const newestFirst = (a: VaultFile, b: VaultFile) =>
   new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 
@@ -62,6 +93,9 @@ export function ComplianceDocumentVault({
   onOpenChange: (open: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const { sections, gallery } = useMemo(() => {
     const collect = (match: (type: ComplianceDocumentType) => boolean) =>
@@ -145,54 +179,94 @@ export function ComplianceDocumentVault({
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
-          {sections.map((section) => (
-            <section key={section.heading} className="space-y-2">
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {section.heading}
-                </h4>
-                <span className="text-xs tabular-nums text-muted-foreground/80">
-                  {section.files.length} file
-                  {section.files.length === 1 ? "" : "s"}
-                </span>
-                <p className="w-full text-xs text-muted-foreground/80">
-                  {section.description}
-                </p>
-              </div>
+        <div className="space-y-3">
+          {sections.map((section, index) => {
+            const isSectionOpen =
+              openSections[section.heading] ?? index === 0;
 
-              <DataTable
-                onRowClick={(index) => openPreview(section.offset + index)}
-                rowLabel={(index) =>
-                  `Open ${section.files[index]?.filename ?? "document"}`
+            return (
+              <Collapsible
+                key={section.heading}
+                open={isSectionOpen}
+                onOpenChange={(open) =>
+                  setOpenSections((current) => ({
+                    ...current,
+                    [section.heading]: open,
+                  }))
                 }
-                caption={`${section.heading} — ${section.description}`}
-                headers={["#", "Name", "Document", "Size", "Uploaded"]}
-                align={["end", "start", "start", "end", "start"]}
-                rows={section.files.map((file, index) => [
-                  <span key={`index-${file.id}`} className="tabular-nums">
-                    {index + 1}
-                  </span>,
-                  <span
-                    key={`name-${file.id}`}
-                    className="font-medium text-primary underline-offset-4 hover:underline"
-                  >
-                    {file.filename}
-                  </span>,
-                  <span key={`type-${file.id}`}>{file.documentLabel}</span>,
-                  <span key={`size-${file.id}`} className="tabular-nums">
-                    {formatFileSize(file.filesize)}
-                  </span>,
-                  <span
-                    key={`date-${file.id}`}
-                    className="text-muted-foreground"
-                  >
-                    {dataTimeFormat.format(new Date(file.createdAt))}
-                  </span>,
-                ])}
-              />
-            </section>
-          ))}
+                className="overflow-hidden rounded-xl border border-border/70 bg-background"
+              >
+                <CollapsibleTrigger className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition hover:bg-primary/[0.035] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <VaultSectionIcon index={index} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-heading text-sm font-semibold text-foreground">
+                        {section.heading}
+                      </span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                        {section.files.length} file
+                        {section.files.length === 1 ? "" : "s"}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {section.description}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${isSectionOpen ? "rotate-180 text-primary" : ""}`}
+                    aria-hidden="true"
+                  />
+                </CollapsibleTrigger>
+
+                <CollapsibleContent className="overflow-hidden data-open:animate-collapsible-down data-closed:animate-collapsible-up">
+                  <div className="border-t border-border/70 bg-muted/15 p-2">
+                    <DataTable
+                      onRowClick={(rowIndex) =>
+                        openPreview(section.offset + rowIndex)
+                      }
+                      rowLabel={(rowIndex) =>
+                        `Open ${section.files[rowIndex]?.filename ?? "document"}`
+                      }
+                      caption={`${section.heading} — ${section.description}`}
+                      headers={["#", "Name", "Document", "Size", "Uploaded"]}
+                      align={["end", "start", "start", "end", "start"]}
+                      rows={section.files.map((file, rowIndex) => [
+                        <span
+                          key={`index-${file.id}`}
+                          className="tabular-nums"
+                        >
+                          {rowIndex + 1}
+                        </span>,
+                        <span
+                          key={`name-${file.id}`}
+                          className="font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                          {file.filename}
+                        </span>,
+                        <span key={`type-${file.id}`}>
+                          {file.documentLabel}
+                        </span>,
+                        <span
+                          key={`size-${file.id}`}
+                          className="tabular-nums"
+                        >
+                          {formatFileSize(file.filesize)}
+                        </span>,
+                        <span
+                          key={`date-${file.id}`}
+                          className="text-muted-foreground"
+                        >
+                          {dataTimeFormat.format(new Date(file.createdAt))}
+                        </span>,
+                      ])}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
     </ComplianceSectionCard>

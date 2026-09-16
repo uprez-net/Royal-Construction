@@ -36,7 +36,8 @@ export default function OfferDetailError({
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
           <Button
             onClick={() => reset()}
-            className="h-10 w-full bg-royal-gold px-6 text-[13px] font-semibold text-primary-foreground hover:bg-royal-gold-dark sm:w-auto"
+            variant="royal"
+            className="h-10 w-full px-6 text-[13px] font-semibold sm:w-auto"
           >
             <RefreshCw className="mr-2 size-4" />
             Try again

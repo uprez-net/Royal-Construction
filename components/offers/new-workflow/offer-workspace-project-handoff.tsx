@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
@@ -23,6 +24,9 @@ type ProjectHandoffPanelProps = {
   readonly onCreateProject: () => void;
   readonly projectCreating?: boolean;
   readonly projectResult?: ProjectHandoffResult | null;
+  // The project this offer was handed off to, from the handoff itself or, after
+  // a reload, from the loader. Null until one exists.
+  readonly projectId?: string | null;
 };
 
 export function ProjectHandoffPanel({
@@ -34,6 +38,7 @@ export function ProjectHandoffPanel({
   onCreateProject,
   projectCreating = false,
   projectResult = null,
+  projectId = null,
 }: ProjectHandoffPanelProps) {
   const isCreated = status === "project";
   const costLineCount = lines.filter((line) => line.includedInContract).length;
@@ -49,7 +54,7 @@ export function ProjectHandoffPanel({
           title="Project handoff"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
+      <CardContent className="grid gap-4">
         {isCreated ? (
           <Banner tone="success">
             <span className="flex items-center gap-2 font-medium">
@@ -86,13 +91,24 @@ export function ProjectHandoffPanel({
         </dl>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isCreated ? (
+          {/* Open Project was a permanently disabled button, so the handoff's
+              end state led nowhere. It stays disabled only while the project's
+              id is unknown. */}
+          {isCreated && projectId ? (
+            <Button
+              asChild
+              className="bg-royal-gold-ink text-white hover:bg-royal-gold-ink/90"
+              size="sm"
+            >
+              <Link href={`/projects/${projectId}`}>Open Project</Link>
+            </Button>
+          ) : isCreated ? (
             <Button disabled size="sm" type="button" variant="outline">
               Open Project
             </Button>
           ) : (
             <Button
-              className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+              className="bg-royal-gold-ink text-white hover:bg-royal-gold-ink/90"
               disabled={projectCreating}
               size="sm"
               type="button"

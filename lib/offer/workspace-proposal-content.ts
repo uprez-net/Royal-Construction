@@ -2,6 +2,10 @@ import type {
   OfferInclusionEntry,
   OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
+import {
+  offerAreaBasisFromJob,
+  rawTotalAreaSqm,
+} from "@/lib/offer/workspace-area";
 
 // Standard, reusable proposal content (welcome letter, inclusions schedule,
 // includes/excludes). This is boilerplate shared across offers — the same way
@@ -333,14 +337,13 @@ export const OFFER_EXCLUDES_BULLETS: readonly string[] = [
 export function buildWelcomeParagraphs(
   job: OfferWorkspaceJob,
 ): readonly string[] {
-  const totalArea = Math.round(
-    job.groundFloorSqm +
-      job.firstFloorSqm +
-      job.garageSqm +
-      job.alfrescoPorchSqm +
-      job.porchSqm +
-      job.grannyFlatSqm,
-  );
+  // The same total the cover and the Tender print; this one left out balcony and
+  // void, so the letter quoted a smaller home than the page before it.
+  // Up to two decimals, like formatArea on the cover and in the Tender, so a
+  // 435.5 m² home is not quoted here as 436.
+  const totalArea = new Intl.NumberFormat("en-AU", {
+    maximumFractionDigits: 2,
+  }).format(rawTotalAreaSqm(offerAreaBasisFromJob(job)));
   // Only assert what we can derive from this job (client, site, area). Specific
   // design features, "photos match your home", and finish guarantees were
   // hard-coded and often wrong (e.g. "double storey" on a single-storey build),

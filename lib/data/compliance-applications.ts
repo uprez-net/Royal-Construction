@@ -8,6 +8,7 @@ import {
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
   CompliancePartyType,
+  GraphMailbox,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
@@ -161,6 +162,7 @@ async function ensureCouncilThread(
       refToken: generatePartyRefToken(CompliancePartyType.COUNCIL),
       mode: ComplianceOutreachMode.OUTREACH,
       status: ComplianceOutreachStatus.SENT,
+      graphMailbox: GraphMailbox.ADMIN,
       sentAt: appliedAt,
     },
   });

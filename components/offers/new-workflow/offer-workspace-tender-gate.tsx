@@ -17,7 +17,6 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { cn } from "@/lib/utils";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // The one-off architectural-plan fee the gate waits on. Manual checkbox only —
@@ -65,7 +64,7 @@ export function TenderGatePanel({
           title="Tender access"
         />
       </CardHeader>
-      <CardContent className="grid gap-5 pt-4">
+      <CardContent className="grid gap-5">
         {gatePassed ? (
           <Banner tone="success">
             Tender access unlocked — proceed to the Tender step below.
@@ -238,12 +237,10 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value === true ? "default" : "outline"}
-          className={cn(
-            value === true
-              ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              : "",
-          )}
+          variant={value === true ? "royal" : "outline"}
+          // Colour is the only other cue, and the question is tri-state:
+          // unanswered must not read as "No".
+          aria-pressed={value === true}
           onClick={() => onChange(true)}
         >
           Yes
@@ -251,12 +248,8 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value === false ? "default" : "outline"}
-          className={cn(
-            value === false
-              ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              : "",
-          )}
+          variant={value === false ? "royal" : "outline"}
+          aria-pressed={value === false}
           onClick={() => onChange(false)}
         >
           No

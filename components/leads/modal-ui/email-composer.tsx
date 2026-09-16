@@ -267,7 +267,8 @@ export function EmailComposer({
         <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
           <Button
             size="icon"
-            className="bg-royal-gold text-white shrink-0 hover:bg-royal-gold/90"
+            variant="royal"
+            className="shrink-0"
             disabled={sending || body === undefined || !body?.html.trim()}
             onClick={() => startTransition(handleSend)}
           >
