@@ -9,6 +9,8 @@ import {
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { EffectiveMargin } from "@/lib/offer/workspace-pricing";
+import type { TenderGateStatus } from "@/lib/offer/workspace-persistence";
+import { formatArea } from "@/lib/offer/workspace-print-template";
 import { formatPercent } from "@/lib/offer/format";
 
 // One line per workflow step, answering "what does this step currently say?"
@@ -51,6 +53,9 @@ export type OfferStepDigestInput = {
   readonly phaseUnlocked: Readonly<
     Record<"tender-gate" | "tender" | "contract" | "project", boolean>
   >;
+  // The Tender access answers, so an agreed offer's gate row can say whether
+  // access has been granted yet.
+  readonly tenderGateStatus: TenderGateStatus;
 };
 
 // Compact money for a 240px rail: no cents, and thousands shortened past $10k so
@@ -79,7 +84,9 @@ function plural(count: number, one: string, many: string): string {
 // The room counts an estimator scans for. Falls back to the area alone when no
 // counts have been entered, rather than printing "0 bed · 0 bath".
 function jobDigest(job: OfferWorkspaceJob, totalAreaSqm: number): string {
-  const area = totalAreaSqm > 0 ? `${totalAreaSqm} m²` : null;
+  // Formatted: the area is a sum of entered floats, and 180.1 + 20.2 printed
+  // "200.29999999999998 m²".
+  const area = totalAreaSqm > 0 ? formatArea(totalAreaSqm) : null;
   const rooms =
     job.bedrooms > 0 || job.bathrooms > 0
       ? `${job.bedrooms} bed · ${job.bathrooms} bath`
@@ -114,6 +121,46 @@ function sendDigest(
   }
 }
 
+// The gate only holds the Tender while the offer is AGREED; once a Tender has
+// been drafted, access was granted.
+function tenderGateDigest(
+  status: OfferWorkspaceStatus,
+  gate: TenderGateStatus,
+): string {
+  return status === "agreed" && gate !== "unlocked"
+    ? "Awaiting tender access"
+    : "Tender access granted";
+}
+
+// Only reached once the Tender phase is open, so anything past a declined
+// Tender has a signed one.
+function tenderDigest(status: OfferWorkspaceStatus): string {
+  switch (status) {
+    case "agreed":
+      return "Ready to draft";
+    case "tender_draft":
+    case "tender_sent":
+    case "tender_declined":
+      return OFFER_STATUS_LABEL[status];
+    default:
+      return "Tender signed";
+  }
+}
+
+// Only reached once the Contract phase is open (the Tender is signed).
+function contractDigest(status: OfferWorkspaceStatus): string {
+  switch (status) {
+    case "tender_signed":
+      return "Ready to draft";
+    case "contract_draft":
+    case "contract_sent":
+    case "contract_declined":
+      return OFFER_STATUS_LABEL[status];
+    default:
+      return "Contract signed";
+  }
+}
+
 export function buildOfferStepDigests(
   input: OfferStepDigestInput,
 ): Readonly<Record<OfferStepId, string>> {
@@ -144,18 +191,22 @@ export function buildOfferStepDigests(
     "offer-document": `${imagesSet} of ${OFFER_IMAGE_SLOTS.length} images set`,
     send: sendDigest(input.status, input.sendBlockers),
     // A gated phase describes its gate only while the gate is shut. Once open,
-    // the offer's status is the honest one-liner.
+    // each row says where its own step stands. They all used to print the
+    // offer's status, so a Contract out for signature read "Contract sent" on
+    // the gate, Tender and Contract rows alike.
     "tender-gate": input.phaseUnlocked["tender-gate"]
-      ? OFFER_STATUS_LABEL[input.status]
+      ? tenderGateDigest(input.status, input.tenderGateStatus)
       : "Unlocks once the offer is agreed",
     tender: input.phaseUnlocked.tender
-      ? OFFER_STATUS_LABEL[input.status]
+      ? tenderDigest(input.status)
       : "Unlocks after tender access",
     contract: input.phaseUnlocked.contract
-      ? OFFER_STATUS_LABEL[input.status]
+      ? contractDigest(input.status)
       : "Unlocks when the tender is signed",
     project: input.phaseUnlocked.project
-      ? OFFER_STATUS_LABEL[input.status]
+      ? input.status === "project"
+        ? "Project created"
+        : "Ready to create"
       : "Unlocks when the contract is signed",
   };
 }
