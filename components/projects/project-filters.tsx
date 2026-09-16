@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import type { ProjectStatus } from "@prisma/client";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { setProjectFilter } from "@/lib/store/slices/uiSlice";
 import { PRE_CONSTRUCTION_FILTER, type ProjectKPIs } from "@/types/project";
@@ -12,6 +13,8 @@ interface ProjectFiltersProps {
   onFilterChange: () => void;
 }
 
+type ProjectFilterValue = ProjectStatus | typeof PRE_CONSTRUCTION_FILTER | null;
+
 export function ProjectFilters({
   kpis,
   activeFilter,
@@ -19,7 +22,7 @@ export function ProjectFilters({
 }: ProjectFiltersProps) {
   const dispatch = useAppDispatch();
 
-  const filters: { label: string; value: string | null; count: number }[] = [
+  const filters: { label: string; value: ProjectFilterValue; count: number }[] = [
     { label: "All", value: null, count: kpis.totalActive + kpis.completed },
     // Before "Active", because it is before it: a job is in the pipeline until
     // somebody starts a milestone on it. Three statuses under one chip — see
@@ -48,6 +51,7 @@ export function ProjectFilters({
     >
       {filters.map((filter) => {
         const isActive = activeFilter === filter.value;
+        const isPreConstruction = filter.value === PRE_CONSTRUCTION_FILTER;
 
         return (
           <button
@@ -62,6 +66,8 @@ export function ProjectFilters({
               "min-h-11 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               isActive
                 ? "border-primary bg-primary text-primary-foreground"
+                : isPreConstruction
+                  ? "border-[color:var(--stage-3)] bg-[color:var(--stage-2)] text-foreground hover:bg-[color:var(--stage-3)]"
                 : "border-border bg-card text-foreground hover:bg-muted/40",
             )}
           >
