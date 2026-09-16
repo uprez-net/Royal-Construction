@@ -67,7 +67,10 @@ function printedAmountLabels(
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
     priceAdjustmentLabel: "",
     standardPriceIncGst: null,
-  }).scopeRows.map((row) => row.amountLabel);
+    // tenderScopeRows, like the preview itself: seeded allowances sit OFF the
+    // Offer document, so mapping scopeRows returned an empty list and the
+    // amount assertions below quietly checked nothing at all.
+  }).tenderScopeRows.map((row) => row.amountLabel);
 }
 
 test("the tender preview lists every allowance ticked for the Tender", () => {
@@ -81,7 +84,9 @@ test("the tender preview lists every allowance ticked for the Tender", () => {
       `missing the variation rule for ${allowance.label}`,
     );
   }
-  for (const amountLabel of printedAmountLabels(INITIAL_ALLOWANCES)) {
+  const amountLabels = printedAmountLabels(INITIAL_ALLOWANCES);
+  assert.ok(amountLabels.length > 0, "no amounts to check — the helper read the wrong list");
+  for (const amountLabel of amountLabels) {
     assert.ok(html.includes(amountLabel), `missing amount ${amountLabel}`);
   }
 });

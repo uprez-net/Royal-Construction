@@ -238,6 +238,9 @@ function YesNoQuestion({
           size="sm"
           type="button"
           variant={value === true ? "royal" : "outline"}
+          // Colour is the only other cue, and the question is tri-state:
+          // unanswered must not read as "No".
+          aria-pressed={value === true}
           onClick={() => onChange(true)}
         >
           Yes
@@ -246,6 +249,7 @@ function YesNoQuestion({
           size="sm"
           type="button"
           variant={value === false ? "royal" : "outline"}
+          aria-pressed={value === false}
           onClick={() => onChange(false)}
         >
           No
