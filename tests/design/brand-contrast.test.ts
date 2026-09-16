@@ -43,15 +43,32 @@ test("the royal hover is a darker step of the ink", () => {
   assert.ok(hover.lightness < ink.lightness);
 });
 
-// The app ships light-only, but .dark must still define the token so the
-// utility never resolves to an undefined var, and its step must still carry
-// the variant's white text.
-test("the dark theme defines a royal hover that still carries white text", () => {
+// The app ships light-only, but .dark must still define the tokens so the
+// utility never resolves to an undefined var, and both steps must carry the
+// variant's white text. Checking only the hover is how the dark REST state sat
+// at 3.75:1 unnoticed — and rest is what variant="royal" paints until someone
+// points at it.
+test("the dark theme carries white text at rest and on hover", () => {
+  const ink = themeColour(css, ".dark", "--royal-gold-ink");
   const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
 
   assert.ok(
+    contrastRatio(WHITE, ink) >= AA_TEXT,
+    `white on the dark --royal-gold-ink measures ${ratio(contrastRatio(WHITE, ink))}`,
+  );
+  assert.ok(
     contrastRatio(WHITE, hover) >= AA_TEXT,
     `white on the dark --royal-gold-ink-hover measures ${ratio(contrastRatio(WHITE, hover))}`,
+  );
+});
+
+test("the dark hover is a darker step of the dark ink", () => {
+  const ink = themeColour(css, ".dark", "--royal-gold-ink");
+  const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
+
+  assert.ok(
+    hover.lightness < ink.lightness,
+    "the dark hover must darken, as the light one does",
   );
 });
 

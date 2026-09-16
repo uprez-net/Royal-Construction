@@ -194,10 +194,10 @@
   --warning-ink: oklch(0.620 0.14 70.1);
   --info-ink: oklch(0.616 0.16 262.9);
   --destructive-ink: oklch(0.632 0.16 28.5);
-  --royal-gold-ink: oklch(0.616 0.1 77.3);
+  --royal-gold-ink: oklch(0.560 0.1 77.3);
   /* A darker step, as in light: any lighter gold drops the royal variant's
      white text further below AA (this measures 4.80:1). */
-  --royal-gold-ink-hover: oklch(0.556 0.1 77.3);
+  --royal-gold-ink-hover: oklch(0.500 0.1 77.3);
 
   /* Stage ramp, dark theme — same progression, lifted for contrast. */
   --stage-1: oklch(0.5 0.02 253);
