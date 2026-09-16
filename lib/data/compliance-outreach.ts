@@ -38,7 +38,10 @@ import {
 } from "@/types/compliance";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { generateEmailChecksum } from "@/utils/generator";
-import type { StartPartyOutreachInput } from "@/utils/validators/compliance";
+import type {
+  PartyReplyInput,
+  StartPartyOutreachInput,
+} from "@/utils/validators/compliance";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { logAction } from "./actionLog";
 
@@ -488,7 +491,7 @@ export async function recordPartySelfSupplied(
 export async function sendPartyReply(
   projectId: string,
   outreachId: string,
-  input: { body: string; attachments: CertifierEmailAttachment[] },
+  input: Omit<PartyReplyInput, "outreachId">,
 ): Promise<CertifierEngagementDetail> {
   const engagement = await requireEngagement(projectId);
   const outreach = engagement.outreaches.find(
@@ -512,10 +515,27 @@ export async function sendPartyReply(
     engagement.subjectAddress,
   );
 
-  // Attached from the urls the composer uploaded to, not from ids: the message
-  // may carry a file that belongs to no compliance document at all.
+  const extraFiles = await resolveExtraAttachments(
+    projectId,
+    input.extraAttachmentIds ?? [],
+  );
+  const requestedAttachments = [
+    ...input.attachments,
+    ...extraFiles.map((file) => ({
+      fileId: file.id,
+      name: file.filename,
+      url: file.url,
+    })),
+  ].filter(
+    (attachment, index, all) =>
+      all.findIndex((candidate) => candidate.fileId === attachment.fileId) ===
+      index,
+  );
+
+  // Composer uploads carry their URLs; modal extras carry trusted File ids and
+  // are resolved above. Both become the same recorded attachment shape here.
   const attachments = await Promise.all(
-    input.attachments.map((attachment) =>
+    requestedAttachments.map((attachment) =>
       toEmailAttachment({
         url: attachment.url,
         filename: attachment.name,
@@ -523,7 +543,10 @@ export async function sendPartyReply(
       }),
     ),
   );
-  const body = `<p>${escapeEmailHtml(input.body).replace(/\n/g, "<br/>")}</p>`;
+  const body =
+    input.bodyFormat === "html"
+      ? sanitizeLeadNotesHtml(input.body)
+      : `<p>${escapeEmailHtml(input.body).replace(/\n/g, "<br/>")}</p>`;
 
   if (outreach.lastInboundMessageId) {
     await client.replyToMessage({
@@ -551,7 +574,7 @@ export async function sendPartyReply(
     emailTo: outreach.contactEmail,
     subject,
     body,
-    attachments: input.attachments,
+    attachments: requestedAttachments,
   });
 
   after(() => revalidateEngagement(projectId));

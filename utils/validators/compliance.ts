@@ -809,6 +809,10 @@ export const partyReplySchema = z.object({
   outreachId: idSchema,
   body: z.string().trim().min(1, "A message is required"),
   attachments: z.array(certifierReplyAttachmentSchema).default([]),
+  /** Rich editor output is sanitized server-side; ordinary thread replies stay plain. */
+  bodyFormat: z.enum(["plain", "html"]).optional(),
+  /** Extra files are resolved from trusted File rows rather than client URLs. */
+  extraAttachmentIds: extraAttachmentsSchema.optional(),
 });
 
 export type PartyReplyInput = z.infer<typeof partyReplySchema>;

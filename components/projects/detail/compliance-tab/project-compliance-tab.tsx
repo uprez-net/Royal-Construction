@@ -17,6 +17,7 @@ import {
   ListChecks,
   Loader2,
   MessagesSquare,
+  RefreshCw,
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -56,6 +57,7 @@ import {
   isSignedCopyType,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
+  partyForDocumentType,
   SIGNED_COPY_DOCUMENTS,
   WASTE_MANAGEMENT_PLAN_PARTY,
 } from "@/constants/complianceDocuments";
@@ -65,6 +67,7 @@ import {
   hasReachedChecklistStage,
   hasSentRequiredPack,
   isRequiredPackComplete,
+  sentToCertifierUrls,
   unsentRequiredDocuments,
 } from "@/lib/compliance/required-pack";
 import {
@@ -91,6 +94,7 @@ import {
   recordPartySelfSupplied,
   refreshCertifierEngagement,
   sendCertifierReply,
+  sendComplianceDocumentForReview,
   sendPartyReply,
   setComplianceDocumentNotRequired,
   setDeveloperApprovalRequired,
@@ -127,6 +131,7 @@ import {
   vaultAttachmentOptions,
   type CertifierEngagementDetail,
   type ComplianceDocumentWithFiles,
+  type ComplianceOutreachDetail,
 } from "@/types/compliance";
 import { filePreviewModal } from "@/utils/file-preview";
 import type { CertifierReplyAttachment } from "@/utils/validators/compliance";
@@ -409,7 +414,7 @@ export function ProjectComplianceTab({
     [engagement],
   );
 
-  /** What the review send carries, and therefore what "all N documents" counts. */
+  /** Everything that can form the review submission. */
   const submissionDocuments = useMemo(
     () => (engagement ? reviewSubmission(engagement) : []),
     [engagement],
@@ -417,6 +422,17 @@ export function ProjectComplianceTab({
 
   const inReview = engagement?.status === CertifierEngagementStatus.IN_REVIEW;
   const allEvidenceIn = engagement ? isReadyForReview(engagement) : false;
+  const certifierSentUrls = useMemo(
+    () => (engagement ? sentToCertifierUrls(engagement) : new Set<string>()),
+    [engagement],
+  );
+  const isSentForReview = (document: ComplianceDocumentWithFiles) =>
+    document.files.length > 0 &&
+    document.files.every((file) => certifierSentUrls.has(file.url));
+  const unsentSubmissionDocuments = submissionDocuments.filter(
+    (document) =>
+      !isNotRequired(document.status) && !isSentForReview(document),
+  );
 
   /**
    * Which controls a row shows.
@@ -470,11 +486,19 @@ export function ProjectComplianceTab({
       return "frozen";
     }
 
+    if (document?.documentType === ComplianceDocumentType.CHECKLIST_ITEM) {
+      // A rejected file remains on the row as the audit copy, but it is not a
+      // candidate for another decision until its replacement has been uploaded.
+      if (document.rejectionReason || document.files.length === 0) return "upload";
+
+      // Per-document sends make review asynchronous: a row is decidable when
+      // its current copy is actually on an outbound certifier message, whether
+      // or not the rest of the checklist has reached IN_REVIEW yet.
+      if (isSentForReview(document)) return isAdmin ? "resolve" : "frozen";
+      return "upload";
+    }
+
     if (!inReview) return "upload";
-    // Sent back. The old file is still attached, so a row that only asked "has
-    // it got a file?" showed Approve/Reject here and left the loop unable to
-    // finish — an admin could re-reject an item nobody had a way to re-supply.
-    if (document?.rejectionReason) return "upload";
     if (!document || document.files.length === 0) return "upload";
     if (!isApprovableDocumentType(document.documentType)) return "frozen";
     return isAdmin ? "resolve" : "frozen";
@@ -978,6 +1002,33 @@ export function ProjectComplianceTab({
   const checklistLineType = (item: ComplianceDocumentWithFiles) =>
     checklistItemDetail(item.detail)?.mapsToType ?? null;
 
+  /** The existing external-party thread that produced one checklist item. */
+  const producerForChecklistItem = (
+    item: ComplianceDocumentWithFiles,
+  ): ComplianceOutreachDetail | null => {
+    if (!engagement) return null;
+
+    const direct = engagement.outreaches.find(
+      (outreach) =>
+        outreach.checklistDocumentId === item.id ||
+        outreach.deliverables.some(
+          (deliverable) => deliverable.checklistDocumentId === item.id,
+        ),
+    );
+    if (direct?.contactEmail) return direct;
+
+    const documentType = checklistLineType(item);
+    const party =
+      documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
+        ? WASTE_MANAGEMENT_PLAN_PARTY
+        : consultantForDocumentType(documentType) ??
+          (documentType ? partyForDocumentType(documentType) : null);
+    if (!party) return null;
+
+    const outreach = outreachForParty(engagement, party);
+    return outreach?.contactEmail ? outreach : null;
+  };
+
   /**
    * Where a mapped checklist line's document came from, or undefined.
    *
@@ -1202,6 +1253,58 @@ export function ProjectComplianceTab({
         isBusy={isScopeBusy(complianceScope.party(party))}
         onConnect={() => handleConnectParty(party, checklistDocumentId)}
       />
+    );
+  };
+
+  const handleSendDocumentForReview = async (
+    document: ComplianceDocumentWithFiles,
+  ) => {
+    try {
+      await dispatch(
+        sendComplianceDocumentForReview({
+          projectId: project.id,
+          documentId: document.id,
+        }),
+      ).unwrap();
+      toast.success("Document sent to the certifier for verification.");
+    } catch (error) {
+      toast.error(
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Could not send the document for verification.",
+      );
+    }
+  };
+
+  /** Opens an editable revision request on the document producer's thread. */
+  const handleRequestPartyRevision = (
+    document: ComplianceDocumentWithFiles,
+    outreach: ComplianceOutreachDetail,
+  ) => {
+    dispatch(
+      openModal({
+        type: "requestCompliancePartyRevision",
+        payload: {
+          projectId: project.id,
+          outreachId: outreach.id,
+          party: outreach.party,
+          contactName: outreach.contactName,
+          contactEmail: outreach.contactEmail,
+          subjectAddress: engagement?.subjectAddress ?? project.location,
+          documentLabel: complianceDocumentLabel(
+            document.documentType,
+            document.label,
+          ),
+          rejectionReason: document.rejectionReason ?? "",
+          attachments: document.files.map((file) => ({
+            fileId: file.id,
+            name: file.filename,
+            url: file.url,
+          })),
+        },
+      }),
     );
   };
 
@@ -2375,49 +2478,90 @@ export function ProjectComplianceTab({
             ) : null}
 
             <ul>
-              {checklistItems.map((item) => (
-                <ComplianceDocumentRow
-                  key={item.id}
-                  label={complianceDocumentLabel(item.documentType, item.label)}
-                  document={item}
-                  detail={checklistItemDetail(item.detail)}
-                  helperText={
-                    item.files.length ? undefined : "Not supplied yet"
-                  }
-                  mode={rowMode(item)}
-                  isBusy={
-                    isScopeBusy(
-                      scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
-                    ) || submissionClaimed
-                  }
-                  // By id, not by type. Twenty lines share CHECKLIST_ITEM, so
-                  // the consultant three weeks late on the geotechnical report
-                  // reddens that line and not the other nineteen.
-                  overdue={isRowOverdue(item)}
-                  onUpload={(file) =>
-                    void attachEvidence(file, {
-                      documentId: item.id,
-                      documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-                    })
-                  }
-                  onApprove={() => void handleApprove(item)}
-                  onReject={() => handleReject(item)}
-                  // Offered to an admin, and only while the file is still
-                  // being assembled. Once it is with the certifier the answer
-                  // to "is this needed" is theirs, and it comes back as an
-                  // approval or a rejection rather than as a row nobody has
-                  // to fill in any more.
-                  onSetNotRequired={
-                    isAdmin && !inReview && !checklistBlocked
-                      ? (notRequired) =>
-                          void handleSetNotRequired(item, notRequired)
-                      : undefined
-                  }
-                  onPreviewFile={handlePreviewFile}
-                  consultantAction={renderChecklistAction(item)}
-                  mappedFrom={mappedSourceFor(item)}
-                />
-              ))}
+              {checklistItems.map((item) => {
+                const sentForReview = isSentForReview(item);
+                const producer = item.rejectionReason
+                  ? producerForChecklistItem(item)
+                  : null;
+
+                return (
+                  <ComplianceDocumentRow
+                    key={item.id}
+                    label={complianceDocumentLabel(
+                      item.documentType,
+                      item.label,
+                    )}
+                    document={item}
+                    detail={checklistItemDetail(item.detail)}
+                    helperText={
+                      item.files.length ? undefined : "Not supplied yet"
+                    }
+                    mode={rowMode(item)}
+                    isBusy={
+                      isScopeBusy(
+                        scopeOf(item, ComplianceDocumentType.CHECKLIST_ITEM),
+                      ) || submissionClaimed
+                    }
+                    // By id, not by type. Twenty lines share CHECKLIST_ITEM, so
+                    // the consultant three weeks late on the geotechnical report
+                    // reddens that line and not the other nineteen.
+                    overdue={isRowOverdue(item)}
+                    onUpload={(file) =>
+                      void attachEvidence(file, {
+                        documentId: item.id,
+                        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
+                      })
+                    }
+                    onApprove={() => void handleApprove(item)}
+                    onReject={() => handleReject(item)}
+                    sentForReview={sentForReview}
+                    onSendForReview={
+                      item.files.length > 0 &&
+                      !sentForReview &&
+                      !item.rejectionReason &&
+                      !checklistBlocked
+                        ? () => void handleSendDocumentForReview(item)
+                        : undefined
+                    }
+                    // Offered to an admin, and only while the file is still
+                    // being assembled. Once it is with the certifier the answer
+                    // to "is this needed" is theirs, and it comes back as an
+                    // approval or a rejection rather than as a row nobody has
+                    // to fill in any more.
+                    onSetNotRequired={
+                      isAdmin &&
+                      !inReview &&
+                      !sentForReview &&
+                      !checklistBlocked
+                        ? (notRequired) =>
+                            void handleSetNotRequired(item, notRequired)
+                        : undefined
+                    }
+                    onPreviewFile={handlePreviewFile}
+                    consultantAction={
+                      producer ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isScopeBusy(
+                            complianceScope.partyReply(producer.id),
+                          )}
+                          onClick={() =>
+                            handleRequestPartyRevision(item, producer)
+                          }
+                        >
+                          <RefreshCw aria-hidden="true" />
+                          Request revision
+                        </Button>
+                      ) : (
+                        renderChecklistAction(item)
+                      )
+                    }
+                    mappedFrom={mappedSourceFor(item)}
+                  />
+                );
+              })}
             </ul>
 
           </ComplianceSectionCard>
@@ -2444,15 +2588,14 @@ export function ProjectComplianceTab({
         </div>
 
         {/* -------------------------------------------------------------
-            Send for review — the one send that puts the file with the
-            certifier. On offer while the collection is still open, and
-            gone the moment it has happened.
+            Send the remaining review documents. Items sent asynchronously
+            are left off rather than attached to the thread a second time.
 
             Full width and outside the grid on purpose: it is the one
             action that closes the whole engagement, so it must not sit
             inside a card that happens to be collapsed.
         ------------------------------------------------------------- */}
-        {allEvidenceIn ? (
+        {allEvidenceIn && unsentSubmissionDocuments.length > 0 ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success-light px-4 py-3">
             <p className="flex-1 font-medium text-foreground">
               Checklist pack ready for certifier review
@@ -2466,7 +2609,7 @@ export function ProjectComplianceTab({
                     type: "complianceComplete",
                     payload: {
                       projectId: project.id,
-                      documentCount: submissionDocuments.length,
+                      documentCount: unsentSubmissionDocuments.length,
                     },
                   }),
                 )

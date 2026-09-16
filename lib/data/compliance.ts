@@ -38,6 +38,7 @@ import {
 import {
   applicableRequiredDocuments,
   canSendRequiredPack,
+  hasSentCurrentDocument,
   hasSentRequiredPack,
   missingOutreachDocuments,
   sentToCertifierUrls,
@@ -1142,13 +1143,7 @@ export async function resolveComplianceDocument(params: {
       id: params.documentId,
       engagement: { projectId: params.projectId },
     },
-    select: {
-      id: true,
-      engagementId: true,
-      documentType: true,
-      label: true,
-      status: true,
-    },
+    include: { files: true },
   });
 
   if (!document) {
@@ -1163,6 +1158,13 @@ export async function resolveComplianceDocument(params: {
   if (!isApprovableDocumentType(document.documentType)) {
     throw new Error(
       `${complianceDocumentLabel(document.documentType, document.label)} is not reviewed by the certifier.`,
+    );
+  }
+
+  const engagement = await requireEngagement(document.engagementId);
+  if (!hasSentCurrentDocument(engagement, document)) {
+    throw new Error(
+      `${complianceDocumentLabel(document.documentType, document.label)} has not been sent to the certifier yet.`,
     );
   }
 
@@ -1401,6 +1403,66 @@ export async function setComplianceDocumentNotRequired(params: {
 }
 
 /**
+ * Sends one checklist document to the certifier as soon as it is available.
+ *
+ * This is intentionally independent of the engagement's IN_REVIEW status. The
+ * rest of the checklist can still be collected while this item is assessed;
+ * the outbound email itself is the durable marker that enables its decision
+ * controls. Sending a replacement works the same way because its new URL will
+ * not appear in the mail trail until this call succeeds.
+ */
+export async function sendComplianceDocumentForReview(
+  engagementId: string,
+  documentId: string,
+) {
+  const engagement = await requireEngagement(engagementId);
+  const blocked = checklistBlockedReason(engagement);
+  if (blocked) throw new Error(blocked);
+
+  const document = engagement.documents.find(
+    (candidate) => candidate.id === documentId,
+  );
+  if (!document) {
+    throw new Error("Compliance document not found on this project.");
+  }
+  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
+    throw new Error("Only a checklist item can be sent for early verification.");
+  }
+  if (isNotRequired(document.status) || document.files.length === 0) {
+    throw new Error("Upload the checklist document before sending it for verification.");
+  }
+  if (document.status === ComplianceDocumentStatus.APPROVED) {
+    throw new Error("This checklist document has already been approved.");
+  }
+  if (document.rejectionReason) {
+    throw new Error("Upload the revised document before sending it back to the certifier.");
+  }
+  if (hasSentCurrentDocument(engagement, document)) {
+    return { subject: "", attachmentCount: 0, alreadySent: true as const };
+  }
+
+  const label = complianceDocumentLabel(
+    document.documentType,
+    document.label,
+  );
+  return sendCertifierReply(engagementId, {
+    body: [
+      engagement.certifierName
+        ? `<p>Hi ${escapeEmailHtml(engagement.certifierName)},</p>`
+        : "<p>Hi,</p>",
+      `<p>The <strong>${escapeEmailHtml(label)}</strong> for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> is ready and attached.</p>`,
+      "<p>Could you please verify this item while we continue collecting the rest of the checklist documents, and let us know if it needs revising?</p>",
+      "<p>Kind regards,<br/>Royal Constructions</p>",
+    ].join("\n"),
+    attachments: document.files.map((file) => ({
+      fileId: file.id,
+      name: file.filename,
+      url: file.url,
+    })),
+  });
+}
+
+/**
  * Sends the completed checklist to the certifier for review.
  *
  * Moves the engagement to IN_REVIEW first, then sends. That order is
@@ -1439,6 +1501,18 @@ export async function sendComplianceForReview(engagementId: string) {
     );
   }
 
+  const requiredEvidence = evidence.filter(
+    (document) => !isNotRequired(document.status),
+  );
+  const unsentEvidence = requiredEvidence.filter(
+    (document) => !hasSentCurrentDocument(engagement, document),
+  );
+  if (unsentEvidence.length === 0) {
+    throw new Error(
+      "The certifier already has the current copy of every checklist document.",
+    );
+  }
+
   const claimed = await advanceEngagementStatus(
     engagementId,
     [
@@ -1462,8 +1536,9 @@ export async function sendComplianceForReview(engagementId: string) {
     );
   }
 
-  // Every file behind that set, in document order. The message says everything
-  // is attached, and before this nothing was.
+  // Every current file the certifier has not already received, in document
+  // order. Early per-item review sends stay on the same thread and must not be
+  // attached again when the rest of the checklist becomes complete.
   //
   // Rows marked not required are left out even where they still hold a file —
   // a line can be waved off after something was uploaded against it, and the
@@ -1474,8 +1549,7 @@ export async function sendComplianceForReview(engagementId: string) {
   // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
   // which asserts the total against the mailbox's MaxSendSize and switches to
   // an upload session past the inline ceiling on its own.
-  const attachments = evidence
-    .filter((doc) => !isNotRequired(doc.status))
+  const attachments = unsentEvidence
     .flatMap((doc) =>
       doc.files.map((file) => ({
         fileId: file.id,
@@ -1484,12 +1558,15 @@ export async function sendComplianceForReview(engagementId: string) {
       })),
     );
 
+  const isRemainingSend = unsentEvidence.length < requiredEvidence.length;
   let sent;
   try {
     sent = await sendCertifierReply(engagementId, {
       body: [
         "<p>Hi,</p>",
-        `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
+        isRemainingSend
+          ? `<p>The remaining checklist documents for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> are attached. Together with the items already sent on this thread, the checklist pack is now complete.</p>`
+          : `<p>The checklist for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
         "<p>Could you review it and let us know if anything needs revising?</p>",
         "<p>Kind regards,<br/>Royal Constructions</p>",
       ].join("\n"),
@@ -1512,7 +1589,7 @@ export async function sendComplianceForReview(engagementId: string) {
 
   after(async () => {
     await notifyCompliance("complianceReviewSent", engagement.projectId, {
-      documentCount: evidence.length,
+      documentCount: unsentEvidence.length,
     });
   });
 

@@ -587,6 +587,31 @@ export const resolveComplianceDocument = createAsyncThunk<
   }
 });
 
+/** Sends one checklist item without waiting for the rest of the pack. */
+export const sendComplianceDocumentForReview = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string; documentId: string },
+  { rejectValue: string }
+>(
+  "projects/sendComplianceDocumentForReview",
+  async ({ projectId, documentId }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/documents/${documentId}/review`,
+        { method: "POST" },
+        "Unable to send the document for verification",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the document for verification",
+      );
+    }
+  },
+);
+
 /**
  * Marks a checklist line as not applying to this job, or puts it back.
  *
@@ -1184,6 +1209,10 @@ const complianceOperations = [
   complianceOperation(sendCertifierOutreach, () => complianceScope.outreach),
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
+  complianceOperation(
+    sendComplianceDocumentForReview,
+    complianceScope.document,
+  ),
   complianceOperation(
     setComplianceDocumentNotRequired,
     complianceScope.document,

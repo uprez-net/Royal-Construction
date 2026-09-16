@@ -96,3 +96,23 @@ export function buildPartyOutreachBody(params: {
     .filter(Boolean)
     .join("\n");
 }
+
+/** Builds the editable email that sends a certifier rejection to its producer. */
+export function buildPartyRevisionBody(params: {
+  contactName: string | null;
+  subjectAddress: string;
+  documentLabel: string;
+  rejectionReason: string;
+}): string {
+  const greeting = params.contactName
+    ? `Hi ${escapeEmailHtml(params.contactName)},`
+    : "Hi,";
+
+  return [
+    `<p>${greeting}</p>`,
+    `<p>The certifier has reviewed the <strong>${escapeEmailHtml(params.documentLabel)}</strong> for <strong>${escapeEmailHtml(params.subjectAddress)}</strong> and asked for a revision:</p>`,
+    `<blockquote><p>${escapeEmailHtml(params.rejectionReason)}</p></blockquote>`,
+    "<p>The reviewed copy is attached. Could you please revise the document to address this feedback and reply on this thread with the updated version?</p>",
+    "<p>Kind regards,<br/>Royal Constructions</p>",
+  ].join("\n");
+}
