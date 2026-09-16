@@ -142,11 +142,13 @@
      on base --royal-gold is 2.77:1; on the ink 5.37:1 and on this hover step
      6.93:1, measured in tests/design/brand-contrast.test.ts. */
   --royal-gold-ink-hover: oklch(0.470 0.12 77.3);
-  /* Gold AS TEXT. In light these are the same colour: the fill value already
-     clears AA on --card/--background/--muted (5.37/5.06/4.84:1). They diverge
-     in dark, where a fill carrying white text must darken and text on a dark
-     surface must lighten — one value cannot do both. */
-  --royal-gold-ink-text: var(--royal-gold-ink);
+  /* Gold AS TEXT. The same colour as the fill in light — where the fill already
+     clears AA as text (5.37/5.06/4.84:1) — but written out rather than aliased:
+     the contrast suite parses literal oklch() values, and a var() reference put
+     this token beyond the checks that exist to guard it. Keep the two in step.
+     They diverge in dark, where a fill carrying white text must darken and text
+     on a dark surface must lighten — one value cannot do both. */
+  --royal-gold-ink-text: oklch(0.530 0.12 77.3);
 
   /* Pipeline stage ramp — cool grey through gold as likelihood rises, then
      green for banked stages. The colour encodes progression, so the chart

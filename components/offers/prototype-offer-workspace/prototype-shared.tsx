@@ -585,7 +585,7 @@ function AddDwellingTile({ onClick }: { readonly onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="grid h-11 place-items-center self-start rounded-lg border border-dashed border-border bg-muted/20 text-sm font-medium text-muted-foreground transition-colors hover:border-royal-gold/50 hover:bg-royal-gold-light/40 hover:text-royal-gold-ink-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+      className="grid h-11 place-items-center self-start rounded-lg border border-dashed border-border bg-muted/20 text-sm font-medium text-muted-foreground transition-colors hover:border-royal-gold/50 hover:bg-royal-gold-light/40 hover:text-royal-gold-ink-text dark:hover:bg-royal-gold-ink dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
     >
       <span className="flex items-center gap-2">
         <Plus className="size-4" aria-hidden="true" />

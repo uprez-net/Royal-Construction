@@ -78,6 +78,27 @@ test("dark gold-as-text clears AA on the surfaces it sits on", () => {
   }
 });
 
+// The light theme's two gold tokens must stay the same colour: the split exists
+// for dark only, and a drift in light would go unnoticed otherwise.
+test("light gold-as-text matches the light fill", () => {
+  const fill = themeColour(css, ":root", "--royal-gold-ink");
+  const text = themeColour(css, ":root", "--royal-gold-ink-text");
+
+  assert.deepEqual(text, fill);
+});
+
+// Gold text on the light-gold chip: --royal-gold-light is never redefined for
+// dark, so it stays near-white there while the dark text token lightens. That
+// pairing measured 2.81:1 in dark, which is why the dashed add-dwelling hover
+// switches to a gold FILL with white text under .dark instead.
+test("gold text on the light-gold chip clears AA in light", () => {
+  const chip = themeColour(css, ":root", "--royal-gold-light");
+  const text = themeColour(css, ":root", "--royal-gold-ink-text");
+
+  const measured = contrastRatio(chip, text);
+  assert.ok(measured >= AA_TEXT, `gold on --royal-gold-light measures ${ratio(measured)}`);
+});
+
 test("the dark hover is a darker step of the dark ink", () => {
   const ink = themeColour(css, ".dark", "--royal-gold-ink");
   const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
