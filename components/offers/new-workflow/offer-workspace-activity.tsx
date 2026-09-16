@@ -228,8 +228,15 @@ function mergeTimeline(
       : null;
     // repliedAt is stamped on the first reply and lastReplyAt on the latest, so
     // the second only adds anything once the client has written back again.
-    const lastReplyWhen = send.lastReplyAt
-      ? formatActivityWhen(send.lastReplyAt, now)
+    // Decided on the instants, never on the labels: formatActivityWhen renders
+    // to the minute, so a second reply arriving seconds after the first formats
+    // identically and the timeline would hide it.
+    const hasLaterReply =
+      send.lastReplyAt !== null &&
+      send.lastReplyAt !== undefined &&
+      send.lastReplyAt !== send.repliedAt;
+    const lastReplyWhen = hasLaterReply
+      ? formatActivityWhen(send.lastReplyAt as string, now)
       : null;
 
     return {
@@ -252,9 +259,7 @@ function mergeTimeline(
             <span className="ml-1 inline-flex items-center gap-1 text-success">
               <Reply className="size-3" aria-hidden="true" /> replied{" "}
               {repliedWhen}
-              {lastReplyWhen && lastReplyWhen !== repliedWhen
-                ? ` · last reply ${lastReplyWhen}`
-                : null}
+              {lastReplyWhen ? ` · last reply ${lastReplyWhen}` : null}
             </span>
           ) : null}
         </span>

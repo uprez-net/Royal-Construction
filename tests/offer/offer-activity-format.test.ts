@@ -22,3 +22,18 @@ test("REGRESSION: a date from a prior year shows its year", () => {
 
   assert.match(when, /2025/);
 });
+
+// The timeline used to decide whether a later reply existed by comparing two
+// FORMATTED labels. This is why that was wrong: the formatter stops at the
+// minute, so replies seconds apart are indistinguishable once formatted, and a
+// client who wrote back twice in a minute had their latest reply hidden. The
+// component compares the ISO instants now; this pins the property that forced
+// it, so nobody reintroduces a label comparison.
+test("two instants in the same minute format identically", () => {
+  const now = new Date("2026-09-17T10:00:00+10:00");
+  const first = formatActivityWhen("2026-09-17T09:30:05+10:00", now);
+  const second = formatActivityWhen("2026-09-17T09:30:48+10:00", now);
+
+  assert.equal(first, second);
+  assert.notEqual("2026-09-17T09:30:05+10:00", "2026-09-17T09:30:48+10:00");
+});
