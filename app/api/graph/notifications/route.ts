@@ -643,11 +643,6 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             continue;
           }
 
-          if (mailbox === 'admin') {
-            console.log(`  Ignored uncorrelated admin mailbox message ${message.id}`);
-            continue;
-          }
-
           // Check if this message was already processed before calling the LLM extraction
           if (message.id && await isMessageAlreadyProcessed(message.id)) {
             console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
