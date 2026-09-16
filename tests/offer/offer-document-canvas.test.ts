@@ -81,3 +81,21 @@ test("a human-written row carries no marker", () => {
 
   assert.doesNotMatch(html, /AI draft/);
 });
+
+// Keyboard focus on a canvas field only tinted its border to 60% gold, about
+// 1.8:1 against the white field, so tabbing through the document showed no
+// usable indicator. The ink border (5.37:1) plus a ring is a visible one.
+test("every editable field focuses to the ink border, not the faint gold", () => {
+  const html = render(INITIAL_OFFER_DRAFT.inclusionSchedule);
+  const textareas = html.match(/<textarea[^>]*>/g) ?? [];
+
+  assert.ok(textareas.length > 10, "the canvas should be mostly editable text");
+  for (const textarea of textareas) {
+    assert.match(
+      textarea,
+      /focus:border-royal-gold-ink(?![\w-])/,
+      `editable field has no ink focus border: ${textarea.slice(0, 120)}`,
+    );
+    assert.doesNotMatch(textarea, /royal-gold\/60/);
+  }
+});

@@ -72,7 +72,7 @@ ${CHECKLIST_EXTRACTION_CONTRACT}
     <type name="SURVEY">A survey, a signed survey, a detail and level survey, a contour survey, or a surveyor's identification report.</type>
     <type name="FULL_ARCHITECTURAL_DESIGN">Architectural drawings, architectural plans, the architectural set, or design documentation. Use this even where the line says only "architectural plans" — a certifier asking for plans on a checklist means the set the job is assessed on.</type>
     <type name="PLANNING_CERTIFICATE_10_7">A section 10.7 planning certificate, a 10.7(2) and (5), or the older section 149 certificate.</type>
-    <type name="HOME_INSURANCE">HBCF, home warranty insurance, or Home Building Compensation Fund cover.</type>
+    <type name="HOME_INSURANCE">HBCF, HWI, home warranty insurance, or Home Building Compensation Fund cover. HWI is the legacy abbreviation for the same HBCF/home warranty certificate.</type>
   </group>
 
   <group name="commissioned from a consultant">

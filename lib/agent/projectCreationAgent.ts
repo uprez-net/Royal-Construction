@@ -1,4 +1,5 @@
-'use server';
+import "server-only";
+
 import { Output, stepCountIs, NoObjectGeneratedError, TypeValidationError, generateText, tool } from "ai";
 import { gateway } from "@/lib/model";
 import z from "zod";

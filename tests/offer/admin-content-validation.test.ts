@@ -36,3 +36,24 @@ test("the HBCF schema still accepts a real claim", () => {
   });
   assert.equal(result.success, true);
 });
+
+test("the HBCF schema rejects negative values", () => {
+  for (const field of ["claimAmount", "loadingChargePercent"] as const) {
+    const result = hbfcClaimDataSchema.safeParse({
+      claimAmount: 800_000,
+      loadingChargePercent: 30,
+      totalPremiumToBePaid: 0,
+      [field]: -1,
+    });
+    assert.equal(result.success, false, `accepted a negative ${field}`);
+  }
+});
+
+test("the HBCF schema accepts zero", () => {
+  const result = hbfcClaimDataSchema.safeParse({
+    claimAmount: 0,
+    loadingChargePercent: 0,
+    totalPremiumToBePaid: 0,
+  });
+  assert.equal(result.success, true);
+});

@@ -20,7 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { REQUIRED_COMPLIANCE_DOCUMENTS } from "@/constants/complianceDocuments";
+import {
+  isOptionalForOutreach,
+  REQUIRED_COMPLIANCE_DOCUMENTS,
+} from "@/constants/complianceDocuments";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
@@ -39,7 +42,7 @@ import { fetchJson } from "@/utils/fetch";
  * reached and has not resolved yet, so storing it would mean a setState in the
  * effect body purely to say what the cursor already says.
  */
-type DiscoveryState = "waiting" | "found" | "missing";
+type DiscoveryState = "waiting" | "found" | "missing" | "optional-missing";
 
 type Row = {
   type: (typeof REQUIRED_COMPLIANCE_DOCUMENTS)[number]["type"];
@@ -146,6 +149,9 @@ export function CertifierDiscoveryModal({
             fileName: response.data.file?.name,
           });
           setCursor((value) => value + 1);
+        } else if (isOptionalForOutreach(row.type)) {
+          setRow(cursor, { state: "optional-missing" });
+          setCursor((value) => value + 1);
         } else {
           setRow(cursor, { state: "missing" });
         }
@@ -154,12 +160,19 @@ export function CertifierDiscoveryModal({
         // A failed probe is treated as "not found" rather than as a dead end:
         // the admin can still upload the document by hand, which is the whole
         // fallback this screen exists to offer.
-        setRow(cursor, { state: "missing" });
-        setError(
-          discoveryError instanceof Error
-            ? discoveryError.message
-            : `Could not look for ${row.label}.`,
-        );
+        if (isOptionalForOutreach(row.type)) {
+          setRow(cursor, { state: "optional-missing" });
+          setCursor((value) => value + 1);
+        } else {
+          setRow(cursor, { state: "missing" });
+        }
+        if (!isOptionalForOutreach(row.type)) {
+          setError(
+            discoveryError instanceof Error
+              ? discoveryError.message
+              : `Could not look for ${row.label}.`,
+          );
+        }
       }
     })();
 
@@ -190,7 +203,9 @@ export function CertifierDiscoveryModal({
     }
   };
 
-  const allFound = rows.every((row) => row.state === "found");
+  const packReady = rows.every(
+    (row) => row.state === "found" || row.state === "optional-missing",
+  );
   const isDone = cursor >= REQUIRED_COMPLIANCE_DOCUMENTS.length;
 
   const handleSend = async () => {
@@ -221,7 +236,7 @@ export function CertifierDiscoveryModal({
    * button below can retry.
    */
   useEffect(() => {
-    if (!open || !allFound || !isDone || sentRef.current) {
+    if (!open || !packReady || !isDone || sentRef.current) {
       return;
     }
     sentRef.current = true;
@@ -229,7 +244,7 @@ export function CertifierDiscoveryModal({
     // handleSend is recreated every render and is not part of the condition
     // this effect is watching.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, allFound, isDone]);
+  }, [open, packReady, isDone]);
 
   return (
     <Dialog
@@ -249,9 +264,9 @@ export function CertifierDiscoveryModal({
             {isSending ? "Sending documents to certifier…" : "Collecting documents"}
           </DialogTitle>
           <DialogDescription>
-            Looking for each required document on the project. Anything missing
-            can be uploaded here, and the whole pack goes to the certifier as
-            soon as it is complete.
+            Looking for each document on the project. Missing required items can
+            be uploaded here. The full architectural design is included when it
+            is found, but does not hold up the certifier pack.
           </DialogDescription>
         </DialogHeader>
 
@@ -300,6 +315,11 @@ export function CertifierDiscoveryModal({
                     className="size-4 text-warning-ink"
                     aria-hidden="true"
                   />
+                ) : displayState === "optional-missing" ? (
+                  <CheckCircle2
+                    className="size-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <span className="block size-4 rounded-full border border-border" />
                 )}
@@ -322,6 +342,10 @@ export function CertifierDiscoveryModal({
                 ) : displayState === "missing" ? (
                   <span className="text-warning-ink">
                     {row.label} not found, please upload
+                  </span>
+                ) : displayState === "optional-missing" ? (
+                  <span className="text-muted-foreground">
+                    {row.label} not found — optional for this send
                   </span>
                 ) : (
                   <span className="text-muted-foreground/70">{row.label}</span>
@@ -371,7 +395,7 @@ export function CertifierDiscoveryModal({
           <Button
             type="button"
             disabled={
-              !allFound ||
+              !packReady ||
               !isDone ||
               isSending ||
               outreach.status === "pending"

@@ -1,3 +1,4 @@
+
 // Pure, framework-agnostic readiness helpers for the Offer phase: how close an
 // offer's validity is to expiring, and the enumerated blockers that stand
 // between the current draft and an email to the client. Kept side-effect free so

@@ -88,6 +88,16 @@ export const DEFAULT_RATE_CONSTANTS: Record<RateConstantKey, number> = {
   PRICE_OF_EACH_LINEN: 500,
 };
 
+// The rate constants a formula is actually priced with: stored admin overrides
+// on top of the defaults, exactly as the offer prefill merges them. The admin
+// editor used to validate against the stored keys alone, so a formula using a
+// constant the admin had never overridden was flagged unknown and blocked Save.
+export function withDefaultRateConstants(
+  stored: Partial<Record<RateConstantKey, number>>,
+): Record<RateConstantKey, number> {
+  return { ...DEFAULT_RATE_CONSTANTS, ...stored };
+}
+
 // ─── Phase 2 line-item formulas ───
 //
 // The default formula strings that populate each work line item in the admin
