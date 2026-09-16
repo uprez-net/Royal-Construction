@@ -144,10 +144,6 @@ const KNOWN_GAPS: ReadonlyArray<readonly [file: string, classes: string]> = [
     "components/offers/admin/offer-content-header.tsx",
     "border-2 border-royal-gold bg-royal-gold text-white",
   ],
-  [
-    "components/offers/new-workflow/shell/offer-step-rail.tsx",
-    "bg-royal-gold text-white",
-  ],
 ];
 
 const CLOSING: Readonly<Record<string, string>> = { "{": "}", "(": ")" };
