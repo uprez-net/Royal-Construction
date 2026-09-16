@@ -43,6 +43,10 @@ type OfferSummaryStripProps = {
   readonly effectiveMargin: EffectiveMargin;
   readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
+  // Until the offer loads these figures are the seeded defaults, and a price
+  // stated with confidence beside a "Loading this offer…" pane is worse than no
+  // price: it reads as this offer's money. Show the cells empty instead.
+  readonly awaitingOffer: boolean;
 };
 
 export function OfferSummaryStrip({
@@ -50,6 +54,7 @@ export function OfferSummaryStrip({
   effectiveMargin,
   pricing,
   totalAreaSqm,
+  awaitingOffer,
 }: OfferSummaryStripProps) {
   const selected = customerPrice.selectedContractValueIncGst;
   const computed = pricing.contractValueIncGst;
@@ -59,13 +64,21 @@ export function OfferSummaryStrip({
   const overridden = Math.round(selected) !== Math.round(computed);
   const perSqm = totalAreaSqm > 0 ? selected / totalAreaSqm : 0;
 
-  const cells: readonly (readonly [string, string])[] = [
-    ["Building area", totalAreaSqm > 0 ? `${totalAreaSqm} m²` : "—"],
-    ["Direct total", formatCurrency(pricing.directTotal)],
-    ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
-    ["GST", formatCurrency(pricing.gstAmount)],
-    ["Per m²", totalAreaSqm > 0 ? formatCurrency(perSqm) : "—"],
-  ];
+  const cells: readonly (readonly [string, string])[] = awaitingOffer
+    ? [
+        ["Building area", "—"],
+        ["Direct total", "—"],
+        ["Cost before fee", "—"],
+        ["GST", "—"],
+        ["Per m²", "—"],
+      ]
+    : [
+        ["Building area", totalAreaSqm > 0 ? `${totalAreaSqm} m²` : "—"],
+        ["Direct total", formatCurrency(pricing.directTotal)],
+        ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
+        ["GST", formatCurrency(pricing.gstAmount)],
+        ["Per m²", totalAreaSqm > 0 ? formatCurrency(perSqm) : "—"],
+      ];
 
   return (
     // The old right rail was an <aside>; this is its replacement and keeps the
