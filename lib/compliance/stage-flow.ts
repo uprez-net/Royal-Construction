@@ -960,8 +960,8 @@ export function complianceStageFlow(
 
   const main = [
     surveyorStage(engagement, now),
-    architectStage(engagement, now),
     councilStage(engagement, now),
+    architectStage(engagement, now),
     certifierStage(engagement, now),
     checklistStage(engagement, now),
     planningPortalStage(engagement, now),

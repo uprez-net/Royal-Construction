@@ -86,8 +86,12 @@ export const startPartyOutreachSchema = z.object({
   contactName: normalizedStringSchema.optional(),
   contactEmail: z.email().trim().toLowerCase(),
   contactPhone: normalizedStringSchema.optional(),
-  /** An extra line on the outreach — "we need this by Friday". */
-  note: normalizedStringSchema.optional(),
+  /** The reviewed and edited HTML body that will be sent to the party. */
+  body: z
+    .string()
+    .trim()
+    .min(1, "Email body is required")
+    .max(100_000, "Email body is too long"),
   /**
    * The checklist line a consultant is being engaged against.
    *
@@ -266,6 +270,15 @@ export const estateDeveloperSchema = z
 export type EstateDeveloperInput = z.infer<typeof estateDeveloperSchema>;
 /** The browser's half — see `ExternalApplicationRequest`. */
 export type EstateDeveloperRequest = z.input<typeof estateDeveloperSchema>;
+
+/** Whether this compliance file needs a Development Application. */
+export const developmentApplicationRequirementSchema = z.object({
+  required: z.boolean(),
+});
+
+export type DevelopmentApplicationRequirementInput = z.infer<
+  typeof developmentApplicationRequirementSchema
+>;
 
 // ============================================================================
 // Applications to outside bodies
@@ -796,6 +809,10 @@ export const partyReplySchema = z.object({
   outreachId: idSchema,
   body: z.string().trim().min(1, "A message is required"),
   attachments: z.array(certifierReplyAttachmentSchema).default([]),
+  /** Rich editor output is sanitized server-side; ordinary thread replies stay plain. */
+  bodyFormat: z.enum(["plain", "html"]).optional(),
+  /** Extra files are resolved from trusted File rows rather than client URLs. */
+  extraAttachmentIds: extraAttachmentsSchema.optional(),
 });
 
 export type PartyReplyInput = z.infer<typeof partyReplySchema>;

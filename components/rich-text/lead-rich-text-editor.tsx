@@ -67,6 +67,10 @@ type LeadRichTextEditorProps = {
   canSaveNote: boolean;
   isSavingNote: boolean;
   ariaLabelledBy?: string;
+  hideSaveButton?: boolean;
+  hideMentionInfo?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
 };
 
 type MentionElementNode = LeadRichTextNode & {
@@ -627,6 +631,10 @@ export function LeadRichTextEditor({
   canSaveNote,
   isSavingNote,
   ariaLabelledBy,
+  hideSaveButton = false,
+  hideMentionInfo = false,
+  disabled = false,
+  placeholder = "Write a note. Type @ to mention a team member.",
 }: LeadRichTextEditorProps) {
   const initialDocument = useMemo(
     () => value ?? createLeadNotesDocument({ plainText: "" }),
@@ -681,6 +689,7 @@ export function LeadRichTextEditor({
         editor={editor}
         onReplaceNoteText={replaceNoteText}
         value={value}
+        hideMentionInfo={hideMentionInfo}
       />
       <Plate
         editor={editor}
@@ -696,33 +705,36 @@ export function LeadRichTextEditor({
           <EditorContainer variant="leadNote">
             <Editor
               variant="leadNote"
+              disabled={disabled}
               aria-labelledby={ariaLabelledBy}
-              placeholder="Write a note. Type @ to mention a team member."
+              placeholder={placeholder}
             />
           </EditorContainer>
         </MentionUsersContext.Provider>
       </Plate>
 
-      <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
-        <button
-          type="button"
-          className="inline-flex h-8 items-center gap-1 rounded bg-[#0D9488] px-3 text-xs font-medium text-white hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={onSaveNote}
-          disabled={!canSaveNote || isSavingNote}
-        >
-          {isSavingNote ? (
-            <>
-              <div className="size-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="size-3.5" />
-              Save Note
-            </>
-          )}
-        </button>
-      </div>
+      {!hideSaveButton ? (
+        <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded bg-[#0D9488] px-3 text-xs font-medium text-white hover:bg-[#0f766e] disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onSaveNote}
+            disabled={!canSaveNote || isSavingNote}
+          >
+            {isSavingNote ? (
+              <>
+                <div className="size-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="size-3.5" />
+                Save Note
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
-import { revalidateTag } from "next/cache";
+import { revalidateTag, updateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
@@ -29,7 +29,9 @@ import {
   LEGACY_CALC_VERSION,
   deserializeWorkspace,
   parseWorkspaceState,
+  planWorkspaceSave,
   serializeWorkspace,
+  validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
   type PersistedOfferWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
@@ -103,6 +105,9 @@ type LoadedOfferWorkspace = {
   // The offer was still editable, so the current admin defaults were re-applied
   // and the returned snapshot + stateVersion are the refreshed ones.
   adminContentRefreshed?: boolean;
+  // The project a handed-off (PROJECT) offer created, so Open Project links to
+  // it after a reload. Null when there is none; absent below PROJECT.
+  projectId?: string | null;
 };
 
 type OfferRow = {
@@ -330,6 +335,22 @@ async function attachContractParticulars(
   };
 }
 
+// The handoff creates the project against the lead, and only the tab that ran it
+// ever learned its id, so after a reload Open Project had nowhere to go.
+async function attachProjectId(
+  loaded: LoadedOfferWorkspace,
+  leadId: number,
+): Promise<LoadedOfferWorkspace> {
+  if (loaded.status !== OfferStatus.PROJECT) {
+    return loaded;
+  }
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { project: { select: { id: true } } },
+  });
+  return { ...loaded, projectId: lead?.project?.id ?? null };
+}
+
 // Mint the next base reference (RC-Q-YYYY-NNN) inside a transaction.
 async function mintOfferReference(
   tx: Prisma.TransactionClient,
@@ -343,9 +364,11 @@ async function mintOfferReference(
   return `RC-Q-${year}-${String(counter.lastSeq).padStart(3, "0")}`;
 }
 
+// No actor argument on this or any action below: each is a Server Action, so a
+// caller-supplied id could put anyone's name on the offer or its audit trail.
+// The actor is always the user the access check signed in.
 export async function loadActiveOfferWorkspace(
   leadId: number,
-  actorId?: string,
 ): Promise<LoadedOfferWorkspace> {
   const access = await authorizeLeadAccess(leadId);
   if (!access.ok) {
@@ -370,20 +393,26 @@ export async function loadActiveOfferWorkspace(
         });
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-      return attachSignerStatus(
-        await attachContractParticulars(
-          await attachDeclineReason(
-            await reapplyAdminContentIfStale(toLoaded(healed)),
+      return attachProjectId(
+        await attachSignerStatus(
+          await attachContractParticulars(
+            await attachDeclineReason(
+              await reapplyAdminContentIfStale(toLoaded(healed)),
+            ),
           ),
         ),
+        leadId,
       );
     }
-    return attachSignerStatus(
-      await attachContractParticulars(
-        await attachDeclineReason(
-          await reapplyAdminContentIfStale(toLoaded(existing)),
+    return attachProjectId(
+      await attachSignerStatus(
+        await attachContractParticulars(
+          await attachDeclineReason(
+            await reapplyAdminContentIfStale(toLoaded(existing)),
+          ),
         ),
       ),
+      leadId,
     );
   }
 
@@ -397,7 +426,7 @@ export async function loadActiveOfferWorkspace(
         baseReference,
         revisionNumber: 1,
         isActive: true,
-        createdById: actorId,
+        createdById: access.user.id,
         offerStatus: OfferStatus.PENDING,
         amount: new Prisma.Decimal(0),
         gstAmount: new Prisma.Decimal(0),
@@ -412,7 +441,13 @@ export async function loadActiveOfferWorkspace(
 type SaveResult =
   | { ok: true; stateVersion: number }
   | { ok: false; reason: "stale"; currentStateVersion: number | null }
-  | { ok: false; reason: "superseded" };
+  | { ok: false; reason: "superseded" }
+  // The save would change a step that is frozen at the offer's stored status
+  // (lockedSnapshotChanges), typically because another tab issued the offer.
+  | { ok: false; reason: "locked" }
+  // The snapshot does not satisfy the persisted schema, or names an image
+  // outside Royal's Blob storage.
+  | { ok: false; reason: "invalid" };
 
 export type OfferSigningStatusPoll =
   | {
@@ -518,20 +553,67 @@ export async function saveOfferWorkspace(input: {
   // today's rules; anything already saved keeps its stored pin forever.
   const storedRow = await prisma.offer.findUnique({
     where: { id: input.offerId },
-    select: { workspaceState: true },
+    select: {
+      workspaceState: true,
+      offerStatus: true,
+      amount: true,
+      gstAmount: true,
+      totalAmount: true,
+      contractValueIncGst: true,
+    },
   });
+  if (storedRow === null) {
+    return { ok: false, reason: "stale", currentStateVersion: null };
+  }
   const persisted = pinCalcVersion(
     serializeWorkspace(input.snapshot),
-    readStoredCalcVersion(storedRow?.workspaceState),
+    readStoredCalcVersion(storedRow.workspaceState),
   );
+  const validated = validatePersistedWorkspace(persisted);
+  if (!validated.ok) {
+    console.error(
+      `[offer-workspace] refused an invalid snapshot for offer ${input.offerId}: ${validated.error}`,
+    );
+    return { ok: false, reason: "invalid" };
+  }
+
+  // The workspace locks a step's controls once the offer is issued, but this
+  // action writes the whole snapshot it is given. A tab still showing the offer
+  // as pending after another tab sent it could otherwise change the cost lines
+  // and reprice an issued offer. An accepted save still writes the frozen parts
+  // as stored, so a tab's hydrated form of them never moves the price.
+  const storedStatus = storedRow.offerStatus.toLowerCase() as OfferWorkspaceStatus;
+  let storedState: PersistedOfferWorkspaceState | null = null;
+  if (storedRow.workspaceState !== null) {
+    try {
+      storedState = parseWorkspaceState(storedRow.workspaceState);
+    } catch (error) {
+      // Unreadable, so nothing can be compared. A pending offer has no issued
+      // record to protect and the save repairs the row; an issued one keeps it.
+      if (storedStatus !== "pending") {
+        console.error(
+          `[offer-workspace] stored snapshot for issued offer ${input.offerId} is unreadable; refusing the save:`,
+          error,
+        );
+        return { ok: false, reason: "locked" };
+      }
+    }
+  }
+  const plan = planWorkspaceSave(storedStatus, storedState, validated.state);
+  if (!plan.ok) {
+    return { ok: false, reason: "locked" };
+  }
+  const saved = plan.state;
+  const savedSnapshot = deserializeWorkspace(saved);
   // Resolve the price through the same path the Tender/Contract and the project
   // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
   // blank override serialises to 0 cents — so reading it here stamped $0 on every
   // offer priced the normal way, which is what the Versions timeline displayed.
   const selectedContractValueIncGst = buildProposalInput(
-    // Deliberately the pinned state, not input.snapshot: the money columns must
-    // agree with what was actually persisted, including its calculation rules.
-    deserializeWorkspace(persisted),
+    // Deliberately the written state, not input.snapshot: the money columns must
+    // agree with what was actually persisted, including its calculation rules
+    // and, once issued, its stored frozen slices.
+    savedSnapshot,
   ).customerPrice.selectedContractValueIncGst;
   const contractValue = new Prisma.Decimal(selectedContractValueIncGst);
   // The three money columns the Offers list prints (amount / GST / total) were
@@ -541,24 +623,35 @@ export async function saveOfferWorkspace(input: {
   // disagree — see splitContractValueByGst for why GST is a back-solve.
   const priceSplit = splitContractValueByGst({
     contractValueIncGst: selectedContractValueIncGst,
-    gstRate: input.snapshot.workspacePricingSettings.gstRate,
+    gstRate: savedSnapshot.workspacePricingSettings.gstRate,
   });
+  const amount = new Prisma.Decimal(priceSplit.amountExGst);
+  const gstAmount = new Prisma.Decimal(priceSplit.gstAmount);
+  const totalAmount = new Prisma.Decimal(priceSplit.totalIncGst);
+  const moneyChanged =
+    !sameMoney(storedRow.amount, amount) ||
+    !sameMoney(storedRow.gstAmount, gstAmount) ||
+    !sameMoney(storedRow.totalAmount, totalAmount) ||
+    !sameMoney(storedRow.contractValueIncGst, contractValue);
 
   // isActive is part of the predicate, not just the check above: forking a
   // revision deactivates this row without touching its stateVersion, so a save
   // that passed the check moments earlier would still satisfy an id+version
-  // predicate and land on the freshly archived revision.
+  // predicate and land on the freshly archived revision. offerStatus is there
+  // for the same reason: the lock above was decided against that status, and a
+  // send landing in between must not let this write through.
   const result = await prisma.offer.updateMany({
     where: {
       id: input.offerId,
       isActive: true,
+      offerStatus: storedRow.offerStatus,
       stateVersion: input.expectedStateVersion,
     },
     data: {
-      workspaceState: persisted as unknown as Prisma.InputJsonValue,
-      amount: new Prisma.Decimal(priceSplit.amountExGst),
-      gstAmount: new Prisma.Decimal(priceSplit.gstAmount),
-      totalAmount: new Prisma.Decimal(priceSplit.totalIncGst),
+      workspaceState: saved as unknown as Prisma.InputJsonValue,
+      amount,
+      gstAmount,
+      totalAmount,
       contractValueIncGst: contractValue,
       stateVersion: { increment: 1 },
     },
@@ -633,7 +726,19 @@ export async function saveOfferWorkspace(input: {
   }
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
+  // The Offers list and its KPIs print these columns from a cached read. Only
+  // a price edit moves them, and most autosaves are copy edits.
+  if (moneyChanged) {
+    updateTag("offers");
+  }
   return { ok: true, stateVersion: input.expectedStateVersion + 1 };
+}
+
+function sameMoney(
+  stored: Prisma.Decimal | null,
+  next: Prisma.Decimal,
+): boolean {
+  return stored !== null && stored.equals(next);
 }
 
 // Persist a lifecycle transition, record an audit event, and freeze the agreed
@@ -641,7 +746,6 @@ export async function saveOfferWorkspace(input: {
 export async function transitionOfferStatus(input: {
   offerId: string;
   toStatus: OfferStatus;
-  actorId?: string;
   note?: string;
 }): Promise<{ ok: true; status: OfferStatus }> {
   const access = await authorizeOfferAccess(input.offerId);
@@ -697,7 +801,7 @@ export async function transitionOfferStatus(input: {
     to: input.toStatus,
     skipOwnerGate: false,
     stampSentAt: input.toStatus === OfferStatus.SENT,
-    actorId: input.actorId,
+    actorId: access.user.id,
     note: input.note,
   });
   if (!committed) {
@@ -910,6 +1014,10 @@ export type LoadedOfferRevision =
       // Feeds the document's "prepared" date, so re-rendering an old revision
       // reproduces the date it was drawn up rather than today's.
       createdAt: string;
+      // When this revision's proposal was last emailed, or null if it never
+      // was. Preferred for the prepared date: it dates the copy the customer
+      // actually received.
+      lastSentAt: string | null;
       snapshot: OfferWorkspaceSnapshot;
     }
   // "empty": the revision was superseded before anything was saved onto it.
@@ -935,6 +1043,11 @@ export async function loadOfferRevisionSnapshot(
       isActive: true,
       createdAt: true,
       workspaceState: true,
+      documentSends: {
+        select: { sentAt: true },
+        orderBy: { sentAt: "desc" },
+        take: 1,
+      },
     },
   });
 
@@ -965,6 +1078,7 @@ export async function loadOfferRevisionSnapshot(
     status: offer.offerStatus,
     isActive: offer.isActive,
     createdAt: offer.createdAt.toISOString(),
+    lastSentAt: offer.documentSends[0]?.sentAt.toISOString() ?? null,
     snapshot,
   };
 }
@@ -1037,8 +1151,18 @@ async function voidLiveOfferEnvelopes(
   const inDocusign: { id: string; docusignId: string }[] = [];
   for (const env of liveEnvelopes) {
     if (env.docusignId === null) {
-      await writeEnvelopeEnded(env.id, EnvelopeStatus.VOIDED);
-      voidedIds.push(env.id);
+      // A failed write must not reject the whole pull-back: leaving the row out
+      // of voidedIds makes decideRecallPullBack refuse, which is what both
+      // callers document, instead of throwing past their refusal result.
+      try {
+        await writeEnvelopeEnded(env.id, EnvelopeStatus.VOIDED);
+        voidedIds.push(env.id);
+      } catch (error) {
+        console.error(
+          `[offer] envelope ${env.id} never reached DocuSign, but recording it voided failed:`,
+          error,
+        );
+      }
     } else {
       inDocusign.push({ id: env.id, docusignId: env.docusignId });
     }
@@ -1167,7 +1291,6 @@ export async function recallOfferEnvelope(input: {
   offerId: string;
   scope: "offer" | "tender" | "contract";
   toStatus: OfferStatus;
-  actorId?: string;
   note?: string;
 }): Promise<
   | { ok: true; status: OfferStatus; voidWarnings: readonly string[] }
@@ -1225,7 +1348,7 @@ export async function recallOfferEnvelope(input: {
     to: recall.to,
     skipOwnerGate: true,
     stampSentAt: false,
-    actorId: input.actorId,
+    actorId: access.user.id,
     note: input.note,
   });
   if (!committed) {
@@ -1247,7 +1370,6 @@ export async function recallOfferEnvelope(input: {
 // unless DocuSign confirmed every void.
 export async function createOfferRevision(input: {
   offerId: string;
-  actorId?: string;
 }): Promise<CreateOfferRevisionResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
@@ -1356,7 +1478,7 @@ export async function createOfferRevision(input: {
         baseReference: currentRow.baseReference,
         revisionNumber: currentRow.revisionNumber + 1,
         isActive: true,
-        createdById: input.actorId,
+        createdById: access.user.id,
         offerStatus: OfferStatus.PENDING,
         // Derive rather than copy: the parent's columns may predate the fix
         // that wrote the resolved price, and inheriting them would carry that
@@ -1397,6 +1519,8 @@ export async function createOfferRevision(input: {
   }
 
   revalidateTag(`offer-lead-${created.leadId}`, CACHE_PROFILES.SHORT);
+  // The Offers list shows the live revision and its price.
+  updateTag("offers");
   return {
     ok: true,
     offerId: created.id,

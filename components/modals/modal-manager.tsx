@@ -63,6 +63,7 @@ import type {
 import type { DeveloperApprovalDocument } from "@/constants/complianceDocuments";
 import { ApplicationModal } from "./compliance/application-modal";
 import { ConnectPartyModal } from "./compliance/connect-party-modal";
+import { PartyRevisionModal } from "./compliance/party-revision-modal";
 import { DeveloperDecisionModal } from "./compliance/developer-decision-modal";
 import { DeveloperResendModal } from "./compliance/developer-resend-modal";
 import { ResubmitApplicationModal } from "./compliance/resubmit-application-modal";
@@ -699,6 +700,7 @@ export function ModalManager() {
         deliverables,
         council,
         location,
+        customer,
         vaultOptions,
       } = modal.payload as {
         projectId: string;
@@ -712,6 +714,12 @@ export function ModalManager() {
         }[];
         council?: string | null;
         location?: string | null;
+        customer: {
+          name: string;
+          email: string | null;
+          phone: string | null;
+          address: string | null;
+        };
         vaultOptions?: VaultAttachmentOption[];
       };
       return (
@@ -724,6 +732,55 @@ export function ModalManager() {
           deliverables={deliverables ?? []}
           council={council}
           location={location}
+          customer={customer}
+          vaultOptions={vaultOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "requestCompliancePartyRevision": {
+      const {
+        projectId: id,
+        outreachId,
+        party,
+        contactName,
+        contactEmail,
+        subjectAddress,
+        documentLabel,
+        rejectionReason,
+        attachments,
+        vaultOptions,
+      } = modal.payload as {
+        projectId: string;
+        outreachId: string;
+        party: CompliancePartyType;
+        contactName?: string | null;
+        contactEmail?: string | null;
+        subjectAddress: string;
+        documentLabel: string;
+        rejectionReason: string;
+        attachments: {
+          fileId: string;
+          name: string;
+          url: string;
+        }[];
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <PartyRevisionModal
+          key={`${outreachId}:${documentLabel}:${rejectionReason}`}
+          projectId={id}
+          outreachId={outreachId}
+          party={party}
+          contactName={contactName}
+          contactEmail={contactEmail}
+          subjectAddress={subjectAddress}
+          documentLabel={documentLabel}
+          rejectionReason={rejectionReason}
+          attachments={attachments}
           vaultOptions={vaultOptions}
           open
           onOpenChange={(open) => {
