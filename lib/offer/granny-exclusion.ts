@@ -113,11 +113,19 @@ export function findGrannyExclusionConflicts(
 export function withoutGrannyOutOfScopeLines<T>(
   includesGrannyFlat: boolean,
   items: readonly T[],
-  labelOf: (item: T) => string,
+  // Every text the item contributes to a document, not just its heading: a
+  // Scope exclusion carries a description and a variation rule, and the Tender
+  // prints both beside the label, so the contradiction can sit in any of them.
+  // findGrannyExclusionConflicts reads all three for the same reason.
+  textsOf: (item: T) => readonly string[] | string,
 ): readonly T[] {
   if (!includesGrannyFlat) {
     return items;
   }
-  const kept = items.filter((item) => !isGrannyOutOfScopeLine(labelOf(item)));
+  const kept = items.filter((item) => {
+    const texts = textsOf(item);
+    const lines = typeof texts === "string" ? [texts] : texts;
+    return !lines.some((line) => isGrannyOutOfScopeLine(line));
+  });
   return kept.length === items.length ? items : kept;
 }

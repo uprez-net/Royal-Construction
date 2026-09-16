@@ -123,7 +123,7 @@ export function buildOfferPrintTemplateData({
     exclusionRows: withoutGrannyOutOfScopeLines(
       buildIncludesGrannyFlat(job),
       getVisibleExclusionRows(draft, exclusions),
-      (row) => row.label,
+      (row) => [row.label, row.description, row.variationRule],
     ),
     footerBase: `${job.siteAddress} | Prepared by ${job.preparedBy}`,
     paymentRows: paymentSchedule.map((row) => ({

@@ -227,3 +227,45 @@ test("the workspace strips the line when the build gains a granny flat", () => {
     "the area import does not strip",
   );
 });
+
+// The contradiction can sit in a Scope exclusion's description or variation
+// rule, not just its label: the Tender prints all three beside each other, and
+// the detector always read all three. Filtering on the label alone let a
+// matching detail through to the documents.
+test("a contradiction in the description or the variation rule is removed too", () => {
+  const item = (over: Partial<{ label: string; description: string; variationRule: string }>) => ({
+    label: "Landscaping",
+    description: "",
+    variationRule: "",
+    ...over,
+  });
+  const rows = [
+    item({ description: "Granny flat (not in current scope)" }),
+    item({ variationRule: "Granny flat (not in scope)" }),
+    item({ label: "Granny flat (not in current scope)" }),
+    item({ description: "Granny flat landscaping (not in current scope)" }),
+  ];
+  const kept = withoutGrannyOutOfScopeLines(true, rows, (row) => [
+    row.label,
+    row.description,
+    row.variationRule,
+  ]);
+  assert.deepEqual(
+    [...kept],
+    [item({ description: "Granny flat landscaping (not in current scope)" })],
+  );
+});
+
+test("every filter reads all three exclusion fields", () => {
+  for (const path of [
+    "lib/offer/workspace-print-template.ts",
+    "lib/offer/project-handoff-commercials.ts",
+    "components/offers/new-workflow/new-offer-workspace.tsx",
+  ]) {
+    const text = source(path);
+    assert.ok(
+      /\[\s*(?:row|item)\.label,\s*(?:row|item)\.description,\s*(?:row|item)\.variationRule,?\s*\]/.test(text),
+      `${path} still filters on the label alone`,
+    );
+  }
+});

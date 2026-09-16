@@ -107,7 +107,7 @@ export function resolveSignedTenderExclusions(input: {
           draft as OfferWorkspaceSnapshot["draft"],
           exclusions as OfferWorkspaceSnapshot["exclusions"],
         ),
-        (row) => row.label,
+        (row) => [row.label, row.description, row.variationRule],
       ).map((row) => row.label),
       source: "tender-document",
     };
@@ -122,7 +122,7 @@ export function tenderExclusionLines(
     ...withoutGrannyOutOfScopeLines(
       buildIncludesGrannyFlat(snapshot.job),
       getVisibleExclusionRows(snapshot.draft, snapshot.exclusions),
-      (row) => row.label,
+      (row) => [row.label, row.description, row.variationRule],
     ),
   ].map((row) => row.label);
 }

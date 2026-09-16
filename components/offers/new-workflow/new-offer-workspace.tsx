@@ -484,7 +484,11 @@ export function NewOfferWorkspace({
       return;
     }
     setExclusions((current) => [
-      ...withoutGrannyOutOfScopeLines(true, current, (item) => item.label),
+      ...withoutGrannyOutOfScopeLines(true, current, (item) => [
+        item.label,
+        item.description,
+        item.variationRule,
+      ]),
     ]);
     setDraft((current) => {
       const bullets = withoutGrannyOutOfScopeLines(
