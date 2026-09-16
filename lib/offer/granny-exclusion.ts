@@ -119,53 +119,24 @@ function stillSays(conflicts: readonly GrannyExclusionConflict[]): string {
 // The refusal and the readiness label. `revisionNeeded` is for the Tender send:
 // by then the Offer document and Scope steps are locked, so the line can only be
 // removed on a new revision, which is still allowed there. The Contract send
-// uses decideContractGrannyExclusionGate.
-export function describeGrannyExclusionConflicts(
-  conflicts: readonly GrannyExclusionConflict[],
-  options: { readonly revisionNeeded: boolean },
-): string {
-  const lines = quotedLines(conflicts);
-  const steps = [...new Set(conflicts.map((c) => stepLabel(c.stepId)))];
-  const those = lines.length === 1 ? "that line" : "those lines";
-  const where = `on the ${joinAnd(steps)} step${steps.length === 1 ? "" : "s"}`;
-  const fix = options.revisionNeeded
-    ? `Create a revision and remove ${those} ${where} before sending.`
-    : `Remove ${those} ${where} before sending.`;
-  return `${stillSays(conflicts)} ${fix}`;
-}
 
-export type ContractGrannyExclusionGate =
-  | { readonly kind: "clear" }
-  | { readonly kind: "as-signed"; readonly warning: string }
-  | { readonly kind: "refuse"; readonly error: string };
-
-// The Contract is sent only from TENDER_SIGNED or CONTRACT_DRAFT, where
-// createOfferRevision is locked, so nothing in the app can remove the line any
-// more and telling the estimator to create a revision left the deal stuck.
-//
-// - A Tender sent before this check may carry the line, and the customer signed
-//   it. Refusing would leave the deal with no way to its Contract, so the
-//   Contract carries the exclusions the customer signed and the send logs it.
-// - A Tender sent with the check could not carry it, so the agreed snapshot has
-//   moved away from the signed Tender. That is refused, without advice the app
-//   cannot follow.
-export function decideContractGrannyExclusionGate(input: {
-  readonly conflicts: readonly GrannyExclusionConflict[];
-  readonly tenderSentWithCheck: boolean;
-}): ContractGrannyExclusionGate {
-  const { conflicts } = input;
-  if (conflicts.length === 0) {
-    return { kind: "clear" };
+/**
+ * The same list with any "granny flat is out of scope" line taken out, when the
+ * build includes one. Nothing that prints or stores an exclusion list should
+ * carry a line contradicting the build, and asking the estimator to notice and
+ * delete it (the old readiness blocker and the server refusals) put the work on
+ * the wrong side. The narrowness of isGrannyOutOfScopeLine is what makes this
+ * safe: only a line whose whole subject is the granny flat is dropped, so
+ * "Granny flat landscaping (not in current scope)" survives.
+ */
+export function withoutGrannyOutOfScopeLines<T>(
+  includesGrannyFlat: boolean,
+  items: readonly T[],
+  labelOf: (item: T) => string,
+): readonly T[] {
+  if (!includesGrannyFlat) {
+    return items;
   }
-  const those = quotedLines(conflicts).length === 1 ? "that line" : "those lines";
-  if (!input.tenderSentWithCheck) {
-    return {
-      kind: "as-signed",
-      warning: `${stillSays(conflicts)} The Tender went out before that was checked and the customer signed it with ${those}, so the Contract carries the same exclusions.`,
-    };
-  }
-  return {
-    kind: "refuse",
-    error: `${stillSays(conflicts)} The signed Tender did not carry ${those}, so the Contract was not sent. A signed Tender cannot be revised in the app, so the agreed offer needs reconciling by hand first.`,
-  };
+  const kept = items.filter((item) => !isGrannyOutOfScopeLine(labelOf(item)));
+  return kept.length === items.length ? items : kept;
 }

@@ -174,6 +174,7 @@ test("exclusions come from the signed Tender's stored document", () => {
       exclusions: [],
     },
     snapshot: {
+      job: { hasGrannyHome: false, grannyFlatSqm: 0 },
       draft: { exclusionBullets: ["Edited after the Tender went out"] },
       exclusions: [],
     } as never,
@@ -187,6 +188,7 @@ test("a Tender row with nothing readable falls back to the snapshot", () => {
     const resolved = resolveSignedTenderExclusions({
       tenderDocumentData: documentData,
       snapshot: {
+        job: { hasGrannyHome: false, grannyFlatSqm: 0 },
         draft: { exclusionBullets: ["Landscaping (not in scope)"] },
         exclusions: [],
       } as never,

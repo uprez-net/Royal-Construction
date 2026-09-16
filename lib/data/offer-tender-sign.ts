@@ -29,10 +29,6 @@ import { createDocusignContext } from "@/lib/docusign/client";
 import { createTenderEnvelope } from "@/lib/docusign/tender-envelope";
 import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
-import {
-  describeGrannyExclusionConflicts,
-  findGrannyExclusionConflicts,
-} from "@/lib/offer/granny-exclusion";
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -93,18 +89,6 @@ export async function sendTenderForSignature(input: {
     };
   }
 
-  // A granny flat priced on one page and excluded on another. Checked on the
-  // workspace the Tender renders from; the Offer steps are locked by now, so
-  // the fix is a revision.
-  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
-  if (grannyConflicts.length > 0) {
-    return {
-      ok: false,
-      error: describeGrannyExclusionConflicts(grannyConflicts, {
-        revisionNeeded: true,
-      }),
-    };
-  }
 
   // A Tender is a fixed-price contract: its progress-payment schedule must sum
   // to exactly the contract value (100%), or the customer is asked to sign a
