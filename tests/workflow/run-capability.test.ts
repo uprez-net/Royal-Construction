@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   RUN_CAPABILITY_SECRET_ENV,
+  RUN_CAPABILITY_SECRET_MIN_LENGTH,
   runCapabilitySecret,
   signRunCapability,
   verifyRunCapability,
@@ -13,7 +14,10 @@ import {
 // with no owner. The extraction routes now hand out a capability bound to the
 // user who started the run, and resume-stream accepts nothing else.
 
-const SECRET = "test-secret-not-for-production";
+// 44 characters, the shape of `openssl rand -base64 32`: the fixture has to
+// clear RUN_CAPABILITY_SECRET_MIN_LENGTH, or the one assertion that reads it
+// through runCapabilitySecret would be testing a rejected secret.
+const SECRET = "test-secret-not-for-production-0000000000000";
 const RUN = "wrun_01K5EXAMPLE0000000000000000";
 const ALICE = "5b0f6d2e-4c1a-4e8e-9a51-1f2d3c4b5a60";
 const BOB = "9c3e1a7b-2d4f-4b6a-8e1c-0a9b8c7d6e5f";
@@ -87,4 +91,42 @@ test("an id that would make the token ambiguous is not signed", () => {
   assert.throws(() => signRunCapability({ runId: RUN, userId: "" }, SECRET));
   assert.throws(() => signRunCapability({ runId: RUN, userId: "a.b" }, SECRET));
   assert.throws(() => signRunCapability({ runId: "wrun/../x", userId: ALICE }, SECRET));
+});
+
+// A capability is an HMAC the holder can read, so its secret must not be
+// guessable offline. A short value is refused the same way a missing one is:
+// the routes that issue capabilities check for null before starting a run.
+test("a secret too short to resist offline guessing counts as unset", () => {
+  const originalError = console.error;
+  const seen: string[] = [];
+  console.error = (message?: unknown) => {
+    seen.push(String(message));
+  };
+  try {
+    for (const weak of ["dev", "secret", "a".repeat(RUN_CAPABILITY_SECRET_MIN_LENGTH - 1)]) {
+      assert.equal(
+        runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: weak }),
+        null,
+        `accepted ${weak.length} characters`,
+      );
+    }
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(seen.length, 3, "a rejected secret should say why");
+  assert.match(seen[0], /too weak/);
+});
+
+test("a secret at the floor, and a real generated one, are accepted", () => {
+  const atFloor = "b".repeat(RUN_CAPABILITY_SECRET_MIN_LENGTH);
+  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: atFloor }), atFloor);
+
+  // What `openssl rand -base64 32` produces: 32 bytes as 44 characters.
+  const generated = Buffer.from("c".repeat(32)).toString("base64");
+  assert.equal(generated.length, 44);
+  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: generated }), generated);
+});
+
+test("a weak secret cannot be smuggled past the trim", () => {
+  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: `  dev  ` }), null);
 });
