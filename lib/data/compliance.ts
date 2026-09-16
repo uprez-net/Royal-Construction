@@ -1,10 +1,13 @@
 "use server";
 
 import {
+  ComplianceAlertType,
   CertifierEmailDirection,
   CertifierEngagementStatus,
+  GraphMailbox,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   Prisma,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
@@ -13,6 +16,7 @@ import { after } from "next/server";
 import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
+  DA_DOCUMENTS,
   isApprovableDocumentType,
   isNotRequired,
   isOutstandingEvidence,
@@ -34,6 +38,7 @@ import {
 import {
   applicableRequiredDocuments,
   canSendRequiredPack,
+  hasSentCurrentDocument,
   hasSentRequiredPack,
   missingOutreachDocuments,
   sentToCertifierUrls,
@@ -80,6 +85,47 @@ import { logAction } from "./actionLog";
 
 const engagementInclude = certifierEngagementInclude;
 
+/**
+ * Ensures every fixed DA row exists once the DA path is opened.
+ *
+ * Most of these rows do not have a file yet, but they still need an identity so
+ * an admin can explicitly say that a conditional council requirement does not
+ * apply. Uploading used to create those rows lazily; the not-required action
+ * needs the row before an upload, so the DA alert seeds the fixed list.
+ */
+export async function ensureDevelopmentApplicationDocuments(
+  engagementId: string,
+): Promise<boolean> {
+  const daTypes = DA_DOCUMENTS.map((document) => document.type);
+  const existing = await prisma.complianceDocument.findMany({
+    where: {
+      engagementId,
+      documentType: { in: daTypes },
+    },
+    select: { documentType: true },
+  });
+  const existingTypes = new Set(existing.map((document) => document.documentType));
+  const missing = DA_DOCUMENTS.filter(
+    (document) => !existingTypes.has(document.type),
+  );
+
+  if (missing.length === 0) return false;
+
+  const nextOrder = await prisma.complianceDocument.count({
+    where: { engagementId },
+  });
+  await prisma.complianceDocument.createMany({
+    data: missing.map((document, index) => ({
+      engagementId,
+      documentType: document.type,
+      status: ComplianceDocumentStatus.PENDING,
+      order: nextOrder + index,
+    })),
+  });
+
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
@@ -87,6 +133,32 @@ const engagementInclude = certifierEngagementInclude;
 export async function getCertifierEngagement(
   projectId: string,
 ): Promise<CertifierEngagementDetail | null> {
+  const engagement = await prisma.certifierEngagement.findUnique({
+    where: { projectId },
+    include: engagementInclude,
+  });
+
+  if (!engagement) return null;
+
+  const hasDevelopmentApplication =
+    engagement.alerts.some(
+      (alert) =>
+        alert.type === ComplianceAlertType.DA_APPROVAL_REQUIRED &&
+        alert.status === "OPEN",
+    ) ||
+    engagement.externalApplications.some(
+      (application) =>
+        application.kind ===
+        ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+    );
+
+  if (
+    !hasDevelopmentApplication ||
+    !(await ensureDevelopmentApplicationDocuments(engagement.id))
+  ) {
+    return engagement;
+  }
+
   return prisma.certifierEngagement.findUnique({
     where: { projectId },
     include: engagementInclude,
@@ -151,6 +223,7 @@ export async function startCertifierEngagement(
       certifierName: input.certifierName ?? null,
       certifierEmail: input.certifierEmail,
       certifierPhone: input.certifierPhone ?? null,
+      graphMailbox: GraphMailbox.ADMIN,
       status: CertifierEngagementStatus.COLLECTING_DOCS,
       documents: {
         create: REQUIRED_COMPLIANCE_DOCUMENTS.map((doc, index) => ({
@@ -241,6 +314,7 @@ async function recordOutboundEmail(params: {
   subject: string;
   body: string;
   attachments: CertifierEmailAttachment[];
+  graphMailbox: GraphMailbox;
 }): Promise<void> {
   const checksum = await generateEmailChecksum(
     params.subject,
@@ -259,6 +333,7 @@ async function recordOutboundEmail(params: {
         body: params.body,
         checksum,
         direction: CertifierEmailDirection.OUTBOUND,
+        graphMailbox: params.graphMailbox,
         attachments: params.attachments as unknown as Prisma.InputJsonValue,
         sentAt: new Date(),
       },
@@ -381,7 +456,9 @@ export async function sendCertifierOutreach(engagementId: string) {
     return sendUpdatedRequiredDocuments(engagement);
   }
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    engagement.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
   const subject = buildCertifierSubject(
     engagement.refToken,
@@ -404,6 +481,7 @@ export async function sendCertifierOutreach(engagementId: string) {
 
   await recordOutboundEmail({
     engagementId,
+    graphMailbox: engagement.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     emailTo: certifierEmail,
     subject,
@@ -531,7 +609,9 @@ export async function sendCertifierReply(
     throw new Error("This engagement has no certifier email address.");
   }
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    engagement.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
 
   // Rebuilt from the engagement rather than taken from the last message on the
@@ -602,6 +682,7 @@ export async function sendCertifierReply(
 
   await recordOutboundEmail({
     engagementId,
+    graphMailbox: engagement.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     emailTo: certifierEmail,
     subject,
@@ -1062,13 +1143,7 @@ export async function resolveComplianceDocument(params: {
       id: params.documentId,
       engagement: { projectId: params.projectId },
     },
-    select: {
-      id: true,
-      engagementId: true,
-      documentType: true,
-      label: true,
-      status: true,
-    },
+    include: { files: true },
   });
 
   if (!document) {
@@ -1083,6 +1158,13 @@ export async function resolveComplianceDocument(params: {
   if (!isApprovableDocumentType(document.documentType)) {
     throw new Error(
       `${complianceDocumentLabel(document.documentType, document.label)} is not reviewed by the certifier.`,
+    );
+  }
+
+  const engagement = await requireEngagement(document.engagementId);
+  if (!hasSentCurrentDocument(engagement, document)) {
+    throw new Error(
+      `${complianceDocumentLabel(document.documentType, document.label)} has not been sent to the certifier yet.`,
     );
   }
 
@@ -1218,7 +1300,8 @@ export async function resolveComplianceDocument(params: {
 }
 
 /**
- * Marks a checklist line as not applying to this job, or puts it back.
+ * Marks a compliance document needed by the DA or checklist as not applying to
+ * this job, or puts it back.
  *
  * The one judgement on a checklist row that nothing infers. A certifier's
  * checklist is a standard list sent for every job, so several lines routinely do
@@ -1226,10 +1309,10 @@ export async function resolveComplianceDocument(params: {
  * for something the certifier already holds. Nothing in the pipeline can read a
  * strikethrough reliably, so the admin says so.
  *
- * Restricted to checklist items on purpose. The required pack and the signed
- * copies are what opens the engagement and there is no version of this job where
- * one of them is optional; letting a row of either be waved through would be a
- * way to send the certifier an incomplete pack and have the tab call it done.
+ * DA rows are included because the council's standard list is conditional: a
+ * document can be present in the list while not applying to this job. The
+ * required pack and signed copies stay excluded; they are what opens the
+ * engagement and cannot be waived through this control.
  *
  * Setting it never touches an uploaded file. A line can be marked not required
  * after something was uploaded against it — the certifier says they have it
@@ -1261,9 +1344,16 @@ export async function setComplianceDocumentNotRequired(params: {
     throw new Error("Compliance document not found on this project.");
   }
 
-  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
+  const isDaDocument =
+    document.documentType === ComplianceDocumentType.DA_ITEM ||
+    DA_DOCUMENTS.some((entry) => entry.type === document.documentType);
+
+  if (
+    document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM &&
+    !isDaDocument
+  ) {
     throw new Error(
-      `${complianceDocumentLabel(document.documentType, document.label)} is not a checklist item.`,
+      `${complianceDocumentLabel(document.documentType, document.label)} cannot be marked not required here.`,
     );
   }
 
@@ -1313,6 +1403,66 @@ export async function setComplianceDocumentNotRequired(params: {
 }
 
 /**
+ * Sends one checklist document to the certifier as soon as it is available.
+ *
+ * This is intentionally independent of the engagement's IN_REVIEW status. The
+ * rest of the checklist can still be collected while this item is assessed;
+ * the outbound email itself is the durable marker that enables its decision
+ * controls. Sending a replacement works the same way because its new URL will
+ * not appear in the mail trail until this call succeeds.
+ */
+export async function sendComplianceDocumentForReview(
+  engagementId: string,
+  documentId: string,
+) {
+  const engagement = await requireEngagement(engagementId);
+  const blocked = checklistBlockedReason(engagement);
+  if (blocked) throw new Error(blocked);
+
+  const document = engagement.documents.find(
+    (candidate) => candidate.id === documentId,
+  );
+  if (!document) {
+    throw new Error("Compliance document not found on this project.");
+  }
+  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
+    throw new Error("Only a checklist item can be sent for early verification.");
+  }
+  if (isNotRequired(document.status) || document.files.length === 0) {
+    throw new Error("Upload the checklist document before sending it for verification.");
+  }
+  if (document.status === ComplianceDocumentStatus.APPROVED) {
+    throw new Error("This checklist document has already been approved.");
+  }
+  if (document.rejectionReason) {
+    throw new Error("Upload the revised document before sending it back to the certifier.");
+  }
+  if (hasSentCurrentDocument(engagement, document)) {
+    return { subject: "", attachmentCount: 0, alreadySent: true as const };
+  }
+
+  const label = complianceDocumentLabel(
+    document.documentType,
+    document.label,
+  );
+  return sendCertifierReply(engagementId, {
+    body: [
+      engagement.certifierName
+        ? `<p>Hi ${escapeEmailHtml(engagement.certifierName)},</p>`
+        : "<p>Hi,</p>",
+      `<p>The <strong>${escapeEmailHtml(label)}</strong> for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> is ready and attached.</p>`,
+      "<p>Could you please verify this item while we continue collecting the rest of the checklist documents, and let us know if it needs revising?</p>",
+      "<p>Kind regards,<br/>Royal Constructions</p>",
+    ].join("\n"),
+    attachments: document.files.map((file) => ({
+      fileId: file.id,
+      name: file.filename,
+      url: file.url,
+    })),
+  });
+}
+
+/**
  * Sends the completed checklist to the certifier for review.
  *
  * Moves the engagement to IN_REVIEW first, then sends. That order is
@@ -1351,6 +1501,18 @@ export async function sendComplianceForReview(engagementId: string) {
     );
   }
 
+  const requiredEvidence = evidence.filter(
+    (document) => !isNotRequired(document.status),
+  );
+  const unsentEvidence = requiredEvidence.filter(
+    (document) => !hasSentCurrentDocument(engagement, document),
+  );
+  if (unsentEvidence.length === 0) {
+    throw new Error(
+      "The certifier already has the current copy of every checklist document.",
+    );
+  }
+
   const claimed = await advanceEngagementStatus(
     engagementId,
     [
@@ -1374,8 +1536,9 @@ export async function sendComplianceForReview(engagementId: string) {
     );
   }
 
-  // Every file behind that set, in document order. The message says everything
-  // is attached, and before this nothing was.
+  // Every current file the certifier has not already received, in document
+  // order. Early per-item review sends stay on the same thread and must not be
+  // attached again when the rest of the checklist becomes complete.
   //
   // Rows marked not required are left out even where they still hold a file —
   // a line can be waved off after something was uploaded against it, and the
@@ -1386,8 +1549,7 @@ export async function sendComplianceForReview(engagementId: string) {
   // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
   // which asserts the total against the mailbox's MaxSendSize and switches to
   // an upload session past the inline ceiling on its own.
-  const attachments = evidence
-    .filter((doc) => !isNotRequired(doc.status))
+  const attachments = unsentEvidence
     .flatMap((doc) =>
       doc.files.map((file) => ({
         fileId: file.id,
@@ -1396,12 +1558,15 @@ export async function sendComplianceForReview(engagementId: string) {
       })),
     );
 
+  const isRemainingSend = unsentEvidence.length < requiredEvidence.length;
   let sent;
   try {
     sent = await sendCertifierReply(engagementId, {
       body: [
         "<p>Hi,</p>",
-        `<p>The checklist for <strong>${engagement.subjectAddress}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
+        isRemainingSend
+          ? `<p>The remaining checklist documents for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> are attached. Together with the items already sent on this thread, the checklist pack is now complete.</p>`
+          : `<p>The checklist for <strong>${escapeEmailHtml(engagement.subjectAddress)}</strong> is complete. Everything you asked for is attached to this thread.</p>`,
         "<p>Could you review it and let us know if anything needs revising?</p>",
         "<p>Kind regards,<br/>Royal Constructions</p>",
       ].join("\n"),
@@ -1424,7 +1589,7 @@ export async function sendComplianceForReview(engagementId: string) {
 
   after(async () => {
     await notifyCompliance("complianceReviewSent", engagement.projectId, {
-      documentCount: evidence.length,
+      documentCount: unsentEvidence.length,
     });
   });
 

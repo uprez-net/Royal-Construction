@@ -28,13 +28,16 @@ namespace NodeJS {
         GRAPH_MODE: "delegated" | "app-only";
 
         BUSINESS_EMAIL: string;
+        BUSINESS_ADMIN_EMAIL: string;
         // Server-only. There is deliberately no NEXT_PUBLIC_ counterpart:
         // Next inlines NEXT_PUBLIC_* into the browser bundle wherever it is
         // referenced, so declaring one here invites shipping this token to
         // every visitor. The Graph admin routes are server-side only.
         GRAPH_ADMIN_TOKEN: string;
         GRAPH_SENDER_UPN: string;
+        GRAPH_ADMIN_SENDER_UPN: string;
         MAIL_ID_CC: string;
+        GRAPH_ADMIN_MAIL_CC: string;
 
         // Demo Mail Config
         DEMO_RECIPIENT: string;
@@ -45,9 +48,11 @@ namespace NodeJS {
         WEBHOOK_PORT: string;
         WEBHOOK_PATH: string;
         GRAPH_WEBHOOK_CLIENT_STATE: string;
+        GRAPH_ADMIN_WEBHOOK_CLIENT_STATE: string;
         GRAPH_NOTIFICATION_URL: string;
         GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: string;
         GRAPH_SUBSCRIPTION_RESOURCE: string;
+        GRAPH_ADMIN_SUBSCRIPTION_RESOURCE: string;
 
         // App
         NEXT_PUBLIC_APP_URL: string;

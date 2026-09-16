@@ -38,9 +38,32 @@ export interface SafeOffer
     version: number;
 }
 
+/** The lead columns the offers listing selects: only what the table renders. */
+export type OfferListLead = Pick<Lead, "id" | "name" | "email" | "phone" | "location" | "type">;
+
 export interface OfferWithLead extends SafeOffer {
-    lead: Lead
+    lead: OfferListLead
 }
+
+/** One revision as the offers listing sends it to the browser (see toOfferListRow). */
+export type OfferListRow = Pick<
+    SafeOffer,
+    | "id"
+    | "leadId"
+    | "baseReference"
+    | "revisionNumber"
+    | "isActive"
+    | "offerStatus"
+    | "amount"
+    | "gstAmount"
+    | "totalAmount"
+    | "contractValueIncGst"
+    | "sentAt"
+    | "acceptedAt"
+    | "createdAt"
+    | "updatedAt"
+    | "version"
+>;
 
 export interface OfferWithItemsAndFiles extends OfferWithLead {
     items: Record<number, SafeOfferItem[]>;
@@ -65,16 +88,16 @@ export type PaginatedOfferResult = {
  */
 export interface OfferGroup {
     leadId: number;
-    lead: Lead;
+    lead: OfferListLead;
     /** `baseReference` of the representative offer, or a `OF-<leadId>` fallback. */
     reference: string;
     /**
      * The revision the group speaks for: the active one, else the highest
      * revision number. Its status/amounts drive the collapsed row.
      */
-    latest: OfferWithLead;
+    latest: OfferListRow;
     /** Every revision in the family, newest first. Always includes `latest`. */
-    revisions: OfferWithLead[];
+    revisions: OfferListRow[];
     versionCount: number;
 }
 
@@ -108,11 +131,11 @@ export interface OfferKPIs {
  * The tab/filter buckets the offers table paginates by. These are *not*
  * individual `OfferStatus` values: the offer lifecycle introduced terminal
  * states (AGREED, TENDER_*, CONTRACT_*, PROJECT, *_DECLINED) that the old
- * single-status tabs silently dropped. Each bucket maps to the same set of
- * statuses the KPI query in `getOfferKPIs` uses, so a lead whose representative
- * revision is `TENDER_SIGNED` counts (and filters) as "approved" here exactly
- * as it does in the KPI cards. Buckets overlap by design — `TENDER_SENT` is
- * both "sent" and "approved" — mirroring the KPI query.
+ * single-status tabs silently dropped. The table filter and the KPI query both
+ * read their status sets from `OFFER_STATUS_BUCKETS`, so a lead whose
+ * representative revision is `TENDER_SIGNED` counts (and filters) as "approved"
+ * in both. Buckets overlap by design — `TENDER_SENT` is both "sent" and
+ * "approved".
  */
 export type OfferStatusBucket = "all" | "pending" | "approved" | "rejected" | "sent";
 

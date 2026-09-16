@@ -49,6 +49,24 @@ export function sentToCertifierUrls(
 }
 
 /**
+ * Whether the certifier has the copy currently attached to one document row.
+ *
+ * Read from the outbound mail trail rather than from the document status. A
+ * replacement keeps the row but changes its file URL, so this deliberately
+ * becomes false again until the replacement itself is sent. That gives the UI
+ * and the server the same durable answer without maintaining a second sent
+ * flag that could drift away from what was actually emailed.
+ */
+export function hasSentCurrentDocument(
+  engagement: CertifierEngagementDetail,
+  document: ComplianceDocumentWithFiles,
+): boolean {
+  if (document.files.length === 0) return false;
+  const sent = sentToCertifierUrls(engagement);
+  return document.files.every((file) => sent.has(file.url));
+}
+
+/**
  * The required documents this particular file still has to produce.
  *
  * Normally all six. An open DA_APPROVAL_REQUIRED alert drops the 10.7 planning

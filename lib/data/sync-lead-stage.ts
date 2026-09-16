@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { leadStagePatchForOfferStatus } from "@/lib/leads/offer-stage-map";
 
@@ -60,5 +61,21 @@ export async function syncLeadStageForOffer(
     });
   } catch (error) {
     console.error(`[Offer ${offerId}] Failed to sync lead stage`, error);
+  } finally {
+    expireOffersList(offerId);
+  }
+}
+
+// Every offer status writer calls syncLeadStageForOffer, so this is where the
+// offers list learns a status changed, including when the lead's stage did not
+// need to move (the early returns above). `expire: 0`, not a stale window: the
+// tab counts and badges must be current on the next load. It works from Route
+// Handlers (the DocuSign webhook) as well as Server Actions. The catch keeps
+// the never-throws promise, since revalidateTag throws outside a request.
+function expireOffersList(offerId: string): void {
+  try {
+    revalidateTag("offers", { expire: 0 });
+  } catch (error) {
+    console.error(`[Offer ${offerId}] Failed to expire the offers list cache`, error);
   }
 }

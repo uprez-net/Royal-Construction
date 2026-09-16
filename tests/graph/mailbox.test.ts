@@ -7,7 +7,14 @@ import {
   resolveLeadEmail,
 } from '../../lib/graph/mailbox';
 
-const ENV_KEYS = ['BUSINESS_EMAIL', 'GRAPH_SENDER_UPN', 'MAIL_ID_CC'] as const;
+const ENV_KEYS = [
+  'BUSINESS_EMAIL',
+  'GRAPH_SENDER_UPN',
+  'BUSINESS_ADMIN_EMAIL',
+  'GRAPH_ADMIN_SENDER_UPN',
+  'MAIL_ID_CC',
+  'GRAPH_ADMIN_MAIL_CC',
+] as const;
 
 let saved: Record<string, string | undefined> = {};
 
@@ -42,6 +49,11 @@ describe('isOwnMailbox', () => {
     process.env.GRAPH_SENDER_UPN = 'noreply@royalconstructions.com.au';
     assert.equal(isOwnMailbox('hello@royalconstructions.com.au'), true);
     assert.equal(isOwnMailbox('noreply@royalconstructions.com.au'), true);
+  });
+
+  it('recognises the configured admin mailbox', () => {
+    process.env.BUSINESS_ADMIN_EMAIL = 'compliance@royalconstructions.com.au';
+    assert.equal(isOwnMailbox('compliance@royalconstructions.com.au'), true);
   });
 
   it('splits a comma-separated CC list', () => {

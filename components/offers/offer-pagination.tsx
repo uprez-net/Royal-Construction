@@ -43,7 +43,7 @@ export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOff
           <div className="text-center text-xs text-muted-foreground">
             Showing {offers.items.length} of {offers.totalCount} offers
             {offers.totalOfferCount > offers.totalCount
-              ? ` (${offers.totalOfferCount} versions in total)`
+              ? ` (${offers.totalOfferCount} versions in this view)`
               : null}
           </div>
           <Pagination>

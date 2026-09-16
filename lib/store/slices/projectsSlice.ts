@@ -29,9 +29,12 @@ import { reviveComplianceEngagementDates } from "@/lib/compliance/engagement-dat
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.
-import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
-import type {
+import {
+  ComplianceDocumentType,
   ComplianceExternalApplicationKind,
+  CompliancePartyType,
+} from "@prisma/client";
+import type {
   File as ProjectFiles,
 } from "@prisma/client"
 import { fetchJson } from "@/utils/fetch";
@@ -43,6 +46,7 @@ import type {
   DeveloperDecisionInput,
   DeveloperRequirementInput,
   DeveloperResendInput,
+  DevelopmentApplicationRequirementInput,
   PartyReplyInput,
   PartySelfSuppliedInput,
   EstateDeveloperRequest,
@@ -583,6 +587,31 @@ export const resolveComplianceDocument = createAsyncThunk<
   }
 });
 
+/** Sends one checklist item without waiting for the rest of the pack. */
+export const sendComplianceDocumentForReview = createAsyncThunk<
+  { projectId: string; engagement: CertifierEngagementDetail | null },
+  { projectId: string; documentId: string },
+  { rejectValue: string }
+>(
+  "projects/sendComplianceDocumentForReview",
+  async ({ projectId, documentId }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        `/documents/${documentId}/review`,
+        { method: "POST" },
+        "Unable to send the document for verification",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to send the document for verification",
+      );
+    }
+  },
+);
+
 /**
  * Marks a checklist line as not applying to this job, or puts it back.
  *
@@ -848,6 +877,31 @@ export const setEstateDeveloper = createAsyncThunk<
         error instanceof Error
           ? error.message
           : "Unable to record the estate developer",
+      );
+    }
+  },
+);
+
+/** Records whether this compliance file needs a Development Application. */
+export const setDevelopmentApplicationRequired = createAsyncThunk<
+  ComplianceResult,
+  { projectId: string } & DevelopmentApplicationRequirementInput,
+  { rejectValue: string }
+>(
+  "projects/setDevelopmentApplicationRequired",
+  async ({ projectId, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/development-application/requirement",
+        jsonPost(payload),
+        "Unable to record whether a Development Application is needed",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error
+          ? error.message
+          : "Unable to record whether a Development Application is needed",
       );
     }
   },
@@ -1156,6 +1210,10 @@ const complianceOperations = [
   complianceOperation(sendCertifierReply, () => complianceScope.reply),
   complianceOperation(resolveComplianceDocument, complianceScope.document),
   complianceOperation(
+    sendComplianceDocumentForReview,
+    complianceScope.document,
+  ),
+  complianceOperation(
     setComplianceDocumentNotRequired,
     complianceScope.document,
   ),
@@ -1179,6 +1237,13 @@ const complianceOperations = [
     () => complianceScope.developer,
   ),
   complianceOperation(setEstateDeveloper, () => complianceScope.developer),
+  complianceOperation(
+    setDevelopmentApplicationRequired,
+    () =>
+      complianceScope.application(
+        ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+      ),
+  ),
   complianceOperation(recordExternalApplication, (arg) =>
     complianceScope.application(arg.kind),
   ),

@@ -330,6 +330,9 @@ const scopeItemSchema = z.object({
   unit: z.string(),
   variationRule: z.string(),
   includedInOfferDocument: z.boolean(),
+  // Absent on offers saved before the Offer and Tender boxes were split. Those
+  // Tenders list every allowance, as they did before.
+  includedInTender: z.boolean().default(true),
 });
 
 const inclusionEntrySchema = z.object({
@@ -826,6 +829,7 @@ function serializeScopeItem(item: OfferWorkspaceScopeItem) {
     unit: item.unit,
     variationRule: item.variationRule,
     includedInOfferDocument: item.includedInOfferDocument,
+    includedInTender: item.includedInTender,
   };
 }
 
@@ -932,5 +936,6 @@ function deserializeScopeItem(
     unit: item.unit,
     variationRule: item.variationRule,
     includedInOfferDocument: item.includedInOfferDocument,
+    includedInTender: item.includedInTender,
   };
 }

@@ -39,6 +39,7 @@ const scopeItem = (id: string): OfferWorkspaceScopeItem => ({
   unit: "",
   variationRule: "",
   includedInOfferDocument: true,
+  includedInTender: true,
 });
 
 const BASE: OfferStepDigestInput = {
@@ -230,4 +231,12 @@ test("every step has a digest, so no rail row can render blank", () => {
     assert.ok(text.length > 0, `${step} produced an empty digest`);
   }
   assert.equal(Object.keys(d).length, 10);
+});
+
+test("the scope digest says when an allowance is left off the Tender", () => {
+  const d = buildOfferStepDigests({
+    ...BASE,
+    allowances: [{ ...scopeItem("pc1"), includedInTender: false }, scopeItem("pc2")],
+  });
+  assert.equal(d.scope, "2 allowances · 2 excluded · 1 not on Tender");
 });

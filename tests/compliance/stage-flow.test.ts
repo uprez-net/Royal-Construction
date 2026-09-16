@@ -169,8 +169,8 @@ test("every file carries the whole route, approval branch included", () => {
     stages.map((entry) => entry.id),
     [
       "SURVEYOR",
-      "ARCHITECT",
       "COUNCIL",
+      "ARCHITECT",
       "CERTIFIER",
       "DEVELOPMENT_APPLICATION",
       "CHECKLIST",
@@ -313,7 +313,7 @@ test("exactly one stage is current, and it is the first unfinished one", () => {
 
   const current = stages.filter((entry) => entry.state === "current");
   assert.equal(current.length, 1);
-  assert.equal(current[0].id, "ARCHITECT");
+  assert.equal(current[0].id, "COUNCIL");
   assert.equal(stage(stages, "SURVEYOR").state, "done");
   assert.equal(stage(stages, "CHECKLIST").state, "upcoming");
 });
@@ -574,11 +574,13 @@ test("an outstanding revision takes the architect's clock back off the plans", (
   const stages = complianceStageFlow(
     engagement({
       documents: [
-        // The surveyor's three, so the architect is the stage the flow is on
-        // rather than one waiting behind an unfinished survey.
+        // The surveyor's three and the council's planning certificate, so the
+        // architect is the stage the flow is on rather than one waiting behind
+        // an unfinished prerequisite.
         document(ComplianceDocumentType.DEPOSITED_PLAN),
         document(ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL),
         document(ComplianceDocumentType.SURVEY),
+        document(ComplianceDocumentType.PLANNING_CERTIFICATE_10_7),
         document(ComplianceDocumentType.PRELIMINARY_ARCHITECTURAL_PLANS),
       ] as never,
       outreaches: [
