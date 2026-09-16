@@ -1,6 +1,7 @@
 import { ProjectStatus } from "@prisma/client";
 import { z } from "zod";
 import { ProjectListSortBy } from "@/lib/data/projects";
+import { PRE_CONSTRUCTION_FILTER } from "@/types/project";
 import {
   emailSchema,
   nonNegativeSchema,
@@ -271,7 +272,7 @@ export const projectListQuerySchema = z
       .optional(),
 
     status: z
-      .enum(ProjectStatus)
+      .union([z.enum(ProjectStatus), z.literal(PRE_CONSTRUCTION_FILTER)])
       .optional()
       .catch(undefined),
 

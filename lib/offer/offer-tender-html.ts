@@ -4,8 +4,15 @@ import {
   formatDwellingSpec,
   grannyDwellingSpec,
   COMPANY_LINE,
+  type OfferPrintPaymentRow,
+  type OfferPrintScopeRow,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
+import { formatPercent } from "./format";
+import {
+  offerAreaBasisFromJob,
+  rawTotalAreaSqm,
+} from "./workspace-area";
 import {
   formatBoundedOwnerList,
   chunkByEstimatedHeight,
@@ -491,13 +498,9 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   // order, so anchor sigOwner{k} on this PDF maps to recipient k. See ADR 0003.
   const signers = collectOfferSigners(job.owners);
   const reference = `${job.reference}-${job.revision}`;
-  const totalArea =
-    job.groundFloorSqm +
-    job.firstFloorSqm +
-    job.garageSqm +
-    job.alfrescoPorchSqm +
-    job.porchSqm +
-    job.grannyFlatSqm;
+  // The total the offer's cover and snapshot print. This sum left out balcony and
+  // void, so the signed Tender stated a smaller build than the offer before it.
+  const totalArea = rawTotalAreaSqm(offerAreaBasisFromJob(job));
 
   // The schedule the estimator edited on this offer — not a module constant.
   // An empty schedule produces zero sections rather than an empty table.
@@ -545,13 +548,19 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     (row) => row.lines,
   );
 
+  // The prime cost and provisional sums the Important Notes make the price
+  // subject to: every allowance ticked "Show on Tender". They sit beneath the
+  // exclusions while they fit and continue on counted pages when they don't.
+  const allowanceLayout = layoutTenderAllowances(data);
+
   const totalPages =
     1 + // cover letter
     1 + // project particulars
     ownerDetailChunks.length +
     schedulePages.length +
     1 + // contract terms + progress payments
-    1 + // exclusions
+    1 + // exclusions, with the allowances that fit beneath them
+    allowanceLayout.continuation.length +
     acceptanceChunks.length;
   let pageNo = 0;
   const foot = (): string => {
@@ -559,8 +568,15 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     return `<div class="rfoot">${esc(TENDER_FOOTER_BASE)}  |  Tender ${esc(reference)}  |  Page ${pageNo} of ${totalPages}</div>`;
   };
 
+  // The three "N% deposit" sentences quote the schedule's own deposit stage. With
+  // no stages there is no deposit to ask for, so the clause is dropped.
+  const deposit = depositRow(data.paymentRows);
+  const depositPercent = deposit
+    ? formatPercent(deposit.percentOfContract)
+    : null;
+
   const body = [
-    coverPage(input, data, foot()),
+    coverPage(input, data, depositPercent, foot()),
     particularsPage(
       input,
       totalArea,
@@ -573,13 +589,21 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     ...schedulePages.map((items, index) =>
       schedulePage(items, index === 0, foot()),
     ),
-    contractTermsPage(data, contractTermsSectionNo, foot()),
-    exclusionsPage(data, foot()),
+    contractTermsPage(data, contractTermsSectionNo, depositPercent, foot()),
+    exclusionsPage(data, allowanceLayout.inline, foot()),
+    ...allowanceLayout.continuation.map((rows, index) =>
+      allowancesPage(
+        rows,
+        allowanceLayout.inline.length > 0 || index > 0,
+        foot(),
+      ),
+    ),
     ...acceptanceChunks.map((rows, index) =>
       acceptancePage(
         job,
         signers,
         rows,
+        depositPercent,
         index === 0,
         index === acceptanceChunks.length - 1,
         foot(),
@@ -591,6 +615,17 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
 }
 
 // ─── Document shells ────────────────────────────────────────────────────────
+
+// The deposit stage, by the rule the contract's deposit field already uses
+// (lib/data/offer-contract-sign.ts): the stage named for it, else the first.
+function depositRow(
+  rows: readonly OfferPrintPaymentRow[],
+): OfferPrintPaymentRow | undefined {
+  return (
+    rows.find((row) => row.stageName.toLowerCase().includes("deposit")) ??
+    rows[0]
+  );
+}
 
 // The TENDER shell. Forked from legalDocShell() so restyling the tender to the
 // Word template could not silently restyle the Contract annexure, which is a
@@ -666,6 +701,10 @@ export function tenderDocShell(body: string): string {
   .c-exc-item { width: 23.748%; }
   .c-exc-means { width: 42.608%; }
   .c-exc-req { width: 33.644%; }
+  /* The source has no allowances table; it reuses the exclusions widths. */
+  .c-alw-item { width: 42.608%; }
+  .c-alw-amt { width: 23.748%; }
+  .c-alw-rule { width: 33.644%; }
   .c-pay-stage { width: 23.748%; }
   .c-pay-pct { width: 8.906%; }
   .c-pay-amt { width: 19.790%; }
@@ -798,6 +837,7 @@ export function legalDocShell(body: string): string {
 function coverPage(
   input: OfferPrintTemplateInput,
   data: ReturnType<typeof buildOfferPrintTemplateData>,
+  depositPercent: string | null,
   foot: string,
 ): string {
   const { job, customerPrice } = input;
@@ -831,7 +871,9 @@ function coverPage(
     `Below is an itemised list of inclusions which have been included in your tender price based on the preliminary drawings provided.`,
     `Should you wish to discuss any of the contents of this tender, please do not hesitate to contact me.`,
     `I trust the tender meets with your approval; we look forward to providing you with a high level of service in the construction of your new home.`,
-    `This tender will remain firm until ${esc(data.validUntilLabel)}, subject to your acceptance and 5% deposit.`,
+    depositPercent
+      ? `This tender will remain firm until ${esc(data.validUntilLabel)}, subject to your acceptance and ${depositPercent} deposit.`
+      : `This tender will remain firm until ${esc(data.validUntilLabel)}, subject to your acceptance.`,
   ];
   return tenderPage(
     `<div class="t-date">${esc(data.preparedDateLabel)}</div>
@@ -1025,14 +1067,17 @@ function inclusionRowHtml(row: TenderInclusionRow): string {
 function contractTermsPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   sectionNo: number,
+  depositPercent: string | null,
   foot: string,
 ): string {
   const term = (item: string, detail: string): string =>
     `<tr><td class="c-item"><b>${item}</b></td><td class="c-detail">${detail}</td></tr>`;
+  // formatPercent, as the React print path uses: toFixed(0) printed a 12.5% stage
+  // as 13% beside an amount computed from 12.5%.
   const pay = data.paymentRows
     .map(
       (row) =>
-        `<tr><td class="c-pay-stage"><b>${esc(row.stageName)}</b></td><td class="c-pay-pct">${(row.percentOfContract * 100).toFixed(0)}%</td><td class="c-pay-amt">${money(row.amount)}</td><td class="c-pay-trigger">${esc(row.trigger)}</td></tr>`,
+        `<tr><td class="c-pay-stage"><b>${esc(row.stageName)}</b></td><td class="c-pay-pct">${formatPercent(row.percentOfContract)}</td><td class="c-pay-amt">${money(row.amount)}</td><td class="c-pay-trigger">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
   return tenderPage(
@@ -1042,7 +1087,7 @@ function contractTermsPage(
       <tbody>
         ${term("Contract Documents", "This Tender, the approved plans and specifications, and the executed MBA fixed-price home building contract together form the agreement between the parties.")}
         ${term("Construction Period", "Approximately 8&ndash;10 months from slab pour to handover, subject to council approval timing and site conditions. Pre-construction and plan preparation time is additional. Final period to be confirmed in the MBA Building Contract.")}
-        ${term("Tender Validity", `This tender remains firm until ${esc(data.validUntilLabel)}, subject to acceptance and 5% deposit.`)}
+        ${term("Tender Validity", depositPercent ? `This tender remains firm until ${esc(data.validUntilLabel)}, subject to acceptance and ${depositPercent} deposit.` : `This tender remains firm until ${esc(data.validUntilLabel)}, subject to acceptance.`)}
         ${term("Site Conditions", "Priced on standard residential site conditions. Class H2/E soil, rock, or abnormal fill identified by geotechnical investigation is addressed by written variation before affected works proceed.")}
         ${term("Progress Payments", "Claims are payable within the period stated in the building contract on completion of each stage set out below.")}
         ${term("Variations", "No variation is carried out without a signed Variation Order. Owner-requested variations: $250 + GST admin fee plus cost of works. Variations may extend the contract period by a minimum of 2 weeks. Variation amounts are payable at the next progress claim.")}
@@ -1056,6 +1101,134 @@ function contractTermsPage(
   );
 }
 
+// ─── Exclusions sheet and allowances layout ─────────────────────────────────
+// The Exclusions table's columns are 23.748% / 42.608% / 33.644% of 178.26mm.
+// The Item cell is bold, so it holds fewer characters per millimetre.
+const CHARS_PER_LINE_EXCLUSION_ITEM = 20;
+const CHARS_PER_LINE_EXCLUSION_MEANS = 40;
+const CHARS_PER_LINE_EXCLUSION_REQUIRED = 32;
+// A note bullet runs the full content width less its hanging indent.
+const CHARS_PER_LINE_NOTE = 90;
+// A table's header row, in line units.
+const TABLE_HEADER_LINES = 2;
+// An h3.t-sub heading: a 12pt line plus 3pt above and 4pt below.
+const SUB_HEADING_LINES = 2;
+// The one-line intro above the exclusions table, with its spacing.
+const EXCLUSIONS_INTRO_LINES = 2;
+// The allowances intro: two lines at full width, with its spacing.
+const TENDER_ALLOWANCES_INTRO_LINES = 2.5;
+// A row's 4pt top and bottom padding plus its border, about three quarters of a
+// 10pt line. The owner and schedule tables round this up to a whole line; these
+// two tables share one sheet, so they use the measured figure, and the Chromium
+// sheet-count tests hold it to what actually prints.
+const SHARED_SHEET_ROW_CHROME_LINES = 0.75;
+// The Tender's allowance columns: Item 42.608% (a bold label over its
+// description) and "If the actual cost differs" 33.644% of 178.26mm.
+const CHARS_PER_LINE_TENDER_ALLOWANCE_ITEM = 36;
+const CHARS_PER_LINE_TENDER_ALLOWANCE_RULE = 32;
+
+type TenderExclusionRow = ReturnType<
+  typeof buildOfferPrintTemplateData
+>["exclusionRows"][number];
+
+// An exclusion row is as tall as its tallest cell. An empty cell prints a dash.
+function exclusionRowLines(row: TenderExclusionRow): number {
+  return (
+    Math.max(
+      estimateWrappedLines(row.label, CHARS_PER_LINE_EXCLUSION_ITEM),
+      estimateWrappedLines(row.description || "-", CHARS_PER_LINE_EXCLUSION_MEANS),
+      estimateWrappedLines(
+        row.variationRule || "-",
+        CHARS_PER_LINE_EXCLUSION_REQUIRED,
+      ),
+    ) + SHARED_SHEET_ROW_CHROME_LINES
+  );
+}
+
+// Each note is its own paragraph, with a little spacing after it.
+function importantNotesLines(hasAllowances: boolean): number {
+  return importantNotes(hasAllowances).reduce(
+    (sum, note) => sum + estimateWrappedLines(note, CHARS_PER_LINE_NOTE) + 0.25,
+    0,
+  );
+}
+
+// An allowance row is as tall as its taller cell: the label stacked over the
+// description, or the variation rule. An empty rule prints a dash.
+function tenderAllowanceRowLines(row: OfferPrintScopeRow): number {
+  const item =
+    estimateWrappedLines(row.label, CHARS_PER_LINE_TENDER_ALLOWANCE_ITEM) +
+    (row.description.trim().length > 0
+      ? estimateWrappedLines(
+          row.description,
+          CHARS_PER_LINE_TENDER_ALLOWANCE_ITEM,
+        )
+      : 0);
+  return (
+    Math.max(
+      item,
+      estimateWrappedLines(
+        row.variationRule || "-",
+        CHARS_PER_LINE_TENDER_ALLOWANCE_RULE,
+      ),
+    ) + SHARED_SHEET_ROW_CHROME_LINES
+  );
+}
+
+type TenderAllowanceLayout = {
+  // Printed beneath the exclusions and Important Notes, on their sheet.
+  readonly inline: readonly OfferPrintScopeRow[];
+  // Each on a sheet of its own after that.
+  readonly continuation: readonly (readonly OfferPrintScopeRow[])[];
+};
+
+// The allowances follow the exclusions on the same sheet while they fit. The
+// section's heading, intro and table header only go there with at least one
+// row, so a heading is never the last thing on the sheet; whatever does not fit
+// continues on counted pages. Rows are measured at the Tender's own column widths.
+function layoutTenderAllowances(
+  data: ReturnType<typeof buildOfferPrintTemplateData>,
+): TenderAllowanceLayout {
+  const rows = data.tenderScopeRows;
+  if (rows.length === 0) {
+    return { inline: [], continuation: [] };
+  }
+  const exclusionsLines =
+    SUB_HEADING_LINES +
+    EXCLUSIONS_INTRO_LINES +
+    TABLE_HEADER_LINES +
+    data.exclusionRows.reduce((sum, row) => sum + exclusionRowLines(row), 0) +
+    importantNotesLines(true);
+  let remaining =
+    TENDER_LINES_PER_PAGE -
+    exclusionsLines -
+    SUB_HEADING_LINES -
+    TENDER_ALLOWANCES_INTRO_LINES -
+    TABLE_HEADER_LINES;
+  const inline: OfferPrintScopeRow[] = [];
+  for (const row of rows) {
+    const lines = tenderAllowanceRowLines(row);
+    if (lines > remaining) break;
+    inline.push(row);
+    remaining -= lines;
+  }
+  const rest = rows.slice(inline.length);
+  if (rest.length === 0) {
+    return { inline, continuation: [] };
+  }
+  // A sheet of its own carries the heading and table header, plus the intro
+  // when none of the section fitted beneath the exclusions.
+  const budget =
+    TENDER_LINES_PER_PAGE -
+    SUB_HEADING_LINES -
+    TABLE_HEADER_LINES -
+    (inline.length === 0 ? TENDER_ALLOWANCES_INTRO_LINES : 0);
+  return {
+    inline,
+    continuation: chunkByEstimatedHeight(rest, budget, tenderAllowanceRowLines),
+  };
+}
+
 // "Exclusions & Important Notes". Kept as three columns rather than the source's
 // bullets: the description and variation rule are captured on every Scope
 // exclusion and were previously printed NOWHERE — an estimator typed "Can be
@@ -1065,9 +1238,10 @@ function contractTermsPage(
 // label-only; that gap is visible here rather than hidden, which is the point.
 function exclusionsPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
+  inlineAllowances: readonly OfferPrintScopeRow[],
   foot: string,
 ): string {
-  const notes = IMPORTANT_NOTES;
+  const notes = importantNotes(data.tenderScopeRows.length > 0);
   const excludes = data.exclusionRows
     .map(
       (row) =>
@@ -1078,18 +1252,60 @@ function exclusionsPage(
     `<h3 class="t-sub">Exclusions &amp; Important Notes</h3>
     <p>The following are not included in the Tender Price and, if required, are priced as a written variation:</p>
     <table><thead><tr><th class="c-exc-item">Item</th><th class="c-exc-means">What this means</th><th class="c-exc-req">If required</th></tr></thead><tbody>${excludes}</tbody></table>
-    ${notes.map(bullet).join("")}`,
+    ${notes.map(bullet).join("")}
+    ${inlineAllowances.length > 0 ? allowancesSection(inlineAllowances, false) : ""}`,
     foot,
   );
 }
 
 // The "Important Notes" half of the section heading. The source carries these as
 // bulleted notes beneath the exclusions, not as a block of bold prose.
-const IMPORTANT_NOTES: readonly string[] = [
-  "This Tender is the final fixed-price offer for the works described above and, on acceptance by both parties, forms the basis of a Master Builders Association (MBA) fixed-price home building contract. It supersedes any earlier negotiation proposal.",
-  "The Tender Price is fixed and includes GST for the full scope described, subject only to written variations and the provisional/prime-cost allowances noted in the inclusions schedule.",
-  "Above tender is subject to final engineering details and council requirements.",
-];
+//
+// The price note used to make the Tender subject to allowances "noted in the
+// inclusions schedule", a list the Tender never printed. It now points at the
+// allowances page when there is one, and claims no allowances when there isn't.
+function importantNotes(hasAllowances: boolean): readonly string[] {
+  return [
+    "This Tender is the final fixed-price offer for the works described above and, on acceptance by both parties, forms the basis of a Master Builders Association (MBA) fixed-price home building contract. It supersedes any earlier negotiation proposal.",
+    hasAllowances
+      ? "The Tender Price is fixed and includes GST for the full scope described, subject only to written variations and the prime cost and provisional sum allowances set out in this Tender."
+      : "The Tender Price is fixed and includes GST for the full scope described, subject only to written variations.",
+    "Above tender is subject to final engineering details and council requirements.",
+  ];
+}
+
+// "Prime Cost & Provisional Sums": every allowance ticked "Show on Tender", with
+// its amount and what happens when the real cost differs, whatever the Offer box
+// says: the Tender is the document that is signed. The section follows the
+// exclusions on their sheet while it fits (layoutTenderAllowances) and runs on
+// "(cont.)" pages after that. The item cell stacks the description under the
+// label only when it says something the variation rule does not (scopeRows drops
+// repeats).
+function allowancesPage(
+  rows: readonly OfferPrintScopeRow[],
+  continued: boolean,
+  foot: string,
+): string {
+  return tenderPage(allowancesSection(rows, continued), foot);
+}
+
+function allowancesSection(
+  rows: readonly OfferPrintScopeRow[],
+  continued: boolean,
+): string {
+  const body = rows
+    .map((row) => {
+      const description = row.description.trim();
+      const item = description
+        ? `<b>${esc(row.label)}</b><br />${esc(description)}`
+        : `<b>${esc(row.label)}</b>`;
+      return `<tr><td class="c-alw-item">${item}</td><td class="c-alw-amt">${esc(row.amountLabel)}</td><td class="c-alw-rule">${esc(row.variationRule) || "&mdash;"}</td></tr>`;
+    })
+    .join("");
+  return `<h3 class="t-sub">Prime Cost &amp; Provisional Sums${continued ? " (cont.)" : ""}</h3>
+    ${continued ? "" : `<p>The following amounts are allowances included in the Tender Price, not fixed costs. Where the final selection costs more or less than the allowance, the difference is adjusted by written variation as set out against each item.</p>`}
+    <table><thead><tr><th class="c-alw-item">Item</th><th class="c-alw-amt">Allowance</th><th class="c-alw-rule">If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>`;
+}
 
 // A manual bullet glyph plus two spaces on a hanging indent — the source's own
 // construction (ind left=360 hanging=200 twips). A real <ul> will not reproduce
@@ -1146,6 +1362,7 @@ function acceptancePage(
   job: OfferWorkspaceJob,
   signers: readonly OfferSignerContext[],
   rows: readonly AcceptanceRow[],
+  depositPercent: string | null,
   first: boolean,
   last: boolean,
   foot: string,
@@ -1159,7 +1376,7 @@ function acceptancePage(
     .join(" ");
   return tenderPage(
     `<h3 class="t-sub">Acceptance of Tender${first ? "" : " (cont.)"}</h3>
-    ${first ? `<p>Please read and acknowledge that you understand the above document by signing below. Once signed, please return along with the 5% deposit to proceed.</p>` : ""}
+    ${first ? `<p>Please read and acknowledge that you understand the above document by signing below. ${depositPercent ? `Once signed, please return along with the ${depositPercent} deposit to proceed.` : "Once signed, please return it to proceed."}</p>` : ""}
     <table class="t-accept">
       <thead><tr><th class="c-name">Print Full Name</th><th class="c-sign">Signature</th><th class="c-date">Date</th></tr></thead>
       <tbody>${rows.map((row) => row.html).join("")}</tbody>

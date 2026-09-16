@@ -9,6 +9,7 @@ import {
   ListChecks,
   Loader2,
   RotateCcw,
+  Send,
   Upload,
   X,
 } from "lucide-react";
@@ -73,6 +74,10 @@ type ComplianceDocumentRowProps = {
   onUpload?: (file: File) => void;
   onApprove?: () => void;
   onReject?: () => void;
+  /** The current file has appeared on an outbound certifier message. */
+  sentForReview?: boolean;
+  /** Sends this row now, without waiting for the rest of the checklist. */
+  onSendForReview?: () => void;
   /**
    * Marks the line as not applying to this job, or puts it back.
    *
@@ -275,6 +280,8 @@ export function ComplianceDocumentRow({
   onUpload,
   onApprove,
   onReject,
+  sentForReview = false,
+  onSendForReview,
   onSetNotRequired,
   consultantAction,
   mappedFrom,
@@ -343,6 +350,9 @@ export function ComplianceDocumentRow({
           <StatusPill tone={STATUS_TONE[status]}>
             {STATUS_LABEL[status]}
           </StatusPill>
+          {sentForReview && status !== ComplianceDocumentStatus.APPROVED ? (
+            <StatusPill tone="primary">Sent to certifier</StatusPill>
+          ) : null}
           {/* Beside the status rather than replacing it. "Outstanding" and
               "Overdue" are two different facts — what the row holds, and
               whether anybody is late with it — and a row that swapped one for
@@ -508,6 +518,23 @@ export function ComplianceDocumentRow({
               {files.length > 0 ? "Replace" : "Upload"}
               <span className="sr-only"> {label}</span>
             </Button>
+            {onSendForReview && files.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={isBusy}
+                onClick={onSendForReview}
+              >
+                {isBusy ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Send className="size-4" aria-hidden="true" />
+                )}
+                Send {files.length} document{files.length === 1 ? "" : "s"} to
+                certifier
+                <span className="sr-only"> for {label}</span>
+              </Button>
+            ) : null}
           </>
         ) : null}
 

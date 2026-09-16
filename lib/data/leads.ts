@@ -1,4 +1,5 @@
 "use server";
+import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
@@ -503,14 +504,11 @@ export async function getLeads(
       totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
     };
   } catch (error) {
+    // Rethrown rather than swallowed into an empty page: the lead pickers read
+    // that as "no leads" and never said the load had failed. Both callers, the
+    // /api/leads route and the MCP tool, catch it and report the failure.
     console.error("Error fetching leads:", error);
-    return {
-      items: [],
-      page: 1,
-      limit: defaultLookupPageSize,
-      totalCount: 0,
-      totalPages: 0,
-    };
+    throw error;
   }
 }
 
@@ -1189,6 +1187,27 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     }),
     ...reassignOpenTasks,
   ]);
+
+  // The offers list is cached per access scope (lib/data/offer-listing.ts), and
+  // a user outside the internal roles sees only the leads assigned to them. Left
+  // alone, a reassigned lead stayed on its old owner's list and off its new
+  // owner's until the cache expired.
+  //
+  // Expired whenever an update SETS the assignee, with no comparison against the
+  // lead read before the transaction: a concurrent reassignment can commit in
+  // between, which made that comparison skip an expiry it owed (CodeRabbit, #246).
+  //
+  // revalidateTag rather than updateTag, because updateLead also runs from Route
+  // Handlers (the lead PATCH, MCP and booking routes), where updateTag throws.
+  // expire: 0 so nobody gets one more stale read of a list that decides which
+  // offers they can see. The catch keeps a cache failure from failing the save.
+  if (input.assignedId !== undefined) {
+    try {
+      revalidateTag("offers", { expire: 0 });
+    } catch (error) {
+      console.error(`[Lead ${id}] Failed to expire the offers list cache`, error);
+    }
+  }
 
   for (const annotation of annotationInputs) {
     try {

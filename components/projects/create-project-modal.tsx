@@ -39,6 +39,7 @@ import {
   type LookupOption,
 } from "@/components/common/searchable-select";
 import { useLeadSearch } from "@/hooks/useLeadSearch";
+import { shownSelection } from "@/lib/leads/lead-search-paging";
 import {
   useUploadQueue,
   type QueuedUploadFile,
@@ -475,7 +476,14 @@ export function CreateProjectModal({
   };
 
   const handleExtract = async () => {
-    if (!selectedLeadId) {
+    // From the picker the lead must still be on screen: a search can hide it
+    // without clearing the choice. Retry runs from the error stage, where the
+    // list isn't shown and the lead was already confirmed.
+    const shownLeadId =
+      stage === "selection"
+        ? shownSelection(selectedLeadId, leadSearch.items, leadSearch.loading)
+        : selectedLeadId;
+    if (!selectedLeadId || !shownLeadId) {
       toast.error("Select a lead before continuing.");
       return;
     }
@@ -755,6 +763,12 @@ export function CreateProjectModal({
               currentPage={leadSearch.pageInfo.page}
               totalPages={leadSearch.pageInfo.totalPages}
               loadingMore={leadSearch.loadingMore}
+              error={leadSearch.error}
+              emptyMessage={
+                leadSearch.resultQuery
+                  ? "No leads match your search."
+                  : "No leads are waiting for a project."
+              }
             />
 
             <div className="grid gap-4 lg:grid-cols-2">

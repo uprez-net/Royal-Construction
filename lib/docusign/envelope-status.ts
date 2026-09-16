@@ -5,8 +5,7 @@ import { EnvelopeStatus } from "@prisma/client";
 
 // Monotonic rank for forward-only status: an out-of-order or replayed event
 // must never drag a terminal envelope (COMPLETED/DECLINED/VOIDED) backwards.
-// A copy of the rank in app/api/docusign/connect/route.ts, which still carries
-// its own; keep the two identical until the webhook imports this one.
+// The Connect webhook ranks with this one.
 export function envelopeStatusRank(status: EnvelopeStatus): number {
   switch (status) {
     case EnvelopeStatus.SENT:

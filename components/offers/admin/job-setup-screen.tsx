@@ -48,7 +48,8 @@ export function JobSetupScreen() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveBuildScope())}
+          onSave={() => dispatch(saveBuildScope()).unwrap()}
+          successMessage="Build scope saved."
         />
       </CardFooter>
     </Card>

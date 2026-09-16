@@ -1,5 +1,6 @@
 import {
   CHARS_PER_LINE_SIGNATURE,
+  chunkAllowanceRows,
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
@@ -16,11 +17,15 @@ import {
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
+  buildAreaBreakdown,
   buildOfferPrintTemplateData,
   formatArea,
+  formatRoomCount,
   formatSiteParticulars,
   getPrintFooterText,
+  grannyDwellingSpec,
   PROPOSAL_TAGLINE,
+  type OfferDwellingSpec,
   type OfferPrintScopeRow,
 } from "@/lib/offer/workspace-print-template";
 import {
@@ -247,17 +252,19 @@ export function OfferWorkspacePrintTemplate(
             />
           ),
     ),
-    ...(data.scopeRows.length > 0
-      ? [
-          (n: number, total: number) => (
+    ...chunkAllowanceRows(data.scopeRows).map(
+      (rows, i) =>
+        // eslint-disable-next-line react/display-name -- page factory, not a component
+        (n: number, total: number) =>
+          (
             <PrintAllowancesPage
-              key="allowances"
-              rows={data.scopeRows}
+              key={`allowances-${i}`}
+              rows={rows}
+              continued={i > 0}
               footer={foot(data, n, total)}
             />
           ),
-        ]
-      : []),
+    ),
     (n, total) => (
       <PrintTermsPage
         key="terms"
@@ -459,27 +466,18 @@ function PrintSnapshotPage({
   readonly job: OfferWorkspaceJob;
   readonly footer: string;
 }) {
-  const gfGarage = job.groundFloorSqm + job.garageSqm;
-  const alfrescoBalcony = job.alfrescoPorchSqm + job.balconySqm;
-  const totalArea =
-    gfGarage + 
-    job.firstFloorSqm + 
-    alfrescoBalcony + 
-    job.porchSqm + 
-    job.grannyFlatSqm
+  // The same cells and total as snapshotPage() in offer-proposal-html.ts, so the
+  // grid adds up and matches the cover, the letter and the Tender.
+  const area = buildAreaBreakdown(job);
   const areaCells = [
-    { label: "Ground Floor + Garage", value: formatArea(gfGarage) },
-    { label: "First Floor", value: formatArea(job.firstFloorSqm) },
-    { label: "Alfresco + Balcony", value: formatArea(alfrescoBalcony) },
-    { label: "Porch", value: formatArea(job.porchSqm) },
-    { label: "Kitchen", value: formatArea(job.kitchenSqm) },
-    // Granny flat is part of Total Area; show it as its own cell when present so
-    // the breakdown reconciles with the emphasized total.
-    ...(job.grannyFlatSqm > 0
-      ? [{ label: "Granny Flat", value: formatArea(job.grannyFlatSqm) }]
-      : []),
-    { label: "Total Area", value: formatArea(totalArea), emphasis: true },
+    ...area.cells.map((cell) => ({
+      label: cell.label,
+      value: formatArea(cell.sqm),
+      emphasis: false,
+    })),
+    { label: "Total Area", value: formatArea(area.totalSqm), emphasis: true },
   ];
+  const granny = grannyDwellingSpec(job);
   const siteParticulars = formatSiteParticulars(job);
   return (
     <PrintPage footerText={footer}>
@@ -514,27 +512,82 @@ function PrintSnapshotPage({
           </div>
         </div>
       </PrintSection>
-      <div className="mt-8 grid grid-cols-5 border border-border text-center text-sm">
+      <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
         {areaCells.map((cell) => (
           <div
             key={cell.label}
             className={
               cell.emphasis
-                ? "bg-sidebar p-4 text-white"
-                : "border-r border-border p-4 last:border-r-0"
+                ? "bg-sidebar px-2 py-4 text-white"
+                : "border-r border-border px-2 py-4 last:border-r-0"
             }
           >
             <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
               {cell.label}
             </p>
-            <p className="mt-2 font-mono font-semibold">{cell.value}</p>
+            {/* With void and granny flat both showing, seven cells leave ~77px
+                for a value and "187.35 m²" is ~76px of monospace: it broke at
+                the space and printed the unit on a line of its own. */}
+            <p className="mt-2 whitespace-nowrap font-mono font-semibold">
+              {cell.value}
+            </p>
           </div>
         ))}
       </div>
       <p className="mt-6 text-xs text-muted-foreground">
         Total build area {data.areaLabel}.
       </p>
+      <PrintDwellingSpec
+        title="Major House Specifications"
+        spec={{
+          bathrooms: job.bathrooms,
+          bedrooms: job.bedrooms,
+          garageSpaces: job.garageSpaces,
+        }}
+      />
+      {granny ? (
+        <PrintDwellingSpec title="Granny Home Specifications" spec={granny} />
+      ) : null}
     </PrintPage>
+  );
+}
+
+// Room counts per dwelling, as the emailed snapshot page prints them: the major
+// house always, the granny home only when the build includes one. The printed
+// copy carried neither, so it lost the bedroom counts the emailed PDF showed.
+function PrintDwellingSpec({
+  title,
+  spec,
+}: {
+  readonly title: string;
+  readonly spec: OfferDwellingSpec;
+}) {
+  const cells = [
+    { label: "Bedrooms", value: spec.bedrooms },
+    { label: "Bathrooms", value: spec.bathrooms },
+    { label: "Garage Spaces", value: spec.garageSpaces },
+  ];
+  return (
+    <div className="mt-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sidebar">
+        {title}
+      </p>
+      <div className="mt-2 grid grid-cols-3 border border-border text-center text-sm">
+        {cells.map((cell) => (
+          <div
+            key={cell.label}
+            className="border-r border-border p-3 last:border-r-0"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+              {cell.label}
+            </p>
+            <p className="mt-2 font-mono font-semibold">
+              {formatRoomCount(cell.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -640,25 +693,37 @@ function PrintInclusionsPage({
 // which sums were allowances, what they were worth, or what happens when the
 // real cost differs — while the estimator saw a ticked checkbox saying it would.
 //
-// Its own page, and only when there is something to disclose, so an offer with
-// no allowances keeps exactly the page count it had before.
+// Its own page(s), and only when there is something to disclose, so an offer with
+// no allowances keeps exactly the page count it had before. A continued page
+// drops the intro, mirroring allowancesPage() in offer-proposal-html.ts.
 function PrintAllowancesPage({
   rows,
+  continued,
   footer,
 }: {
   readonly rows: readonly OfferPrintScopeRow[];
+  readonly continued: boolean;
   readonly footer: string;
 }) {
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <PrintSection eyebrow="Allowances" title="Prime cost & provisional sums">
-        <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-          The amounts below are allowances held within your fixed contract
-          price, not fixed costs. Where your final selection costs more or less
-          than the allowance, the difference is adjusted by written variation as
-          set out against each item.
-        </p>
+      <PrintSection
+        eyebrow="Allowances"
+        title={
+          continued
+            ? "Prime cost & provisional sums (cont.)"
+            : "Prime cost & provisional sums"
+        }
+      >
+        {continued ? null : (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            The amounts below are allowances held within your fixed contract
+            price, not fixed costs. Where your final selection costs more or
+            less than the allowance, the difference is adjusted by written
+            variation as set out against each item.
+          </p>
+        )}
       </PrintSection>
       <table className="mt-6 w-full border-collapse text-left text-sm">
         <thead>

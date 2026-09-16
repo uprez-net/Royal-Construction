@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   Card,
@@ -6,7 +6,6 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   hbfcClaimChanged,
   saveHBFCClaim,
@@ -15,6 +14,8 @@ import { FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { FilePenLine } from "lucide-react";
 import { OfferCardHeading } from "../new-workflow/offer-workspace-card-heading";
+import { SaveChangesButton } from "./shared/save-changes-button";
+import { isRawCurrent } from "./shared/numeric-input";
 
 function useNumericInput(value: number, onCommit: (value: number) => void) {
   const [raw, setRaw] = useState(() =>
@@ -22,9 +23,7 @@ function useNumericInput(value: number, onCommit: (value: number) => void) {
   );
 
   useEffect(() => {
-    const parsed = parseFloat(raw);
-    const rawIsCurrent = Number.isFinite(value) ? parsed === value : raw === "";
-    if (!rawIsCurrent) {
+    if (!isRawCurrent(raw, value)) {
       setTimeout(() => {
         setRaw(Number.isFinite(value) ? String(value) : "");
       }, 0);
@@ -34,38 +33,49 @@ function useNumericInput(value: number, onCommit: (value: number) => void) {
 
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value;
-    if (!/^-?\d*\.?\d*$/.test(next)) return;
+    // A claim amount and a loading percentage are never negative.
+    if (!/^\d*\.?\d*$/.test(next)) return;
     setRaw(next);
-    onCommit(
-      next === "" || next === "-" || next === "." ? NaN : parseFloat(next),
-    );
+    onCommit(next === "" || next === "." ? NaN : parseFloat(next));
   };
 
   return { value: raw, onChange };
+}
+
+interface NumericFieldProps {
+  value: number;
+  onChange: (value: number) => void;
+  placeholder?: string;
+  invalid?: boolean;
+  describedBy?: string;
 }
 
 function NumberField({
   value,
   onChange,
   placeholder,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  placeholder?: string;
-}) {
+  invalid,
+  describedBy,
+}: NumericFieldProps) {
   const field = useNumericInput(value, onChange);
-  return <Input {...field} inputMode="decimal" placeholder={placeholder} />;
+  return (
+    <Input
+      {...field}
+      inputMode="decimal"
+      placeholder={placeholder}
+      aria-invalid={invalid || undefined}
+      aria-describedby={describedBy}
+    />
+  );
 }
 
 function PercentInput({
   value,
   onChange,
   placeholder,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  placeholder?: string;
-}) {
+  invalid,
+  describedBy,
+}: NumericFieldProps) {
   const field = useNumericInput(value, onChange);
   return (
     <div className="relative">
@@ -73,6 +83,8 @@ function PercentInput({
         {...field}
         inputMode="decimal"
         placeholder={placeholder}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         className="pr-7"
       />
       <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
@@ -93,6 +105,12 @@ export function HBFCClaimPage() {
   const dirty = useAppSelector((s) => s.adminOfferContent.dirty.hbfcClaim);
   const saving = useAppSelector((s) => s.adminOfferContent.saving.hbfcClaim);
   const error = useAppSelector((s) => s.adminOfferContent.error.hbfcClaim);
+  const blockedMessageId = useId();
+  // An emptied field, or one holding only ".", commits NaN. Save refuses it,
+  // and says so, rather than going grey with no reason given.
+  const claimAmountMissing = !Number.isFinite(claimAmount);
+  const loadingChargeMissing = !Number.isFinite(loadingChargePercent);
+  const saveBlocked = claimAmountMissing || loadingChargeMissing;
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -112,6 +130,8 @@ export function HBFCClaimPage() {
               dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF claim amount"
+            invalid={claimAmountMissing}
+            describedBy={claimAmountMissing ? blockedMessageId : undefined}
           />
         </label>
         <label>
@@ -122,17 +142,33 @@ export function HBFCClaimPage() {
               dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF loading charge percentage"
+            invalid={loadingChargeMissing}
+            describedBy={loadingChargeMissing ? blockedMessageId : undefined}
           />
         </label>
+        {saveBlocked && (
+          <p
+            id={blockedMessageId}
+            role="alert"
+            className="text-sm text-destructive"
+          >
+            Save is blocked: both fields need a number.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </CardContent>
-      <CardFooter className="flex items-center justify-end gap-2">
-        <Button
-          onClick={() => dispatch(saveHBFCClaim())}
-          disabled={!dirty || saving}
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </Button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <CardFooter className="justify-end">
+        <SaveChangesButton
+          dirty={dirty}
+          saving={saving}
+          disabled={saveBlocked}
+          onSave={() => dispatch(saveHBFCClaim()).unwrap()}
+          successMessage="HBCF settings saved."
+        />
       </CardFooter>
     </Card>
   );

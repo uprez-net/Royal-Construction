@@ -54,12 +54,19 @@ the template.
 | `ownerEmail` | `owners_0_owner_email_value` | client email |
 | `siteAddress` | `site_address_value` | job.siteAddress |
 | `variationPercent` | `percentage_allowed_on_variations_value` | "10%" |
-| `paymentSchedule` | `installments_0_installment_item_value` | all stages, compact single field |
-| `depositAmount` | `deposit_value` | deposit stage amount |
+| `paymentSchedule` | `installments_0_installment_item_value` | every stage of the signed Tender's schedule, compact single field (percent as printed, e.g. 2.5%; amounts to the cent) |
+| `depositAmount` | `deposit_value` | the signed Tender's deposit stage amount |
+
+The schedule and deposit come from `Tender.documentData` (the `paymentTerms`
+block stamped at send, or the stored render input for older Tenders), falling
+back to the agreed snapshot only when neither is readable; the contract price
+stays the agreed snapshot's. A Tender whose printed price differs from it (in
+whole cents) is refused before the envelope is created
+(`lib/offer/contract-payment-source.ts`).
 | `excludedDays` | `days_not_included_value` | "Saturdays, Sundays and NSW Public Holidays" |
 | `defectsLiabilityWeeks` | `defects_liability_period_value` | "12 Weeks" |
 | `workDescription` | `description_of_the_work_to_be_completed_value` | buildType + buildScope |
-| `exclusionsList` | `exclusions_value` | tender exclusion bullets |
+| `exclusionsList` | `exclusions_value` | the Tender's exclusions: draft bullets plus Scope exclusions ticked for the document, deduplicated as the Tender prints them |
 | `ownerPrintName` | `acknowledgement_of_owner_docusign_0_name_value` | first owner (Owner role) |
 
 Checkboxes set by the action: `gstInclusive`, `hbcfIncluded`, `exclusionsYes`.
