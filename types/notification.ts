@@ -198,6 +198,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/offers/${data.leadId}`,
   }),
 
+  unexpectedEnvelopeCompletion: (data) => ({
+    title: `Unexpected Signature: ${data.offerReference} — ${data.documentLabel}`,
+    message: `DocuSign reports ${data.customerName}'s ${data.documentLabel} envelope ${data.envelopeId} as signed, but the app had recalled or replaced it. The offer was not changed and the signed copy was filed separately. Check with the customer before going further.`,
+    url: `/offers/${data.leadId}`,
+  }),
+
   milestoneStatusChanged: (data) => ({
     title: `Milestone Status Changed: ${data.milestoneName}`,
     message: `The status of milestone ${data.milestoneName} has been changed to ${data.newStatus}`,
