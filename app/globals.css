@@ -55,6 +55,7 @@
   --color-destructive-ink: var(--destructive-ink);
   --color-royal-gold-ink: var(--royal-gold-ink);
   --color-royal-gold-ink-hover: var(--royal-gold-ink-hover);
+  --color-royal-gold-ink-text: var(--royal-gold-ink-text);
   --color-accent-purple: var(--accent-purple);
   --color-accent-purple-light: var(--accent-purple-light);
   --color-popover-foreground: var(--popover-foreground);
@@ -141,6 +142,11 @@
      on base --royal-gold is 2.77:1; on the ink 5.37:1 and on this hover step
      6.93:1, measured in tests/design/brand-contrast.test.ts. */
   --royal-gold-ink-hover: oklch(0.470 0.12 77.3);
+  /* Gold AS TEXT. In light these are the same colour: the fill value already
+     clears AA on --card/--background/--muted (5.37/5.06/4.84:1). They diverge
+     in dark, where a fill carrying white text must darken and text on a dark
+     surface must lighten — one value cannot do both. */
+  --royal-gold-ink-text: var(--royal-gold-ink);
 
   /* Pipeline stage ramp — cool grey through gold as likelihood rises, then
      green for banked stages. The colour encodes progression, so the chart
@@ -189,7 +195,10 @@
 
   /* Dark-mode ink variants. DESIGN.md commits to a light-only system, so these
      exist only so text-*-ink utilities never resolve to an undefined var if the
-     .dark class is ever applied. Each clears 4.55:1 on --card/--background/--muted. */
+     .dark class is ever applied. The four below clear 4.55:1 on
+     --card/--background/--muted. --royal-gold-ink is the exception by design: it
+     is a BUTTON FILL carrying white text, so it darkens instead — gold as text
+     uses --royal-gold-ink-text. Both are asserted in brand-contrast.test.ts. */
   --success-ink: oklch(0.597 0.14 149.2);
   --warning-ink: oklch(0.620 0.14 70.1);
   --info-ink: oklch(0.616 0.16 262.9);
@@ -199,6 +208,10 @@
      hover 6.09:1; the rest state sat at 3.75:1 until the dark theme was checked
      at rest and not only on hover. */
   --royal-gold-ink-hover: oklch(0.500 0.1 77.3);
+  /* Gold AS TEXT needs the opposite move: darkening the fill for white text
+     pushed gold-on-dark-surface down to 3.66:1, so text gets its own lighter
+     step at 5.28:1 worst-case (--muted), in line with light's 4.84:1. */
+  --royal-gold-ink-text: oklch(0.650 0.1 77.3);
 
   /* Stage ramp, dark theme — same progression, lifted for contrast. */
   --stage-1: oklch(0.5 0.02 253);

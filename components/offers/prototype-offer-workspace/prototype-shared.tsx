@@ -383,7 +383,7 @@ function BuildKindRow({
           />
         ) : (
           <Info
-            className="mt-0.5 size-3.5 shrink-0 text-royal-gold-ink"
+            className="mt-0.5 size-3.5 shrink-0 text-royal-gold-ink-text"
             aria-hidden="true"
           />
         )}

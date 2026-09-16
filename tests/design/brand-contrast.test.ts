@@ -62,6 +62,22 @@ test("the dark theme carries white text at rest and on hover", () => {
   );
 });
 
+// Gold serves two roles and they pull opposite ways in dark: the fill carries
+// white text so it must darken, while gold AS TEXT sits on a dark surface and
+// must lighten. Darkening the fill for the button silently dropped the text use
+// to 3.66:1, which is why both are pinned here.
+test("dark gold-as-text clears AA on the surfaces it sits on", () => {
+  const text = themeColour(css, ".dark", "--royal-gold-ink-text");
+
+  for (const surface of ["--card", "--background", "--muted"] as const) {
+    const measured = contrastRatio(themeColour(css, ".dark", surface), text);
+    assert.ok(
+      measured >= AA_TEXT,
+      `--royal-gold-ink-text on ${surface} measures ${ratio(measured)}`,
+    );
+  }
+});
+
 test("the dark hover is a darker step of the dark ink", () => {
   const ink = themeColour(css, ".dark", "--royal-gold-ink");
   const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
