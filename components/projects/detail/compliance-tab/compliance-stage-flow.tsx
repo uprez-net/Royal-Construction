@@ -1,7 +1,14 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type {
   ComplianceStage,
@@ -67,6 +74,144 @@ type ComplianceStageFlowProps = {
   className?: string;
 };
 
+const STAGE_DETAILS: Readonly<Record<ComplianceStageId, string>> = {
+  SURVEYOR:
+    "Requests the property and site information that establishes the project’s starting constraints.",
+  ARCHITECT:
+    "Assembles the design pack and resolves the design information needed for certification.",
+  COUNCIL:
+    "Collects council records and planning information needed to assess the proposal.",
+  CERTIFIER:
+    "Reviews the submission and turns any missing evidence into checklist items to resolve.",
+  DEVELOPMENT_APPLICATION:
+    "Runs the development approval detour from lodgement through to the authority’s determination.",
+  CHECKLIST:
+    "Tracks each certifier request until the evidence is supplied or the item is marked not required.",
+  PLANNING_PORTAL:
+    "Lodges the application and waits for the planning portal or authority to determine it.",
+  CERTIFICATE:
+    "Collects the final certificate and cover so the compliance file can be closed.",
+};
+
+function stageProgress(stage: ComplianceStage) {
+  const engaged = stage.actors.some((actor) => actor.state !== "idle");
+
+  if (
+    !stage.isActive ||
+    !engaged ||
+    stage.state === "done" ||
+    stage.slaBusinessDays === null ||
+    stage.elapsedBusinessDays === null
+  ) {
+    return null;
+  }
+
+  const progress = Math.min(
+    100,
+    Math.max(
+      0,
+      (stage.elapsedBusinessDays / Math.max(stage.slaBusinessDays, 1)) * 100,
+    ),
+  );
+  return {
+    progress,
+    daysLeft: stage.daysLeft,
+    slaBusinessDays: stage.slaBusinessDays,
+  };
+}
+
+function StageTooltip({
+  stage,
+  children,
+}: {
+  stage: ComplianceStage;
+  children: ReactNode;
+}) {
+  const actors = stage.actors;
+  const progress = stageProgress(stage);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent
+        side="top"
+        sideOffset={10}
+        className="block w-80 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl p-3.5"
+      >
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-background">{stage.label}</p>
+          <p className="text-xs leading-relaxed text-background/75">
+            {STAGE_DETAILS[stage.id]}
+          </p>
+        </div>
+
+        {actors.length > 0 ? (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold tracking-[0.12em] text-background/55 uppercase">
+              Parties
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {actors.map((actor) => (
+                <span
+                  key={actor.id}
+                  className="rounded-full border border-background/20 bg-background/10 px-2 py-1 text-[11px] text-background"
+                >
+                  {actor.label}
+                  <span className="ml-1 text-background/55">
+                    {actor.state === "outstanding"
+                      ? "· outstanding"
+                      : actor.state === "settled"
+                        ? "· settled"
+                        : "· not engaged"}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-background/60">
+            No parties are attached to this stage yet.
+          </p>
+        )}
+
+        {progress ? (
+          <div className="space-y-1.5 border-t border-background/15 pt-2.5">
+            <div className="flex items-center justify-between gap-3 text-[11px]">
+              <span className="font-medium text-background/80">SLA progress</span>
+              <span className="tabular-nums text-background/60">
+                {progress.daysLeft !== null && progress.daysLeft < 0
+                  ? `${Math.abs(progress.daysLeft)}d over`
+                  : progress.daysLeft === 0
+                    ? "Due today"
+                    : `${progress.daysLeft}d left`}
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={`${stage.label} SLA progress`}
+              aria-valuemin={0}
+              aria-valuemax={progress.slaBusinessDays}
+              aria-valuenow={stage.elapsedBusinessDays ?? 0}
+              className="h-1.5 overflow-hidden rounded-full bg-background/15"
+            >
+              <span
+                className="block h-full rounded-full transition-[width,background-color] duration-700"
+                style={{
+                  width: `${progress.progress}%`,
+                  backgroundColor: `color-mix(in oklab, var(--destructive) ${progress.progress}%, var(--primary))`,
+                }}
+              />
+            </div>
+            <p className="text-[10px] text-background/50">
+              {stage.elapsedBusinessDays} of {progress.slaBusinessDays} working days used
+            </p>
+          </div>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function ComplianceStageFlow({
   stages,
   onSelectStage,
@@ -108,16 +253,17 @@ export function ComplianceStageFlow({
           "aria-current":
             stage.state === "current" ? ("step" as const) : undefined,
         }
-      : { "aria-current": undefined };
+      : { "aria-current": undefined, tabIndex: 0 };
 
   return (
-    <nav
-      aria-label="Compliance stages"
-      className={cn(
-        "rounded-xl border border-border/70 bg-card px-3 py-4 shadow-sm",
-        className,
-      )}
-    >
+    <TooltipProvider delayDuration={180}>
+      <nav
+        aria-label="Compliance stages"
+        className={cn(
+          "rounded-xl border border-border/70 bg-card px-3 py-4 shadow-sm",
+          className,
+        )}
+      >
       {/* Scrolls rather than wraps. Six stages plus a branch is wider than a
           phone, and wrapping them puts the last two on a line of their own
           under a connector that no longer connects anything — which reads as
@@ -180,21 +326,23 @@ export function ComplianceStageFlow({
                   </span>
                 ) : null}
 
-                <Node
-                  {...nodeProps(stage)}
-                  className={cn(
-                    "flex w-full flex-col items-center gap-1.5 rounded-lg px-1 text-center",
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                    selectable(stage) && "hover:bg-muted/60",
-                  )}
-                  style={{
-                    paddingTop: NODE_PAD_TOP,
-                    paddingBottom: NODE_PAD_TOP,
-                  }}
-                >
-                  <StageMarker stage={stage} />
-                  <StageCaption stage={stage} actorLimit={3} />
-                </Node>
+                <StageTooltip stage={stage}>
+                  <Node
+                    {...nodeProps(stage)}
+                    className={cn(
+                      "flex w-full flex-col items-center gap-1.5 rounded-lg px-1 text-center",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                      selectable(stage) && "hover:bg-muted/60",
+                    )}
+                    style={{
+                      paddingTop: NODE_PAD_TOP,
+                      paddingBottom: NODE_PAD_TOP,
+                    }}
+                  >
+                    <StageMarker stage={stage} />
+                    <StageCaption stage={stage} actorLimit={3} />
+                  </Node>
+                </StageTooltip>
               </div>
             );
           })}
@@ -283,33 +431,36 @@ export function ComplianceStageFlow({
                     side and push the whole card right, so a short branch drew
                     its card hanging off one upright and clear of the other. */}
                 <span className="flex justify-center">
-                  <BranchNode
-                    {...nodeProps(branch)}
-                    className={cn(
-                      // A floor as well as a ceiling. The branch can leave from
-                      // the column right next to the one it rejoins — a certifier
-                      // asking for a DA on the checklist they have just issued —
-                      // and half a column each side of that is not a card's
-                      // width. So it keeps its own size and hangs past the
-                      // uprights, which is harmless now that it sits under the
-                      // run rather than on it.
-                      "relative z-10 flex w-fit min-w-60 max-w-88 items-center gap-2.5 rounded-xl border px-3 py-2 text-left",
-                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                      branch.isActive
-                        ? "border-border bg-card shadow-sm"
-                        : "border-dashed border-border/80 bg-muted/30",
-                      selectable(branch) && "hover:bg-muted/60",
-                    )}
-                  >
-                    <StageMarker stage={branch} />
-                    <StageCaption stage={branch} actorLimit={4} align="start" />
-                  </BranchNode>
+                  <StageTooltip stage={branch}>
+                    <BranchNode
+                      {...nodeProps(branch)}
+                      className={cn(
+                        // A floor as well as a ceiling. The branch can leave from
+                        // the column right next to the one it rejoins — a certifier
+                        // asking for a DA on the checklist they have just issued —
+                        // and half a column each side of that is not a card's
+                        // width. So it keeps its own size and hangs past the
+                        // uprights, which is harmless now that it sits under the
+                        // run rather than on it.
+                        "relative z-10 flex w-fit min-w-60 max-w-88 items-center gap-2.5 rounded-xl border px-3 py-2 text-left",
+                        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                        branch.isActive
+                          ? "border-border bg-card shadow-sm"
+                          : "border-dashed border-border/80 bg-muted/30",
+                        selectable(branch) && "hover:bg-muted/60",
+                      )}
+                    >
+                      <StageMarker stage={branch} />
+                      <StageCaption stage={branch} actorLimit={4} align="start" />
+                    </BranchNode>
+                  </StageTooltip>
                 </span>
               </div>
             </div>
           ) : null}
         </div>
       </div>
-    </nav>
+      </nav>
+    </TooltipProvider>
   );
 }
