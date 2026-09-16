@@ -1,3 +1,8 @@
+import {
+  describeGrannyExclusionConflicts,
+  type GrannyExclusionConflict,
+} from "./granny-exclusion";
+
 // Pure, framework-agnostic readiness helpers for the Offer phase: how close an
 // offer's validity is to expiring, and the enumerated blockers that stand
 // between the current draft and an email to the client. Kept side-effect free so
@@ -98,6 +103,10 @@ export type OfferSendReadinessInput = {
   // one to re-send, and the operator decides whether the change is material
   // enough to warrant a new revision.
   readonly adminContentStale?: boolean;
+  // Exclusion lines saying the granny flat is out of scope on a build that
+  // includes one (findGrannyExclusionConflicts). Block-severity: every send
+  // action refuses them server-side too.
+  readonly grannyExclusionConflicts?: readonly GrannyExclusionConflict[];
 };
 
 export function collectOfferSendBlockers({
@@ -107,6 +116,7 @@ export function collectOfferSendBlockers({
   ownerIssues = [],
   inclusionFindingCount = 0,
   adminContentStale = false,
+  grannyExclusionConflicts = [],
 }: OfferSendReadinessInput): readonly OfferSendBlocker[] {
   const blockers: OfferSendBlocker[] = [];
 
@@ -135,6 +145,17 @@ export function collectOfferSendBlockers({
       severity: "block",
     });
   }
+  // One per line, each jumping to the step where that line is edited.
+  grannyExclusionConflicts.forEach((conflict, index) => {
+    blockers.push({
+      id: `granny-exclusion-${index}`,
+      label: describeGrannyExclusionConflicts([conflict], {
+        revisionNeeded: false,
+      }),
+      stepId: conflict.stepId,
+      severity: "block",
+    });
+  });
   if (expiryState === "expired") {
     blockers.push({
       id: "expired",

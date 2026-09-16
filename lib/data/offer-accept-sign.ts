@@ -27,6 +27,11 @@ import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { createOfferAcceptanceEnvelope } from "@/lib/docusign/offer-envelope";
 import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
+import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
+import {
+  describeGrannyExclusionConflicts,
+  findGrannyExclusionConflicts,
+} from "@/lib/offer/granny-exclusion";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -102,6 +107,18 @@ export async function sendOfferForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // A granny flat priced on one page and excluded on another. Checked on the
+  // saved workspace the acceptance PDF renders from; still editable at SENT.
+  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
+  if (grannyConflicts.length > 0) {
+    return {
+      ok: false,
+      error: describeGrannyExclusionConflicts(grannyConflicts, {
+        revisionNeeded: false,
+      }),
     };
   }
 
@@ -236,6 +253,31 @@ export async function sendOfferForSignature(input: {
       owners,
     });
   } catch (error) {
+    const reason = describeDocusignError(error);
+    // Logged and recorded before the claim is released. The release puts the
+    // offer back exactly where it was and the refusal reaches only whoever
+    // clicked, so otherwise nothing showed that a send was tried and rejected.
+    console.error(
+      `[offer] acceptance envelope creation failed for offer ${offer.id}; claim released:`,
+      reason,
+      error,
+    );
+    await prisma.offerStatusEvent
+      .create({
+        data: {
+          offerId: offer.id,
+          fromStatus: offer.offerStatus,
+          toStatus: offer.offerStatus,
+          note: `DocuSign rejected the offer acceptance envelope: ${reason}`,
+          actorId: access.user.id,
+        },
+      })
+      .catch((eventError) =>
+        console.error(
+          "[offer] recording the rejected acceptance envelope failed:",
+          eventError,
+        ),
+      );
     // Release the claim so the estimator can retry.
     await prisma.offer.updateMany({
       where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
@@ -247,7 +289,7 @@ export async function sendOfferForSignature(input: {
     };
   }
 
-  await prisma
+  const stillClaimed = await prisma
     .$transaction(async (tx) => {
       await tx.envelope.create({
         data: {
@@ -274,20 +316,38 @@ export async function sendOfferForSignature(input: {
           },
         },
       });
-      await tx.offer.update({
-        where: { id: offer.id },
-        data: { offerStatus: OfferStatus.OFFER_SENT },
+      // Only over the status this send claimed, on the live revision: a recall
+      // or revision during envelope creation must not be overwritten with
+      // OFFER_SENT. The envelope row above is still written so it can be
+      // cancelled and stays on the audit trail.
+      const stillSent = await tx.offer.updateMany({
+        where: {
+          id: offer.id,
+          offerStatus: OfferStatus.OFFER_SENT,
+          isActive: true,
+        },
+        data: {
+          offerStatus: OfferStatus.OFFER_SENT,
+          // A new envelope replaces the acceptance, so the last envelope's
+          // executed PDF no longer describes it. The webhook files this one's.
+          executedPdfUrl: null,
+        },
       });
+      if (stillSent.count === 0) {
+        return false;
+      }
       await tx.offerStatusEvent.create({
         data: {
           offerId: offer.id,
           fromStatus: offer.offerStatus,
           toStatus: OfferStatus.OFFER_SENT,
+          actorId: access.user.id,
           note: `DocuSign acceptance envelope ${envelope.envelopeId} sent to ${owners
             .map((owner) => owner.email)
             .join(", ")}`,
         },
       });
+      return true;
     })
     .catch((error) => {
       // The envelope is ALREADY with the client and cannot be un-sent, so this
@@ -303,6 +363,13 @@ export async function sendOfferForSignature(input: {
         `The offer was sent for signature (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
       );
     });
+
+  // No *_SENT event and no lead sync: the offer is wherever the recall or
+  // revision left it.
+  if (!stillClaimed) {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    return cancelRacedSend(envelope.envelopeId);
+  }
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   // The status moved to *_SENT above; bring the lead with it. Best effort

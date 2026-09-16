@@ -105,6 +105,7 @@ import {
   collectOfferSendBlockers,
   describeOfferExpiry,
 } from "@/lib/offer/offer-readiness";
+import { findGrannyExclusionConflicts } from "@/lib/offer/granny-exclusion";
 import {
   EMPTY_OFFER_IMAGES,
   setOfferImage,
@@ -474,6 +475,11 @@ export function NewOfferWorkspace({
     [job.owners],
   );
   const ownersComplete = ownerIssues.length === 0;
+  // The check every send action makes server-side, surfaced before the send.
+  const grannyExclusionConflicts = useMemo(
+    () => findGrannyExclusionConflicts({ job, draft, exclusions }),
+    [job, draft, exclusions],
+  );
   const sendBlockers = useMemo(
     () =>
       collectOfferSendBlockers({
@@ -482,9 +488,11 @@ export function NewOfferWorkspace({
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
         adminContentStale,
+        grannyExclusionConflicts,
       }),
     [
       adminContentStale,
+      grannyExclusionConflicts,
       leadId,
       customerPrice.needsOverrideReason,
       offerExpiry,
@@ -1975,7 +1983,8 @@ export function NewOfferWorkspace({
         canSend={
           leadId !== undefined &&
           !customerPrice.needsOverrideReason &&
-          ownersComplete
+          ownersComplete &&
+          grannyExclusionConflicts.length === 0
         }
         sending={sending}
         sendError={sendError}
