@@ -6,6 +6,7 @@ import {
   ComplianceOutreachMode,
   ComplianceOutreachStatus,
   CompliancePartyType,
+  GraphMailbox,
   Prisma,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
@@ -117,6 +118,7 @@ async function recordOutboundEmail(params: {
   subject: string;
   body: string;
   attachments: CertifierEmailAttachment[];
+  graphMailbox: GraphMailbox;
 }): Promise<void> {
   const checksum = await generateEmailChecksum(
     params.subject,
@@ -136,6 +138,7 @@ async function recordOutboundEmail(params: {
         body: params.body,
         checksum,
         direction: CertifierEmailDirection.OUTBOUND,
+        graphMailbox: params.graphMailbox,
         attachments: params.attachments as unknown as Prisma.InputJsonValue,
         sentAt: new Date(),
       },
@@ -472,6 +475,7 @@ export async function startPartyOutreach(
           refToken: generatePartyRefToken(party),
           mode: ComplianceOutreachMode.OUTREACH,
           status: ComplianceOutreachStatus.NOT_SENT,
+          graphMailbox: GraphMailbox.ADMIN,
           ...contact,
         },
       });
@@ -533,7 +537,9 @@ export async function startPartyOutreach(
     ...extraFiles.filter((file) => !packIds.has(file.id)),
   ];
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    outreach.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
   const subject = buildPartySubject(
     outreach.refToken,
@@ -561,6 +567,7 @@ export async function startPartyOutreach(
   await recordOutboundEmail({
     engagementId: engagement.id,
     outreachId: outreach.id,
+    graphMailbox: outreach.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     emailTo: contactEmail,
     subject,
@@ -642,6 +649,7 @@ export async function recordPartySelfSupplied(
       // NOT_SENT and staying there. There is no mail to send and none coming
       // back; the documents arrive by upload like any other.
       status: ComplianceOutreachStatus.NOT_SENT,
+      graphMailbox: GraphMailbox.ADMIN,
     },
   });
 
@@ -687,7 +695,9 @@ export async function sendPartyReply(
     );
   }
 
-  const config = getGraphConfig();
+  const config = getGraphConfig(
+    outreach.graphMailbox === GraphMailbox.ADMIN ? "admin" : "business",
+  );
   const client = await createGraphContext(config);
   const subject = buildPartySubject(
     outreach.refToken,
@@ -728,6 +738,7 @@ export async function sendPartyReply(
   await recordOutboundEmail({
     engagementId: engagement.id,
     outreachId: outreach.id,
+    graphMailbox: outreach.graphMailbox,
     emailFrom: config.senderUpn ?? "",
     emailTo: outreach.contactEmail,
     subject,
