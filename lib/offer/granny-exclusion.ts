@@ -44,8 +44,11 @@ const NOT_IN_SCOPE = /\bnot in (?:the )?(?:current )?scope\b/;
 
 // What must be left once that statement and its brackets or dashes are gone:
 // the granny flat alone, singular or plural.
+// "secondary dwelling" is the planning term for the same thing, and is a
+// complete subject on its own: "Secondary dwelling (not in scope)" contradicts
+// a build that includes one exactly as the granny wording does.
 const GRANNY_FLAT_ALONE =
-  /^(?:(?:the|a|any) )?(?:secondary dwelling )?granny ?(?:flat|home)s?(?: secondary dwelling)?(?: (?:is|are))?$/;
+  /^(?:(?:the|a|any) )?(?:(?:secondary dwellings?)|(?:secondary dwellings? )?granny ?(?:flat|home)s?(?: secondary dwellings?)?)(?: (?:is|are))?$/;
 
 // Narrow on purpose: the granny flat must be the whole subject of the line.
 // "Granny flat landscaping (not in current scope)" and "Granny flat site costs"

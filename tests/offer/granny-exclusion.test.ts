@@ -164,3 +164,24 @@ test("the readiness strip blocks the send and jumps to the step that holds the l
   assert.equal(blocker.stepId, "offer-step-offer-document");
   assert.match(blocker.label, /Granny flat \(not in current scope\)/);
 });
+
+test("the planning term for a granny flat is the same subject", () => {
+  for (const line of [
+    "Secondary dwelling (not in scope)",
+    "Secondary dwelling (not in current scope)",
+    "Secondary dwellings (not in the current scope)",
+    "The secondary dwelling is not in scope",
+  ]) {
+    assert.equal(isGrannyOutOfScopeLine(line), true, `missed ${line}`);
+  }
+});
+
+test("a secondary dwelling named inside a wider exclusion is left alone", () => {
+  for (const line of [
+    "Council Development & Secondary Dwelling contribution",
+    "Secondary dwelling landscaping (not in current scope)",
+    "Secondary dwelling site costs",
+  ]) {
+    assert.equal(isGrannyOutOfScopeLine(line), false, `wrongly flagged ${line}`);
+  }
+});

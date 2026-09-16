@@ -48,7 +48,7 @@ import {
   formatContractMoney,
   paymentScheduleLine as buildPaymentScheduleLine,
   stageAmount,
-  tenderExclusionLines,
+  resolveSignedTenderExclusions,
 } from "@/lib/offer/project-handoff-commercials";
 import {
   describeTenderPriceMismatch,
@@ -342,9 +342,20 @@ export async function sendContractForSignature(input: {
   const stageRows = payment.paymentSchedule.slice(0, 7);
   const paymentScheduleLine = buildPaymentScheduleLine(stageRows, contractValue);
   const depositRow = payment.deposit;
-  // The exclusions the Tender printed, Scope exclusions included — the bullets
-  // alone left out every ticked Scope exclusion the customer had signed.
-  const exclusions = tenderExclusionLines(snapshot);
+  // The exclusions the SIGNED Tender printed, Scope exclusions included. Read
+  // from the Tender row, not the snapshot: the workspace can still be saved
+  // after the offer is agreed, which would otherwise put a line on the BC4 that
+  // the customer never signed (or drop one they did).
+  const signedExclusions = resolveSignedTenderExclusions({
+    tenderDocumentData: offer.tender?.documentData ?? null,
+    snapshot,
+  });
+  if (signedExclusions.source === "agreed-snapshot") {
+    console.warn(
+      `[offer] contract for offer ${offer.id}: no readable exclusions on the Tender row, using the agreed snapshot's`,
+    );
+  }
+  const exclusions = signedExclusions.lines;
 
   // Owner address/contact for the single BC4 owner lines. Current Location (from
   // Job setup) supersedes the hand-typed owner-address particular as the source

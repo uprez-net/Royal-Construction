@@ -60,6 +60,49 @@ export function paymentScheduleLine(
 // exclusion table is. The contract and the project read draft.exclusionBullets
 // alone, so a ticked Scope exclusion the customer signed on the Tender was
 // missing from both.
+export type SignedTenderExclusions = {
+  readonly lines: readonly string[];
+  // "tender-document": the exclusions the signed Tender actually printed.
+  // "agreed-snapshot": a Tender row with nothing readable on it, so the offer's
+  // own snapshot stands in — what both consumers always used.
+  readonly source: "tender-document" | "agreed-snapshot";
+};
+
+/**
+ * The exclusions the Contract and the project must carry: the ones the SIGNED
+ * Tender printed, read from `Tender.documentData` (the render input stored at
+ * send). The consumers used to rebuild them from `agreedSnapshot ?? workspaceState`,
+ * which `saveOfferWorkspace` still accepts writes to after the offer is agreed,
+ * so an edit between the Tender send and the Contract made the two disagree.
+ * Mirrors resolveContractPaymentSource, which does this for the schedule.
+ */
+export function resolveSignedTenderExclusions(input: {
+  readonly tenderDocumentData: unknown;
+  readonly snapshot: Pick<OfferWorkspaceSnapshot, "draft" | "exclusions">;
+}): SignedTenderExclusions {
+  const data =
+    typeof input.tenderDocumentData === "object" && input.tenderDocumentData !== null
+      ? (input.tenderDocumentData as Record<string, unknown>)
+      : null;
+  const draft = data?.draft;
+  const exclusions = data?.exclusions;
+  if (
+    typeof draft === "object" &&
+    draft !== null &&
+    Array.isArray((draft as { exclusionBullets?: unknown }).exclusionBullets) &&
+    Array.isArray(exclusions)
+  ) {
+    return {
+      lines: getVisibleExclusionRows(
+        draft as OfferWorkspaceSnapshot["draft"],
+        exclusions as OfferWorkspaceSnapshot["exclusions"],
+      ).map((row) => row.label),
+      source: "tender-document",
+    };
+  }
+  return { lines: tenderExclusionLines(input.snapshot), source: "agreed-snapshot" };
+}
+
 export function tenderExclusionLines(
   snapshot: Pick<OfferWorkspaceSnapshot, "draft" | "exclusions">,
 ): string[] {
