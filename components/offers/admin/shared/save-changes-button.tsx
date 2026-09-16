@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { AdminSaveReceipt } from "@/lib/store/slices/admin-offer-content-save";
-import { useUnsavedAdminGuard } from "./use-unsaved-admin-guard";
 
 interface SaveChangesButtonProps {
   dirty: boolean;
@@ -28,8 +27,6 @@ export function SaveChangesButton({
   className,
   disabled,
 }: SaveChangesButtonProps) {
-  useUnsavedAdminGuard();
-
   const handleSave = () => {
     const result = onSave();
     if (!result) return;

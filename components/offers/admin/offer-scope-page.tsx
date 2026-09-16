@@ -41,6 +41,7 @@ import {
   Coins,
 } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
+import { ALLOWANCE_UNDO_TOAST_ID, EXCLUSION_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
 
 const ALLOWANCE_CATEGORIES: AllowanceCategory[] = [
   "package",
@@ -87,6 +88,7 @@ export function OfferScopePage() {
     const item = allowances[index];
     dispatch(allowanceRemoved(id));
     toast("Allowance removed", {
+      id: ALLOWANCE_UNDO_TOAST_ID,
       action: {
         label: "Undo",
         onClick: () => dispatch(allowanceRestored({ item, index })),
@@ -100,6 +102,7 @@ export function OfferScopePage() {
     const item = exclusions[index];
     dispatch(exclusionRemoved(id));
     toast("Exclusion removed", {
+      id: EXCLUSION_UNDO_TOAST_ID,
       action: {
         label: "Undo",
         onClick: () => dispatch(exclusionRestored({ item, index })),

@@ -34,6 +34,7 @@ import { Calculator, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { PriceModeCell } from "./shared/price-mode-cell";
 import { FormulaVariablesPanel } from "./shared/formula-variables-panel";
 import { SaveChangesButton } from "./shared/save-changes-button";
+import { COST_SCHEDULE_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
 
 function newRow(phase: string): CostScheduleRow {
   return {
@@ -144,6 +145,7 @@ export function OfferCostScheduleScreen() {
     dispatch(costScheduleRowRemoved(id));
     forgetFormulaValidity(id);
     toast("Task removed", {
+      id: COST_SCHEDULE_UNDO_TOAST_ID,
       action: {
         label: "Undo",
         onClick: () => dispatch(costScheduleRowRestored({ row, index })),
