@@ -43,9 +43,9 @@ type OfferSummaryStripProps = {
   readonly effectiveMargin: EffectiveMargin;
   readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
-  // Until the offer loads these figures are the seeded defaults, and a price
+  // Until the offer loads every figure here is a seeded default, and a price
   // stated with confidence beside a "Loading this offer…" pane is worse than no
-  // price: it reads as this offer's money. Show the cells empty instead.
+  // price: it reads as this offer's money. The whole strip goes neutral.
   readonly awaitingOffer: boolean;
 };
 
@@ -99,6 +99,17 @@ export function OfferSummaryStrip({
       </dl>
 
       <div className="ml-auto flex items-center gap-3">
+        {awaitingOffer ? (
+          // Every figure in this group comes from the same seeded state as the
+          // cells above: the override badge compares two placeholder numbers,
+          // the margin badge grades a placeholder markup, and the contract
+          // value is the largest number on the screen. None of it is this
+          // offer's until it has loaded.
+          <p className="font-heading text-lg font-semibold tabular-nums text-muted-foreground">
+            <span className="sr-only">Contract value including GST: </span>—
+          </p>
+        ) : (
+          <>
         {overridden ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium text-warning-ink">
             <TriangleAlert className="size-3" aria-hidden="true" />
@@ -123,6 +134,8 @@ export function OfferSummaryStrip({
           <span className="sr-only">Contract value including GST: </span>
           {formatCurrency(selected)}
         </p>
+          </>
+        )}
       </div>
     </aside>
   );
