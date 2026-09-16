@@ -19,7 +19,7 @@ import {
   MessagesSquare,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +89,7 @@ import {
   selectDeveloperPendingDocument,
   selectComplianceMutations,
   recordPartySelfSupplied,
+  refreshCertifierEngagement,
   sendCertifierReply,
   sendPartyReply,
   setComplianceDocumentNotRequired,
@@ -97,7 +98,10 @@ import {
   type ComplianceScope,
 } from "@/lib/store/slices/projectsSlice";
 import type { ProjectDetail } from "@/types/project";
-import { DEVELOPER_APPROVAL_DOCUMENTS } from "@/constants/complianceDocuments";
+import {
+  DA_DOCUMENTS,
+  DEVELOPER_APPROVAL_DOCUMENTS,
+} from "@/constants/complianceDocuments";
 import { developerByKey } from "@/constants/complianceDevelopers";
 import {
   PortalCertificateBlock,
@@ -330,6 +334,20 @@ export function ProjectComplianceTab({
     }
     return map;
   }, [engagement]);
+
+  const hasDa = hasDevelopmentApplication(engagement);
+
+  /**
+   * Older DA engagements predate fixed DA rows being seeded. Refresh them once
+   * so every row gets the same not-required control, including empty rows.
+   */
+  const missingDaRows =
+    hasDa && DA_DOCUMENTS.some((document) => !documentsByType.has(document.type));
+
+  useEffect(() => {
+    if (!missingDaRows) return;
+    void dispatch(refreshCertifierEngagement({ projectId: project.id }));
+  }, [dispatch, missingDaRows, project.id]);
 
   /**
    * Every file on the engagement, in the order the documents are listed.
@@ -813,6 +831,10 @@ export function ProjectComplianceTab({
       ),
     } satisfies DeveloperApprovalItem;
   });
+
+  const activeDeveloperItems = developerItems.filter(
+    (item) => !item.document || !isNotRequired(item.document.status),
+  );
 
   /**
    * Whether the banner at the top of the tab still has a question to ask.
@@ -1445,8 +1467,6 @@ export function ProjectComplianceTab({
    * block, its lodgement date and its reference number instead of reverting to
    * a tab that never mentions the council.
    */
-  const hasDa = hasDevelopmentApplication(engagement);
-
   /** Show the DA question until it is answered or dismissed in this render. */
   const needsDevelopmentApplicationAnswer =
     engagement?.developmentApplicationRequired === null && !hasDa;
@@ -2262,7 +2282,11 @@ export function ProjectComplianceTab({
                   // applying: there is nothing for a covenant to be about on a lot
                   // outside a bushfire-prone area, and a panel that can never be
                   // satisfied is a gate nobody can clear.
-                  items={developerItems.filter(
+                  // A document waived in the DA list is no longer a document
+                  // the developer needs to approve. Keep the decision in one
+                  // place so the approval block cannot ask for a row the DA
+                  // has already settled.
+                  items={activeDeveloperItems.filter(
                     (item) =>
                       item.documentType !==
                         ComplianceDocumentType.BUSHFIRE_REPORT ||

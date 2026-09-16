@@ -9,6 +9,9 @@ import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
 import { notifyCompliance } from "@/lib/compliance/notify";
+import {
+  ensureDevelopmentApplicationDocuments,
+} from "@/lib/data/compliance";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -146,6 +149,10 @@ export async function raiseComplianceAlert(params: {
   raisedBySource?: ComplianceAlertSource | null;
   detail?: string | null;
 }): Promise<{ alertId: string; created: boolean }> {
+  if (params.type === ComplianceAlertType.DA_APPROVAL_REQUIRED) {
+    await ensureDevelopmentApplicationDocuments(params.engagementId);
+  }
+
   const open = await prisma.complianceAlert.findFirst({
     where: {
       engagementId: params.engagementId,

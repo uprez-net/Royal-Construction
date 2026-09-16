@@ -12,6 +12,8 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { isNotRequired } from "@/constants/complianceDocuments";
+
 /**
  * What a compliance read pulls in.
  *
@@ -732,6 +734,15 @@ export function developerPlansBlockedReason(
     | undefined,
 ): string | null {
   if (!engagement?.developerApprovalRequired) return null;
+
+  // The DA list owns whether this document applies to the job. If it has been
+  // waived there is no developer approval left to collect for it, even when an
+  // older developer approval record is still present on the engagement.
+  const plans = engagement.documents.find(
+    (document) =>
+      document.documentType === ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+  );
+  if (plans && isNotRequired(plans.status)) return null;
 
   const approval = developerApprovalFor(
     engagement,

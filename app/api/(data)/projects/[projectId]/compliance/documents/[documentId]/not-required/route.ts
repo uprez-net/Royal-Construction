@@ -17,7 +17,7 @@ import {
 } from "@/utils/validators/compliance";
 
 /**
- * Marks one checklist line as not applying to this job, or puts it back.
+ * Marks one DA or checklist line as not applying to this job, or puts it back.
  *
  * ADMIN-only, the same gate the approve/reject decision carries. It is the same
  * kind of judgement: it settles a row without a document behind it, and it is

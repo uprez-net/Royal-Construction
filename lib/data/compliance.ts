@@ -1,11 +1,13 @@
 "use server";
 
 import {
+  ComplianceAlertType,
   CertifierEmailDirection,
   CertifierEngagementStatus,
   GraphMailbox,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
+  ComplianceExternalApplicationKind,
   Prisma,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
@@ -14,6 +16,7 @@ import { after } from "next/server";
 import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
+  DA_DOCUMENTS,
   isApprovableDocumentType,
   isNotRequired,
   isOutstandingEvidence,
@@ -81,6 +84,47 @@ import { logAction } from "./actionLog";
 
 const engagementInclude = certifierEngagementInclude;
 
+/**
+ * Ensures every fixed DA row exists once the DA path is opened.
+ *
+ * Most of these rows do not have a file yet, but they still need an identity so
+ * an admin can explicitly say that a conditional council requirement does not
+ * apply. Uploading used to create those rows lazily; the not-required action
+ * needs the row before an upload, so the DA alert seeds the fixed list.
+ */
+export async function ensureDevelopmentApplicationDocuments(
+  engagementId: string,
+): Promise<boolean> {
+  const daTypes = DA_DOCUMENTS.map((document) => document.type);
+  const existing = await prisma.complianceDocument.findMany({
+    where: {
+      engagementId,
+      documentType: { in: daTypes },
+    },
+    select: { documentType: true },
+  });
+  const existingTypes = new Set(existing.map((document) => document.documentType));
+  const missing = DA_DOCUMENTS.filter(
+    (document) => !existingTypes.has(document.type),
+  );
+
+  if (missing.length === 0) return false;
+
+  const nextOrder = await prisma.complianceDocument.count({
+    where: { engagementId },
+  });
+  await prisma.complianceDocument.createMany({
+    data: missing.map((document, index) => ({
+      engagementId,
+      documentType: document.type,
+      status: ComplianceDocumentStatus.PENDING,
+      order: nextOrder + index,
+    })),
+  });
+
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
@@ -88,6 +132,32 @@ const engagementInclude = certifierEngagementInclude;
 export async function getCertifierEngagement(
   projectId: string,
 ): Promise<CertifierEngagementDetail | null> {
+  const engagement = await prisma.certifierEngagement.findUnique({
+    where: { projectId },
+    include: engagementInclude,
+  });
+
+  if (!engagement) return null;
+
+  const hasDevelopmentApplication =
+    engagement.alerts.some(
+      (alert) =>
+        alert.type === ComplianceAlertType.DA_APPROVAL_REQUIRED &&
+        alert.status === "OPEN",
+    ) ||
+    engagement.externalApplications.some(
+      (application) =>
+        application.kind ===
+        ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION,
+    );
+
+  if (
+    !hasDevelopmentApplication ||
+    !(await ensureDevelopmentApplicationDocuments(engagement.id))
+  ) {
+    return engagement;
+  }
+
   return prisma.certifierEngagement.findUnique({
     where: { projectId },
     include: engagementInclude,
@@ -1228,7 +1298,8 @@ export async function resolveComplianceDocument(params: {
 }
 
 /**
- * Marks a checklist line as not applying to this job, or puts it back.
+ * Marks a compliance document needed by the DA or checklist as not applying to
+ * this job, or puts it back.
  *
  * The one judgement on a checklist row that nothing infers. A certifier's
  * checklist is a standard list sent for every job, so several lines routinely do
@@ -1236,10 +1307,10 @@ export async function resolveComplianceDocument(params: {
  * for something the certifier already holds. Nothing in the pipeline can read a
  * strikethrough reliably, so the admin says so.
  *
- * Restricted to checklist items on purpose. The required pack and the signed
- * copies are what opens the engagement and there is no version of this job where
- * one of them is optional; letting a row of either be waved through would be a
- * way to send the certifier an incomplete pack and have the tab call it done.
+ * DA rows are included because the council's standard list is conditional: a
+ * document can be present in the list while not applying to this job. The
+ * required pack and signed copies stay excluded; they are what opens the
+ * engagement and cannot be waived through this control.
  *
  * Setting it never touches an uploaded file. A line can be marked not required
  * after something was uploaded against it — the certifier says they have it
@@ -1271,9 +1342,16 @@ export async function setComplianceDocumentNotRequired(params: {
     throw new Error("Compliance document not found on this project.");
   }
 
-  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
+  const isDaDocument =
+    document.documentType === ComplianceDocumentType.DA_ITEM ||
+    DA_DOCUMENTS.some((entry) => entry.type === document.documentType);
+
+  if (
+    document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM &&
+    !isDaDocument
+  ) {
     throw new Error(
-      `${complianceDocumentLabel(document.documentType, document.label)} is not a checklist item.`,
+      `${complianceDocumentLabel(document.documentType, document.label)} cannot be marked not required here.`,
     );
   }
 
