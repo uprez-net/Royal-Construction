@@ -6,8 +6,11 @@ import type { OfferWorkspaceSnapshot } from "./workspace-persistence";
 // who adds a granny flat sends a document that prices it on one page and
 // excludes it on another.
 //
-// Directive-free so the rule is shared by the send-readiness strip and every
-// send action, and can be unit-tested.
+// Nothing gates a send on this any more: the workspace removes the line as soon
+// as the build says there is a granny flat, and every document filters it when
+// it is built (withoutGrannyOutOfScopeLines). findGrannyExclusionConflicts is
+// kept as the detector those rules are specified against — it reports WHERE a
+// line sits, which the filters do not need but a future warning would.
 
 type GrannyExclusionStepId = "offer-step-offer-document" | "offer-step-scope";
 
