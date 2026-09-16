@@ -699,6 +699,7 @@ export function ModalManager() {
         deliverables,
         council,
         location,
+        customer,
         vaultOptions,
       } = modal.payload as {
         projectId: string;
@@ -712,6 +713,12 @@ export function ModalManager() {
         }[];
         council?: string | null;
         location?: string | null;
+        customer: {
+          name: string;
+          email: string | null;
+          phone: string | null;
+          address: string | null;
+        };
         vaultOptions?: VaultAttachmentOption[];
       };
       return (
@@ -724,6 +731,7 @@ export function ModalManager() {
           deliverables={deliverables ?? []}
           council={council}
           location={location}
+          customer={customer}
           vaultOptions={vaultOptions}
           open
           onOpenChange={(open) => {

@@ -737,9 +737,14 @@ export function ProjectComplianceTab({
           // filters -- see `developersForArea`.
           council: project.council,
           location: project.location,
-          // What the "From the file" control offers. Resolved here for the same
-          // reason `prefilled` is: the modal knows how to send a request and
-          // nothing about which documents exist.
+          // Optional files the sender can add on top of the party's standard
+          // attachment pack.
+          customer: {
+            name: project.customer.name,
+            email: project.customer.email,
+            phone: project.customer.phone,
+            address: project.customer.address,
+          },
           vaultOptions,
         },
       }),
