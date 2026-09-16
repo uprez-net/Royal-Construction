@@ -127,6 +127,12 @@ test("no override means no chip and no delta", () => {
 test("a money delta keeps its sign, and its cents when under a dollar", () => {
   // A sub-dollar override still blocks Send, so it must not print as "$0".
   assert.equal(formatMoneyDelta(0.37), "+$0.37");
+  // Prices parse as decimals and the selected-versus-build-up difference is
+  // rounded to two places, so a delta with cents is ordinary at any size. These
+  // used to print as "+$2" and "-$1", overstating the gap.
+  assert.equal(formatMoneyDelta(1.5), "+$1.50");
+  assert.equal(formatMoneyDelta(-1.01), "-$1.01");
+  assert.equal(formatMoneyDelta(1234.56), "+$1,234.56");
   assert.equal(formatMoneyDelta(-0.5), "-$0.50");
   assert.equal(formatMoneyDelta(-50000), "-$50,000");
   assert.equal(formatMoneyDelta(110386), "+$110,386");
