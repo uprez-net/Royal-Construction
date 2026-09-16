@@ -146,7 +146,7 @@ export function OfferScopePage() {
         />
 
         <ScopeSection
-          icon={<Ban className="size-4 text-royal-gold-ink" aria-hidden="true" />}
+          icon={<Ban className="size-4 text-royal-gold-ink-text" aria-hidden="true" />}
           title="Exclusions"
           banner={{
             tone: "info",

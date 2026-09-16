@@ -185,8 +185,8 @@ export function OfferWorkspaceImages({
                     src={url}
                   />
                 ) : (
-                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center font-mono text-[10px] uppercase tracking-wide text-royal-gold-dark">
-                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image"}
+                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image yet"}
                   </span>
                 )}
                 {isAi ? (
@@ -199,7 +199,11 @@ export function OfferWorkspaceImages({
                 {slot.label}
               </p>
               <div className="mt-auto flex flex-wrap items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-dark">
+                {/* The input is sr-only, so its own focus ring is invisible and
+                    the label is what a keyboard user sees. has-[:focus-visible]
+                    puts the ring on the label when the hidden input takes focus;
+                    without it, tabbing to Upload showed nothing at all. */}
+                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
                   {url ? "Replace" : "Upload"}
                   <input
                     accept="image/png,image/jpeg,image/webp"

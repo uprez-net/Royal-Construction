@@ -108,7 +108,7 @@ export function CoverRow({
       <dt
         className={
           emphasis
-            ? "bg-royal-gold px-3 py-3 font-semibold text-white"
+            ? "bg-royal-gold-ink px-3 py-3 font-semibold text-white"
             : "bg-sidebar px-3 py-3 font-semibold text-white"
         }
       >
