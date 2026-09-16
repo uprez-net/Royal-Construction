@@ -95,27 +95,6 @@ export function findGrannyExclusionConflicts(
   return [...conflicts.values()];
 }
 
-function stepLabel(stepId: GrannyExclusionStepId): string {
-  return (
-    OFFER_WORKFLOW_STEPS.find((step) => step.sectionId === stepId)?.label ??
-    stepId
-  );
-}
-
-function joinAnd(items: readonly string[]): string {
-  return items.length <= 1
-    ? (items[0] ?? "")
-    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
-function quotedLines(conflicts: readonly GrannyExclusionConflict[]): string[] {
-  return [...new Set(conflicts.map((c) => `"${c.line}"`))];
-}
-
-function stillSays(conflicts: readonly GrannyExclusionConflict[]): string {
-  return `This build includes a granny flat, but its exclusions still say ${joinAnd(quotedLines(conflicts))}.`;
-}
-
 // The refusal and the readiness label. `revisionNeeded` is for the Tender send:
 // by then the Offer document and Scope steps are locked, so the line can only be
 // removed on a new revision, which is still allowed there. The Contract send

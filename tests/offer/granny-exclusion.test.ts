@@ -9,7 +9,6 @@ import {
   withoutGrannyOutOfScopeLines,
   type GrannyExclusionInput,
 } from "../../lib/offer/granny-exclusion";
-import { collectOfferSendBlockers } from "../../lib/offer/offer-readiness";
 import {
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
