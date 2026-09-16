@@ -1,4 +1,3 @@
-import { OFFER_WORKFLOW_STEPS } from "./workflow-steps";
 import type { OfferWorkspaceSnapshot } from "./workspace-persistence";
 
 // A build that includes a granny flat must not go out with an exclusion saying
