@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
   buildFormulaScope,
   evaluateCostFormula,
 } from "../../lib/offer/formula-evaluator";
+import { validateFormula } from "../../lib/offer/formula-validation";
 import {
+  AREA_MEASUREMENT_KEYS,
   LINE_ITEM_FORMULAS,
   DEFAULT_RATE_CONSTANTS,
+  RATE_CONSTANT_KEYS,
+  withDefaultRateConstants,
   type AreaMeasurementKey,
   type RateConstantKey,
 } from "../../lib/offer/formula-variables";
@@ -149,3 +154,33 @@ assert.equal(evaluateCostFormula("UNKNOWN_VAR * 10", scope), 0);
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+// ─── Admin editor validates against the rate constants the runtime uses ───
+// The cost schedule editor built its variable list from the stored overrides
+// only, while the offer prefill prices with those overrides merged over
+// DEFAULT_RATE_CONSTANTS. A formula using a constant the admin never overrode
+// was reported as an unknown variable and kept Save disabled.
+
+test("withDefaultRateConstants fills every rate constant, and an override wins", () => {
+  const merged = withDefaultRateConstants({});
+  for (const key of RATE_CONSTANT_KEYS) {
+    assert.equal(merged[key], DEFAULT_RATE_CONSTANTS[key], `missing ${key}`);
+  }
+
+  assert.equal(
+    withDefaultRateConstants({ KITCHEN_COST_PER_SQM: 900 }).KITCHEN_COST_PER_SQM,
+    900,
+  );
+});
+
+test("a formula using a default-only constant validates against the merged keys", () => {
+  const formula = "KITCHEN_AREA * KITCHEN_COST_PER_SQM";
+  const merged = [
+    ...Object.keys(withDefaultRateConstants({})),
+    ...AREA_MEASUREMENT_KEYS,
+  ];
+  const storedOnly = [...Object.keys({}), ...AREA_MEASUREMENT_KEYS];
+
+  assert.equal(validateFormula(formula, merged).valid, true);
+  assert.equal(validateFormula(formula, storedOnly).valid, false);
+});
