@@ -14,16 +14,16 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
-  Paperclip,
   GitFork,
   LoaderCircle,
   Send,
   Sparkles,
 } from "lucide-react";
 import {
-  AgentComposerContext,
+  AgentAnnotations,
   type AgentAnnotation,
-} from "@/components/agent/agent-composer-context";
+} from "@/components/agent/agent-annotations";
+import { AgentAttachments } from "@/components/agent/agent-attachments";
 import {
   AgentMessage,
   type AgentInputResponse,
@@ -606,7 +606,7 @@ export function AgentWorkspace({
 
         <footer className="relative z-10 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4">
           <form
-            className="mx-auto max-w-4xl"
+            className="relative mx-auto max-w-4xl"
             onSubmit={(event) => {
               event.preventDefault();
               void sendMessage(composer);
@@ -630,19 +630,20 @@ export function AgentWorkspace({
                 </Button>
               </div>
             ) : null}
-            <AgentComposerContext
+            <AgentAnnotations
               annotations={annotations}
               setAnnotations={setAnnotations}
               annotationResults={annotationResults}
               annotationQuery={annotationQuery}
               selectAnnotation={selectAnnotation}
-              attachments={attachments}
-              setAttachments={setAttachments}
             />
             <InputGroup className="rounded-xl bg-muted/20 shadow-xs">
               <InputGroupTextarea
                 aria-label="Message the operations agent"
-                className="min-h-20 max-h-40 px-3 pt-3"
+                 className={cn(
+                   "min-h-20 max-h-40 px-3",
+                   annotations.length > 0 ? "pt-12" : "pt-3",
+                 )}
                 disabled={agent.status === "resuming"}
                 onChange={(event) => setComposer(event.target.value)}
                 onKeyDown={(event) => {
@@ -655,27 +656,16 @@ export function AgentWorkspace({
                 ref={composerRef}
                 value={composer}
               />
-              <InputGroupAddon align="block-end" className="justify-between">
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 hover:bg-muted">
-                    <Paperclip className="size-3.5" />
-                    Attach
-                    <input
-                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-                      className="hidden"
-                      multiple
-                      onChange={(event) =>
-                        setAttachments((items) =>
-                          [
-                            ...items,
-                            ...Array.from(event.target.files ?? []),
-                          ].slice(0, 5),
-                        )
-                      }
-                      type="file"
-                    />
-                  </label>
-                  <span className="hidden sm:inline">
+              <InputGroupAddon
+                align="block-end"
+                className="justify-between gap-2"
+              >
+                <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  <AgentAttachments
+                    attachments={attachments}
+                    setAttachments={setAttachments}
+                  />
+                  <span className="hidden shrink-0 sm:inline">
                     Enter to send · Shift+Enter for a new line · @ to reference
                   </span>
                 </span>
