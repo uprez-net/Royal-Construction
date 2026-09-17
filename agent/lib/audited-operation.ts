@@ -164,14 +164,15 @@ export async function runAuditedAgentOperation<T>(params: {
   if (!("operationId" in prepared)) return prepared.replay;
 
   if (params.transactional === false) {
+    let output: T;
     try {
-      const output = params.outputSchema.parse(await params.execute());
-      await prisma.$transaction((tx) => finalizeSuccess(tx, prepared, output));
-      return output;
+      output = params.outputSchema.parse(await params.execute());
     } catch (error) {
       await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
       throw error;
     }
+    await prisma.$transaction((tx) => finalizeSuccess(tx, prepared, output));
+    return output;
   }
 
   try {

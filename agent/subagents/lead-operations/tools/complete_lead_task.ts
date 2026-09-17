@@ -4,6 +4,7 @@ import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
 import { changeLeadTaskStateInputSchema } from "@/agent/lib/lead-contracts";
 import {
   completeAuthorizedLeadTask,
+  authorizeLeadTaskMutation,
   resolveAuthorizedTask,
 } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
@@ -27,6 +28,7 @@ export default defineTool({
       ownerUserId: actor.id,
       targetId: String(taskId),
       targetType: "leadTask",
+      authorize: (tx) => authorizeLeadTaskMutation(ctx, leadId, tx, taskId),
       execute: (tx) => completeAuthorizedLeadTask(ctx, leadId, taskId, tx),
     });
   },

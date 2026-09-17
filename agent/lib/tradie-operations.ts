@@ -163,7 +163,10 @@ export async function getAuthorizedTradie(ctx: SessionContext, input: { tradieId
   });
   if (!details) throw new AgentAuthorizationError();
   const incidents = details.incidents ?? [];
-  return envelope("tradie-summary", details.name, `${details.trade} tradie with ${details.schedules.filter((s) => s.status === TradieScheduleStatus.COMPLETED).length} completed job(s), ${incidents.filter((i) => i.status === TradieIncidentStatus.OPEN).length} open incident(s), and ${details.schedules.length} recent schedule row(s).`, {
+  const incidentSummary = isAdmin(actor)
+    ? `${incidents.filter((i) => i.status === TradieIncidentStatus.OPEN).length} open incident(s)`
+    : "incident details restricted";
+  return envelope("tradie-summary", details.name, `${details.trade} tradie with ${details.schedules.filter((s) => s.status === TradieScheduleStatus.COMPLETED).length} completed job(s), ${incidentSummary}, and ${details.schedules.length} recent schedule row(s).`, {
     tradie: serializeTradie(details),
     schedules: details.schedules.map((schedule) => ({ id: schedule.id, projectId: schedule.project.id, projectName: schedule.project.name, milestone: schedule.milestone?.name ?? null, scheduledDate: schedule.scheduledDate.toISOString(), durationDays: schedule.durationDays, status: schedule.status, quotedPrice: schedule.quotedPrice == null ? null : String(schedule.quotedPrice) })),
     incidents,
@@ -335,7 +338,60 @@ export async function requestAuthorizedScheduleDeletion(ctx: ToolContext, input:
   return envelope("confirmation", "Schedule deletion approval requested", `The booking for ${schedule.tradie.name} on ${schedule.project.name} remains in place until an admin reviews the request.`, { approvalId: approval.id, scheduleId: schedule.id, currentStatus: schedule.status }, { entityRef: scheduleRef(schedule) });
 }
 
-export async function runTradieWrite(params: { action: string; ctx: ToolContext; input: Record<string, unknown>; targetId?: string; targetType: string; targetIdFromOutput?: (output: AgentResultEnvelope) => string | undefined; execute: (tx?: Prisma.TransactionClient) => Promise<AgentResultEnvelope> }) {
+function inputString(input: Record<string, unknown>, key: string) {
+  const value = input[key];
+  if (typeof value !== "string") throw new AgentAuthorizationError();
+  return value;
+}
+
+export async function authorizeTradieWrite(
+  ctx: ToolContext,
+  action: string,
+  input: Record<string, unknown>,
+  transaction: Prisma.TransactionClient,
+) {
+  const actor = await requireCurrentAgentActor(ctx, transaction);
+  if (action === "tradie.create") {
+    requireAdmin(actor);
+    return;
+  }
+  if (action === "tradie.update" || action === "tradie.price-change.request" || action === "tradie.removal.request") {
+    requireAdmin(actor);
+    await getVisibleTradie(actor, inputString(input, "tradieId"), transaction);
+    return;
+  }
+  if (action === "tradie.incident.report") {
+    if (!isAdmin(actor) && actor.role !== Role.SITE_MANAGER) throw new AgentAuthorizationError();
+    await getVisibleTradie(actor, inputString(input, "tradieId"), transaction);
+    const fileIds = Array.isArray(input.fileIds) ? input.fileIds.filter((id): id is string => typeof id === "string") : [];
+    if (fileIds.length !== (Array.isArray(input.fileIds) ? input.fileIds.length : 0)) throw new AgentAuthorizationError();
+    if (fileIds.length > 0) {
+      const files = await transaction.file.findMany({ where: { id: { in: fileIds }, uploadedBy: actor.id }, select: { id: true } });
+      if (files.length !== fileIds.length) throw new AgentAuthorizationError();
+    }
+    return;
+  }
+  if (action === "tradie.rating.create") {
+    if (!isAdmin(actor) && actor.role !== Role.SITE_MANAGER) throw new AgentAuthorizationError();
+    await getVisibleTradie(actor, inputString(input, "tradieId"), transaction);
+    return;
+  }
+  if (action === "tradie.schedule.create") {
+    if (!isAdmin(actor) && actor.role !== Role.SITE_MANAGER) throw new AgentAuthorizationError();
+    await getVisibleTradie(actor, inputString(input, "tradieId"), transaction);
+    const project = await transaction.project.findFirst({ where: { id: inputString(input, "projectId"), ...(isAdmin(actor) ? {} : { siteManagerId: actor.id }) }, select: { id: true } });
+    if (!project) throw new AgentAuthorizationError();
+    return;
+  }
+  if (action === "tradie.schedule.transition" || action === "tradie.schedule.reschedule" || action === "tradie.schedule.deletion.request") {
+    if (!isAdmin(actor) && actor.role !== Role.SITE_MANAGER) throw new AgentAuthorizationError();
+    await getVisibleSchedule(actor, inputString(input, "scheduleId"), transaction);
+    return;
+  }
+  throw new AgentAuthorizationError();
+}
+
+export async function runTradieWrite(params: { action: string; ctx: ToolContext; input: Record<string, unknown>; targetId?: string; targetType: string; targetIdFromOutput?: (output: AgentResultEnvelope) => string | undefined; authorize: (tx: Prisma.TransactionClient) => Promise<void>; execute: (tx?: Prisma.TransactionClient) => Promise<AgentResultEnvelope> }) {
   const actor = await requireCurrentAgentActor(params.ctx);
-  return runAuditedAgentOperation({ action: params.action, ctx: params.ctx, inputSummary: safe(params.input) as Prisma.InputJsonValue, outputSchema: agentResultEnvelopeSchema, ownerUserId: actor.id, targetId: params.targetId, targetType: params.targetType, targetIdFromOutput: params.targetIdFromOutput, execute: params.execute });
+  return runAuditedAgentOperation({ action: params.action, ctx: params.ctx, inputSummary: safe(params.input) as Prisma.InputJsonValue, outputSchema: agentResultEnvelopeSchema, ownerUserId: actor.id, targetId: params.targetId, targetType: params.targetType, targetIdFromOutput: params.targetIdFromOutput, authorize: params.authorize, execute: params.execute });
 }

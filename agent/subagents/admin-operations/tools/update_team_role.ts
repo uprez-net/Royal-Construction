@@ -10,6 +10,6 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
-    return runAdminWrite({ action: "admin.team.role.update", ctx, input, targetId: input.userId, targetType: "teamMember", execute: () => updateAuthorizedTeamRole(ctx, input) });
+    return runAdminWrite({ action: "admin.team.role.update", ctx, input, targetId: input.userId, targetType: "teamMember", transactional: false, execute: () => updateAuthorizedTeamRole(ctx, input) });
   },
 });

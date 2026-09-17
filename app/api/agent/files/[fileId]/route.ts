@@ -3,6 +3,7 @@ import { get } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { uuidSchema } from "@/utils/validators/common";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ fileId: string }> }) {
   const { userId } = await auth();
@@ -10,8 +11,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ fil
   const user = await getUserByClerkIdCached(userId);
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 403 });
   const { fileId } = await params;
+  const parsedFileId = uuidSchema.safeParse(fileId);
+  if (!parsedFileId.success) return NextResponse.json({ error: "Invalid file ID" }, { status: 400 });
   const file = await prisma.file.findUnique({
-    where: { id: fileId },
+    where: { id: parsedFileId.data },
     select: { url: true, storagePath: true, filename: true, fileType: true, uploadedBy: true, project: { select: { siteManagerId: true } } },
   });
   if (!file) return NextResponse.json({ error: "File not found" }, { status: 404 });

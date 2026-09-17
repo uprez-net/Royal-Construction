@@ -12,7 +12,8 @@ import {
   // optionalIsoDateSchema,
   paginationSchema,
   sortOrderSchema,
-  isoDateStringSchema
+  isoDateStringSchema,
+  hasAtMostTwoDecimalPlaces,
 } from "./common";
 /**
  * Project-related validators
@@ -409,7 +410,7 @@ export const createVariationSchema = z.object({
     .min(1, "Description is required")
     .max(2000, "Description is too long"),
 
-  cost: nonNegativeSchema.refine((value) => Number.isInteger(value * 100), { message: "Cost must have at most two decimal places." }),
+  cost: nonNegativeSchema.refine(hasAtMostTwoDecimalPlaces, { message: "Cost must have at most two decimal places." }),
 
   requestedDate: isoDateStringSchema.optional(),
 });

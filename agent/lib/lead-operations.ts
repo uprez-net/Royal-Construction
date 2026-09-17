@@ -46,12 +46,30 @@ async function authorizeLead(ctx: SessionContext, leadId: number) {
 async function assertAgentCanAccessLead(
   actor: Pick<User, "id" | "role">,
   leadId: number,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
   try {
-    await assertCanAccessLead(actor, leadId);
+    await assertCanAccessLead(actor, leadId, db);
   } catch {
     // Do not reveal whether a forbidden lead exists.
     throw new AgentAuthorizationError();
+  }
+}
+
+export async function authorizeLeadTaskMutation(
+  ctx: SessionContext,
+  leadId: number,
+  transaction: Prisma.TransactionClient,
+  taskId?: number,
+) {
+  const actor = await requireCurrentAgentActor(ctx, transaction);
+  await assertAgentCanAccessLead(actor, leadId, transaction);
+  if (taskId !== undefined) {
+    const task = await transaction.leadTask.findUnique({
+      where: { id: taskId },
+      select: { leadId: true },
+    });
+    if (!task || task.leadId !== leadId) throw new Error("The requested task is unavailable.");
   }
 }
 
@@ -253,8 +271,8 @@ export async function createAuthorizedLeadTask(
   },
   transaction?: Prisma.TransactionClient,
 ) {
-  const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, input.leadId);
+  const actor = await requireCurrentAgentActor(ctx, transaction);
+  await assertAgentCanAccessLead(actor, input.leadId, transaction);
   const task = await createLeadTask({
     assignedId: actor.id,
     dueDate: new Date(input.dueAt),
@@ -287,8 +305,11 @@ export async function completeAuthorizedLeadTask(
   taskId: number,
   transaction?: Prisma.TransactionClient,
 ) {
-  const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, leadId);
+  const actor = await requireCurrentAgentActor(ctx, transaction);
+  await assertAgentCanAccessLead(actor, leadId, transaction);
+  const db = transaction ?? prisma;
+  const currentTask = await db.leadTask.findUnique({ where: { id: taskId }, select: { leadId: true } });
+  if (!currentTask || currentTask.leadId !== leadId) throw new Error("The requested task is unavailable.");
   const task = await completeLeadTask(taskId, transaction);
   if (!task || task.leadId !== leadId) {
     throw new Error("The requested task is unavailable.");
@@ -302,8 +323,11 @@ export async function reopenAuthorizedLeadTask(
   taskId: number,
   transaction?: Prisma.TransactionClient,
 ) {
-  const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, leadId);
+  const actor = await requireCurrentAgentActor(ctx, transaction);
+  await assertAgentCanAccessLead(actor, leadId, transaction);
+  const db = transaction ?? prisma;
+  const currentTask = await db.leadTask.findUnique({ where: { id: taskId }, select: { leadId: true } });
+  if (!currentTask || currentTask.leadId !== leadId) throw new Error("The requested task is unavailable.");
   const task = await reopenLeadTask(taskId, transaction);
   if (!task || task.leadId !== leadId) {
     throw new Error("The requested task is unavailable.");

@@ -3,7 +3,7 @@ import { ownerOnlyApproval } from "@/agent/lib/agent-approval";
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
 import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { createLeadTaskInputSchema } from "@/agent/lib/lead-contracts";
-import { createAuthorizedLeadTask } from "@/agent/lib/lead-operations";
+import { authorizeLeadTaskMutation, createAuthorizedLeadTask } from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 export default defineTool({
@@ -30,6 +30,7 @@ export default defineTool({
       ownerUserId: actor.id,
       targetId: String(input.leadId),
       targetType: "lead",
+      authorize: (tx) => authorizeLeadTaskMutation(ctx, input.leadId, tx),
       execute: (tx) => createAuthorizedLeadTask(ctx, input, tx),
     });
   },

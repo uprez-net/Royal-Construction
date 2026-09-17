@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { saveFile } from "@/lib/data/file";
@@ -17,6 +17,16 @@ export async function POST(request: Request) {
   if (!UPLOAD_CONSTRAINTS.allowedMimeTypes.includes(file.type as never)) return NextResponse.json({ error: "File type is not supported" }, { status: 415 });
   const safeName = file.name.replaceAll(/[^a-zA-Z0-9._-]/g, "-").slice(0, 160) || "attachment";
   const blob = await put(`agent/${user.id}/${crypto.randomUUID()}-${safeName}`, file, { access: "private", addRandomSuffix: false });
-  const saved = await saveFile({ userId: user.id, fileUrl: blob.url, storagePath: blob.pathname, fileName: file.name, fileType: file.type || "application/octet-stream", fileSize: file.size });
+  let saved;
+  try {
+    saved = await saveFile({ userId: user.id, fileUrl: blob.url, storagePath: blob.pathname, fileName: file.name, fileType: file.type || "application/octet-stream", fileSize: file.size });
+  } catch (error) {
+    try {
+      await del(blob.url);
+    } catch (cleanupError) {
+      console.error("Failed to clean up an orphaned agent upload", cleanupError);
+    }
+    throw error;
+  }
   return NextResponse.json({ file: { id: saved.file.id, url: `/api/agent/files/${saved.file.id}`, filename: file.name, fileType: file.type, filesize: file.size } });
 }

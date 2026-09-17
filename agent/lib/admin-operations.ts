@@ -178,15 +178,34 @@ export async function inviteAuthorizedTeamMember(ctx: ToolContext, input: { emai
 export async function updateAuthorizedTeamRole(ctx: ToolContext, input: { userId: string; newRole: Role }) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const updated = await prisma.$transaction(async (tx) => {
-    const target = await tx.user.findUnique({ where: { clerkId: input.userId }, select: { id: true, clerkId: true, role: true, name: true } });
-    if (!target) throw new Error("Team member not found.");
-    if (target.id === actor.id && input.newRole !== Role.ADMIN) throw new Error("You cannot remove your own admin access through the agent.");
-    if (target.role === Role.ADMIN && input.newRole !== Role.ADMIN && await tx.user.count({ where: { role: Role.ADMIN } }) <= 1) throw new Error("The last admin cannot be demoted.");
-    await clerkClient.users.updateUser(target.clerkId, { publicMetadata: { role: input.newRole } });
-    return tx.user.update({ where: { id: target.id }, data: { role: input.newRole }, select: { id: true, name: true, role: true } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  return result("confirmation", "Team role updated", `${updated.name}'s role is now ${updated.role}.`, { userId: updated.id, role: updated.role });
+  const target = await prisma.user.findUnique({ where: { clerkId: input.userId }, select: { id: true, clerkId: true, role: true, name: true } });
+  if (!target) throw new Error("Team member not found.");
+  if (target.id === actor.id && input.newRole !== Role.ADMIN) throw new Error("You cannot remove your own admin access through the agent.");
+  if (target.role === input.newRole) return result("confirmation", "Team role unchanged", `${target.name}'s role is already ${target.role}.`, { userId: target.id, role: target.role });
+
+  // Clerk is an external system, so update it before the local transaction and
+  // compensate if the serialized local role transition cannot commit.
+  await clerkClient.users.updateUser(target.clerkId, { publicMetadata: { role: input.newRole } });
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const current = await tx.user.findUnique({ where: { id: target.id }, select: { id: true, name: true, role: true } });
+      if (!current || current.role !== target.role) throw new Error("The team member changed during this role update; refresh and retry.");
+      if (current.role === Role.ADMIN && input.newRole !== Role.ADMIN && await tx.user.count({ where: { role: Role.ADMIN } }) <= 1) throw new Error("The last admin cannot be demoted.");
+      const changed = await tx.user.updateMany({ where: { id: current.id, role: target.role }, data: { role: input.newRole } });
+      if (changed.count !== 1) throw new Error("The team member changed during this role update; refresh and retry.");
+      return { id: current.id, name: current.name, role: input.newRole };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    return result("confirmation", "Team role updated", `${updated.name}'s role is now ${updated.role}.`, { userId: updated.id, role: updated.role });
+  } catch (error) {
+    try {
+      const current = await prisma.user.findUnique({ where: { id: target.id }, select: { role: true } });
+      await clerkClient.users.updateUser(target.clerkId, { publicMetadata: { role: current?.role ?? target.role } });
+    } catch (compensationError) {
+      console.error("Could not compensate a Clerk role update after the local role transition failed", compensationError);
+      throw new Error("The role update needs manual reconciliation between Clerk and the local team record.", { cause: error });
+    }
+    throw error;
+  }
 }
 
 export async function revokeAuthorizedTeamInvitation(ctx: ToolContext, input: { invitationId: string }) {
@@ -214,7 +233,7 @@ export async function disconnectAuthorizedXero(ctx: ToolContext, input: { reason
   return result("confirmation", "Xero disconnected", `${active.tenantName ?? "The Xero organisation"} was disconnected.`, { connectionId: active.id, reason: input.reason });
 }
 
-export async function runAdminWrite(params: { action: string; ctx: ToolContext; input: Record<string, unknown>; targetId?: string; targetType: string; execute: (tx?: Prisma.TransactionClient) => Promise<AgentResultEnvelope> }) {
+export async function runAdminWrite(params: { action: string; ctx: ToolContext; input: Record<string, unknown>; targetId?: string; targetType: string; transactional?: boolean; execute: (tx?: Prisma.TransactionClient) => Promise<AgentResultEnvelope> }) {
   const actor = await requireCurrentAgentActor(params.ctx);
-  return runAuditedAgentOperation({ action: params.action, ctx: params.ctx, inputSummary: JSON.parse(JSON.stringify(params.input)) as Prisma.InputJsonValue, outputSchema: agentResultEnvelopeSchema, ownerUserId: actor.id, targetId: params.targetId, targetType: params.targetType, execute: params.execute });
+  return runAuditedAgentOperation({ action: params.action, ctx: params.ctx, inputSummary: JSON.parse(JSON.stringify(params.input)) as Prisma.InputJsonValue, outputSchema: agentResultEnvelopeSchema, ownerUserId: actor.id, targetId: params.targetId, targetType: params.targetType, transactional: params.transactional, authorize: async (tx) => { const current = await requireCurrentAgentActor(params.ctx, tx); requireAdmin(current); }, execute: params.execute });
 }

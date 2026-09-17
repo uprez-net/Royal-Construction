@@ -10,6 +10,6 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   execute(input, ctx) {
-    return runAdminWrite({ action: "admin.team.invitation.revoke", ctx, input, targetId: input.invitationId, targetType: "teamMember", execute: () => revokeAuthorizedTeamInvitation(ctx, input) });
+    return runAdminWrite({ action: "admin.team.invitation.revoke", ctx, input, targetId: input.invitationId, targetType: "teamMember", transactional: false, execute: () => revokeAuthorizedTeamInvitation(ctx, input) });
   },
 });

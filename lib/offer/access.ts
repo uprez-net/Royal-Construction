@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma";
-import { Role, type User } from "@prisma/client";
+import { Role, type Prisma, type User } from "@prisma/client";
 
 const INTERNAL_ROLES = new Set<Role>([Role.ADMIN, Role.SITE_MANAGER, Role.GUEST]);
 
@@ -41,8 +41,9 @@ export function leadListScope(user: Pick<User, "id" | "role">): LeadListScope {
 export async function assertCanAccessLead(
   user: Pick<User, "id" | "role">,
   leadId: number,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<AccessibleLead> {
-  const lead = await prisma.lead.findUnique({
+  const lead = await db.lead.findUnique({
     where: { id: leadId },
     select: { id: true, assignedId: true },
   });

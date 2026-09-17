@@ -232,6 +232,13 @@ export const nonNegativeSchema = z.coerce
   .finite("Must be a valid number")
   .nonnegative("Cannot be negative");
 
+/** Accept values representable as whole cents without exact float equality. */
+export function hasAtMostTwoDecimalPlaces(value: number): boolean {
+  const scaled = value * 100;
+  return Math.abs(scaled - Math.round(scaled)) <=
+    Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8;
+}
+
 // ============================================================================
 // String Coercion & Normalization
 // ============================================================================

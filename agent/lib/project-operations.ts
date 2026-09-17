@@ -220,17 +220,17 @@ async function sendComplianceOutreachDirect(input: { body: string; contactEmail:
   const existing = engagement.outreaches.find((candidate) => candidate.party === input.party);
   if (existing?.mode === ComplianceOutreachMode.SELF_SUPPLIED) throw new Error("This party's documents were marked self-supplied; there is no outreach thread to send on.");
   if (existing && existing.status !== ComplianceOutreachStatus.NOT_SENT) throw new Error("This party has already been contacted. Use a follow-up reply instead.");
-  const outreach = existing ?? await prisma.complianceOutreach.create({ data: { engagementId: engagement.id, party: input.party, refToken: generatePartyRefToken(input.party), mode: ComplianceOutreachMode.OUTREACH, status: ComplianceOutreachStatus.NOT_SENT, graphMailbox: GraphMailbox.ADMIN, contactName: input.contactName ?? null, contactEmail: input.contactEmail, contactPhone: input.contactPhone ?? null }, select: { id: true, refToken: true, contactEmail: true, lastInboundMessageId: true, graphMailbox: true } });
-  if (!outreach.contactEmail) throw new Error("A recipient email is required.");
-  await prisma.complianceOutreach.update({ where: { id: outreach.id }, data: { contactName: input.contactName ?? undefined, contactEmail: input.contactEmail, contactPhone: input.contactPhone ?? undefined } });
-  const reviewedOutreach = { ...outreach, contactEmail: input.contactEmail };
   const ownDocumentIds = new Set(engagement.documents.map((document) => document.id));
   const deliverables = input.deliverables.filter((deliverable) => !deliverable.checklistDocumentId || ownDocumentIds.has(deliverable.checklistDocumentId));
   if (input.deliverables.some((deliverable) => deliverable.checklistDocumentId && !ownDocumentIds.has(deliverable.checklistDocumentId))) throw new Error("Every checklist deliverable must belong to this compliance engagement.");
+  const outreach = existing ?? await prisma.complianceOutreach.create({ data: { engagementId: engagement.id, party: input.party, refToken: generatePartyRefToken(input.party), mode: ComplianceOutreachMode.OUTREACH, status: ComplianceOutreachStatus.NOT_SENT, graphMailbox: GraphMailbox.ADMIN, contactName: input.contactName ?? null, contactEmail: input.contactEmail, contactPhone: input.contactPhone ?? null }, select: { id: true, refToken: true, contactEmail: true, lastInboundMessageId: true, graphMailbox: true } });
+  if (!outreach.contactEmail) throw new Error("A recipient email is required.");
   await prisma.$transaction([
     prisma.complianceOutreachDeliverable.deleteMany({ where: { outreachId: outreach.id } }),
     ...(deliverables.length > 0 ? [prisma.complianceOutreachDeliverable.createMany({ data: deliverables.map((deliverable) => ({ outreachId: outreach.id, documentType: deliverable.documentType, checklistDocumentId: deliverable.checklistDocumentId ?? null })), skipDuplicates: true })] : []),
   ]);
+  await prisma.complianceOutreach.update({ where: { id: outreach.id }, data: { contactName: input.contactName ?? undefined, contactEmail: input.contactEmail, contactPhone: input.contactPhone ?? undefined } });
+  const reviewedOutreach = { ...outreach, contactName: input.contactName ?? null, contactEmail: input.contactEmail, contactPhone: input.contactPhone ?? null };
   const attachmentTypes = new Set(PARTY_OUTREACH_ATTACHMENTS[input.party] ?? []);
   const packFiles = engagement.documents.filter((document) => attachmentTypes.has(document.documentType)).flatMap((document) => document.files);
   const extras = await resolveExtraAttachments(input.projectId, input.extraAttachmentIds);

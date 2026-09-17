@@ -1,4 +1,5 @@
 import type { SessionContext } from "eve/context";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 
 export class AgentAuthorizationError extends Error {
@@ -10,13 +11,16 @@ export class AgentAuthorizationError extends Error {
   }
 }
 
-export async function requireCurrentAgentActor(ctx: SessionContext) {
+export async function requireCurrentAgentActor(
+  ctx: SessionContext,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+) {
   const caller = ctx.session.auth.current;
   if (caller?.principalType !== "user") {
     throw new AgentAuthorizationError();
   }
 
-  const user = await prisma.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: caller.principalId },
   });
 

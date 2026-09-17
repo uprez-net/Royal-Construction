@@ -64,6 +64,7 @@ export function AgentWorkspace({
   const router = useRouter();
   const [composer, setComposer] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [annotations, setAnnotations] = useState<AgentAnnotation[]>([]);
   const [annotationResults, setAnnotationResults] = useState<AgentAnnotation[]>(
@@ -416,17 +417,22 @@ export function AgentWorkspace({
                       className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       onClick={async (event) => {
                         event.preventDefault();
-                        const response = await fetch(
-                          `/api/agent/sessions/${session.eveSessionId}/archive`,
-                          { method: "POST" },
-                        );
-                        if (response.ok)
+                        setArchiveError(null);
+                        try {
+                          const response = await fetch(
+                            `/api/agent/sessions/${session.eveSessionId}/archive`,
+                            { method: "POST" },
+                          );
+                          if (!response.ok) throw new Error("The conversation could not be archived.");
                           setSessions((items) =>
                             items.filter(
                               (item) =>
                                 item.eveSessionId !== session.eveSessionId,
                             ),
                           );
+                        } catch (error) {
+                          setArchiveError(error instanceof Error ? error.message : "The conversation could not be archived.");
+                        }
                       }}
                       size="icon-sm"
                       type="button"
@@ -598,6 +604,12 @@ export function AgentWorkspace({
                 <Alert variant="destructive">
                   <AlertTitle>The message could not be sent</AlertTitle>
                   <AlertDescription>{sendError}</AlertDescription>
+                </Alert>
+              ) : null}
+              {archiveError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>The conversation could not be archived</AlertTitle>
+                  <AlertDescription>{archiveError}</AlertDescription>
                 </Alert>
               ) : null}
             </div>

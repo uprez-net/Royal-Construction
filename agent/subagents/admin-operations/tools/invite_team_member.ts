@@ -10,6 +10,6 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   async execute(input, ctx) {
-    return await runAdminWrite({ action: "admin.team.invite", ctx, input, targetType: "teamMember", execute: () => inviteAuthorizedTeamMember(ctx, input) });
+    return await runAdminWrite({ action: "admin.team.invite", ctx, input, targetType: "teamMember", transactional: false, execute: () => inviteAuthorizedTeamMember(ctx, input) });
   },
 });
