@@ -129,7 +129,10 @@ export function XeroConnectionPanel({
         <CardHeader className="border-b border-border/70 pb-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle as="h2" className="text-base font-semibold text-foreground">
+              <CardTitle
+                as="h2"
+                className="text-base font-semibold text-foreground"
+              >
                 Xero connection
               </CardTitle>
               <CardDescription>
@@ -190,7 +193,9 @@ export function XeroConnectionPanel({
                   value={
                     status.refreshTokenExpiresAt
                       ? `${dateFormat.format(new Date(status.refreshTokenExpiresAt))}${
-                          daysLeft !== null && daysLeft > 0 ? ` (${daysLeft} days)` : ""
+                          daysLeft !== null && daysLeft > 0
+                            ? ` (${daysLeft} days)`
+                            : ""
                         }`
                       : "—"
                   }
@@ -200,8 +205,9 @@ export function XeroConnectionPanel({
               {!status.salesAccountCode ? (
                 <p className="mt-4 text-sm text-warning-ink">
                   No revenue account is configured, so Xero will refuse every
-                  claim. Set <code className="font-mono">XERO_SALES_ACCOUNT_CODE</code>{" "}
-                  to the account progress claims should post to — the code from
+                  claim. Set{" "}
+                  <code className="font-mono">XERO_SALES_ACCOUNT_CODE</code> to
+                  the account progress claims should post to — the code from
                   your Xero chart of accounts, not its name.
                 </p>
               ) : null}
@@ -237,7 +243,10 @@ export function XeroConnectionPanel({
           ) : (
             <div className="mx-auto flex max-w-xl flex-col items-center gap-3 py-8 text-center">
               <div className="flex size-11 items-center justify-center rounded-2xl bg-muted">
-                <Plug className="size-5 text-muted-foreground" aria-hidden="true" />
+                <Plug
+                  className="size-5 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </div>
 
               <p className="text-base font-semibold text-foreground">

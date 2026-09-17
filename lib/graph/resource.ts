@@ -1,9 +1,9 @@
 function normalizeResource(resource: string | undefined): string {
-  const withoutOrigin = (resource ?? '')
+  const withoutOrigin = (resource ?? "")
     .trim()
-    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0(?:\/|$)/i, '')
+    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0(?:\/|$)/i, "")
     .split(/[?#]/, 1)[0]
-    .replace(/^\/+|\/+$/g, '');
+    .replace(/^\/+|\/+$/g, "");
 
   try {
     return decodeURIComponent(withoutOrigin).toLowerCase();
@@ -18,12 +18,14 @@ function mailboxIdentity(
   resource: string,
   senderUpn: string | undefined,
 ): string | null {
-  const usersMatch = resource.match(/(?:^|\/)users(?:\/([^/]+)|\(([^)]+)\))(?:\/|$)/i);
+  const usersMatch = resource.match(
+    /(?:^|\/)users(?:\/([^/]+)|\(([^)]+)\))(?:\/|$)/i,
+  );
   if (usersMatch) {
-    return (usersMatch[1] ?? usersMatch[2]).replace(/^['"]|['"]$/g, '');
+    return (usersMatch[1] ?? usersMatch[2]).replace(/^['"]|['"]$/g, "");
   }
 
-  if (resource === 'me' || resource.startsWith('me/')) {
+  if (resource === "me" || resource.startsWith("me/")) {
     return senderUpn?.trim().toLowerCase() || null;
   }
 
@@ -80,5 +82,5 @@ export function graphResourceBelongsToMailbox(
   // The distinct, secret clientState has already selected this mailbox, so a
   // message resource whose identity is opaque cannot be rejected as a foreign
   // mailbox merely because its ID cannot be derived from the UPN locally.
-  return expectedMailbox.includes('@') && !actualMailbox.includes('@');
+  return expectedMailbox.includes("@") && !actualMailbox.includes("@");
 }

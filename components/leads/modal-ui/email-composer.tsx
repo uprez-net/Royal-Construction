@@ -220,7 +220,7 @@ export function EmailComposer({
         `${projectType} - ${location}`,
         body.html.trim(),
         recipient,
-        replyTo ?? undefined
+        replyTo ?? undefined,
       );
 
       appendEmailToLead(leadId, email);

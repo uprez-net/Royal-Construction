@@ -93,7 +93,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const offerId =
-    envelope.tender?.offerId ?? envelope.contract?.offerId ?? envelope.offer?.id;
+    envelope.tender?.offerId ??
+    envelope.contract?.offerId ??
+    envelope.offer?.id;
   try {
     await syncRecipients(envelope.id, envelope.signatures, payload);
     await syncEnvelopeStatus(envelope, event, payload);
@@ -112,7 +114,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       try {
         revalidateTag(`offer-${offerId}`, CACHE_PROFILES.SHORT);
       } catch (error) {
-        console.error("[docusign] revalidate after Connect sync failed:", error);
+        console.error(
+          "[docusign] revalidate after Connect sync failed:",
+          error,
+        );
       }
     }
   }
@@ -138,7 +143,6 @@ type ConnectPayload = {
     };
   };
 };
-
 
 const RECIPIENT_STATUS: Record<string, SignerStatus> = {
   sent: SignerStatus.SENT,
@@ -215,7 +219,11 @@ type ConnectEnvelope = {
   docType: EnvelopeDocType;
   status: EnvelopeStatus;
   tender: { id: string; offerId: string; executedPdfUrl: string | null } | null;
-  contract: { id: string; offerId: string; executedPdfUrl: string | null } | null;
+  contract: {
+    id: string;
+    offerId: string;
+    executedPdfUrl: string | null;
+  } | null;
   offer: { id: string; executedPdfUrl: string | null } | null;
 };
 
@@ -241,7 +249,9 @@ type EnvelopeTarget = {
     | { offerId: string };
 };
 
-function resolveEnvelopeTarget(envelope: ConnectEnvelope): EnvelopeTarget | null {
+function resolveEnvelopeTarget(
+  envelope: ConnectEnvelope,
+): EnvelopeTarget | null {
   switch (envelope.docType) {
     case EnvelopeDocType.TENDER:
       if (!envelope.tender) return null;
@@ -310,7 +320,9 @@ async function syncEnvelopeStatus(
       where: { id: envelope.id },
       data: {
         status: nextStatus,
-        ...(nextStatus === EnvelopeStatus.COMPLETED ? { completedAt: now } : {}),
+        ...(nextStatus === EnvelopeStatus.COMPLETED
+          ? { completedAt: now }
+          : {}),
         ...(nextStatus === EnvelopeStatus.VOIDED ? { voidedAt: now } : {}),
       },
     });
@@ -417,7 +429,11 @@ async function handleCompletion(envelope: ConnectEnvelope): Promise<void> {
       return;
     case "advance":
       if (
-        !isArchivedForEnvelope(target.executedPdfUrl, target.parent.kind, docusignId)
+        !isArchivedForEnvelope(
+          target.executedPdfUrl,
+          target.parent.kind,
+          docusignId,
+        )
       ) {
         archived = await tryArchive(docusignId, () =>
           archiveExecuted(target.parent, docusignId),
@@ -429,7 +445,11 @@ async function handleCompletion(envelope: ConnectEnvelope): Promise<void> {
       // Usually the redelivery after an archive failure: the offer moved on,
       // but its PDF is missing or still the previous envelope's.
       if (
-        !isArchivedForEnvelope(target.executedPdfUrl, target.parent.kind, docusignId)
+        !isArchivedForEnvelope(
+          target.executedPdfUrl,
+          target.parent.kind,
+          docusignId,
+        )
       ) {
         archived = await tryArchive(docusignId, () =>
           archiveExecuted(target.parent, docusignId),
@@ -710,7 +730,9 @@ async function advanceOfferOnDecline(
 
   // DocuSign attaches the decliner's reason to the recipient record; surface it
   // rather than inventing our own copy.
-  const declineReason = (payload.data?.envelopeSummary?.recipients?.signers ?? [])
+  const declineReason = (
+    payload.data?.envelopeSummary?.recipients?.signers ?? []
+  )
     .find((signer) => (signer.status ?? "").toLowerCase() === "declined")
     ?.declinedReason?.trim();
 

@@ -92,8 +92,8 @@ export function ComplianceRejectModal({
           </DialogTitle>
           <DialogDescription>
             The row goes back to outstanding with this note on it. Whoever
-            uploads the replacement sees the note, and the certifier is told what
-            was fixed as soon as it lands.
+            uploads the replacement sees the note, and the certifier is told
+            what was fixed as soon as it lands.
           </DialogDescription>
         </DialogHeader>
 

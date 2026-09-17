@@ -9,10 +9,7 @@
  * component importing a component to read a string is how the copy ends up
  * duplicated and then drifting.
  */
-import {
-  ComplianceAlertSource,
-  ComplianceAlertType,
-} from "@prisma/client";
+import { ComplianceAlertSource, ComplianceAlertType } from "@prisma/client";
 
 /**
  * What each alert is called, and what closing it actually requires.
@@ -267,7 +264,6 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
   },
 };
 
-
 /**
  * How each source reads on the pill.
  *
@@ -275,7 +271,9 @@ export const COMPLIANCE_ALERT_COPY: Readonly<
  * not an outreach party — and because the pill wording is "via the X", which
  * wants the lower-case form.
  */
-export const ALERT_SOURCE_LABEL: Readonly<Record<ComplianceAlertSource, string>> = {
+export const ALERT_SOURCE_LABEL: Readonly<
+  Record<ComplianceAlertSource, string>
+> = {
   [ComplianceAlertSource.SURVEYOR]: "surveyor",
   [ComplianceAlertSource.ARCHITECT]: "architect",
   [ComplianceAlertSource.COUNCIL]: "NSW Planning",

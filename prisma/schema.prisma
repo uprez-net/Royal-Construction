@@ -454,6 +454,36 @@ enum CertifierEmailDirection {
   OUTBOUND
 }
 
+enum AgentSessionStatus {
+  ACTIVE
+  WAITING
+  ARCHIVED
+  COMPLETED
+  FAILED
+}
+
+enum AgentActionStatus {
+  PENDING
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AgentOperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AgentMemoryProvenance {
+  USER_CONFIRMED
+  MODEL_SUMMARY
+}
+
 enum GraphMailbox {
   BUSINESS
   ADMIN
@@ -624,6 +654,7 @@ model TradieApproval {
   reason          String                   @db.Text
   updationData    Json?
   rejectionReason String?                  @db.Text
+  pendingDeletionKey String?                @unique
   requestedBy     String
 
   createdAt DateTime @default(now())
@@ -663,6 +694,7 @@ model File {
   fileType             String
   filesize             Int
   url                  String
+  storagePath          String?
   uploadedBy           String
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -797,17 +829,21 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]           @relation("UserFiles")
-  siteManagerProjects Project[]        @relation("SiteManagerProjects")
+  files               File[]             @relation("UserFiles")
+  siteManagerProjects Project[]          @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[]           @relation("LeadAssignee")
-  leadHistories       LeadHistory[]    @relation("LeadHistoryAuthor")
-  leadTasks           LeadTask[]       @relation("LeadTaskAssignee")
+  assignedLeads       Lead[]             @relation("LeadAssignee")
+  leadHistories       LeadHistory[]      @relation("LeadHistoryAuthor")
+  leadTasks           LeadTask[]         @relation("LeadTaskAssignee")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
-  createdOffers       Offer[]          @relation("OfferCreatedBy")
-  xeroConnections     XeroConnection[] @relation("XeroConnections")
+  createdOffers       Offer[]            @relation("OfferCreatedBy")
+  xeroConnections     XeroConnection[]   @relation("XeroConnections")
+  agentSessions       AgentSession[]
+  agentActionAudits   AgentActionAudit[]
+  agentOperations     AgentOperation[]
+  agentMemories       AgentMemory[]
 
   resolvedComplianceAlerts   ComplianceAlert[]    @relation("UserResolvedComplianceAlerts")
   decidedComplianceApprovals ComplianceOutreach[] @relation("UserDecidedComplianceApprovals")
@@ -828,6 +864,133 @@ model User {
   @@index([phone])
   @@index([role])
   @@index([clerkId])
+}
+
+/// Owner-only registry for durable Eve conversations. The Eve session ID is
+/// never sufficient authority by itself; every continuation is checked against
+/// ownerUserId at the channel boundary.
+model AgentSession {
+  id                 String             @id @default(uuid())
+  eveSessionId       String             @unique
+  ownerUserId        String
+  agentName          String
+  parentEveSessionId String?
+  rootEveSessionId   String
+  title              String?
+  summary            String?            @db.Text
+  selectedContext    Json?
+  status             AgentSessionStatus @default(ACTIVE)
+  lastEventAt        DateTime?
+  archivedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  owner      User                @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  events     AgentSessionEvent[]
+  actions    AgentActionAudit[]
+  operations AgentOperation[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerUserId, archivedAt])
+  @@index([ownerUserId, parentEveSessionId, updatedAt])
+}
+
+/// Application-owned copy of Eve's durable event stream for the session list,
+/// replay diagnostics, and audit correlation. Eve meta.id is the dedupe key.
+model AgentSessionEvent {
+  id             String   @id @default(uuid())
+  agentSessionId String
+  eveEventId     String
+  eventType      String
+  payload        Json
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+
+  agentSession AgentSession @relation(fields: [agentSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([agentSessionId, eveEventId])
+  @@index([agentSessionId, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
+/// Sanitized, application-level audit record for agent mutations and external
+/// side effects. Raw prompts, credentials, and document bytes do not belong here.
+model AgentActionAudit {
+  id              String            @id @default(uuid())
+  ownerUserId     String?
+  agentSessionId  String?
+  eveSessionId    String
+  eveTurnId       String?
+  eveCallId       String?
+  toolName        String
+  action          String
+  targetType      String?
+  targetId        String?
+  approvalOutcome String?
+  operationKey    String?
+  status          AgentActionStatus @default(PENDING)
+  inputSummary    Json?
+  outputSummary   Json?
+  beforeSummary   Json?
+  afterSummary    Json?
+  failureReason   String?           @db.Text
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  owner        User?         @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  agentSession AgentSession? @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId, createdAt])
+  @@index([eveSessionId, createdAt])
+  @@index([targetType, targetId])
+  @@index([operationKey])
+}
+
+/// Durable idempotency gate for persistent and external side effects. Redis may
+/// accelerate lookups, but this row remains authoritative.
+model AgentOperation {
+  id             String               @id @default(uuid())
+  ownerUserId    String
+  agentSessionId String?
+  operationKey   String
+  action         String
+  status         AgentOperationStatus @default(PENDING)
+  result         Json?
+  failureReason  String?              @db.Text
+  expiresAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  owner        User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  agentSession AgentSession? @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([ownerUserId, operationKey])
+  @@index([agentSessionId, createdAt])
+  @@index([status, updatedAt])
+}
+
+/// Bounded durable memory document. Live CRM facts never belong in this table;
+/// the opaque scope is derived by Eve from the authenticated internal user.
+model AgentMemory {
+  id              String                @id @default(uuid())
+  ownerUserId     String
+  scope           String
+  content         Json
+  version         Int                   @default(1)
+  provenance      AgentMemoryProvenance
+  lastOperationId String?
+  expiresAt       DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, scope])
+  @@index([ownerUserId, deletedAt])
+  @@index([expiresAt])
 }
 
 model Lead {

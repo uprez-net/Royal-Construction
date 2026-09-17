@@ -118,7 +118,8 @@ export function ObjectToMarkdown(
       .replace(/^./, (char) => char.toUpperCase());
 
   /** Escapes characters with special meaning in Markdown so text renders literally. */
-  const escapeMarkdown = (value: string) => value.replace(/([*_`~|#>[\]\\])/g, "\\$1");
+  const escapeMarkdown = (value: string) =>
+    value.replace(/([*_`~|#>[\]\\])/g, "\\$1");
 
   /** Renders `title` as a heading, with the level clamped to `safeMaxHeadingDepth`. */
   const heading = (title: string, level: number) => {
@@ -141,13 +142,16 @@ export function ObjectToMarkdown(
     if (value === null) return "`null`";
     if (value === undefined) return "`undefined`";
     if (value instanceof Date) {
-      return Number.isNaN(value.getTime()) ? "`Invalid Date`" : value.toISOString();
+      return Number.isNaN(value.getTime())
+        ? "`Invalid Date`"
+        : value.toISOString();
     }
     if (typeof value === "string") return escapeMarkdown(value);
     if (typeof value === "boolean") return value ? "Yes" : "No";
     if (typeof value === "number") {
       if (Number.isNaN(value)) return "`NaN`";
-      if (!Number.isFinite(value)) return value > 0 ? "`Infinity`" : "`-Infinity`";
+      if (!Number.isFinite(value))
+        return value > 0 ? "`Infinity`" : "`-Infinity`";
       return String(value);
     }
     // Map, Set, RegExp, class instances, functions, symbols, bigints, etc.
@@ -168,10 +172,16 @@ export function ObjectToMarkdown(
         .map((item, index) => {
           const indent = " ".repeat(currentDepth * safeBulletIndent);
           if (Array.isArray(item)) {
-            return `${indent}- Item ${index + 1}\n` + renderArray(item, currentDepth + 1);
+            return (
+              `${indent}- Item ${index + 1}\n` +
+              renderArray(item, currentDepth + 1)
+            );
           }
           if (isPlainObject(item)) {
-            return `${indent}- **Item ${index + 1}**\n\n` + renderObject(item, currentDepth + 1);
+            return (
+              `${indent}- **Item ${index + 1}**\n\n` +
+              renderObject(item, currentDepth + 1)
+            );
           }
           return `${indent}- ${renderPrimitive(item)}`;
         })
@@ -185,7 +195,10 @@ export function ObjectToMarkdown(
   };
 
   /** Renders a plain object's entries as headings/labels, recursing into nested values. */
-  const renderObject = (object: Record<string, unknown>, currentDepth: number): string => {
+  const renderObject = (
+    object: Record<string, unknown>,
+    currentDepth: number,
+  ): string => {
     if (visited.has(object)) {
       return "_Circular reference detected_\n\n";
     }
@@ -198,10 +211,14 @@ export function ObjectToMarkdown(
       return entries
         .map(([key, value]) => {
           if (Array.isArray(value)) {
-            return heading(key, currentDepth) + renderArray(value, currentDepth);
+            return (
+              heading(key, currentDepth) + renderArray(value, currentDepth)
+            );
           }
           if (isPlainObject(value)) {
-            return heading(key, currentDepth) + renderObject(value, currentDepth + 1);
+            return (
+              heading(key, currentDepth) + renderObject(value, currentDepth + 1)
+            );
           }
           return `**${normalizeKey(key)}:** ${renderPrimitive(value)}\n`;
         })

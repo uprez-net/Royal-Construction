@@ -125,7 +125,8 @@ export function AddLeadModal({
 
   const toggleProjectType = (value: ProjectType) =>
     setForm((prev) => {
-      if (value === "Not Specified") return { ...prev, type: ["Not Specified"] };
+      if (value === "Not Specified")
+        return { ...prev, type: ["Not Specified"] };
       const base = prev.type.filter((t) => t !== "Not Specified");
       const next = prev.type.includes(value)
         ? base.filter((t) => t !== value)
@@ -263,7 +264,10 @@ export function AddLeadModal({
           }
         } catch (taskError) {
           console.error("Lead created but its first task was not", taskError);
-          showToast("Lead saved, but the follow-up task could not be created.", "info");
+          showToast(
+            "Lead saved, but the follow-up task could not be created.",
+            "info",
+          );
         }
       }
 
@@ -283,11 +287,19 @@ export function AddLeadModal({
     } catch (error) {
       console.error(error);
       if (error instanceof FetchError) {
-        console.error("error Status:", error.status, "error Message:", error.message);
+        console.error(
+          "error Status:",
+          error.status,
+          "error Message:",
+          error.message,
+        );
         // Reached only when the 409 body could not be read; the normal path
         // returns the duplicate above, along with the lead it matched.
         if (error.status === 409) {
-          showToast("A lead with the same email or phone number already exists. Check in Leads Table", "error");
+          showToast(
+            "A lead with the same email or phone number already exists. Check in Leads Table",
+            "error",
+          );
           return;
         }
       }
@@ -304,7 +316,8 @@ export function AddLeadModal({
     "mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground shadow-none transition-all focus:border-[color:var(--royal-gold)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[color:var(--royal-gold-light)]";
   const textareaCls =
     "mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-none transition-all focus:border-[color:var(--royal-gold)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[color:var(--royal-gold-light)]";
-  const sectionLbl = "text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground";
+  const sectionLbl =
+    "text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground";
   const itemLbl = "text-xs font-medium text-muted-foreground";
 
   /* ── Render ── */
@@ -429,7 +442,9 @@ export function AddLeadModal({
               onChange={(e) => updateField("sourceDetail", e.target.value)}
             >
               {LEAD_SOURCE_OPTIONS.map((o) => (
-                <option key={o} value={o}>{o}</option>
+                <option key={o} value={o}>
+                  {o}
+                </option>
               ))}
             </select>
           </div>
@@ -448,7 +463,9 @@ export function AddLeadModal({
                 Select a person
               </option>
               {availableUsers.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
               ))}
             </select>
           </div>
@@ -463,7 +480,9 @@ export function AddLeadModal({
               onChange={(e) => updateField("budget", e.target.value)}
             >
               {BUDGET_OPTIONS.map((o) => (
-                <option key={o} value={o}>{o}</option>
+                <option key={o} value={o}>
+                  {o}
+                </option>
               ))}
             </select>
           </div>
@@ -635,7 +654,9 @@ export function AddLeadModal({
                 }
               >
                 {HISTORY_TYPE_OPTIONS.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
                 ))}
               </select>
             </div>

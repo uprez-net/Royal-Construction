@@ -37,9 +37,7 @@ export function LeadEmailBadges({
                 variant="outline"
                 className="group flex items-center gap-2 rounded-full px-3 py-1 text-xs font-normal"
               >
-                <span className="max-w-55 truncate">
-                  {email}
-                </span>
+                <span className="max-w-55 truncate">{email}</span>
 
                 <Button
                   type="button"

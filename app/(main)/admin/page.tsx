@@ -14,9 +14,9 @@ import {
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Admin Dashboard",
-    description: "Manage offer pre-fill content and review task approvals.",
-}
+  title: "Admin Dashboard",
+  description: "Manage offer pre-fill content and review task approvals.",
+};
 
 export default function AdminPage() {
   const adminAction: {

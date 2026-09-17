@@ -465,7 +465,11 @@ export function TradieScheduleDetailsModal({
               <Button
                 variant="outline"
                 onClick={() => onSendReminder(item)}
-                disabled={["AWAITING_ADMIN_APPROVAL", "DECLINED", "CONFIRMED"].includes(item.status)}
+                disabled={[
+                  "AWAITING_ADMIN_APPROVAL",
+                  "DECLINED",
+                  "CONFIRMED",
+                ].includes(item.status)}
                 className={cn(
                   "h-auto rounded-[7px]",
                   "border-border/70 bg-card",

@@ -9,7 +9,7 @@ import {
   Text,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -18,20 +18,23 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Credential Item Sub-Component ──────────────────────────────────────────
 
 function CredentialItem({ text }: { text: string }) {
   return (
-    <Row style={{ marginBottom: '0.625rem' }}>
-      <Column style={{ width: 24, verticalAlign: 'top', paddingTop: '2px' }}>
+    <Row style={{ marginBottom: "0.625rem" }}>
+      <Column style={{ width: 24, verticalAlign: "top", paddingTop: "2px" }}>
         <Text
           className="m-0"
           style={{
@@ -70,7 +73,7 @@ interface PortfolioEmailProps {
 }
 
 export default function PortfolioEmail({
-  name = 'Homeowner',
+  name = "Homeowner",
   leadContext,
 }: PortfolioEmailProps) {
   return (
@@ -108,7 +111,7 @@ export default function PortfolioEmail({
           >
             <EmailHeader showGoldBar />
 
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -116,7 +119,7 @@ export default function PortfolioEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -129,41 +132,43 @@ export default function PortfolioEmail({
                   fontWeight: 350,
                   fontSize: 14,
                   lineHeight: 1.7,
-                  letterSpacing: '0.3px',
+                  letterSpacing: "0.3px",
                   color: RC_COLORS.textMutedOnLight,
                   maxWidth: 490,
                 }}
               >
-                Dear {name}, here is the Royal Constructions builder profile and project portfolio for your review before we discuss the next step for your project.
+                Dear {name}, here is the Royal Constructions builder profile and
+                project portfolio for your review before we discuss the next
+                step for your project.
               </Text>
             </EmailSectionLight>
 
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Hero Image ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2rem" }}>
               <Img
                 alt="Royal Constructions Portfolio"
                 src={RC_URLS.heroPortfolio}
                 width={592}
                 style={{
-                  display: 'block',
-                  width: '100%',
+                  display: "block",
+                  width: "100%",
                   maxWidth: 592,
-                  height: 'auto',
+                  height: "auto",
                   borderRadius: 4,
                 }}
               />
             </EmailSectionWhite>
 
             {/* ── Credentials CTA Card ── */}
-            <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionWhite style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.light,
                   borderRadius: 6,
                   border: `2px solid ${RC_COLORS.gold}`,
-                  padding: '1.5rem',
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -174,7 +179,7 @@ export default function PortfolioEmail({
                         fontFamily: FONTS.condensed,
                         fontWeight: 500,
                         fontSize: 13,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.gold,
                       }}
                     >
@@ -208,8 +213,8 @@ export default function PortfolioEmail({
                       }}
                     >
                       We manage every project from approval through to handover
-                      with no outsourcing of responsibility, ensuring consistency
-                      and quality on every job.
+                      with no outsourcing of responsibility, ensuring
+                      consistency and quality on every job.
                     </Text>
 
                     <EmailCtaButton
@@ -236,12 +241,12 @@ export default function PortfolioEmail({
             </EmailSectionWhite>
 
             {/* ── Reply Prompt Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -266,11 +271,11 @@ export default function PortfolioEmail({
             </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: '1px solid #E2E8F0',
-                  paddingTop: '1.5rem',
+                  borderTop: "1px solid #E2E8F0",
+                  paddingTop: "1.5rem",
                 }}
               >
                 <Row>

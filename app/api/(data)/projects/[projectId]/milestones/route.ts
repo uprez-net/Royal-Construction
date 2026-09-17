@@ -1,5 +1,8 @@
-
-import { parseBodyWithResponse, parseRouteParamsWithResponse, successResponse } from "@/utils/validators";
+import {
+  parseBodyWithResponse,
+  parseRouteParamsWithResponse,
+  successResponse,
+} from "@/utils/validators";
 import { projectParamSchema } from "@/utils/validators/projects";
 import { NextRequest } from "next/server";
 import { milestoneCreationSchema } from "@/utils/validators";
@@ -13,7 +16,7 @@ export async function GET(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
-    projectParamSchema
+    projectParamSchema,
   );
   if (!routeParams.success) return routeParams.response;
 
@@ -22,13 +25,15 @@ export async function GET(
   return successResponse(milestones);
 }
 
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   const { projectId } = await params;
-  const milestoneCreationResult = await parseBodyWithResponse(request, milestoneCreationSchema);
+  const milestoneCreationResult = await parseBodyWithResponse(
+    request,
+    milestoneCreationSchema,
+  );
 
   if (!milestoneCreationResult.success) return milestoneCreationResult.response;
 

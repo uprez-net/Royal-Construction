@@ -158,7 +158,11 @@ function withTimeout<T>(
 export async function readLandDeedDeveloper(file: {
   url: string;
   filename?: string;
-}): Promise<{ name: string; email: string | null; phone: string | null } | null> {
+}): Promise<{
+  name: string;
+  email: string | null;
+  phone: string | null;
+} | null> {
   const label = file.filename ?? file.url;
 
   let markdown: string;

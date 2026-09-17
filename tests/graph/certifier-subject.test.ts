@@ -70,7 +70,7 @@ test("a bounce quoting the token is rejected before it reaches an engagement", (
   assert.equal(isMachineGenerated({ returnPath: "<>" }), true);
   assert.equal(
     isMachineGenerated({
-      contentType: 'multipart/report; report-type=delivery-status',
+      contentType: "multipart/report; report-type=delivery-status",
     }),
     true,
   );
@@ -84,7 +84,10 @@ test("minted tokens round-trip through a built subject", () => {
     const token = generateCertifierRefToken();
     const subject = buildCertifierSubject(token, "14 Example St, Marrickville");
     assert.equal(extractCertifierRefToken(subject), token);
-    assert.equal(extractCertifierRefToken(buildCertifierReplySubject(subject)), token);
+    assert.equal(
+      extractCertifierRefToken(buildCertifierReplySubject(subject)),
+      token,
+    );
   }
 });
 
@@ -129,14 +132,32 @@ test("a certifier's own job number and address correlate to the engagement", () 
 test("street type abbreviations are the same address either way round", () => {
   // Whichever side spells it out. This is the single most common difference
   // between what was typed into the engagement and what comes back.
-  assert.equal(subjectMentionsSiteAddress("14 Example Street", "14 Example St"), true);
-  assert.equal(subjectMentionsSiteAddress("14 Example St", "14 Example Street"), true);
-  assert.equal(subjectMentionsSiteAddress("9 Ash Rd", "9 Ash Road, Kellyville"), true);
-  assert.equal(subjectMentionsSiteAddress("2 Grand Pde", "2 Grand Parade"), true);
-  assert.equal(subjectMentionsSiteAddress("7 Oak Cres, Ryde", "7 Oak Crescent"), true);
+  assert.equal(
+    subjectMentionsSiteAddress("14 Example Street", "14 Example St"),
+    true,
+  );
+  assert.equal(
+    subjectMentionsSiteAddress("14 Example St", "14 Example Street"),
+    true,
+  );
+  assert.equal(
+    subjectMentionsSiteAddress("9 Ash Rd", "9 Ash Road, Kellyville"),
+    true,
+  );
+  assert.equal(
+    subjectMentionsSiteAddress("2 Grand Pde", "2 Grand Parade"),
+    true,
+  );
+  assert.equal(
+    subjectMentionsSiteAddress("7 Oak Cres, Ryde", "7 Oak Crescent"),
+    true,
+  );
   // Case and punctuation carry no meaning either.
   assert.equal(
-    subjectMentionsSiteAddress("14 EXAMPLE ST., MARRICKVILLE", ENGAGEMENT_ADDRESS),
+    subjectMentionsSiteAddress(
+      "14 EXAMPLE ST., MARRICKVILLE",
+      ENGAGEMENT_ADDRESS,
+    ),
     true,
   );
 });
@@ -151,7 +172,10 @@ test("unit markers and separators do not decide the match", () => {
     true,
   );
   assert.equal(
-    subjectMentionsSiteAddress("260449-11 14-16 Example St", "14-16 Example Street"),
+    subjectMentionsSiteAddress(
+      "260449-11 14-16 Example St",
+      "14-16 Example Street",
+    ),
     true,
   );
 });
@@ -178,7 +202,10 @@ test("a different site is not correlated onto this engagement", () => {
     );
   }
   assert.equal(subjectMentionsSiteAddress(null, ENGAGEMENT_ADDRESS), false);
-  assert.equal(subjectMentionsSiteAddress(undefined, ENGAGEMENT_ADDRESS), false);
+  assert.equal(
+    subjectMentionsSiteAddress(undefined, ENGAGEMENT_ADDRESS),
+    false,
+  );
 });
 
 test("the certifier's job number cannot stand in for a street number", () => {
@@ -186,7 +213,10 @@ test("the certifier's job number cannot stand in for a street number", () => {
   // missing. Reading the tail of their reference as one would file the
   // documents against 11 Smith St, which is a different project.
   assert.equal(
-    subjectMentionsSiteAddress("260449-11 Smith Street", "11 Smith St, Newtown"),
+    subjectMentionsSiteAddress(
+      "260449-11 Smith Street",
+      "11 Smith St, Newtown",
+    ),
     false,
   );
   assert.equal(
@@ -199,7 +229,10 @@ test("the certifier's job number cannot stand in for a street number", () => {
     subjectMentionsSiteAddress("14-16 Example St", "14-16 Example Street"),
     true,
   );
-  assert.equal(stripSubjectPrefixes("Re: 260449-11 14 Example St"), "14 Example St");
+  assert.equal(
+    stripSubjectPrefixes("Re: 260449-11 14 Example St"),
+    "14 Example St",
+  );
   assert.equal(stripSubjectPrefixes("14 Example St"), "14 Example St");
 });
 
@@ -218,9 +251,17 @@ test("an address too thin to correlate on opts out entirely", () => {
   // No number: whatever this matches, it matches far too much of it. The
   // message goes to the lead path instead, which is where it went before the
   // fallback existed.
-  for (const address of ["", "Marrickville", "Sydney NSW", "The Corner Store"]) {
+  for (const address of [
+    "",
+    "Marrickville",
+    "Sydney NSW",
+    "The Corner Store",
+  ]) {
     assert.deepEqual(siteAddressCore(address), []);
-    assert.equal(subjectMentionsSiteAddress(`260449-11 ${address}`, address), false);
+    assert.equal(
+      subjectMentionsSiteAddress(`260449-11 ${address}`, address),
+      false,
+    );
   }
   assert.deepEqual(siteAddressCore(ENGAGEMENT_ADDRESS), [
     "14",
@@ -245,7 +286,10 @@ test("a leading abbreviation is a name, not a street type", () => {
     "road",
   ]);
   assert.equal(
-    subjectMentionsSiteAddress("260449-11 12 Mamre Road St Marys", "12 Mamre Rd, St Marys"),
+    subjectMentionsSiteAddress(
+      "260449-11 12 Mamre Road St Marys",
+      "12 Mamre Rd, St Marys",
+    ),
     true,
   );
   assert.deepEqual(addressTokens("St Marys"), ["st", "marys"]);
@@ -272,7 +316,10 @@ test("the state and the postcode are dropped, and only from the tail", () => {
     "road",
   ]);
   assert.equal(
-    subjectMentionsSiteAddress("260449-11 2500 Nowra Road", "2500 Nowra Rd, Nowra NSW 2541"),
+    subjectMentionsSiteAddress(
+      "260449-11 2500 Nowra Road",
+      "2500 Nowra Rd, Nowra NSW 2541",
+    ),
     true,
   );
 });
@@ -280,10 +327,21 @@ test("the state and the postcode are dropped, and only from the tail", () => {
 test("a public mailbox domain is not evidence of who is writing", () => {
   // The sender guard in the notifications route falls back to the full address
   // on these, because the homeowner writing about the same site is on one too.
-  for (const domain of ["gmail.com", "GMAIL.COM", " hotmail.com ", "bigpond.com"]) {
+  for (const domain of [
+    "gmail.com",
+    "GMAIL.COM",
+    " hotmail.com ",
+    "bigpond.com",
+  ]) {
     assert.equal(isPublicMailDomain(domain), true, domain);
   }
-  for (const domain of ["certifierco.com.au", "bluegumcertifiers.com", "", null, undefined]) {
+  for (const domain of [
+    "certifierco.com.au",
+    "bluegumcertifiers.com",
+    "",
+    null,
+    undefined,
+  ]) {
     assert.equal(isPublicMailDomain(domain), false, String(domain));
   }
 });

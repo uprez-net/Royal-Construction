@@ -42,7 +42,8 @@ export function DeleteConfirmModal({
     >
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          This will permanently archive {lead.name}. This action cannot be undone.
+          This will permanently archive {lead.name}. This action cannot be
+          undone.
         </p>
         <div className="flex flex-wrap gap-2">
           <button

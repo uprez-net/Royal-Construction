@@ -6,7 +6,10 @@ import {
   compactMoney,
   type OfferStepDigestInput,
 } from "../../lib/offer/step-digests";
-import { EMPTY_OFFER_IMAGES, OFFER_IMAGE_SLOTS } from "../../lib/offer/workspace-images";
+import {
+  EMPTY_OFFER_IMAGES,
+  OFFER_IMAGE_SLOTS,
+} from "../../lib/offer/workspace-images";
 import {
   INITIAL_OFFER_JOB,
   type OfferWorkspaceCostLine,
@@ -78,7 +81,10 @@ test("each step reports its own number, not a Complete/Incomplete chip", () => {
   assert.equal(d["cost-schedule"], "2 lines · $3,000");
   assert.equal(d.pricing, "20% margin · $3.64m");
   assert.equal(d.scope, "1 allowance · 2 excluded");
-  assert.equal(d["offer-document"], `0 of ${OFFER_IMAGE_SLOTS.length} images set`);
+  assert.equal(
+    d["offer-document"],
+    `0 of ${OFFER_IMAGE_SLOTS.length} images set`,
+  );
 });
 
 test("an untouched offer says so rather than printing zeros", () => {
@@ -164,7 +170,11 @@ test("a gated phase stops describing its gate once the gate is open", () => {
     buildOfferStepDigests({
       ...BASE,
       status: "agreed",
-      phaseUnlocked: { ...BASE.phaseUnlocked, "tender-gate": true, tender: true },
+      phaseUnlocked: {
+        ...BASE.phaseUnlocked,
+        "tender-gate": true,
+        tender: true,
+      },
       tenderGateStatus: "unlocked",
     })["tender-gate"],
     "Tender access granted",
@@ -236,7 +246,10 @@ test("every step has a digest, so no rail row can render blank", () => {
 test("the scope digest says when an allowance is left off the Tender", () => {
   const d = buildOfferStepDigests({
     ...BASE,
-    allowances: [{ ...scopeItem("pc1"), includedInTender: false }, scopeItem("pc2")],
+    allowances: [
+      { ...scopeItem("pc1"), includedInTender: false },
+      scopeItem("pc2"),
+    ],
   });
   assert.equal(d.scope, "2 allowances · 2 excluded · 1 not on Tender");
 });

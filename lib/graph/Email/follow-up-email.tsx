@@ -9,7 +9,7 @@ import {
   Text,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -17,13 +17,16 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -43,10 +46,10 @@ interface FollowUpEmailProps {
 }
 
 export default function FollowUpEmail({
-  name = 'Homeowner',
-  type = 'New Home Build',
-  location = 'NSW',
-  notes = 'Discussed initial design preferences, block orientation, and budget expectations for the project.',
+  name = "Homeowner",
+  type = "New Home Build",
+  location = "NSW",
+  notes = "Discussed initial design preferences, block orientation, and budget expectations for the project.",
   scheduleCallUrl = RC_URLS.bookConsultation,
   leadContext,
 }: FollowUpEmailProps) {
@@ -86,7 +89,7 @@ export default function FollowUpEmail({
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -94,7 +97,7 @@ export default function FollowUpEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -107,7 +110,7 @@ export default function FollowUpEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.2px',
+                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -122,17 +125,17 @@ export default function FollowUpEmail({
                   fontWeight: 350,
                   fontSize: 14,
                   lineHeight: 1.7,
-                  letterSpacing: '0.3px',
+                  letterSpacing: "0.3px",
                   color: RC_COLORS.textMutedOnLight,
                   maxWidth: 490,
                 }}
               >
                 Dear {name}, I wanted to follow up on our recent conversation
-                regarding your{' '}
+                regarding your{" "}
                 <span style={{ color: RC_COLORS.textOnLight, fontWeight: 450 }}>
                   {type}
-                </span>{' '}
-                project at{' '}
+                </span>{" "}
+                project at{" "}
                 <span style={{ color: RC_COLORS.textOnLight, fontWeight: 450 }}>
                   {location}
                 </span>
@@ -144,41 +147,49 @@ export default function FollowUpEmail({
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Discussion Notes Card ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '1.5rem',
+                  border: "1px solid #E2E8F0",
+                  padding: "1.5rem",
                 }}
               >
                 <Row
                   style={{
-                    borderBottom: '1px solid #E2E8F0',
-                    paddingBottom: '0.75rem',
-                    marginBottom: '0.75rem',
+                    borderBottom: "1px solid #E2E8F0",
+                    paddingBottom: "0.75rem",
+                    marginBottom: "0.75rem",
                   }}
                 >
                   <Column
-                    style={{ width: 24, verticalAlign: 'middle', paddingRight: 10 }}
+                    style={{
+                      width: 24,
+                      verticalAlign: "middle",
+                      paddingRight: 10,
+                    }}
                   >
                     <Img
                       alt=""
                       height={18}
                       src={ICONS.chat}
                       width={18}
-                      style={{ display: 'block', outline: 'none', border: 'none' }}
+                      style={{
+                        display: "block",
+                        outline: "none",
+                        border: "none",
+                      }}
                     />
                   </Column>
-                  <Column style={{ verticalAlign: 'middle' }}>
+                  <Column style={{ verticalAlign: "middle" }}>
                     <Text
                       className="m-0 uppercase"
                       style={{
                         fontFamily: FONTS.condensed,
                         fontWeight: 500,
                         fontSize: 13,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.gold,
                       }}
                     >
@@ -206,13 +217,13 @@ export default function FollowUpEmail({
             </EmailSectionLight>
 
             {/* ── Schedule Call CTA Card ── */}
-            <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionWhite style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.light,
                   borderRadius: 6,
                   border: `2px solid ${RC_COLORS.gold}`,
-                  padding: '1.5rem',
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -223,7 +234,7 @@ export default function FollowUpEmail({
                         fontFamily: FONTS.condensed,
                         fontWeight: 500,
                         fontSize: 13,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.gold,
                       }}
                     >
@@ -279,12 +290,12 @@ export default function FollowUpEmail({
             </EmailSectionWhite>
 
             {/* ── Encouragement Note ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -299,11 +310,11 @@ export default function FollowUpEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      Building a home is a big decision — there&apos;s{' '}
+                      Building a home is a big decision — there&apos;s{" "}
                       <span style={{ color: RC_COLORS.gold, fontWeight: 450 }}>
                         no rush
-                      </span>{' '}
-                      and{' '}
+                      </span>{" "}
+                      and{" "}
                       <span style={{ color: RC_COLORS.gold, fontWeight: 450 }}>
                         no pressure
                       </span>
@@ -316,11 +327,11 @@ export default function FollowUpEmail({
             </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: '1px solid #E2E8F0',
-                  paddingTop: '1.5rem',
+                  borderTop: "1px solid #E2E8F0",
+                  paddingTop: "1.5rem",
                 }}
               >
                 <Row>

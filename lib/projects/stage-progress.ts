@@ -23,7 +23,10 @@ export function calcStageProgress(
   const byStage = new Map<ProjectStage, { completed: number; total: number }>();
 
   for (const milestone of milestones) {
-    const stage = byStage.get(milestone.projectStage) ?? { completed: 0, total: 0 };
+    const stage = byStage.get(milestone.projectStage) ?? {
+      completed: 0,
+      total: 0,
+    };
     stage.total += 1;
     if (milestone.status === "DONE" || milestone.status === "NOT_REQUIRED") {
       stage.completed += 1;

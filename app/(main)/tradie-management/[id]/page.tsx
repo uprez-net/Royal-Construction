@@ -29,7 +29,8 @@ export async function generateMetadata({
     ? `${Number(tradie.rating).toFixed(1)}/5`
     : "No rating";
   const lastQuotedPrice =
-    tradie.lastQuotedPrice != null && !Number.isNaN(Number(tradie.lastQuotedPrice))
+    tradie.lastQuotedPrice != null &&
+    !Number.isNaN(Number(tradie.lastQuotedPrice))
       ? rateCurrency.format(Number(tradie.lastQuotedPrice))
       : null;
 
@@ -63,9 +64,7 @@ async function TradieDetailContent({ params }: TradieDetailPageProps) {
 
 export default function TradieDetailPage({ params }: TradieDetailPageProps) {
   return (
-    <Suspense
-      fallback={<TradieDetailsSkeleton />}
-    >
+    <Suspense fallback={<TradieDetailsSkeleton />}>
       <TradieDetailContent params={params} />
     </Suspense>
   );

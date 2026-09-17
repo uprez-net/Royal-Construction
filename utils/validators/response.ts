@@ -56,7 +56,7 @@ export interface ApiPaginatedResponse<T = unknown> {
  */
 export function successResponse<T>(
   data: T,
-  options?: { status?: number }
+  options?: { status?: number },
 ): NextResponse<ApiSuccessResponse<T>> {
   return NextResponse.json(
     {
@@ -66,7 +66,7 @@ export function successResponse<T>(
     },
     {
       status: options?.status ?? 200,
-    }
+    },
   );
 }
 
@@ -80,7 +80,7 @@ export function paginatedResponse<T>(
     limit: number;
     total: number;
   },
-  options?: { status?: number }
+  options?: { status?: number },
 ): NextResponse<ApiPaginatedResponse<T>> {
   const totalPages = Math.ceil(pagination.total / pagination.limit);
 
@@ -99,7 +99,7 @@ export function paginatedResponse<T>(
     },
     {
       status: options?.status ?? 200,
-    }
+    },
   );
 }
 
@@ -108,7 +108,7 @@ export function paginatedResponse<T>(
  */
 export function validationErrorResponse(
   error: z.ZodError,
-  options?: { status?: number; message?: string }
+  options?: { status?: number; message?: string },
 ): NextResponse<ApiErrorResponse> {
   const flattened = z.treeifyError(error);
 
@@ -122,7 +122,7 @@ export function validationErrorResponse(
     },
     {
       status: options?.status ?? 400,
-    }
+    },
   );
 }
 
@@ -136,7 +136,7 @@ export function errorResponse(
     code?: string;
     details?: string;
     issues?: Record<string, unknown>;
-  }
+  },
 ): NextResponse<ApiErrorResponse> {
   return NextResponse.json(
     {
@@ -149,7 +149,7 @@ export function errorResponse(
     },
     {
       status: options?.status ?? 500,
-    }
+    },
   );
 }
 
@@ -157,7 +157,7 @@ export function errorResponse(
  * Unauthorized error (401)
  */
 export function unauthorizedResponse(
-  message = "Unauthorized"
+  message = "Unauthorized",
 ): NextResponse<ApiErrorResponse> {
   return errorResponse(message, {
     status: 401,
@@ -169,7 +169,7 @@ export function unauthorizedResponse(
  * Forbidden error (403)
  */
 export function forbiddenResponse(
-  message = "Forbidden"
+  message = "Forbidden",
 ): NextResponse<ApiErrorResponse> {
   return errorResponse(message, {
     status: 403,
@@ -181,7 +181,7 @@ export function forbiddenResponse(
  * Not found error (404)
  */
 export function notFoundResponse(
-  resource: string = "Resource"
+  resource: string = "Resource",
 ): NextResponse<ApiErrorResponse> {
   return errorResponse(`${resource} not found`, {
     status: 404,
@@ -194,7 +194,7 @@ export function notFoundResponse(
  */
 export function badRequestResponse(
   message: string,
-  options?: { issues?: Record<string, unknown> }
+  options?: { issues?: Record<string, unknown> },
 ): NextResponse<ApiErrorResponse> {
   return errorResponse(message, {
     status: 400,
@@ -207,7 +207,7 @@ export function badRequestResponse(
  * Conflict error (409) - for duplicate resources
  */
 export function conflictResponse(
-  message: string
+  message: string,
 ): NextResponse<ApiErrorResponse> {
   return errorResponse(message, {
     status: 409,
@@ -225,7 +225,7 @@ export function conflictResponse(
  */
 export async function parseBodyWithResponse<T extends z.ZodSchema>(
   request: NextRequest,
-  schema: T
+  schema: T,
 ): Promise<
   | { success: true; data: z.infer<T> }
   | { success: false; response: NextResponse<ApiErrorResponse> }
@@ -257,20 +257,24 @@ export async function parseBodyWithResponse<T extends z.ZodSchema>(
  */
 export function parseSearchParamsWithResponse<T extends z.ZodSchema>(
   url: URL,
-  schema: T
-): {
-  success: true;
-  data: z.infer<T>;
-} | {
-  success: false;
-  response: NextResponse<ApiErrorResponse>;
-} {
+  schema: T,
+):
+  | {
+      success: true;
+      data: z.infer<T>;
+    }
+  | {
+      success: false;
+      response: NextResponse<ApiErrorResponse>;
+    } {
   const obj: Record<string, string | string[] | undefined> = {};
 
   url.searchParams.forEach((value, key) => {
     if (obj[key]) {
       const existing = obj[key];
-      obj[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+      obj[key] = Array.isArray(existing)
+        ? [...existing, value]
+        : [existing, value];
     } else {
       obj[key] = value;
     }
@@ -293,14 +297,16 @@ export function parseSearchParamsWithResponse<T extends z.ZodSchema>(
  */
 export function parseRouteParamsWithResponse<T extends z.ZodSchema>(
   params: Record<string, string | string[] | undefined>,
-  schema: T
-): {
-  success: true;
-  data: z.infer<T>;
-} | {
-  success: false;
-  response: NextResponse<ApiErrorResponse>;
-} {
+  schema: T,
+):
+  | {
+      success: true;
+      data: z.infer<T>;
+    }
+  | {
+      success: false;
+      response: NextResponse<ApiErrorResponse>;
+    } {
   const parsed = schema.safeParse(params);
 
   if (!parsed.success) {
@@ -325,14 +331,14 @@ export function parseRouteParamsWithResponse<T extends z.ZodSchema>(
  */
 export function legacyErrorResponse(
   error: z.ZodError | string,
-  status: number = 400
+  status: number = 400,
 ): NextResponse {
   if (typeof error === "string") {
     return NextResponse.json(
       {
         error,
       },
-      { status }
+      { status },
     );
   }
 
@@ -341,6 +347,6 @@ export function legacyErrorResponse(
       error: "Validation failed",
       issues: z.treeifyError(error),
     },
-    { status }
+    { status },
   );
 }

@@ -347,7 +347,8 @@ export function ProjectComplianceTab({
    * so every row gets the same not-required control, including empty rows.
    */
   const missingDaRows =
-    hasDa && DA_DOCUMENTS.some((document) => !documentsByType.has(document.type));
+    hasDa &&
+    DA_DOCUMENTS.some((document) => !documentsByType.has(document.type));
 
   useEffect(() => {
     if (!missingDaRows) return;
@@ -430,8 +431,7 @@ export function ProjectComplianceTab({
     document.files.length > 0 &&
     document.files.every((file) => certifierSentUrls.has(file.url));
   const unsentSubmissionDocuments = submissionDocuments.filter(
-    (document) =>
-      !isNotRequired(document.status) && !isSentForReview(document),
+    (document) => !isNotRequired(document.status) && !isSentForReview(document),
   );
 
   /**
@@ -489,7 +489,8 @@ export function ProjectComplianceTab({
     if (document?.documentType === ComplianceDocumentType.CHECKLIST_ITEM) {
       // A rejected file remains on the row as the audit copy, but it is not a
       // candidate for another decision until its replacement has been uploaded.
-      if (document.rejectionReason || document.files.length === 0) return "upload";
+      if (document.rejectionReason || document.files.length === 0)
+        return "upload";
 
       // Per-document sends make review asynchronous: a row is decidable when
       // its current copy is actually on an outbound certifier message, whether
@@ -855,8 +856,8 @@ export function ProjectComplianceTab({
       approval,
       hasRevised: Boolean(
         approval?.decision === ComplianceApprovalDecision.REJECTED &&
-          document?.files.length &&
-          !outstanding,
+        document?.files.length &&
+        !outstanding,
       ),
     } satisfies DeveloperApprovalItem;
   });
@@ -1021,8 +1022,8 @@ export function ProjectComplianceTab({
     const party =
       documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
         ? WASTE_MANAGEMENT_PLAN_PARTY
-        : consultantForDocumentType(documentType) ??
-          (documentType ? partyForDocumentType(documentType) : null);
+        : (consultantForDocumentType(documentType) ??
+          (documentType ? partyForDocumentType(documentType) : null));
     if (!party) return null;
 
     const outreach = outreachForParty(engagement, party);
@@ -2444,7 +2445,10 @@ export function ProjectComplianceTab({
                   }
                 />
               }
-              blockedReason={developerPlansBlockedReason(engagement) ?? bushfireDeveloperBlockedReason}
+              blockedReason={
+                developerPlansBlockedReason(engagement) ??
+                bushfireDeveloperBlockedReason
+              }
             />
           ) : null}
 
@@ -2563,7 +2567,6 @@ export function ProjectComplianceTab({
                 );
               })}
             </ul>
-
           </ComplianceSectionCard>
 
           <PortalCertificateBlock
@@ -2639,7 +2642,10 @@ export function ProjectComplianceTab({
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="flex items-center gap-2 rounded-xl border border-primary/15 bg-primary/[0.045] px-3 py-2.5">
-          <ListChecks className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <ListChecks
+            className="size-4 shrink-0 text-primary"
+            aria-hidden="true"
+          />
           <span className="min-w-0 text-xs text-muted-foreground">
             <strong className="block text-sm font-semibold text-foreground tabular-nums">
               {suppliedChecklistItems}/{checklistItems.length || 0}
@@ -2648,7 +2654,10 @@ export function ProjectComplianceTab({
           </span>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-success/20 bg-success-light/55 px-3 py-2.5">
-          <FileArchive className="size-4 shrink-0 text-success-ink" aria-hidden="true" />
+          <FileArchive
+            className="size-4 shrink-0 text-success-ink"
+            aria-hidden="true"
+          />
           <span className="min-w-0 text-xs text-muted-foreground">
             <strong className="block text-sm font-semibold text-foreground tabular-nums">
               {totalFiles}
@@ -2657,7 +2666,10 @@ export function ProjectComplianceTab({
           </span>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-warning/20 bg-warning-light/55 px-3 py-2.5">
-          <Archive className="size-4 shrink-0 text-warning-ink" aria-hidden="true" />
+          <Archive
+            className="size-4 shrink-0 text-warning-ink"
+            aria-hidden="true"
+          />
           <span className="min-w-0 text-xs text-muted-foreground">
             <strong className="block text-sm font-semibold text-foreground tabular-nums">
               {partySections.filter((section) => section.isComplete).length}/
@@ -2667,7 +2679,10 @@ export function ProjectComplianceTab({
           </span>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/45 px-3 py-2.5">
-          <MessagesSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <MessagesSquare
+            className="size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <span className="min-w-0 text-xs text-muted-foreground">
             <strong className="block text-sm font-semibold text-foreground tabular-nums">
               {threadMessageCount}

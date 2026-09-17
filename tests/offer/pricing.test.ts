@@ -40,4 +40,3 @@ assert.deepEqual(calculateOfferTotals([gstExclusive, gstInclusive]), {
   gstAmount: 30,
   totalAmount: 330,
 });
-

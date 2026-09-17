@@ -1,4 +1,11 @@
-import { badRequestResponse, createLeadSchema, errorResponse, leadLookupParamSchema, parseSearchParamsWithResponse, successResponse } from "@/utils/validators";
+import {
+  badRequestResponse,
+  createLeadSchema,
+  errorResponse,
+  leadLookupParamSchema,
+  parseSearchParamsWithResponse,
+  successResponse,
+} from "@/utils/validators";
 import { getLeads, createLead } from "@/lib/data/leads";
 import { NextRequest } from "next/server";
 import { parseLeadStageFilter } from "@/lib/leads/types";
@@ -19,19 +26,46 @@ export async function GET(request: NextRequest) {
     if (params.data.status) {
       const { stages, unknown } = parseLeadStageFilter(params.data.status);
       if (unknown.length > 0) {
-        return badRequestResponse(`Unknown lead stage filter: ${unknown.join(", ")}`);
+        return badRequestResponse(
+          `Unknown lead stage filter: ${unknown.join(", ")}`,
+        );
       }
       statusFilterArray = stages;
     }
     const filterTiming = params.data.filterTiming;
-    const filterLeadsWithoutProject = params.data.filterLeadsWithoutProject ? true : false;
-    const isArchived = params.data.isArchived ? params.data.isArchived === 'true' : undefined;
-    const hasOpenTask = params.data.hasOpenTask === 'true';
-    const pendingFollowUps = params.data.pendingFollowUps ? params.data.pendingFollowUps === 'true' : undefined;
-    const upcomingFollowUps = params.data.upcomingFollowUps ? params.data.upcomingFollowUps === 'true' : undefined;
-    const pendingMeetings = params.data.pendingMeetings ? params.data.pendingMeetings === 'true' : undefined;
-    const upcomingMeetings = params.data.upcomingMeetings ? params.data.upcomingMeetings === 'true' : undefined;
-    const leads = await getLeads(params.data.page, params.data.limit, params.data.q, statusFilterArray, filterTiming, filterLeadsWithoutProject, isArchived, hasOpenTask, pendingFollowUps, upcomingFollowUps, pendingMeetings, upcomingMeetings);
+    const filterLeadsWithoutProject = params.data.filterLeadsWithoutProject
+      ? true
+      : false;
+    const isArchived = params.data.isArchived
+      ? params.data.isArchived === "true"
+      : undefined;
+    const hasOpenTask = params.data.hasOpenTask === "true";
+    const pendingFollowUps = params.data.pendingFollowUps
+      ? params.data.pendingFollowUps === "true"
+      : undefined;
+    const upcomingFollowUps = params.data.upcomingFollowUps
+      ? params.data.upcomingFollowUps === "true"
+      : undefined;
+    const pendingMeetings = params.data.pendingMeetings
+      ? params.data.pendingMeetings === "true"
+      : undefined;
+    const upcomingMeetings = params.data.upcomingMeetings
+      ? params.data.upcomingMeetings === "true"
+      : undefined;
+    const leads = await getLeads(
+      params.data.page,
+      params.data.limit,
+      params.data.q,
+      statusFilterArray,
+      filterTiming,
+      filterLeadsWithoutProject,
+      isArchived,
+      hasOpenTask,
+      pendingFollowUps,
+      upcomingFollowUps,
+      pendingMeetings,
+      upcomingMeetings,
+    );
     return successResponse(leads);
   } catch (error) {
     console.error("/api/leads GET error", error);
@@ -52,8 +86,8 @@ export async function POST(request: NextRequest) {
     }
 
     const created = await createLead(parsed.data);
-    if ('message' in created) {
-     // console.log("Lead already exists:", created.message);
+    if ("message" in created) {
+      // console.log("Lead already exists:", created.message);
       return successResponse(created, { status: 409 });
     }
     return successResponse(created, { status: 201 });

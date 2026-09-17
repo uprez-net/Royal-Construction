@@ -138,14 +138,20 @@ export function TradeTypeField({
 }: TradeTypeFieldProps) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={comboboxProps.id ?? "tradie-trade"} className="flex items-center gap-2">
+      <Label
+        htmlFor={comboboxProps.id ?? "tradie-trade"}
+        className="flex items-center gap-2"
+      >
         <HardHat className="h-4 w-4" aria-hidden="true" />
         Trade type
         {requiredMark}
       </Label>
       <TradeTypeCombobox {...comboboxProps} />
       {comboboxProps.error && (
-        <p id={`${comboboxProps.id ?? "tradie-trade"}-error`} className="text-xs text-destructive">
+        <p
+          id={`${comboboxProps.id ?? "tradie-trade"}-error`}
+          className="text-xs text-destructive"
+        >
           {comboboxProps.error}
         </p>
       )}

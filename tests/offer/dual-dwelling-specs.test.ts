@@ -34,7 +34,9 @@ import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 // as separate, labelled specifications — and must NOT print a granny section for
 // a single-dwelling build.
 
-function snapshotWithJob(job: Partial<OfferWorkspaceJob>): OfferWorkspaceSnapshot {
+function snapshotWithJob(
+  job: Partial<OfferWorkspaceJob>,
+): OfferWorkspaceSnapshot {
   return {
     job: { ...INITIAL_OFFER_JOB, ...job },
     lines: INITIAL_COST_LINES,

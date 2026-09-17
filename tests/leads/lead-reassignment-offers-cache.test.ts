@@ -18,7 +18,10 @@ import {
 // (the lead PATCH, MCP and booking routes), where updateTag throws.
 
 const text = readFileSync(join(process.cwd(), "lib/data/leads.ts"), "utf8");
-const listing = readFileSync(join(process.cwd(), "lib/data/offer-listing.ts"), "utf8");
+const listing = readFileSync(
+  join(process.cwd(), "lib/data/offer-listing.ts"),
+  "utf8",
+);
 
 function functionBody(name: string): string {
   const start = text.indexOf(`async function ${name}(`);
@@ -29,11 +32,17 @@ function functionBody(name: string): string {
 }
 
 test("updateLead expires the offers listing once the write is committed", () => {
-  assert.match(text, /import \{[^}]*\brevalidateTag\b[^}]*\} from "next\/cache"/);
+  assert.match(
+    text,
+    /import \{[^}]*\brevalidateTag\b[^}]*\} from "next\/cache"/,
+  );
   const body = functionBody("updateLead");
 
   const invalidation = body.search(/revalidateTag\(\s*"offers"/);
-  assert.ok(invalidation >= 0, "updateLead never invalidates the offers listing");
+  assert.ok(
+    invalidation >= 0,
+    "updateLead never invalidates the offers listing",
+  );
   assert.ok(
     body.indexOf("prisma.$transaction(") < invalidation,
     "the listing is expired before the lead is written",
@@ -82,19 +91,33 @@ test("a write changes the listing only when a listed value differs", () => {
     location: "Parramatta",
     type: ["Duplex"],
   };
-  const unrelated: Record<string, unknown> = { notes: "called back", stage: "WON" };
+  const unrelated: Record<string, unknown> = {
+    notes: "called back",
+    stage: "WON",
+  };
 
   assert.equal(offerListingLeadChanged(current, {}), false);
   assert.equal(offerListingLeadChanged(current, unrelated), false);
-  assert.equal(offerListingLeadChanged(current, { name: "Ann Lee", type: ["Duplex"] }), false);
+  assert.equal(
+    offerListingLeadChanged(current, { name: "Ann Lee", type: ["Duplex"] }),
+    false,
+  );
 
   assert.equal(offerListingLeadChanged(current, { phone: "0411111111" }), true);
   assert.equal(offerListingLeadChanged(current, { location: "" }), true);
-  assert.equal(offerListingLeadChanged(current, { type: ["Duplex", "Granny flat"] }), true);
-  assert.equal(offerListingLeadChanged(current, { type: ["Granny flat"] }), true);
-  assert.equal(offerListingLeadChanged(null, { email: "ann@example.com" }), true);
+  assert.equal(
+    offerListingLeadChanged(current, { type: ["Duplex", "Granny flat"] }),
+    true,
+  );
+  assert.equal(
+    offerListingLeadChanged(current, { type: ["Granny flat"] }),
+    true,
+  );
+  assert.equal(
+    offerListingLeadChanged(null, { email: "ann@example.com" }),
+    true,
+  );
 });
-
 
 test("the expiry cannot fail the save", () => {
   const body = functionBody("updateLead");

@@ -25,11 +25,11 @@ export async function PATCH(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
-    variationParamSchema
+    variationParamSchema,
   );
   if (!routeParams.success) {
     return badRequestResponse("Invalid route parameters");
-  };
+  }
 
   const body = await parseBodyWithResponse(request, variationUpdateSchema);
   if (!body.success) {
@@ -38,7 +38,10 @@ export async function PATCH(
 
   const { variationId } = routeParams.data;
   try {
-    const variation = await updateVariationStatus(variationId, body.data.status);
+    const variation = await updateVariationStatus(
+      variationId,
+      body.data.status,
+    );
 
     return successResponse(variation);
   } catch (error) {

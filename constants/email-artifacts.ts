@@ -1,4 +1,3 @@
-
 export const EMAIL_HEADER_HTML = `
 <!-- Header -->
 <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#ffffff;margin:0;padding:0;">

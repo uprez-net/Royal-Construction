@@ -49,24 +49,30 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Project Name",
         source: "Tender/Contract cover page or header",
         logic: "Extract the project or job name/reference exactly as printed.",
-        importance: "Used to match the extraction back to the correct CRM lead/project record.",
+        importance:
+          "Used to match the extraction back to the correct CRM lead/project record.",
       },
       projectType: {
         label: "Project Type",
         source: "Tender/Contract cover page or header",
-        logic: "Extract build type (e.g. new build, knockdown-rebuild, renovation) if explicitly stated.",
-        importance: "Drives which downstream checklist/workflow the project follows.",
+        logic:
+          "Extract build type (e.g. new build, knockdown-rebuild, renovation) if explicitly stated.",
+        importance:
+          "Drives which downstream checklist/workflow the project follows.",
       },
       lotSize: {
         label: "Lot Size",
         source: "Tender/Contract cover page or header",
-        logic: "Extract the lot size in square metres only if explicitly stated.",
-        importance: "Used to confirm the build is within the correct lot boundaries.",
+        logic:
+          "Extract the lot size in square metres only if explicitly stated.",
+        importance:
+          "Used to confirm the build is within the correct lot boundaries.",
       },
       summary: {
         label: "Summary",
         source: "Tender/Contract cover page",
-        logic: "Only summarize content that is explicitly present; do not editorialize or infer scope.",
+        logic:
+          "Only summarize content that is explicitly present; do not editorialize or infer scope.",
         importance: "Gives site staff a fast, faithful snapshot of the job.",
       },
     },
@@ -84,7 +90,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
       legalAdministrationOwnerNames: {
         label: "Owner Names",
         source: 'Contract: "WHO" > Owner(s)',
-        logic: "Extract each named owner (Owner 1, Owner 2, ...) as separate array entries.",
+        logic:
+          "Extract each named owner (Owner 1, Owner 2, ...) as separate array entries.",
         importance: "Confirms who is legally party to the contract.",
       },
       legalAdministrationOwnerEmails: {
@@ -96,13 +103,16 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
       legalAdministrationOwnerPhones: {
         label: "Owner Phones",
         source: 'Contract: "WHO" > Owner(s)',
-        logic: "Extract each owner's mobile/phone number as a separate array entry.",
-        importance: "Instant access for site-meeting requests and urgent contact.",
+        logic:
+          "Extract each owner's mobile/phone number as a separate array entry.",
+        importance:
+          "Instant access for site-meeting requests and urgent contact.",
       },
       legalAdministrationCommencementTrigger: {
         label: "Commencement Trigger",
         source: "Contract: Clause 10(a)",
-        logic: "Identify the 'later of' condition and the accompanying list items (i) to (v).",
+        logic:
+          "Identify the 'later of' condition and the accompanying list items (i) to (v).",
         importance: "Tracks the stopwatch for official build start.",
       },
       legalAdministrationSignedDate: {
@@ -127,49 +137,61 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Total Contract Sum",
         source: "Contract: Page ii (Price)",
         logic: "Extract the $ value and note whether it is inclusive of GST.",
-        importance: "The single source of truth for all downstream payment tracking.",
+        importance:
+          "The single source of truth for all downstream payment tracking.",
       },
       commercialsAndClaimsTenderTotalPrice: {
         label: "Tender Total Price",
         source: "Tender: pricing summary",
-        logic: "Extract the Tender's own total price figure for reconciliation against the Contract price.",
-        importance: "Should equal the Contract price; a mismatch is a red-alert discrepancy.",
+        logic:
+          "Extract the Tender's own total price figure for reconciliation against the Contract price.",
+        importance:
+          "Should equal the Contract price; a mismatch is a red-alert discrepancy.",
       },
       commercialsAndClaimsContractPrice: {
         label: "Contract Price",
         source: "Contract: Page ii (Price)",
         logic: "Extract the signed Contract price, the legal master figure.",
-        importance: "Legal master value used to reconcile against the Tender total price.",
+        importance:
+          "Legal master value used to reconcile against the Tender total price.",
       },
       commercialsAndClaimsGstIncluded: {
         label: "GST Included",
         source: "Contract: Price section",
-        logic: "Extract the boolean 'Inclusive of GST' checkbox/statement only if explicitly stated.",
-        importance: "Confirms whether the contract sum already accounts for GST.",
+        logic:
+          "Extract the boolean 'Inclusive of GST' checkbox/statement only if explicitly stated.",
+        importance:
+          "Confirms whether the contract sum already accounts for GST.",
       },
       commercialsAndClaimsGstAmount: {
         label: "GST Amount",
         source: "Contract: Price section",
-        logic: "Extract the stated GST dollar component only if explicitly shown.",
-        importance: "Should be consistent with Contract Price / 11; large mismatches indicate a documentation error.",
+        logic:
+          "Extract the stated GST dollar component only if explicitly shown.",
+        importance:
+          "Should be consistent with Contract Price / 11; large mismatches indicate a documentation error.",
       },
       commercialsAndClaimsDepositValue: {
         label: "Deposit Value",
         source: "Contract: Schedule 2, 4(b); cross-check Tender Sec 4",
         logic: "Extract the stated deposit amount.",
-        importance: "Ensures the mobilization fee is paid before start; NSW caps deposits at 10% of contract price.",
+        importance:
+          "Ensures the mobilization fee is paid before start; NSW caps deposits at 10% of contract price.",
       },
       commercialsAndClaimsClaimStageSlabPercentage: {
         label: "Claim Stage: Slab %",
         source: "Contract: Schedule 2, 4(a)(2)",
         logic: "Extract the slab claim stage percentage (e.g. 15%).",
-        importance: "Triggers the slab-stage invoice as soon as the slab is poured.",
+        importance:
+          "Triggers the slab-stage invoice as soon as the slab is poured.",
       },
       commercialsAndClaimsClaimStageSlabDollarValue: {
         label: "Claim Stage: Slab $",
         source: "Contract: Schedule 2, 4(a)(2)",
-        logic: "Extract the slab claim stage dollar value if stated explicitly (do not calculate it yourself).",
-        importance: "Confirms the exact invoice amount for the slab claim stage.",
+        logic:
+          "Extract the slab claim stage dollar value if stated explicitly (do not calculate it yourself).",
+        importance:
+          "Confirms the exact invoice amount for the slab claim stage.",
       },
       commercialsAndClaimsVariationAdminFee: {
         label: "Variation Admin Fee",
@@ -181,13 +203,16 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Late Penalty Rate",
         source: "Contract: Schedule 2, 3(a)",
         logic: "Extract the $ per calendar week penalty rate.",
-        importance: "Prevents 'time is of the essence' disputes over delay costs.",
+        importance:
+          "Prevents 'time is of the essence' disputes over delay costs.",
       },
       commercialsAndClaimsPaymentStages: {
         label: "Payment Stages",
         source: "Contract: Schedule 2 payment schedule",
-        logic: "Extract each payment/claim stage as a separate array entry, in document order.",
-        importance: "The full staged schedule should sum to 100%; a sum of 95% or 105% is legally invalid.",
+        logic:
+          "Extract each payment/claim stage as a separate array entry, in document order.",
+        importance:
+          "The full staged schedule should sum to 100%; a sum of 95% or 105% is legally invalid.",
       },
     },
   },
@@ -199,7 +224,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Concrete Slab Class",
         source: "Tender: 1.10 & 1.12",
         logic: "Look for the stated slab class (e.g. H1 or M).",
-        importance: "Wrong class leads to slab cracking and a costly variation.",
+        importance:
+          "Wrong class leads to slab cracking and a costly variation.",
       },
       subStructureAndGroundConcreteStrengthMpa: {
         label: "Concrete Strength (MPa)",
@@ -216,14 +242,17 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
       subStructureAndGroundTermiteSystem: {
         label: "Termite System",
         source: "Tender: 2.3",
-        logic: "Identify the stated system (e.g. full perimeter + collar protection).",
+        logic:
+          "Identify the stated system (e.g. full perimeter + collar protection).",
         importance: "Critical for obtaining the Occupation Certificate.",
       },
       subStructureAndGroundSewerConnection: {
         label: "Sewer Connection",
         source: "Tender: 1.13",
-        logic: "Search for 'sewer connection to main' and its included/by-owner status.",
-        importance: "Clarifies whether the builder or owner is responsible for the connection.",
+        logic:
+          "Search for 'sewer connection to main' and its included/by-owner status.",
+        importance:
+          "Clarifies whether the builder or owner is responsible for the connection.",
       },
     },
   },
@@ -234,14 +263,18 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
       inclusionsAndExclusionsInclusions: {
         label: "Inclusions",
         source: "Tender: inclusions / scope items",
-        logic: "Extract each tender inclusion as a separate array entry, one entry per item.",
-        importance: "Keeps the agreed scope visible so extras are not silently absorbed.",
+        logic:
+          "Extract each tender inclusion as a separate array entry, one entry per item.",
+        importance:
+          "Keeps the agreed scope visible so extras are not silently absorbed.",
       },
       inclusionsAndExclusionsExclusions: {
         label: "Exclusions",
         source: "Tender: exclusions / exclusions & notes",
-        logic: "Extract each tender exclusion as a separate array entry, one entry per item.",
-        importance: "Surfaces items the owner may assume are included but are explicitly excluded.",
+        logic:
+          "Extract each tender exclusion as a separate array entry, one entry per item.",
+        importance:
+          "Surfaces items the owner may assume are included but are explicitly excluded.",
       },
     },
   },
@@ -253,7 +286,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Electrical Phase",
         source: "Tender: 1.14",
         logic: "Search for 'phase' (e.g. Three Phase).",
-        importance: "Three-phase power is essential to support high-capacity AC systems.",
+        importance:
+          "Three-phase power is essential to support high-capacity AC systems.",
       },
       utilityInfrastructureCommunicationConduit: {
         label: "Comms Conduit",
@@ -265,7 +299,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Gas Connection",
         source: "Tender: 2.7",
         logic: "Search for 'Gas HWS' (hot water system) references.",
-        importance: "Requires specific pipe sizing for continuous-flow systems.",
+        importance:
+          "Requires specific pipe sizing for continuous-flow systems.",
       },
       utilityInfrastructureFridgeWaterPoint: {
         label: "Fridge Water Point",
@@ -277,7 +312,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Smart Lock Brand",
         source: "Tender: 2.12",
         logic: "Search for a named brand (e.g. Philips).",
-        importance: "Determines the door prep/routing the carpenter must perform.",
+        importance:
+          "Determines the door prep/routing the carpenter must perform.",
       },
     },
   },
@@ -289,7 +325,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Waterproofing Standard",
         source: "Tender: 2.11",
         logic: "Search for 'AS3740' or 'BCA' references.",
-        importance: "Mandatory compliance reference; missing it risks a rejected Occupation Certificate.",
+        importance:
+          "Mandatory compliance reference; missing it risks a rejected Occupation Certificate.",
       },
       wetAreaComplianceShowerScreenType: {
         label: "Shower Screen Type",
@@ -331,13 +368,15 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Roof Guardrails",
         source: "Tender: 3.3",
         logic: "Search for 'roof guardrail' / 'Work Cover' references.",
-        importance: "Required status for any roof work under WorkCover regulations.",
+        importance:
+          "Required status for any roof work under WorkCover regulations.",
       },
       safetyAndSiteLogisticsSedimentControl: {
         label: "Sediment Control",
         source: "Tender: 1.6 / 3.1",
         logic: "Search for 'EPA' or 'sediment' references.",
-        importance: "EPA fines of $15k+ can apply if silt leaves the site uncontrolled.",
+        importance:
+          "EPA fines of $15k+ can apply if silt leaves the site uncontrolled.",
       },
       safetyAndSiteLogisticsScaffoldingSafety: {
         label: "Scaffolding / Safety",
@@ -355,7 +394,8 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         label: "Final Clean Status",
         source: "Tender: 3.6",
         logic: "Search for 'interior and exterior cleaned' references.",
-        importance: "A professional clean is required as a condition of handover.",
+        importance:
+          "A professional clean is required as a condition of handover.",
       },
     },
   },
@@ -429,19 +469,23 @@ ${renderSectionGuideXml()}
 </anti_hallucination>
 `;
 
-export function buildTenderExtractionPrompt(input: TenderExtractionPromptInput) {
+export function buildTenderExtractionPrompt(
+  input: TenderExtractionPromptInput,
+) {
   return `  
 Extract the project information from the following source documents.
   
 Tender file: ${input.tenderFileName}
 Contract file: ${input.contractFileName}
 
-  ${input.leadInfo ?
-      `
+  ${
+    input.leadInfo
+      ? `
   Lead information Markdown: 
   ${input.leadInfo}
-  ` :
-      ""}
+  `
+      : ""
+  }
 
 Tender OCR markdown:
 ${input.tenderMarkdown}

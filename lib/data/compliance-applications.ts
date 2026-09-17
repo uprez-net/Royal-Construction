@@ -254,7 +254,6 @@ export async function recordExternalApplication(
             applicationRef: input.applicationRef ?? null,
           },
         });
-
       });
 
       if (APPLICATIONS_WITH_A_COUNCIL_THREAD.has(input.kind)) {

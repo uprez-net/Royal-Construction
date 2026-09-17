@@ -4,7 +4,10 @@ import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import { getCachedProjectById, getProjectById } from "@/lib/data/projects";
 import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
-import { collectProjectDateBlockers, partitionBlockers } from "@/lib/data/projectReadiness";
+import {
+  collectProjectDateBlockers,
+  partitionBlockers,
+} from "@/lib/data/projectReadiness";
 import { normalizeDateString } from "@/utils/date";
 import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
@@ -17,7 +20,7 @@ import {
   unauthorizedResponse,
   forbiddenResponse,
   notFoundResponse,
-  errorResponse
+  errorResponse,
 } from "@/utils/validators";
 import { z } from "zod";
 
@@ -50,15 +53,19 @@ const projectValidationSchema = z.object({
   message: z.string().min(1),
   ownerResponsibility: z.boolean().optional(),
   variationRequired: z.boolean().optional(),
-  resolvedValue: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+  resolvedValue: z
+    .union([z.string(), z.number(), z.boolean(), z.null()])
+    .optional(),
 });
 
 const projectRequirementsPayloadSchema = projectExtractionSchema.extend({
   version: z.literal(1).optional(),
-  sourceDocuments: z.object({
-    tender: sourceDocumentSchema,
-    contract: sourceDocumentSchema,
-  }).optional(),
+  sourceDocuments: z
+    .object({
+      tender: sourceDocumentSchema,
+      contract: sourceDocumentSchema,
+    })
+    .optional(),
   validations: z.array(projectValidationSchema).optional(),
 });
 
@@ -88,7 +95,10 @@ export async function PATCH(
   }
 
   const resolvedParams = await params;
-  const routeParams = parseRouteParamsWithResponse(resolvedParams, projectParamSchema);
+  const routeParams = parseRouteParamsWithResponse(
+    resolvedParams,
+    projectParamSchema,
+  );
   if (!routeParams.success) return routeParams.response;
 
   const body = await parseBodyWithResponse(request, updateProjectBodySchema);
@@ -120,10 +130,13 @@ export async function PATCH(
       user.role === Role.ADMIN ||
       existingProject.siteManagerId === user.id ||
       existingProject.Lead.assignedId === user.id ||
-      (user.role === Role.CUSTOMER && user.customerId === existingProject.customerId);
+      (user.role === Role.CUSTOMER &&
+        user.customerId === existingProject.customerId);
 
     if (!canEditProject) {
-      return forbiddenResponse("You do not have access to update this project.");
+      return forbiddenResponse(
+        "You do not have access to update this project.",
+      );
     }
 
     // ── Phase 2: date reconciliation on PATCH ──
@@ -163,8 +176,10 @@ export async function PATCH(
     const dateBlockers = collectProjectDateBlockers({
       signedDate: effectiveSignedDate,
       startDate: effectiveStartDate,
-      hbcfInsuranceNumber: mergedRequirements.legalAdministration?.hbcfInsuranceNumber ?? null,
-      pcaInspector: mergedRequirements.legalAdministration?.pcaInspector ?? null,
+      hbcfInsuranceNumber:
+        mergedRequirements.legalAdministration?.hbcfInsuranceNumber ?? null,
+      pcaInspector:
+        mergedRequirements.legalAdministration?.pcaInspector ?? null,
       status: existingProject.status,
     });
     const { blocks } = partitionBlockers(dateBlockers);
@@ -189,12 +204,24 @@ export async function PATCH(
       data: {
         ...(body.data.name ? { name: body.data.name } : {}),
         ...(body.data.location ? { location: body.data.location } : {}),
-        ...(body.data.council !== undefined ? { council: body.data.council } : {}),
-        ...(body.data.description !== undefined ? { description: body.data.description } : {}),
-        ...(body.data.startDate ? { startDate: new Date(body.data.startDate) } : {}),
-        ...(body.data.estimatedEndDate ? { estimatedEndDate: new Date(body.data.estimatedEndDate) } : {}),
-        ...(body.data.totalBudget !== undefined ? { totalBudget: String(body.data.totalBudget) } : {}),
-        ...(body.data.requirements !== undefined ? { requirements: body.data.requirements as never } : {}),
+        ...(body.data.council !== undefined
+          ? { council: body.data.council }
+          : {}),
+        ...(body.data.description !== undefined
+          ? { description: body.data.description }
+          : {}),
+        ...(body.data.startDate
+          ? { startDate: new Date(body.data.startDate) }
+          : {}),
+        ...(body.data.estimatedEndDate
+          ? { estimatedEndDate: new Date(body.data.estimatedEndDate) }
+          : {}),
+        ...(body.data.totalBudget !== undefined
+          ? { totalBudget: String(body.data.totalBudget) }
+          : {}),
+        ...(body.data.requirements !== undefined
+          ? { requirements: body.data.requirements as never }
+          : {}),
       },
     });
 
@@ -208,14 +235,16 @@ export async function PATCH(
 
     return successResponse(updatedProject);
   } catch (error) {
-    console.error(`PATCH /api/projects/${routeParams.data.projectId} error`, error);
+    console.error(
+      `PATCH /api/projects/${routeParams.data.projectId} error`,
+      error,
+    );
     return errorResponse("Failed to update project", {
       status: 500,
       code: "INTERNAL_ERROR",
     });
   }
 }
-
 
 export async function GET(
   _request: Request,
@@ -224,7 +253,7 @@ export async function GET(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
-    projectParamSchema
+    projectParamSchema,
   );
   if (!routeParams.success) return routeParams.response;
 

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { LEAD_SUBJECT_LINES, LEAD_SUBJECT_PATTERNS, isLeadMessage, isLeadSubject, isOwnDomainSender, normalizeSubject } from "../../lib/graph/lead-subject";
+import {
+  LEAD_SUBJECT_LINES,
+  LEAD_SUBJECT_PATTERNS,
+  isLeadMessage,
+  isLeadSubject,
+  isOwnDomainSender,
+  normalizeSubject,
+} from "../../lib/graph/lead-subject";
 
 test("the quoted 'I want to build' subject creates a lead", () => {
   // The regression: the allowlist held the quoted form while the normalizer
@@ -142,7 +149,11 @@ test("patterns are stateless across calls", () => {
   }
   for (let i = 0; i < 3; i++) {
     assert.equal(isLeadSubject("Custom Build Quote"), true, `call ${i}`);
-    assert.equal(isLeadSubject("Quote for a new home build"), true, `call ${i}`);
+    assert.equal(
+      isLeadSubject("Quote for a new home build"),
+      true,
+      `call ${i}`,
+    );
   }
 });
 
@@ -301,7 +312,10 @@ test("an oversized subject is refused instead of scanned", () => {
   const started = process.hrtime.bigint();
   assert.equal(isLeadSubject(hostile), false);
   const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
-  assert.ok(elapsedMs < 50, `scan took ${elapsedMs.toFixed(0)}ms, expected < 50ms`);
+  assert.ok(
+    elapsedMs < 50,
+    `scan took ${elapsedMs.toFixed(0)}ms, expected < 50ms`,
+  );
 
   // The cap must not be doing the work a real subject depends on.
   assert.equal(isLeadSubject("Quote for a new home"), true);
@@ -334,17 +348,29 @@ test("our own outbound is settled by the sender, not by subject wording", () => 
 
   // The subject reads exactly like a customer's, because it was written to one.
   assert.equal(
-    isLeadMessage("Following up on your quote for my extension", "sales@royalconstructions.com.au", own),
+    isLeadMessage(
+      "Following up on your quote for my extension",
+      "sales@royalconstructions.com.au",
+      own,
+    ),
     false,
   );
   assert.equal(
-    isLeadMessage("Your Building Offer - Lot 8358 Expedition Loop", "noreply@royalconstructions.com.au", own),
+    isLeadMessage(
+      "Your Building Offer - Lot 8358 Expedition Loop",
+      "noreply@royalconstructions.com.au",
+      own,
+    ),
     false,
   );
 
   // The identical subject from a member of the public is still a lead.
   assert.equal(
-    isLeadMessage("Following up on your quote for my extension", "jane@gmail.com", own),
+    isLeadMessage(
+      "Following up on your quote for my extension",
+      "jane@gmail.com",
+      own,
+    ),
     true,
   );
 });
@@ -354,14 +380,25 @@ test("a website form submission is a lead even when it posts from our own domain
   // would silently drop every genuine website enquiry, which is the one
   // failure this whole module exists to prevent.
   assert.equal(
-    isLeadMessage("I want to build Form Submission", "noreply@royalconstructions.com.au", "info@royalconstructions.com.au"),
+    isLeadMessage(
+      "I want to build Form Submission",
+      "noreply@royalconstructions.com.au",
+      "info@royalconstructions.com.au",
+    ),
     true,
   );
 });
 
 test("an unreadable sender never decides the outcome", () => {
   const own = "info@royalconstructions.com.au";
-  for (const from of [null, undefined, "", "not-an-address", "@", "someone@localhost"]) {
+  for (const from of [
+    null,
+    undefined,
+    "",
+    "not-an-address",
+    "@",
+    "someone@localhost",
+  ]) {
     assert.equal(isOwnDomainSender(from, own), false, String(from));
   }
   // ...and a missing business address cannot make every sender look like us.
@@ -371,11 +408,23 @@ test("an unreadable sender never decides the outcome", () => {
 
 test("the sender is matched on domain, in either address form", () => {
   const own = "info@royalconstructions.com.au";
-  assert.equal(isOwnDomainSender("Sales <sales@ROYALCONSTRUCTIONS.com.au>", own), true);
-  assert.equal(isOwnDomainSender("sales@royalconstructions.com.au", "Info <info@royalconstructions.com.au>"), true);
+  assert.equal(
+    isOwnDomainSender("Sales <sales@ROYALCONSTRUCTIONS.com.au>", own),
+    true,
+  );
+  assert.equal(
+    isOwnDomainSender(
+      "sales@royalconstructions.com.au",
+      "Info <info@royalconstructions.com.au>",
+    ),
+    true,
+  );
   // A lookalike domain is not us.
   assert.equal(isOwnDomainSender("sales@royalconstructions.com", own), false);
-  assert.equal(isOwnDomainSender("sales@notroyalconstructions.com.au", own), false);
+  assert.equal(
+    isOwnDomainSender("sales@notroyalconstructions.com.au", own),
+    false,
+  );
 });
 
 test("live-job vocabulary is vetoed in the plural too", () => {
@@ -397,10 +446,18 @@ test("a customer asking for information about building is still a lead", () => {
   // Only the council's "request for further information" is administration.
   // The bare phrase is how an ordinary person asks, and vetoing it dropped
   // them.
-  assert.equal(isLeadSubject("Request for information about a new home build"), true);
-  assert.equal(isLeadSubject("Request for information on building a granny flat"), true);
   assert.equal(
-    isLeadSubject("Council: request for further information, extension DA-2024-119"),
+    isLeadSubject("Request for information about a new home build"),
+    true,
+  );
+  assert.equal(
+    isLeadSubject("Request for information on building a granny flat"),
+    true,
+  );
+  assert.equal(
+    isLeadSubject(
+      "Council: request for further information, extension DA-2024-119",
+    ),
     false,
   );
 });
@@ -436,6 +493,12 @@ test("certifier vocabulary a customer also uses is not vetoed", () => {
   // request for a quote — "CDC- FOR DOUBLE STORY AND GRANNY-" is a buyer, not
   // a certifier. Vetoing that vocabulary would block the customer, so the
   // guard stops at paperwork only a live contract produces.
-  assert.equal(isLeadSubject("CDC approval attached - granny flat, quote please"), true);
-  assert.equal(isLeadSubject("DA approved - looking for a builder for our new home"), true);
+  assert.equal(
+    isLeadSubject("CDC approval attached - granny flat, quote please"),
+    true,
+  );
+  assert.equal(
+    isLeadSubject("DA approved - looking for a builder for our new home"),
+    true,
+  );
 });

@@ -37,7 +37,9 @@ const SENDS = [
 // stripped: the claim-before-write block explains that "only a throw rolls
 // back" a transaction, and prose about throwing is not a throw.
 function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 }
 
 function afterEnvelope(source: string, envelope: string): string {
@@ -59,10 +61,15 @@ for (const send of SENDS) {
   });
 
   test(`the workspace shows ${send.action.split("(")[0]}'s refusal`, () => {
-    const workspace = read("components/offers/new-workflow/new-offer-workspace.tsx");
+    const workspace = read(
+      "components/offers/new-workflow/new-offer-workspace.tsx",
+    );
     const start = workspace.indexOf(`const result = await ${send.action};`);
     assert.ok(start >= 0, `the workspace never calls ${send.action}`);
-    const handling = workspace.slice(start, workspace.indexOf("} catch", start));
+    const handling = workspace.slice(
+      start,
+      workspace.indexOf("} catch", start),
+    );
 
     assert.ok(
       handling.includes(send.showsError),

@@ -266,7 +266,9 @@ export function LeadOverviewTab({
     setForm((prev) => ({ ...prev, ...updates }));
 
   const isSectionDirty = (key: LeadSectionKey) =>
-    SECTION_FIELDS[key].some((field) => !Object.is(form[field], baseline[field]));
+    SECTION_FIELDS[key].some(
+      (field) => !Object.is(form[field], baseline[field]),
+    );
 
   const handleSectionSave = async (key: LeadSectionKey) => {
     const message = validateSection(key, form);
@@ -452,7 +454,9 @@ export function LeadOverviewTab({
                   // open its section rather than hiding the blocker.
                   if (isLostStage(next))
                     setOpenSections((prev) =>
-                      prev.includes("lostReason") ? prev : [...prev, "lostReason"],
+                      prev.includes("lostReason")
+                        ? prev
+                        : [...prev, "lostReason"],
                     );
                 }}
               >
@@ -481,7 +485,9 @@ export function LeadOverviewTab({
               <Checkbox
                 id={fieldId("urgent")}
                 checked={form.urgent}
-                onCheckedChange={(checked) => patch({ urgent: checked === true })}
+                onCheckedChange={(checked) =>
+                  patch({ urgent: checked === true })
+                }
               />
               <Label htmlFor={fieldId("urgent")} className={FIELD_LABEL_CLASS}>
                 Urgent
@@ -680,7 +686,9 @@ export function LeadOverviewTab({
               onChange={(e) => patch({ lostReason: e.target.value })}
               required
               aria-invalid={lostReasonMissing}
-              aria-describedby={lostReasonMissing ? lostReasonErrorId : undefined}
+              aria-describedby={
+                lostReasonMissing ? lostReasonErrorId : undefined
+              }
             />
             {lostReasonMissing ? (
               <p
@@ -706,7 +714,10 @@ export function LeadOverviewTab({
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Lead information
           </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">

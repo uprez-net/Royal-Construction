@@ -9,7 +9,8 @@ import XeroConnectionSkeleton from "./loading";
 
 export const metadata: Metadata = {
   title: "Xero Accounting",
-  description: "Connect the Xero organisation that progress claims are raised in.",
+  description:
+    "Connect the Xero organisation that progress claims are raised in.",
 };
 
 type XeroPageSearchParams = Promise<{ connected?: string; error?: string }>;

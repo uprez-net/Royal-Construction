@@ -31,7 +31,12 @@ import {
   MeasureInput,
   PricingRail,
 } from "./prototype-shared";
-import { CommandBar, StepFooter, StepRail, type VariantId } from "./prototype-shell";
+import {
+  CommandBar,
+  StepFooter,
+  StepRail,
+  type VariantId,
+} from "./prototype-shell";
 
 // ── Job setup sections ─────────────────────────────────────────────────────
 
@@ -467,7 +472,9 @@ function DocumentPreview({ job }: { readonly job: PrototypeJob }) {
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Title reference</dt>
-            <dd className={cn("font-mono", !job.dpNumber && "text-warning-ink")}>
+            <dd
+              className={cn("font-mono", !job.dpNumber && "text-warning-ink")}
+            >
               {job.dpNumber || "not supplied"}
             </dd>
           </div>

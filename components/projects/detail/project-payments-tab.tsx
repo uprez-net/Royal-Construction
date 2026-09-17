@@ -3,20 +3,36 @@
 import { useMemo } from "react";
 
 import type { ProjectStage } from "@prisma/client";
-import { Banknote, CircleDollarSign, FileText, ReceiptText, Wallet } from "lucide-react";
+import {
+  Banknote,
+  CircleDollarSign,
+  FileText,
+  ReceiptText,
+  Wallet,
+} from "lucide-react";
 
 import { DataTable } from "@/components/common/data-table";
 import { METRIC_TONES, type MetricTone } from "@/components/common/metric-card";
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { countPendingInvoices, invoiceTone } from "@/lib/projects/invoice-display";
+import {
+  countPendingInvoices,
+  invoiceTone,
+} from "@/lib/projects/invoice-display";
 import { summarizeInvoices } from "@/lib/projects/invoice-totals";
-import { contractClaimTotal, resolveStageClaims } from "@/lib/projects/stage-claim";
+import {
+  contractClaimTotal,
+  resolveStageClaims,
+} from "@/lib/projects/stage-claim";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { cn } from "@/lib/utils";
-import { PROJECT_STAGE_LABELS, type ProjectDetail, type SafeInvoice } from "@/types/project";
+import {
+  PROJECT_STAGE_LABELS,
+  type ProjectDetail,
+  type SafeInvoice,
+} from "@/types/project";
 import { filePreviewModal } from "@/utils/file-preview";
 import { currency, dateFormat, formatStatus } from "@/utils/formatters";
 
@@ -96,7 +112,9 @@ const StatCard = ({
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className={CARD_VALUE}>{value ?? <span aria-hidden="true">&mdash;</span>}</p>
+        <p className={CARD_VALUE}>
+          {value ?? <span aria-hidden="true">&mdash;</span>}
+        </p>
         <p className={CARD_LABEL}>{value ? caption : "Not recorded"}</p>
       </div>
       <span className={cn(ICON_CONTAINER, METRIC_TONES[tone])}>
@@ -129,7 +147,10 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
 
   // One reference date for the whole render — see `invoice-display`.
   const today = new Date();
-  const { pending: pendingCount } = countPendingInvoices(project.invoices, today);
+  const { pending: pendingCount } = countPendingInvoices(
+    project.invoices,
+    today,
+  );
 
   const openInvoice = (invoice: SafeInvoice) => {
     if (!invoice.pdfUrl) {
@@ -181,7 +202,9 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
           label="Outstanding"
           value={money(totals.outstanding)}
           caption={
-            pendingCount === 1 ? "1 claim unpaid" : `${pendingCount} claims unpaid`
+            pendingCount === 1
+              ? "1 claim unpaid"
+              : `${pendingCount} claims unpaid`
           }
           Icon={Wallet}
           tone="warning"
@@ -190,7 +213,10 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Invoices
           </CardTitle>
         </CardHeader>
@@ -234,7 +260,11 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
                 invoice.projectStage,
               dateFormat.format(new Date(invoice.issuedDate)),
               dateFormat.format(new Date(invoice.dueDate)),
-              <MoneyCell key="total" value={invoice.total} label="No total recorded" />,
+              <MoneyCell
+                key="total"
+                value={invoice.total}
+                label="No total recorded"
+              />,
               <MoneyCell
                 key="paid"
                 value={invoice.amountPaid}
@@ -284,8 +314,8 @@ export function ProjectPaymentsTab({ project }: ProjectPaymentsTabProps) {
                 </p>
 
                 <p className="text-sm text-muted-foreground">
-                  A claim is raised in Xero automatically once every milestone in
-                  a contract stage is finished. The claim schedule is on the
+                  A claim is raised in Xero automatically once every milestone
+                  in a contract stage is finished. The claim schedule is on the
                   Milestones tab.
                 </p>
               </div>

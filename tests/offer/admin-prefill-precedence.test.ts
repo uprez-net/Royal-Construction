@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { resolveAllowances, resolveDraft } from "../../lib/offer/admin-offer-prefill";
+import {
+  resolveAllowances,
+  resolveDraft,
+} from "../../lib/offer/admin-offer-prefill";
 import {
   EMPTY_ADMIN_OFFER_CONTENT,
   type AdminOfferContent,

@@ -18,10 +18,7 @@ function InboxLoading() {
   return (
     <PageSkeleton label="Loading notifications" className="space-y-1">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-xl border border-border bg-card p-3"
-        >
+        <div key={i} className="rounded-xl border border-border bg-card p-3">
           <div className="flex items-start gap-3">
             <Skeleton className="size-9 rounded-lg" />
             <div className="flex-1 space-y-2">

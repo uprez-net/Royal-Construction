@@ -88,9 +88,7 @@ export function PriceBuildupPanel({
         <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
-              <p className={FIELD_LABEL_CLASS}>
-                HBCF premium
-              </p>
+              <p className={FIELD_LABEL_CLASS}>HBCF premium</p>
               <p className="text-xs text-muted-foreground">
                 Auto-calculated from Total Contract Value (H01 metro{" "}
                 {hbcfRatePercent}% + GST + stamp ≈ {hbcfEffectivePercent}%)

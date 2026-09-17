@@ -27,12 +27,20 @@ export async function applyVariationDelay(variationId: string): Promise<void> {
     throw new Error("Variation not found");
   }
 
-  if (variation.status !== VariationStatus.APPROVED || !variation.approvedDate) {
+  if (
+    variation.status !== VariationStatus.APPROVED ||
+    !variation.approvedDate
+  ) {
     throw new Error("Variation must be approved before delay can be applied");
   }
 
-  const delayDays = differenceInCalendarDays(variation.approvedDate, variation.requestedDate);
-  const activeMilestone = variation.project.milestones.find((milestone) => milestone.status === "ACTIVE");
+  const delayDays = differenceInCalendarDays(
+    variation.approvedDate,
+    variation.requestedDate,
+  );
+  const activeMilestone = variation.project.milestones.find(
+    (milestone) => milestone.status === "ACTIVE",
+  );
   const activeOrder = activeMilestone?.order ?? 0;
 
   await prisma.$transaction(async (tx) => {
@@ -42,7 +50,8 @@ export async function applyVariationDelay(variationId: string): Promise<void> {
     });
 
     const pendingMilestones = variation.project.milestones.filter(
-      (milestone) => milestone.status === "PENDING" && milestone.order > activeOrder,
+      (milestone) =>
+        milestone.status === "PENDING" && milestone.order > activeOrder,
     );
 
     for (const milestone of pendingMilestones) {
@@ -57,7 +66,10 @@ export async function applyVariationDelay(variationId: string): Promise<void> {
     await tx.project.update({
       where: { id: variation.projectId },
       data: {
-        estimatedEndDate: addDays(variation.project.estimatedEndDate, delayDays),
+        estimatedEndDate: addDays(
+          variation.project.estimatedEndDate,
+          delayDays,
+        ),
       },
     });
   });

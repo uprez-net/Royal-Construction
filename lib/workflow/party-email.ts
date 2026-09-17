@@ -218,7 +218,12 @@ async function saveInboundEmails(
     const subject = thread.subject.trim() || message.subject;
     const from = normalizeEmailAddress(thread.from || message.from);
     const to = normalizeEmailAddress(thread.to || message.to);
-    const checksum = await generateEmailChecksum(subject, thread.body, from, to);
+    const checksum = await generateEmailChecksum(
+      subject,
+      thread.body,
+      from,
+      to,
+    );
 
     rows.push({
       engagementId,
@@ -514,8 +519,7 @@ async function classifyStoredDocuments(
       }
 
       if (
-        result.documentType ===
-        ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+        result.documentType === ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
       ) {
         architecturalDesigns += 1;
       }
@@ -776,7 +780,8 @@ async function recordCouncilDetermination(
     // Only used to fill a row that has none; the lodgement's own reference is not
     // overwritten, since a council quoting a case number is not a council renaming
     // our application.
-    applicationRef: [...planningReferencesIn(message.subject, message.body)][0] ?? null,
+    applicationRef:
+      [...planningReferencesIn(message.subject, message.body)][0] ?? null,
   });
 
   return recorded ? kind : null;
@@ -963,7 +968,10 @@ export const processInboundPartyEmail = async (
 
   const projectId = outreach.engagement.projectId;
 
-  const report = await readAttachments(message.messageId, outreach.graphMailbox);
+  const report = await readAttachments(
+    message.messageId,
+    outreach.graphMailbox,
+  );
   const stored = await archiveAttachments(
     outreach.id,
     outreach.engagementId,

@@ -26,7 +26,16 @@ import {
   updateTradieScheduleStatus,
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
-import { ComplianceApprovalDecision, MilestoneStatus, ProjectStage, TradieApprovalActionType, TradieScheduleStatus, type ComplianceDocumentType, type ComplianceExternalApplicationKind, type CompliancePartyType } from "@prisma/client";
+import {
+  ComplianceApprovalDecision,
+  MilestoneStatus,
+  ProjectStage,
+  TradieApprovalActionType,
+  TradieScheduleStatus,
+  type ComplianceDocumentType,
+  type ComplianceExternalApplicationKind,
+  type CompliancePartyType,
+} from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
 import { PreviewPictureModal } from "../common/preview-picture-modal";
@@ -125,7 +134,10 @@ export function ModalManager() {
     const loading = toast.loading("Updating status...");
     handleClose();
     try {
-      await updateScheduleStatuses([row.id], TradieScheduleStatus.AWAITING_ADMIN_APPROVAL);
+      await updateScheduleStatuses(
+        [row.id],
+        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+      );
     } catch (error) {
       toast.error("Failed to update status. Please try again.");
       console.error("Error updating tradie schedule status:", error);
@@ -607,11 +619,17 @@ export function ModalManager() {
       return <EditTradieModal open onClose={handleClose} tradie={tradie} />;
     }
     case "previewFile": {
-      const { fileUrl } = modal.payload as { fileUrl: string };
+      const { fileUrl, fileName, fileType } = modal.payload as {
+        fileUrl: string;
+        fileName?: string | null;
+        fileType?: string | null;
+      };
       return (
         <FilePreviewCanvas
           key={fileUrl} // extra safety net — forces a clean remount
           url={fileUrl}
+          fileName={fileName}
+          fileType={fileType}
           onClose={handleClose} // swap in your actual close action
         />
       );

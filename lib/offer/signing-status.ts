@@ -185,6 +185,7 @@ export function allCustomersSigned(
     (entry) => entry.docType === docType && entry.role === "CUSTOMER",
   );
   return (
-    customers.length > 0 && customers.every((entry) => entry.status === "SIGNED")
+    customers.length > 0 &&
+    customers.every((entry) => entry.status === "SIGNED")
   );
 }

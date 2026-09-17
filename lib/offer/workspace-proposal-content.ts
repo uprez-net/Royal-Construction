@@ -71,12 +71,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "Roof Trusses",
-    specification: "Engineered prefabricated roof trusses to suit approved plans.",
+    specification:
+      "Engineered prefabricated roof trusses to suit approved plans.",
   },
   {
     group: "Structure & Envelope",
     category: "External Walls",
-    specification: "Render to all elevations — both levels. Arched feature entry included.",
+    specification:
+      "Render to all elevations — both levels. Arched feature entry included.",
   },
   {
     group: "Structure & Envelope",
@@ -89,7 +91,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "Feature Facade",
-    specification: "Entry columns, rendered surrounds, feature cladding per 3D renders.",
+    specification:
+      "Entry columns, rendered surrounds, feature cladding per 3D renders.",
   },
   {
     group: "Structure & Envelope",
@@ -100,12 +103,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "External Doors",
-    specification: "Feature arched front entry door. All external doors, locks and hardware.",
+    specification:
+      "Feature arched front entry door. All external doors, locks and hardware.",
   },
   {
     group: "Structure & Envelope",
     category: "Garage Door",
-    specification: "Double panel-lift garage door — remote operated — facade matched.",
+    specification:
+      "Double panel-lift garage door — remote operated — facade matched.",
   },
   {
     group: "Structure & Envelope",
@@ -129,7 +134,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Kitchen — Luxury",
     category: "Splashback",
-    specification: "Full-height tiled splashback above cooktop. Stone to match benchtops.",
+    specification:
+      "Full-height tiled splashback above cooktop. Stone to match benchtops.",
   },
   {
     group: "Kitchen — Luxury",
@@ -146,7 +152,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Bathrooms",
     category: "Vanity Benchtops",
-    specification: "Engineered stone tops to all vanities. Choice at colour selection.",
+    specification:
+      "Engineered stone tops to all vanities. Choice at colour selection.",
   },
   {
     group: "Bathrooms",
@@ -162,7 +169,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Bathrooms",
     category: "Tapware",
-    specification: "Quality tapware package — basin mixers, shower sets. All wet areas.",
+    specification:
+      "Quality tapware package — basin mixers, shower sets. All wet areas.",
   },
   {
     group: "Bathrooms",
@@ -172,7 +180,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Internal Doors",
-    specification: "Hollow core internal doors throughout. All door hardware included.",
+    specification:
+      "Hollow core internal doors throughout. All door hardware included.",
   },
   {
     group: "Internal Finishes",
@@ -206,12 +215,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Insulation",
-    specification: "R2.5 wall batts + R4.1 ceiling batts — full thermal and acoustic insulation.",
+    specification:
+      "R2.5 wall batts + R4.1 ceiling batts — full thermal and acoustic insulation.",
   },
   {
     group: "Internal Finishes",
     category: "Skirting",
-    specification: "90mm skirting and 90mm architraves throughout — timber, paint-grade.",
+    specification:
+      "90mm skirting and 90mm architraves throughout — timber, paint-grade.",
   },
   {
     group: "Internal Finishes",
@@ -222,7 +233,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Flooring — Bedrooms",
-    specification: "Timber-look hybrid flooring all bedrooms, rumpus and office.",
+    specification:
+      "Timber-look hybrid flooring all bedrooms, rumpus and office.",
   },
   {
     group: "Electrical & HVAC",
@@ -234,7 +246,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Lighting",
-    specification: "LED downlights throughout. Feature pendant provisions to kitchen and dining.",
+    specification:
+      "LED downlights throughout. Feature pendant provisions to kitchen and dining.",
   },
   {
     group: "Electrical & HVAC",
@@ -246,12 +259,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Hot Water",
-    specification: "2 × 31L gas continuous flow hot water systems — BASIX compliant.",
+    specification:
+      "2 × 31L gas continuous flow hot water systems — BASIX compliant.",
   },
   {
     group: "Electrical & HVAC",
     category: "Rainwater Tank",
-    specification: "2,000L rainwater tank — toilet/laundry reuse. BASIX compliance.",
+    specification:
+      "2,000L rainwater tank — toilet/laundry reuse. BASIX compliance.",
   },
   {
     group: "External & Completion",
@@ -280,7 +295,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
     group: "External & Completion",
     category: "HBCF",
     summary: "HBCF home warranty insurance",
-    specification: "Home Building Compensation Fund warranty insurance — included. iCare registered.",
+    specification:
+      "Home Building Compensation Fund warranty insurance — included. iCare registered.",
   },
   // These two were sold on the Investment Summary page but had no schedule row
   // of their own, so collapsing the two lists would have quietly dropped them
@@ -362,6 +378,8 @@ function shortLocation(siteAddress: string): string {
   if (parts.length < 2) {
     return siteAddress;
   }
-  const locality = parts[1].trim().replace(/\s+(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b.*$/i, "");
+  const locality = parts[1]
+    .trim()
+    .replace(/\s+(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b.*$/i, "");
   return locality || siteAddress;
 }

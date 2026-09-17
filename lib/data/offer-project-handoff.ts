@@ -28,7 +28,10 @@ import {
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
 import { collectOfferSigners } from "@/lib/offer/workspace-model";
-import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
+import type {
+  ProjectRequirementsPayload,
+  ProjectSourceDocumentReference,
+} from "@/types/project-flow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -57,7 +60,10 @@ export async function createProjectFromOffer(input: {
   }
   const actor = clerkId ? await getUserByClerkId(clerkId) : null;
   if (!actor) {
-    return { ok: false, error: "No internal user found for the signed-in account." };
+    return {
+      ok: false,
+      error: "No internal user found for the signed-in account.",
+    };
   }
 
   const offer = await prisma.offer.findUnique({
@@ -97,7 +103,15 @@ export async function createProjectFromOffer(input: {
           },
         },
       },
-      lead: { select: { id: true, name: true, email: true, phone: true, project: { select: { id: true } } } },
+      lead: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          project: { select: { id: true } },
+        },
+      },
     },
   });
   if (!offer || !offer.lead) {
@@ -109,7 +123,10 @@ export async function createProjectFromOffer(input: {
     return { ok: false, error: "You do not have access to this offer." };
   }
   if (offer.offerStatus === OfferStatus.PROJECT) {
-    return { ok: false, error: "A project has already been created from this offer." };
+    return {
+      ok: false,
+      error: "A project has already been created from this offer.",
+    };
   }
   if (offer.offerStatus !== OfferStatus.CONTRACT_SIGNED) {
     return {
@@ -142,9 +159,13 @@ export async function createProjectFromOffer(input: {
     missingExecutedDocs.push({ kind: "tender", signed: executedTender.signed });
   }
   if (!executedContract.url) {
-    missingExecutedDocs.push({ kind: "contract", signed: executedContract.signed });
+    missingExecutedDocs.push({
+      kind: "contract",
+      signed: executedContract.signed,
+    });
   }
-  const missingExecutedError = describeMissingExecutedDocuments(missingExecutedDocs);
+  const missingExecutedError =
+    describeMissingExecutedDocuments(missingExecutedDocs);
   if (missingExecutedError) {
     return { ok: false, error: missingExecutedError };
   }
@@ -158,7 +179,10 @@ export async function createProjectFromOffer(input: {
     data: { offerStatus: OfferStatus.PROJECT },
   });
   if (claim.count !== 1) {
-    return { ok: false, error: "This offer is already being handed off to a project." };
+    return {
+      ok: false,
+      error: "This offer is already being handed off to a project.",
+    };
   }
 
   // Normally a no-op — the deal is already WON from CONTRACT_SIGNED — but this
@@ -223,7 +247,11 @@ export async function createProjectFromOffer(input: {
   // catch below must ASK the database rather than assume (PR #124 review): if a
   // project now exists for this lead, rolling back would strand a live project on
   // an offer that claims none — and `offer.lead.project` would block every retry.
-  let handoff: { projectId: string; projectName: string; milestoneCount: number };
+  let handoff: {
+    projectId: string;
+    projectName: string;
+    milestoneCount: number;
+  };
   try {
     const snapshot = deserializeWorkspace(parseWorkspaceState(state));
     const job = snapshot.job;
@@ -245,7 +273,9 @@ export async function createProjectFromOffer(input: {
           where: { id: offer.lead.id },
           data: { email: jobEmail },
         });
-        warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
+        warnings.push(
+          `Lead email was blank — set to ${jobEmail} from the offer.`,
+        );
       } else {
         const rollbackFailures = await rollback();
         return {
@@ -270,7 +300,9 @@ export async function createProjectFromOffer(input: {
         // present. Kept as a defensive invariant so a future refactor can never
         // silently attach an empty document reference (the root of issue #90). The
         // outer catch rolls back the claim + files so the offer stays retryable.
-        throw new Error(`Executed ${kind} PDF unexpectedly missing after gate.`);
+        throw new Error(
+          `Executed ${kind} PDF unexpectedly missing after gate.`,
+        );
       }
       const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
       const file = await prisma.file.create({
@@ -398,7 +430,8 @@ export async function createProjectFromOffer(input: {
     // rollback — and a DB blip is the most likely reason the original call threw,
     // so the verification query is exactly when it's likeliest to fail too. Only a
     // SUCCESSFUL query that returns project: null proves the rollback is safe.
-    let committed: { project: { id: string; name: string } | null } | null = null;
+    let committed: { project: { id: string; name: string } | null } | null =
+      null;
     let verificationFailed = false;
     try {
       committed = await prisma.lead.findUnique({
@@ -523,7 +556,10 @@ async function ensureExecutedPdf(
     return { url: null, signed: false };
   }
   try {
-    const url = await archiveExecuted({ kind, id: parent.id }, latest.docusignId);
+    const url = await archiveExecuted(
+      { kind, id: parent.id },
+      latest.docusignId,
+    );
     return { url, signed: true };
   } catch (error) {
     console.error(
@@ -540,7 +576,10 @@ function buildExtractionPayload(
   snapshot: OfferWorkspaceSnapshot,
   contractValue: number,
   reference: string,
-  sourceDocuments: { tender: ProjectSourceDocumentReference; contract: ProjectSourceDocumentReference },
+  sourceDocuments: {
+    tender: ProjectSourceDocumentReference;
+    contract: ProjectSourceDocumentReference;
+  },
   payment: Pick<ContractPaymentSource, "paymentSchedule" | "deposit">,
   // Resolved by the caller, which can read the Tender row: the exclusions the
   // SIGNED Tender printed, not whatever the workspace holds now.
@@ -623,24 +662,37 @@ function buildExtractionPayload(
       paymentStages,
     },
     subStructureAndGround: {
-      concreteSlabClass: null, concreteStrengthMpa: null, vapourBarrier: null,
-      termiteSystem: null, sewerConnection: null,
+      concreteSlabClass: null,
+      concreteStrengthMpa: null,
+      vapourBarrier: null,
+      termiteSystem: null,
+      sewerConnection: null,
     },
     inclusionsAndExclusions: {
       inclusions: [...snapshot.draft.inclusionHighlights],
       exclusions: [...signedExclusions],
     },
     utilityInfrastructure: {
-      electricalPhase: null, communicationConduit: null, gasConnection: null,
-      fridgeWaterPoint: null, smartLockBrand: null,
+      electricalPhase: null,
+      communicationConduit: null,
+      gasConnection: null,
+      fridgeWaterPoint: null,
+      smartLockBrand: null,
     },
     wetAreaCompliance: {
-      waterproofingStandard: null, showerScreenType: null, tiledNicheCount: null,
-      showerCount: null, floorToCeilingTiles: null, floorWasteType: null,
+      waterproofingStandard: null,
+      showerScreenType: null,
+      tiledNicheCount: null,
+      showerCount: null,
+      floorToCeilingTiles: null,
+      floorWasteType: null,
     },
     safetyAndSiteLogistics: {
-      roofGuardrails: null, sedimentControl: null, scaffoldingSafety: null,
-      tradeWaste: null, finalCleanStatus: null,
+      roofGuardrails: null,
+      sedimentControl: null,
+      scaffoldingSafety: null,
+      tradeWaste: null,
+      finalCleanStatus: null,
     },
     conflicts: [],
     automationTriggers: {

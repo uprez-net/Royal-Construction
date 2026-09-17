@@ -134,7 +134,11 @@ export function SendNegotiatePanel({
   const signingRows = recipients
     .filter((recipient) => recipient.email.trim().length > 0)
     .map((recipient) => {
-      const persisted = findSignerStatus(signerStatuses, "OFFER", recipient.email);
+      const persisted = findSignerStatus(
+        signerStatuses,
+        "OFFER",
+        recipient.email,
+      );
       return {
         role: "Customer" as const,
         detail: recipient.label,
@@ -214,8 +218,8 @@ export function SendNegotiatePanel({
               ) : null}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Recipients are the owners on Job setup — every individual owner and
-              company director. To change an address, edit the owner there.
+              Recipients are the owners on Job setup — every individual owner
+              and company director. To change an address, edit the owner there.
             </p>
 
             {confirming ? (
@@ -235,7 +239,9 @@ export function SendNegotiatePanel({
             ) : null}
 
             {sendError ? (
-              <p className="text-xs font-medium text-destructive">{sendError}</p>
+              <p className="text-xs font-medium text-destructive">
+                {sendError}
+              </p>
             ) : null}
             {sentInfo ? (
               <p className="text-xs font-medium text-success">{sentInfo}</p>
@@ -252,9 +258,9 @@ export function SendNegotiatePanel({
             {isSent ? (
               <>
                 <p className="text-xs text-muted-foreground">
-                  Once scope and price are settled, send the offer document for the
-                  customer to sign as a formal acceptance. Customer-only — the
-                  builder doesn&apos;t sign the acceptance.
+                  Once scope and price are settled, send the offer document for
+                  the customer to sign as a formal acceptance. Customer-only —
+                  the builder doesn&apos;t sign the acceptance.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -285,8 +291,9 @@ export function SendNegotiatePanel({
                     customerOnly
                     documentName="Offer document"
                     recipientName={
-                      recipients.map((recipient) => recipient.label).join(", ") ||
-                      "the customer"
+                      recipients
+                        .map((recipient) => recipient.label)
+                        .join(", ") || "the customer"
                     }
                     valueLabel="Fixed price inc GST"
                     value={contractValueIncGst}
@@ -311,7 +318,9 @@ export function SendNegotiatePanel({
                         this outside development. */}
                     {process.env.NODE_ENV === "development" ? (
                       <Button
-                        aria-busy={lifecycleBusy === "offer_signed" || undefined}
+                        aria-busy={
+                          lifecycleBusy === "offer_signed" || undefined
+                        }
                         disabled={lifecycleBusy !== null}
                         size="sm"
                         type="button"
@@ -337,14 +346,14 @@ export function SendNegotiatePanel({
                 ) : null}
                 {isOfferSigned ? (
                   <p className="text-xs text-muted-foreground">
-                    Accepted by the customer. Mark the offer agreed below to freeze
-                    the snapshot and generate the Tender.
+                    Accepted by the customer. Mark the offer agreed below to
+                    freeze the snapshot and generate the Tender.
                   </p>
                 ) : null}
                 {isOfferDeclined ? (
                   <p className="text-xs font-medium text-destructive">
-                    The customer declined to sign — create a new version to revise
-                    and re-send.
+                    The customer declined to sign — create a new version to
+                    revise and re-send.
                   </p>
                 ) : null}
               </>
@@ -451,7 +460,10 @@ function ReadinessStrip({
                 aria-hidden="true"
               />
               <span className="flex-1">{blocker.label}</span>
-              <ArrowRight className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              <ArrowRight
+                className="mt-0.5 size-3.5 shrink-0"
+                aria-hidden="true"
+              />
             </button>
           </li>
         );
@@ -466,7 +478,10 @@ function ReadinessStrip({
 function RecipientList({
   recipients,
 }: {
-  readonly recipients: readonly { readonly email: string; readonly label: string }[];
+  readonly recipients: readonly {
+    readonly email: string;
+    readonly label: string;
+  }[];
 }) {
   if (recipients.length === 0) {
     return null;
@@ -502,7 +517,10 @@ function SendConfirm({
 }: {
   readonly contractValueIncGst: number;
   readonly offerReference: string;
-  readonly recipients: readonly { readonly email: string; readonly label: string }[];
+  readonly recipients: readonly {
+    readonly email: string;
+    readonly label: string;
+  }[];
   readonly sending: boolean;
   readonly onCancel: () => void;
   readonly onConfirm: () => void;

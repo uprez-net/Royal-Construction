@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  filePreviewModal,
-  isPreviewableImage,
-} from "../../utils/file-preview";
+import { filePreviewModal, isPreviewableImage } from "../../utils/file-preview";
 
 const BLOB = "https://x.public.blob.vercel-storage.com/projects/p1";
 
 test("a stored MIME type decides before the extension does", () => {
   // A photo uploaded with no extension is still a photo.
   assert.equal(
-    isPreviewableImage({ url: `${BLOB}/abc-screenshot`, fileType: "image/png" }),
+    isPreviewableImage({
+      url: `${BLOB}/abc-screenshot`,
+      fileType: "image/png",
+    }),
     true,
   );
   // And a PDF named like an image is still a PDF.
@@ -35,11 +35,25 @@ test("without a MIME type the name carries the signal", () => {
     "render.avif",
     "photo.heic",
   ]) {
-    assert.equal(isPreviewableImage({ url: `${BLOB}/id-${name}`, name }), true, name);
+    assert.equal(
+      isPreviewableImage({ url: `${BLOB}/id-${name}`, name }),
+      true,
+      name,
+    );
   }
 
-  for (const name of ["survey.pdf", "fees.docx", "costs.xlsx", "notes.txt", "plan"]) {
-    assert.equal(isPreviewableImage({ url: `${BLOB}/id-${name}`, name }), false, name);
+  for (const name of [
+    "survey.pdf",
+    "fees.docx",
+    "costs.xlsx",
+    "notes.txt",
+    "plan",
+  ]) {
+    assert.equal(
+      isPreviewableImage({ url: `${BLOB}/id-${name}`, name }),
+      false,
+      name,
+    );
   }
 });
 
@@ -48,7 +62,10 @@ test("SVG is not routed to the picture viewer", () => {
   // so sending one to the gallery would render a broken image. The document
   // viewer at least offers the file.
   assert.equal(
-    isPreviewableImage({ url: `${BLOB}/id-logo.svg`, fileType: "image/svg+xml" }),
+    isPreviewableImage({
+      url: `${BLOB}/id-logo.svg`,
+      fileType: "image/svg+xml",
+    }),
     false,
   );
   assert.equal(
@@ -77,7 +94,11 @@ test("a document opens in the document viewer, alone", () => {
 
   assert.deepEqual(filePreviewModal(files, 1), {
     type: "previewFile",
-    payload: { fileUrl: `${BLOB}/2-survey.pdf` },
+    payload: {
+      fileUrl: `${BLOB}/2-survey.pdf`,
+      fileName: "survey.pdf",
+      fileType: null,
+    },
   });
 });
 

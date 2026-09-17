@@ -1,9 +1,6 @@
 import { TradieScheduleStatus } from "@prisma/client";
 import { z } from "zod";
-import {
-  isoDateStringSchema,
-  optionalEnumSchema,
-} from "./common";
+import { isoDateStringSchema, optionalEnumSchema } from "./common";
 
 /**
  * Tradie and schedule-related validators
@@ -17,15 +14,9 @@ import {
  * Tradie search query (for dropdowns/lookups)
  */
 export const tradieSearchQuerySchema = z.object({
-  search: z
-    .string()
-    .trim()
-    .default(""),
+  search: z.string().trim().default(""),
 
-  q: z
-    .string()
-    .trim()
-    .default(""),
+  q: z.string().trim().default(""),
 
   /**
    * Restrict to one trade, by its label -- "Surveying", "Certifier".
@@ -34,23 +25,11 @@ export const tradieSearchQuerySchema = z.object({
    * name/ABN/trade, which is why it is separate: a compliance picker asking for
    * surveyors must not be handed a plumber whose name contains "survey".
    */
-  trade: z
-    .string()
-    .trim()
-    .default(""),
+  trade: z.string().trim().default(""),
 
-  limit: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(100)
-    .default(20),
+  limit: z.coerce.number().int().positive().max(100).default(20),
 
-  page: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(1),
+  page: z.coerce.number().int().positive().default(1),
 });
 
 export type TradieSearchQuery = z.infer<typeof tradieSearchQuerySchema>;
@@ -72,20 +51,11 @@ export type TradieParam = z.infer<typeof tradieParamSchema>;
  * Create tradie schedule
  */
 export const createTradieScheduleSchema = z.object({
-  tradieId: z
-    .string()
-    .trim()
-    .min(1, "Tradie ID is required"),
+  tradieId: z.string().trim().min(1, "Tradie ID is required"),
 
-  projectId: z
-    .string()
-    .trim()
-    .min(1, "Project ID is required"),
+  projectId: z.string().trim().min(1, "Project ID is required"),
 
-  milestoneId: z
-    .string()
-    .trim()
-    .optional(),
+  milestoneId: z.string().trim().optional(),
 
   scheduledDate: isoDateStringSchema,
 
@@ -98,19 +68,25 @@ export const createTradieScheduleSchema = z.object({
 
   requiresQuote: z.boolean().optional().default(false),
 
-  emailContent: z.object({
-    subject: z.string().trim().min(1, "Email subject is required"),
-    body: z.string().trim().min(1, "Email body is required"),
-    attachments: z.array(
-      z.object({
-        name: z.string().trim().min(1, "Attachment name is required"),
-        url: z.string().trim().url("Attachment URL must be a valid URL"),
-      })
-    ).default([]),
-  }).optional(),
+  emailContent: z
+    .object({
+      subject: z.string().trim().min(1, "Email subject is required"),
+      body: z.string().trim().min(1, "Email body is required"),
+      attachments: z
+        .array(
+          z.object({
+            name: z.string().trim().min(1, "Attachment name is required"),
+            url: z.string().trim().url("Attachment URL must be a valid URL"),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
 });
 
-export type CreateTradieScheduleInput = z.infer<typeof createTradieScheduleSchema>;
+export type CreateTradieScheduleInput = z.infer<
+  typeof createTradieScheduleSchema
+>;
 
 /**
  * Update tradie schedule status
@@ -132,7 +108,9 @@ export const updateTradieScheduleSchema = z.object({
   quoteUnit: z.enum(["FIXED", "HOURLY", "DAILY"]).optional(),
 });
 
-export type UpdateTradieScheduleInput = z.infer<typeof updateTradieScheduleSchema>;
+export type UpdateTradieScheduleInput = z.infer<
+  typeof updateTradieScheduleSchema
+>;
 
 /**
  * Request removal of a tradie schedule.
@@ -149,7 +127,9 @@ export const deleteTradieScheduleSchema = z.object({
     .max(500, "Reason must be 500 characters or fewer"),
 });
 
-export type DeleteTradieScheduleInput = z.infer<typeof deleteTradieScheduleSchema>;
+export type DeleteTradieScheduleInput = z.infer<
+  typeof deleteTradieScheduleSchema
+>;
 
 /**
  * Tradie schedule route params
@@ -181,23 +161,11 @@ export type ScheduleStatusFilter = z.infer<typeof scheduleStatusFilterSchema>;
 export const tradieCoordinationListQuerySchema = z
   .object({
     mode: z.literal("coordination"),
-    page: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(1),
+    page: z.coerce.number().int().positive().default(1),
 
-    limit: z.coerce
-      .number()
-      .int()
-      .positive()
-      .max(100)
-      .default(10),
+    limit: z.coerce.number().int().positive().max(100).default(10),
 
-    search: z
-      .string()
-      .trim()
-      .default(""),
+    search: z.string().trim().default(""),
 
     projectId: z
       .string()
@@ -220,13 +188,19 @@ export const tradieCoordinationListQuerySchema = z
       .default("all"),
 
     sortBy: z
-      .enum(["scheduledDate", "tradieName", "tradeType", "projectName", "status"])
+      .enum([
+        "scheduledDate",
+        "tradieName",
+        "tradeType",
+        "projectName",
+        "status",
+      ])
       .default("scheduledDate"),
 
-    sortOrder: z
-      .enum(["asc", "desc"])
-      .default("asc"),
+    sortOrder: z.enum(["asc", "desc"]).default("asc"),
   })
   .strict();
 
-export type TradieCoordinationListQuery = z.infer<typeof tradieCoordinationListQuerySchema>;
+export type TradieCoordinationListQuery = z.infer<
+  typeof tradieCoordinationListQuerySchema
+>;

@@ -1,6 +1,6 @@
-import type { GraphAttachmentMetadata } from './client';
-import { withGraphRetry } from './retry';
-import { isOcrConfigured, ocrFile, type OcrInput } from '@/lib/ocr';
+import type { GraphAttachmentMetadata } from "./client";
+import { withGraphRetry } from "./retry";
+import { isOcrConfigured, ocrFile, type OcrInput } from "@/lib/ocr";
 
 /**
  * An attachment prepared for the lead extractor.
@@ -12,8 +12,8 @@ import { isOcrConfigured, ocrFile, type OcrInput } from '@/lib/ocr';
  * model has to look at the thing itself.
  */
 export type LeadAttachment =
-  | { kind: 'file'; name: string; mediaType: string; data: Buffer }
-  | { kind: 'text'; name: string; text: string };
+  | { kind: "file"; name: string; mediaType: string; data: Buffer }
+  | { kind: "text"; name: string; text: string };
 
 export interface SkippedAttachment {
   name: string;
@@ -78,14 +78,14 @@ export const EMPTY_LEAD_ATTACHMENTS: LeadAttachmentSet = {
 };
 
 const DOCX_MEDIA_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 interface MediaSupport {
   /**
    * How the file goes to OCR: as a document to be unpacked and parsed, as a
    * still image, or not at all when its bytes are already characters.
    */
-  ocr: 'document' | 'image' | null;
+  ocr: "document" | "image" | null;
   /**
    * Whether the model can read the raw bytes itself. This is the fallback when
    * OCR comes back empty — and for a format the model cannot take, the only
@@ -98,36 +98,36 @@ interface MediaSupport {
 // is filtered out before it is downloaded: the model rejects an unknown binary
 // rather than ignoring it, so an unfiltered .dwg would fail the whole call.
 const SUPPORTED_MEDIA: Record<string, MediaSupport> = {
-  'application/pdf': { ocr: 'document', agent: true },
+  "application/pdf": { ocr: "document", agent: true },
   // Word has no fallback — Gemini cannot open a .docx, so if OCR returns
   // nothing there is nothing left to try.
-  [DOCX_MEDIA_TYPE]: { ocr: 'document', agent: false },
-  'image/png': { ocr: 'image', agent: true },
-  'image/jpeg': { ocr: 'image', agent: true },
-  'image/webp': { ocr: 'image', agent: true },
-  'image/heic': { ocr: 'image', agent: true },
-  'image/heif': { ocr: 'image', agent: true },
+  [DOCX_MEDIA_TYPE]: { ocr: "document", agent: false },
+  "image/png": { ocr: "image", agent: true },
+  "image/jpeg": { ocr: "image", agent: true },
+  "image/webp": { ocr: "image", agent: true },
+  "image/heic": { ocr: "image", agent: true },
+  "image/heif": { ocr: "image", agent: true },
   // Already text; OCR would be a round-trip to be told what we can read.
-  'text/plain': { ocr: null, agent: false },
-  'text/csv': { ocr: null, agent: false },
-  'text/markdown': { ocr: null, agent: false },
+  "text/plain": { ocr: null, agent: false },
+  "text/csv": { ocr: null, agent: false },
+  "text/markdown": { ocr: null, agent: false },
 };
 
 // Outlook sends plenty of attachments as application/octet-stream, and a web
 // form's mail relay is worse — the declared type is a hint, the extension is
 // what the sender actually chose.
 const EXTENSION_MEDIA_TYPES: Record<string, string> = {
-  pdf: 'application/pdf',
+  pdf: "application/pdf",
   docx: DOCX_MEDIA_TYPE,
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-  heic: 'image/heic',
-  heif: 'image/heif',
-  txt: 'text/plain',
-  csv: 'text/csv',
-  md: 'text/markdown',
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  txt: "text/plain",
+  csv: "text/csv",
+  md: "text/markdown",
 };
 
 // A single file this large is a video or a CAD bundle, not something the model
@@ -160,11 +160,11 @@ const MIN_OCR_TEXT_CHARS = 20;
 // where the same OCR endpoint is given the same budget.
 const OCR_TIMEOUT_MS = 75_000;
 
-const FILE_ATTACHMENT_ODATA_TYPE = '#microsoft.graph.fileAttachment';
+const FILE_ATTACHMENT_ODATA_TYPE = "#microsoft.graph.fileAttachment";
 
 function extensionOf(name: string): string {
   const match = /\.([a-z0-9]+)$/i.exec(name.trim());
-  return match ? match[1].toLowerCase() : '';
+  return match ? match[1].toLowerCase() : "";
 }
 
 /**
@@ -177,7 +177,7 @@ export function resolveMediaType(name: string, contentType: string): string {
     return fromExtension;
   }
 
-  return (contentType ?? '').split(';')[0].trim().toLowerCase();
+  return (contentType ?? "").split(";")[0].trim().toLowerCase();
 }
 
 function formatBytes(bytes: number): string {
@@ -200,23 +200,26 @@ export function selectLeadAttachments(metadata: GraphAttachmentMetadata[]): {
   let totalBytes = 0;
 
   for (const attachment of metadata) {
-    const skip = (reason: string) => skipped.push({ name: attachment.name, reason });
+    const skip = (reason: string) =>
+      skipped.push({ name: attachment.name, reason });
 
     // itemAttachment is a forwarded email and referenceAttachment is a link to
     // OneDrive; neither has bytes behind /$value.
     if (attachment.odataType !== FILE_ATTACHMENT_ODATA_TYPE) {
-      skip(`unsupported attachment type ${attachment.odataType || 'unknown'}`);
+      skip(`unsupported attachment type ${attachment.odataType || "unknown"}`);
       continue;
     }
 
     if (attachment.isInline && attachment.size < MIN_INLINE_BYTES) {
-      skip('inline image too small to be anything but a signature or a tracking pixel');
+      skip(
+        "inline image too small to be anything but a signature or a tracking pixel",
+      );
       continue;
     }
 
     const mediaType = resolveMediaType(attachment.name, attachment.contentType);
     if (!SUPPORTED_MEDIA[mediaType]) {
-      skip(`unreadable format ${mediaType || 'unknown'}`);
+      skip(`unreadable format ${mediaType || "unknown"}`);
       continue;
     }
 
@@ -233,7 +236,9 @@ export function selectLeadAttachments(metadata: GraphAttachmentMetadata[]): {
     }
 
     if (totalBytes + attachment.size > MAX_TOTAL_ATTACHMENT_BYTES) {
-      skip(`would take the message past the ${formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)} total limit`);
+      skip(
+        `would take the message past the ${formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)} total limit`,
+      );
       continue;
     }
 
@@ -250,7 +255,10 @@ export function selectLeadAttachments(metadata: GraphAttachmentMetadata[]): {
  */
 export interface LeadAttachmentSource {
   listMessageAttachments(messageId: string): Promise<GraphAttachmentMetadata[]>;
-  downloadMessageAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
+  downloadMessageAttachment(
+    messageId: string,
+    attachmentId: string,
+  ): Promise<Buffer>;
 }
 
 /** Injectable so the OCR-shaped decisions below can be tested without Mistral. */
@@ -258,8 +266,10 @@ export type OcrReader = (input: OcrInput) => Promise<string>;
 
 const mistralOcrReader: OcrReader = async (input) => {
   if (!isOcrConfigured()) {
-    console.warn(`  MISTRAL_AI_KEY is not set; skipping OCR for "${input.name}".`);
-    return '';
+    console.warn(
+      `  MISTRAL_AI_KEY is not set; skipping OCR for "${input.name}".`,
+    );
+    return "";
   }
 
   return ocrFile(input);
@@ -288,10 +298,10 @@ async function readWithOcr(
       timeoutMs: OCR_TIMEOUT_MS,
     });
     const trimmed = text.trim();
-    return trimmed.length >= MIN_OCR_TEXT_CHARS ? trimmed : '';
+    return trimmed.length >= MIN_OCR_TEXT_CHARS ? trimmed : "";
   } catch (error) {
     console.error(`  OCR failed for "${name}":`, error);
-    return '';
+    return "";
   }
 }
 
@@ -326,7 +336,7 @@ async function summarizeAttachment(
   }
 
   if (support.ocr === null) {
-    return { ...summary, text: data.toString('utf8').slice(0, MAX_TEXT_CHARS) };
+    return { ...summary, text: data.toString("utf8").slice(0, MAX_TEXT_CHARS) };
   }
 
   const text = await readWithOcr(
@@ -334,7 +344,7 @@ async function summarizeAttachment(
     metadata.name,
     mediaType,
     data,
-    support.ocr === 'image',
+    support.ocr === "image",
   );
 
   return text ? { ...summary, text: text.slice(0, MAX_TEXT_CHARS) } : summary;
@@ -368,7 +378,10 @@ export async function collectLeadAttachments(
       source.listMessageAttachments(messageId),
     );
   } catch (error) {
-    console.error(`  Failed to list attachments for message ${messageId}:`, error);
+    console.error(
+      `  Failed to list attachments for message ${messageId}:`,
+      error,
+    );
     return EMPTY_LEAD_ATTACHMENT_REPORT;
   }
 
@@ -390,7 +403,7 @@ export async function collectLeadAttachments(
       files.push(await summarizeAttachment(item, data, ocr));
     } catch (error) {
       console.error(`  Failed to download attachment "${item.name}":`, error);
-      skipped.push({ name: item.name, reason: 'download failed' });
+      skipped.push({ name: item.name, reason: "download failed" });
     }
   }
 
@@ -423,14 +436,14 @@ export async function hydrateLeadAttachments(
 
   for (const file of report.files) {
     if (file.text !== null) {
-      attachments.push({ kind: 'text', name: file.name, text: file.text });
+      attachments.push({ kind: "text", name: file.name, text: file.text });
       continue;
     }
 
     if (!file.modelReadable) {
       skipped.push({
         name: file.name,
-        reason: 'no text found and the model cannot open the format',
+        reason: "no text found and the model cannot open the format",
       });
       continue;
     }
@@ -440,14 +453,14 @@ export async function hydrateLeadAttachments(
         source.downloadMessageAttachment(messageId, file.id),
       );
       attachments.push({
-        kind: 'file',
+        kind: "file",
         name: file.name,
         mediaType: file.mediaType,
         data,
       });
     } catch (error) {
       console.error(`  Failed to re-read attachment "${file.name}":`, error);
-      skipped.push({ name: file.name, reason: 'could not be read back' });
+      skipped.push({ name: file.name, reason: "could not be read back" });
     }
   }
 

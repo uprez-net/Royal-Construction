@@ -56,7 +56,13 @@ function shortDate(value: Date) {
   return format(value, "d MMM");
 }
 
-function MetaItem({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+function MetaItem({
+  icon,
+  children,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="shrink-0" aria-hidden="true">
@@ -88,9 +94,7 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
     const late = daysLate(new Date(milestone.targetDate), actual);
 
     return (
-      <MetaItem
-        icon={<CheckCircle2 className="size-3.5 text-success-ink" />}
-      >
+      <MetaItem icon={<CheckCircle2 className="size-3.5 text-success-ink" />}>
         Completed{" "}
         <span className="font-mono tabular-nums">{shortDate(actual)}</span>
         {late > 0 ? ` · ${late}d late` : null}
@@ -124,7 +128,11 @@ function DuenessLine({ milestone }: { milestone: UIMilestone }) {
 
   return (
     <MetaItem icon={<Calendar className="size-3.5" />}>
-      <span className={cn(dueness.kind === "soon" && "font-semibold text-warning-ink")}>
+      <span
+        className={cn(
+          dueness.kind === "soon" && "font-semibold text-warning-ink",
+        )}
+      >
         Due{" "}
         <span className="font-mono tabular-nums">
           {shortDate(new Date(milestone.targetDate))}
@@ -225,7 +233,6 @@ export function MilestoneCard({
                 {children.length === 1 ? "" : "s"} done
               </span>
             ) : null}
-
           </div>
 
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -418,21 +425,21 @@ export function MilestoneCard({
           <CollapsibleContent className="sm:col-span-2">
             <ul className="ml-1 list-none border-l border-border/70 pl-4">
               {orderedChildren.map((child) => (
-                  <MilestoneCard
-                    key={child.id}
-                    isAdmin={isAdmin}
-                    isActiveStage={isActiveStage}
-                    milestone={child}
-                    project={project}
-                    depth={depth + 1}
-                    tradieAlertsByMilestone={tradieAlertsByMilestone}
-                    onOpenAddUpdateModal={onOpenAddUpdateModal}
-                    onStatusUpdate={onStatusUpdate}
-                    onStartMilestone={onStartMilestone}
-                    onSendReminder={onSendReminder}
-                    onOpenViewPicture={onOpenViewPicture}
-                    onMarkasNotRequired={onMarkasNotRequired}
-                  />
+                <MilestoneCard
+                  key={child.id}
+                  isAdmin={isAdmin}
+                  isActiveStage={isActiveStage}
+                  milestone={child}
+                  project={project}
+                  depth={depth + 1}
+                  tradieAlertsByMilestone={tradieAlertsByMilestone}
+                  onOpenAddUpdateModal={onOpenAddUpdateModal}
+                  onStatusUpdate={onStatusUpdate}
+                  onStartMilestone={onStartMilestone}
+                  onSendReminder={onSendReminder}
+                  onOpenViewPicture={onOpenViewPicture}
+                  onMarkasNotRequired={onMarkasNotRequired}
+                />
               ))}
             </ul>
           </CollapsibleContent>

@@ -217,7 +217,9 @@ export function resolveTargetMarkupPct(
     "royalConstructionOverheadPct" | "royalConstructionFeePct"
   >,
 ): number {
-  return settings.royalConstructionOverheadPct + settings.royalConstructionFeePct;
+  return (
+    settings.royalConstructionOverheadPct + settings.royalConstructionFeePct
+  );
 }
 
 // The margin the builder ACTUALLY earns at the price being charged. Kept
@@ -361,7 +363,9 @@ export function calculateOfferWorkspacePricing({
   const totalIncludingConstruction = roundCurrency(
     costBeforeFee + royalConstructionOverhead + royalConstructionFee,
   );
-  const gstAmount = roundCurrency(totalIncludingConstruction * settings.gstRate);
+  const gstAmount = roundCurrency(
+    totalIncludingConstruction * settings.gstRate,
+  );
   const contractValueIncGst = roundCurrency(
     totalIncludingConstruction + gstAmount,
   );
@@ -405,7 +409,9 @@ export function calculateEffectiveMargin({
   if (!(costBeforeFee > 0)) {
     return { effectiveMarkupPct: 0, marginStatus: "not_priced" };
   }
-  const sellingExGst = roundCurrency(sellingContractValueIncGst / (1 + gstRate));
+  const sellingExGst = roundCurrency(
+    sellingContractValueIncGst / (1 + gstRate),
+  );
   const effectiveMarkupPct = roundRate(
     (sellingExGst - costBeforeFee) / costBeforeFee,
   );
@@ -415,7 +421,11 @@ export function calculateEffectiveMargin({
   // positive epsilon so a break-even (0%) markup is a loss (red), not amber.
   return {
     effectiveMarkupPct,
-    marginStatus: getMarginStatus(effectiveMarkupPct, targetFeePct, Number.EPSILON),
+    marginStatus: getMarginStatus(
+      effectiveMarkupPct,
+      targetFeePct,
+      Number.EPSILON,
+    ),
   };
 }
 

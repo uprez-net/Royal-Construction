@@ -97,7 +97,9 @@ export async function checkOfferConsistency(
   const scheduled = input.scheduled
     .map((spec, index) => `${index + 1}. ${spec.trim()}`)
     .join("\n");
-  const estimated = input.estimated.map((item) => `- ${item.trim()}`).join("\n");
+  const estimated = input.estimated
+    .map((item) => `- ${item.trim()}`)
+    .join("\n");
   const excluded = input.excluded.map((item) => `- ${item.trim()}`).join("\n");
   const offered = input.offered.map((line) => `- ${line.trim()}`).join("\n");
 
@@ -121,7 +123,9 @@ export async function checkOfferConsistency(
         // Drop cited rows that do not exist rather than render a broken link.
         scheduleRows: finding.scheduleRows.filter((row) => row <= maxRow),
       }))
-      .filter((finding) => finding.source.length > 0 && finding.detail.length > 0);
+      .filter(
+        (finding) => finding.source.length > 0 && finding.detail.length > 0,
+      );
 
     return { ok: true, findings };
   } catch (error) {

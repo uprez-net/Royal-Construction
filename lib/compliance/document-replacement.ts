@@ -117,10 +117,16 @@ export async function placeConsultantDeliverable(params: {
   return prisma.$transaction(async (tx) => {
     const [arrival, target] = await Promise.all([
       tx.complianceDocument.findFirst({
-        where: { id: params.arrivalDocumentId, engagementId: params.engagementId },
+        where: {
+          id: params.arrivalDocumentId,
+          engagementId: params.engagementId,
+        },
       }),
       tx.complianceDocument.findFirst({
-        where: { id: params.checklistDocumentId, engagementId: params.engagementId },
+        where: {
+          id: params.checklistDocumentId,
+          engagementId: params.engagementId,
+        },
         include: { files: { select: { id: true, url: true } } },
       }),
     ]);

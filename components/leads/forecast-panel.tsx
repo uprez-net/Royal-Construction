@@ -16,7 +16,11 @@ const QUARTERS: { q: FyQuarter; label: string }[] = [
   { q: 4, label: "Q4 Apr–Jun" },
 ];
 
-export function ForecastPanel({ forecast: initial }: { forecast: SafeForecast }) {
+export function ForecastPanel({
+  forecast: initial,
+}: {
+  forecast: SafeForecast;
+}) {
   const [forecast, setForecast] = useState(initial);
   const [pending, startTransition] = useTransition();
 
@@ -48,7 +52,9 @@ export function ForecastPanel({ forecast: initial }: { forecast: SafeForecast })
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{forecast.label || "Forecast"}</CardTitle>
+        <CardTitle className="text-base">
+          {forecast.label || "Forecast"}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="mb-3 flex flex-wrap gap-0.5 rounded-md border border-border bg-muted p-0.5">

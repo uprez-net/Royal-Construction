@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 // The beforeunload guard used to mount with SaveChangesButton, which meant it
 // unmounted on the way out and a later reload lost those edits in silence.
 
-const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+const read = (path: string) =>
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 test("the guard is mounted above every route, by the Redux provider", () => {
   const provider = read("components/providers/redux-provider.tsx");

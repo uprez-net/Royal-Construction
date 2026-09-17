@@ -1,27 +1,27 @@
 /** Royal Constructions email brand tokens — aligned with royalconstructions.com.au */
 
-export const RC_SITE = 'https://royalconstructions.com.au';
-export const RC_MAIN_APP = 'https://royal-construction-chi.vercel.app';
+export const RC_SITE = "https://royalconstructions.com.au";
+export const RC_MAIN_APP = "https://royal-construction-chi.vercel.app";
 
 export const RC_COLORS = {
-  dark: '#F1EDE3',
-  container: '#F7F5EF',
-  card: '#FCFBF7',
-  border: '#DED9CE',
-  footer: '#EEEAE1',
-  gold: '#C6923A',
-  goldLight: '#D4A034',
-  white: '#FFFFFF',
-  text: '#334155',
-  muted: '#667085',
-  dimmed: '#98A2B3',
-  light: '#F7F6F2',
-  label: '#5B6573',
-  highlight: '#E8E4DA',
-  ctaText: '#2F3742',
-  accreditedLabel: '#5B6573',
-  textOnLight: '#2F3742',
-  textMutedOnLight: '#667085',
+  dark: "#F1EDE3",
+  container: "#F7F5EF",
+  card: "#FCFBF7",
+  border: "#DED9CE",
+  footer: "#EEEAE1",
+  gold: "#C6923A",
+  goldLight: "#D4A034",
+  white: "#FFFFFF",
+  text: "#334155",
+  muted: "#667085",
+  dimmed: "#98A2B3",
+  light: "#F7F6F2",
+  label: "#5B6573",
+  highlight: "#E8E4DA",
+  ctaText: "#2F3742",
+  accreditedLabel: "#5B6573",
+  textOnLight: "#2F3742",
+  textMutedOnLight: "#667085",
 } as const;
 
 export const RC_URLS = {
@@ -42,11 +42,11 @@ export const RC_URLS = {
   claimOffer: `${RC_SITE}/claim-offer/`,
   terms: `${RC_SITE}/terms/`,
   catalogue: `${RC_SITE}/catalogue/`,
-  facebookPage: 'https://www.facebook.com/royalconstructionsau/',
-  instagramPage: 'https://www.instagram.com/royalconstructionsau/',
-  phone: '1300832355',
-  phoneDisplay: '1300 832 355',
-  email: 'info@royalconstructions.com.au',
+  facebookPage: "https://www.facebook.com/royalconstructionsau/",
+  instagramPage: "https://www.instagram.com/royalconstructionsau/",
+  phone: "1300832355",
+  phoneDisplay: "1300 832 355",
+  email: "info@royalconstructions.com.au",
 } as const;
 
 /** Logo intrinsic ratio 1024×713 — keep width/height paired for email clients. */
@@ -57,9 +57,9 @@ export const LOGO_EMAIL = {
 
 export function getAppAssetUrl(path: string): string {
   const base =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ??
-    'http://localhost:3000';
-  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
+    "http://localhost:3000";
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export const RC_URLS_APP = {
@@ -68,12 +68,12 @@ export const RC_URLS_APP = {
    * Keep this URL in sync with the uploaded asset.
    */
   builderProfile:
-    'https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/public-file/Royal_Constructions_Builder_Profile_1.pdf',
+    "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/public-file/Royal_Constructions_Builder_Profile_1.pdf",
 } as const;
 
 export const FONTS = {
   condensed: '"IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif',
-  body: 'Inter, Arial, sans-serif',
+  body: "Inter, Arial, sans-serif",
 } as const;
 
 export const RESPONSIVE_CSS = `

@@ -23,7 +23,11 @@ test("page 1 replaces the list", () => {
 test("a later page appends without repeating a lead already shown", () => {
   const onScreen = [lead(1), lead(2)];
   const next = [lead(2), lead(3)];
-  assert.deepEqual(mergeLeadPage(onScreen, next, 2), [lead(1), lead(2), lead(3)]);
+  assert.deepEqual(mergeLeadPage(onScreen, next, 2), [
+    lead(1),
+    lead(2),
+    lead(3),
+  ]);
 });
 
 test("the same search keeps the scrolled-to page", () => {

@@ -119,8 +119,9 @@ export function PartyRevisionModal({
         <DialogHeader>
           <DialogTitle>Request a revision from the {label}</DialogTitle>
           <DialogDescription>
-            Review the certifier&apos;s feedback, edit the email, and confirm every
-            attachment before sending it on the existing {label.toLowerCase()}
+            Review the certifier&apos;s feedback, edit the email, and confirm
+            every attachment before sending it on the existing{" "}
+            {label.toLowerCase()}
             thread.
           </DialogDescription>
         </DialogHeader>
@@ -208,8 +209,8 @@ export function PartyRevisionModal({
                 ))}
               </ul>
               <p className="text-xs text-muted-foreground">
-                The rejected copy stays attached so the {label.toLowerCase()} can
-                see exactly what the certifier reviewed.
+                The rejected copy stays attached so the {label.toLowerCase()}{" "}
+                can see exactly what the certifier reviewed.
               </p>
             </div>
 

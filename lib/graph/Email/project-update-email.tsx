@@ -10,7 +10,7 @@ import {
   Link,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -18,12 +18,15 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 // Updated stroke colors for Light Theme compatibility
@@ -42,28 +45,26 @@ function ProgressStep({
   state,
 }: {
   label: string;
-  state: 'completed' | 'current' | 'upcoming';
+  state: "completed" | "current" | "upcoming";
 }) {
-  const isCompleted = state === 'completed';
-  const isCurrent = state === 'current';
+  const isCompleted = state === "completed";
+  const isCurrent = state === "current";
 
   return (
-    <Column
-      style={{ width: '25%', verticalAlign: 'top', textAlign: 'center' }}
-    >
-      <Section className="mx-auto" style={{ display: 'inline-block' }}>
+    <Column style={{ width: "25%", verticalAlign: "top", textAlign: "center" }}>
+      <Section className="mx-auto" style={{ display: "inline-block" }}>
         <Row>
           <Column
             style={{
               width: 24,
               height: 24,
-              borderRadius: '50%',
-              textAlign: 'center',
-              verticalAlign: 'middle',
+              borderRadius: "50%",
+              textAlign: "center",
+              verticalAlign: "middle",
               backgroundColor: isCompleted ? RC_COLORS.gold : RC_COLORS.white,
               border: isCompleted
-                ? 'none'
-                : `2px solid ${isCurrent ? RC_COLORS.gold : '#E2E8F0'}`,
+                ? "none"
+                : `2px solid ${isCurrent ? RC_COLORS.gold : "#E2E8F0"}`,
             }}
           >
             {isCompleted ? (
@@ -75,14 +76,14 @@ function ProgressStep({
                 className="block outline-none border-none mx-auto"
               />
             ) : (
-              <Section className="mx-auto" style={{ display: 'inline-block' }}>
+              <Section className="mx-auto" style={{ display: "inline-block" }}>
                 <Row>
                   <Column
                     style={{
                       width: 8,
                       height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: isCurrent ? RC_COLORS.gold : '#CBD5E1',
+                      borderRadius: "50%",
+                      backgroundColor: isCurrent ? RC_COLORS.gold : "#CBD5E1",
                       fontSize: 0,
                       lineHeight: 0,
                     }}
@@ -101,8 +102,8 @@ function ProgressStep({
           color: isCompleted
             ? RC_COLORS.gold
             : isCurrent
-            ? RC_COLORS.textOnLight
-            : RC_COLORS.dimmed,
+              ? RC_COLORS.textOnLight
+              : RC_COLORS.dimmed,
         }}
       >
         {label}
@@ -114,10 +115,10 @@ function ProgressStep({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 const DEFAULT_STEPS = [
-  { label: 'Foundation', state: 'completed' as const },
-  { label: 'Frame', state: 'completed' as const },
-  { label: 'Lock-Up', state: 'current' as const },
-  { label: 'Handover', state: 'upcoming' as const },
+  { label: "Foundation", state: "completed" as const },
+  { label: "Frame", state: "completed" as const },
+  { label: "Lock-Up", state: "current" as const },
+  { label: "Handover", state: "upcoming" as const },
 ];
 
 interface ProjectUpdateEmailProps {
@@ -126,20 +127,20 @@ interface ProjectUpdateEmailProps {
   milestone?: string;
   date?: string;
   progressPercent?: number;
-  steps?: { label: string; state: 'completed' | 'current' | 'upcoming' }[];
+  steps?: { label: string; state: "completed" | "current" | "upcoming" }[];
   nextMilestone?: string;
   portalUrl?: string;
   leadContext?: LeadEmailContext;
 }
 
 export default function ProjectUpdateEmail({
-  name = 'Client',
-  location = 'Your Location',
-  milestone = 'Lock-Up Stage',
-  date = 'Today',
+  name = "Client",
+  location = "Your Location",
+  milestone = "Lock-Up Stage",
+  date = "Today",
   progressPercent = 60,
   steps = DEFAULT_STEPS,
-  nextMilestone = 'Practical Completion',
+  nextMilestone = "Practical Completion",
   portalUrl = RC_URLS.contact,
   leadContext,
 }: ProjectUpdateEmailProps) {
@@ -168,22 +169,39 @@ export default function ProjectUpdateEmail({
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
             Great news — your project has reached an important milestone
-            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
+            <div>
+              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
+            </div>
           </div>
 
-          <Container className="max-w-[640px] mx-auto" style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}>
+          <Container
+            className="max-w-[640px] mx-auto"
+            style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}
+          >
             <EmailHeader showGoldBar />
 
             {/* ── Celebration Banner ── */}
             <Section style={{ backgroundColor: RC_COLORS.gold }}>
               <Row>
                 <Column className="py-2.5 px-6">
-                  <Section className="mx-auto" style={{ display: 'inline-block' }}>
+                  <Section
+                    className="mx-auto"
+                    style={{ display: "inline-block" }}
+                  >
                     <Row>
-                      <Column className="pr-2" style={{ verticalAlign: 'middle' }}>
-                        <Img alt="" height={16} src={ICONS.checkNavySmall} width={16} className="block outline-none border-none" />
+                      <Column
+                        className="pr-2"
+                        style={{ verticalAlign: "middle" }}
+                      >
+                        <Img
+                          alt=""
+                          height={16}
+                          src={ICONS.checkNavySmall}
+                          width={16}
+                          className="block outline-none border-none"
+                        />
                       </Column>
-                      <Column style={{ verticalAlign: 'middle' }}>
+                      <Column style={{ verticalAlign: "middle" }}>
                         <Text
                           className="m-0 uppercase tracking-[1px]"
                           style={{
@@ -204,7 +222,7 @@ export default function ProjectUpdateEmail({
             </Section>
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 1.5rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 1.5rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -212,7 +230,7 @@ export default function ProjectUpdateEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -225,7 +243,7 @@ export default function ProjectUpdateEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.4px',
+                  letterSpacing: "-1.4px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -236,7 +254,7 @@ export default function ProjectUpdateEmail({
             </EmailSectionLight>
 
             {/* ── Intro ── */}
-            <EmailSectionLight style={{ padding: '0.5rem 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0.5rem 1.5rem 2.5rem" }}>
               <Row>
                 <Column>
                   <Text
@@ -246,7 +264,7 @@ export default function ProjectUpdateEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                     }}
                   >
@@ -259,16 +277,19 @@ export default function ProjectUpdateEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                       maxWidth: 480,
                     }}
                   >
-                    Great news! Your project at{' '}
-                    <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>
+                    Great news! Your project at{" "}
+                    <span
+                      style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}
+                    >
                       {location}
-                    </span>{' '}
-                    has reached an important milestone. Here&apos;s a summary of the progress.
+                    </span>{" "}
+                    has reached an important milestone. Here&apos;s a summary of
+                    the progress.
                   </Text>
                 </Column>
               </Row>
@@ -277,11 +298,11 @@ export default function ProjectUpdateEmail({
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Milestone Card ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
                 <Column
                   className="rounded-md overflow-hidden"
-                  style={{ border: '1px solid #E2E8F0' }}
+                  style={{ border: "1px solid #E2E8F0" }}
                 >
                   {/* Card Header */}
                   <Row>
@@ -294,8 +315,8 @@ export default function ProjectUpdateEmail({
                             fontWeight: 500,
                             fontSize: 13,
                             lineHeight: 1,
-                            letterSpacing: '0.6px',
-                            color: '#FFFFFF',
+                            letterSpacing: "0.6px",
+                            color: "#FFFFFF",
                           }}
                         >
                           Milestone Completed
@@ -305,14 +326,36 @@ export default function ProjectUpdateEmail({
                   </Row>
 
                   {/* Milestone Name */}
-                  <Row style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  <Row style={{ borderBottom: "1px solid #E2E8F0" }}>
                     <Column className="pt-7 pb-5 px-6">
                       <Row>
-                        <Column className="pt-1" style={{ width: 40, verticalAlign: 'top' }}>
-                          <Section style={{ width: 28, height: 28, backgroundColor: RC_COLORS.gold, borderRadius: '50%' }}>
+                        <Column
+                          className="pt-1"
+                          style={{ width: 40, verticalAlign: "top" }}
+                        >
+                          <Section
+                            style={{
+                              width: 28,
+                              height: 28,
+                              backgroundColor: RC_COLORS.gold,
+                              borderRadius: "50%",
+                            }}
+                          >
                             <Row>
-                              <Column style={{ textAlign: 'center', verticalAlign: 'middle', height: 28 }}>
-                                <Img alt="" height={14} src={ICONS.checkWhiteSmall} width={14} className="block outline-none border-none mx-auto" />
+                              <Column
+                                style={{
+                                  textAlign: "center",
+                                  verticalAlign: "middle",
+                                  height: 28,
+                                }}
+                              >
+                                <Img
+                                  alt=""
+                                  height={14}
+                                  src={ICONS.checkWhiteSmall}
+                                  width={14}
+                                  className="block outline-none border-none mx-auto"
+                                />
                               </Column>
                             </Row>
                           </Section>
@@ -324,7 +367,7 @@ export default function ProjectUpdateEmail({
                               fontFamily: FONTS.body,
                               fontWeight: 500,
                               fontSize: 10,
-                              letterSpacing: '0.8px',
+                              letterSpacing: "0.8px",
                               color: RC_COLORS.textMutedOnLight,
                             }}
                           >
@@ -351,8 +394,17 @@ export default function ProjectUpdateEmail({
                   <Row>
                     <Column className="py-5 px-6">
                       <Row>
-                        <Column className="pt-[2px]" style={{ width: 40, verticalAlign: 'top' }}>
-                          <Img alt="" height={20} src={ICONS.calendar} width={20} className="block outline-none border-none" />
+                        <Column
+                          className="pt-[2px]"
+                          style={{ width: 40, verticalAlign: "top" }}
+                        >
+                          <Img
+                            alt=""
+                            height={20}
+                            src={ICONS.calendar}
+                            width={20}
+                            className="block outline-none border-none"
+                          />
                         </Column>
                         <Column className="pl-3">
                           <Text
@@ -361,7 +413,7 @@ export default function ProjectUpdateEmail({
                               fontFamily: FONTS.body,
                               fontWeight: 500,
                               fontSize: 10,
-                              letterSpacing: '0.8px',
+                              letterSpacing: "0.8px",
                               color: RC_COLORS.textMutedOnLight,
                             }}
                           >
@@ -388,13 +440,13 @@ export default function ProjectUpdateEmail({
             </EmailSectionWhite>
 
             {/* ── Progress Indicator ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 3rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 3rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
-                  border: '1px solid #E2E8F0',
+                  border: "1px solid #E2E8F0",
                   borderRadius: 6,
-                  padding: '1.5rem',
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -406,7 +458,7 @@ export default function ProjectUpdateEmail({
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1,
-                        letterSpacing: '0.3px',
+                        letterSpacing: "0.3px",
                         color: RC_COLORS.textOnLight,
                       }}
                     >
@@ -417,7 +469,7 @@ export default function ProjectUpdateEmail({
                     <Section
                       className="mb-8"
                       style={{
-                        backgroundColor: '#E2E8F0',
+                        backgroundColor: "#E2E8F0",
                         borderRadius: 100,
                         height: 6,
                         fontSize: 0,
@@ -435,14 +487,24 @@ export default function ProjectUpdateEmail({
                             lineHeight: 0,
                           }}
                         />
-                        <Column style={{ width: emptyWidth, fontSize: 0, lineHeight: 0 }} />
+                        <Column
+                          style={{
+                            width: emptyWidth,
+                            fontSize: 0,
+                            lineHeight: 0,
+                          }}
+                        />
                       </Row>
                     </Section>
 
                     {/* Progress Steps */}
                     <Row>
                       {steps.map((step) => (
-                        <ProgressStep key={step.label} label={step.label} state={step.state} />
+                        <ProgressStep
+                          key={step.label}
+                          label={step.label}
+                          state={step.state}
+                        />
                       ))}
                     </Row>
                   </Column>
@@ -451,21 +513,30 @@ export default function ProjectUpdateEmail({
             </EmailSectionLight>
 
             {/* ── Photo Updates Card ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
                 <Column
                   style={{
                     backgroundColor: RC_COLORS.light,
                     borderRadius: 6,
-                    border: '1px solid #E2E8F0',
+                    border: "1px solid #E2E8F0",
                   }}
                 >
                   <Section className="p-6">
                     <Row>
-                      <Column className="pr-4" style={{ width: 36, verticalAlign: 'top' }}>
-                        <Img alt="" height={28} src={ICONS.camera} width={28} className="block outline-none border-none" />
+                      <Column
+                        className="pr-4"
+                        style={{ width: 36, verticalAlign: "top" }}
+                      >
+                        <Img
+                          alt=""
+                          height={28}
+                          src={ICONS.camera}
+                          width={28}
+                          className="block outline-none border-none"
+                        />
                       </Column>
-                      <Column style={{ verticalAlign: 'top' }}>
+                      <Column style={{ verticalAlign: "top" }}>
                         <Text
                           className="m-0 mb-1.5"
                           style={{
@@ -485,11 +556,12 @@ export default function ProjectUpdateEmail({
                             fontWeight: 350,
                             fontSize: 13,
                             lineHeight: 1.5,
-                            letterSpacing: '0.2px',
+                            letterSpacing: "0.2px",
                             color: RC_COLORS.textMutedOnLight,
                           }}
                         >
-                          See the latest progress photos from your site on the client portal.
+                          See the latest progress photos from your site on the
+                          client portal.
                         </Text>
                         <Link
                           href={portalUrl}
@@ -500,7 +572,7 @@ export default function ProjectUpdateEmail({
                             fontSize: 14,
                             lineHeight: 1.5,
                             color: RC_COLORS.gold,
-                            textDecoration: 'none',
+                            textDecoration: "none",
                           }}
                         >
                           View Photos&nbsp;→
@@ -513,12 +585,12 @@ export default function ProjectUpdateEmail({
             </EmailSectionWhite>
 
             {/* ── Next Milestone Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -529,7 +601,7 @@ export default function ProjectUpdateEmail({
                         fontFamily: FONTS.body,
                         fontWeight: 500,
                         fontSize: 11,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
@@ -545,8 +617,13 @@ export default function ProjectUpdateEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      The next milestone is{' '}
-                      <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>
+                      The next milestone is{" "}
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          color: RC_COLORS.textOnLight,
+                        }}
+                      >
                         {nextMilestone}
                       </span>
                       . We&apos;ll keep you updated as your project progresses.
@@ -557,8 +634,10 @@ export default function ProjectUpdateEmail({
             </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section
+                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+              >
                 <Row>
                   <Column>
                     <Text
@@ -571,9 +650,13 @@ export default function ProjectUpdateEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      We look forward to seeing the project continue to take shape.
+                      We look forward to seeing the project continue to take
+                      shape.
                     </Text>
-                    <Text className="m-0 mb-1" style={{ fontSize: 14, color: RC_COLORS.textOnLight }}>
+                    <Text
+                      className="m-0 mb-1"
+                      style={{ fontSize: 14, color: RC_COLORS.textOnLight }}
+                    >
                       Kind regards,
                     </Text>
                     <Text
@@ -588,7 +671,10 @@ export default function ProjectUpdateEmail({
                     </Text>
                     <Text
                       className="m-0"
-                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
+                      style={{
+                        fontSize: 13,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
                     >
                       Royal Constructions Pty Ltd
                     </Text>

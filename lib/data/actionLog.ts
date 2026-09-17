@@ -1,8 +1,8 @@
 import "server-only";
 
-import prisma from '@/lib/prisma';
-import { ActivityLogEntry } from '@/types/activityLog';
-import { Prisma } from '@prisma/client';
+import prisma from "@/lib/prisma";
+import { ActivityLogEntry } from "@/types/activityLog";
+import { Prisma } from "@prisma/client";
 
 /**
  * Creates a new activity log entry.
@@ -24,21 +24,24 @@ import { Prisma } from '@prisma/client';
  * @returns A promise that resolves once the activity log has been written or
  * an error has been handled.
  */
-export async function logAction(input: ActivityLogEntry, tx?: Prisma.TransactionClient) {
-    try {
-        const prismaClient = tx ?? prisma;
-        await prismaClient.activityLog.create({
-            data: {
-                id: input.id,
-                type: input.type,
-                message: input.message,
-                // authorId: input.authorId,
-                createdAt: new Date(input.timestamp),
-                projectId: input.projectId,
-                milestoneId: input.milestoneId ?? null,
-            },
-        });
-    } catch (error) {
-        console.error("Failed to log action:", error);
-    }
+export async function logAction(
+  input: ActivityLogEntry,
+  tx?: Prisma.TransactionClient,
+) {
+  try {
+    const prismaClient = tx ?? prisma;
+    await prismaClient.activityLog.create({
+      data: {
+        id: input.id,
+        type: input.type,
+        message: input.message,
+        // authorId: input.authorId,
+        createdAt: new Date(input.timestamp),
+        projectId: input.projectId,
+        milestoneId: input.milestoneId ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to log action:", error);
+  }
 }

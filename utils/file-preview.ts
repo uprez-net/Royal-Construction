@@ -83,7 +83,14 @@ export type FilePreviewModalAction =
       type: "viewPicture";
       payload: { imageUrls: string[]; selectedIndex: number };
     }
-  | { type: "previewFile"; payload: { fileUrl: string } };
+  | {
+      type: "previewFile";
+      payload: {
+        fileUrl: string;
+        fileName?: string | null;
+        fileType?: string | null;
+      };
+    };
 
 /**
  * The modal to open for the file at `selectedIndex`, given everything shown
@@ -113,7 +120,14 @@ export function filePreviewModal(
   }
 
   if (!isPreviewableImage(selected)) {
-    return { type: "previewFile", payload: { fileUrl: selected.url } };
+    return {
+      type: "previewFile",
+      payload: {
+        fileUrl: selected.url,
+        fileName: selected.name ?? null,
+        fileType: selected.fileType ?? null,
+      },
+    };
   }
 
   const siblings = files.filter(

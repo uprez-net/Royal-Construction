@@ -289,11 +289,14 @@ test("an issued checklist shows only the parties its lines name", () => {
 
   const actors = actorsOn(detail, "CHECKLIST");
 
-  assert.deepEqual(ids(actors).sort(), [
-    "builder",
-    CompliancePartyType.BASIX_CONSULTANT,
-    CompliancePartyType.STRUCTURAL_ENGINEER,
-  ].sort());
+  assert.deepEqual(
+    ids(actors).sort(),
+    [
+      "builder",
+      CompliancePartyType.BASIX_CONSULTANT,
+      CompliancePartyType.STRUCTURAL_ENGINEER,
+    ].sort(),
+  );
   // Nobody has been written to about the structural drawings yet.
   assert.equal(
     stateOf(actors, CompliancePartyType.STRUCTURAL_ENGINEER),

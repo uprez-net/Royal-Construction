@@ -38,11 +38,19 @@ export function OfferContentHeader({
   ) {
     const last = ADMIN_OFFER_TABS.length - 1;
     const next =
-      event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
-      : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
-      : event.key === "Home" ? 0
-      : event.key === "End" ? last
-      : null;
+      event.key === "ArrowRight"
+        ? index === last
+          ? 0
+          : index + 1
+        : event.key === "ArrowLeft"
+          ? index === 0
+            ? last
+            : index - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
     if (next === null) return;
     event.preventDefault();
     movedByKeyboard.current = true;
@@ -54,7 +62,11 @@ export function OfferContentHeader({
       aria-label="Offer pre-fill sections"
       className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
     >
-      <ol role="tablist" aria-orientation="horizontal" className="flex min-w-190">
+      <ol
+        role="tablist"
+        aria-orientation="horizontal"
+        className="flex min-w-190"
+      >
         {ADMIN_OFFER_TABS.map((tab, index) => {
           const isCurrent = tab.id === activeTab;
           const isDirty = dirtyTabs[tab.id];

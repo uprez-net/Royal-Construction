@@ -6,10 +6,7 @@
 // from the server action, the offer-handoff path, and the PATCH route.
 
 import type { ProjectStatus } from "@prisma/client";
-import {
-  compareSignedAndStartDates,
-  normalizeDateString,
-} from "@/utils/date";
+import { compareSignedAndStartDates, normalizeDateString } from "@/utils/date";
 
 export type ProjectDateBlockerSeverity = "block" | "warn";
 
@@ -88,9 +85,12 @@ export function collectProjectDateBlockers({
   }
 
   const pcaMissing =
-    !pcaInspector || (typeof pcaInspector === "string" && pcaInspector.trim() === "");
+    !pcaInspector ||
+    (typeof pcaInspector === "string" && pcaInspector.trim() === "");
   const hbcfInsuranceMissing =
-    !hbcfInsuranceNumber || (typeof hbcfInsuranceNumber === "string" && hbcfInsuranceNumber.trim() === "");
+    !hbcfInsuranceNumber ||
+    (typeof hbcfInsuranceNumber === "string" &&
+      hbcfInsuranceNumber.trim() === "");
   if (pcaMissing && status === "ACTIVE") {
     blockers.push({
       id: "pca_missing",

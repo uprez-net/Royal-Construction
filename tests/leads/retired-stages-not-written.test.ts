@@ -73,5 +73,9 @@ test("nothing in runtime code assigns a retired stage", () => {
       }
     }
   }
-  assert.deepEqual(offenders, [], `retired stage written in:\n  ${offenders.join("\n  ")}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `retired stage written in:\n  ${offenders.join("\n  ")}`,
+  );
 });

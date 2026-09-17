@@ -4,7 +4,10 @@ import { test } from "node:test";
 import { MilestoneStatus } from "@prisma/client";
 
 import { reviveMilestoneDates } from "../../lib/projects/milestone-dates";
-import { partitionActivities, sortActivities } from "../../lib/projects/milestone-ledger";
+import {
+  partitionActivities,
+  sortActivities,
+} from "../../lib/projects/milestone-ledger";
 
 /** A milestone as the RSC payload delivers it: real Dates. */
 const fromServer = (
@@ -51,7 +54,12 @@ test("revives ISO strings from an API response into Dates", () => {
 });
 
 test("leaves a milestone that already carries Dates alone", () => {
-  const original = fromServer("Frame", MilestoneStatus.DONE, "2026-09-01", "2026-09-03");
+  const original = fromServer(
+    "Frame",
+    MilestoneStatus.DONE,
+    "2026-09-01",
+    "2026-09-03",
+  );
   const revived = reviveMilestoneDates(original);
 
   assert.equal(revived.targetDate.getTime(), original.targetDate.getTime());
@@ -109,7 +117,9 @@ test("reviving at the boundary makes the same stage sort cleanly", () => {
 // are open at once rather than only on completion.
 test("open activities sort cleanly once revived", () => {
   const revived = [
-    reviveMilestoneDates(fromApi("Windows", MilestoneStatus.ACTIVE, "2026-09-10", null)),
+    reviveMilestoneDates(
+      fromApi("Windows", MilestoneStatus.ACTIVE, "2026-09-10", null),
+    ),
     fromServer("Roof", MilestoneStatus.PENDING, "2026-09-05", null),
   ];
 

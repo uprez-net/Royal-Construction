@@ -21,11 +21,7 @@ import type { DashboardGraphData } from "@/lib/data/dashboard";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 import { useState, useMemo } from "react";
-import {
-  isWithinInterval,
-  startOfYear,
-  subMonths,
-} from "date-fns";
+import { isWithinInterval, startOfYear, subMonths } from "date-fns";
 
 // ─── Shared tokens ────────────────────────────────────────────────────────────
 const TEAL = "#1D9E75";
@@ -422,7 +418,12 @@ export function DashboardGraphCards({ data }: { data: DashboardGraphData }) {
               ))}
             </div>
           }
-          graphNode={<LeadsRevenueChart key={selectedPeriod} data={filteredLeadRevenueData} />}
+          graphNode={
+            <LeadsRevenueChart
+              key={selectedPeriod}
+              data={filteredLeadRevenueData}
+            />
+          }
         />
         <GraphCard
           title="Conversion Breakdown"

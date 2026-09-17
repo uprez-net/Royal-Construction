@@ -3,6 +3,10 @@
 // React and path aliases so the node test runner can import it.
 
 export function getScreenTitle(slug: string): string {
+  if (slug === "agent") {
+    return "Operations Agent";
+  }
+
   // A bare number is a lead id (/leads/123, /offers/123). The offer route used
   // to read "Creating Offer for Lead #123" even on an issued offer.
   if (/^\d+$/.test(slug)) {

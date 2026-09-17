@@ -48,7 +48,11 @@ test("the inclusions schedule uses multi-column, not a row-filled grid", () => {
   const html = render(INITIAL_OFFER_DRAFT.inclusionSchedule);
   const ol = html.match(/<ol class="([^"]*)"/)?.[1] ?? "";
 
-  assert.match(ol, /md:columns-2/, "should use CSS multi-column for the schedule");
+  assert.match(
+    ol,
+    /md:columns-2/,
+    "should use CSS multi-column for the schedule",
+  );
   assert.doesNotMatch(
     ol,
     /grid-cols-2/,

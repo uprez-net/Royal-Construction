@@ -18,7 +18,10 @@ import {
   partyDeliverables,
 } from "@/constants/complianceDocuments";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
-import { escapeEmailHtml, sendOnPartyThread } from "@/lib/compliance/party-mail";
+import {
+  escapeEmailHtml,
+  sendOnPartyThread,
+} from "@/lib/compliance/party-mail";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -181,9 +184,7 @@ function followUpBody(params: {
         );
       }
 
-      const wanted = outstanding.map((type) =>
-        complianceDocumentLabel(type),
-      );
+      const wanted = outstanding.map((type) => complianceDocumentLabel(type));
 
       return [
         `<p>${greeting}</p>`,
@@ -219,7 +220,9 @@ function isSuppliedOnFile(
     if (document.files.length === 0 && !isNotRequired(document.status)) {
       return false;
     }
-    return lineId ? document.id === lineId : document.documentType === documentType;
+    return lineId
+      ? document.id === lineId
+      : document.documentType === documentType;
   });
 }
 

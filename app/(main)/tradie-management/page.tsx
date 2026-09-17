@@ -8,7 +8,8 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Tradie Management",
-  description: "Manage your tradies effectively for seamless project execution.",
+  description:
+    "Manage your tradies effectively for seamless project execution.",
 };
 
 export default async function TradieManagementPage() {

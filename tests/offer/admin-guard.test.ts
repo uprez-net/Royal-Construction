@@ -39,12 +39,22 @@ test("a signed-in account with no internal user is refused", () => {
 
 test("no session is refused", () => {
   for (const clerkId of [null, undefined, ""]) {
-    assert.equal(resolveAdminGuard(clerkId, ADMIN).ok, false, `${clerkId} allowed`);
+    assert.equal(
+      resolveAdminGuard(clerkId, ADMIN).ok,
+      false,
+      `${clerkId} allowed`,
+    );
   }
 });
 
 test("the role comparison is exact, not a prefix or case-insensitive match", () => {
-  for (const role of ["admin", "Admin", "ADMINISTRATOR", "NOT_ADMIN", " ADMIN"]) {
+  for (const role of [
+    "admin",
+    "Admin",
+    "ADMINISTRATOR",
+    "NOT_ADMIN",
+    " ADMIN",
+  ]) {
     const guard = resolveAdminGuard("clerk_abc", { id: "user-3", role });
     assert.equal(guard.ok, false, `"${role}" was treated as ADMIN`);
   }
@@ -72,11 +82,15 @@ test("refusing a non-admin says no more than refusing a stranger", () => {
 // updateBuildScope and the rest stayed callable directly, with no guard,
 // skipping the actions entirely. They now live in a module with no directive.
 
-const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const source = (path: string) =>
+  readFileSync(join(process.cwd(), path), "utf8");
 
 // A directive only counts as the first statement, so skip leading comments.
 function startsWithUseServer(text: string): boolean {
-  const body = text.replace(/^(?:\s+|\/\/[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*/, "");
+  const body = text.replace(
+    /^(?:\s+|\/\/[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*/,
+    "",
+  );
   return /^["']use server["']/.test(body);
 }
 
@@ -108,7 +122,13 @@ test("the admin writers live in a module that is not 'use server'", () => {
 });
 
 test("the directive check itself sees a directive behind leading comments", () => {
-  assert.equal(startsWithUseServer('// note\n/* block */\n"use server";\n'), true);
+  assert.equal(
+    startsWithUseServer('// note\n/* block */\n"use server";\n'),
+    true,
+  );
   assert.equal(startsWithUseServer("'use server';"), true);
-  assert.equal(startsWithUseServer('// "use server" in a comment\nimport x from "y";'), false);
+  assert.equal(
+    startsWithUseServer('// "use server" in a comment\nimport x from "y";'),
+    false,
+  );
 });

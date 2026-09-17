@@ -241,9 +241,7 @@ export function DaApprovalSection({
             (isRowOverdue?.(documentsByType.get(entry.type), entry.type) ??
               false),
         ) ||
-        daItems.some(
-          (item) => isRowOverdue?.(item, item.documentType) ?? false,
-        )
+        daItems.some((item) => isRowOverdue?.(item, item.documentType) ?? false)
       }
       // Determined, and the notice is still on the portal.
       //
@@ -369,7 +367,9 @@ export function DaApprovalSection({
                     documentType: item.documentType,
                   })
                 }
-                onApprove={onApproveItem ? () => onApproveItem(item) : undefined}
+                onApprove={
+                  onApproveItem ? () => onApproveItem(item) : undefined
+                }
                 onReject={onRejectItem ? () => onRejectItem(item) : undefined}
                 onSetNotRequired={
                   onSetNotRequired
@@ -423,7 +423,9 @@ export function DaApprovalSection({
               // Offered only once something has actually been lodged. A
               // resubmission of an application nobody recorded lodging is
               // somebody on the wrong control, and the server refuses it.
-              canResubmit={Boolean(application?.appliedAt) && step !== "received"}
+              canResubmit={
+                Boolean(application?.appliedAt) && step !== "received"
+              }
             />
             <ExternalApplicationBlock
               projectId={projectId}
@@ -512,9 +514,7 @@ export function DaApprovalSection({
  * certifier's. The row's own default covers that case, and returning null here
  * rather than guessing keeps the fallback in one place.
  */
-function rejectedByLabel(
-  document: ComplianceDocumentWithFiles,
-): string | null {
+function rejectedByLabel(document: ComplianceDocumentWithFiles): string | null {
   if (!document.rejectionReason) return null;
   switch (document.rejectedBySource) {
     case ComplianceAlertSource.COUNCIL:
@@ -561,7 +561,12 @@ function SubmissionRounds({
             : "Lodgement history"}
         </p>
         {canResubmit && onResubmit ? (
-          <Button type="button" variant="outline" size="sm" onClick={onResubmit}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onResubmit}
+          >
             <Send className="size-3.5" aria-hidden="true" />
             Record a resubmission
           </Button>

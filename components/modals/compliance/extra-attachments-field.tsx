@@ -351,9 +351,7 @@ export function ExtraAttachmentsField({
                 disabled={disabled}
                 onClick={() =>
                   onChange(
-                    value.filter(
-                      (entry) => entry.fileId !== attachment.fileId,
-                    ),
+                    value.filter((entry) => entry.fileId !== attachment.fileId),
                   )
                 }
               >

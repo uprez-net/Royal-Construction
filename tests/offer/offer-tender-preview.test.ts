@@ -93,7 +93,10 @@ test("the tender preview lists every allowance ticked for the Tender", () => {
     );
   }
   const amountLabels = printedAmountLabels(INITIAL_ALLOWANCES);
-  assert.ok(amountLabels.length > 0, "no amounts to check — the helper read the wrong list");
+  assert.ok(
+    amountLabels.length > 0,
+    "no amounts to check — the helper read the wrong list",
+  );
   for (const amountLabel of amountLabels) {
     assert.ok(html.includes(amountLabel), `missing amount ${amountLabel}`);
   }
@@ -113,9 +116,14 @@ test("an allowance left off the Tender stays off the tender preview", () => {
 // starts off the Offer and on the Tender.
 test("an allowance kept off the Offer document is still previewed", () => {
   const [first] = INITIAL_ALLOWANCES;
-  const html = render([{ ...first, includedInOfferDocument: false, includedInTender: true }]);
+  const html = render([
+    { ...first, includedInOfferDocument: false, includedInTender: true },
+  ]);
 
-  assert.ok(html.includes(first.label), "the Tender preview dropped a Tender allowance");
+  assert.ok(
+    html.includes(first.label),
+    "the Tender preview dropped a Tender allowance",
+  );
 });
 
 test("an empty inclusions list says where to add them, in readable text", () => {

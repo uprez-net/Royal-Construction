@@ -84,8 +84,7 @@ function resolveCostLines(
     seenKeys.add(row.taskKey);
     const mapping = mappingByKey.get(row.taskKey) ?? null;
     const itemName = (row.task || mapping?.taskName) ?? "";
-    const offerTenderLineItem =
-      mapping?.offerTenderWording ?? row.task ?? "";
+    const offerTenderLineItem = mapping?.offerTenderWording ?? row.task ?? "";
     const costExGst =
       row.priceMode === "fixed"
         ? row.value
@@ -143,7 +142,12 @@ export function resolveAllowances(
       label: a.name,
       description: a.variationRule,
       amount: a.amount,
-      unit: a.category === "per-sqm" ? "sqm" : a.category === "per-lm" ? "lm" : "package",
+      unit:
+        a.category === "per-sqm"
+          ? "sqm"
+          : a.category === "per-lm"
+            ? "lm"
+            : "package",
       variationRule: a.variationRule,
       // Off the sales proposal until the estimator ticks it; on the signed Tender.
       includedInOfferDocument: false,
@@ -159,7 +163,8 @@ function resolveExclusions(
 ): readonly OfferWorkspaceScopeItem[] {
   return adminContent.offerScope.exclusions.map((e, index) => ({
     id: `admin-exclusion-${index + 1}-${e.id}`,
-    category: e.exclusionKind === "owner_supplied" ? "owner_selection" : "exclusion",
+    category:
+      e.exclusionKind === "owner_supplied" ? "owner_selection" : "exclusion",
     amountType: "included_note" as const,
     label: e.name,
     description: e.description,
@@ -317,9 +322,7 @@ export function reevaluateFormulaCostLines(
     TIE_COST: area.tieCost,
     TOTAL_TILES_REQUIRED: calc.totalTilesRequired,
     KITCHEN_AREA: basis.kitchenSqm,
-    TOTAL_FLOORING_AREA:
-      basis.firstFloorSqm +
-      basis.balconySqm,
+    TOTAL_FLOORING_AREA: basis.firstFloorSqm + basis.balconySqm,
     TOTAL_AREA: rawTotalAreaSqm(basis),
     TOTAL_SHOWERS: job.showerCount,
     TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,
@@ -329,7 +332,11 @@ export function reevaluateFormulaCostLines(
   const scope = buildFormulaScope(rateConstants, measurements);
   return costLines.map((line) =>
     line.formula
-      ? { ...line, costExGst: Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000 }
+      ? {
+          ...line,
+          costExGst:
+            Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000,
+        }
       : line,
   );
 }
@@ -405,6 +412,9 @@ export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
     draft: resolveDraft(adminContent),
     areaCalculator: resolveAreaCalculator(),
     loadingChargePercentage: adminContent.hbfcClaim.loadingChargePercent,
-    rateConstants: { ...DEFAULT_RATE_CONSTANTS, ...adminContent.costSchedule.rateConstants },
+    rateConstants: {
+      ...DEFAULT_RATE_CONSTANTS,
+      ...adminContent.costSchedule.rateConstants,
+    },
   };
 }

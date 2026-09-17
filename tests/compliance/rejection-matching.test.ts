@@ -52,7 +52,10 @@ describe("normalising a name", () => {
   it("treats a plural as the same thing", () => {
     // A council writing "Shadow Diagrams" in March and "shadow diagram" in
     // April is naming one thing twice.
-    assert.equal(comparableName("Shadow Diagrams"), comparableName("shadow diagram"));
+    assert.equal(
+      comparableName("Shadow Diagrams"),
+      comparableName("shadow diagram"),
+    );
   });
 
   it("leaves short words that merely end in s alone", () => {
@@ -120,7 +123,10 @@ describe("refusing to guess", () => {
   });
 
   it("returns null when two rows share the same item number", () => {
-    const clashing = [row("a", ["First list item"], 7), row("b", ["Second"], 7)];
+    const clashing = [
+      row("a", ["First list item"], 7),
+      row("b", ["Second"], 7),
+    ];
     assert.equal(matchRejection("item 7", clashing), null);
   });
 

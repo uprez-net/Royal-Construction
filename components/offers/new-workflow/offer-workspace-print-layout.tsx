@@ -15,7 +15,9 @@ export function ImageSlot({
 }) {
   return (
     <figure className="overflow-hidden">
-      <div className={`relative w-full ${heightClass} overflow-hidden border border-border`}>
+      <div
+        className={`relative w-full ${heightClass} overflow-hidden border border-border`}
+      >
         {/* An A4 page is a fixed 210mm (~794px) wide, so the slot never scales
             with the viewport. Without `sizes`, `fill` requests a 100vw asset
             for every slot — wasteful now that the revision viewer renders
@@ -98,11 +100,7 @@ export function PrintSection({ children, eyebrow, title }: PrintSectionProps) {
   );
 }
 
-export function CoverRow({
-  emphasis = false,
-  label,
-  value,
-}: LabelValueProps) {
+export function CoverRow({ emphasis = false, label, value }: LabelValueProps) {
   return (
     <>
       <dt

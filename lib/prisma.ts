@@ -65,7 +65,10 @@ const pool =
     /**
      * IDENTIFICATION
      */
-    application_name: process.env.NODE_ENV === "production" ? "royal-construction-prod" : "royal-construction-dev",
+    application_name:
+      process.env.NODE_ENV === "production"
+        ? "royal-construction-prod"
+        : "royal-construction-dev",
 
     /**
      * HOOK
@@ -82,14 +85,11 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["warn", "error"]
-        : ["error"],
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     transactionOptions: {
       maxWait: 30_000,
       timeout: 15_000,
-    }
+    },
   });
 
 if (process.env.NODE_ENV !== "production") {

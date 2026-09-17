@@ -140,7 +140,10 @@ export async function getXeroContext(): Promise<XeroContext> {
       throw error;
     }
 
-    console.error("[xero] Refresh token rejected; deactivating connection:", error);
+    console.error(
+      "[xero] Refresh token rejected; deactivating connection:",
+      error,
+    );
     await prisma.xeroConnection.update({
       where: { id: connection.id },
       data: { isActive: false },
@@ -151,7 +154,9 @@ export async function getXeroContext(): Promise<XeroContext> {
   }
 
   if (!tokenSet.access_token || !tokenSet.refresh_token) {
-    throw new XeroNotConnectedError("Xero returned a token set with no tokens.");
+    throw new XeroNotConnectedError(
+      "Xero returned a token set with no tokens.",
+    );
   }
 
   // Xero ROTATES the refresh token on every refresh and invalidates the old

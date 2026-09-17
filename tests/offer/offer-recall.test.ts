@@ -26,7 +26,15 @@ import {
 // anything, which is the defect Recall was built to fix.
 
 test("a recall refuses any scope that is not the document out for signature", () => {
-  for (const scope of ["all", "bogus", undefined, {}, "toString", "offer", "contract"]) {
+  for (const scope of [
+    "all",
+    "bogus",
+    undefined,
+    {},
+    "toString",
+    "offer",
+    "contract",
+  ]) {
     const result = resolveRecall(
       scope,
       OfferStatus.TENDER_DRAFT,
@@ -64,11 +72,17 @@ test("a recall refuses when nothing is out for signature", () => {
 
 test("a recall refuses a target status that is not the document's draft", () => {
   assert.equal(
-    resolveRecall("offer", OfferStatus.TENDER_DRAFT, OfferStatus.TENDER_SENT, true).ok,
+    resolveRecall(
+      "offer",
+      OfferStatus.TENDER_DRAFT,
+      OfferStatus.TENDER_SENT,
+      true,
+    ).ok,
     false,
   );
   assert.equal(
-    resolveRecall("tender", OfferStatus.AGREED, OfferStatus.TENDER_SENT, true).ok,
+    resolveRecall("tender", OfferStatus.AGREED, OfferStatus.TENDER_SENT, true)
+      .ok,
     false,
   );
   assert.equal(
@@ -79,7 +93,12 @@ test("a recall refuses a target status that is not the document's draft", () => 
 
 test("a recall refuses a superseded revision", () => {
   assert.equal(
-    resolveRecall("tender", OfferStatus.TENDER_DRAFT, OfferStatus.TENDER_SENT, false).ok,
+    resolveRecall(
+      "tender",
+      OfferStatus.TENDER_DRAFT,
+      OfferStatus.TENDER_SENT,
+      false,
+    ).ok,
     false,
   );
 });
@@ -87,7 +106,12 @@ test("a recall refuses a superseded revision", () => {
 test("a status named after an Object.prototype key finds no recall edge", () => {
   for (const status of ["constructor", "toString", "__proto__"]) {
     assert.equal(
-      resolveRecall("tender", OfferStatus.TENDER_DRAFT, status as OfferStatus, true).ok,
+      resolveRecall(
+        "tender",
+        OfferStatus.TENDER_DRAFT,
+        status as OfferStatus,
+        true,
+      ).ok,
       false,
     );
   }
@@ -96,8 +120,16 @@ test("a status named after an Object.prototype key finds no recall edge", () => 
 test("each document out for signature recalls to its own draft", () => {
   const cases = [
     { from: OfferStatus.OFFER_SENT, scope: "offer", to: OfferStatus.SENT },
-    { from: OfferStatus.TENDER_SENT, scope: "tender", to: OfferStatus.TENDER_DRAFT },
-    { from: OfferStatus.CONTRACT_SENT, scope: "contract", to: OfferStatus.CONTRACT_DRAFT },
+    {
+      from: OfferStatus.TENDER_SENT,
+      scope: "tender",
+      to: OfferStatus.TENDER_DRAFT,
+    },
+    {
+      from: OfferStatus.CONTRACT_SENT,
+      scope: "contract",
+      to: OfferStatus.CONTRACT_DRAFT,
+    },
   ] as const;
   for (const { from, scope, to } of cases) {
     assert.deepEqual(resolveRecall(scope, to, from, true), {
@@ -131,7 +163,10 @@ test("stepping back from a sent document is classified as a recall", () => {
     { recall: "tender" },
   );
   assert.deepEqual(
-    classifyOfferTransition(OfferStatus.CONTRACT_SENT, OfferStatus.CONTRACT_DRAFT),
+    classifyOfferTransition(
+      OfferStatus.CONTRACT_SENT,
+      OfferStatus.CONTRACT_DRAFT,
+    ),
     { recall: "contract" },
   );
   assert.deepEqual(
@@ -146,13 +181,23 @@ test("sending and the project handoff are not status changes", () => {
     [OfferStatus.TENDER_DRAFT, OfferStatus.TENDER_SENT],
     [OfferStatus.CONTRACT_DRAFT, OfferStatus.CONTRACT_SENT],
   ] as const) {
-    assert.equal(classifyOfferTransition(from, to), "send-only", `${from} → ${to}`);
+    assert.equal(
+      classifyOfferTransition(from, to),
+      "send-only",
+      `${from} → ${to}`,
+    );
   }
 });
 
 test("ordinary moves and self-transitions still classify as before", () => {
-  assert.equal(classifyOfferTransition(OfferStatus.PENDING, OfferStatus.SENT), "allowed");
-  assert.equal(classifyOfferTransition(OfferStatus.PROJECT, OfferStatus.PROJECT), "self");
+  assert.equal(
+    classifyOfferTransition(OfferStatus.PENDING, OfferStatus.SENT),
+    "allowed",
+  );
+  assert.equal(
+    classifyOfferTransition(OfferStatus.PROJECT, OfferStatus.PROJECT),
+    "self",
+  );
   assert.equal(
     classifyOfferTransition(OfferStatus.PENDING, OfferStatus.PROJECT),
     "invalid",
@@ -168,7 +213,10 @@ test("the generic table holds no recall edge and no edge into a sent or project 
   ]);
   for (const [from, targets] of Object.entries(OFFER_WORKFLOW_TRANSITIONS)) {
     for (const to of targets ?? []) {
-      assert.ok(!writtenElsewhere.has(to), `${from} → ${to} is in the generic table`);
+      assert.ok(
+        !writtenElsewhere.has(to),
+        `${from} → ${to} is in the generic table`,
+      );
       assert.notEqual(
         RECALL_EDGES[from as OfferStatus]?.to,
         to,
@@ -179,10 +227,16 @@ test("the generic table holds no recall edge and no edge into a sent or project 
 });
 
 test("a recall back to SENT skips the owner gate; a first send does not", () => {
-  assert.equal(requiresOwnerGate(OfferStatus.OFFER_SENT, OfferStatus.SENT), false);
+  assert.equal(
+    requiresOwnerGate(OfferStatus.OFFER_SENT, OfferStatus.SENT),
+    false,
+  );
   assert.equal(requiresOwnerGate(OfferStatus.PENDING, OfferStatus.SENT), true);
   assert.equal(requiresOwnerGate(OfferStatus.SENT, OfferStatus.AGREED), true);
-  assert.equal(requiresOwnerGate(OfferStatus.AGREED, OfferStatus.AGREED), false);
+  assert.equal(
+    requiresOwnerGate(OfferStatus.AGREED, OfferStatus.AGREED),
+    false,
+  );
 });
 
 // Recall and Create revision treated a void DocuSign did not confirm as a
@@ -283,7 +337,10 @@ test("the refusal for a signed envelope does not advise voiding or retrying", ()
   assert.match(message, /ds-9 as signed/);
   assert.match(message, /No revision was created/);
   assert.match(message, /Tell an admin/);
-  assert.doesNotMatch(message, /void it|void any|Try again|still out for signature/);
+  assert.doesNotMatch(
+    message,
+    /void it|void any|Try again|still out for signature/,
+  );
 });
 
 test("the refusal for a void the app could not record does not say it is still signable", () => {
@@ -295,7 +352,10 @@ test("the refusal for a void the app could not record does not say it is still s
   assert.match(message, /ds-4/);
   assert.match(message, /could not record/);
   assert.match(message, /Try again in a moment/);
-  assert.doesNotMatch(message, /still out for signature|void it|did not confirm/);
+  assert.doesNotMatch(
+    message,
+    /still out for signature|void it|did not confirm/,
+  );
 });
 
 test("the refusal does not hide envelopes that were already voided", () => {

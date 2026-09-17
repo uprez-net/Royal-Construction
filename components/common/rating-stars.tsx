@@ -18,7 +18,10 @@ export function RatingStars({
   size = 16,
   showOutOf = false,
 }: RatingStarsProps) {
-  const clampedRating = Math.min(5, Math.max(0, Number.isFinite(rating) ? rating : 0));
+  const clampedRating = Math.min(
+    5,
+    Math.max(0, Number.isFinite(rating) ? rating : 0),
+  );
 
   return (
     <div

@@ -36,9 +36,7 @@ const WIDE_SLOTS: ReadonlySet<OfferImageSlotKey> = new Set([
   "render",
 ]);
 
-type GenerateResult =
-  | { ok: true; url: string }
-  | { ok: false; error: string };
+type GenerateResult = { ok: true; url: string } | { ok: false; error: string };
 
 export async function generateOfferInspirationImage(input: {
   slotKey: OfferImageSlotKey;
@@ -83,6 +81,9 @@ export async function generateOfferInspirationImage(input: {
     });
     return { ok: true, url: blob.url };
   } catch (error) {
-    return { ok: false, error: (error as Error).message || "Generation failed" };
+    return {
+      ok: false,
+      error: (error as Error).message || "Generation failed",
+    };
   }
 }

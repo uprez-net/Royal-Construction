@@ -323,9 +323,10 @@ function countConstructionKeywords(text: string): {
  * Counts spam pattern matches per group, capped independently so a single
  * category can't dominate the score.
  */
-function evaluateSpamPatternGroups(
-  text: string,
-): { totalCapped: number; details: Array<{ name: string; matches: number; capped: number }> } {
+function evaluateSpamPatternGroups(text: string): {
+  totalCapped: number;
+  details: Array<{ name: string; matches: number; capped: number }>;
+} {
   const details = SPAM_PATTERN_GROUPS.map((group) => {
     const matches = group.patterns.filter((p) => p.test(text)).length;
     const capped = Math.min(matches, group.maxMatches);
@@ -391,7 +392,9 @@ function uppercaseRatio(text: string): number {
   const letters = text.match(/[a-zA-Z]/g);
   if (!letters || letters.length < 20) return 0; // too short to be meaningful
 
-  const upper = letters.filter((c) => c === c.toUpperCase() && c !== c.toLowerCase());
+  const upper = letters.filter(
+    (c) => c === c.toUpperCase() && c !== c.toLowerCase(),
+  );
   return upper.length / letters.length;
 }
 
@@ -597,7 +600,10 @@ export function evaluateEmail(
     });
   }
 
-  if (/^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim()) && subject.trim().length > 6) {
+  if (
+    /^[A-Z0-9\s!?.,'"-]+$/.test(subject.trim()) &&
+    subject.trim().length > 6
+  ) {
     signals.push({
       code: "subject_all_caps",
       delta: SCORE_WEIGHTS.subjectAllCaps,

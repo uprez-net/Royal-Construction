@@ -9,7 +9,11 @@
 // canAccessLead's internal roles in lib/offer/access.ts, the roles that read
 // every lead. Spelled out as strings so this module does not load Prisma; a
 // test holds the two lists in step.
-export const PROJECT_STAFF_ROLES: readonly string[] = ["ADMIN", "SITE_MANAGER", "GUEST"];
+export const PROJECT_STAFF_ROLES: readonly string[] = [
+  "ADMIN",
+  "SITE_MANAGER",
+  "GUEST",
+];
 
 export type ProjectUploader = {
   readonly role: string;

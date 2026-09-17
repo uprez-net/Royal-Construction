@@ -84,7 +84,10 @@ test("a malformed payload names the field that failed", () => {
     assert.equal(result.success, false, `${field} was accepted`);
     if (result.success) continue;
     const paths = result.error.issues.map((issue) => issue.path[0]);
-    assert.ok(paths.includes(field), `${field} not named, got ${paths.join(",")}`);
+    assert.ok(
+      paths.includes(field),
+      `${field} not named, got ${paths.join(",")}`,
+    );
   }
 });
 

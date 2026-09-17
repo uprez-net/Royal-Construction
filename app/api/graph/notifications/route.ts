@@ -1,39 +1,42 @@
-import { createGraphContext, GraphMessage } from '@/lib/graph/client';
+import { createGraphContext, GraphMessage } from "@/lib/graph/client";
 import { isLeadMessage } from "@/lib/graph/lead-subject";
-import { getGraphConfig, type GraphMailbox } from '@/lib/graph/config';
+import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
 import prisma from "@/lib/prisma";
-import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
-import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
-import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
-import { isOwnMailbox } from '@/lib/graph/mailbox';
-import { evaluateEmail } from '@/utils/spam-detector';
-import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
+import { extractTradieScheduleInfoFromMessage } from "@/lib/graph/tradie-schedule-info-extractor";
+import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
+import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
+import { evaluateEmail } from "@/utils/spam-detector";
+import {
+  extractOfferReplyToken,
+  recordOfferReply,
+} from "@/lib/graph/offer-reply-tracker";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
   subjectMentionsSiteAddress,
-} from '@/lib/graph/certifier-subject';
-import { extractPartyRefToken } from '@/lib/graph/party-subject';
+} from "@/lib/graph/certifier-subject";
+import { extractPartyRefToken } from "@/lib/graph/party-subject";
 import {
   looksLikePlanningNotification,
   normaliseReference,
   planningReferencesIn,
-} from '@/lib/graph/planning-portal';
-import { isMachineGenerated } from '@/lib/graph/offer-reply-classify';
-import { normalizeEmailAddress } from '@/utils/formatters';
+} from "@/lib/graph/planning-portal";
+import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
+import { normalizeEmailAddress } from "@/utils/formatters";
 import {
   CertifierEmailDirection,
   CompliancePartyType,
   GraphMailbox as PrismaGraphMailbox,
-} from '@prisma/client';
-import { processInboundCertifierEmail } from '@/lib/workflow/certifier-email';
-import { processInboundPartyEmail } from '@/lib/workflow/party-email';
-import { isRetryableGraphError, withGraphRetry } from '@/lib/graph/retry';
-import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
-import { processInboundLead } from '@/lib/workflow/lead-extraction';
-import { start } from 'workflow/api';
-import { after } from 'next/server';
-import { graphResourceBelongsToMailbox } from '@/lib/graph/resource';
+} from "@prisma/client";
+import { processInboundCertifierEmail } from "@/lib/workflow/certifier-email";
+import { processInboundPartyEmail } from "@/lib/workflow/party-email";
+import { isRetryableGraphError, withGraphRetry } from "@/lib/graph/retry";
+import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
+import { processInboundLead } from "@/lib/workflow/lead-extraction";
+import { start } from "workflow/api";
+import { after } from "next/server";
+import { isOwnMailbox } from "@/lib/graph/mailbox";
+import { graphResourceBelongsToMailbox } from "@/lib/graph/resource";
 
 // export const runtime = 'nodejs';
 
@@ -47,7 +50,7 @@ interface GraphNotification {
   resource?: string;
   resourceData?: {
     id?: string;
-    '@odata.type'?: string;
+    "@odata.type"?: string;
   };
   clientState?: string;
   tenantId?: string;
@@ -64,7 +67,7 @@ function textResponse(status: number, body: string): Response {
   return new Response(body, {
     status,
     headers: {
-      'Content-Type': 'text/plain',
+      "Content-Type": "text/plain",
     },
   });
 }
@@ -77,7 +80,10 @@ async function isMessageAlreadyProcessed(messageId: string): Promise<boolean> {
     });
     return existingLead !== null;
   } catch (error) {
-    console.error(`Error checking if messageId ${messageId} is processed:`, error);
+    console.error(
+      `Error checking if messageId ${messageId} is processed:`,
+      error,
+    );
     return false;
   }
 }
@@ -87,11 +93,14 @@ async function isTradieMessage(fromEmail: string): Promise<boolean> {
     const existingTradie = await prisma.tradie.findUnique({
       where: {
         email: fromEmail,
-      }
+      },
     });
     return existingTradie !== null;
   } catch (error) {
-    console.error(`Error checking if fromEmail ${fromEmail} is a tradie message:`, error);
+    console.error(
+      `Error checking if fromEmail ${fromEmail} is a tradie message:`,
+      error,
+    );
     return false;
   }
 }
@@ -100,14 +109,14 @@ interface CertifierMatch {
   refToken: string;
   /** Null only for a token with no engagement behind it. */
   engagement: { id: string } | null;
-  matchedOn: 'token' | 'address';
+  matchedOn: "token" | "address";
 }
 
 interface PartyMatch {
   refToken: string;
   /** Null only for a token with no outreach behind it. */
   outreach: { id: string; party: CompliancePartyType } | null;
-  matchedOn: 'token' | 'address';
+  matchedOn: "token" | "address";
 }
 
 /**
@@ -138,22 +147,23 @@ async function matchPartyOutreach(
    * every other correspondent is replying on a thread whose subject we wrote.
    */
   body?: string | null,
-  mailbox: GraphMailbox = 'business',
+  mailbox: GraphMailbox = "business",
 ): Promise<PartyMatch | null> {
   const token = extractPartyRefToken(subject);
-  const graphMailbox = mailbox === 'admin'
-    ? PrismaGraphMailbox.ADMIN
-    : PrismaGraphMailbox.BUSINESS;
+  const graphMailbox =
+    mailbox === "admin"
+      ? PrismaGraphMailbox.ADMIN
+      : PrismaGraphMailbox.BUSINESS;
   if (token) {
     const outreach = await prisma.complianceOutreach.findFirst({
       where: { refToken: token, graphMailbox },
       select: { id: true, party: true },
     });
-    return { refToken: token, outreach, matchedOn: 'token' };
+    return { refToken: token, outreach, matchedOn: "token" };
   }
 
-  const sender = normalizeEmailAddress(fromEmail ?? '');
-  const domain = sender.slice(sender.indexOf('@') + 1);
+  const sender = normalizeEmailAddress(fromEmail ?? "");
+  const domain = sender.slice(sender.indexOf("@") + 1);
   if (!domain) {
     return null;
   }
@@ -184,8 +194,8 @@ async function matchPartyOutreach(
               // address has to match. Same trade the certifier route makes: a
               // missed correlation is a message in the lead queue, a wrong one
               // files a client's enquiry as compliance.
-              { equals: sender, mode: 'insensitive' }
-            : { endsWith: `@${domain}`, mode: 'insensitive' },
+              { equals: sender, mode: "insensitive" }
+            : { endsWith: `@${domain}`, mode: "insensitive" },
           // An outreach whose mail has never gone out has not told this party
           // the address, so a message quoting it cannot be a reply to it.
           emails: { some: { direction: CertifierEmailDirection.OUTBOUND } },
@@ -243,9 +253,9 @@ async function matchPartyOutreach(
       // units of the same address, most likely. Picking one files documents
       // against the wrong project, which is worse than filing them nowhere.
       console.log(
-        `  Compliance party address match ambiguous for "${subject ?? ''}": ${matches
+        `  Compliance party address match ambiguous for "${subject ?? ""}": ${matches
           .map((match) => match.refToken)
-          .join(', ')}`,
+          .join(", ")}`,
       );
     }
     return null;
@@ -255,7 +265,7 @@ async function matchPartyOutreach(
   return {
     refToken: match.refToken,
     outreach: { id: match.id, party: match.party },
-    matchedOn: 'address',
+    matchedOn: "address",
   };
 }
 
@@ -286,22 +296,23 @@ async function matchPartyOutreach(
 async function matchCertifierEngagement(
   subject: string | undefined | null,
   fromEmail: string | undefined | null,
-  mailbox: GraphMailbox = 'business',
+  mailbox: GraphMailbox = "business",
 ): Promise<CertifierMatch | null> {
   const token = extractCertifierRefToken(subject);
-  const graphMailbox = mailbox === 'admin'
-    ? PrismaGraphMailbox.ADMIN
-    : PrismaGraphMailbox.BUSINESS;
+  const graphMailbox =
+    mailbox === "admin"
+      ? PrismaGraphMailbox.ADMIN
+      : PrismaGraphMailbox.BUSINESS;
   if (token) {
     const engagement = await prisma.certifierEngagement.findFirst({
       where: { refToken: token, graphMailbox },
       select: { id: true },
     });
-    return { refToken: token, engagement, matchedOn: 'token' };
+    return { refToken: token, engagement, matchedOn: "token" };
   }
 
-  const sender = normalizeEmailAddress(fromEmail ?? '');
-  const domain = sender.slice(sender.indexOf('@') + 1);
+  const sender = normalizeEmailAddress(fromEmail ?? "");
+  const domain = sender.slice(sender.indexOf("@") + 1);
   if (!domain) {
     return null;
   }
@@ -316,8 +327,8 @@ async function matchCertifierEngagement(
           // tolerance the next branch keeps, and it is the right trade: a
           // missed correlation is a message in the lead queue, a wrong one
           // files a client's enquiry as compliance.
-          { equals: sender, mode: 'insensitive' }
-        : { endsWith: `@${domain}`, mode: 'insensitive' },
+          { equals: sender, mode: "insensitive" }
+        : { endsWith: `@${domain}`, mode: "insensitive" },
       // An engagement still being assembled has never told this certifier the
       // address, so a message quoting it cannot be a reply to it.
       emails: { some: { direction: CertifierEmailDirection.OUTBOUND } },
@@ -336,9 +347,9 @@ async function matchCertifierEngagement(
       // documents against the wrong project, which is worse than filing them
       // nowhere, so it is left for a human and logged loudly enough to find.
       console.log(
-        `  Certifier address match ambiguous for "${subject ?? ''}": ${matches
+        `  Certifier address match ambiguous for "${subject ?? ""}": ${matches
           .map((match) => match.refToken)
-          .join(', ')}`,
+          .join(", ")}`,
       );
     }
     return null;
@@ -348,19 +359,19 @@ async function matchCertifierEngagement(
   return {
     refToken: match.refToken,
     engagement: { id: match.id },
-    matchedOn: 'address',
+    matchedOn: "address",
   };
 }
 
 function handleValidationToken(request: Request): Response | null {
   const { searchParams } = new URL(request.url);
-  const validationToken = searchParams.get('validationToken');
+  const validationToken = searchParams.get("validationToken");
 
   if (!validationToken) {
     return null;
   }
 
-  console.log('Received Graph webhook validation request');
+  console.log("Received Graph webhook validation request");
   return textResponse(200, validationToken);
 }
 
@@ -369,18 +380,20 @@ function handleValidationToken(request: Request): Response | null {
  * again after loading the role's config because a notification can contain a
  * resource from another subscription in the same batch.
  */
-function mailboxForNotification(notification: GraphNotification): GraphMailbox | null {
+function mailboxForNotification(
+  notification: GraphNotification,
+): GraphMailbox | null {
   const clientState = notification.clientState;
   if (!clientState) return null;
 
   if (clientState === process.env.GRAPH_ADMIN_WEBHOOK_CLIENT_STATE) {
-    return 'admin';
+    return "admin";
   }
   if (
     clientState ===
-    (process.env.GRAPH_WEBHOOK_CLIENT_STATE || 'royal-leadgen-webhook')
+    (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
   ) {
-    return 'business';
+    return "business";
   }
   return null;
 }
@@ -391,7 +404,7 @@ export async function GET(request: Request): Promise<Response> {
     return validation;
   }
 
-  return textResponse(400, 'Missing validationToken');
+  return textResponse(400, "Missing validationToken");
 }
 
 /**
@@ -403,16 +416,21 @@ export async function GET(request: Request): Promise<Response> {
  * resend the notification. Which is exactly why the Graph calls below retry
  * rather than giving up on the first transient error.
  */
-async function processNotifications(notifications: GraphNotification[]): Promise<void> {
+async function processNotifications(
+  notifications: GraphNotification[],
+): Promise<void> {
   const contexts = new Map<
     GraphMailbox,
-    { config: ReturnType<typeof getGraphConfig>; client: Awaited<ReturnType<typeof createGraphContext>> } | null
+    {
+      config: ReturnType<typeof getGraphConfig>;
+      client: Awaited<ReturnType<typeof createGraphContext>>;
+    } | null
   >();
 
   for (const notification of notifications) {
     const mailbox = mailboxForNotification(notification);
     if (!mailbox) {
-      console.log('Ignored notification with invalid or missing clientState');
+      console.log("Ignored notification with invalid or missing clientState");
       continue;
     }
 
@@ -425,7 +443,10 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           client: await createGraphContext(config),
         };
       } catch (error) {
-        console.error(`Graph auth/config failed for ${mailbox} webhook fetch`, error);
+        console.error(
+          `Graph auth/config failed for ${mailbox} webhook fetch`,
+          error,
+        );
         context = null;
       }
       contexts.set(mailbox, context);
@@ -444,14 +465,16 @@ async function processNotifications(notifications: GraphNotification[]): Promise
       continue;
     }
 
-    console.log(`Notification: ${notification.changeType ?? 'unknown'}`);
-    console.log(`  resource: ${notification.resource ?? 'unknown'}`);
-    console.log(`  messageId: ${notification.resourceData?.id ?? 'unknown'}`);
+    console.log(`Notification: ${notification.changeType ?? "unknown"}`);
+    console.log(`  resource: ${notification.resource ?? "unknown"}`);
+    console.log(`  messageId: ${notification.resourceData?.id ?? "unknown"}`);
     console.log(
-      `  type: ${notification.resourceData?.['@odata.type'] ?? 'unknown'}`,
+      `  type: ${notification.resourceData?.["@odata.type"] ?? "unknown"}`,
     );
-    console.log(`  subscriptionId: ${notification.subscriptionId ?? 'unknown'}`);
-    console.log(`  tenantId: ${notification.tenantId ?? 'unknown'}`);
+    console.log(
+      `  subscriptionId: ${notification.subscriptionId ?? "unknown"}`,
+    );
+    console.log(`  tenantId: ${notification.tenantId ?? "unknown"}`);
 
     if (graphClient && notification.resource) {
       // Captured so the retry closure keeps the narrowing on both.
@@ -461,7 +484,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
 
       try {
         message = await withGraphRetry(
-          'fetch message details',
+          "fetch message details",
           () => client.getMessageByResource(resource, true),
           {
             // The notification routinely beats Graph's own index, so a 404
@@ -473,7 +496,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           },
         );
       } catch {
-        console.error('All attempts to fetch message details failed.');
+        console.error("All attempts to fetch message details failed.");
       }
 
       if (message) {
@@ -481,25 +504,24 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           // Outbound compliance mail is copied back into the watched inbox by
           // Exchange. It is a message in the admin mailbox, but never an
           // inbound party response and must not reach lead extraction.
-          if (mailbox === 'admin' && isOwnMailbox(message.from)) {
+          if (mailbox === "admin" && isOwnMailbox(message.from)) {
             console.log(`  Ignored self-generated admin message ${message.id}`);
             continue;
           }
 
-          const contentType = message.body?.contentType ?? 'text';
-          const content = message.body?.content ?? message.bodyPreview ?? '';
+          const contentType = message.body?.contentType ?? "text";
+          const content = message.body?.content ?? message.bodyPreview ?? "";
           console.log(`  subject: ${message.subject}`);
           console.log(`  from: ${message.from}`);
           console.log(`  received: ${message.receivedDateTime}`);
-          console.log(
-            `  body(${contentType}): ${content || '[no body]'}`,
-          );
+          console.log(`  body(${contentType}): ${content || "[no body]"}`);
 
           // Offer proposal reply: the subject carries [RCOFR-…]. Correlate it
           // back to the send and stop — it is not a lead/tradie message.
-          const offerReplyToken = mailbox === 'business'
-            ? extractOfferReplyToken(message.subject)
-            : null;
+          const offerReplyToken =
+            mailbox === "business"
+              ? extractOfferReplyToken(message.subject)
+              : null;
           if (offerReplyToken) {
             const outcome = await recordOfferReply(offerReplyToken, message);
             // Log the negatives too. An "auto-generated" line here is a
@@ -539,7 +561,9 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             const { refToken: partyToken, outreach } = partyMatch;
 
             if (!outreach) {
-              console.log(`  Compliance party ${partyToken}: no matching outreach`);
+              console.log(
+                `  Compliance party ${partyToken}: no matching outreach`,
+              );
             } else if (isMachineGenerated(message.headers)) {
               // A bounce quotes the original subject, so "Undeliverable: …
               // [RCSURV-…]" correlates perfectly and is not the surveyor
@@ -564,13 +588,13 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 {
                   messageId: message.id,
                   refToken: partyToken,
-                  subject: message.subject ?? '',
+                  subject: message.subject ?? "",
                   body: content,
                   from: message.from,
                   to:
                     message.to?.[0] ??
                     config.senderUpn ??
-                    'info@royalconstructions.com.au',
+                    "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
@@ -625,13 +649,13 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 {
                   messageId: message.id,
                   refToken: certifierToken,
-                  subject: message.subject ?? '',
+                  subject: message.subject ?? "",
                   body: content,
                   from: message.from,
                   to:
                     message.to?.[0] ??
                     config.senderUpn ??
-                    'info@royalconstructions.com.au',
+                    "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
@@ -644,13 +668,15 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           }
 
           // Check if this message was already processed before calling the LLM extraction
-          if (message.id && await isMessageAlreadyProcessed(message.id)) {
-            console.log(`  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`);
+          if (message.id && (await isMessageAlreadyProcessed(message.id))) {
+            console.log(
+              `  Lead with MicrosoftmessageId: ${message.id} already exists in database. Skipping duplicate processing.`,
+            );
             continue;
           }
 
           // Check if the message is from a tradie and extract tradie schedule info
-          if (message.from && await isTradieMessage(message.from)) {
+          if (message.from && (await isTradieMessage(message.from))) {
             const tradie = await prisma.tradie.findUnique({
               where: { email: message.from },
             });
@@ -659,20 +685,36 @@ async function processNotifications(notifications: GraphNotification[]): Promise
                 tradieId: tradie!.id,
                 status: {
                   not: {
-                    in: ['DECLINED', 'AWAITING_ADMIN_APPROVAL', 'CONFIRMED', 'QUOTE_RECEIVED']
-                  }
-                } // Only consider non-declined schedules 
+                    in: [
+                      "DECLINED",
+                      "AWAITING_ADMIN_APPROVAL",
+                      "CONFIRMED",
+                      "QUOTE_RECEIVED",
+                    ],
+                  },
+                }, // Only consider non-declined schedules
               },
             });
-            console.log(`  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`);
+            console.log(
+              `  Found ${tradieSchedules.length} existing schedule(s) for tradieId: ${tradie!.id}`,
+            );
             if (tradieSchedules.length === 0) {
-              console.log(`  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`);
+              console.log(
+                `  No existing schedules found for tradieId: ${tradie!.id}. Skipping lead extraction.`,
+              );
               continue;
             }
-            console.log(`  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`);
-            const tradieInfo = await extractTradieScheduleInfoFromMessage(message.subject ?? '', content);
+            console.log(
+              `  Message from ${message.from} is identified as a tradie message. Skipping lead extraction.`,
+            );
+            const tradieInfo = await extractTradieScheduleInfoFromMessage(
+              message.subject ?? "",
+              content,
+            );
             if (!tradieInfo) {
-              console.log('  No tradie schedule information could be extracted from the message.');
+              console.log(
+                "  No tradie schedule information could be extracted from the message.",
+              );
               continue;
             }
             console.log(`  extractedTradieInfo: ${JSON.stringify(tradieInfo)}`);
@@ -689,7 +731,9 @@ async function processNotifications(notifications: GraphNotification[]): Promise
               },
             });
             if (!schedule) {
-              console.log(`  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`);
+              console.log(
+                `  Tradie schedule already exists for tradieId: ${tradie!.id}, scheduleDate: ${tradieInfo.scheduleDate}, projectLocation: ${tradieInfo.projectLocation}. Skipping duplicate processing.`,
+              );
               continue;
             }
             const status = tradieInfo.scheduleConfirmation
@@ -710,11 +754,15 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           }
 
           //Check if the message is part of a lead trail
-          if (await checkLeadPresentWithEmailPhone(message.from, message.to, "")) {
-            console.log(`  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`);
+          if (
+            await checkLeadPresentWithEmailPhone(message.from, message.to, "")
+          ) {
+            console.log(
+              `  Lead with Email: ${message.from} already exists in database. Saving to the email trail.`,
+            );
             await saveLeadEmailTrail({
               from: message.from,
-              to: config.senderUpn ?? 'info@royalconstructions.com.au',
+              to: config.senderUpn ?? "info@royalconstructions.com.au",
               subject: message.subject,
               body: content,
               sentAt: new Date(message.receivedDateTime),
@@ -723,23 +771,35 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           }
 
           // Check if the message subject matches any of the predefined lead subject lines
-          if (!isLeadMessage(
-            message.subject,
-            message.from,
-            config.senderUpn ?? 'info@royalconstructions.com.au'
-          )) {
+          if (
+            !isLeadMessage(
+              message.subject,
+              message.from,
+              config.senderUpn ?? "info@royalconstructions.com.au",
+            )
+          ) {
             console.log(
-              `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`
+              `Message subject "${message.subject}" does not match any lead subject lines. Skipping lead extraction.`,
             );
             continue;
           }
 
           // Evaluate the email for spam likelihood before proceeding with lead extraction
-          const emailEvaluation = evaluateEmail(message.subject ?? '', content, message.headers);
+          const emailEvaluation = evaluateEmail(
+            message.subject ?? "",
+            content,
+            message.headers,
+          );
           if (!emailEvaluation.shouldEvaluate) {
-            console.log(`  Email evaluation scored ${emailEvaluation.score}. Language: ${emailEvaluation.language ?? 'unknown'}.`);
-            console.log(` Email evaluation signals: ${emailEvaluation.signals.map(signal => `${signal.code} (${signal.delta}): ${signal.reason}`).join('; ')}`);
-            console.log(`  Email evaluation indicates this message is likely spam. Reasons: ${emailEvaluation.reasons.join(', ')}`);
+            console.log(
+              `  Email evaluation scored ${emailEvaluation.score}. Language: ${emailEvaluation.language ?? "unknown"}.`,
+            );
+            console.log(
+              ` Email evaluation signals: ${emailEvaluation.signals.map((signal) => `${signal.code} (${signal.delta}): ${signal.reason}`).join("; ")}`,
+            );
+            console.log(
+              `  Email evaluation indicates this message is likely spam. Reasons: ${emailEvaluation.reasons.join(", ")}`,
+            );
             continue; // Skip processing this message
           }
 
@@ -755,7 +815,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
           const run = await start(processInboundLead, [
             {
               messageId: message.id,
-              subject: message.subject ?? '',
+              subject: message.subject ?? "",
               body: content,
               from: message.from,
             },
@@ -765,7 +825,7 @@ async function processNotifications(notifications: GraphNotification[]): Promise
             `  Lead extraction workflow started for message ${message.id}: run ${run.runId}`,
           );
         } catch (error) {
-          console.error('Failed to extract or save lead to database:', error);
+          console.error("Failed to extract or save lead to database:", error);
         }
       }
     }
@@ -783,18 +843,20 @@ export async function POST(request: Request): Promise<Response> {
     const rawBody = await request.text();
     payload = rawBody ? (JSON.parse(rawBody) as GraphNotificationBody) : {};
   } catch (error) {
-    console.error('Invalid webhook payload', error);
-    return textResponse(400, 'Bad Request');
+    console.error("Invalid webhook payload", error);
+    return textResponse(400, "Bad Request");
   }
 
   const notifications = payload.value ?? [];
   if (notifications.length === 0) {
     if (payload.lifecycleEvent) {
-      console.log(`Received lifecycle event: ${String(payload.lifecycleEvent)}`);
+      console.log(
+        `Received lifecycle event: ${String(payload.lifecycleEvent)}`,
+      );
     } else {
-      console.log('Received unknown webhook payload');
+      console.log("Received unknown webhook payload");
     }
-    return textResponse(202, 'accepted');
+    return textResponse(202, "accepted");
   }
 
   console.log(`Received ${notifications.length} Graph notification(s)`);
@@ -813,9 +875,9 @@ export async function POST(request: Request): Promise<Response> {
     } catch (error) {
       // after() swallows what it catches; without this the only trace of a
       // failed batch would be a silent absence of leads.
-      console.error('Graph notification processing failed', error);
+      console.error("Graph notification processing failed", error);
     }
   });
 
-  return textResponse(202, 'accepted');
+  return textResponse(202, "accepted");
 }

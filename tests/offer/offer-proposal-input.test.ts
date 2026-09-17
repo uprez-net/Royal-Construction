@@ -120,7 +120,10 @@ test("blank standard price does not become a $0 standard price after round-trip"
 
 test("a real manual override is still honored through the round-trip", () => {
   const reloaded = roundTrip(
-    makeSnapshot({ selectedPriceInput: "600000", overrideReason: "Client cap" }),
+    makeSnapshot({
+      selectedPriceInput: "600000",
+      overrideReason: "Client cap",
+    }),
   );
   const input = buildProposalInput(reloaded);
   assert.equal(input.customerPrice.selectedContractValueIncGst, 600000);
@@ -147,7 +150,10 @@ test("resolveOptionalPriceInput treats blank and $0 as 'no override'", () => {
 // out-of-range fee to the default, but preserve a legitimate legacy fee.
 test("migration clamps a corrupt out-of-range persisted fee, keeps a valid one", () => {
   const withLegacyFee = (fee: number) => {
-    const persisted = serializeWorkspace(makeSnapshot()) as Record<string, unknown>;
+    const persisted = serializeWorkspace(makeSnapshot()) as Record<
+      string,
+      unknown
+    >;
     persisted.pricingSettings = { gstRate: 0.1 }; // old-shape: no new fee key
     persisted.legacyPricingSettings = { royalConstructionFeePct: fee };
     return deserializeWorkspace(
@@ -160,7 +166,10 @@ test("migration clamps a corrupt out-of-range persisted fee, keeps a valid one",
 });
 
 test("an offer saved before the overhead field keeps its single-fee markup", () => {
-  const persisted = serializeWorkspace(makeSnapshot()) as Record<string, unknown>;
+  const persisted = serializeWorkspace(makeSnapshot()) as Record<
+    string,
+    unknown
+  >;
   // Old-shape map: a legacy 20% fee, no overhead key at all.
   persisted.pricingSettings = { royalConstructionFeePct: 0.2, gstRate: 0.1 };
   const settings = deserializeWorkspace(
@@ -171,7 +180,10 @@ test("an offer saved before the overhead field keeps its single-fee markup", () 
 });
 
 test("a corrupt out-of-range overhead falls back to the default, not 0", () => {
-  const persisted = serializeWorkspace(makeSnapshot()) as Record<string, unknown>;
+  const persisted = serializeWorkspace(makeSnapshot()) as Record<
+    string,
+    unknown
+  >;
   // Present but invalid (e.g. 200% fat-fingered) — must NOT silently zero a
   // real overhead; it clamps to the 0.1 default like the fee does.
   persisted.pricingSettings = {

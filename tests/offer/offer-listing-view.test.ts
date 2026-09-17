@@ -42,38 +42,62 @@ test("a fetch records the tab and search it asks for", () => {
 
 test("a page change keeps the current tab and search", () => {
   assert.deepEqual(
-    filtersForRequest({ status: "sent", q: "smith" }, { page: 2 } as { status?: undefined; q?: undefined }),
+    filtersForRequest({ status: "sent", q: "smith" }, { page: 2 } as {
+      status?: undefined;
+      q?: undefined;
+    }),
     { status: "sent", q: "smith" },
   );
 });
 
 test("clearing the search is recorded, not ignored", () => {
-  assert.deepEqual(filtersForRequest({ status: "all", q: "smith" }, { q: "" }), {
-    status: "all",
-    q: "",
-  });
+  assert.deepEqual(
+    filtersForRequest({ status: "all", q: "smith" }, { q: "" }),
+    {
+      status: "all",
+      q: "",
+    },
+  );
 });
 
 test("the server's page is adopted only for the unfiltered list on that page", () => {
   const server = { page: 1, limit: 10 };
   const unfiltered = { status: "all" as const, q: "" };
-  assert.equal(shouldAdoptServerOffers(unfiltered, { page: 1, limit: 10 }, server), true);
+  assert.equal(
+    shouldAdoptServerOffers(unfiltered, { page: 1, limit: 10 }, server),
+    true,
+  );
   assert.equal(
     shouldAdoptServerOffers(unfiltered, { page: 3, limit: 10 }, server),
     false,
     "a refresh would bounce page 3 back to page 1",
   );
-  assert.equal(shouldAdoptServerOffers(unfiltered, { page: 1, limit: 25 }, server), false);
   assert.equal(
-    shouldAdoptServerOffers({ status: "sent", q: "" }, { page: 1, limit: 10 }, server),
+    shouldAdoptServerOffers(unfiltered, { page: 1, limit: 25 }, server),
+    false,
+  );
+  assert.equal(
+    shouldAdoptServerOffers(
+      { status: "sent", q: "" },
+      { page: 1, limit: 10 },
+      server,
+    ),
     false,
   );
 });
 
 test("the store and updateLead use these rules", () => {
   const slice = readFileSync("lib/store/slices/offerSlice.ts", "utf8");
-  assert.match(slice, /fetchOffers\.pending[\s\S]{0,500}filtersForRequest\(/, "pending does not record the filters");
-  assert.match(slice, /shouldAdoptServerOffers\(filters, offers, serverOffers\)/, "syncServerOffers ignores the page");
+  assert.match(
+    slice,
+    /fetchOffers\.pending[\s\S]{0,500}filtersForRequest\(/,
+    "pending does not record the filters",
+  );
+  assert.match(
+    slice,
+    /shouldAdoptServerOffers\(filters, offers, serverOffers\)/,
+    "syncServerOffers ignores the page",
+  );
   const leads = readFileSync("lib/data/leads.ts", "utf8");
   // The assignee trigger must stay unconditional on being SET — a compare
   // against the lead read before the transaction could skip an expiry it owed.

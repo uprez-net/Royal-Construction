@@ -1,4 +1,4 @@
-'use server';
+"use server";
 import { generateText } from "ai";
 import { gateway } from "@/lib/model";
 
@@ -39,15 +39,11 @@ import { gateway } from "@/lib/model";
  * ```
  */
 export async function generateEmailSubject(body: string): Promise<string> {
+  const cleanBody = body.replace(/\s+/g, " ").trim().slice(0, 3000);
 
-    const cleanBody = body
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 3000);
-
-    const result = await generateText({
-        model: gateway("google/gemini-2.5-flash"),
-        prompt: `
+  const result = await generateText({
+    model: gateway("google/gemini-2.5-flash"),
+    prompt: `
 Generate a clear professional email subject line.
 
 Rules:
@@ -60,16 +56,14 @@ Rules:
 Email:
 ${cleanBody}
 `,
-        temperature: 0.2,
-        maxOutputTokens: 30,
-    });
+    temperature: 0.2,
+    maxOutputTokens: 30,
+  });
 
-    return (
-        result.text
-            ?.replace(/^subject:\s*/i, "")
-            .replace(/["']/g, "")
-            .trim()
-        ||
-        "Project Inquiry"
-    );
+  return (
+    result.text
+      ?.replace(/^subject:\s*/i, "")
+      .replace(/["']/g, "")
+      .trim() || "Project Inquiry"
+  );
 }

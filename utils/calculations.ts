@@ -56,9 +56,12 @@ export function formatQuotedPrice(
  * Returns null for unparseable, ambiguous or negative input. Never 0: a zero
  * quote is a real value and a failed parse must not present as one.
  */
-const MONEY_TOKEN = /(?<![\w.])(?:\$\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?(?![\w.])|(?<![\w.])(?:\$\s*)?\d+(?:\.\d{1,2})?(?![\w.])/g;
+const MONEY_TOKEN =
+  /(?<![\w.])(?:\$\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?(?![\w.])|(?<![\w.])(?:\$\s*)?\d+(?:\.\d{1,2})?(?![\w.])/g;
 
-export function parseQuotedAmount(raw: string | null | undefined): number | null {
+export function parseQuotedAmount(
+  raw: string | null | undefined,
+): number | null {
   if (raw == null) return null;
   if (/-\s*\d/.test(raw)) return null; // a negative quote is not a quote
 

@@ -481,7 +481,10 @@ async function detectDevelopmentApproval(
     }
     return raised;
   } catch (error) {
-    console.error("  Failed to read the checklist for a DA requirement:", error);
+    console.error(
+      "  Failed to read the checklist for a DA requirement:",
+      error,
+    );
     return 0;
   }
 }
@@ -603,10 +606,10 @@ export const extractComplianceChecklist = async (
     };
 
     await writeToStream({
-        workflow: COMPLIANCE_CHECKLIST_WORKFLOW,
-        type: "result",
-        result,
-      });
+      workflow: COMPLIANCE_CHECKLIST_WORKFLOW,
+      type: "result",
+      result,
+    });
     await sleep(2000);
     await closeWorkflowStream();
     return result;

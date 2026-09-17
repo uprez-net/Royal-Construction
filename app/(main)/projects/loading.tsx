@@ -3,7 +3,6 @@ import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 export default function ProjectsLoading() {
   return (
     <PageSkeleton label="Loading projects" className="grid gap-6">
-
       {/* KPI Skeleton Grid */}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (

@@ -1,9 +1,12 @@
 import prisma from "@/lib/prisma";
-import { sydneyDateOnly, sydneyStartOfDay, sydneyToday } from "@/lib/dates/sydney";
+import {
+  sydneyDateOnly,
+  sydneyStartOfDay,
+  sydneyToday,
+} from "@/lib/dates/sydney";
 import { errorResponse, successResponse } from "@/utils/validators";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
-
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -42,13 +45,17 @@ export async function GET(request: Request) {
         reminderSentAt: null,
         dueDate: { not: null, lt: todayStart },
         lead: {
-          stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },
+          stage: {
+            notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"],
+          },
         },
       },
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },
         lead: {
-          include: { assignedUser: { select: { id: true, name: true, email: true } } },
+          include: {
+            assignedUser: { select: { id: true, name: true, email: true } },
+          },
         },
       },
     });
@@ -112,7 +119,10 @@ export async function GET(request: Request) {
       failed,
     });
   } catch (error) {
-    console.error("[CRON_ERROR] Failed during meeting-review-reminder cron execution:", error);
+    console.error(
+      "[CRON_ERROR] Failed during meeting-review-reminder cron execution:",
+      error,
+    );
     return errorResponse("Failed to process meeting review reminders", {
       status: 500,
       code: "INTERNAL_ERROR",

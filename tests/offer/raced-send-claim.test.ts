@@ -23,9 +23,9 @@ const read = (path: string) =>
 function sendTransaction(source: string): string {
   const start = source.indexOf("const stillClaimed = await prisma");
   assert.ok(start > -1, "no send transaction found");
-  const end = source.indexOf("\n  })", start);
-  assert.ok(end > start, "the send transaction has no end");
-  return source.slice(start, end);
+  const end = /\n\s*\}\)\s*\.catch/.exec(source.slice(start));
+  assert.ok(end, "the send transaction has no end");
+  return source.slice(start, start + end.index);
 }
 
 const PATHS = [
@@ -52,7 +52,11 @@ for (const { path, model } of PATHS) {
     assert.ok(upsertAt > -1, `no ${model} found`);
     const upsert = transaction.slice(upsertAt);
     const update = upsert.slice(0, upsert.indexOf("create:"));
-    assert.match(update, /update: claimed/, "the upsert writes regardless of the claim");
+    assert.match(
+      update,
+      /update: claimed/,
+      "the upsert writes regardless of the claim",
+    );
     assert.match(
       transaction,
       /if \(!claimed\) \{\s*return false;/,

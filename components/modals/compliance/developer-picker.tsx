@@ -112,7 +112,10 @@ export function DeveloperPicker({
             />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+        <PopoverContent
+          className="w-(--radix-popover-trigger-width) p-0"
+          align="start"
+        >
           <Command>
             <CommandInput placeholder="Search estates and developers…" />
             <CommandList>

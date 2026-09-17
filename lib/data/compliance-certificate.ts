@@ -116,11 +116,7 @@ export async function recordCertificateIssued(params: {
       }),
     );
 
-    await notifyCompliance(
-      "complianceCertificateIssued",
-      params.projectId,
-      {},
-    );
+    await notifyCompliance("complianceCertificateIssued", params.projectId, {});
   } catch (error) {
     console.error(
       `Could not record the complying development certificate on ${params.projectId}`,

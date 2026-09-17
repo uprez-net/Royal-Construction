@@ -7,7 +7,11 @@ import { getUserByClerkId } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
 import { buildXeroClient, expiryFromTokenSet } from "@/lib/xero/client";
 import { getXeroConfig, XERO_SCOPES } from "@/lib/xero/config";
-import { errorResponse, forbiddenResponse, unauthorizedResponse } from "@/utils/validators";
+import {
+  errorResponse,
+  forbiddenResponse,
+  unauthorizedResponse,
+} from "@/utils/validators";
 
 // The OAuth consent round-trip goes out to Xero and back; the callback leg also
 // exchanges a code, lists tenants and reads the organisation.
@@ -52,7 +56,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // attacker-controllable through a crafted link and ends up in an alert on
     // an admin page; the page owns the wording and ignores codes it does not
     // recognise, so a stranger cannot put words in our UI.
-    return clearState(redirectToAdmin(request, { error: consentErrorCode(error) }));
+    return clearState(
+      redirectToAdmin(request, { error: consentErrorCode(error) }),
+    );
   }
 
   return url.searchParams.get("code")
@@ -100,7 +106,10 @@ export async function DELETE(): Promise<NextResponse> {
     // heading for anyway. Deactivate locally regardless — leaving the row
     // active would keep the invoice generator trying to use a token we have
     // just told the operator is gone.
-    console.error("[xero] Token revocation failed; deactivating locally:", revokeError);
+    console.error(
+      "[xero] Token revocation failed; deactivating locally:",
+      revokeError,
+    );
   }
 
   await prisma.xeroConnection.update({
@@ -318,7 +327,9 @@ function refuseFetch(reason: AdminRefusal): NextResponse {
  * Anything unfamiliar collapses to `refused` rather than being passed along.
  */
 function consentErrorCode(error: string): string {
-  return error === "access_denied" || error === "invalid_scope" ? error : "refused";
+  return error === "access_denied" || error === "invalid_scope"
+    ? error
+    : "refused";
 }
 
 /** Retire the one-shot state cookie, whichever way the callback ended. */

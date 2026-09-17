@@ -57,9 +57,7 @@ export async function POST(
     // closed, no thread behind this condition — so it reaches the user as the
     // message that actually explains it.
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Failed to send the follow-up.",
+      error instanceof Error ? error.message : "Failed to send the follow-up.",
       { status: 400, code: "FOLLOW_UP_FAILED" },
     );
   }

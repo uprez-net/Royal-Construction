@@ -58,8 +58,10 @@ export function ProjectDetailModal({
       const lastIndex = TABS.length - 1;
       let nextIndex: number | null = null;
 
-      if (event.key === "ArrowRight") nextIndex = index === lastIndex ? 0 : index + 1;
-      else if (event.key === "ArrowLeft") nextIndex = index === 0 ? lastIndex : index - 1;
+      if (event.key === "ArrowRight")
+        nextIndex = index === lastIndex ? 0 : index + 1;
+      else if (event.key === "ArrowLeft")
+        nextIndex = index === 0 ? lastIndex : index - 1;
       else if (event.key === "Home") nextIndex = 0;
       else if (event.key === "End") nextIndex = lastIndex;
 
@@ -104,7 +106,7 @@ export function ProjectDetailModal({
             {TABS.map((tab, index) => {
               const isActive = activeTab === tab.id;
 
-              if(tab.requiresAdmin && !isAdmin) {
+              if (tab.requiresAdmin && !isAdmin) {
                 return null;
               }
 
@@ -151,7 +153,9 @@ export function ProjectDetailModal({
             />
           )}
 
-          {activeTab === "customer" && <CustomerTab project={project} isAdmin={isAdmin} />}
+          {activeTab === "customer" && (
+            <CustomerTab project={project} isAdmin={isAdmin} />
+          )}
 
           {activeTab === "milestones" && <MilestoneTab project={project} />}
 

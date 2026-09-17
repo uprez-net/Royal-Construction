@@ -45,7 +45,9 @@ export function runCapabilitySecret(
 }
 
 function mac(runId: string, userId: string, secret: string): string {
-  return createHmac("sha256", secret).update(`${runId}.${userId}`).digest("base64url");
+  return createHmac("sha256", secret)
+    .update(`${runId}.${userId}`)
+    .digest("base64url");
 }
 
 export function signRunCapability(

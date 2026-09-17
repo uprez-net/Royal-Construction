@@ -80,8 +80,8 @@ export function DevelopmentApplicationBanner({
           </p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Your answer changes the approval path for this project. Choosing Yes
-            activates the DA checklist and raises the DA alert so the application
-            can be collected and tracked here.
+            activates the DA checklist and raises the DA alert so the
+            application can be collected and tracked here.
           </p>
 
           <div className="mt-3 flex flex-wrap gap-2">

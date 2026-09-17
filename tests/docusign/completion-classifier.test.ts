@@ -49,7 +49,10 @@ test("a retry after the envelope was already marked completed still advances", (
 });
 
 test("a redelivery after this envelope moved the offer on is a replay", () => {
-  for (const offerStatus of [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT]) {
+  for (const offerStatus of [
+    OfferStatus.TENDER_SIGNED,
+    OfferStatus.CONTRACT_DRAFT,
+  ]) {
     assert.equal(
       classifyCompletion({
         ...tenderSent,
@@ -66,7 +69,10 @@ test("a redelivery after this envelope moved the offer on is a replay", () => {
 test("a completion on a recalled tender is unexpected", () => {
   // Recall moved the offer back to TENDER_DRAFT; nothing was advanced by it.
   assert.equal(
-    classifyCompletion({ ...tenderSent, offerStatus: OfferStatus.TENDER_DRAFT }),
+    classifyCompletion({
+      ...tenderSent,
+      offerStatus: OfferStatus.TENDER_DRAFT,
+    }),
     "unexpected",
   );
 });
@@ -99,7 +105,10 @@ test("a completion over an envelope we recorded as voided is unexpected", () => 
 });
 
 test("an envelope with a newer sibling is a stale sibling, unless it was flagged unexpected", () => {
-  assert.equal(classifyCompletion({ ...tenderSent, isLatest: false }), "stale-sibling");
+  assert.equal(
+    classifyCompletion({ ...tenderSent, isLatest: false }),
+    "stale-sibling",
+  );
   assert.equal(
     classifyCompletion({
       ...tenderSent,
@@ -132,7 +141,10 @@ test("every later delivery of an unexpected completion stays unexpected", () => 
   assert.equal(classifyCompletion(redelivery), "unexpected");
   // A newer envelope sent since does not drop it, so a copy whose first archive
   // failed is still stored.
-  assert.equal(classifyCompletion({ ...redelivery, isLatest: false }), "unexpected");
+  assert.equal(
+    classifyCompletion({ ...redelivery, isLatest: false }),
+    "unexpected",
+  );
 });
 
 // ─── isDeclinableEnvelopeStatus ───
@@ -149,7 +161,11 @@ test("a decline moves the offer only for an envelope still out, or on a retry", 
   }
   // Recall confirmed the void: the customer declined a withdrawn document.
   for (const status of [EnvelopeStatus.VOIDED, EnvelopeStatus.COMPLETED]) {
-    assert.equal(isDeclinableEnvelopeStatus(status), false, `${status} let through`);
+    assert.equal(
+      isDeclinableEnvelopeStatus(status),
+      false,
+      `${status} let through`,
+    );
   }
 });
 
@@ -160,7 +176,11 @@ const blob = (pathname: string) =>
 
 test("a parent URL filed from this envelope counts as archived", () => {
   assert.equal(
-    isArchivedForEnvelope(blob("offer-signed/tender-env-2.pdf"), "tender", "env-2"),
+    isArchivedForEnvelope(
+      blob("offer-signed/tender-env-2.pdf"),
+      "tender",
+      "env-2",
+    ),
     true,
   );
 });
@@ -190,7 +210,11 @@ test("a URL with a query string still matches", () => {
 
 test("the archive guard recognises the pathname the archive writes", () => {
   assert.equal(
-    isArchivedForEnvelope(blob(executedPdfPathname("contract", "env-4")), "contract", "env-4"),
+    isArchivedForEnvelope(
+      blob(executedPdfPathname("contract", "env-4")),
+      "contract",
+      "env-4",
+    ),
     true,
   );
   assert.equal(

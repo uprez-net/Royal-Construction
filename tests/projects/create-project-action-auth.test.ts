@@ -27,7 +27,10 @@ test("the wizard's action authorizes the lead before converting it", () => {
   assert.match(actions, /^"use server";/);
   const body = functionBody(actions, "createProjectWithLeadAction");
   const check = body.indexOf("authorizeLeadAccess(input.leadId)");
-  assert.ok(check >= 0, "createProjectWithLeadAction never authorizes the lead");
+  assert.ok(
+    check >= 0,
+    "createProjectWithLeadAction never authorizes the lead",
+  );
   assert.ok(
     check < body.indexOf("createProjectWithLead(parsed.data)"),
     "the lead is converted before the caller is checked",
@@ -41,7 +44,10 @@ test("the whole payload is parsed before the lead is converted", () => {
   // create-project-payload.test.ts; this pins that the action still uses it.
   const body = functionBody(actions, "createProjectWithLeadAction");
   const parse = body.indexOf("createProjectWithLeadSchema.safeParse(input)");
-  assert.ok(parse >= 0, "createProjectWithLeadAction no longer parses its input");
+  assert.ok(
+    parse >= 0,
+    "createProjectWithLeadAction no longer parses its input",
+  );
   assert.ok(
     parse < body.indexOf("createProjectWithLead(parsed.data)"),
     "the lead is converted before the payload is validated",
@@ -66,14 +72,23 @@ test("conversion re-parents only the lead's own files, never a File matched by a
   // onto the new project.
   const body = functionBody(writes, "createProjectWithLead");
   const start = body.indexOf("tx.file.updateMany(");
-  assert.ok(start >= 0, "createProjectWithLead no longer re-parents the lead's files");
+  assert.ok(
+    start >= 0,
+    "createProjectWithLead no longer re-parents the lead's files",
+  );
   const where = body.slice(start, body.indexOf("data:", start));
-  assert.match(where, /where: \{\s*leadId: lead\.id\s*\}/);
+  assert.match(where, /where: \{\s*leadId: lead\.id\s*,?\s*\}/);
   assert.doesNotMatch(where, /\burl\b|sourceDocuments/);
 });
 
 test("the unauthorized conversion is no longer a Server Action", () => {
   assert.doesNotMatch(writes, /^["']use server["']/m);
-  assert.doesNotMatch(writes, /export async function createProjectWithLeadAction/);
-  assert.match(read("lib/store/slices/projectsSlice.ts"), /import \{ createProjectWithLeadAction \} from "@\/lib\/actions\/projects";/);
+  assert.doesNotMatch(
+    writes,
+    /export async function createProjectWithLeadAction/,
+  );
+  assert.match(
+    read("lib/store/slices/projectsSlice.ts"),
+    /import \{ createProjectWithLeadAction \} from "@\/lib\/actions\/projects";/,
+  );
 });

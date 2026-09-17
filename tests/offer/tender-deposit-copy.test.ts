@@ -28,7 +28,9 @@ import {
 // own payment schedule set. An offer taking a 10% deposit sent a Tender that
 // asked for 5% three times, above a payment table that said 10%.
 
-function tenderWith(paymentSchedule: readonly OfferPaymentScheduleRow[]): string {
+function tenderWith(
+  paymentSchedule: readonly OfferPaymentScheduleRow[],
+): string {
   const snapshot: OfferWorkspaceSnapshot = {
     job: INITIAL_OFFER_JOB,
     lines: INITIAL_COST_LINES,
@@ -70,21 +72,49 @@ test("the Tender asks for the deposit its own schedule sets", () => {
 });
 
 test("the seeded 5% deposit still reads 5%", () => {
-  assert.equal(occurrences(tenderWith(INITIAL_PAYMENT_SCHEDULE), "5% deposit"), 3);
+  assert.equal(
+    occurrences(tenderWith(INITIAL_PAYMENT_SCHEDULE), "5% deposit"),
+    3,
+  );
 });
 
 test("the deposit is found by name, not position", () => {
   // Same rule the contract uses: a stage named for the deposit, else the first.
   const html = tenderWith([
-    { id: "a", stageName: "Booking fee", percentOfContract: 0.02, trigger: "On signing" },
-    { id: "b", stageName: "Initial Deposit", percentOfContract: 0.08, trigger: "Contract" },
-    { id: "c", stageName: "Balance", percentOfContract: 0.9, trigger: "Handover" },
+    {
+      id: "a",
+      stageName: "Booking fee",
+      percentOfContract: 0.02,
+      trigger: "On signing",
+    },
+    {
+      id: "b",
+      stageName: "Initial Deposit",
+      percentOfContract: 0.08,
+      trigger: "Contract",
+    },
+    {
+      id: "c",
+      stageName: "Balance",
+      percentOfContract: 0.9,
+      trigger: "Handover",
+    },
   ]);
   assert.equal(occurrences(html, "8% deposit"), 3);
 
   const unnamed = tenderWith([
-    { id: "a", stageName: "Stage one", percentOfContract: 0.15, trigger: "On signing" },
-    { id: "b", stageName: "Stage two", percentOfContract: 0.85, trigger: "Handover" },
+    {
+      id: "a",
+      stageName: "Stage one",
+      percentOfContract: 0.15,
+      trigger: "On signing",
+    },
+    {
+      id: "b",
+      stageName: "Stage two",
+      percentOfContract: 0.85,
+      trigger: "Handover",
+    },
   ]);
   assert.equal(occurrences(unnamed, "15% deposit"), 3);
 });

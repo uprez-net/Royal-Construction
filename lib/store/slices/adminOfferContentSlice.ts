@@ -37,9 +37,27 @@ import {
 
 type Section = AdminOfferContentSection;
 
-const allClean = { buildScope: false, costSchedule: false, offerScope: false, offerContent: false, hbfcClaim: false };
-const noError = { buildScope: null, costSchedule: null, offerScope: null, offerContent: null, hbfcClaim: null };
-const noEdits = { buildScope: 0, costSchedule: 0, offerScope: 0, offerContent: 0, hbfcClaim: 0 };
+const allClean = {
+  buildScope: false,
+  costSchedule: false,
+  offerScope: false,
+  offerContent: false,
+  hbfcClaim: false,
+};
+const noError = {
+  buildScope: null,
+  costSchedule: null,
+  offerScope: null,
+  offerContent: null,
+  hbfcClaim: null,
+};
+const noEdits = {
+  buildScope: 0,
+  costSchedule: 0,
+  offerScope: 0,
+  offerContent: 0,
+  hbfcClaim: 0,
+};
 
 const initialState: AdminOfferContentState = {
   data: structuredClone(EMPTY_ADMIN_OFFER_CONTENT),
@@ -54,7 +72,10 @@ function adminState(rootState: unknown): AdminOfferContentState {
     .adminOfferContent;
 }
 
-function upsertRow(rows: CostScheduleRow[], row: CostScheduleRow): CostScheduleRow[] {
+function upsertRow(
+  rows: CostScheduleRow[],
+  row: CostScheduleRow,
+): CostScheduleRow[] {
   const idx = rows.findIndex((r) => r.id === row.id);
   if (idx === -1) return [...rows, row];
   const next = rows.slice();
@@ -62,7 +83,10 @@ function upsertRow(rows: CostScheduleRow[], row: CostScheduleRow): CostScheduleR
   return next;
 }
 
-function upsertAllowance(items: OfferAllowance[], item: OfferAllowance): OfferAllowance[] {
+function upsertAllowance(
+  items: OfferAllowance[],
+  item: OfferAllowance,
+): OfferAllowance[] {
   const idx = items.findIndex((a) => a.id === item.id);
   if (idx === -1) return [...items, item];
   const next = items.slice();
@@ -70,7 +94,10 @@ function upsertAllowance(items: OfferAllowance[], item: OfferAllowance): OfferAl
   return next;
 }
 
-function upsertExclusion(items: OfferExclusion[], item: OfferExclusion): OfferExclusion[] {
+function upsertExclusion(
+  items: OfferExclusion[],
+  item: OfferExclusion,
+): OfferExclusion[] {
   const idx = items.findIndex((e) => e.id === item.id);
   if (idx === -1) return [...items, item];
   const next = items.slice();
@@ -114,7 +141,11 @@ export const saveBuildScope = createAsyncThunk(
       const sentRevision = state.revision.buildScope;
       const result = await saveBuildScopeAction(state.data.buildScope);
       unwrap(result);
-      return saveReceipt(adminState(thunkAPI.getState()), "buildScope", sentRevision);
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "buildScope",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save build scope.",
@@ -131,10 +162,16 @@ export const saveCostSchedule = createAsyncThunk(
       const sentRevision = state.revision.costSchedule;
       const result = await saveCostScheduleAction(state.data.costSchedule);
       unwrap(result);
-      return saveReceipt(adminState(thunkAPI.getState()), "costSchedule", sentRevision);
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "costSchedule",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error instanceof Error ? error.message : "Failed to save cost schedule.",
+        error instanceof Error
+          ? error.message
+          : "Failed to save cost schedule.",
       );
     }
   },
@@ -148,7 +185,11 @@ export const saveOfferScope = createAsyncThunk(
       const sentRevision = state.revision.offerScope;
       const result = await saveOfferScopeAction(state.data.offerScope);
       unwrap(result);
-      return saveReceipt(adminState(thunkAPI.getState()), "offerScope", sentRevision);
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "offerScope",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save offer scope.",
@@ -165,10 +206,16 @@ export const saveOfferContent = createAsyncThunk(
       const sentRevision = state.revision.offerContent;
       const result = await saveOfferContentAction(state.data.offerContent);
       unwrap(result);
-      return saveReceipt(adminState(thunkAPI.getState()), "offerContent", sentRevision);
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "offerContent",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error instanceof Error ? error.message : "Failed to save offer content.",
+        error instanceof Error
+          ? error.message
+          : "Failed to save offer content.",
       );
     }
   },
@@ -182,9 +229,12 @@ export const saveHBFCClaim = createAsyncThunk(
       const sentRevision = state.revision.hbfcClaim;
       const result = await saveHBFCClaimAction(state.data.hbfcClaim);
       unwrap(result);
-      return saveReceipt(adminState(thunkAPI.getState()), "hbfcClaim", sentRevision);
-    }
-    catch (error) {
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "hbfcClaim",
+        sentRevision,
+      );
+    } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save HBCF claim.",
       );
@@ -245,9 +295,8 @@ const slice = createSlice({
       markSectionEdited(state, "offerScope");
     },
     allowanceRemoved(state, action: PayloadAction<string>) {
-      state.data.offerScope.allowances = state.data.offerScope.allowances.filter(
-        (a) => a.id !== action.payload,
-      );
+      state.data.offerScope.allowances =
+        state.data.offerScope.allowances.filter((a) => a.id !== action.payload);
       markSectionEdited(state, "offerScope");
     },
     allowanceRestored(
@@ -269,9 +318,8 @@ const slice = createSlice({
       markSectionEdited(state, "offerScope");
     },
     exclusionRemoved(state, action: PayloadAction<string>) {
-      state.data.offerScope.exclusions = state.data.offerScope.exclusions.filter(
-        (e) => e.id !== action.payload,
-      );
+      state.data.offerScope.exclusions =
+        state.data.offerScope.exclusions.filter((e) => e.id !== action.payload);
       markSectionEdited(state, "offerScope");
     },
     exclusionRestored(
@@ -321,7 +369,10 @@ const slice = createSlice({
       );
       markSectionEdited(state, "offerContent");
     },
-    inclusionsScheduleChanged(state, action: PayloadAction<InclusionScheduleRow[]>) {
+    inclusionsScheduleChanged(
+      state,
+      action: PayloadAction<InclusionScheduleRow[]>,
+    ) {
       state.data.offerContent.inclusionSchedule = action.payload;
       markSectionEdited(state, "offerContent");
     },
@@ -354,7 +405,10 @@ const slice = createSlice({
       state.data.hbfcClaim = {
         claimAmount,
         loadingChargePercent,
-        totalPremiumToBePaid: calcTotalPremium(claimAmount, loadingChargePercent),
+        totalPremiumToBePaid: calcTotalPremium(
+          claimAmount,
+          loadingChargePercent,
+        ),
       };
       markSectionEdited(state, "hbfcClaim");
     },
@@ -374,7 +428,10 @@ const slice = createSlice({
       ) => {
         settleSavedSection(state, section, action.payload.sentRevision);
       },
-      rejected: (state: AdminOfferContentState, action: { payload: unknown }) => {
+      rejected: (
+        state: AdminOfferContentState,
+        action: { payload: unknown },
+      ) => {
         state.saving[section] = false;
         state.error[section] =
           (action.payload as string | undefined) ?? "Save failed.";
@@ -434,4 +491,8 @@ export const {
 
 export const adminOfferContentReducer = slice.reducer;
 
-export type { AdminOfferContentState, AdminOfferContentSection, AdminSaveReceipt };
+export type {
+  AdminOfferContentState,
+  AdminOfferContentSection,
+  AdminSaveReceipt,
+};

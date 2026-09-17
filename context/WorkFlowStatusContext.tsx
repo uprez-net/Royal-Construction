@@ -88,7 +88,8 @@ export function WorkflowStreamProvider({
 
   const [creatingOffer, setCreatingOffer] =
     useState<OfferCreationStatus | null>(null);
-  const [extractingTender, setExtractingTender] = useState<TenderExtractionWorkflowStreamEvent | null>(null);
+  const [extractingTender, setExtractingTender] =
+    useState<TenderExtractionWorkflowStreamEvent | null>(null);
   const [extractingChecklist, setExtractingChecklist] =
     useState<ComplianceChecklistStreamEvent | null>(null);
 
@@ -193,11 +194,13 @@ export function WorkflowStreamProvider({
             // one route carries both.
             if (payload.workflow === COMPLIANCE_CHECKLIST_WORKFLOW) {
               setExtractingChecklist(payload);
-            }
-            else if( payload.type === "stage" || payload.type === "result" || payload.type === "error") {
+            } else if (
+              payload.type === "stage" ||
+              payload.type === "result" ||
+              payload.type === "error"
+            ) {
               setExtractingTender(payload);
-            }
-            else if (payload.status) {
+            } else if (payload.status) {
               setCreatingOffer(payload);
             }
           } catch {

@@ -1,4 +1,10 @@
-import { generateText, NoObjectGeneratedError, NoOutputGeneratedError, Output, TypeValidationError } from "ai";
+import {
+  generateText,
+  NoObjectGeneratedError,
+  NoOutputGeneratedError,
+  Output,
+  TypeValidationError,
+} from "ai";
 import { z } from "zod";
 
 import { gateway } from "@/lib/model";
@@ -72,7 +78,10 @@ function withTimeout<T>(
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+      setTimeout(
+        () => reject(new Error(`${label} timed out after ${ms}ms`)),
+        ms,
+      ),
     ),
   ]);
 }

@@ -13,7 +13,9 @@
  * Lives apart from the extractor so it can be tested without loading the AI
  * gateway, which throws at import when its key is unset.
  */
-export function normalizeContactNumber(value: string | null | undefined): string {
-  const collapsed = (value ?? '').replace(/\s+/g, ' ').trim();
-  return /\d/.test(collapsed) ? collapsed : '';
+export function normalizeContactNumber(
+  value: string | null | undefined,
+): string {
+  const collapsed = (value ?? "").replace(/\s+/g, " ").trim();
+  return /\d/.test(collapsed) ? collapsed : "";
 }

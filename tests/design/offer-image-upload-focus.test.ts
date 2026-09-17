@@ -9,7 +9,10 @@ import { test } from "node:test";
 // admin tab strip's ring (2px gold ink, offset) while its input has focus.
 
 const source = readFileSync(
-  join(process.cwd(), "components/offers/new-workflow/offer-workspace-images.tsx"),
+  join(
+    process.cwd(),
+    "components/offers/new-workflow/offer-workspace-images.tsx",
+  ),
   "utf8",
 );
 const adminTabs = readFileSync(

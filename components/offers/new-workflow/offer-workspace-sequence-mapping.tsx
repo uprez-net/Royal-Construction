@@ -1,9 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -19,7 +15,10 @@ import {
   type OfferSequenceMapping,
 } from "@/lib/offer/workspace-sequence-mapping";
 import { GitBranch, Link2 } from "lucide-react";
-import { OfferCardHeading, OfferSummaryBadge } from "./offer-workspace-card-heading";
+import {
+  OfferCardHeading,
+  OfferSummaryBadge,
+} from "./offer-workspace-card-heading";
 
 const stats = getOfferSequenceMappingStats(OFFER_SEQUENCE_MAPPINGS);
 
@@ -57,8 +56,8 @@ export function SequenceMappingPanel() {
       <CardContent className="grid gap-3">
         <div className="rounded-lg border border-royal-gold/25 bg-royal-gold-light/25 px-3 py-2 text-sm text-muted-foreground">
           Sequence IDs are intentionally hidden. Trade and milestone columns are
-          downstream handoff data for Project creation, not customer-facing copy.
-          Scroll sideways on small screens.
+          downstream handoff data for Project creation, not customer-facing
+          copy. Scroll sideways on small screens.
         </div>
         <div className="max-w-full overflow-x-auto rounded-lg border border-border bg-card">
           <Table className="min-w-[720px] table-fixed border-separate border-spacing-0 text-[13px]">
@@ -178,8 +177,15 @@ function HandoffSummary({
 }: {
   readonly mapping: OfferSequenceMapping;
 }) {
-  if (mapping.tradesToBook.length === 0 && mapping.milestoneStages.length === 0) {
-    return <span className="text-muted-foreground/80">No Project handoff mapping</span>;
+  if (
+    mapping.tradesToBook.length === 0 &&
+    mapping.milestoneStages.length === 0
+  ) {
+    return (
+      <span className="text-muted-foreground/80">
+        No Project handoff mapping
+      </span>
+    );
   }
 
   return (
@@ -216,4 +222,3 @@ function BadgeList({
     </div>
   );
 }
-

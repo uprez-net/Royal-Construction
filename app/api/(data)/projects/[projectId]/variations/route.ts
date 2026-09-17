@@ -15,7 +15,7 @@ export async function POST(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
-    projectParamSchema
+    projectParamSchema,
   );
   if (!routeParams.success) return routeParams.response;
 

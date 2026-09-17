@@ -12,15 +12,14 @@ export const paginatedLookupSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
     totalPages: z.number(),
   });
 
-export const tradieItemSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    company: z.string().nullable(),
-    tradeType: z.string(),
-    phone: z.string(),
-    email: z.string(),
-  });
+export const tradieItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  company: z.string().nullable(),
+  tradeType: z.string(),
+  phone: z.string(),
+  email: z.string(),
+});
 
 export const tradiesResponseSchema = z.array(tradieItemSchema);
 
@@ -107,7 +106,7 @@ export const tradieUrgentReminderItemSchema = z.object({
 });
 
 export const tradieUrgentRemindersResponseSchema = z.array(
-  tradieUrgentReminderItemSchema
+  tradieUrgentReminderItemSchema,
 );
 
 export const tradieScheduleResponseSchema = tradieScheduleItemSchema;
@@ -151,22 +150,19 @@ export const leadHistoryItemSchema = z.object({
   time: z.string(),
   action: z.string(),
   detail: z.string(),
-  type: z.enum([
-    "system",
-    "call",
-    "email",
-    "referral",
-  ]),
+  type: z.enum(["system", "call", "email", "referral"]),
 });
 
 export const leadRichTextNodeSchema: z.ZodType<LeadRichTextNode> = z.lazy(() =>
-  z.object({
-    type: z.string().optional(),
-    text: z.string().optional(),
-    key: z.unknown().optional(),
-    value: z.unknown().optional(),
-    children: z.array(leadRichTextNodeSchema).optional(),
-  }).catchall(z.unknown())
+  z
+    .object({
+      type: z.string().optional(),
+      text: z.string().optional(),
+      key: z.unknown().optional(),
+      value: z.unknown().optional(),
+      children: z.array(leadRichTextNodeSchema).optional(),
+    })
+    .catchall(z.unknown()),
 );
 
 export const leadRichTextDocumentSchema = z.object({
@@ -222,9 +218,7 @@ export const leadItemSchema = z.object({
 
   notesDoc: leadRichTextDocumentSchema.nullable().optional(),
 
-  noteAnnotations: z
-    .array(leadNoteAnnotationSchema)
-    .optional(),
+  noteAnnotations: z.array(leadNoteAnnotationSchema).optional(),
 
   followupDate: z.string().nullable(),
 
@@ -249,18 +243,37 @@ export const leadItemSchema = z.object({
 
 export const leadsResponseSchema = paginatedLookupSchema(leadItemSchema);
 export const leadResponseSchema = leadItemSchema;
-export const deleteLeadResponseSchema = z.object({ success: z.boolean() }).loose();
+export const deleteLeadResponseSchema = z
+  .object({ success: z.boolean() })
+  .loose();
 
 export const projectCustomerSchema = z
-  .object({ id: z.string(), name: z.string(), email: z.string().nullable(), phone: z.string().nullable(), createdAt: isoDateStringSchema })
+  .object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+    createdAt: isoDateStringSchema,
+  })
   .loose();
 
 export const projectSiteManagerSchema = z
-  .object({ id: z.string(), name: z.string().nullable(), email: z.string().nullable(), phone: z.string().nullable() })
+  .object({
+    id: z.string(),
+    name: z.string().nullable(),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+  })
   .nullable();
 
 export const projectMilestoneSchema = z
-  .object({ id: z.string(), name: z.string(), status: z.string(), order: z.number(), isPhotoRequired: z.boolean().optional() })
+  .object({
+    id: z.string(),
+    name: z.string(),
+    status: z.string(),
+    order: z.number(),
+    isPhotoRequired: z.boolean().optional(),
+  })
   .loose();
 
 export const projectListMilestoneSchema = z
@@ -300,7 +313,9 @@ export const projectListItemSchema = z
   })
   .loose();
 
-export const projectsResponseSchema = paginatedLookupSchema(projectListItemSchema);
+export const projectsResponseSchema = paginatedLookupSchema(
+  projectListItemSchema,
+);
 
 export const variationSchema = z
   .object({
@@ -366,19 +381,46 @@ export const materialResponseSchema = z
 
 export const tradieCoordinationResponseSchema = z
   .object({
-    pagination: z.object({ page: z.number(), limit: z.number(), totalCount: z.number(), totalPages: z.number() }).optional(),
+    pagination: z
+      .object({
+        page: z.number(),
+        limit: z.number(),
+        totalCount: z.number(),
+        totalPages: z.number(),
+      })
+      .optional(),
     schedules: z.array(tradieScheduleItemSchema),
     tradeOptions: z.array(z.string()),
-    statusMetrics: z.array(z.object({ label: z.string(), value: z.number(), status: z.enum(TradieScheduleStatus) })),
-    tradeBreakdown: z.array(z.object({ tradeType: z.string(), total: z.number(), confirmedRate: z.number() })),
-    projectAllocations: z.array(z.object({ projectId: z.string(), projectName: z.string(), allocationCount: z.number() })),
-    urgentReminders: z.array(tradieUrgentReminderItemSchema)
+    statusMetrics: z.array(
+      z.object({
+        label: z.string(),
+        value: z.number(),
+        status: z.enum(TradieScheduleStatus),
+      }),
+    ),
+    tradeBreakdown: z.array(
+      z.object({
+        tradeType: z.string(),
+        total: z.number(),
+        confirmedRate: z.number(),
+      }),
+    ),
+    projectAllocations: z.array(
+      z.object({
+        projectId: z.string(),
+        projectName: z.string(),
+        allocationCount: z.number(),
+      }),
+    ),
+    urgentReminders: z.array(tradieUrgentReminderItemSchema),
   })
   .loose();
 
-export const tradieScheduleWriteResponseSchema = z.object({
-  id: z.string(),
-}).loose();
+export const tradieScheduleWriteResponseSchema = z
+  .object({
+    id: z.string(),
+  })
+  .loose();
 
 export const updateTradieScheduleResponseSchema = z
   .object({

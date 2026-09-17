@@ -23,7 +23,10 @@ interface PriceModeCellProps {
   formulaSampleValues?: Record<string, number>;
   /** Streams each formula row's validation result up to the parent so the
    * Save button can be disabled while any row is invalid. */
-  onFormulaValidationChange?: (rowId: string, result: FormulaValidation) => void;
+  onFormulaValidationChange?: (
+    rowId: string,
+    result: FormulaValidation,
+  ) => void;
 }
 
 export function PriceModeCell({

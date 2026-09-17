@@ -146,7 +146,10 @@ export function MilestoneActionGroup({
 
   if (hasChildren) {
     return (
-      <EditActivityButton milestone={milestone} onStatusUpdate={onStatusUpdate} />
+      <EditActivityButton
+        milestone={milestone}
+        onStatusUpdate={onStatusUpdate}
+      />
     );
   }
 

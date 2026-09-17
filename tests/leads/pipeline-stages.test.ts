@@ -12,11 +12,22 @@ import {
 
 const ALL_STAGES = [
   // Live ladder.
-  "NEW", "CONTACTED", "DISCOVERY", "QUALIFIED", "QUOTED", "NEGOTIATING", "CONVERTED",
-  "NO_RESPONSE", "DISQUALIFIED", "LOST",
+  "NEW",
+  "CONTACTED",
+  "DISCOVERY",
+  "QUALIFIED",
+  "QUOTED",
+  "NEGOTIATING",
+  "CONVERTED",
+  "NO_RESPONSE",
+  "DISQUALIFIED",
+  "LOST",
   // Retired but still in the Prisma enum, so still keyed here. Rows hold them
   // until 20260821030100 has run against every database.
-  "MEETING_SCHEDULED", "IN_FOLLOW_UP", "WON", "CANCELLED",
+  "MEETING_SCHEDULED",
+  "IN_FOLLOW_UP",
+  "WON",
+  "CANCELLED",
 ] as const;
 
 test("every LeadStage has a definition", () => {
@@ -32,7 +43,10 @@ test("every LeadStage has a definition", () => {
 
 test("orders are unique and contiguous from 1", () => {
   const orders = ALL_STAGES.map((c) => stageDef(c).order).sort((a, b) => a - b);
-  assert.deepEqual(orders, Array.from({ length: ALL_STAGES.length }, (_, i) => i + 1));
+  assert.deepEqual(
+    orders,
+    Array.from({ length: ALL_STAGES.length }, (_, i) => i + 1),
+  );
 });
 
 test("outcome classification matches the design", () => {
@@ -60,7 +74,11 @@ test("banked is equivalent to a won outcome", () => {
   // the card is claiming money that has not been won.
   for (const code of ALL_STAGES) {
     const def = stageDef(code);
-    assert.equal(def.banked, def.outcome === "WON", `${code} banked/outcome disagree`);
+    assert.equal(
+      def.banked,
+      def.outcome === "WON",
+      `${code} banked/outcome disagree`,
+    );
   }
 });
 
@@ -114,7 +132,10 @@ test("a brand new lead in an open stage produces an empty patch", () => {
 });
 
 test("a lead created directly in a won stage is stamped", () => {
-  assert.deepEqual(closeDatePatch(null, "WON", NOW), { wonAt: NOW, lostAt: null });
+  assert.deepEqual(closeDatePatch(null, "WON", NOW), {
+    wonAt: NOW,
+    lostAt: null,
+  });
 });
 
 test("tracking constants are sane", () => {

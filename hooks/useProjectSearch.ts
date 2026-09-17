@@ -1,6 +1,9 @@
 "use client";
 
-import type { PaginatedProjectLookupResult, ProjectLookupItem } from "@/lib/data/projects";
+import type {
+  PaginatedProjectLookupResult,
+  ProjectLookupItem,
+} from "@/lib/data/projects";
 import { fetchJson } from "@/utils/fetch";
 import { useEffect, useState } from "react";
 
@@ -21,11 +24,11 @@ export function useProjectSearch(initialQuery = "") {
         `/api/projects?mode=lookup&q=${q}&limit=20`,
         { method: "GET" },
         "Failed to fetch projects",
-        controller.signal
+        controller.signal,
       )
         .then((res) => {
           const { items } = res.data;
-          setItems(Array.isArray(items) ? items : items ?? []);
+          setItems(Array.isArray(items) ? items : (items ?? []));
         })
         .catch((err) => {
           if (err.name === "AbortError") return;

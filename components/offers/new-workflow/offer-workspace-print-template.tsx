@@ -213,7 +213,11 @@ export function OfferWorkspacePrintTemplate(
       />
     ),
     (n, total) => (
-      <PrintWelcomePage key="welcome" job={props.job} footer={foot(data, n, total)} />
+      <PrintWelcomePage
+        key="welcome"
+        job={props.job}
+        footer={foot(data, n, total)}
+      />
     ),
     ...(galleryImages.length > 0
       ? [
@@ -227,7 +231,12 @@ export function OfferWorkspacePrintTemplate(
         ]
       : []),
     (n, total) => (
-      <PrintSnapshotPage key="snapshot" data={data} job={props.job} footer={foot(data, n, total)} />
+      <PrintSnapshotPage
+        key="snapshot"
+        data={data}
+        job={props.job}
+        footer={foot(data, n, total)}
+      />
     ),
     (n, total) => (
       <PrintInvestmentPage
@@ -238,32 +247,28 @@ export function OfferWorkspacePrintTemplate(
         footer={foot(data, n, total)}
       />
     ),
-    ...inclusionPages.map(
-      (rows, i) =>
-        // eslint-disable-next-line react/display-name -- page factory, not a component
-        (n: number, total: number) =>
-          (
-            <PrintInclusionsPage
-              key={`inclusions-${i}`}
-              specifications={rows}
-              startIndex={inclusionStartIndexes[i]}
-              continued={i > 0}
-              footer={foot(data, n, total)}
-            />
-          ),
+    ...inclusionPages.map((rows, i) =>
+      // eslint-disable-next-line react/display-name -- page factory, not a component
+      (n: number, total: number) => (
+        <PrintInclusionsPage
+          key={`inclusions-${i}`}
+          specifications={rows}
+          startIndex={inclusionStartIndexes[i]}
+          continued={i > 0}
+          footer={foot(data, n, total)}
+        />
+      ),
     ),
-    ...chunkAllowanceRows(data.scopeRows).map(
-      (rows, i) =>
-        // eslint-disable-next-line react/display-name -- page factory, not a component
-        (n: number, total: number) =>
-          (
-            <PrintAllowancesPage
-              key={`allowances-${i}`}
-              rows={rows}
-              continued={i > 0}
-              footer={foot(data, n, total)}
-            />
-          ),
+    ...chunkAllowanceRows(data.scopeRows).map((rows, i) =>
+      // eslint-disable-next-line react/display-name -- page factory, not a component
+      (n: number, total: number) => (
+        <PrintAllowancesPage
+          key={`allowances-${i}`}
+          rows={rows}
+          continued={i > 0}
+          footer={foot(data, n, total)}
+        />
+      ),
     ),
     (n, total) => (
       <PrintTermsPage
@@ -275,20 +280,18 @@ export function OfferWorkspacePrintTemplate(
         last={signatureChunks.length === 0}
       />
     ),
-    ...signatureChunks.map(
-      (blocks, i) =>
-        // eslint-disable-next-line react/display-name -- page factory, not a component
-        (n: number, total: number) =>
-          (
-            <PrintSignaturePage
-              key={`signatures-${i}`}
-              job={props.job}
-              blocks={blocks}
-              continued={i > 0}
-              footer={foot(data, n, total)}
-              last={i === signatureChunks.length - 1}
-            />
-          ),
+    ...signatureChunks.map((blocks, i) =>
+      // eslint-disable-next-line react/display-name -- page factory, not a component
+      (n: number, total: number) => (
+        <PrintSignaturePage
+          key={`signatures-${i}`}
+          job={props.job}
+          blocks={blocks}
+          continued={i > 0}
+          footer={foot(data, n, total)}
+          last={i === signatureChunks.length - 1}
+        />
+      ),
     ),
   ];
 
@@ -332,7 +335,8 @@ function PrintCoverPage({
   // Render every owner from owners[] (companies annotated with ABN/ACN), not the
   // primary/secondary projection — otherwise window.print() dropped owners 3+
   // while the emailed HTML listed them all (codex #8).
-  const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
+  const ownerNamesLine =
+    formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
   const ownerLabel = (job.owners?.length ?? 0) > 1 ? "Owners" : "Client";
   return (
     <PrintPage footerText={footer}>
@@ -403,7 +407,10 @@ function PrintWelcomePage({
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <PrintSection eyebrow="A personal welcome" title={`Dear ${greetingName},`}>
+      <PrintSection
+        eyebrow="A personal welcome"
+        title={`Dear ${greetingName},`}
+      >
         <div className="max-w-[155mm] space-y-4 text-base leading-7">
           {paragraphs.map((paragraph, index) => (
             <p key={index}>{paragraph}</p>
@@ -438,8 +445,8 @@ function PrintGalleryPage({
           The images below are from a recently completed home — built to a
           similar size and finish level. Full render to all elevations, luxury
           shaker kitchen, {OFFER_SPEC_FACTS.stoneBenchtopThickness} stone
-          benchtops and floor-to-ceiling tiles to the wet areas. Finishes on your
-          home are as per the inclusions schedule.
+          benchtops and floor-to-ceiling tiles to the wet areas. Finishes on
+          your home are as per the inclusions schedule.
         </p>
       </PrintSection>
       <div className="mt-6 grid grid-cols-2 gap-4">
@@ -628,8 +635,14 @@ function PrintInvestmentPage({
         </p>
       </div>
       <div className="mt-8 grid grid-cols-2 gap-8">
-        <PrintBulletList items={data.summaryInclusions} title="This price includes" />
-        <PrintBulletList items={data.exclusionBullets} title="This price excludes" />
+        <PrintBulletList
+          items={data.summaryInclusions}
+          title="This price includes"
+        />
+        <PrintBulletList
+          items={data.exclusionBullets}
+          title="This price excludes"
+        />
       </div>
     </PrintPage>
   );
@@ -651,13 +664,17 @@ function PrintInclusionsPage({
       <ProposalMasthead />
       <PrintSection
         eyebrow="Inclusions"
-        title={continued ? "Full inclusions schedule (cont.)" : "Full inclusions schedule"}
+        title={
+          continued
+            ? "Full inclusions schedule (cont.)"
+            : "Full inclusions schedule"
+        }
       >
         {continued ? null : (
           <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-            All items below are fixed within your contract price. Design provided
-            by owner/architect — all costs fixed as per approved plans, confirmed
-            at colour selection.
+            All items below are fixed within your contract price. Design
+            provided by owner/architect — all costs fixed as per approved plans,
+            confirmed at colour selection.
           </p>
         )}
       </PrintSection>
@@ -670,7 +687,10 @@ function PrintInclusionsPage({
         </thead>
         <tbody>
           {specifications.map((entry, index) => (
-            <tr className="border-b border-border" key={`${startIndex + index}`}>
+            <tr
+              className="border-b border-border"
+              key={`${startIndex + index}`}
+            >
               <td className="py-3 pr-4 align-top font-semibold text-sidebar">
                 {entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL}
               </td>
@@ -819,7 +839,11 @@ function PrintTermsPage({
       {inlineBlocks ? (
         <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
           {inlineBlocks.map((block) => (
-            <SignatureBlock key={block.key} label={block.label} name={block.name} />
+            <SignatureBlock
+              key={block.key}
+              label={block.label}
+              name={block.name}
+            />
           ))}
         </div>
       ) : (
@@ -853,7 +877,11 @@ function PrintSignaturePage({
       <ProposalMasthead />
       <PrintSection
         eyebrow="Acceptance"
-        title={continued ? "Acceptance & signatures (cont.)" : "Acceptance & signatures"}
+        title={
+          continued
+            ? "Acceptance & signatures (cont.)"
+            : "Acceptance & signatures"
+        }
       >
         {continued ? null : (
           <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
@@ -863,7 +891,11 @@ function PrintSignaturePage({
       </PrintSection>
       <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
         {blocks.map((block) => (
-          <SignatureBlock key={block.key} label={block.label} name={block.name} />
+          <SignatureBlock
+            key={block.key}
+            label={block.label}
+            name={block.name}
+          />
         ))}
       </div>
     </PrintPage>

@@ -73,5 +73,7 @@ export default async function OfferWorkspacePage({
 
   const adminPrefill = await buildAdminOfferPrefill();
 
-  return <NewOfferWorkspace leadId={parsedLeadId} adminPrefill={adminPrefill} />;
+  return (
+    <NewOfferWorkspace leadId={parsedLeadId} adminPrefill={adminPrefill} />
+  );
 }

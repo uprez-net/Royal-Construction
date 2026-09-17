@@ -108,7 +108,9 @@ test("a stage with one unfinished sub-activity is not complete", () => {
     activity("Piering", DONE, "2026-08-08", {
       actualDate: "2026-08-07",
       children: [
-        activity("Pier holes", DONE, "2026-08-05", { actualDate: "2026-08-05" }),
+        activity("Pier holes", DONE, "2026-08-05", {
+          actualDate: "2026-08-05",
+        }),
         activity("Engineer inspection", PENDING, "2026-08-07"),
       ],
     }),
@@ -317,16 +319,14 @@ test("the last completed activity is the most recent one, ignoring waived work",
 });
 
 test("a stage with no completed activity has no 'last' note", () => {
-  assert.equal(lastCompleted([activity("Slab pour", PENDING, "2026-09-02")]), null);
+  assert.equal(
+    lastCompleted([activity("Slab pour", PENDING, "2026-09-02")]),
+    null,
+  );
 });
 
 test("the working stage is the first one not yet complete", () => {
-  const states: StageState[] = [
-    "complete",
-    "active",
-    "upcoming",
-    "upcoming",
-  ];
+  const states: StageState[] = ["complete", "active", "upcoming", "upcoming"];
 
   assert.equal(findWorkingStageIndex(states), 1);
 });
@@ -347,7 +347,9 @@ test("flatten walks the whole tree depth-first", () => {
     activity("Piering", DONE, "2026-08-08", {
       actualDate: "2026-08-07",
       children: [
-        activity("Pier holes", DONE, "2026-08-05", { actualDate: "2026-08-05" }),
+        activity("Pier holes", DONE, "2026-08-05", {
+          actualDate: "2026-08-05",
+        }),
         activity("Inspection", DONE, "2026-08-07", {
           actualDate: "2026-08-07",
           children: [activity("Re-check", PENDING, "2026-08-09")],
@@ -373,7 +375,9 @@ test("a stage with no stated amount falls back to its percentage of the budget",
   // Compared within a cent: percentage-of-budget is binary float arithmetic,
   // so 5% of 33,207 lands on 1660.3500000000001, not 1660.35.
   const cent = 0.005;
-  assert.ok(Math.abs((stageClaimAmount(null, 15, 33207) ?? 0) - 4981.05) < cent);
+  assert.ok(
+    Math.abs((stageClaimAmount(null, 15, 33207) ?? 0) - 4981.05) < cent,
+  );
   assert.ok(
     Math.abs((stageClaimAmount(undefined, 5, 33207) ?? 0) - 1660.35) < cent,
   );
@@ -414,7 +418,9 @@ test("an active parent whose children are all done names itself", () => {
   const stage = [
     activity("Piering", ACTIVE, "2026-08-08", {
       children: [
-        activity("Pier holes", DONE, "2026-08-05", { actualDate: "2026-08-05" }),
+        activity("Pier holes", DONE, "2026-08-05", {
+          actualDate: "2026-08-05",
+        }),
         activity("Inspection", NOT_REQUIRED, "2026-08-07"),
       ],
     }),
@@ -427,7 +433,11 @@ test("a settled activity is never the next step, at any depth", () => {
   const stage = [
     activity("Done parent", DONE, "2026-08-01", {
       actualDate: "2026-08-01",
-      children: [activity("Done child", DONE, "2026-08-01", { actualDate: "2026-08-01" })],
+      children: [
+        activity("Done child", DONE, "2026-08-01", {
+          actualDate: "2026-08-01",
+        }),
+      ],
     }),
     activity("Slab pour", PENDING, "2026-09-02"),
   ];

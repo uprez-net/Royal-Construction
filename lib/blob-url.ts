@@ -37,7 +37,9 @@ const BLOB_RW_TOKEN_PREFIX = "vercel_blob_rw_";
 // would silently yield a store id and pin the allowlist to a store we do not
 // own. Fails closed instead, the same way hostFromBlobToken does in
 // lib/offer/offer-image-url.ts.
-export function blobStoreIdFromToken(token: string | null | undefined): string | null {
+export function blobStoreIdFromToken(
+  token: string | null | undefined,
+): string | null {
   if (typeof token !== "string") {
     return null;
   }
@@ -45,7 +47,8 @@ export function blobStoreIdFromToken(token: string | null | undefined): string |
   if (!trimmed.startsWith(BLOB_RW_TOKEN_PREFIX)) {
     return null;
   }
-  const storeId = trimmed.slice(BLOB_RW_TOKEN_PREFIX.length).split("_")[0] ?? "";
+  const storeId =
+    trimmed.slice(BLOB_RW_TOKEN_PREFIX.length).split("_")[0] ?? "";
   return /^[a-z0-9-]+$/i.test(storeId) ? storeId.toLowerCase() : null;
 }
 
@@ -56,9 +59,15 @@ export function blobStoreIdFromToken(token: string | null | undefined): string |
 // this deployment uploaded pins the store instead, passing the id from
 // BLOB_READ_WRITE_TOKEN. The offer image rule cannot: it also runs in the
 // browser, where there is no token.
-export function isBlobStoreUrl(url: unknown, storeId: string | null | undefined): boolean {
+export function isBlobStoreUrl(
+  url: unknown,
+  storeId: string | null | undefined,
+): boolean {
   if (!storeId || !isBlobStorageUrl(url)) {
     return false;
   }
-  return new URL(url as string).hostname.toLowerCase() === `${storeId.toLowerCase()}${BLOB_HOST_SUFFIX}`;
+  return (
+    new URL(url as string).hostname.toLowerCase() ===
+    `${storeId.toLowerCase()}${BLOB_HOST_SUFFIX}`
+  );
 }

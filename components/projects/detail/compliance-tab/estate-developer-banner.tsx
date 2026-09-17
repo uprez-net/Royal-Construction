@@ -134,10 +134,10 @@ export function EstateDeveloperBanner({
           </p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Land released in a master-planned estate usually carries a covenant:
-            the developer has to approve the architectural design and the bushfire
-            report before anything is lodged. It is on the contract of sale —
-            nothing else on this file will say. Answering now is what stops the
-            plans being drawn and lodged without their sign-off.
+            the developer has to approve the architectural design and the
+            bushfire report before anything is lodged. It is on the contract of
+            sale — nothing else on this file will say. Answering now is what
+            stops the plans being drawn and lodged without their sign-off.
           </p>
 
           {step === "asking" ? (

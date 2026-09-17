@@ -1,33 +1,37 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Loader2, Sparkles } from "lucide-react"
+import * as React from "react";
+import { Loader2, Sparkles } from "lucide-react";
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useAiRewrite, type AiRewriteError } from "@/hooks/useAiWrite"
-import type { AiAction } from "@/lib/ai-rewrite/schema"
+} from "@/components/ui/dropdown-menu";
+import { useAiRewrite, type AiRewriteError } from "@/hooks/useAiWrite";
+import type { AiAction } from "@/lib/ai-rewrite/schema";
 // ^ adjust these three import paths to match your project structure
 
 const AI_REWRITE_LABELS: Record<AiAction, string> = {
   "fix-grammar": "Fix grammar",
   improve: "Improve",
   shorten: "Shorten",
-}
+};
 
-const DEFAULT_AI_REWRITE_ACTIONS: AiAction[] = ["improve", "fix-grammar", "shorten"]
+const DEFAULT_AI_REWRITE_ACTIONS: AiAction[] = [
+  "improve",
+  "fix-grammar",
+  "shorten",
+];
 
 export type AiRewriteConfig = {
   /** Which actions to offer, in menu order. Defaults to all three. */
-  actions?: AiAction[]
-  onError?: (error: AiRewriteError) => void
-}
+  actions?: AiAction[];
+  onError?: (error: AiRewriteError) => void;
+};
 
 export type TextareaProps = React.ComponentProps<"textarea"> & {
   /**
@@ -39,9 +43,9 @@ export type TextareaProps = React.ComponentProps<"textarea"> & {
    * working) and `textareaClassName` targets the `<textarea>` surface
    * itself.
    */
-  aiRewrite?: boolean | AiRewriteConfig
-  textareaClassName?: string
-}
+  aiRewrite?: boolean | AiRewriteConfig;
+  textareaClassName?: string;
+};
 
 /**
  * Sets a <textarea>'s value through React's native setter so any onChange
@@ -52,10 +56,10 @@ export type TextareaProps = React.ComponentProps<"textarea"> & {
 function setNativeTextareaValue(textarea: HTMLTextAreaElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(
     window.HTMLTextAreaElement.prototype,
-    "value"
-  )?.set
-  setter?.call(textarea, value)
-  textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    "value",
+  )?.set;
+  setter?.call(textarea, value);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 function AiRewriteTrigger({
@@ -63,28 +67,34 @@ function AiRewriteTrigger({
   config,
   disabled,
 }: {
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
-  config: AiRewriteConfig
-  disabled?: boolean
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  config: AiRewriteConfig;
+  disabled?: boolean;
 }) {
-  const actions = config.actions?.length ? config.actions : DEFAULT_AI_REWRITE_ACTIONS
-  const { rewrite, isLoading, action: activeAction } = useAiRewrite({
+  const actions = config.actions?.length
+    ? config.actions
+    : DEFAULT_AI_REWRITE_ACTIONS;
+  const {
+    rewrite,
+    isLoading,
+    action: activeAction,
+  } = useAiRewrite({
     onError: config.onError,
-  })
+  });
 
   const handleSelect = async (nextAction: AiAction) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const before = textarea.value
-    if (!before.trim()) return
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const before = textarea.value;
+    if (!before.trim()) return;
 
-    const result = await rewrite(before, nextAction)
+    const result = await rewrite(before, nextAction);
     // Skip applying the result if the field was edited while the request
     // was in flight, so we never clobber the user's own typing.
     if (result && textareaRef.current && textareaRef.current.value === before) {
-      setNativeTextareaValue(textareaRef.current, result)
+      setNativeTextareaValue(textareaRef.current, result);
     }
-  }
+  };
 
   return (
     <DropdownMenu>
@@ -107,7 +117,11 @@ function AiRewriteTrigger({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {actions.map((a) => (
-          <DropdownMenuItem key={a} disabled={isLoading} onSelect={() => handleSelect(a)}>
+          <DropdownMenuItem
+            key={a}
+            disabled={isLoading}
+            onSelect={() => handleSelect(a)}
+          >
             {isLoading && activeAction === a && (
               <Loader2 className="size-3.5 animate-spin" />
             )}
@@ -116,25 +130,36 @@ function AiRewriteTrigger({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
-function Textarea({ className, textareaClassName, aiRewrite, ref, ...props }: TextareaProps) {
-  const internalRef = React.useRef<HTMLTextAreaElement>(null)
+function Textarea({
+  className,
+  textareaClassName,
+  aiRewrite,
+  ref,
+  ...props
+}: TextareaProps) {
+  const internalRef = React.useRef<HTMLTextAreaElement>(null);
 
   const setRefs = React.useCallback(
     (node: HTMLTextAreaElement | null) => {
-      internalRef.current = node
-      if (typeof ref === "function") ref(node)
-      else if (ref) (ref as React.RefObject<HTMLTextAreaElement | null>).current = node
+      internalRef.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref)
+        (ref as React.RefObject<HTMLTextAreaElement | null>).current = node;
     },
-    [ref]
-  )
+    [ref],
+  );
 
-  const config: AiRewriteConfig | null = !aiRewrite ? null : aiRewrite === true ? {} : aiRewrite
+  const config: AiRewriteConfig | null = !aiRewrite
+    ? null
+    : aiRewrite === true
+      ? {}
+      : aiRewrite;
 
   const baseTextareaClassName =
-    "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground selection:bg-transparent selection:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40"
+    "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground selection:bg-transparent selection:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40";
 
   if (!config) {
     return (
@@ -144,7 +169,7 @@ function Textarea({ className, textareaClassName, aiRewrite, ref, ...props }: Te
         className={cn(baseTextareaClassName, className)}
         {...props}
       />
-    )
+    );
   }
 
   return (
@@ -155,9 +180,13 @@ function Textarea({ className, textareaClassName, aiRewrite, ref, ...props }: Te
         className={cn(baseTextareaClassName, "pr-9", textareaClassName)}
         {...props}
       />
-      <AiRewriteTrigger textareaRef={internalRef} config={config} disabled={props.disabled} />
+      <AiRewriteTrigger
+        textareaRef={internalRef}
+        config={config}
+        disabled={props.disabled}
+      />
     </div>
-  )
+  );
 }
 
-export { Textarea }
+export { Textarea };

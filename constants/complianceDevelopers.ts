@@ -169,7 +169,10 @@ export function developerByKey(
 
 /** Casefolded, punctuation-stripped, for comparing a council or a suburb. */
 function normalise(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 /**
@@ -222,8 +225,7 @@ export function developersForArea(params: {
   return scored
     .sort(
       (a, b) =>
-        a.rank - b.rank ||
-        a.developer.estate.localeCompare(b.developer.estate),
+        a.rank - b.rank || a.developer.estate.localeCompare(b.developer.estate),
     )
     .map(({ developer, suggested }) => ({ developer, suggested }));
 }

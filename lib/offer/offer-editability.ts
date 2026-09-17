@@ -64,7 +64,9 @@ export function isOfferIssued(status: OfferWorkspaceStatus): boolean {
 export function offerDocumentStillEditableWhileIssued(
   status: OfferWorkspaceStatus,
 ): boolean {
-  return isOfferIssued(status) && isOfferBuildStepEditable("offer-document", status);
+  return (
+    isOfferIssued(status) && isOfferBuildStepEditable("offer-document", status)
+  );
 }
 
 // Statuses a new revision can't be forked from. Once the Tender is signed the
@@ -247,7 +249,12 @@ function sameJsonValue(a: unknown, b: unknown): boolean {
       a.every((item, index) => sameJsonValue(item, b[index]))
     );
   }
-  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+  if (
+    a === null ||
+    b === null ||
+    typeof a !== "object" ||
+    typeof b !== "object"
+  ) {
     return false;
   }
   const left = a as Record<string, unknown>;
@@ -256,7 +263,8 @@ function sameJsonValue(a: unknown, b: unknown): boolean {
   return (
     keys.length === Object.keys(right).length &&
     keys.every(
-      (key) => Object.hasOwn(right, key) && sameJsonValue(left[key], right[key]),
+      (key) =>
+        Object.hasOwn(right, key) && sameJsonValue(left[key], right[key]),
     )
   );
 }

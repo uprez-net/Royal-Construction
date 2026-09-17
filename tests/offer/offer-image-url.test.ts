@@ -121,11 +121,15 @@ test("a stored snapshot with a bad image URL opens with that slot empty", () => 
     ...SNAPSHOT,
     images: {
       hero: { url: BLOB_URL, source: "upload" },
-      kitchen: { url: "http://169.254.169.254/latest/meta-data/", source: "upload" },
+      kitchen: {
+        url: "http://169.254.169.254/latest/meta-data/",
+        source: "upload",
+      },
     },
   }) as Record<string, unknown>;
   // Pre-{url,source} rows stored a bare string per slot; those are screened too.
-  (persisted.images as Record<string, unknown>).living = "https://example.com/x.png";
+  (persisted.images as Record<string, unknown>).living =
+    "https://example.com/x.png";
 
   const restored = deserializeWorkspace(
     parseWorkspaceState(JSON.parse(JSON.stringify(persisted))),

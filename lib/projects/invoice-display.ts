@@ -65,6 +65,7 @@ export function countPendingInvoices(
 
   return {
     pending: pending.length,
-    overdue: pending.filter((invoice) => isInvoiceOverdue(invoice, today)).length,
+    overdue: pending.filter((invoice) => isInvoiceOverdue(invoice, today))
+      .length,
   };
 }

@@ -31,35 +31,35 @@ type NotificationResult = { success: true } | { success: false; error: string };
  * successfully. On failure, an error message describing the reason is returned.
  */
 export async function triggerNotification(
-    userId: Array<string | null | undefined>,
-    content: {
-        title: string,
-        message: string,
-        url: string
-    }
+  userId: Array<string | null | undefined>,
+  content: {
+    title: string;
+    message: string;
+    url: string;
+  },
 ): Promise<NotificationResult> {
-    try {
-        let users: string[] = [];
-        if(userId.length === 0) {
-            users = await getAllUserClerkIds();
-        } else {
-            users = await resolveUserIdsToClerkIds(userId);
-        }
-        if (users.length === 0) {
-            return { success: false, error: "No notification recipients found" };
-        }
-        await novu.trigger({
-            workflowId: WORKFLOW_IDENTIFIER,
-            to: users.map((id) => ({ subscriberId: id })),
-            payload: {
-                subject: content.title,
-                body: content.message,
-                url: content.url
-            }
-        })
-        return { success: true };
-    } catch (error) {
-        console.error("Error triggering notification:", error);
-        return { success: false, error: "Failed to trigger notification" };
+  try {
+    let users: string[] = [];
+    if (userId.length === 0) {
+      users = await getAllUserClerkIds();
+    } else {
+      users = await resolveUserIdsToClerkIds(userId);
     }
+    if (users.length === 0) {
+      return { success: false, error: "No notification recipients found" };
+    }
+    await novu.trigger({
+      workflowId: WORKFLOW_IDENTIFIER,
+      to: users.map((id) => ({ subscriberId: id })),
+      payload: {
+        subject: content.title,
+        body: content.message,
+        url: content.url,
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Error triggering notification:", error);
+    return { success: false, error: "Failed to trigger notification" };
+  }
 }

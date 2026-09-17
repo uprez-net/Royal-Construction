@@ -90,7 +90,9 @@ function save(
   storedRow: unknown,
   snapshot: OfferWorkspaceSnapshot,
 ) {
-  const incoming = validatePersistedWorkspace(row(serializeWorkspace(snapshot)));
+  const incoming = validatePersistedWorkspace(
+    row(serializeWorkspace(snapshot)),
+  );
   assert.ok(incoming.ok, incoming.ok ? "" : incoming.error);
   return planWorkspaceSave(
     status,
@@ -188,7 +190,11 @@ test("the payment schedule and tender access stay writable until the Tender is s
 
   for (const status of ["agreed", "tender_draft"] as const) {
     assert.deepEqual(refused(status, STORED, changed), [], status);
-    const saved = written(status, STORED, changed) as PersistedOfferWorkspaceState;
+    const saved = written(
+      status,
+      STORED,
+      changed,
+    ) as PersistedOfferWorkspaceState;
     assert.equal(saved.paymentSchedule[0].trigger, "On signing the Tender");
     assert.equal(saved.tenderGate.needsArchitecturalPlan, false);
   }
@@ -200,7 +206,11 @@ test("the revision label the workspace stamps on load is not a job edit", () => 
     job: { ...BASE.job, reference: "RC-Q-2026-002", revision: "R2" },
   };
   assert.deepEqual(refused("sent", STORED, relabelled), []);
-  const saved = written("sent", STORED, relabelled) as PersistedOfferWorkspaceState;
+  const saved = written(
+    "sent",
+    STORED,
+    relabelled,
+  ) as PersistedOfferWorkspaceState;
   assert.equal(saved.job.revision, "R2");
 
   const areaEdit = { ...BASE, job: { ...BASE.job, groundFloorSqm: 999 } };
@@ -237,9 +247,10 @@ test("a pinned version moving is refused even though no step owns it", () => {
     refused("sent", STORED, { ...BASE, calcVersion: LEGACY_CALC_VERSION }),
     ["calcVersion"],
   );
-  assert.deepEqual(refused("agreed", STORED, { ...BASE, adminContentVersion: 4 }), [
-    "adminContentVersion",
-  ]);
+  assert.deepEqual(
+    refused("agreed", STORED, { ...BASE, adminContentVersion: 4 }),
+    ["adminContentVersion"],
+  );
 });
 
 test("nothing saved yet means nothing to protect", () => {
@@ -298,7 +309,10 @@ test("a tab keeps saving edits to an issued legacy offer, and its price does not
   const legacy = legacyRow();
   // The tab's hydrated premium re-derives a cent off the stored one, which is
   // what the lock used to read as a pricing edit.
-  assert.notEqual(settledWorkspace(legacy).pricingSettings.homeWarrantyHbcfFixed, 5000);
+  assert.notEqual(
+    settledWorkspace(legacy).pricingSettings.homeWarrantyHbcfFixed,
+    5000,
+  );
 
   for (const status of ISSUED_SAVE_STATUSES) {
     // The tab opens the offer, carrying the formula the workspace attaches to
@@ -391,7 +405,11 @@ test("a pending tab that took the admin loading charge can edit the offer after 
 
   for (const status of ISSUED_SAVE_STATUSES) {
     assert.deepEqual(
-      refused(status, savedAtPending, allowedEdit(status, tab, "after sending")),
+      refused(
+        status,
+        savedAtPending,
+        allowedEdit(status, tab, "after sending"),
+      ),
       [],
       status,
     );
@@ -410,7 +428,11 @@ test("a stale tab's HBCF contract value change is still refused on a legacy offe
   };
 
   for (const status of ISSUED_SAVE_STATUSES) {
-    assert.deepEqual(refused(status, legacy, repriced), ["pricingSettings"], status);
+    assert.deepEqual(
+      refused(status, legacy, repriced),
+      ["pricingSettings"],
+      status,
+    );
   }
 });
 
@@ -419,7 +441,10 @@ test("a save naming an image outside Blob storage is refused, not written", () =
     serializeWorkspace({
       ...BASE,
       images: {
-        hero: { url: "http://169.254.169.254/latest/meta-data/", source: "upload" },
+        hero: {
+          url: "http://169.254.169.254/latest/meta-data/",
+          source: "upload",
+        },
       },
     }),
   );

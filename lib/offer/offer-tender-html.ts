@@ -9,10 +9,7 @@ import {
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
 import { formatPercent } from "./format";
-import {
-  offerAreaBasisFromJob,
-  rawTotalAreaSqm,
-} from "./workspace-area";
+import { offerAreaBasisFromJob, rawTotalAreaSqm } from "./workspace-area";
 import {
   formatBoundedOwnerList,
   chunkByEstimatedHeight,
@@ -90,16 +87,18 @@ export const SIGNATURE_BLOCKS_PER_PAGE = 4;
 
 // Shared by the Tender and Contract builders (see contract-annexure-html.ts).
 export function esc(value: string): string {
-  return value
-    // Strip backslashes so user-controlled text (client name, address, spec)
-    // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the PDF and
-    // steal a signature/date/initial field via AutoPlace. Real anchors are
-    // emitted by anchor(), never through esc().
-    .replace(/\\/g, "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return (
+    value
+      // Strip backslashes so user-controlled text (client name, address, spec)
+      // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the PDF and
+      // steal a signature/date/initial field via AutoPlace. Real anchors are
+      // emitted by anchor(), never through esc().
+      .replace(/\\/g, "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+  );
 }
 
 export function money(value: number | null): string {
@@ -112,12 +111,37 @@ export function money(value: number | null): string {
 }
 
 const ONES = [
-  "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-  "seventeen", "eighteen", "nineteen",
+  "",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
 ] as const;
 const TENS = [
-  "", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty",
+  "",
+  "",
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
   "ninety",
 ] as const;
 const SCALES = [
@@ -212,49 +236,49 @@ export const OTHER_INCLUSIONS_SECTION = "Other Inclusions";
 const SECTION_BY_TRADE_LABEL: Readonly<Record<string, string>> = {
   // Preliminaries, design, insurance and site establishment.
   "design & plans": "Fixed Price Site Cost",
-  "hbcf": "Fixed Price Site Cost",
-  "scaffolding": "Fixed Price Site Cost",
+  hbcf: "Fixed Price Site Cost",
+  scaffolding: "Fixed Price Site Cost",
   "pc & provisional items": "Fixed Price Site Cost",
   // Council, certifier and statutory approval requirements.
-  "approvals": "Council & Statutory Authority Requirements",
+  approvals: "Council & Statutory Authority Requirements",
   // Construction proper.
   "concrete slab": "Building",
-  "frame": "Building",
-  "roof": "Building",
+  frame: "Building",
+  roof: "Building",
   "roof trusses": "Building",
   "external walls": "Building",
   "rendering - full facade": "Building",
   "feature facade": "Building",
-  "windows": "Building",
+  windows: "Building",
   "external doors": "Building",
   "garage door": "Building",
   "kitchen cabinetry": "Building",
   "stone benchtops": "Building",
-  "splashback": "Building",
-  "appliances": "Building",
+  splashback: "Building",
+  appliances: "Building",
   "vanity cabinetry": "Building",
   "vanity benchtops": "Building",
-  "tiling": "Building",
+  tiling: "Building",
   "shower screens": "Building",
-  "tapware": "Building",
-  "waterproofing": "Building",
+  tapware: "Building",
+  waterproofing: "Building",
   "internal doors": "Building",
   "door hardware": "Building",
-  "staircase": "Building",
-  "void": "Building",
-  "wardrobes": "Building",
-  "gyprock": "Building",
-  "insulation": "Building",
-  "skirting": "Building",
+  staircase: "Building",
+  void: "Building",
+  wardrobes: "Building",
+  gyprock: "Building",
+  insulation: "Building",
+  skirting: "Building",
   "flooring - living": "Building",
   "flooring - bedrooms": "Building",
-  "electrical": "Building",
-  "lighting": "Building",
+  electrical: "Building",
+  lighting: "Building",
   "ducted air con": "Building",
   "hot water": "Building",
   "rainwater tank": "Building",
-  "driveway": "Building",
-  "painting": "Building",
+  driveway: "Building",
+  painting: "Building",
   "front pillars": "Building",
   "final clean": "Building",
 };
@@ -262,11 +286,7 @@ const SECTION_BY_TRADE_LABEL: Readonly<Record<string, string>> = {
 // Case-, dash- and whitespace-insensitive so "Rendering — Full Facade" and
 // "Rendering - Full  Facade" resolve to the same section.
 function normaliseLabel(label: string): string {
-  return label
-    .trim()
-    .toLowerCase()
-    .replace(/[‐-―]/g, "-")
-    .replace(/\s+/g, " ");
+  return label.trim().toLowerCase().replace(/[‐-―]/g, "-").replace(/\s+/g, " ");
 }
 
 export type TenderInclusionRow = {
@@ -313,7 +333,9 @@ export function buildInclusionSections(
   const ordered = [
     ...canonical,
     ...extra,
-    ...(grouped.has(OTHER_INCLUSIONS_SECTION) ? [OTHER_INCLUSIONS_SECTION] : []),
+    ...(grouped.has(OTHER_INCLUSIONS_SECTION)
+      ? [OTHER_INCLUSIONS_SECTION]
+      : []),
   ];
   return ordered.map((name, sectionIndex) => ({
     name,
@@ -395,7 +417,8 @@ function ownerDetailLines(owner: OfferOwner): number {
     );
   }
   const headerRow =
-    Math.max(nameCell, location(owner.currentLocation)) + OWNER_ROW_CHROME_LINES;
+    Math.max(nameCell, location(owner.currentLocation)) +
+    OWNER_ROW_CHROME_LINES;
   return (
     headerRow +
     owner.signatories.reduce(
@@ -434,10 +457,10 @@ function inclusionRowLines(row: TenderInclusionRow): number {
       ? estimateWrappedLines(label, CHARS_PER_LINE_DESCRIPTION)
       : 0;
   const specLines =
-    spec.length > 0 ? estimateWrappedLines(spec, CHARS_PER_LINE_DESCRIPTION) : 0;
-  return (
-    Math.max(1, labelLines + specLines) + INCLUSION_ROW_CHROME_LINES
-  );
+    spec.length > 0
+      ? estimateWrappedLines(spec, CHARS_PER_LINE_DESCRIPTION)
+      : 0;
+  return Math.max(1, labelLines + specLines) + INCLUSION_ROW_CHROME_LINES;
 }
 
 // One item in the paginated schedule flow: a section heading, or one row.
@@ -483,7 +506,11 @@ function chunkSchedule(
   const rest = atoms.slice(first.length);
   return [
     first,
-    ...chunkByEstimatedHeight(rest, TENDER_LINES_PER_PAGE, (atom) => atom.lines),
+    ...chunkByEstimatedHeight(
+      rest,
+      TENDER_LINES_PER_PAGE,
+      (atom) => atom.lines,
+    ),
   ]
     .filter((page) => page.length > 0)
     .map((page) => page.flatMap((atom) => atom.items));
@@ -887,9 +914,11 @@ function coverPage(
     </div>
     <div class="t-price-label">TOTAL TENDER PRICE incl. GST</div>
     <div class="t-price">${priceLine}</div>
-    ${/* Statutory disclosures sit at the foot of the cover, clear of the
+    ${
+      /* Statutory disclosures sit at the foot of the cover, clear of the
          letter: they are a required notice, not part of the address block the
-         template opens with. */ ""}
+         template opens with. */ ""
+    }
     <div class="t-statutory">${esc(BUILDER_STATUTORY_LINE)}</div>`,
     foot,
   );
@@ -911,8 +940,10 @@ function particularsPage(
     <table>
       <tbody>
         ${particular("Site Location", job.siteAddress)}
-        ${/* Omit unknown site particulars rather than contracting to a blank
-             title reference, a blank zoning, or a "0 m²" lot. */ ""}
+        ${
+          /* Omit unknown site particulars rather than contracting to a blank
+             title reference, a blank zoning, or a "0 m²" lot. */ ""
+        }
         ${job.dpNumber.trim() ? particular("Title reference", job.dpNumber) : ""}
         ${job.zoning.trim() ? particular("Zoning", job.zoning) : ""}
         ${job.lotAreaSqm > 0 ? particular("Lot area", formatArea(job.lotAreaSqm)) : ""}
@@ -1136,7 +1167,10 @@ function exclusionRowLines(row: TenderExclusionRow): number {
   return (
     Math.max(
       estimateWrappedLines(row.label, CHARS_PER_LINE_EXCLUSION_ITEM),
-      estimateWrappedLines(row.description || "-", CHARS_PER_LINE_EXCLUSION_MEANS),
+      estimateWrappedLines(
+        row.description || "-",
+        CHARS_PER_LINE_EXCLUSION_MEANS,
+      ),
       estimateWrappedLines(
         row.variationRule || "-",
         CHARS_PER_LINE_EXCLUSION_REQUIRED,
@@ -1328,7 +1362,11 @@ function buildAcceptanceRows(
   job: OfferWorkspaceJob,
   signers: readonly OfferSignerContext[],
 ): AcceptanceRow[] {
-  const rowFor = (whoText: string, whoHtml: string, tags: readonly [string, string]) => ({
+  const rowFor = (
+    whoText: string,
+    whoHtml: string,
+    tags: readonly [string, string],
+  ) => ({
     html: `<tr><td class="c-name">${whoHtml}</td><td class="c-sign">${anchor(tags[0])}</td><td class="c-date">${anchor(tags[1])}</td></tr>`,
     lines: Math.max(
       ACCEPTANCE_ROW_MIN_LINES,

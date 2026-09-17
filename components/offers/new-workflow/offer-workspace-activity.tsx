@@ -121,7 +121,9 @@ export function OfferWorkspaceActivity({
           setError(result.error);
         }
       } catch (logError) {
-        setError(`Couldn't log the change request: ${(logError as Error).message}`);
+        setError(
+          `Couldn't log the change request: ${(logError as Error).message}`,
+        );
       } finally {
         setLogging(false);
       }
@@ -138,9 +140,7 @@ export function OfferWorkspaceActivity({
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className={GROUP_HEADING_CLASS}>
-          Negotiation activity
-        </p>
+        <p className={GROUP_HEADING_CLASS}>Negotiation activity</p>
         <Button
           disabled={loading}
           onClick={() => void refresh()}
@@ -158,8 +158,8 @@ export function OfferWorkspaceActivity({
 
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No activity yet — sends, opens, replies, and status changes will appear
-          here.
+          No activity yet — sends, opens, replies, and status changes will
+          appear here.
         </p>
       ) : (
         <ol className="grid gap-2">
@@ -309,7 +309,9 @@ function describeEvent(event: OfferActivityEvent): React.ReactNode {
   }
   return (
     <span>
-      <span className="text-muted-foreground">{statusLabel(event.fromStatus)}</span>{" "}
+      <span className="text-muted-foreground">
+        {statusLabel(event.fromStatus)}
+      </span>{" "}
       → <span className="font-medium text-foreground">{to}</span>
       <ActivityNote note={event.note} />
     </span>

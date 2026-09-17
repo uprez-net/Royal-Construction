@@ -261,7 +261,9 @@ export function CertifierDiscoveryModal({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {isSending ? "Sending documents to certifier…" : "Collecting documents"}
+            {isSending
+              ? "Sending documents to certifier…"
+              : "Collecting documents"}
           </DialogTitle>
           <DialogDescription>
             Looking for each document on the project. Missing required items can
@@ -292,97 +294,97 @@ export function CertifierDiscoveryModal({
                 ? "searching"
                 : row.state;
             return (
-            <li
-              key={row.type}
-              className={cn(
-                "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2",
-                displayState === "missing" && "bg-warning-light",
-              )}
-            >
-              <span className="shrink-0">
-                {displayState === "searching" ? (
-                  <Loader2
-                    className="size-4 animate-spin text-primary"
-                    aria-hidden="true"
-                  />
-                ) : displayState === "found" ? (
-                  <CheckCircle2
-                    className="size-4 text-success-ink"
-                    aria-hidden="true"
-                  />
-                ) : displayState === "missing" ? (
-                  <AlertCircle
-                    className="size-4 text-warning-ink"
-                    aria-hidden="true"
-                  />
-                ) : displayState === "optional-missing" ? (
-                  <CheckCircle2
-                    className="size-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <span className="block size-4 rounded-full border border-border" />
+              <li
+                key={row.type}
+                className={cn(
+                  "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2",
+                  displayState === "missing" && "bg-warning-light",
                 )}
-              </span>
-
-              <span className="min-w-0 flex-1 text-sm">
-                {displayState === "searching" ? (
-                  <span className="text-muted-foreground">
-                    Finding {row.label}…
-                  </span>
-                ) : displayState === "found" ? (
-                  <span className="text-foreground">
-                    {row.label}
-                    {row.fileName ? (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {row.fileName}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : displayState === "missing" ? (
-                  <span className="text-warning-ink">
-                    {row.label} not found, please upload
-                  </span>
-                ) : displayState === "optional-missing" ? (
-                  <span className="text-muted-foreground">
-                    {row.label} not found — optional for this send
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground/70">{row.label}</span>
-                )}
-              </span>
-
-              {displayState === "missing" ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={isUploading(rowScope(row.type))}
-                  onClick={() => {
-                    pendingUploadRef.current = index;
-                    fileInputRef.current?.click();
-                  }}
-                >
-                  {isUploading(rowScope(row.type)) ? (
+              >
+                <span className="shrink-0">
+                  {displayState === "searching" ? (
                     <Loader2
-                      className="size-4 animate-spin"
+                      className="size-4 animate-spin text-primary"
+                      aria-hidden="true"
+                    />
+                  ) : displayState === "found" ? (
+                    <CheckCircle2
+                      className="size-4 text-success-ink"
+                      aria-hidden="true"
+                    />
+                  ) : displayState === "missing" ? (
+                    <AlertCircle
+                      className="size-4 text-warning-ink"
+                      aria-hidden="true"
+                    />
+                  ) : displayState === "optional-missing" ? (
+                    <CheckCircle2
+                      className="size-4 text-muted-foreground"
                       aria-hidden="true"
                     />
                   ) : (
-                    <CloudUpload className="size-4" aria-hidden="true" />
+                    <span className="block size-4 rounded-full border border-border" />
                   )}
-                  Upload
-                  <span className="sr-only"> {row.label}</span>
-                </Button>
-              ) : null}
-            </li>
+                </span>
+
+                <span className="min-w-0 flex-1 text-sm">
+                  {displayState === "searching" ? (
+                    <span className="text-muted-foreground">
+                      Finding {row.label}…
+                    </span>
+                  ) : displayState === "found" ? (
+                    <span className="text-foreground">
+                      {row.label}
+                      {row.fileName ? (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {row.fileName}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : displayState === "missing" ? (
+                    <span className="text-warning-ink">
+                      {row.label} not found, please upload
+                    </span>
+                  ) : displayState === "optional-missing" ? (
+                    <span className="text-muted-foreground">
+                      {row.label} not found — optional for this send
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground/70">
+                      {row.label}
+                    </span>
+                  )}
+                </span>
+
+                {displayState === "missing" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isUploading(rowScope(row.type))}
+                    onClick={() => {
+                      pendingUploadRef.current = index;
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    {isUploading(rowScope(row.type)) ? (
+                      <Loader2
+                        className="size-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <CloudUpload className="size-4" aria-hidden="true" />
+                    )}
+                    Upload
+                    <span className="sr-only"> {row.label}</span>
+                  </Button>
+                ) : null}
+              </li>
             );
           })}
         </ul>
 
-        {error ? (
-          <p className="text-sm text-destructive-ink">{error}</p>
-        ) : null}
+        {error ? <p className="text-sm text-destructive-ink">{error}</p> : null}
 
         <DialogFooter>
           <Button

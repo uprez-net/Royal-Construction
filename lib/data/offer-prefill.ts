@@ -107,16 +107,16 @@ export async function generateOfferPrefillFromLead(input: {
 
   const emails = (lead.emails ?? []).slice(0, 8);
   if (emails.length > 0) {
-    sources.push(
-      `${emails.length} email${emails.length === 1 ? "" : "s"}`,
-    );
+    sources.push(`${emails.length} email${emails.length === 1 ? "" : "s"}`);
     const emailBlock = emails
       .map((email) => {
         const body = stripToText(email.body).slice(0, 1500);
         return `From: ${email.emailFrom}\nSubject: ${email.subject}\n${body}`;
       })
       .join("\n---\n");
-    contextParts.push(`# Email conversation (most recent first)\n${emailBlock}`);
+    contextParts.push(
+      `# Email conversation (most recent first)\n${emailBlock}`,
+    );
   }
 
   const history = (lead.history ?? [])
@@ -154,9 +154,7 @@ export async function generateOfferPrefillFromLead(input: {
     if (d.buildType.trim()) job.buildType = d.buildType.trim();
     // The schema constrains facade to a valid option or "" (no guess).
     if (d.facade) job.facade = d.facade;
-    const scope = d.buildScope
-      .map((bullet) => bullet.trim())
-      .filter(Boolean);
+    const scope = d.buildScope.map((bullet) => bullet.trim()).filter(Boolean);
     if (scope.length > 0) job.buildScope = scope;
     if (d.introText.trim()) draft.introText = d.introText.trim();
     confidence = d.confidence;

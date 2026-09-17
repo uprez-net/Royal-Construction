@@ -124,7 +124,8 @@ export function leadStagePatchForOfferStatus(
 
   // Won only moves forward. Out-of-order webhooks are normal, and a stale
   // CONTRACT_SENT arriving after CONTRACT_SIGNED must not reopen the deal.
-  if (currentStage && isWonStage(currentStage) && !isWonStage(next)) return null;
+  if (currentStage && isWonStage(currentStage) && !isWonStage(next))
+    return null;
 
   // Never overrule a human who has closed the deal as lost. They recorded a
   // reason; an offer status has none to offer.
@@ -144,12 +145,18 @@ export function leadStagePatchForOfferStatus(
   // stages are held; STALLED is not a rung on the ladder.
   if (currentStage) {
     const from = stageDef(currentStage);
-    if (from.outcome === "OPEN" && stageDef(next).probability < from.probability) {
+    if (
+      from.outcome === "OPEN" &&
+      stageDef(next).probability < from.probability
+    ) {
       return null;
     }
   }
 
-  const patch: LeadStagePatch = { stage: next, ...closeDatePatch(currentStage, next, now) };
+  const patch: LeadStagePatch = {
+    stage: next,
+    ...closeDatePatch(currentStage, next, now),
+  };
   if (isWonStage(next) && patch.wonAt == null && currentWonAt == null) {
     patch.wonAt = now;
     patch.lostAt = null;

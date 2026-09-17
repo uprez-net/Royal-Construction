@@ -137,18 +137,18 @@
   --accent-purple-light: oklch(0.943 0.028 294.6);
   --destructive-light: oklch(0.936 0.031 17.7);
   --destructive-ink: oklch(0.534 0.23 28.5);
-  --royal-gold-ink: oklch(0.530 0.12 77.3);
+  --royal-gold-ink: oklch(0.53 0.12 77.3);
   /* The fill behind white text on gold CTAs (Button variant "royal"). White
      on base --royal-gold is 2.77:1; on the ink 5.37:1 and on this hover step
      6.93:1, measured in tests/design/brand-contrast.test.ts. */
-  --royal-gold-ink-hover: oklch(0.470 0.12 77.3);
+  --royal-gold-ink-hover: oklch(0.47 0.12 77.3);
   /* Gold AS TEXT. The same colour as the fill in light — where the fill already
      clears AA as text (5.37/5.06/4.84:1) — but written out rather than aliased:
      the contrast suite parses literal oklch() values, and a var() reference put
      this token beyond the checks that exist to guard it. Keep the two in step.
      They diverge in dark, where a fill carrying white text must darken and text
      on a dark surface must lighten — one value cannot do both. */
-  --royal-gold-ink-text: oklch(0.530 0.12 77.3);
+  --royal-gold-ink-text: oklch(0.53 0.12 77.3);
 
   /* Pipeline stage ramp — cool grey through gold as likelihood rises, then
      green for banked stages. The colour encodes progression, so the chart
@@ -202,18 +202,18 @@
      is a BUTTON FILL carrying white text, so it darkens instead — gold as text
      uses --royal-gold-ink-text. Both are asserted in brand-contrast.test.ts. */
   --success-ink: oklch(0.597 0.14 149.2);
-  --warning-ink: oklch(0.620 0.14 70.1);
+  --warning-ink: oklch(0.62 0.14 70.1);
   --info-ink: oklch(0.616 0.16 262.9);
   --destructive-ink: oklch(0.632 0.16 28.5);
-  --royal-gold-ink: oklch(0.560 0.1 77.3);
+  --royal-gold-ink: oklch(0.56 0.1 77.3);
   /* A darker step, as in light. The rest token above measures 4.72:1 and this
      hover 6.09:1; the rest state sat at 3.75:1 until the dark theme was checked
      at rest and not only on hover. */
-  --royal-gold-ink-hover: oklch(0.500 0.1 77.3);
+  --royal-gold-ink-hover: oklch(0.5 0.1 77.3);
   /* Gold AS TEXT needs the opposite move: darkening the fill for white text
      pushed gold-on-dark-surface down to 3.66:1, so text gets its own lighter
      step at 5.28:1 worst-case (--muted), in line with light's 4.84:1. */
-  --royal-gold-ink-text: oklch(0.650 0.1 77.3);
+  --royal-gold-ink-text: oklch(0.65 0.1 77.3);
 
   /* Stage ramp, dark theme — same progression, lifted for contrast. */
   --stage-1: oklch(0.5 0.02 253);
@@ -250,9 +250,21 @@
   body {
     @apply min-h-full bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(circle at top left, rgba(13, 148, 136, 0.14), transparent 36%),
-      radial-gradient(circle at top right, rgba(232, 115, 12, 0.08), transparent 30%),
-      linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.98));
+      radial-gradient(
+        circle at top left,
+        rgba(13, 148, 136, 0.14),
+        transparent 36%
+      ),
+      radial-gradient(
+        circle at top right,
+        rgba(232, 115, 12, 0.08),
+        transparent 30%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(248, 250, 252, 0.95),
+        rgba(241, 245, 249, 0.98)
+      );
     background-attachment: fixed;
   }
 
@@ -325,7 +337,9 @@
       :has([data-offer-revision-viewer])
     )
     :has([data-offer-print-template="true"])
-    > :not(:has([data-offer-print-template="true"])):not([data-offer-print-template="true"]) {
+    > :not(:has([data-offer-print-template="true"])):not(
+      [data-offer-print-template="true"]
+    ) {
     display: none !important;
   }
 
@@ -397,7 +411,9 @@
      the close button and the overlay. */
   body:has([data-offer-print-template="screen"])
     :has([data-offer-print-template="screen"])
-    > :not(:has([data-offer-print-template="screen"])):not([data-offer-print-template="screen"]) {
+    > :not(:has([data-offer-print-template="screen"])):not(
+      [data-offer-print-template="screen"]
+    ) {
     display: none !important;
   }
 
@@ -418,7 +434,11 @@
 .toaster .cn-toast {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), var(--card));
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 96%, transparent),
+    var(--card)
+  );
   color: var(--card-foreground);
   box-shadow: 0 24px 56px -28px rgba(15, 23, 42, 0.32);
   font-family: var(--font-sans);
@@ -440,7 +460,11 @@
 }
 
 .toaster .cn-toast[data-type="success"] [data-description] {
-  color: color-mix(in oklab, var(--primary) 28%, var(--card-foreground)) !important;
+  color: color-mix(
+    in oklab,
+    var(--primary) 28%,
+    var(--card-foreground)
+  ) !important;
 }
 
 .toaster .cn-toast[data-type="error"] {
@@ -450,7 +474,11 @@
 }
 
 .toaster .cn-toast[data-type="error"] [data-description] {
-  color: color-mix(in oklab, var(--destructive) 38%, var(--card-foreground)) !important;
+  color: color-mix(
+    in oklab,
+    var(--destructive) 38%,
+    var(--card-foreground)
+  ) !important;
 }
 
 .toaster .cn-toast[data-type="warning"] {
@@ -460,7 +488,11 @@
 }
 
 .toaster .cn-toast[data-type="warning"] [data-description] {
-  color: color-mix(in oklab, var(--chart-3) 38%, var(--card-foreground)) !important;
+  color: color-mix(
+    in oklab,
+    var(--chart-3) 38%,
+    var(--card-foreground)
+  ) !important;
 }
 
 .toaster .cn-toast[data-type="info"] {
@@ -470,7 +502,11 @@
 }
 
 .toaster .cn-toast[data-type="info"] [data-description] {
-  color: color-mix(in oklab, var(--info) 28%, var(--card-foreground)) !important;
+  color: color-mix(
+    in oklab,
+    var(--info) 28%,
+    var(--card-foreground)
+  ) !important;
 }
 
 .toaster .cn-toast[data-type="loading"] {
@@ -480,7 +516,11 @@
 }
 
 .toaster .cn-toast[data-type="loading"] [data-description] {
-  color: color-mix(in oklab, var(--muted-foreground) 28%, var(--card-foreground)) !important;
+  color: color-mix(
+    in oklab,
+    var(--muted-foreground) 28%,
+    var(--card-foreground)
+  ) !important;
 }
 
 /* ----------------------------------------------
@@ -633,7 +673,7 @@
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   position: relative;
-  transition: color 0.2s cubic-bezier(.4, 0, .2, 1);
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
   display: flex;
   align-items: center;
@@ -649,7 +689,7 @@
 }
 
 .tab-button.active::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -2px;
   left: 0;
@@ -777,7 +817,9 @@
   border-radius: 10px;
   padding: 12px;
   cursor: pointer;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
   position: relative;
   box-shadow: var(--shadow-sm);
 }
@@ -787,8 +829,16 @@
 }
 
 .lead-card.urgent {
-  border-color: color-mix(in oklab, var(--leads-danger) 34%, var(--border-color));
-  background: color-mix(in oklab, var(--leads-danger-light) 38%, var(--bg-card));
+  border-color: color-mix(
+    in oklab,
+    var(--leads-danger) 34%,
+    var(--border-color)
+  );
+  background: color-mix(
+    in oklab,
+    var(--leads-danger-light) 38%,
+    var(--bg-card)
+  );
 }
 
 .urgent-indicator {
@@ -803,14 +853,14 @@
 }
 
 @keyframes pulse {
-
   0%,
   100% {
     box-shadow: 0 0 0 0 color-mix(in oklab, var(--destructive) 40%, transparent);
   }
 
   50% {
-    box-shadow: 0 0 0 6px color-mix(in oklab, var(--destructive) 0%, transparent);
+    box-shadow: 0 0 0 6px
+      color-mix(in oklab, var(--destructive) 0%, transparent);
   }
 }
 
@@ -1494,7 +1544,6 @@
 }
 
 @keyframes fu-pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -1519,11 +1568,11 @@
 .fu-item {
   display: grid;
   grid-template-columns:
-    26px                    /* number */
-    minmax(150px, 1.1fr)    /* name + stage */
-    auto                    /* date, time, assignee */
-    minmax(0, 1.3fr)        /* notes, truncated */
-    auto;                   /* actions */
+    26px /* number */
+    minmax(150px, 1.1fr) /* name + stage */
+    auto /* date, time, assignee */
+    minmax(0, 1.3fr) /* notes, truncated */
+    auto; /* actions */
 
   align-items: center;
   column-gap: 12px;
@@ -1541,7 +1590,7 @@
 }
 
 .fu-item.fu-item-today {
-  background: oklch(0.970 0.068 100.4);
+  background: oklch(0.97 0.068 100.4);
   border: 1px solid oklch(0.924 0.115 95.7);
   box-shadow: 0 6px 18px oklch(0.861 0.173 91.9 / 0.2);
 }
@@ -1554,7 +1603,7 @@
   background: oklch(0.968 0.007 247.9 / 0.6);
 }
 
-.fu-item+.fu-item {
+.fu-item + .fu-item {
   border-top: 1px solid var(--border-light);
 }
 
@@ -1760,8 +1809,17 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid color-mix(in oklab, var(--reminder-accent, var(--leads-primary)) 28%, var(--border-color));
-  background: color-mix(in oklab, var(--reminder-accent, var(--leads-primary)) 7%, var(--bg-body));
+  border: 1px solid
+    color-mix(
+      in oklab,
+      var(--reminder-accent, var(--leads-primary)) 28%,
+      var(--border-color)
+    );
+  background: color-mix(
+    in oklab,
+    var(--reminder-accent, var(--leads-primary)) 7%,
+    var(--bg-body)
+  );
   transition: background 0.15s;
 }
 
@@ -1960,7 +2018,7 @@
   gap: 10px;
 }
 
-.analytics-summary>div {
+.analytics-summary > div {
   border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--bg-card);
@@ -2017,7 +2075,6 @@
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
 }
-
 
 .analytics-card-title {
   font-size: 12px;
@@ -2204,8 +2261,16 @@
   }
 
   .mobile-lead-card.urgent {
-    border-color: color-mix(in oklab, var(--leads-danger) 34%, var(--border-color));
-    background: color-mix(in oklab, var(--leads-danger-light) 38%, var(--bg-card));
+    border-color: color-mix(
+      in oklab,
+      var(--leads-danger) 34%,
+      var(--border-color)
+    );
+    background: color-mix(
+      in oklab,
+      var(--leads-danger-light) 38%,
+      var(--bg-card)
+    );
   }
 
   .mobile-lead-main {
@@ -2799,8 +2864,6 @@
   margin: 0;
 }
 
-
-
 .email-html-preview {
   margin-top: 6px;
   border: 1px solid var(--border);
@@ -2969,7 +3032,10 @@
   color: var(--text-secondary);
   cursor: pointer;
   line-height: 1.6;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
 }
 
 .task-chip:hover {

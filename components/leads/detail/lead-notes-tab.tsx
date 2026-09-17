@@ -138,8 +138,8 @@ export function LeadNotesTab({
             Add a note
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Mention a teammate with @ to email them a copy. Saving files the note
-            into the activity log below.
+            Mention a teammate with @ to email them a copy. Saving files the
+            note into the activity log below.
           </p>
         </CardHeader>
         <CardContent className="pt-5">
@@ -157,12 +157,15 @@ export function LeadNotesTab({
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Activity
           </CardTitle>
           <p className="text-sm text-muted-foreground tabular-nums">
-            {activities.length}{" "}
-            {activities.length === 1 ? "entry" : "entries"}, newest first
+            {activities.length} {activities.length === 1 ? "entry" : "entries"},
+            newest first
           </p>
         </CardHeader>
         <CardContent className="pt-5">

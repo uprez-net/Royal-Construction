@@ -16,7 +16,10 @@ import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
   type OfferImageMap,

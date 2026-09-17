@@ -23,7 +23,10 @@ export default function OfferContentSkeleton() {
       <div className="overflow-x-auto rounded-lg border border-border/70 bg-card px-4 py-3 shadow-sm">
         <div className="flex min-w-190 gap-2">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+            <div
+              key={index}
+              className="flex min-w-0 flex-1 flex-col items-center gap-2"
+            >
               <Skeleton className="size-8 rounded-full" />
               <Skeleton className="h-3 w-16" />
             </div>

@@ -76,7 +76,10 @@ function snapshotWith(job: Partial<OfferWorkspaceJob>): OfferWorkspaceSnapshot {
 }
 
 function emailed(job: Partial<OfferWorkspaceJob>): string {
-  return buildProposalHtml(buildProposalInput(snapshotWith(job)), EMPTY_OFFER_IMAGES);
+  return buildProposalHtml(
+    buildProposalInput(snapshotWith(job)),
+    EMPTY_OFFER_IMAGES,
+  );
 }
 
 function printed(job: Partial<OfferWorkspaceJob>): string {
@@ -118,7 +121,11 @@ test("the printed snapshot grid prints the one total and no Kitchen cell", () =>
   const html = printed(AREAS);
   assert.match(html, printedCell("Total Area", "435 m²"));
   assert.match(html, printedCell("Alfresco + Balcony", "32 m²"));
-  assert.equal(html.includes(">Kitchen<"), false, "a Kitchen cell is in no total");
+  assert.equal(
+    html.includes(">Kitchen<"),
+    false,
+    "a Kitchen cell is in no total",
+  );
 });
 
 test("the Tender prints the same total build area", () => {
@@ -128,7 +135,9 @@ test("the Tender prints the same total build area", () => {
 test("the welcome letter quotes the same area", () => {
   const job = { ...INITIAL_OFFER_JOB, ...AREAS };
   assert.ok(
-    buildWelcomeParagraphs(job).some((p) => p.includes("all 435 square metres")),
+    buildWelcomeParagraphs(job).some((p) =>
+      p.includes("all 435 square metres"),
+    ),
   );
   assert.ok(emailed(AREAS).includes("all 435 square metres"));
   assert.ok(printed(AREAS).includes("all 435 square metres"));
@@ -170,7 +179,10 @@ test("the grid cells add up to the printed total", () => {
       `cells sum to ${cellSum} but the total is ${breakdown.totalSqm}`,
     );
     // The total is the figure the cover and the cost formulas already use.
-    assert.equal(breakdown.totalSqm, rawTotalAreaSqm(offerAreaBasisFromJob(job)));
+    assert.equal(
+      breakdown.totalSqm,
+      rawTotalAreaSqm(offerAreaBasisFromJob(job)),
+    );
   }
 });
 
@@ -185,7 +197,10 @@ test("an area value never splits from its unit when void and granny flat both sh
   assert.equal(values.length, 7, "expected all seven area cells");
   assert.ok(values.some((match) => match[0].includes("187.35 m²")));
   for (const [cell, className] of values) {
-    assert.ok(className.split(" ").includes("whitespace-nowrap"), `wraps: ${cell}`);
+    assert.ok(
+      className.split(" ").includes("whitespace-nowrap"),
+      `wraps: ${cell}`,
+    );
   }
   assert.match(emailed(job), /\.areatable \.num \{[^}]*white-space: nowrap/);
 });
@@ -207,7 +222,10 @@ test("a single-storey job prints no First Floor cell", () => {
     false,
     "a zero First Floor still has a cell",
   );
-  assert.doesNotMatch(emailed(singleStorey), /<div class="cap">First Floor<\/div>/);
+  assert.doesNotMatch(
+    emailed(singleStorey),
+    /<div class="cap">First Floor<\/div>/,
+  );
   assert.equal(printed(singleStorey).includes(">First Floor</p>"), false);
   assert.match(emailed(singleStorey), emailedCell("Total Area", "285 m²"));
 });
@@ -216,7 +234,9 @@ test("the welcome letter keeps a fractional area", () => {
   const fractional = { ...AREAS, porchSqm: 5.5 };
   const job = { ...INITIAL_OFFER_JOB, ...fractional };
   assert.ok(
-    buildWelcomeParagraphs(job).some((p) => p.includes("all 435.5 square metres")),
+    buildWelcomeParagraphs(job).some((p) =>
+      p.includes("all 435.5 square metres"),
+    ),
   );
   assert.ok(emailed(fractional).includes("all 435.5 square metres"));
   assert.ok(printed(fractional).includes("all 435.5 square metres"));

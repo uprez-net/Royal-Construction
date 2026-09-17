@@ -37,19 +37,59 @@ import { individualOwner, snapshotOf } from "./tender-fixtures";
 // resolves until the BC4 goes out, and the tab values it went out with after.
 
 const SIGNED_SCHEDULE: readonly OfferPaymentScheduleRow[] = [
-  { id: "deposit", stageName: "Deposit", percentOfContract: 0.025, trigger: "On signing" },
-  { id: "slab", stageName: "Slab", percentOfContract: 0.175, trigger: "Slab poured" },
-  { id: "frame", stageName: "Frame", percentOfContract: 0.25, trigger: "Frame up" },
-  { id: "lockup", stageName: "Lock-up", percentOfContract: 0.25, trigger: "Locked up" },
-  { id: "fitout", stageName: "Fit-out", percentOfContract: 0.2, trigger: "Fit-out done" },
-  { id: "handover", stageName: "Handover", percentOfContract: 0.1, trigger: "Keys" },
+  {
+    id: "deposit",
+    stageName: "Deposit",
+    percentOfContract: 0.025,
+    trigger: "On signing",
+  },
+  {
+    id: "slab",
+    stageName: "Slab",
+    percentOfContract: 0.175,
+    trigger: "Slab poured",
+  },
+  {
+    id: "frame",
+    stageName: "Frame",
+    percentOfContract: 0.25,
+    trigger: "Frame up",
+  },
+  {
+    id: "lockup",
+    stageName: "Lock-up",
+    percentOfContract: 0.25,
+    trigger: "Locked up",
+  },
+  {
+    id: "fitout",
+    stageName: "Fit-out",
+    percentOfContract: 0.2,
+    trigger: "Fit-out done",
+  },
+  {
+    id: "handover",
+    stageName: "Handover",
+    percentOfContract: 0.1,
+    trigger: "Keys",
+  },
 ];
 
 // One more stage than the BC4 template has slots for.
 const EIGHT_STAGES: readonly OfferPaymentScheduleRow[] = [
   ...SIGNED_SCHEDULE,
-  { id: "pc", stageName: "Practical completion", percentOfContract: 0.05, trigger: "PC" },
-  { id: "final", stageName: "Final", percentOfContract: 0.05, trigger: "Defects" },
+  {
+    id: "pc",
+    stageName: "Practical completion",
+    percentOfContract: 0.05,
+    trigger: "PC",
+  },
+  {
+    id: "final",
+    stageName: "Final",
+    percentOfContract: 0.05,
+    trigger: "Defects",
+  },
 ];
 
 // The agreed snapshot keeps the default schedule and ticks a Scope exclusion
@@ -66,7 +106,8 @@ function agreedSnapshot(): OfferWorkspaceSnapshot {
   };
 }
 
-const roundTrip = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+const roundTrip = (value: unknown): unknown =>
+  JSON.parse(JSON.stringify(value));
 
 // A stored state as Prisma hands it back: plain JSON.
 const stored = (snapshot: OfferWorkspaceSnapshot): unknown =>
@@ -85,7 +126,10 @@ const TENDER_ROWS = {
   // A Tender sent before the terms were stamped: the render input only.
   "tender-document": () =>
     roundTrip(
-      buildProposalInput({ ...agreedSnapshot(), paymentSchedule: SIGNED_SCHEDULE }),
+      buildProposalInput({
+        ...agreedSnapshot(),
+        paymentSchedule: SIGNED_SCHEDULE,
+      }),
     ),
   "agreed-snapshot": () => null,
 } as const;
@@ -105,7 +149,10 @@ const REFUSED_TENDERS = {
 // The BC4 values and refusals as sendContractForSignature computed them before
 // it shared the resolver, written out independently so the shared one cannot
 // drift from them.
-function sendPathValues(tenderDocumentData: unknown, snapshot: OfferWorkspaceSnapshot) {
+function sendPathValues(
+  tenderDocumentData: unknown,
+  snapshot: OfferWorkspaceSnapshot,
+) {
   const contractValue =
     buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const payment = resolveContractPaymentSource({
@@ -124,7 +171,9 @@ function sendPathValues(tenderDocumentData: unknown, snapshot: OfferWorkspaceSna
       contractValue,
     ),
     depositAmount: payment.deposit
-      ? formatContractMoney(stageAmount(contractValue, payment.deposit.percentOfContract))
+      ? formatContractMoney(
+          stageAmount(contractValue, payment.deposit.percentOfContract),
+        )
       : "",
     exclusions: signedExclusions.lines,
     exclusionsSource: signedExclusions.source,
@@ -168,8 +217,8 @@ for (const [name, tenderRow] of Object.entries(ALL_TENDERS)) {
 test("the preview names the refusal the send returns", () => {
   const agreed = agreedSnapshot();
   const refusal = (tender: unknown) =>
-    resolveContractTerms({ tenderDocumentData: tender, agreedSnapshot: agreed }).terms
-      .refusal;
+    resolveContractTerms({ tenderDocumentData: tender, agreedSnapshot: agreed })
+      .terms.refusal;
 
   assert.match(
     refusal(REFUSED_TENDERS["more stages than the BC4 has"]()) ?? "",
@@ -194,8 +243,13 @@ test("REGRESSION: the preview shows the signed Tender's schedule, not the agreed
   assert.equal(terms.deposit?.percentOfContract, 0.025);
   // Every row carries the cent-rounded amount the schedule line prints.
   for (const row of terms.paymentSchedule) {
-    assert.equal(row.amount, stageAmount(terms.contractValueIncGst, row.percentOfContract));
-    assert.ok(terms.paymentScheduleLine.includes(formatContractMoney(row.amount)));
+    assert.equal(
+      row.amount,
+      stageAmount(terms.contractValueIncGst, row.percentOfContract),
+    );
+    assert.ok(
+      terms.paymentScheduleLine.includes(formatContractMoney(row.amount)),
+    );
   }
   assert.ok(terms.exclusions.includes(agreedSnapshot().exclusions[0].label));
 });
@@ -231,7 +285,10 @@ test("the send and the Contract step read one copy of the offer: agreedSnapshot,
     workspaceState: stored(edited),
     tender: { documentData: tender },
   });
-  assert.deepEqual(stages(agreed), INITIAL_PAYMENT_SCHEDULE.map((row) => row.stageName));
+  assert.deepEqual(
+    stages(agreed),
+    INITIAL_PAYMENT_SCHEDULE.map((row) => row.stageName),
+  );
   assert.deepEqual(agreed?.tenderDocumentData, tender);
 
   const unagreed = contractTermsInput({
@@ -239,11 +296,18 @@ test("the send and the Contract step read one copy of the offer: agreedSnapshot,
     workspaceState: stored(edited),
     tender: null,
   });
-  assert.deepEqual(stages(unagreed), SIGNED_SCHEDULE.map((row) => row.stageName));
+  assert.deepEqual(
+    stages(unagreed),
+    SIGNED_SCHEDULE.map((row) => row.stageName),
+  );
   assert.equal(unagreed?.tenderDocumentData, null);
 
   assert.equal(
-    contractTermsInput({ agreedSnapshot: null, workspaceState: null, tender: null }),
+    contractTermsInput({
+      agreedSnapshot: null,
+      workspaceState: null,
+      tender: null,
+    }),
     null,
   );
 });
@@ -296,7 +360,10 @@ test("REGRESSION: a Contract sent before Tender-sourced terms shows what its BC4
 });
 
 test("a Contract sent now reads back the terms the preview showed before the send", () => {
-  const before = contractPreviewTerms({ status: "CONTRACT_DRAFT", row: offerRow({}) });
+  const before = contractPreviewTerms({
+    status: "CONTRACT_DRAFT",
+    row: offerRow({}),
+  });
   assert.ok(before !== null && before.source !== "sent-contract");
   // What sendContractForSignature stores, through a JSON column.
   const sentDocument = roundTrip({
@@ -310,7 +377,10 @@ test("a Contract sent now reads back the terms the preview showed before the sen
   });
 
   assert.deepEqual(
-    contractPreviewTerms({ status: "CONTRACT_SIGNED", row: offerRow(sentDocument) }),
+    contractPreviewTerms({
+      status: "CONTRACT_SIGNED",
+      row: offerRow(sentDocument),
+    }),
     {
       source: "sent-contract",
       scheduleSource: "tender-terms",
@@ -336,7 +406,12 @@ test("no terms before the Tender is signed, resolved until the BC4 is sent, read
   for (const status of ["TENDER_SIGNED", "CONTRACT_DRAFT"]) {
     assert.equal(source(status), "tender-terms", status);
   }
-  for (const status of ["CONTRACT_SENT", "CONTRACT_SIGNED", "CONTRACT_DECLINED", "PROJECT"]) {
+  for (const status of [
+    "CONTRACT_SENT",
+    "CONTRACT_SIGNED",
+    "CONTRACT_DECLINED",
+    "PROJECT",
+  ]) {
     assert.equal(source(status), "sent-contract", status);
   }
   // A development sign leaves the Contract row as generated, with no tabs.
@@ -362,7 +437,10 @@ test("the contract send reads the offer and refuses through the shared terms", (
     send,
     /describeTenderPriceMismatch\(|CONTRACT_STAGE_SLOTS|resolveContractPaymentSource\(/,
   );
-  assert.match(send, /locked\("paymentSchedule", contractTerms\.paymentScheduleLine\)/);
+  assert.match(
+    send,
+    /locked\("paymentSchedule", contractTerms\.paymentScheduleLine\)/,
+  );
   assert.match(send, /locked\("depositAmount", contractTerms\.depositAmount\)/);
   // The exclusions reach the BC4 through contractTerms like everything else.
   // The shared resolver reads them from the SIGNED Tender's stored document —
@@ -397,23 +475,38 @@ test("the loader reads the send's rows and the sent Contract through the shared 
   assert.match(loader, /contractTerms\?: ContractPreviewTerms \| null;/);
   assert.match(loader, /return attachContractTerms\(/);
   // Only a caller holding no terms asks; the signing ticks do not re-read them.
-  assert.match(loader, /input\.needsContractTerms === true\s*\?\s*loadContractTerms\(/);
+  assert.match(
+    loader,
+    /input\.needsContractTerms === true\s*\?\s*loadContractTerms\(/,
+  );
   // The Tender's documentData is read on the server and not returned.
   assert.doesNotMatch(loader, /contractTerms:[^\n]*documentData/);
 });
 
 test("a status reached without a load asks for the terms once", () => {
-  const workspace = read("components/offers/new-workflow/new-offer-workspace.tsx");
+  const workspace = read(
+    "components/offers/new-workflow/new-offer-workspace.tsx",
+  );
 
-  assert.match(workspace, /contractTerms !== null \|\|\s*!hasContractTerms\(status\)/);
-  assert.match(workspace, /pollOfferSigningStatus\(\{ offerId, needsContractTerms: true \}\)/);
+  assert.match(
+    workspace,
+    /contractTerms !== null \|\|\s*!hasContractTerms\(status\)/,
+  );
+  assert.match(
+    workspace,
+    /pollOfferSigningStatus\(\{ offerId, needsContractTerms: true \}\)/,
+  );
   assert.equal(workspace.match(/needsContractTerms/g)?.length, 1);
   assert.match(workspace, /\}, \[leadId, status, contractTerms\]\);/);
 });
 
 test("the Contract preview shows the sent tabs, the refusal and each legacy source", () => {
-  const panel = read("components/offers/new-workflow/offer-workspace-contract.tsx");
-  const preview = panel.slice(panel.indexOf("function ContractScheduleToSend("));
+  const panel = read(
+    "components/offers/new-workflow/offer-workspace-contract.tsx",
+  );
+  const preview = panel.slice(
+    panel.indexOf("function ContractScheduleToSend("),
+  );
 
   assert.match(preview, /contractTerms\.source === "sent-contract"/);
   assert.match(preview, /<SentContractSchedule terms=\{contractTerms\} \/>/);

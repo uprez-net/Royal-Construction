@@ -1,6 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   buildScopeChanged,

@@ -22,8 +22,8 @@ export function normaliseScheduleRows(
 // unless the admin deliberately types a label of their own.
 export const INCLUSION_CATEGORY_SUGGESTIONS: readonly string[] = Array.from(
   new Set(
-    STANDARD_INCLUSION_ENTRIES.map((entry) => entry.category?.trim() ?? "").filter(
-      (category) => category !== "",
-    ),
+    STANDARD_INCLUSION_ENTRIES.map(
+      (entry) => entry.category?.trim() ?? "",
+    ).filter((category) => category !== ""),
   ),
 );

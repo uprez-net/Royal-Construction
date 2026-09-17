@@ -63,7 +63,12 @@ test("stage percentages carry no float noise", () => {
 test("the deposit is the stage named deposit, else the first stage", () => {
   const rows = [
     { id: "a", stageName: "Slab", percentOfContract: 0.1, trigger: "" },
-    { id: "b", stageName: "Initial deposit", percentOfContract: 0.05, trigger: "" },
+    {
+      id: "b",
+      stageName: "Initial deposit",
+      percentOfContract: 0.05,
+      trigger: "",
+    },
   ];
   assert.equal(findDepositRow(rows)?.id, "b");
   assert.equal(findDepositRow(rows.slice(0, 1))?.id, "a");
@@ -75,7 +80,14 @@ test("the deposit is the stage named deposit, else the first stage", () => {
 test("a 2.5% deposit prints exactly on the BC4 payment schedule", () => {
   assert.equal(
     paymentScheduleLine(
-      [{ id: "d", stageName: "Deposit", percentOfContract: 0.025, trigger: "" }],
+      [
+        {
+          id: "d",
+          stageName: "Deposit",
+          percentOfContract: 0.025,
+          trigger: "",
+        },
+      ],
       650_000,
     ),
     "(1) Deposit 2.5% $16,250.00",
@@ -97,7 +109,10 @@ test("contract and project exclusions are the Tender's rows, Scope items include
     ...base,
     draft: {
       ...base.draft,
-      exclusionBullets: ["Swimming pool or spa", "Pool, spa and water features"],
+      exclusionBullets: [
+        "Swimming pool or spa",
+        "Pool, spa and water features",
+      ],
     },
     exclusions: [
       // Same label as a bullet: printed once.
@@ -193,7 +208,11 @@ test("a Tender row with nothing readable falls back to the snapshot", () => {
         exclusions: [],
       } as never,
     });
-    assert.deepEqual(resolved.lines, ["Landscaping (not in scope)"], `for ${JSON.stringify(documentData)}`);
+    assert.deepEqual(
+      resolved.lines,
+      ["Landscaping (not in scope)"],
+      `for ${JSON.stringify(documentData)}`,
+    );
     assert.equal(resolved.source, "agreed-snapshot");
   }
 });

@@ -61,7 +61,8 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
 
   const pcaInspector = legal.pcaInspector;
   const hbcfInsuranceNumber = legal.hbcfInsuranceNumber;
-  const hbcfInsuranceMissing = !hbcfInsuranceNumber || hbcfInsuranceNumber.trim() === "";
+  const hbcfInsuranceMissing =
+    !hbcfInsuranceNumber || hbcfInsuranceNumber.trim() === "";
   const pcaMissing = !pcaInspector || pcaInspector.trim() === "";
 
   const statusTone = projectStatusConfig(project.status);
@@ -172,7 +173,10 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
               )}
             </span>
             <span aria-hidden="true">|</span>
-            <span className="inline-flex items-center gap-1" key={hbcfInsuranceNumber}>
+            <span
+              className="inline-flex items-center gap-1"
+              key={hbcfInsuranceNumber}
+            >
               <ShieldCheck className="size-3.5" aria-hidden="true" />
               HBCF Number{" "}
               {hbcfInsuranceMissing ? (
@@ -196,7 +200,9 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
                   </Link>
                 )
               ) : (
-                <span className="font-mono tabular-nums">{hbcfInsuranceNumber}</span>
+                <span className="font-mono tabular-nums">
+                  {hbcfInsuranceNumber}
+                </span>
               )}
             </span>
           </div>

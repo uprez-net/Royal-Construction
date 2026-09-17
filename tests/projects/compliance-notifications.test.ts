@@ -82,7 +82,10 @@ test("every compliance notification deep-links to the compliance tab", () => {
       rejectionReason: "The levels are missing.",
       resolvedBy: "Dana",
     }),
-    createNotification("complianceReviewSent", { ...PROJECT, documentCount: 8 }),
+    createNotification("complianceReviewSent", {
+      ...PROJECT,
+      documentCount: 8,
+    }),
     createNotification("complianceApproved", PROJECT),
   ];
 

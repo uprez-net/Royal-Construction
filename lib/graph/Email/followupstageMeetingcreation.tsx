@@ -8,24 +8,24 @@ import {
   Column,
   Text,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_COLORS,
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailSectionLight } from './email-section-light';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailSectionLight } from "./email-section-light";
 
 // ─── Icons (Using Emojis instead of Data URIs) ──────────────────────────────
 
 const ICONS = {
-  calendar: '📅',
-  clock: '🕒',
-  phone: '📞',
+  calendar: "📅",
+  clock: "🕒",
+  phone: "📞",
 };
 
 // ─── Sub-Component ──────────────────────────────────────────────────────────
@@ -44,12 +44,12 @@ function DetailItem({
   return (
     <Row
       style={{
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
       }}
     >
-      <Column style={{ padding: '1rem 0' }}>
+      <Column style={{ padding: "1rem 0" }}>
         <Row>
-          <Column style={{ width: 36, verticalAlign: 'top', paddingTop: 2 }}>
+          <Column style={{ width: 36, verticalAlign: "top", paddingTop: 2 }}>
             <Text
               className="m-0"
               style={{
@@ -68,7 +68,7 @@ function DetailItem({
                 fontWeight: 300,
                 fontSize: 11,
                 lineHeight: 1.4,
-                letterSpacing: '0.4px',
+                letterSpacing: "0.4px",
                 color: RC_COLORS.textMutedOnLight,
               }}
             >
@@ -103,10 +103,10 @@ interface FollowUpStageMeetingProps {
 }
 
 export default function FollowUpStageMeeting({
-  name = 'Homeowner',
-  formattedDate = 'Saturday 6 June 2026',
-  formattedTime = '09:00 am - 10:00 am (AEST)',
-  contactMethod = 'Phone Call',
+  name = "Homeowner",
+  formattedDate = "Saturday 6 June 2026",
+  formattedTime = "09:00 am - 10:00 am (AEST)",
+  contactMethod = "Phone Call",
 }: FollowUpStageMeetingProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
@@ -135,7 +135,7 @@ export default function FollowUpStageMeeting({
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -143,7 +143,7 @@ export default function FollowUpStageMeeting({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -156,7 +156,7 @@ export default function FollowUpStageMeeting({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.2px',
+                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -171,7 +171,7 @@ export default function FollowUpStageMeeting({
                   fontWeight: 350,
                   fontSize: 14,
                   lineHeight: 1.7,
-                  letterSpacing: '0.3px',
+                  letterSpacing: "0.3px",
                   color: RC_COLORS.textMutedOnLight,
                   maxWidth: 490,
                 }}
@@ -186,13 +186,13 @@ export default function FollowUpStageMeeting({
             </EmailSectionLight>
 
             {/* ── Details Card ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '0.5rem 1.5rem',
+                  border: "1px solid #E2E8F0",
+                  padding: "0.5rem 1.5rem",
                 }}
               >
                 <DetailItem
@@ -217,12 +217,12 @@ export default function FollowUpStageMeeting({
             </EmailSectionLight>
 
             {/* ── Call Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -247,11 +247,11 @@ export default function FollowUpStageMeeting({
             </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: '1px solid #E2E8F0',
-                  paddingTop: '1.5rem',
+                  borderTop: "1px solid #E2E8F0",
+                  paddingTop: "1.5rem",
                 }}
               >
                 <Row>

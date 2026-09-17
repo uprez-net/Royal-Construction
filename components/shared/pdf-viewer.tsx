@@ -36,12 +36,23 @@ export interface PdfViewerProps {
   onError: (message: string) => void;
 }
 
-export default function PdfViewer({ url, zoom, rotation, page, onDocLoad, onError }: PdfViewerProps) {
+export default function PdfViewer({
+  url,
+  zoom,
+  rotation,
+  page,
+  onDocLoad,
+  onError,
+}: PdfViewerProps) {
   return (
     <Document
       file={url}
       onLoadSuccess={(doc) => onDocLoad(doc.numPages)}
-      onLoadError={() => onError("This PDF couldn't be loaded. It may be corrupted or blocked by CORS.")}
+      onLoadError={() =>
+        onError(
+          "This PDF couldn't be loaded. It may be corrupted or blocked by CORS.",
+        )
+      }
       loading={<PageSkeleton />}
       error={null}
       className="flex justify-center"

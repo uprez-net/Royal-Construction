@@ -22,6 +22,10 @@ test("remove then restore at the same index keeps the original order", () => {
   for (const target of items) {
     const index = items.indexOf(target);
     const removed = items.filter((item) => item !== target);
-    assert.deepEqual(insertAt(removed, target, index), items, `restoring ${target}`);
+    assert.deepEqual(
+      insertAt(removed, target, index),
+      items,
+      `restoring ${target}`,
+    );
   }
 });

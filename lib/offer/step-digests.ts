@@ -76,7 +76,6 @@ export function compactMoney(value: number): string {
   return `$${Math.round(value).toLocaleString("en-AU")}`;
 }
 
-
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }

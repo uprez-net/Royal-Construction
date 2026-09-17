@@ -75,7 +75,9 @@ export function createTask(body: CreateLeadTaskBody): Promise<LeadTaskRow> {
   );
 }
 
-export function fetchCompletedTasks(signal?: AbortSignal): Promise<LeadTaskRow[]> {
+export function fetchCompletedTasks(
+  signal?: AbortSignal,
+): Promise<LeadTaskRow[]> {
   return unwrap<LeadTaskRow[]>(
     "/api/leads/tasks?state=completed",
     { method: "GET", cache: "no-store", signal },

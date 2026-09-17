@@ -1,7 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from "@prisma/client";
 
-import prisma from '@/lib/prisma';
-import { isOwnMailbox } from '@/lib/graph/mailbox';
+import prisma from "@/lib/prisma";
+import { isOwnMailbox } from "@/lib/graph/mailbox";
 
 /**
  * Checks whether a lead already exists by matching:
@@ -22,7 +22,7 @@ import { isOwnMailbox } from '@/lib/graph/mailbox';
 export async function checkLeadPresentWithEmailPhone(
   fromEmail?: string,
   toEmails: string[] = [],
-  contactNo?: string
+  contactNo?: string,
 ): Promise<boolean> {
   const orConditions: Prisma.LeadWhereInput[] = [];
 
@@ -59,10 +59,7 @@ export async function checkLeadPresentWithEmailPhone(
     });
   }
 
-  if (
-    normalizedContactNo &&
-    normalizedContactNo !== "0"
-  ) {
+  if (normalizedContactNo && normalizedContactNo !== "0") {
     orConditions.push({
       phone: normalizedContactNo,
     });

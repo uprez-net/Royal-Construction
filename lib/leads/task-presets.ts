@@ -17,7 +17,11 @@ import { sydneyMidnightIn } from "@/lib/dates/sydney";
  * Four separate people asked for a meeting task by typing it into a notes
  * field. These four types cover every note recorded on production.
  */
-export const LEAD_TASK_TYPES: { value: LeadTaskType; label: string; verb: string }[] = [
+export const LEAD_TASK_TYPES: {
+  value: LeadTaskType;
+  label: string;
+  verb: string;
+}[] = [
   { value: "CALL", label: "Call", verb: "Call" },
   { value: "EMAIL", label: "Email or text", verb: "Send an email or text" },
   { value: "MEETING", label: "Meeting", verb: "Organise a meeting" },
@@ -57,7 +61,9 @@ export function dueDateFromPreset(days: number, from: Date): Date {
  * if more legacy notes turn up. Order matters: a note can mention more than one
  * thing, and the most specific intent wins.
  */
-export function taskTypeFromNote(note: string | null | undefined): LeadTaskType {
+export function taskTypeFromNote(
+  note: string | null | undefined,
+): LeadTaskType {
   const n = (note ?? "").toLowerCase();
   if (n.includes("meeting")) return "MEETING";
   if (n.includes("email") || n.includes("text")) return "EMAIL";

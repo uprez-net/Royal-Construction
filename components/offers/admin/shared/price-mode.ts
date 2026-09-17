@@ -17,7 +17,10 @@ export function stripBase(row: CostScheduleRow): CostScheduleRowBase {
 // Switching mode used to reset the row to `value: 0` or `formula: ""`, so one
 // misclick on the mode select destroyed a price or formula the admin had typed.
 // A value or formula still carried on the row is restored instead.
-export function withMode(row: CostScheduleRow, mode: PriceMode): CostScheduleRow {
+export function withMode(
+  row: CostScheduleRow,
+  mode: PriceMode,
+): CostScheduleRow {
   const base = stripBase(row);
   switch (mode) {
     case "none":
@@ -33,7 +36,9 @@ export function withMode(row: CostScheduleRow, mode: PriceMode): CostScheduleRow
         ...base,
         priceMode: "formula",
         formula:
-          "formula" in row && typeof row.formula === "string" ? row.formula : "",
+          "formula" in row && typeof row.formula === "string"
+            ? row.formula
+            : "",
       };
   }
 }

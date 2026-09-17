@@ -156,7 +156,10 @@ export function ContactPicker({
           >
             <span className="flex min-w-0 items-center gap-2">
               {isLoading ? (
-                <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+                <Loader2
+                  className="size-4 shrink-0 animate-spin"
+                  aria-hidden="true"
+                />
               ) : (
                 <UserRound className="size-4 shrink-0" aria-hidden="true" />
               )}

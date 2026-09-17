@@ -16,15 +16,27 @@ function req(headers: Record<string, string> = {}): Request {
 // GRAPH_ADMIN_TOKEN silently exposed every route relying on this guard.
 test("an unconfigured token rejects instead of allowing", async () => {
   for (const configured of [undefined, ""]) {
-    const result = requireAdminToken(req({ "x-graph-admin-token": TOKEN }), configured);
-    assert.ok(result, `expected a rejection when the configured token is ${JSON.stringify(configured)}`);
+    const result = requireAdminToken(
+      req({ "x-graph-admin-token": TOKEN }),
+      configured,
+    );
+    assert.ok(
+      result,
+      `expected a rejection when the configured token is ${JSON.stringify(configured)}`,
+    );
     assert.equal(result.status, 401);
   }
 });
 
 test("the correct token is accepted in either header shape", () => {
-  assert.equal(requireAdminToken(req({ "x-graph-admin-token": TOKEN }), TOKEN), null);
-  assert.equal(requireAdminToken(req({ authorization: `Bearer ${TOKEN}` }), TOKEN), null);
+  assert.equal(
+    requireAdminToken(req({ "x-graph-admin-token": TOKEN }), TOKEN),
+    null,
+  );
+  assert.equal(
+    requireAdminToken(req({ authorization: `Bearer ${TOKEN}` }), TOKEN),
+    null,
+  );
 });
 
 test("a missing, wrong, or malformed token is rejected", async () => {

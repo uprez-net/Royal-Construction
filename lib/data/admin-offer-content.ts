@@ -1,4 +1,4 @@
-'use server';
+"use server";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
@@ -26,7 +26,7 @@ import {
  * Json fields into the typed shapes — and it validates before trusting.
  */
 export async function getAdminOfferContent(): Promise<AdminOfferContent> {
-  'use cache';
+  "use cache";
   cacheTag(ADMIN_OFFER_CONTENT_TAG);
   cacheLife(CACHE_PROFILES.LONG);
 
@@ -38,10 +38,14 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
     const created = await prisma.adminOfferContent.create({
       data: {
         buildScope: EMPTY_ADMIN_OFFER_CONTENT.buildScope,
-        costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
-        offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
-        offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
-        hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
+        costSchedule:
+          EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
+        offerScope:
+          EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
+        offerContent:
+          EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+        hbfcClaim:
+          EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {

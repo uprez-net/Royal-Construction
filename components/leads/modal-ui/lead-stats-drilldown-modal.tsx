@@ -37,7 +37,15 @@ export function LeadStatsDrilldownModal({
       setLoading(true);
       setError(null);
 
-      fetchLeads({ page: 1, limit: 25, status: stage, upcomingFollowUps, pendingFollowUps, pendingMeetings, upcomingMeetings })
+      fetchLeads({
+        page: 1,
+        limit: 25,
+        status: stage,
+        upcomingFollowUps,
+        pendingFollowUps,
+        pendingMeetings,
+        upcomingMeetings,
+      })
         .then((result) => {
           if (!cancelled) {
             setLeads(result.items);
@@ -50,7 +58,9 @@ export function LeadStatsDrilldownModal({
           // message, anything else is the browser's network text.
           if (!cancelled) {
             setLeads([]);
-            setError(err instanceof FetchError ? err.message : "Failed to fetch leads");
+            setError(
+              err instanceof FetchError ? err.message : "Failed to fetch leads",
+            );
           }
         })
         .finally(() => {
@@ -64,7 +74,13 @@ export function LeadStatsDrilldownModal({
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [stage, upcomingFollowUps, pendingFollowUps, pendingMeetings, upcomingMeetings]);
+  }, [
+    stage,
+    upcomingFollowUps,
+    pendingFollowUps,
+    pendingMeetings,
+    upcomingMeetings,
+  ]);
 
   return (
     <ModalShell

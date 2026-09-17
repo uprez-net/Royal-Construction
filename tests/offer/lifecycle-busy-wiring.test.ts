@@ -23,11 +23,17 @@ test("a recall is named by its document, a transition by its target", () => {
 test("the workspace records which action holds its one guard", () => {
   const workspace = read(`${W}/new-offer-workspace.tsx`);
 
-  assert.match(workspace, /setLifecycleBusy\(lifecycleActionFor\(next, recallScope\)\)/);
+  assert.match(
+    workspace,
+    /setLifecycleBusy\(lifecycleActionFor\(next, recallScope\)\)/,
+  );
   assert.match(workspace, /setLifecycleBusy\("revision"\)/);
   assert.equal(workspace.match(/setLifecycleBusy\(null\)/g)?.length, 2);
   // Still one guard: the ref set in transition and in createRevision.
-  assert.equal(workspace.match(/transitioningRef\.current = true;/g)?.length, 2);
+  assert.equal(
+    workspace.match(/transitioningRef\.current = true;/g)?.length,
+    2,
+  );
   assert.doesNotMatch(workspace, /setTransitioning\(/);
   assert.match(workspace, /lifecycleBusy=\{lifecycleBusy\}/);
 });
@@ -51,7 +57,9 @@ test("the screen passes the running action to every lifecycle panel", () => {
 });
 
 // Each lifecycle button, by its click handler, and the action that marks it busy.
-const BUTTONS: ReadonlyArray<readonly [file: string, handler: string, action: string]> = [
+const BUTTONS: ReadonlyArray<
+  readonly [file: string, handler: string, action: string]
+> = [
   ["offer-workspace-send-negotiate.tsx", "onMarkSent", "sent"],
   ["offer-workspace-send-negotiate.tsx", "onMarkOfferSigned", "offer_signed"],
   ["offer-workspace-send-negotiate.tsx", "onRecallOffer", "recall-offer"],
@@ -79,17 +87,28 @@ function buttonTag(source: string, handler: string): string {
 for (const [file, handler, action] of BUTTONS) {
   test(`${handler} in ${file} disables while any action runs and reports its own`, () => {
     const tag = buttonTag(read(`${W}/${file}`), handler);
+    const normalizedTag = tag.replace(/\s+/g, " ");
 
-    assert.match(tag, /disabled=\{[^}]*lifecycleBusy !== null/, tag);
-    assert.ok(
-      tag.includes(`aria-busy={lifecycleBusy === "${action}" || undefined}`),
-      tag,
+    assert.match(
+      normalizedTag,
+      /disabled=\{[^}]*lifecycleBusy !== null/,
+      normalizedTag,
+    );
+    assert.match(
+      normalizedTag,
+      new RegExp(
+        `aria-busy=\\{\\s*lifecycleBusy === "${action}" \\|\\| undefined\\s*\\}`,
+      ),
+      normalizedTag,
     );
   });
 }
 
 test("Create Project disables while any action runs and reports its own", () => {
-  const tag = buttonTag(read(`${W}/offer-workspace-project-handoff.tsx`), "onCreateProject");
+  const tag = buttonTag(
+    read(`${W}/offer-workspace-project-handoff.tsx`),
+    "onCreateProject",
+  );
 
   assert.match(tag, /disabled=\{projectCreating \|\| lifecycleBusy !== null\}/);
   assert.match(tag, /aria-busy=\{projectCreating \|\| undefined\}/);

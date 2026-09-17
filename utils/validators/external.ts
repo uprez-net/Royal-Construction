@@ -14,15 +14,9 @@ import { emailSchema } from "./common";
  * Graph token request body
  */
 export const graphTokenRequestSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .min(1, "Authorization code is required"),
+  code: z.string().trim().min(1, "Authorization code is required"),
 
-  redirectUri: z
-    .string()
-    .trim()
-    .url("Invalid redirect URI"),
+  redirectUri: z.string().trim().url("Invalid redirect URI"),
 });
 
 export type GraphTokenRequest = z.infer<typeof graphTokenRequestSchema>;
@@ -44,29 +38,20 @@ export const graphSendEmailSchema = z.object({
     .min(1, "Subject is required")
     .max(255, "Subject is too long"),
 
-  body: z
-    .string()
-    .min(1, "Body is required")
-    .max(100000, "Body is too long"),
+  body: z.string().min(1, "Body is required").max(100000, "Body is too long"),
 
-  isHtml: z
-    .boolean()
-    .default(false),
+  isHtml: z.boolean().default(false),
 
-  cc: z
-    .array(emailSchema)
-    .optional(),
+  cc: z.array(emailSchema).optional(),
 
-  bcc: z
-    .array(emailSchema)
-    .optional(),
+  bcc: z.array(emailSchema).optional(),
 
   attachments: z
     .array(
       z.object({
         fileName: z.string(),
         contentBytes: z.string(), // base64
-      })
+      }),
     )
     .optional(),
 });
@@ -77,23 +62,13 @@ export type GraphSendEmailInput = z.infer<typeof graphSendEmailSchema>;
  * Graph subscribe endpoint
  */
 export const graphSubscribeSchema = z.object({
-  resource: z
-    .string()
-    .trim()
-    .min(1, "Resource path is required"),
+  resource: z.string().trim().min(1, "Resource path is required"),
 
-  changeType: z
-    .enum(["created", "updated", "deleted"])
-    .or(z.string()),
+  changeType: z.enum(["created", "updated", "deleted"]).or(z.string()),
 
-  notificationUrl: z
-    .string()
-    .url("Invalid notification URL"),
+  notificationUrl: z.string().url("Invalid notification URL"),
 
-  expirationDateTime: z
-    .string()
-    .datetime()
-    .optional(),
+  expirationDateTime: z.string().datetime().optional(),
 });
 
 export type GraphSubscribeInput = z.infer<typeof graphSubscribeSchema>;
@@ -121,32 +96,15 @@ export type GraphNotification = z.infer<typeof graphNotificationSchema>;
  * List emails query
  */
 export const graphEmailsListQuerySchema = z.object({
-  page: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(1),
+  page: z.coerce.number().int().positive().default(1),
 
-  limit: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(50)
-    .default(20),
+  limit: z.coerce.number().int().positive().max(50).default(20),
 
-  search: z
-    .string()
-    .trim()
-    .optional(),
+  search: z.string().trim().optional(),
 
-  from: z
-    .string()
-    .trim()
-    .optional(),
+  from: z.string().trim().optional(),
 
-  folder: z
-    .enum(["inbox", "sent", "drafts", "deleted"])
-    .optional(),
+  folder: z.enum(["inbox", "sent", "drafts", "deleted"]).optional(),
 });
 
 export type GraphEmailsListQuery = z.infer<typeof graphEmailsListQuerySchema>;
@@ -183,7 +141,7 @@ export const clerkUserEventSchema = z.object({
           z.object({
             email_address: emailSchema,
             primary: z.boolean().optional(),
-          })
+          }),
         )
         .optional(),
       first_name: z.string().optional(),
@@ -194,7 +152,10 @@ export const clerkUserEventSchema = z.object({
       updated_at: z.number(),
     })
     .passthrough(), // Allow additional Clerk fields
-  type: z.literal("user.created").or(z.literal("user.updated")).or(z.literal("user.deleted")),
+  type: z
+    .literal("user.created")
+    .or(z.literal("user.updated"))
+    .or(z.literal("user.deleted")),
   object: z.literal("event"),
   id: z.string(),
   created_at: z.number(),
@@ -223,15 +184,9 @@ export type ClerkWebhookEvent = z.infer<typeof clerkWebhookEventSchema>;
  * Cron job trigger validation
  */
 export const cronTriggerSchema = z.object({
-  secret: z
-    .string()
-    .trim()
-    .min(1, "Cron secret is required"),
+  secret: z.string().trim().min(1, "Cron secret is required"),
 
-  timestamp: z
-    .number()
-    .int()
-    .optional(),
+  timestamp: z.number().int().optional(),
 });
 
 export type CronTrigger = z.infer<typeof cronTriggerSchema>;
@@ -240,10 +195,7 @@ export type CronTrigger = z.infer<typeof cronTriggerSchema>;
  * Tradie reminder cron payload
  */
 export const tradiReminderCronSchema = cronTriggerSchema.extend({
-  daysOffset: z
-    .number()
-    .int()
-    .default(0),
+  daysOffset: z.number().int().default(0),
 });
 
 export type TradieReminderCron = z.infer<typeof tradiReminderCronSchema>;

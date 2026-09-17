@@ -67,7 +67,9 @@ export function ScopePanel({
       </CardHeader>
       <CardContent className="flex flex-col gap-8">
         <ScopeList
-          icon={<Coins className="size-4 text-warning-ink" aria-hidden="true" />}
+          icon={
+            <Coins className="size-4 text-warning-ink" aria-hidden="true" />
+          }
           banner={{
             tone: "warning",
             icon: (
@@ -311,7 +313,10 @@ function ScopeList({
 
                 {tenderLabel && !item.includedInTender ? (
                   <p className="flex items-center gap-2 text-xs font-medium text-amber-700">
-                    <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                    <AlertTriangle
+                      className="size-3.5 shrink-0"
+                      aria-hidden="true"
+                    />
                     In the price but not listed in the signed Tender.
                   </p>
                 ) : null}

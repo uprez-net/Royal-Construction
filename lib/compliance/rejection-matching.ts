@@ -120,7 +120,8 @@ export function matchRejection(
 
   const bySubstring = candidates.filter((candidate) =>
     candidate.names.some(
-      (name) => name.length > 0 && (name.includes(wanted) || wanted.includes(name)),
+      (name) =>
+        name.length > 0 && (name.includes(wanted) || wanted.includes(name)),
     ),
   );
   if (bySubstring.length === 1) return bySubstring[0].id;

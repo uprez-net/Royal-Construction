@@ -44,7 +44,7 @@ type NotificationTemplate = {
  */
 type NotificationTemplateFactory = {
   [K in NotificationType]: (
-    data: NotificationDataMap[K]
+    data: NotificationDataMap[K],
   ) => NotificationTemplate;
 };
 
@@ -260,7 +260,9 @@ export const notificationTemplates: NotificationTemplateFactory = {
     // The detail is the raiser's own sentence, which is the whole value of the
     // notification: "this needs a DA" is actionable, "an alert was raised" is
     // only a reason to go and look.
-    message: data.detail ? `${data.alertTitle}. ${data.detail}` : data.alertTitle,
+    message: data.detail
+      ? `${data.alertTitle}. ${data.detail}`
+      : data.alertTitle,
     url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
 
@@ -325,16 +327,16 @@ export const notificationTemplates: NotificationTemplateFactory = {
 
   complianceDaItemsRequested: (data) => ({
     title: `Council Came Back: ${data.projectName}`,
-    message: [
-      data.requestedCount > 0
-        ? `${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"} requested`
-        : null,
-      data.rejectedCount > 0
-        ? `${data.rejectedCount} sent back`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(", ") || "The council has come back on the development application",
+    message:
+      [
+        data.requestedCount > 0
+          ? `${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"} requested`
+          : null,
+        data.rejectedCount > 0 ? `${data.rejectedCount} sent back` : null,
+      ]
+        .filter(Boolean)
+        .join(", ") ||
+      "The council has come back on the development application",
     url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
 };
@@ -360,9 +362,11 @@ export const notificationTemplates: NotificationTemplateFactory = {
  */
 export function createNotification<T extends NotificationType>(
   type: T,
-  payload: NotificationDataMap[T]
+  payload: NotificationDataMap[T],
 ) {
   const validatedPayload = notificationSchemas[type].parse(payload);
 
-  return notificationTemplates[type](validatedPayload as NotificationDataMap[T]);
+  return notificationTemplates[type](
+    validatedPayload as NotificationDataMap[T],
+  );
 }

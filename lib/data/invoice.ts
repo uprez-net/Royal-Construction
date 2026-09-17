@@ -1,15 +1,26 @@
 import { revalidateTag } from "next/cache";
 
-import { Prisma, type Invoice as InvoiceRow, type ProjectStage } from "@prisma/client";
+import {
+  Prisma,
+  type Invoice as InvoiceRow,
+  type ProjectStage,
+} from "@prisma/client";
 import { put } from "@vercel/blob";
 import { addDays, format } from "date-fns";
 import { Invoice, type Invoices, LineAmountTypes } from "xero-node";
 
 import prisma from "@/lib/prisma";
 import { flattenMilestones, stageState } from "@/lib/projects/milestone-ledger";
-import { buildMilestoneTree, groupRootsByStage } from "@/lib/projects/milestone-tree";
+import {
+  buildMilestoneTree,
+  groupRootsByStage,
+} from "@/lib/projects/milestone-tree";
 import { resolveStageClaims } from "@/lib/projects/stage-claim";
-import { getXeroContext, XeroNotConnectedError, type XeroContext } from "@/lib/xero/client";
+import {
+  getXeroContext,
+  XeroNotConnectedError,
+  type XeroContext,
+} from "@/lib/xero/client";
 import { getXeroConfig } from "@/lib/xero/config";
 import { resolveXeroContactId } from "@/lib/xero/contact";
 import { invoiceStatusRank, toInvoiceStatus } from "@/lib/xero/invoice-status";
@@ -187,7 +198,8 @@ export async function createStageInvoice(
     throw new Error(`Project ${projectId} not found.`);
   }
 
-  const requirements = project.requirements as ProjectRequirementsPayload | null;
+  const requirements =
+    project.requirements as ProjectRequirementsPayload | null;
   const claims = resolveStageClaims(
     requirements?.commercialsAndClaims?.paymentStages,
     Number(project.totalBudget),
@@ -269,7 +281,10 @@ export async function createStageInvoice(
   );
 
   const created = response.body.invoices?.[0];
-  if (!created?.invoiceID || created.invoiceID === "00000000-0000-0000-0000-000000000000") {
+  if (
+    !created?.invoiceID ||
+    created.invoiceID === "00000000-0000-0000-0000-000000000000"
+  ) {
     const reason = created?.validationErrors?.map((e) => e.message).join("; ");
     throw new Error(
       `Xero rejected the ${stageLabel} claim for project ${projectId}${reason ? `: ${reason}` : "."}`,
@@ -322,7 +337,9 @@ export async function createStageInvoice(
  * Bring one invoice back in line with Xero. Driven by the webhook, whose
  * payload carries only a resource id — the amounts have to be fetched.
  */
-export async function syncInvoiceFromXero(xeroInvoiceId: string): Promise<void> {
+export async function syncInvoiceFromXero(
+  xeroInvoiceId: string,
+): Promise<void> {
   const existing = await prisma.invoice.findUnique({
     where: { xeroInvoiceId },
     select: {
@@ -370,7 +387,12 @@ export async function syncInvoiceFromXero(xeroInvoiceId: string): Promise<void> 
   // An invoice that had no PDF when it was created — an archive failure, or a
   // claim that was still a draft — gets one now.
   if (!existing.pdfUrl) {
-    await archiveInvoicePdf(context, existing.id, xeroInvoiceId, existing.projectId);
+    await archiveInvoicePdf(
+      context,
+      existing.id,
+      xeroInvoiceId,
+      existing.projectId,
+    );
   }
 
   revalidateTag(`project-${existing.projectId}`, CACHE_PROFILES.MEDIUM);
@@ -413,7 +435,10 @@ async function archiveInvoicePdf(
   } catch (error) {
     // Best effort: Xero holds the document and it can be fetched again on the
     // next webhook. Losing our copy must not lose the claim.
-    console.error(`[xero] Failed to archive the PDF for invoice ${xeroInvoiceId}:`, error);
+    console.error(
+      `[xero] Failed to archive the PDF for invoice ${xeroInvoiceId}:`,
+      error,
+    );
   }
 }
 

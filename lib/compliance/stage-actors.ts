@@ -406,7 +406,10 @@ function checklistActors(
     item.files.length > 0 || isNotRequired(item.status);
 
   const byParty = new Map<CompliancePartyType, boolean>();
-  const standing = { builder: null as boolean | null, permits: null as boolean | null };
+  const standing = {
+    builder: null as boolean | null,
+    permits: null as boolean | null,
+  };
 
   for (const item of items) {
     const type = checklistItemDetail(item.detail)?.mapsToType ?? null;

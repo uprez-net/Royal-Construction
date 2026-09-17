@@ -62,9 +62,7 @@ type SignatureBlock = { readonly html: string; readonly lines: number };
 // Counting blocks instead of lines is what let long company names overflow.
 function signatureBlockLines(whoText: string): number {
   const CHROME_LINES = 4;
-  return (
-    CHROME_LINES + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE)
-  );
+  return CHROME_LINES + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE);
 }
 
 // Line-unit budget for a dedicated signature page, and for the FIRST one, which
@@ -78,17 +76,19 @@ const MIN_FIRST_SIGNATURE_PAGE_BUDGET = 10;
 const INLINE_SIGNATURE_BUDGET = 22;
 
 function esc(value: string): string {
-  return value
-    // Strip backslashes so user-controlled text (client name, address, scope)
-    // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the signed
-    // acceptance PDF and steal a signature/date field via AutoPlace. Harmless for
-    // the emailed copy (real names/addresses carry no backslashes); real anchors
-    // are emitted by anchor(), never through esc(). Mirrors offer-tender-html.esc.
-    .replace(/\\/g, "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return (
+    value
+      // Strip backslashes so user-controlled text (client name, address, scope)
+      // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the signed
+      // acceptance PDF and steal a signature/date field via AutoPlace. Harmless for
+      // the emailed copy (real names/addresses carry no backslashes); real anchors
+      // are emitted by anchor(), never through esc(). Mirrors offer-tender-html.esc.
+      .replace(/\\/g, "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+  );
 }
 
 function money(value: number | null): string {
@@ -115,8 +115,8 @@ function ownerDisplayName(owner: OfferOwner): string {
 // a muted "and …" sub-line (companies annotated). Falls back to the legacy
 // clientNames projection when owners[] is somehow empty.
 function ownerNamesCellHtml(job: OfferWorkspaceJob): string {
-  const owners = (job.owners ?? []).filter((owner) =>
-    owner.displayName.trim().length > 0,
+  const owners = (job.owners ?? []).filter(
+    (owner) => owner.displayName.trim().length > 0,
   );
   if (owners.length === 0) {
     return esc(job.clientNames);
@@ -190,11 +190,12 @@ export function buildProposalHtml(
       MIN_FIRST_SIGNATURE_PAGE_BUDGET,
       SIGNATURE_PAGE_BUDGET - acceptanceLines - SIGNATURE_PAGE_HEADING_LINES,
     );
-    const first = chunkByEstimatedHeight(
-      signatureBlocks,
-      firstBudget,
-      (block) => block.lines,
-    )[0] ?? [];
+    const first =
+      chunkByEstimatedHeight(
+        signatureBlocks,
+        firstBudget,
+        (block) => block.lines,
+      )[0] ?? [];
     const rest = signatureBlocks.slice(first.length);
     signatureChunks = [
       first,
@@ -384,8 +385,7 @@ function welcomePage(
       .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
     return secondary ? `${primary} and ${secondary}` : primary;
   })();
-  const greeting =
-    formatOwnerGreetingNames(job.owners ?? []) || legacyGreeting;
+  const greeting = formatOwnerGreetingNames(job.owners ?? []) || legacyGreeting;
   const paragraphs = buildWelcomeParagraphs(job)
     .map((p) => `<p style="margin-bottom:14px;">${esc(p)}</p>`)
     .join("");
@@ -431,7 +431,9 @@ function snapshotPage(
   const area = buildAreaBreakdown(job);
   const scope = job.buildScope
     .filter((line) => line.trim())
-    .map((line) => `<li style="font-size:13px;color:${MUTED};">${esc(line)}</li>`)
+    .map(
+      (line) => `<li style="font-size:13px;color:${MUTED};">${esc(line)}</li>`,
+    )
     .join("");
   const cell = (cap: string, num: string) =>
     `<div><div class="cap">${esc(cap)}</div><div class="num">${esc(num)}</div></div>`;
@@ -481,7 +483,8 @@ export function investmentListDensity(
 ): "" | "tight" | "tighter" | "tightest" {
   const lines = (items: readonly string[]) =>
     items.reduce(
-      (sum, item) => sum + estimateWrappedLines(item, CHARS_PER_LINE_INVESTMENT),
+      (sum, item) =>
+        sum + estimateWrappedLines(item, CHARS_PER_LINE_INVESTMENT),
       0,
     );
   const tallest = Math.max(lines(includes), lines(excludes));
@@ -496,13 +499,18 @@ function investmentPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   foot: string,
 ): string {
-  const { draft, customerPrice, priceAdjustmentLabel, standardPriceIncGst } = input;
+  const { draft, customerPrice, priceAdjustmentLabel, standardPriceIncGst } =
+    input;
   const saving =
     data.savingAmount !== null && data.savingAmount > 0
       ? `<div class="save">Standard price ${money(standardPriceIncGst)} - ${esc(priceAdjustmentLabel || "saving")} ${money(data.savingAmount)}</div>`
       : "";
-  const includes = data.summaryInclusions.map((b) => `<li>${esc(b)}</li>`).join("");
-  const excludes = data.exclusionBullets.map((b) => `<li>${esc(b)}</li>`).join("");
+  const includes = data.summaryInclusions
+    .map((b) => `<li>${esc(b)}</li>`)
+    .join("");
+  const excludes = data.exclusionBullets
+    .map((b) => `<li>${esc(b)}</li>`)
+    .join("");
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Investment summary</div>
@@ -613,7 +621,11 @@ function acceptanceLineText(job: OfferWorkspaceJob): string {
 // (both walk collectOfferSigners in the same order), so sigOwner{k} maps to
 // recipient k. Only the customer blocks carry anchors — the acceptance is
 // customer-only (ADR 0004).
-function signLine(kind: "sig" | "date", index: number, forSignature: boolean): string {
+function signLine(
+  kind: "sig" | "date",
+  index: number,
+  forSignature: boolean,
+): string {
   if (!forSignature) {
     return "_______________________";
   }

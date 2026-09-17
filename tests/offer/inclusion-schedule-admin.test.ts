@@ -26,7 +26,10 @@ function contentWith(inclusionSchedule: unknown[]) {
 
 test("a bare string row becomes {spec}; a categorised row keeps its category", () => {
   assert.deepEqual(
-    normaliseScheduleRows(["New row", { spec: "Slab", category: "Concrete Slab" }]),
+    normaliseScheduleRows([
+      "New row",
+      { spec: "Slab", category: "Concrete Slab" },
+    ]),
     [{ spec: "New row" }, { spec: "Slab", category: "Concrete Slab" }],
   );
 });
@@ -35,10 +38,14 @@ test("the save schema accepts normalised rows and rejects the raw string", () =>
   const raw = ["New row", { spec: "Slab", category: "Concrete Slab" }];
 
   assert.equal(
-    offerContentDataSchema.safeParse(contentWith(normaliseScheduleRows(raw))).success,
+    offerContentDataSchema.safeParse(contentWith(normaliseScheduleRows(raw)))
+      .success,
     true,
   );
-  assert.equal(offerContentDataSchema.safeParse(contentWith(raw)).success, false);
+  assert.equal(
+    offerContentDataSchema.safeParse(contentWith(raw)).success,
+    false,
+  );
 });
 
 test("category suggestions are the standard schedule's distinct labels", () => {

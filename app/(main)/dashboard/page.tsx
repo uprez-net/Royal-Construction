@@ -56,30 +56,42 @@ async function settleDashboardSection<T>(
 
 export const metadata: Metadata = {
   title: "Dashboard",
-  description: "Overviews and insights into your construction projects, KPIs, and follow-ups.",
+  description:
+    "Overviews and insights into your construction projects, KPIs, and follow-ups.",
 };
 
 export default async function DashboardPageClient() {
   await connection();
-  const [user, projectsResult, kpiResult, followUpsResult, graphResult] = await Promise.all([
-    auth().then(({ userId }) => (userId ? getUserByClerkIdCached(userId) : null)),
-    settleDashboardSection(
-      "project list",
-      getProjects({
-        page: 1,
-        limit: 10,
-        status: "ACTIVE",
-      }),
-      emptyProjects,
-    ),
-    settleDashboardSection("KPI data", getDashboardKPIData(), emptyDashboardKPI),
-    settleDashboardSection<FollowUpItem[]>(
-      "follow-up list",
-      getDashboardFollowUps(),
-      [],
-    ),
-    settleDashboardSection("graph data", getDashboardGraphData(), emptyGraphData),
-  ]);
+  const [user, projectsResult, kpiResult, followUpsResult, graphResult] =
+    await Promise.all([
+      auth().then(({ userId }) =>
+        userId ? getUserByClerkIdCached(userId) : null,
+      ),
+      settleDashboardSection(
+        "project list",
+        getProjects({
+          page: 1,
+          limit: 10,
+          status: "ACTIVE",
+        }),
+        emptyProjects,
+      ),
+      settleDashboardSection(
+        "KPI data",
+        getDashboardKPIData(),
+        emptyDashboardKPI,
+      ),
+      settleDashboardSection<FollowUpItem[]>(
+        "follow-up list",
+        getDashboardFollowUps(),
+        [],
+      ),
+      settleDashboardSection(
+        "graph data",
+        getDashboardGraphData(),
+        emptyGraphData,
+      ),
+    ]);
 
   const dashboardKPI = kpiResult.data;
   const followUpItems = followUpsResult.data;
@@ -102,6 +114,6 @@ export default async function DashboardPageClient() {
       followUpsCount={dashboardKPI.followUpsCount}
       followUpItems={followUpItems}
       dataWarnings={warnings}
-     />
+    />
   );
 }

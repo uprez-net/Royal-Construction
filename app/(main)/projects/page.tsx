@@ -28,7 +28,9 @@ export default async function ProjectPage() {
     // meaning "in flight".
     getProjects({ page: 1, limit: projectPageSize }),
     getProjectKPIs(),
-    auth().then(({ userId }) => userId ? getUserByClerkIdCached(userId) : null),
+    auth().then(({ userId }) =>
+      userId ? getUserByClerkIdCached(userId) : null,
+    ),
   ]);
 
   return (

@@ -3,7 +3,13 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const orderOptions = [
   { label: "Scheduled date", value: "scheduledDate" },
@@ -40,7 +46,12 @@ export function TradieFilters({ tradeTypes }: { tradeTypes: string[] }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={searchParams.get("trade") ?? "__all__"} onValueChange={(value) => updateQuery("trade", value === "__all__" ? "" : value)}>
+      <Select
+        value={searchParams.get("trade") ?? "__all__"}
+        onValueChange={(value) =>
+          updateQuery("trade", value === "__all__" ? "" : value)
+        }
+      >
         <SelectTrigger className="w-48">
           <SelectValue placeholder="Trade type" />
         </SelectTrigger>
@@ -54,7 +65,12 @@ export function TradieFilters({ tradeTypes }: { tradeTypes: string[] }) {
         </SelectContent>
       </Select>
 
-      <Select value={searchParams.get("status") ?? "__all__"} onValueChange={(value) => updateQuery("status", value === "__all__" ? "" : value)}>
+      <Select
+        value={searchParams.get("status") ?? "__all__"}
+        onValueChange={(value) =>
+          updateQuery("status", value === "__all__" ? "" : value)
+        }
+      >
         <SelectTrigger className="w-48">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
@@ -67,7 +83,10 @@ export function TradieFilters({ tradeTypes }: { tradeTypes: string[] }) {
         </SelectContent>
       </Select>
 
-      <Select value={searchParams.get("sort") ?? "scheduledDate"} onValueChange={(value) => updateQuery("sort", value)}>
+      <Select
+        value={searchParams.get("sort") ?? "scheduledDate"}
+        onValueChange={(value) => updateQuery("sort", value)}
+      >
         <SelectTrigger className="w-48">
           <SelectValue placeholder="Sort by" />
         </SelectTrigger>

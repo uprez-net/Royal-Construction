@@ -25,7 +25,11 @@ export interface ProjectConflictResult {
   tenderValue?: string | number | boolean | null;
   contractValue?: string | number | boolean | null;
   resolvedValue?: string | number | boolean | null;
-  resolution: "contract-wins" | "tender-wins" | "written-dimensions-win" | "manual-review";
+  resolution:
+    | "contract-wins"
+    | "tender-wins"
+    | "written-dimensions-win"
+    | "manual-review";
   note?: string;
 }
 

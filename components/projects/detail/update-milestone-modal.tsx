@@ -407,9 +407,12 @@ export default function UpdateMilestoneModal({
                   {fieldErrors.targetDate}
                 </p>
               ) : (
-                <p id="targetDate-hint" className="text-xs text-muted-foreground">
-                  When this activity is due. Drives the due and overdue
-                  markers on the Stage schedule.
+                <p
+                  id="targetDate-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  When this activity is due. Drives the due and overdue markers
+                  on the Stage schedule.
                 </p>
               )}
             </div>

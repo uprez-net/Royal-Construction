@@ -99,13 +99,12 @@ async function requireEngagement(
  * their own drawings is a file that is correctly finished with architects and
  * where the meeting the caller is trying to book has no second party.
  */
-async function requireArchitect(engagement: CertifierEngagementDetail): Promise<{
+async function requireArchitect(
+  engagement: CertifierEngagementDetail,
+): Promise<{
   outreach: ComplianceOutreachDetail;
 }> {
-  const outreach = outreachForParty(
-    engagement,
-    CompliancePartyType.ARCHITECT,
-  );
+  const outreach = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
   if (!outreach) {
     throw new Error(
       "No architect has been engaged on this job yet — engage one before booking a meeting.",

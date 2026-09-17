@@ -220,9 +220,7 @@ export type ComplianceStage = {
  * an alert belongs in principle; `stageForAlert` below corrects it to the block
  * the reader can actually act in on this particular file.
  */
-const ALERT_STAGE: Readonly<
-  Record<ComplianceAlertType, ComplianceStageId>
-> = {
+const ALERT_STAGE: Readonly<Record<ComplianceAlertType, ComplianceStageId>> = {
   [ComplianceAlertType.STALE_TITLE_SEARCH]: "SURVEYOR",
   [ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE]: "SURVEYOR",
   [ComplianceAlertType.ARCHITECT_PLANS_OVERDUE]: "ARCHITECT",
@@ -316,7 +314,11 @@ export function stageForAlert(
     return hasDa ? "DEVELOPMENT_APPLICATION" : "CHECKLIST";
   }
 
-  if (belongsTo === "CHECKLIST" && checklistBlockedReason(engagement) && hasDa) {
+  if (
+    belongsTo === "CHECKLIST" &&
+    checklistBlockedReason(engagement) &&
+    hasDa
+  ) {
     return "DEVELOPMENT_APPLICATION";
   }
 
@@ -656,7 +658,12 @@ function certifierStage(
     // The same instant the checklist stage starts from, which is the point: the
     // certifier's wait ends where the checklist's begins, and two readings of
     // one handover would leave a day unaccounted for between two nodes.
-    ...clock(firstSend?.sentAt ?? null, issuedAt ? { at: issuedAt } : null, null, now),
+    ...clock(
+      firstSend?.sentAt ?? null,
+      issuedAt ? { at: issuedAt } : null,
+      null,
+      now,
+    ),
   };
 }
 
@@ -747,7 +754,12 @@ function checklistStage(
     // and not when — so a completed checklist reports that it is done and says
     // nothing about how long it took, rather than counting to an instant that
     // is not the one anybody waited until.
-    ...clock(checklistIssuedAt(engagement), done ? { at: null } : null, null, now),
+    ...clock(
+      checklistIssuedAt(engagement),
+      done ? { at: null } : null,
+      null,
+      now,
+    ),
   };
 }
 
@@ -805,7 +817,8 @@ function planningPortalStage(
   return {
     id: "PLANNING_PORTAL",
     label:
-      kind === ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
+      kind ===
+      ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE
         ? "CDC application"
         : "Construction certificate",
     done: determinedAt !== null,

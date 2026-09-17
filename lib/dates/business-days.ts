@@ -19,7 +19,11 @@ import { sydneyDateOnly } from "./sydney";
 /** Sydney calendar date, as YYYY-MM-DD. Sorts and compares as a string. */
 type CalendarDate = string;
 
-function toCalendarDate(year: number, month: number, day: number): CalendarDate {
+function toCalendarDate(
+  year: number,
+  month: number,
+  day: number,
+): CalendarDate {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 

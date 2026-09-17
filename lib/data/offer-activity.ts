@@ -88,7 +88,10 @@ export async function logOfferChangeRequest(input: {
     select: { id: true, offerStatus: true },
   });
   if (!offer) {
-    return { ok: false, error: "No active offer to log a change request against." };
+    return {
+      ok: false,
+      error: "No active offer to log a change request against.",
+    };
   }
   await prisma.offerStatusEvent.create({
     data: {

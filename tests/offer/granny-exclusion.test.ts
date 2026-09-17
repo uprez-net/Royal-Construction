@@ -24,7 +24,9 @@ import {
 
 const SEEDED_LINE = "Granny flat (not in current scope)";
 
-function offer(overrides: Partial<GrannyExclusionInput> = {}): GrannyExclusionInput {
+function offer(
+  overrides: Partial<GrannyExclusionInput> = {},
+): GrannyExclusionInput {
   return {
     job: { ...INITIAL_OFFER_JOB, hasGrannyHome: true },
     draft: INITIAL_OFFER_DRAFT,
@@ -42,7 +44,9 @@ test("the seeded exclusion conflicts with a build that includes a granny flat", 
 
 test("a granny-flat area counts even without the toggle", () => {
   const conflicts = findGrannyExclusionConflicts(
-    offer({ job: { ...INITIAL_OFFER_JOB, hasGrannyHome: false, grannyFlatSqm: 60 } }),
+    offer({
+      job: { ...INITIAL_OFFER_JOB, hasGrannyHome: false, grannyFlatSqm: 60 },
+    }),
   );
   assert.equal(conflicts.length, 1);
 });
@@ -82,7 +86,10 @@ test("a ticked Scope exclusion is found on the Scope step; an unticked one is no
   );
   assert.deepEqual(
     findGrannyExclusionConflicts(
-      offer({ draft, exclusions: [{ ...scopeItem, includedInOfferDocument: false }] }),
+      offer({
+        draft,
+        exclusions: [{ ...scopeItem, includedInOfferDocument: false }],
+      }),
     ),
     [],
   );
@@ -112,10 +119,6 @@ test("matching is narrow: the line must be the granny flat alone, said to be out
   }
 });
 
-
-
-
-
 test("the planning term for a granny flat is the same subject", () => {
   for (const line of [
     "Secondary dwelling (not in scope)",
@@ -133,7 +136,11 @@ test("a secondary dwelling named inside a wider exclusion is left alone", () => 
     "Secondary dwelling landscaping (not in current scope)",
     "Secondary dwelling site costs",
   ]) {
-    assert.equal(isGrannyOutOfScopeLine(line), false, `wrongly flagged ${line}`);
+    assert.equal(
+      isGrannyOutOfScopeLine(line),
+      false,
+      `wrongly flagged ${line}`,
+    );
   }
 });
 
@@ -147,17 +154,26 @@ const source = (path: string) =>
   readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 test("the line is dropped only when the build includes a granny flat", () => {
-  const lines = ["Granny flat (not in current scope)", "Landscaping (not in scope)"];
+  const lines = [
+    "Granny flat (not in current scope)",
+    "Landscaping (not in scope)",
+  ];
   assert.deepEqual(
     [...withoutGrannyOutOfScopeLines(true, lines, (line) => line)],
     ["Landscaping (not in scope)"],
   );
-  assert.deepEqual([...withoutGrannyOutOfScopeLines(false, lines, (line) => line)], lines);
+  assert.deepEqual(
+    [...withoutGrannyOutOfScopeLines(false, lines, (line) => line)],
+    lines,
+  );
 });
 
 test("a list with nothing to drop is handed back unchanged", () => {
   const lines = ["Landscaping (not in scope)"];
-  assert.equal(withoutGrannyOutOfScopeLines(true, lines, (line) => line), lines);
+  assert.equal(
+    withoutGrannyOutOfScopeLines(true, lines, (line) => line),
+    lines,
+  );
 });
 
 test("a wider exclusion naming the granny flat survives the removal", () => {
@@ -213,13 +229,17 @@ test("no send path refuses the offer over the line any more", () => {
 });
 
 test("the workspace strips the line when the build gains a granny flat", () => {
-  const workspace = source("components/offers/new-workflow/new-offer-workspace.tsx");
+  const workspace = source(
+    "components/offers/new-workflow/new-offer-workspace.tsx",
+  );
   assert.ok(
     workspace.includes("function dropGrannyExclusionsFor("),
     "no removal helper in the workspace",
   );
   assert.ok(
-    workspace.includes("setJob(nextJob);\n    dropGrannyExclusionsFor(nextJob);"),
+    workspace.includes(
+      "setJob(nextJob);\n    dropGrannyExclusionsFor(nextJob);",
+    ),
     "the job funnel does not strip",
   );
   assert.ok(
@@ -233,7 +253,13 @@ test("the workspace strips the line when the build gains a granny flat", () => {
 // the detector always read all three. Filtering on the label alone let a
 // matching detail through to the documents.
 test("a contradiction in the description or the variation rule is removed too", () => {
-  const item = (over: Partial<{ label: string; description: string; variationRule: string }>) => ({
+  const item = (
+    over: Partial<{
+      label: string;
+      description: string;
+      variationRule: string;
+    }>,
+  ) => ({
     label: "Landscaping",
     description: "",
     variationRule: "",
@@ -264,7 +290,9 @@ test("every filter reads all three exclusion fields", () => {
   ]) {
     const text = source(path);
     assert.ok(
-      /\[\s*(?:row|item)\.label,\s*(?:row|item)\.description,\s*(?:row|item)\.variationRule,?\s*\]/.test(text),
+      /\[\s*(?:row|item)\.label,\s*(?:row|item)\.description,\s*(?:row|item)\.variationRule,?\s*\]/.test(
+        text,
+      ),
       `${path} still filters on the label alone`,
     );
   }

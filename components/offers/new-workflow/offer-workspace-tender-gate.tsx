@@ -22,7 +22,8 @@ import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // The one-off architectural-plan fee the gate waits on. Manual checkbox only —
 // no payment integration is in scope (see plan §7).
-const ARCHITECTURAL_PLAN_FEE_LABEL = "$5,000 AUD architectural plan fee collected";
+const ARCHITECTURAL_PLAN_FEE_LABEL =
+  "$5,000 AUD architectural plan fee collected";
 
 type TenderGatePanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -142,10 +143,7 @@ export function TenderGatePanel({
                     />
                     {uploaded ? (
                       <p className="flex items-center gap-1.5 text-xs font-medium text-success">
-                        <CheckCircle2
-                          className="size-3.5"
-                          aria-hidden="true"
-                        />
+                        <CheckCircle2 className="size-3.5" aria-hidden="true" />
                         {uploaded.fileName} uploaded — answer the design-changes
                         question below to continue.
                       </p>
@@ -178,13 +176,15 @@ export function TenderGatePanel({
                             aria-hidden="true"
                           />
                           <span>
-                            You can&apos;t proceed — design changes were detected
-                            and a revision is required.
+                            You can&apos;t proceed — design changes were
+                            detected and a revision is required.
                           </span>
                         </p>
                         <div>
                           <Button
-                            aria-busy={lifecycleBusy === "revision" || undefined}
+                            aria-busy={
+                              lifecycleBusy === "revision" || undefined
+                            }
                             disabled={
                               !canRevise || revising || lifecycleBusy !== null
                             }
@@ -193,10 +193,7 @@ export function TenderGatePanel({
                             type="button"
                             variant="outline"
                           >
-                            <GitBranch
-                              className="size-4"
-                              aria-hidden="true"
-                            />
+                            <GitBranch className="size-4" aria-hidden="true" />
                             {revising ? "Creating…" : "Create revision"}
                           </Button>
                         </div>

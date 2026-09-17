@@ -61,10 +61,7 @@ import { AreaCalculatorPanel } from "./offer-workspace-area";
 import { CostSchedulePanel } from "./offer-workspace-cost-schedule";
 import { OfferDocumentCanvas } from "./offer-document-canvas";
 import { OfferCommandBar } from "./shell/offer-command-bar";
-import {
-  OfferStepRail,
-  type OfferStepState,
-} from "./shell/offer-step-rail";
+import { OfferStepRail, type OfferStepState } from "./shell/offer-step-rail";
 import { OfferSummaryStrip } from "./shell/offer-summary-strip";
 import {
   buildOfferStepDigests,
@@ -406,7 +403,6 @@ export function OfferWorkspaceScreen({
     [job, lines, allowances, exclusions, draft, customerPrice],
   );
 
-
   // The Offer-build steps do NOT all freeze at once when the offer is issued
   // (#117). The customer-facing content — the Offer document copy and the Scope
   // shown on it — stays editable through the `sent` negotiation window so the
@@ -646,326 +642,339 @@ export function OfferWorkspaceScreen({
           className="@container/pane min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5 outline-none"
         >
           <div className="space-y-5">
-          {awaitingOffer ? (
-            <OfferPaneLoadState failed={loadFailed} />
-          ) : (
-          <>
-          {transitioning ? (
-            <p
-              role="status"
-              className="flex items-center gap-2 text-xs text-muted-foreground"
-            >
-              <Loader2
-                className="size-3.5 animate-spin motion-reduce:animate-none"
-                aria-hidden="true"
-              />
-              Working…
-            </p>
-          ) : null}
-          {/* Transition and recall errors used to render only inside the Send
+            {awaitingOffer ? (
+              <OfferPaneLoadState failed={loadFailed} />
+            ) : (
+              <>
+                {transitioning ? (
+                  <p
+                    role="status"
+                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                  >
+                    <Loader2
+                      className="size-3.5 animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                    Working…
+                  </p>
+                ) : null}
+                {/* Transition and recall errors used to render only inside the Send
               panel, which is unmounted on every other step, so a refused
               Tender or Contract recall said nothing. Send keeps its own slot. */}
-          {transitionError && activeStepId !== "send" ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-xs font-medium text-destructive-ink"
-            >
-              {transitionError}
-            </p>
-          ) : null}
-          {/* On the offer-build steps the lock banner below carries it. */}
-          {revisionNotice && !(offerIssued && activeStepIsOfferPhase) ? (
-            <p
-              role="status"
-              className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
-            >
-              {revisionNotice}
-            </p>
-          ) : null}
-          {/* The banner names the offer-build steps; it has no business above
+                {transitionError && activeStepId !== "send" ? (
+                  <p
+                    role="alert"
+                    className="rounded-lg border border-destructive/40 bg-destructive-light px-4 py-3 text-xs font-medium text-destructive-ink"
+                  >
+                    {transitionError}
+                  </p>
+                ) : null}
+                {/* On the offer-build steps the lock banner below carries it. */}
+                {revisionNotice && !(offerIssued && activeStepIsOfferPhase) ? (
+                  <p
+                    role="status"
+                    className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/40 px-4 py-3 text-xs font-medium text-foreground/80"
+                  >
+                    {revisionNotice}
+                  </p>
+                ) : null}
+                {/* The banner names the offer-build steps; it has no business above
               Tender, Contract or Project. */}
-          {offerIssued && activeStepIsOfferPhase ? (
-            <OfferLockBanner
-              canRevise={canRevise}
-              revising={revising}
-              lifecycleBusy={lifecycleBusy}
-              executed={revisionExecuted}
-              documentsEditable={documentsStillEditable}
-              notice={
-                revisionNotice ??
-                // Create revision is disabled from the signed Tender on. The
-                // server's refusal used to be what said why.
-                (!canRevise && !revisionExecuted && status !== "superseded"
-                  ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
-                  : null)
-              }
-              onCreateRevision={onCreateRevision}
-            />
-          ) : null}
-          <StepPane
-            active={activeStepId === "job-setup"}
-            locked={jobSetupLocked}
-            title="Job setup"
-          >
-            <JobSetupPanel
-              calcVersion={calcVersion}
-              job={job}
-              onJobChange={onJobChange}
-              onPrefillFromLead={onPrefillFromLead}
-              canPrefill={canPrefill}
-              prefilling={prefilling}
-              prefillResult={prefillResult}
-            />
-          </StepPane>
+                {offerIssued && activeStepIsOfferPhase ? (
+                  <OfferLockBanner
+                    canRevise={canRevise}
+                    revising={revising}
+                    lifecycleBusy={lifecycleBusy}
+                    executed={revisionExecuted}
+                    documentsEditable={documentsStillEditable}
+                    notice={
+                      revisionNotice ??
+                      // Create revision is disabled from the signed Tender on. The
+                      // server's refusal used to be what said why.
+                      (!canRevise &&
+                      !revisionExecuted &&
+                      status !== "superseded"
+                        ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
+                        : null)
+                    }
+                    onCreateRevision={onCreateRevision}
+                  />
+                ) : null}
+                <StepPane
+                  active={activeStepId === "job-setup"}
+                  locked={jobSetupLocked}
+                  title="Job setup"
+                >
+                  <JobSetupPanel
+                    calcVersion={calcVersion}
+                    job={job}
+                    onJobChange={onJobChange}
+                    onPrefillFromLead={onPrefillFromLead}
+                    canPrefill={canPrefill}
+                    prefilling={prefilling}
+                    prefillResult={prefillResult}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "cost-schedule"}
-            locked={costScheduleLocked}
-            title="Cost schedule"
-          >
-            <AreaCalculatorPanel
-              calcVersion={calcVersion}
-              job={job}
-              basis={areaBasis}
-              area={areaCalculator}
-              rateConstants={rateConstants}
-              onAreaChange={onAreaChange}
-              onJobChange={onJobChange}
-            />
-            <CostSchedulePanel
-              expandedLineIds={expandedLineIds}
-              onToggleLineExpanded={toggleLineExpanded}
-              importResult={importResult}
-              lines={lines}
-              onAddLine={onAddLine}
-              onImported={onImported}
-              onLineChange={onLineChange}
-              onIncludeAll={onIncludeAll}
-              onRemoveLine={onRemoveLine}
-            />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "cost-schedule"}
+                  locked={costScheduleLocked}
+                  title="Cost schedule"
+                >
+                  <AreaCalculatorPanel
+                    calcVersion={calcVersion}
+                    job={job}
+                    basis={areaBasis}
+                    area={areaCalculator}
+                    rateConstants={rateConstants}
+                    onAreaChange={onAreaChange}
+                    onJobChange={onJobChange}
+                  />
+                  <CostSchedulePanel
+                    expandedLineIds={expandedLineIds}
+                    onToggleLineExpanded={toggleLineExpanded}
+                    importResult={importResult}
+                    lines={lines}
+                    onAddLine={onAddLine}
+                    onImported={onImported}
+                    onLineChange={onLineChange}
+                    onIncludeAll={onIncludeAll}
+                    onRemoveLine={onRemoveLine}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "pricing"}
-            locked={pricingLocked}
-            title="Pricing"
-          >
-            <PriceBuildupPanel
-              directTotal={directTotal}
-              settings={workspacePricingSettings}
-              pricing={pricing}
-              totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
-              onSettingsChange={onWorkspacePricingSettingsChange}
-            />
-            <PricingDecisionPanel
-              customerPrice={customerPrice}
-              overrideReason={overrideReason}
-              priceAdjustmentLabel={priceAdjustmentLabel}
-              selectedPriceInput={selectedPriceInput}
-              standardPriceInput={standardPriceInput}
-              onOverrideReasonChange={onOverrideReasonChange}
-              onPriceAdjustmentLabelChange={onPriceAdjustmentLabelChange}
-              onSelectedPriceInputChange={onSelectedPriceInputChange}
-              onStandardPriceInputChange={onStandardPriceInputChange}
-            />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "pricing"}
+                  locked={pricingLocked}
+                  title="Pricing"
+                >
+                  <PriceBuildupPanel
+                    directTotal={directTotal}
+                    settings={workspacePricingSettings}
+                    pricing={pricing}
+                    totalAreaSqm={getAreaBasisTotalSqm(areaBasis)}
+                    onSettingsChange={onWorkspacePricingSettingsChange}
+                  />
+                  <PricingDecisionPanel
+                    customerPrice={customerPrice}
+                    overrideReason={overrideReason}
+                    priceAdjustmentLabel={priceAdjustmentLabel}
+                    selectedPriceInput={selectedPriceInput}
+                    standardPriceInput={standardPriceInput}
+                    onOverrideReasonChange={onOverrideReasonChange}
+                    onPriceAdjustmentLabelChange={onPriceAdjustmentLabelChange}
+                    onSelectedPriceInputChange={onSelectedPriceInputChange}
+                    onStandardPriceInputChange={onStandardPriceInputChange}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "scope"}
-            locked={scopeLocked}
-            title="Scope"
-          >
-            <ScopePanel
-              allowances={allowances}
-              exclusions={exclusions}
-              onAllowanceChange={onAllowanceChange}
-              onExclusionChange={onExclusionChange}
-              onAddAllowance={onAddAllowance}
-              onRemoveAllowance={onRemoveAllowance}
-              onAddExclusion={onAddExclusion}
-              onRemoveExclusion={onRemoveExclusion}
-            />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "scope"}
+                  locked={scopeLocked}
+                  title="Scope"
+                >
+                  <ScopePanel
+                    allowances={allowances}
+                    exclusions={exclusions}
+                    onAllowanceChange={onAllowanceChange}
+                    onExclusionChange={onExclusionChange}
+                    onAddAllowance={onAddAllowance}
+                    onRemoveAllowance={onRemoveAllowance}
+                    onAddExclusion={onAddExclusion}
+                    onRemoveExclusion={onRemoveExclusion}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "offer-document"}
-            locked={offerDocumentLocked}
-            title="Offer document"
-          >
-            <div className="space-y-6">
-              <OfferDocumentCanvas
-                customerPrice={customerPrice}
-                draft={draft}
-                exclusions={exclusions}
-                job={job}
-                onDraftChange={onDraftChange}
-                onDraftHighlights={onDraftHighlights}
-                onCheckConsistency={onCheckConsistency}
-                draftingHighlights={draftingHighlights}
-                checking={checking}
-                copyError={copyError}
-                findings={findings}
-                checkedClean={checkedClean}
-              />
-              <OfferWorkspaceImages
-                aiBusy={aiBusy}
-                onAiBusyChange={setAiBusyFor}
-                images={images}
-                onImageChange={onImageChange}
-                leadId={leadId}
-                buildType={job.buildType}
-                finishContexts={imageFinishContexts}
-              />
-            </div>
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "offer-document"}
+                  locked={offerDocumentLocked}
+                  title="Offer document"
+                >
+                  <div className="space-y-6">
+                    <OfferDocumentCanvas
+                      customerPrice={customerPrice}
+                      draft={draft}
+                      exclusions={exclusions}
+                      job={job}
+                      onDraftChange={onDraftChange}
+                      onDraftHighlights={onDraftHighlights}
+                      onCheckConsistency={onCheckConsistency}
+                      draftingHighlights={draftingHighlights}
+                      checking={checking}
+                      copyError={copyError}
+                      findings={findings}
+                      checkedClean={checkedClean}
+                    />
+                    <OfferWorkspaceImages
+                      aiBusy={aiBusy}
+                      onAiBusyChange={setAiBusyFor}
+                      images={images}
+                      onImageChange={onImageChange}
+                      leadId={leadId}
+                      buildType={job.buildType}
+                      finishContexts={imageFinishContexts}
+                    />
+                  </div>
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "send"}
-            locked={false}
-            title="Send & negotiate"
-          >
-            <SendNegotiatePanel
-              // A blocker names the step that fixes it; selecting that step is
-              // the new equivalent of the old scroll-to-section.
-              onNavigateToStep={(sectionId) => {
-                const target = stepIdForSectionId(sectionId);
-                if (target) {
-                  navigateToStep(target);
-                }
-              }}
-              status={status}
-              canRevise={canRevise}
-              revising={revising}
-              // Recipients = every customer signatory (individual owners + company
-              // directors), the SAME set sendOfferDocument emails server-side.
-              // Shown read-only so the confirmed list can't diverge from where the
-              // proposal actually goes (PR #124 review); edit emails in Job setup.
-              recipients={collectOfferSigners(job.owners).map((signer) => ({
-                email: signer.signatory.email.trim(),
-                label: offerSignerLabel(signer),
-              }))}
-              contractValueIncGst={customerPrice.selectedContractValueIncGst}
-              offerReference={formatOfferReference(job.reference, job.revision)}
-              sendBlockers={sendBlockers}
-              canSend={canSend}
-              sending={sending}
-              sendError={sendError}
-              sentInfo={sentInfo}
-              transitionError={transitionError}
-              canMarkSent={canMarkSent}
-              onSendOffer={onSendOffer}
-              onMarkSent={onMarkSent}
-              onCreateRevision={onCreateRevision}
-              onMarkAgreed={onMarkAgreed}
-              canMarkAgreed={canMarkAgreed}
-              onMarkRejected={onMarkRejected}
-              // Offer-acceptance DocuSign signing (ADR 0004). The recipient set is
-              // the same customer signatories already shown above.
-              signerStatuses={signerStatuses}
-              onSendForSignature={onSendOfferForSignature}
-              offerSignSending={offerSignSending}
-              offerSignError={offerSignError}
-              onRecallOffer={onRecallOffer}
-              onMarkOfferSigned={onMarkOfferSigned}
-              lifecycleBusy={lifecycleBusy}
-            />
-            <OfferWorkspaceActivity leadId={leadId} status={status} />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "send"}
+                  locked={false}
+                  title="Send & negotiate"
+                >
+                  <SendNegotiatePanel
+                    // A blocker names the step that fixes it; selecting that step is
+                    // the new equivalent of the old scroll-to-section.
+                    onNavigateToStep={(sectionId) => {
+                      const target = stepIdForSectionId(sectionId);
+                      if (target) {
+                        navigateToStep(target);
+                      }
+                    }}
+                    status={status}
+                    canRevise={canRevise}
+                    revising={revising}
+                    // Recipients = every customer signatory (individual owners + company
+                    // directors), the SAME set sendOfferDocument emails server-side.
+                    // Shown read-only so the confirmed list can't diverge from where the
+                    // proposal actually goes (PR #124 review); edit emails in Job setup.
+                    recipients={collectOfferSigners(job.owners).map(
+                      (signer) => ({
+                        email: signer.signatory.email.trim(),
+                        label: offerSignerLabel(signer),
+                      }),
+                    )}
+                    contractValueIncGst={
+                      customerPrice.selectedContractValueIncGst
+                    }
+                    offerReference={formatOfferReference(
+                      job.reference,
+                      job.revision,
+                    )}
+                    sendBlockers={sendBlockers}
+                    canSend={canSend}
+                    sending={sending}
+                    sendError={sendError}
+                    sentInfo={sentInfo}
+                    transitionError={transitionError}
+                    canMarkSent={canMarkSent}
+                    onSendOffer={onSendOffer}
+                    onMarkSent={onMarkSent}
+                    onCreateRevision={onCreateRevision}
+                    onMarkAgreed={onMarkAgreed}
+                    canMarkAgreed={canMarkAgreed}
+                    onMarkRejected={onMarkRejected}
+                    // Offer-acceptance DocuSign signing (ADR 0004). The recipient set is
+                    // the same customer signatories already shown above.
+                    signerStatuses={signerStatuses}
+                    onSendForSignature={onSendOfferForSignature}
+                    offerSignSending={offerSignSending}
+                    offerSignError={offerSignError}
+                    onRecallOffer={onRecallOffer}
+                    onMarkOfferSigned={onMarkOfferSigned}
+                    lifecycleBusy={lifecycleBusy}
+                  />
+                  <OfferWorkspaceActivity leadId={leadId} status={status} />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "tender-gate"}
-            unlocked={isOfferPhaseUnlocked(status, "tender")}
-            unlockHint={"Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."}
-            title="Tender access"
-          >
-            <TenderGatePanel
-              status={status}
-              tenderGate={tenderGate}
-              leadId={leadId}
-              onTenderGateChange={onTenderGateChange}
-              onCreateRevision={onCreateRevision}
-              canRevise={canRevise}
-              revising={revising}
-              lifecycleBusy={lifecycleBusy}
-            />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "tender-gate"}
+                  unlocked={isOfferPhaseUnlocked(status, "tender")}
+                  unlockHint={
+                    "Unlocks once the Offer is agreed. Decide whether tender access unlocks immediately or is held pending an architectural-plan fee and upload."
+                  }
+                  title="Tender access"
+                >
+                  <TenderGatePanel
+                    status={status}
+                    tenderGate={tenderGate}
+                    leadId={leadId}
+                    onTenderGateChange={onTenderGateChange}
+                    onCreateRevision={onCreateRevision}
+                    canRevise={canRevise}
+                    revising={revising}
+                    lifecycleBusy={lifecycleBusy}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "tender"}
-            unlocked={tenderPanelUnlocked}
-            unlockHint={
-              gateUnlocked
-                ? "Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
-                : "Complete the Tender access step to unlock the Tender."
-            }
-            title="Tender"
-          >
-            <TenderPanel
-              allowances={allowances}
-              signerStatuses={signerStatuses}
-              customerPrice={customerPrice}
-              draft={draft}
-              exclusions={exclusions}
-              job={job}
-              paymentSchedule={paymentSchedule}
-              status={status}
-              onGenerateTender={onGenerateTender}
-              onMarkTenderSigned={onMarkTenderSigned}
-              onPaymentScheduleChange={onPaymentScheduleChange}
-              onRecallTender={onRecallTender}
-              onSendTender={onSendTender}
-              tenderSending={tenderSending}
-              tenderSendError={tenderSendError}
-              lifecycleBusy={lifecycleBusy}
-            />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "tender"}
+                  unlocked={tenderPanelUnlocked}
+                  unlockHint={
+                    gateUnlocked
+                      ? "Unlocks once the Offer is agreed. Decide the payment schedule, generate the Tender, and send it for signature via DocuSign."
+                      : "Complete the Tender access step to unlock the Tender."
+                  }
+                  title="Tender"
+                >
+                  <TenderPanel
+                    allowances={allowances}
+                    signerStatuses={signerStatuses}
+                    customerPrice={customerPrice}
+                    draft={draft}
+                    exclusions={exclusions}
+                    job={job}
+                    paymentSchedule={paymentSchedule}
+                    status={status}
+                    onGenerateTender={onGenerateTender}
+                    onMarkTenderSigned={onMarkTenderSigned}
+                    onPaymentScheduleChange={onPaymentScheduleChange}
+                    onRecallTender={onRecallTender}
+                    onSendTender={onSendTender}
+                    tenderSending={tenderSending}
+                    tenderSendError={tenderSendError}
+                    lifecycleBusy={lifecycleBusy}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "contract"}
-            unlocked={isOfferPhaseUnlocked(status, "contract")}
-            unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
-            title="Contract"
-          >
-            <ContractPanel
-              signerStatuses={signerStatuses}
-              customerPrice={customerPrice}
-              draft={draft}
-              job={job}
-              contractTerms={contractTerms}
-              status={status}
-              contractParticulars={contractParticulars}
-              onContractParticularsChange={onContractParticularsChange}
-              onGenerateContract={onGenerateContract}
-              onMarkContractSigned={onMarkContractSigned}
-              onRecallContract={onRecallContract}
-              onSendContract={onSendContract}
-              contractSending={contractSending}
-              contractSendError={contractSendError}
-              lifecycleBusy={lifecycleBusy}
-            />
-          </StepPane>
+                <StepPane
+                  active={activeStepId === "contract"}
+                  unlocked={isOfferPhaseUnlocked(status, "contract")}
+                  unlockHint="Unlocks once the Tender is signed. Generate the Contract from the Tender data and send it via DocuSign for both parties to sign."
+                  title="Contract"
+                >
+                  <ContractPanel
+                    signerStatuses={signerStatuses}
+                    customerPrice={customerPrice}
+                    draft={draft}
+                    job={job}
+                    contractTerms={contractTerms}
+                    status={status}
+                    contractParticulars={contractParticulars}
+                    onContractParticularsChange={onContractParticularsChange}
+                    onGenerateContract={onGenerateContract}
+                    onMarkContractSigned={onMarkContractSigned}
+                    onRecallContract={onRecallContract}
+                    onSendContract={onSendContract}
+                    contractSending={contractSending}
+                    contractSendError={contractSendError}
+                    lifecycleBusy={lifecycleBusy}
+                  />
+                </StepPane>
 
-          <StepPane
-            active={activeStepId === "project"}
-            unlocked={isOfferPhaseUnlocked(status, "handoff")}
-            unlockHint={"Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."}
-            title="Project"
-          >
-            <ProjectHandoffPanel
-              customerPrice={customerPrice}
-              job={job}
-              lines={lines}
-              paymentSchedule={paymentSchedule}
-              status={status}
-              onCreateProject={onCreateProject}
-              projectCreating={projectCreating}
-              projectResult={projectResult}
-              projectId={projectId}
-              lifecycleBusy={lifecycleBusy}
-            />
-          </StepPane>
-          </>
-          )}
+                <StepPane
+                  active={activeStepId === "project"}
+                  unlocked={isOfferPhaseUnlocked(status, "handoff")}
+                  unlockHint={
+                    "Unlocks once the Contract is signed. Create the Project and seed the costing report from the internal cost lines."
+                  }
+                  title="Project"
+                >
+                  <ProjectHandoffPanel
+                    customerPrice={customerPrice}
+                    job={job}
+                    lines={lines}
+                    paymentSchedule={paymentSchedule}
+                    status={status}
+                    onCreateProject={onCreateProject}
+                    projectCreating={projectCreating}
+                    projectResult={projectResult}
+                    projectId={projectId}
+                    lifecycleBusy={lifecycleBusy}
+                  />
+                </StepPane>
+              </>
+            )}
           </div>
         </div>
       </div>

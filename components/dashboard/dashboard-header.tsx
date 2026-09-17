@@ -50,7 +50,9 @@ export function DashboardHeader({
         "urgent",
       ];
       const leadRows = allLeads.map((l) => {
-        const types = normalizeTypes(l.type).filter((t) => t !== "Not Specified");
+        const types = normalizeTypes(l.type).filter(
+          (t) => t !== "Not Specified",
+        );
         return [
           l.id,
           l.name,
@@ -69,7 +71,13 @@ export function DashboardHeader({
           l.urgent ? "true" : "false",
         ];
       });
-      const historyHeader = ["leadId", "action", "detail", "type", "actionDate"];
+      const historyHeader = [
+        "leadId",
+        "action",
+        "detail",
+        "type",
+        "actionDate",
+      ];
       const historyRows = allLeads.flatMap((l) =>
         (l.history ?? []).map((e) => [
           l.id,

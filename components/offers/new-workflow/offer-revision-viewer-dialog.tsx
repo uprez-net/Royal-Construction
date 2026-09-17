@@ -158,9 +158,8 @@ function ViewerBody({ state }: { readonly state: ViewerState }) {
 
   const input = buildProposalInput(revision.snapshot);
   const statusLabel =
-    OFFER_STATUS_LABEL[
-      revision.status.toLowerCase() as OfferWorkspaceStatus
-    ] ?? revision.status;
+    OFFER_STATUS_LABEL[revision.status.toLowerCase() as OfferWorkspaceStatus] ??
+    revision.status;
 
   return (
     <>
@@ -198,9 +197,7 @@ function ViewerHeader({
     <DialogHeader className="shrink-0 gap-1 border-b border-border/70 px-4 py-3 pr-12">
       <div className="flex flex-wrap items-center gap-2">
         <DialogTitle className="font-mono text-sm">{title}</DialogTitle>
-        {statusLabel ? (
-          <Badge variant="secondary">{statusLabel}</Badge>
-        ) : null}
+        {statusLabel ? <Badge variant="secondary">{statusLabel}</Badge> : null}
         {isActive === false ? (
           <Badge variant="secondary">Read-only</Badge>
         ) : null}

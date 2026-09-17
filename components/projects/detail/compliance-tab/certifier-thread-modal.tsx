@@ -46,7 +46,9 @@ export function CertifierThreadModal({
       maxWidthClass="max-w-[820px]"
       isFullScreenable
       isFullScreen={isFullScreen}
-      onToggleFullScreen={(minimize) => setIsFullScreen(minimize ? false : true)}
+      onToggleFullScreen={(minimize) =>
+        setIsFullScreen(minimize ? false : true)
+      }
     >
       <CertifierThread
         projectId={projectId}

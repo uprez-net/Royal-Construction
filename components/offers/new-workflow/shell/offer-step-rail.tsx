@@ -47,7 +47,9 @@ export function OfferStepRail({
     >
       <ol className="flex-1 overflow-y-auto py-2">
         {OFFER_WORKFLOW_PHASES.map((phase) => {
-          const steps = OFFER_WORKFLOW_STEPS.filter((s) => s.phase === phase.id);
+          const steps = OFFER_WORKFLOW_STEPS.filter(
+            (s) => s.phase === phase.id,
+          );
           if (steps.length === 0) {
             return null;
           }
@@ -174,7 +176,10 @@ function StepGlyph({
     "grid size-5 shrink-0 place-items-center rounded-full font-mono text-[0.625rem] font-semibold";
   if (active) {
     return (
-      <span aria-hidden="true" className={cn(base, "bg-royal-gold-ink text-white")}>
+      <span
+        aria-hidden="true"
+        className={cn(base, "bg-royal-gold-ink text-white")}
+      >
         {index}
       </span>
     );

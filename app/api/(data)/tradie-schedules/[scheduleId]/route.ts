@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { requestTradieScheduleDeletion, updateTradieSchedule } from "@/lib/data/tradieSchedules";
+import {
+  requestTradieScheduleDeletion,
+  updateTradieSchedule,
+} from "@/lib/data/tradieSchedules";
 import {
   deleteTradieScheduleSchema,
   updateTradieScheduleSchema,
@@ -21,14 +24,16 @@ export async function PATCH(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     { scheduleId: resolvedParams.scheduleId },
-    ScheduleParamSchema
+    ScheduleParamSchema,
   );
   if (!routeParams.success) return routeParams.response;
 
   const body = await parseBodyWithResponse(request, updateTradieScheduleSchema);
   if (!body.success) return body.response;
 
-  const result = await updateTradieSchedule(routeParams.data.scheduleId, { status: body.data.status });
+  const result = await updateTradieSchedule(routeParams.data.scheduleId, {
+    status: body.data.status,
+  });
 
   return successResponse(result);
 }
@@ -46,7 +51,7 @@ export async function DELETE(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     { scheduleId: resolvedParams.scheduleId },
-    ScheduleParamSchema
+    ScheduleParamSchema,
   );
   if (!routeParams.success) return routeParams.response;
 

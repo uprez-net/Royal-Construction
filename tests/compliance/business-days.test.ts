@@ -62,12 +62,18 @@ test("the day something is lodged counts as zero", () => {
 test("a working week counts five, not seven", () => {
   // Monday 1 June to the following Monday.
   assert.equal(
-    businessDaysBetween(sydney("2026-06-01T09:00:00"), sydney("2026-06-08T09:00:00")),
+    businessDaysBetween(
+      sydney("2026-06-01T09:00:00"),
+      sydney("2026-06-08T09:00:00"),
+    ),
     // The 8th is the King's Birthday, so the Monday itself does not count.
     4,
   );
   assert.equal(
-    businessDaysBetween(sydney("2026-06-01T09:00:00"), sydney("2026-06-05T09:00:00")),
+    businessDaysBetween(
+      sydney("2026-06-01T09:00:00"),
+      sydney("2026-06-05T09:00:00"),
+    ),
     4,
   );
 });
@@ -76,7 +82,10 @@ test("a clock cannot run backwards", () => {
   // A lodgement date typed in as next month must not read as "not due yet" for
   // a month. Zero is the honest answer to a wait that has not started.
   assert.equal(
-    businessDaysBetween(sydney("2026-07-01T09:00:00"), sydney("2026-06-01T09:00:00")),
+    businessDaysBetween(
+      sydney("2026-07-01T09:00:00"),
+      sydney("2026-06-01T09:00:00"),
+    ),
     0,
   );
 });

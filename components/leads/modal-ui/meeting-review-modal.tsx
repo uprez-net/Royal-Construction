@@ -113,7 +113,9 @@ export function MeetingReviewModal({
               ],
             }
           : {
-              history: [buildMeetingDidNotTakePlaceHistoryEntry(discussionNotes)],
+              history: [
+                buildMeetingDidNotTakePlaceHistoryEntry(discussionNotes),
+              ],
             },
       );
 
@@ -130,9 +132,9 @@ export function MeetingReviewModal({
         // Scoped, for the same reason the follow-up dialog is: filtering the
         // capped org-wide list could find no meeting on a lead that has one,
         // and "Done" would then close nothing while saying it had.
-        const openMeetings = (await fetchOpenTasks({ leadIds: [lead.id] })).filter(
-          (t) => t.type === "MEETING",
-        );
+        const openMeetings = (
+          await fetchOpenTasks({ leadIds: [lead.id] })
+        ).filter((t) => t.type === "MEETING");
         // Exactly one meeting is closed, never a set.
         //
         // With a task id this is the row that was clicked. Without one —

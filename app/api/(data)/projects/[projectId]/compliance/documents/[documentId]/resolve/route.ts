@@ -82,7 +82,9 @@ export async function POST(
     if (refusal) return refusal;
     console.error("Failed to resolve a compliance document", error);
     return errorResponse(
-      error instanceof Error ? error.message : "Failed to resolve the document.",
+      error instanceof Error
+        ? error.message
+        : "Failed to resolve the document.",
     );
   }
 }

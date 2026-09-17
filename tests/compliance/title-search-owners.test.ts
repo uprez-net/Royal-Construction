@@ -125,7 +125,10 @@ test("a search naming nobody we hold is a mismatch", () => {
 
   assert.equal(result.verdict, "mismatch");
   if (result.verdict === "mismatch") {
-    assert.deepEqual(result.documentOwners, ["PETER JAMES NGUYEN", "LINH NGUYEN"]);
+    assert.deepEqual(result.documentOwners, [
+      "PETER JAMES NGUYEN",
+      "LINH NGUYEN",
+    ]);
     assert.deepEqual(result.projectOwners, ["John Smith", "Jane Smith"]);
   }
 });

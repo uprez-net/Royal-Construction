@@ -23,14 +23,15 @@ export default function OfferDetailError({
         <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-destructive-light text-destructive ring-8 ring-destructive/10">
           <AlertTriangle className="size-10" />
         </div>
-        
+
         <h2 className="mb-3 font-heading text-[22px] font-semibold tracking-tight text-foreground">
           Failed to load offer details
         </h2>
-        
+
         <p className="mb-8 text-[14px] leading-relaxed text-muted-foreground">
-          We encountered an unexpected error while retrieving this offer&apos;s information. 
-          The offer may have been removed, or there might be a temporary connection issue.
+          We encountered an unexpected error while retrieving this offer&apos;s
+          information. The offer may have been removed, or there might be a
+          temporary connection issue.
         </p>
 
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
@@ -53,7 +54,7 @@ export default function OfferDetailError({
             </Link>
           </Button>
         </div>
-        
+
         {process.env.NODE_ENV === "development" && (
           <div className="mt-10 w-full overflow-hidden rounded-lg border border-destructive/20 bg-destructive-light text-left">
             <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2">

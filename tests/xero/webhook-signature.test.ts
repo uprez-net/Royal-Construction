@@ -29,14 +29,22 @@ function headers(entries: Record<string, string>): Headers {
 
 test("accepts a payload signed with the configured key", () => {
   assert.equal(
-    verifyXeroSignature(headers({ "x-xero-signature": sign(BODY, KEY) }), BODY, KEY),
+    verifyXeroSignature(
+      headers({ "x-xero-signature": sign(BODY, KEY) }),
+      BODY,
+      KEY,
+    ),
     true,
   );
 });
 
 test("rejects a payload signed with a different key", () => {
   assert.equal(
-    verifyXeroSignature(headers({ "x-xero-signature": sign(BODY, OTHER_KEY) }), BODY, KEY),
+    verifyXeroSignature(
+      headers({ "x-xero-signature": sign(BODY, OTHER_KEY) }),
+      BODY,
+      KEY,
+    ),
     false,
   );
 });
@@ -48,7 +56,11 @@ test("rejects a body that was altered after signing", () => {
   const tampered = BODY.replace("INVOICE", "CONTACT");
 
   assert.equal(
-    verifyXeroSignature(headers({ "x-xero-signature": signature }), tampered, KEY),
+    verifyXeroSignature(
+      headers({ "x-xero-signature": signature }),
+      tampered,
+      KEY,
+    ),
     false,
   );
 });
@@ -72,7 +84,11 @@ test("rejects a truncated signature without throwing", () => {
 
 test("rejects everything when no key is configured", () => {
   assert.equal(
-    verifyXeroSignature(headers({ "x-xero-signature": sign(BODY, "") }), BODY, ""),
+    verifyXeroSignature(
+      headers({ "x-xero-signature": sign(BODY, "") }),
+      BODY,
+      "",
+    ),
     false,
   );
 });
@@ -83,7 +99,11 @@ test("verifies an empty payload", () => {
   const empty = JSON.stringify({ events: [] });
 
   assert.equal(
-    verifyXeroSignature(headers({ "x-xero-signature": sign(empty, KEY) }), empty, KEY),
+    verifyXeroSignature(
+      headers({ "x-xero-signature": sign(empty, KEY) }),
+      empty,
+      KEY,
+    ),
     true,
   );
 });

@@ -39,7 +39,8 @@ export const VARIANTS = [
   {
     id: "b",
     name: "Document-aware",
-    blurb: "Fields on the left, the customer's document rendering live beside them.",
+    blurb:
+      "Fields on the left, the customer's document rendering live beside them.",
   },
   {
     id: "c",
@@ -79,11 +80,19 @@ export function CommandBar({ job }: { readonly job: PrototypeJob }) {
           <Download className="size-3.5" aria-hidden="true" />
           <span className="hidden lg:inline">Preview</span>
         </Button>
-        <Button size="sm" className="h-8 bg-royal-gold hover:bg-royal-gold-dark">
+        <Button
+          size="sm"
+          className="h-8 bg-royal-gold hover:bg-royal-gold-dark"
+        >
           <Send className="size-3.5" aria-hidden="true" />
           Send offer
         </Button>
-        <Button size="icon" variant="ghost" className="size-8" aria-label="More actions">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-8"
+          aria-label="More actions"
+        >
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </Button>
       </div>

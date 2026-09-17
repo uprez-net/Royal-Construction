@@ -28,6 +28,12 @@ import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+type AgentSessionTitleDetail = {
+  path: string;
+  sessionId: string;
+  title: string;
+};
+
 export function AppShell({
   isAdmin,
   isSignedIn,
@@ -46,13 +52,41 @@ export function AppShell({
   const [queryClient] = useState(() => new QueryClient());
   const [time, setTime] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [agentSessionTitle, setAgentSessionTitle] =
+    useState<AgentSessionTitleDetail | null>(null);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
-  const activeTradie = useAppSelector((state) => state.tradieManagement.selectedTradieDetails);
+  const activeTradie = useAppSelector(
+    (state) => state.tradieManagement.selectedTradieDetails,
+  );
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
   const sectionSlug = getShellSectionSlug(pathName);
   const titleSlug = isUUID(lastSegment) ? "Loading..." : lastSegment;
-  const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(titleSlug);
+  const isAgentSessionRoute = pathName.startsWith("/agent/");
+  const title = activeProject
+    ? activeProject.name
+    : activeTradie
+      ? activeTradie.name
+      : isAgentSessionRoute && agentSessionTitle?.path === pathName
+        ? agentSessionTitle.title
+        : isAgentSessionRoute
+          ? "Conversation"
+          : getScreenTitle(titleSlug);
+
+  useEffect(() => {
+    const handleAgentSessionTitle = (event: Event) => {
+      const detail = (event as CustomEvent<AgentSessionTitleDetail>).detail;
+      if (!detail?.path || !detail.title) return;
+      setAgentSessionTitle(detail);
+    };
+
+    window.addEventListener("agent-session-title", handleAgentSessionTitle);
+    return () =>
+      window.removeEventListener(
+        "agent-session-title",
+        handleAgentSessionTitle,
+      );
+  }, []);
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -79,7 +113,6 @@ export function AppShell({
     <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-foreground">
       {/* Clean Light Background matching Email Theme */}
       <div className="flex h-full">
-        
         {/* ── Desktop Sidebar ── */}
         <aside className="hidden w-16 shrink-0 border-r border-border bg-white text-muted-foreground shadow-sm md:flex md:flex-col md:items-center md:py-4">
           <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
@@ -90,15 +123,19 @@ export function AppShell({
               height={32}
             />
           </div>
-          <nav aria-label="Main" className="flex flex-1 flex-col items-center gap-1">
+          <nav
+            aria-label="Main"
+            className="flex flex-1 flex-col items-center gap-1"
+          >
             {navigationItems.map((item) => (
               <Link
                 key={item.slug}
                 href={`/${item.slug}`}
                 className={cn(
                   "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-muted hover:text-foreground",
-                  item.slug === sectionSlug && "bg-royal-gold-light text-royal-gold-ink",
-                  item.checkAdmin && !isAdmin && "hidden"
+                  item.slug === sectionSlug &&
+                    "bg-royal-gold-light text-royal-gold-ink",
+                  item.checkAdmin && !isAdmin && "hidden",
                 )}
                 aria-label={item.label}
                 aria-current={item.slug === sectionSlug ? "page" : undefined}
@@ -117,8 +154,7 @@ export function AppShell({
           </nav>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {/* ── Mobile Sidebar Sheet ── */}
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetContent
@@ -173,13 +209,17 @@ export function AppShell({
                           item.slug === sectionSlug
                             ? "bg-royal-gold-light text-royal-gold-ink"
                             : "text-muted-foreground",
-                          item.checkAdmin && !isAdmin && "hidden"
+                          item.checkAdmin && !isAdmin && "hidden",
                         )}
                       >
-                        <span aria-hidden="true" className={cn(
-                          "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
-                          item.slug === sectionSlug && "bg-royal-gold-light text-royal-gold-ink"
-                        )}>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
+                            item.slug === sectionSlug &&
+                              "bg-royal-gold-light text-royal-gold-ink",
+                          )}
+                        >
                           {item.icon}
                         </span>
                         <span>{item.label}</span>
@@ -217,7 +257,8 @@ export function AppShell({
                           userButtonBox:
                             "w-full! flex! flex-row-reverse!  gap-2 justify-end text-foreground",
                           userButtonTrigger: "w-full",
-                          userButtonOuterIdentifier: "text-base text-foreground",
+                          userButtonOuterIdentifier:
+                            "text-base text-foreground",
                           userButtonAvatarBox: "w-8 h-8",
                           rootBox: "w-full shadow-xs",
                         },
@@ -255,13 +296,17 @@ export function AppShell({
                     {trail.map((segment, index) => (
                       <div key={segment} className="flex items-center gap-2">
                         {index > 0 ? (
-                          <span className="text-muted-foreground/50" aria-hidden="true">
+                          <span
+                            className="text-muted-foreground/50"
+                            aria-hidden="true"
+                          >
                             /
                           </span>
                         ) : null}
                         <span
                           className={cn(
-                            index === trail.length - 1 && "font-medium text-foreground",
+                            index === trail.length - 1 &&
+                              "font-medium text-foreground",
                           )}
                         >
                           {segment}
@@ -296,11 +341,7 @@ export function AppShell({
                       >
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
-                      <Button
-                        variant="royal"
-                        className="rounded-lg"
-                        asChild
-                      >
+                      <Button variant="royal" className="rounded-lg" asChild>
                         <Link href="/sign-up">Sign up</Link>
                       </Button>
                     </div>
@@ -320,8 +361,10 @@ export function AppShell({
 
           <main
             className={cn(
-              "flex min-h-0 w-full flex-1 flex-col gap-6",
-              "overflow-y-auto",
+              "min-h-0 w-full flex-1 gap-6",
+              pathName.startsWith("/agent")
+                ? "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
+                : "flex flex-col overflow-y-auto",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",

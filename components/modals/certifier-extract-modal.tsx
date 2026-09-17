@@ -164,7 +164,10 @@ export function CertifierExtractModal({
 
         {failure ? (
           <p className="flex items-start gap-2 text-sm text-destructive-ink">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <AlertCircle
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
             {failure}
           </p>
         ) : result ? (

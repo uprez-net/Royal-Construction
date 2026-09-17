@@ -63,10 +63,7 @@ test("the extraction's mapsToType is taken over any reading of the label", () =>
 test("the six documents the file already holds are recognised by name", () => {
   const cases: [string, ComplianceDocumentType][] = [
     ["Deposited Plan", ComplianceDocumentType.DEPOSITED_PLAN],
-    [
-      "Title Search",
-      ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL,
-    ],
+    ["Title Search", ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL],
     ["Signed Survey", ComplianceDocumentType.SURVEY],
     [
       "Architectural drawings",
@@ -125,7 +122,10 @@ test("the description is read when the label alone says nothing", () => {
 
 test("the consultants' documents are recognised in trade shorthand", () => {
   const cases: [string, ComplianceDocumentType][] = [
-    ["Structural drawings & Design Certificate", ComplianceDocumentType.STRUCTURAL_DRAWINGS],
+    [
+      "Structural drawings & Design Certificate",
+      ComplianceDocumentType.STRUCTURAL_DRAWINGS,
+    ],
     [
       "Hydraulic/Stormwater drawings & Design Certificate",
       ComplianceDocumentType.HYDRAULIC_STORMWATER_DRAWINGS,
@@ -275,7 +275,10 @@ test("the two marks are read independently", () => {
   // must not depend on that, because a row written before the boolean existed
   // carries an id and a false, and it is still ours.
   assert.equal(
-    isMappedCopy({ mappedFromDocumentId: "document-1", mappedFromProject: true }),
+    isMappedCopy({
+      mappedFromDocumentId: "document-1",
+      mappedFromProject: true,
+    }),
     true,
   );
 });

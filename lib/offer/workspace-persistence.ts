@@ -10,7 +10,10 @@ import {
   type OfferWorkspaceStatus,
 } from "./workspace-model";
 import { keepFrozenSlices, lockedSnapshotChanges } from "./offer-editability";
-import { INITIAL_AREA_CALCULATOR, type OfferAreaCalculator } from "./workspace-area";
+import {
+  INITIAL_AREA_CALCULATOR,
+  type OfferAreaCalculator,
+} from "./workspace-area";
 import {
   withDerivedHbcfPremium,
   reverseHbcfTotalContractValue,
@@ -20,10 +23,7 @@ import {
 } from "./workspace-pricing";
 import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
 import type { OfferImageMap } from "./workspace-images";
-import {
-  RATE_CARD_PRODUCTS,
-  RATE_CARD_TIERS,
-} from "./workspace-rate-card";
+import { RATE_CARD_PRODUCTS, RATE_CARD_TIERS } from "./workspace-rate-card";
 import { STANDARD_INCLUSION_ENTRIES } from "./workspace-proposal-content";
 import { isAllowedOfferImageUrl } from "./offer-image-url";
 
@@ -124,7 +124,6 @@ export {
   isSupportedCalcVersion,
   type CalcVersion,
 } from "@/lib/offer/calc-version";
-
 
 // ─── Money helpers (ADR 0002: money persisted as integer cents) ───
 export const dollarsToCents = (value: number): number =>
@@ -632,9 +631,9 @@ function migrateV4ToV5(
     ? draft.inclusionSchedule
     : [];
   const categoryBySpec = new Map(
-    STANDARD_INCLUSION_ENTRIES.filter((entry) => entry.category !== undefined).map(
-      (entry) => [entry.spec, entry.category as string],
-    ),
+    STANDARD_INCLUSION_ENTRIES.filter(
+      (entry) => entry.category !== undefined,
+    ).map((entry) => [entry.spec, entry.category as string]),
   );
   return {
     ...state,
@@ -652,7 +651,9 @@ function migrateV4ToV5(
           return match === undefined ? e : { ...e, category: match };
         }
         const match = categoryBySpec.get(entry);
-        return match === undefined ? { spec: entry } : { spec: entry, category: match };
+        return match === undefined
+          ? { spec: entry }
+          : { spec: entry, category: match };
       }),
     },
   };
@@ -681,7 +682,10 @@ function migrateV5ToV6(
       return raw;
     }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured to DROP
-    const { summary, summaryFromSpec, ...rest } = raw as Record<string, unknown>;
+    const { summary, summaryFromSpec, ...rest } = raw as Record<
+      string,
+      unknown
+    >;
     if (typeof summary === "string" && summary.trim().length > 0) {
       highlights.push(summary);
     }
@@ -896,7 +900,9 @@ export function deserializeWorkspace(
 // premium kept to the cent re-derives a cent off. Hydration is stable after two
 // passes. Throws when the read parse refuses the snapshot.
 export function settledWorkspace(state: unknown): PersistedOfferWorkspaceState {
-  const once = serializeWorkspace(deserializeWorkspace(parseWorkspaceState(state)));
+  const once = serializeWorkspace(
+    deserializeWorkspace(parseWorkspaceState(state)),
+  );
   return serializeWorkspace(deserializeWorkspace(once));
 }
 
@@ -921,7 +927,6 @@ export function planWorkspaceSave(
   }
   return { ok: true, state: keepFrozenSlices(status, stored, incoming) };
 }
-
 
 function deserializeScopeItem(
   item: z.infer<typeof scopeItemSchema>,

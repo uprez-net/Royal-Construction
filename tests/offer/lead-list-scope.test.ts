@@ -41,7 +41,11 @@ test("the listing scope admits exactly the leads canAccessLead admits", () => {
     for (const lead of leads) {
       const listed =
         scope.assignedId === null || lead.assignedId === scope.assignedId;
-      assert.equal(listed, canAccessLead(user, lead), `${role}, lead ${lead.id}`);
+      assert.equal(
+        listed,
+        canAccessLead(user, lead),
+        `${role}, lead ${lead.id}`,
+      );
     }
   }
 });
@@ -60,13 +64,19 @@ test("a customer's lead filter keeps their scope beside every search and tab", (
   const where = offerListLeadWhere(scope, [4, 5], "OF-123");
   assert.deepEqual(where.id, { in: [4, 5] });
   assert.ok(
-    where.OR?.some((clause) => JSON.stringify(clause) === JSON.stringify({ id: 123 })),
+    where.OR?.some(
+      (clause) => JSON.stringify(clause) === JSON.stringify({ id: 123 }),
+    ),
   );
 });
 
 test("an internal lead filter carries no assignee", () => {
   for (const role of INTERNAL_ROLES) {
-    const where = offerListLeadWhere(leadListScope({ id: "u1", role }), null, "OF-123");
+    const where = offerListLeadWhere(
+      leadListScope({ id: "u1", role }),
+      null,
+      "OF-123",
+    );
     assert.equal("assignedId" in where, false, role);
     assert.deepEqual(where.offers, { some: {} });
   }

@@ -290,19 +290,20 @@ export const OFFER_STATUS_LABEL: Record<OfferWorkspaceStatus, string> = {
 // the former single 20%), each set per job. HBCF and the impact fee are the only
 // fixed additions; admin/labour/engineering/legal/licence were removed in #115
 // as they are captured once inside the Calculation Workbook's direct-cost lines.
-export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings = {
-  royalConstructionOverheadPct: 0.1,
-  royalConstructionFeePct: 0.1,
-  gstRate: 0.1,
-  hbcfTotalContractValue: 0,
-  // Keep in sync with DEFAULT_HBCF_RATE in workspace-pricing.ts (#116) —
-  // icare H01 metro base rate ex GST/stamp (0.966%).
-  hbcfRate: 0.00966,
-  homeWarrantyHbcfFixed: 0,
-  impactFeeFixed: 0,
-  // Loading charge percentage applied to whole premium
-  loadingChargePercentage: 0,
-};
+export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings =
+  {
+    royalConstructionOverheadPct: 0.1,
+    royalConstructionFeePct: 0.1,
+    gstRate: 0.1,
+    hbcfTotalContractValue: 0,
+    // Keep in sync with DEFAULT_HBCF_RATE in workspace-pricing.ts (#116) —
+    // icare H01 metro base rate ex GST/stamp (0.966%).
+    hbcfRate: 0.00966,
+    homeWarrantyHbcfFixed: 0,
+    impactFeeFixed: 0,
+    // Loading charge percentage applied to whole premium
+    loadingChargePercentage: 0,
+  };
 
 // Façade options the client picks in Job setup. `imageHint` is the visual
 // descriptor woven into the exterior AI image prompts (see offer-image-context).
@@ -342,13 +343,16 @@ export const FACADE_OPTIONS: readonly {
   {
     value: "Coastal",
     label: "Coastal",
-    imageHint: "coastal facade, light palette, timber batten accents, large windows",
+    imageHint:
+      "coastal facade, light palette, timber batten accents, large windows",
   },
 ];
 
 // Visual descriptor for a selected façade, or "" when none/unknown.
 export function facadeImageHint(facade: string): string {
-  return FACADE_OPTIONS.find((option) => option.value === facade)?.imageHint ?? "";
+  return (
+    FACADE_OPTIONS.find((option) => option.value === facade)?.imageHint ?? ""
+  );
 }
 
 // A fresh offer starts with blank client/site identity — it is synced from the
@@ -384,7 +388,9 @@ export function createIndividualOwner(id: string): OfferOwner {
     displayName: "",
     currentLocation: "",
     abn: "",
-    signatories: [createOfferSignatory(`${id}-signer-1`, OWNER_SIGNER_CAPACITY)],
+    signatories: [
+      createOfferSignatory(`${id}-signer-1`, OWNER_SIGNER_CAPACITY),
+    ],
   };
 }
 
@@ -396,7 +402,9 @@ export function createCompanyOwner(id: string): OfferOwner {
     displayName: "",
     currentLocation: "",
     abn: "",
-    signatories: [createOfferSignatory(`${id}-dir-1`, DIRECTOR_SIGNER_CAPACITY)],
+    signatories: [
+      createOfferSignatory(`${id}-dir-1`, DIRECTOR_SIGNER_CAPACITY),
+    ],
   };
 }
 
@@ -454,7 +462,8 @@ export function collectOfferSigners(
 export function offerSignerLabel(signer: OfferSignerContext): string {
   const name = signer.signatory.name.trim();
   if (signer.entityName) {
-    const capacity = signer.signatory.capacity.trim() || DIRECTOR_SIGNER_CAPACITY;
+    const capacity =
+      signer.signatory.capacity.trim() || DIRECTOR_SIGNER_CAPACITY;
     const who = name || capacity;
     return `${who} (${capacity}, ${signer.entityName})`;
   }
@@ -497,7 +506,9 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
     const isCompany = owner.kind === "company";
     const who = owner.displayName.trim() || `Owner ${index + 1}`;
     if (owner.displayName.trim().length === 0) {
-      issues.push(`Owner ${index + 1} needs a ${isCompany ? "company name" : "name"}.`);
+      issues.push(
+        `Owner ${index + 1} needs a ${isCompany ? "company name" : "name"}.`,
+      );
     }
     // A company is a legal person identified by its ABN/ACN — the Tender/Contract
     // print the number next to the company name, so an entity owner without one
@@ -523,11 +534,15 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
     // defaults signatories to [], so guard it here (the individual editor can't
     // repair a zero-signatory owner either).
     if (owner.signatories.length === 0) {
-      issues.push(`${who} needs at least one ${isCompany ? "director" : "signatory"}.`);
+      issues.push(
+        `${who} needs at least one ${isCompany ? "director" : "signatory"}.`,
+      );
     }
     owner.signatories.forEach((signatory) => {
       if (signatory.name.trim().length === 0) {
-        issues.push(`${who} has a ${isCompany ? "director" : "signatory"} without a name.`);
+        issues.push(
+          `${who} has a ${isCompany ? "director" : "signatory"} without a name.`,
+        );
       }
       if (!OWNER_EMAIL_PATTERN.test(signatory.email.trim())) {
         const label =
@@ -1005,7 +1020,9 @@ export function updateOfferScopeItems(
   itemId: string,
   patch: Partial<OfferWorkspaceScopeItem>,
 ): readonly OfferWorkspaceScopeItem[] {
-  return items.map((item) => (item.id === itemId ? { ...item, ...patch } : item));
+  return items.map((item) =>
+    item.id === itemId ? { ...item, ...patch } : item,
+  );
 }
 
 // A blank scope item ready for the operator to fill in. Exclusions default to a
@@ -1074,7 +1091,6 @@ export function applyTaskMappingToCostLine(
   };
 }
 
-
 // Inclusions Schedule pagination, in LINE UNITS rather than rows. The schedule
 // is estimator-editable free text, so a fixed rows-per-page count overflows the
 // moment someone writes specifications longer than the seeded ones — and an
@@ -1110,7 +1126,8 @@ export function chunkInclusionSchedule(
     1,
     INCLUSIONS_LINES_PER_PAGE - INCLUSIONS_INTRO_LINES,
   );
-  const first = chunkByEstimatedHeight([...entries], firstBudget, heightOf)[0] ?? [];
+  const first =
+    chunkByEstimatedHeight([...entries], firstBudget, heightOf)[0] ?? [];
   const rest = entries.slice(first.length);
   return [
     first,
@@ -1193,7 +1210,11 @@ export function chunkAllowanceRows<T extends AllowanceRowText>(
   const rest = rows.slice(first.length);
   return [
     first,
-    ...chunkByEstimatedHeight(rest, ALLOWANCES_LINES_PER_PAGE, allowanceRowLines),
+    ...chunkByEstimatedHeight(
+      rest,
+      ALLOWANCES_LINES_PER_PAGE,
+      allowanceRowLines,
+    ),
   ].filter((page) => page.length > 0);
 }
 
@@ -1213,7 +1234,6 @@ export function getIncludedOfferTenderLineItems(
     ),
   );
 }
-
 
 export function inferOfferStageCode(taskName: string): OfferStageCode {
   const lowerName = taskName.toLowerCase();
@@ -1246,7 +1266,11 @@ export function inferOfferStageCode(taskName: string): OfferStageCode {
   if (/air conditioning|hvac/.test(lowerName)) {
     return "H";
   }
-  if (/insulation|gyprock|stair|door|lock|carpenter|wardrobe|floor/.test(lowerName)) {
+  if (
+    /insulation|gyprock|stair|door|lock|carpenter|wardrobe|floor/.test(
+      lowerName,
+    )
+  ) {
     return "I";
   }
   if (/waterproof|tile|tiling|sand|cement/.test(lowerName)) {

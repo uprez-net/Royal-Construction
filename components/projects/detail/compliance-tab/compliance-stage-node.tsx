@@ -343,7 +343,9 @@ export function StageMarker({ stage }: { stage: ComplianceStage }) {
         <span
           className={cn(
             "absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full border-2 border-card",
-            stage.isOverdue ? "bg-destructive text-white" : "bg-success text-white",
+            stage.isOverdue
+              ? "bg-destructive text-white"
+              : "bg-success text-white",
           )}
         >
           {stage.isOverdue ? (

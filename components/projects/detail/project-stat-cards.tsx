@@ -158,9 +158,7 @@ export function ProjectStatCards({ role }: { role: Role }) {
             used
           </span>
         </div>
-        <div className={CARD_VALUE}>
-          {currency.format(budgetSummary.spent)}
-        </div>
+        <div className={CARD_VALUE}>{currency.format(budgetSummary.spent)}</div>
         <div className={CARD_LABEL}>Spent to date</div>
       </div>
 
@@ -202,9 +200,7 @@ export function ProjectStatCards({ role }: { role: Role }) {
             {isOverBudget ? "over" : "left"}
           </span>
         </div>
-        <div
-          className={cn(CARD_VALUE, isOverBudget && "text-destructive-ink")}
-        >
+        <div className={cn(CARD_VALUE, isOverBudget && "text-destructive-ink")}>
           {currency.format(isOverBudget ? overrun : budgetSummary.remaining)}
         </div>
         <div className={CARD_LABEL}>

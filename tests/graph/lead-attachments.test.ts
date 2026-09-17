@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { GraphRequestError, type GraphAttachmentMetadata } from "../../lib/graph/client";
+import {
+  GraphRequestError,
+  type GraphAttachmentMetadata,
+} from "../../lib/graph/client";
 import {
   collectLeadAttachments,
   hydrateLeadAttachments,
@@ -13,7 +16,8 @@ import {
 
 const MB = 1024 * 1024;
 
-const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOCX =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 function attachment(
   overrides: Partial<GraphAttachmentMetadata> = {},
@@ -56,7 +60,10 @@ test("the extension wins over a generic Content-Type", () => {
   );
   assert.equal(resolveMediaType("photo.JPEG", ""), "image/jpeg");
   assert.equal(resolveMediaType("noextension", "image/png"), "image/png");
-  assert.equal(resolveMediaType("brief.txt", "text/plain; charset=utf-8"), "text/plain");
+  assert.equal(
+    resolveMediaType("brief.txt", "text/plain; charset=utf-8"),
+    "text/plain",
+  );
 
   const { selected } = selectLeadAttachments([
     attachment({ name: "plans.pdf", contentType: "application/octet-stream" }),
@@ -66,8 +73,18 @@ test("the extension wins over a generic Content-Type", () => {
 
 test("signature logos and tracking pixels are left behind", () => {
   const { selected, skipped } = selectLeadAttachments([
-    attachment({ name: "logo.png", contentType: "image/png", size: 8 * 1024, isInline: true }),
-    attachment({ name: "pixel.gif", contentType: "image/gif", size: 43, isInline: true }),
+    attachment({
+      name: "logo.png",
+      contentType: "image/png",
+      size: 8 * 1024,
+      isInline: true,
+    }),
+    attachment({
+      name: "pixel.gif",
+      contentType: "image/gif",
+      size: 43,
+      isInline: true,
+    }),
   ]);
 
   assert.deepEqual(selected, []);
@@ -78,7 +95,12 @@ test("a large pasted image is kept even though it is inline", () => {
   // Outlook marks a photo dropped into the body as inline. That photo is
   // frequently the entire enquiry, so size — not the inline flag — decides.
   const { selected } = selectLeadAttachments([
-    attachment({ name: "backyard.jpg", contentType: "image/jpeg", size: 900 * 1024, isInline: true }),
+    attachment({
+      name: "backyard.jpg",
+      contentType: "image/jpeg",
+      size: 900 * 1024,
+      isInline: true,
+    }),
   ]);
 
   assert.deepEqual(namesOf(selected), ["backyard.jpg"]);
@@ -108,8 +130,14 @@ test("a .docx is downloaded now that OCR can read it", () => {
 test("linked and forwarded-email attachments are skipped", () => {
   // Neither has bytes behind /$value, so downloading one is a guaranteed error.
   const { selected, skipped } = selectLeadAttachments([
-    attachment({ name: "OneDrive plans.pdf", odataType: "#microsoft.graph.referenceAttachment" }),
-    attachment({ name: "Fwd enquiry", odataType: "#microsoft.graph.itemAttachment" }),
+    attachment({
+      name: "OneDrive plans.pdf",
+      odataType: "#microsoft.graph.referenceAttachment",
+    }),
+    attachment({
+      name: "Fwd enquiry",
+      odataType: "#microsoft.graph.itemAttachment",
+    }),
   ]);
 
   assert.deepEqual(selected, []);
@@ -222,9 +250,12 @@ test("a .docx is readable now that it goes through OCR", async () => {
 test("a text attachment is decoded without an OCR round-trip", async () => {
   let ocrCalls = 0;
   const report = await collectLeadAttachments(
-    sourceFor([attachment({ id: "a", name: "brief.txt", contentType: "text/plain" })], {
-      a: Buffer.from("Knockdown rebuild in Parramatta"),
-    }),
+    sourceFor(
+      [attachment({ id: "a", name: "brief.txt", contentType: "text/plain" })],
+      {
+        a: Buffer.from("Knockdown rebuild in Parramatta"),
+      },
+    ),
     "message-1",
     async () => {
       ocrCalls += 1;
@@ -232,13 +263,19 @@ test("a text attachment is decoded without an OCR round-trip", async () => {
     },
   );
 
-  assert.equal(ocrCalls, 0, "already text — OCR would be a round-trip to be told so");
+  assert.equal(
+    ocrCalls,
+    0,
+    "already text — OCR would be a round-trip to be told so",
+  );
   assert.equal(report.files[0].text, "Knockdown rebuild in Parramatta");
 });
 
 test("a photo OCR cannot read is marked for the model to look at", async () => {
   const report = await collectLeadAttachments(
-    sourceFor([attachment({ id: "a", name: "backyard.jpg", contentType: "image/jpeg" })]),
+    sourceFor([
+      attachment({ id: "a", name: "backyard.jpg", contentType: "image/jpeg" }),
+    ]),
     "message-1",
     noOcrText,
   );
@@ -251,7 +288,9 @@ test("a stray character off a letterbox is not treated as text", async () => {
   // OCR over a site photo returns a number plate or a street number. Sending
   // that instead of the image would lose the only thing worth reading.
   const report = await collectLeadAttachments(
-    sourceFor([attachment({ id: "a", name: "site.jpg", contentType: "image/jpeg" })]),
+    sourceFor([
+      attachment({ id: "a", name: "site.jpg", contentType: "image/jpeg" }),
+    ]),
     "message-1",
     ocrReturning("  42  "),
   );
@@ -284,10 +323,15 @@ test("every downloaded file is reported, whatever became of it", async () => {
       attachment({ id: "c", name: "site.jpg", contentType: "image/jpeg" }),
     ]),
     "message-1",
-    async ({ name }) => (name === "plans.pdf" ? "Granny flat at 12 Smith St" : ""),
+    async ({ name }) =>
+      name === "plans.pdf" ? "Granny flat at 12 Smith St" : "",
   );
 
-  assert.deepEqual(namesOf(report.files), ["plans.pdf", "brief.docx", "site.jpg"]);
+  assert.deepEqual(namesOf(report.files), [
+    "plans.pdf",
+    "brief.docx",
+    "site.jpg",
+  ]);
   assert.deepEqual(
     report.files.map((file) => file.text !== null),
     [true, false, false],
@@ -299,7 +343,13 @@ test("the names of unreadable attachments still reach the extractor", async () =
   // otherwise a "plans attached" enquiry reads as an empty message and is
   // scored as spam.
   const report = await collectLeadAttachments(
-    sourceFor([attachment({ id: "a", name: "plans.dwg", contentType: "application/acad" })]),
+    sourceFor([
+      attachment({
+        id: "a",
+        name: "plans.dwg",
+        contentType: "application/acad",
+      }),
+    ]),
     "message-1",
     noOcrText,
   );
@@ -324,7 +374,9 @@ test("a failed download does not lose the other attachments or throw", async () 
   );
 
   assert.deepEqual(namesOf(report.files), ["plans.pdf"]);
-  assert.deepEqual(report.skipped, [{ name: "broken.pdf", reason: "download failed" }]);
+  assert.deepEqual(report.skipped, [
+    { name: "broken.pdf", reason: "download failed" },
+  ]);
 });
 
 test("a throttled download is retried rather than skipped", async () => {
@@ -333,7 +385,9 @@ test("a throttled download is retried rather than skipped", async () => {
   let calls = 0;
   const report = await collectLeadAttachments(
     {
-      listMessageAttachments: async () => [attachment({ id: "a", name: "plans.pdf" })],
+      listMessageAttachments: async () => [
+        attachment({ id: "a", name: "plans.pdf" }),
+      ],
       downloadMessageAttachment: async () => {
         calls += 1;
         if (calls === 1) throw new GraphRequestError("throttled", 429, 0);
@@ -397,7 +451,8 @@ test("only the files the model must look at are read back", async () => {
   const report = await collectLeadAttachments(
     source,
     "message-1",
-    async ({ name }) => (name === "plans.pdf" ? "Granny flat at 12 Smith St" : ""),
+    async ({ name }) =>
+      name === "plans.pdf" ? "Granny flat at 12 Smith St" : "",
   );
 
   source.downloads.length = 0;
@@ -417,23 +472,34 @@ test("only the files the model must look at are read back", async () => {
 });
 
 test("a docx nothing could read is named to the model but not sent", async () => {
-  const source = sourceFor([attachment({ id: "a", name: "brief.docx", contentType: DOCX })]);
+  const source = sourceFor([
+    attachment({ id: "a", name: "brief.docx", contentType: DOCX }),
+  ]);
   const report = await collectLeadAttachments(source, "message-1", noOcrText);
 
   source.downloads.length = 0;
   const set = await hydrateLeadAttachments(report, source, "message-1");
 
-  assert.deepEqual(source.downloads, [], "nothing can read it — do not fetch it again");
+  assert.deepEqual(
+    source.downloads,
+    [],
+    "nothing can read it — do not fetch it again",
+  );
   assert.deepEqual(set.attachments, []);
   assert.deepEqual(set.skipped, [
-    { name: "brief.docx", reason: "no text found and the model cannot open the format" },
+    {
+      name: "brief.docx",
+      reason: "no text found and the model cannot open the format",
+    },
   ]);
   // Dropped from the prompt, but still named — the enquiry is not empty.
   assert.deepEqual(set.names, ["brief.docx"]);
 });
 
 test("a file that cannot be read back is skipped, not fatal", async () => {
-  const source = sourceFor([attachment({ id: "a", name: "site.jpg", contentType: "image/jpeg" })]);
+  const source = sourceFor([
+    attachment({ id: "a", name: "site.jpg", contentType: "image/jpeg" }),
+  ]);
   const report = await collectLeadAttachments(source, "message-1", noOcrText);
 
   const set = await hydrateLeadAttachments(
@@ -448,5 +514,7 @@ test("a file that cannot be read back is skipped, not fatal", async () => {
   );
 
   assert.deepEqual(set.attachments, []);
-  assert.deepEqual(set.skipped, [{ name: "site.jpg", reason: "could not be read back" }]);
+  assert.deepEqual(set.skipped, [
+    { name: "site.jpg", reason: "could not be read back" },
+  ]);
 });

@@ -1,13 +1,16 @@
 "use server";
 
-import { generateText } from 'ai';
-import { gateway } from '@/lib/model';
-import { del } from '@vercel/blob';
-import { getGraphConfig } from '../graph/config';
-import { createGraphContext } from '../graph/client';
-import { EMAIL_FOOTER_HTML, EMAIL_HEADER_HTML } from '@/constants/email-artifacts';
-import { requireInternalUser } from '@/lib/auth/require-internal-user';
-import { isBlobStorageUrl } from '@/lib/blob-url';
+import { generateText } from "ai";
+import { gateway } from "@/lib/model";
+import { del } from "@vercel/blob";
+import { getGraphConfig } from "../graph/config";
+import { createGraphContext } from "../graph/client";
+import {
+  EMAIL_FOOTER_HTML,
+  EMAIL_HEADER_HTML,
+} from "@/constants/email-artifacts";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
+import { isBlobStorageUrl } from "@/lib/blob-url";
 
 // The lead email screens call every export here from the browser, so each is a
 // Server Action anyone can post to: one spends model tokens, one deletes a
@@ -171,7 +174,7 @@ export interface GeneratedEmailResult {
 function isSafePromptUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
   }
@@ -182,24 +185,28 @@ function isSafePromptUrl(url: string) {
 export async function generateEmailTemplate(
   description: string,
   attachments: { label: string; url: string }[],
-  links: { label: string; url: string }[]
+  links: { label: string; url: string }[],
 ): Promise<GeneratedEmailResult> {
   const access = await requireInternalUser();
   if (!access.ok) {
     throw new Error(access.error);
   }
 
-  const model = gateway('google/gemini-2.5-flash');
+  const model = gateway("google/gemini-2.5-flash");
   const safeLinks = links.filter((link) => isSafePromptUrl(link.url));
-  const safeAttachments = attachments.filter((attachment) => isSafePromptUrl(attachment.url));
+  const safeAttachments = attachments.filter((attachment) =>
+    isSafePromptUrl(attachment.url),
+  );
 
-  const linksContext = safeLinks.length > 0
-    ? `LINKS TO INCLUDE (Render these as Gold CTA Buttons inside an Action Card):\n${safeLinks.map(l => `- Label: "${l.label}", URL: ${l.url}`).join('\n')}`
-    : '';
+  const linksContext =
+    safeLinks.length > 0
+      ? `LINKS TO INCLUDE (Render these as Gold CTA Buttons inside an Action Card):\n${safeLinks.map((l) => `- Label: "${l.label}", URL: ${l.url}`).join("\n")}`
+      : "";
 
-  const attachmentsContext = safeAttachments.length > 0
-    ? `ATTACHMENTS TO INCLUDE (Render these as secondary text links with &nbsp;→):\n${safeAttachments.map(a => `- File Name: "${a.label}", URL: ${a.url}`).join('\n')}`
-    : '';
+  const attachmentsContext =
+    safeAttachments.length > 0
+      ? `ATTACHMENTS TO INCLUDE (Render these as secondary text links with &nbsp;→):\n${safeAttachments.map((a) => `- File Name: "${a.label}", URL: ${a.url}`).join("\n")}`
+      : "";
 
   const userPrompt = `
 Please write the HTML email body based on this description:
@@ -224,8 +231,8 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
     });
 
     // Parse the structured response
-    let subjectContent = 'Royal Constructions Update';
-    let nameContent = 'Custom AI Email';
+    let subjectContent = "Royal Constructions Update";
+    let nameContent = "Custom AI Email";
     let htmlContent = text;
 
     // Extract Subject
@@ -242,9 +249,9 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
 
     // Clean up potential markdown block wrappers if the AI added them
     let cleanBody = htmlContent.trim();
-    if (cleanBody.startsWith('```html')) cleanBody = cleanBody.slice(7);
-    else if (cleanBody.startsWith('```')) cleanBody = cleanBody.slice(3);
-    if (cleanBody.endsWith('```')) cleanBody = cleanBody.slice(0, -3);
+    if (cleanBody.startsWith("```html")) cleanBody = cleanBody.slice(7);
+    else if (cleanBody.startsWith("```")) cleanBody = cleanBody.slice(3);
+    if (cleanBody.endsWith("```")) cleanBody = cleanBody.slice(0, -3);
     cleanBody = cleanBody.trim();
 
     // Assemble the final email
@@ -267,9 +274,8 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
     return {
       html: finalHtml,
       subject: subjectContent,
-      name: nameContent
+      name: nameContent,
     };
-
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Failed to generate email template:", message, error);
@@ -451,10 +457,13 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
 // Where the composer uploads attachments (hooks/use-email-ad-hock.ts). Anything
 // else in the store (lead documents, offer PDFs, signed contracts) is not this
 // action's to delete.
-const EMAIL_ATTACHMENT_PREFIX = '/email-ad-hock-attachment-upload/';
+const EMAIL_ATTACHMENT_PREFIX = "/email-ad-hock-attachment-upload/";
 
 function isEmailAttachmentBlobUrl(url: string): boolean {
-  return isBlobStorageUrl(url) && new URL(url).pathname.startsWith(EMAIL_ATTACHMENT_PREFIX);
+  return (
+    isBlobStorageUrl(url) &&
+    new URL(url).pathname.startsWith(EMAIL_ATTACHMENT_PREFIX)
+  );
 }
 
 export async function RemoveUrlFromBlob(blobUrl: string) {
@@ -463,7 +472,10 @@ export async function RemoveUrlFromBlob(blobUrl: string) {
     return { success: false, error: access.error };
   }
   if (!isEmailAttachmentBlobUrl(blobUrl)) {
-    return { success: false, error: "Only an uploaded email attachment can be removed here." };
+    return {
+      success: false,
+      error: "Only an uploaded email attachment can be removed here.",
+    };
   }
 
   try {

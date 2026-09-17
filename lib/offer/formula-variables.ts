@@ -28,7 +28,7 @@ export const RATE_CONSTANT_KEYS = [
   "FRAME_INSTALLER_RATE_PER_SQM",
   "PRICE_OF_EACH_SHOWER",
   "PRICE_OF_EACH_WARDROBE",
-  "PRICE_OF_EACH_LINEN"
+  "PRICE_OF_EACH_LINEN",
 ] as const;
 
 // Phase 1 calculated values (from the Area Calculator) that are available as

@@ -10,11 +10,16 @@ import * as ids from "../../components/offers/admin/shared/undo-toast-ids";
 
 test("every list has its own Undo toast id", () => {
   const values = Object.values(ids);
-  assert.equal(new Set(values).size, values.length, "two lists share an Undo toast id");
+  assert.equal(
+    new Set(values).size,
+    values.length,
+    "two lists share an Undo toast id",
+  );
   assert.equal(values.length, 6);
 });
 
-const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+const read = (path: string) =>
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 test("every removal toast passes an id", () => {
   const sources = [
@@ -25,7 +30,9 @@ test("every removal toast passes an id", () => {
   ];
   for (const path of sources) {
     const source = read(path);
-    for (const match of source.matchAll(/toast\("[^"]*removed"[^]*?\n\s*\}\);/g)) {
+    for (const match of source.matchAll(
+      /toast\("[^"]*removed"[^]*?\n\s*\}\);/g,
+    )) {
       assert.match(match[0], /\n\s*id: /, `${path}: a removal toast has no id`);
     }
   }

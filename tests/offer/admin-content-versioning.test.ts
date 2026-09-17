@@ -151,7 +151,12 @@ test("an estimator's figure on a line the admin does not price is preserved", ()
   // "the price is zero", so the estimator's entered cost must survive.
   const snapshot = {
     ...BASE_SNAPSHOT,
-    lines: [costLine("task-landscaping", { costExGst: 8_500, includedInContract: true })],
+    lines: [
+      costLine("task-landscaping", {
+        costExGst: 8_500,
+        includedInContract: true,
+      }),
+    ],
   };
 
   const next = applyAdminPrefillToSnapshot(snapshot, PREFILL);
@@ -164,7 +169,11 @@ test("an estimator's figure on a line the admin does not price is preserved", ()
 test("project-specific state is never touched by a re-apply", () => {
   const snapshot = {
     ...BASE_SNAPSHOT,
-    job: { ...INITIAL_OFFER_JOB, siteAddress: "12 Example St", groundFloorSqm: 180 },
+    job: {
+      ...INITIAL_OFFER_JOB,
+      siteAddress: "12 Example St",
+      groundFloorSqm: 180,
+    },
     selectedPriceInput: "512000",
     priceAdjustmentLabel: "Launch saving",
   };
@@ -194,7 +203,9 @@ test("a frozen offer whose admin content moved on warns rather than blocks", () 
     expiryState: "valid",
     adminContentStale: true,
   });
-  const stale = blockers.find((blocker) => blocker.id === "admin-content-stale");
+  const stale = blockers.find(
+    (blocker) => blocker.id === "admin-content-stale",
+  );
 
   assert.ok(stale, "expected a stale-admin-content blocker");
   assert.equal(stale?.severity, "warn");
@@ -224,7 +235,10 @@ test("the admin version survives a persistence round-trip", () => {
 });
 
 test("an offer persisted before versioning parses as version 0, so it reads as stale", () => {
-  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<string, unknown>;
+  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<
+    string,
+    unknown
+  >;
   delete persisted.adminContentVersion;
 
   const restored = deserializeWorkspace(parseWorkspaceState(persisted));

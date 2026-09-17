@@ -17,11 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Command,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
+import { Command, CommandGroup, CommandItem } from "@/components/ui/command";
 
 import { cn } from "@/lib/utils";
 import { OfferStatusLabels } from "@/types/offer";
@@ -147,7 +143,7 @@ export function OfferStatusBadge({
               "gap-1.5 rounded-full px-3 py-1 transition-all",
               "cursor-pointer hover:shadow-sm",
               "disabled:pointer-events-none",
-              statusStyle[status]
+              statusStyle[status],
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -160,10 +156,7 @@ export function OfferStatusBadge({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent
-        align="start"
-        className="w-56 p-1"
-      >
+      <PopoverContent align="start" className="w-56 p-1">
         <Command>
           <CommandGroup heading="Change status">
             {availableTransitions.map((nextStatus) => {

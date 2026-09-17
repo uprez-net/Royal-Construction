@@ -31,14 +31,18 @@ const NOW = new Date("2026-08-16T02:00:00.000Z"); // FY2027 Q1
 // Read off the ladder rather than restated. These assertions are about the
 // arithmetic, and a second hardcoded copy of the probabilities only breaks in
 // a heap the next time the ladder is tuned.
-const P = (code: keyof typeof PIPELINE_STAGES) => PIPELINE_STAGES[code].probability;
+const P = (code: keyof typeof PIPELINE_STAGES) =>
+  PIPELINE_STAGES[code].probability;
 
 /* ── coercion & weighting ─────────────────────────────────────────── */
 
 test("coerceMoney accepts numbers, numeric strings and Decimals", () => {
   assert.equal(coerceMoney(1234.56)?.toString(), "1234.56");
   assert.equal(coerceMoney("1234.56")?.toString(), "1234.56");
-  assert.equal(coerceMoney(new Prisma.Decimal("1234.56"))?.toString(), "1234.56");
+  assert.equal(
+    coerceMoney(new Prisma.Decimal("1234.56"))?.toString(),
+    "1234.56",
+  );
   assert.equal(coerceMoney("0")?.toString(), "0");
 });
 
@@ -59,14 +63,23 @@ test("coerceMoney rejects negative values", () => {
 });
 
 test("probabilityFor falls back to the stage default", () => {
-  assert.equal(probabilityFor(lead({ stage: "NEGOTIATING" })), P("NEGOTIATING"));
+  assert.equal(
+    probabilityFor(lead({ stage: "NEGOTIATING" })),
+    P("NEGOTIATING"),
+  );
   assert.equal(probabilityFor(lead({ stage: "NEW" })), P("NEW"));
   assert.equal(probabilityFor(lead({ stage: "CONVERTED" })), P("CONVERTED"));
 });
 
 test("probabilityFor honours an explicit override", () => {
-  assert.equal(probabilityFor(lead({ stage: "NEW", probabilityOverride: 85 })), 85);
-  assert.equal(probabilityFor(lead({ stage: "NEGOTIATING", probabilityOverride: 0 })), 0);
+  assert.equal(
+    probabilityFor(lead({ stage: "NEW", probabilityOverride: 85 })),
+    85,
+  );
+  assert.equal(
+    probabilityFor(lead({ stage: "NEGOTIATING", probabilityOverride: 0 })),
+    0,
+  );
 });
 
 test("a closed stage outranks any stale override", () => {
@@ -74,19 +87,36 @@ test("a closed stage outranks any stale override", () => {
   // Negotiating). Winning the deal does not clear that column, so without this
   // rule a won deal weights at 60% — and forecast.weightedValue then comes out
   // BELOW the forecast.wonValue it is supposed to contain in full.
-  assert.equal(probabilityFor(lead({ stage: "WON", probabilityOverride: 60 })), 100);
-  assert.equal(probabilityFor(lead({ stage: "CONVERTED", probabilityOverride: 5 })), 100);
-  assert.equal(probabilityFor(lead({ stage: "LOST", probabilityOverride: 90 })), 0);
-  assert.equal(probabilityFor(lead({ stage: "CANCELLED", probabilityOverride: 90 })), 0);
+  assert.equal(
+    probabilityFor(lead({ stage: "WON", probabilityOverride: 60 })),
+    100,
+  );
+  assert.equal(
+    probabilityFor(lead({ stage: "CONVERTED", probabilityOverride: 5 })),
+    100,
+  );
+  assert.equal(
+    probabilityFor(lead({ stage: "LOST", probabilityOverride: 90 })),
+    0,
+  );
+  assert.equal(
+    probabilityFor(lead({ stage: "CANCELLED", probabilityOverride: 90 })),
+    0,
+  );
   // Open stages still honour the override.
-  assert.equal(probabilityFor(lead({ stage: "NEGOTIATING", probabilityOverride: 60 })), 60);
+  assert.equal(
+    probabilityFor(lead({ stage: "NEGOTIATING", probabilityOverride: 60 })),
+    60,
+  );
 });
 
 test("forecast weightedValue always contains wonValue in full", () => {
   const forecast = computeForecast(
     [
       lead({
-        id: 1, stage: "WON", estimatedValue: "800000",
+        id: 1,
+        stage: "WON",
+        estimatedValue: "800000",
         probabilityOverride: 60, // stale, set while the lead was still open
         expectedCloseDate: "2026-08-01T02:00:00Z",
       }),
@@ -107,23 +137,32 @@ test("probabilityFor clamps and rounds, and survives NaN", () => {
   assert.equal(probabilityFor(lead({ probabilityOverride: -20 })), 0);
   assert.equal(probabilityFor(lead({ probabilityOverride: 79.6 })), 80);
   // Math.trunc(NaN) is NaN and survives a clamp — must fall back to the stage.
-  assert.equal(probabilityFor(lead({ stage: "QUOTED", probabilityOverride: Number.NaN })), P("QUOTED"));
+  assert.equal(
+    probabilityFor(lead({ stage: "QUOTED", probabilityOverride: Number.NaN })),
+    P("QUOTED"),
+  );
 });
 
 test("weightedValueOf multiplies value by probability", () => {
   assert.equal(
-    weightedValueOf(lead({ stage: "NEGOTIATING", estimatedValue: "842150" })).toString(),
-    String(842150 * P("NEGOTIATING") / 100),
+    weightedValueOf(
+      lead({ stage: "NEGOTIATING", estimatedValue: "842150" }),
+    ).toString(),
+    String((842150 * P("NEGOTIATING")) / 100),
   );
   assert.equal(
-    weightedValueOf(lead({ stage: "NEW", estimatedValue: "620000" })).toString(),
-    String(620000 * P("NEW") / 100),
+    weightedValueOf(
+      lead({ stage: "NEW", estimatedValue: "620000" }),
+    ).toString(),
+    String((620000 * P("NEW")) / 100),
   );
 });
 
 test("weightedValueOf rounds to two decimal places", () => {
   assert.equal(
-    weightedValueOf(lead({ stage: "QUALIFIED", estimatedValue: "1" })).toString(),
+    weightedValueOf(
+      lead({ stage: "QUALIFIED", estimatedValue: "1" }),
+    ).toString(),
     "0.45",
   );
 });
@@ -138,7 +177,11 @@ test("weightedValueOf returns zero — never NaN — for unusable values", () =>
 
 test("a NaN probability cannot poison a weighted value", () => {
   const result = weightedValueOf(
-    lead({ stage: "QUOTED", estimatedValue: "100", probabilityOverride: Number.NaN }),
+    lead({
+      stage: "QUOTED",
+      estimatedValue: "100",
+      probabilityOverride: Number.NaN,
+    }),
   );
   assert.equal(result.isNaN(), false);
   assert.equal(result.toString(), String(P("QUOTED")));
@@ -158,7 +201,10 @@ test("computePipelineMetrics counts only open leads", () => {
   );
   assert.equal(metrics.openCount, 1);
   assert.equal(metrics.totalValue.toString(), "100000");
-  assert.equal(metrics.weightedValue.toString(), String(100000 * P("QUOTED") / 100));
+  assert.equal(
+    metrics.weightedValue.toString(),
+    String((100000 * P("QUOTED")) / 100),
+  );
 });
 
 test("computePipelineMetrics groups by stage in display order", () => {
@@ -177,8 +223,14 @@ test("computePipelineMetrics groups by stage in display order", () => {
   const [newBucket, negotiating] = metrics.byStage;
   assert.equal(newBucket.count, 2);
   assert.equal(newBucket.total.toString(), "400000");
-  assert.equal(newBucket.weighted.toString(), String(400000 * P("NEW") / 100));
-  assert.equal(negotiating.weighted.toString(), String(200000 * P("NEGOTIATING") / 100));
+  assert.equal(
+    newBucket.weighted.toString(),
+    String((400000 * P("NEW")) / 100),
+  );
+  assert.equal(
+    negotiating.weighted.toString(),
+    String((200000 * P("NEGOTIATING")) / 100),
+  );
 });
 
 test("computePipelineMetrics reports unusable and missing values", () => {
@@ -227,7 +279,11 @@ test("computeWinRate divides wins by decisions", () => {
 });
 
 test("computeWinRate returns null rather than zero or NaN when nothing closed", () => {
-  const rate = computeWinRate([lead({ id: 1, stage: "QUOTED" })], new Date("2026-05-18T14:00:00Z"), NOW);
+  const rate = computeWinRate(
+    [lead({ id: 1, stage: "QUOTED" })],
+    new Date("2026-05-18T14:00:00Z"),
+    NOW,
+  );
   assert.equal(rate.percent, null);
   assert.equal(rate.won, 0);
   assert.equal(rate.lost, 0);
@@ -261,17 +317,43 @@ test("computeForecast splits expected, weighted, won and banked", () => {
   const forecast = computeForecast(
     [
       // Won this quarter, full value.
-      lead({ id: 1, stage: "CONVERTED", estimatedValue: "1240000", expectedCloseDate: "2026-08-01T00:00:00Z", wonAt: "2026-08-01T00:00:00Z" }),
+      lead({
+        id: 1,
+        stage: "CONVERTED",
+        estimatedValue: "1240000",
+        expectedCloseDate: "2026-08-01T00:00:00Z",
+        wonAt: "2026-08-01T00:00:00Z",
+      }),
       // Negotiating this quarter, weighted, NOT banked.
-      lead({ id: 2, stage: "NEGOTIATING", estimatedValue: "842150", expectedCloseDate: "2026-09-12T00:00:00Z" }),
+      lead({
+        id: 2,
+        stage: "NEGOTIATING",
+        estimatedValue: "842150",
+        expectedCloseDate: "2026-09-12T00:00:00Z",
+      }),
       // Quoted this quarter, weighted, NOT banked.
-      lead({ id: 3, stage: "QUOTED", estimatedValue: "400000", expectedCloseDate: "2026-09-20T00:00:00Z" }),
+      lead({
+        id: 3,
+        stage: "QUOTED",
+        estimatedValue: "400000",
+        expectedCloseDate: "2026-09-20T00:00:00Z",
+      }),
       // Next quarter — excluded entirely.
-      lead({ id: 4, stage: "NEGOTIATING", estimatedValue: "900000", expectedCloseDate: "2026-11-01T00:00:00Z" }),
+      lead({
+        id: 4,
+        stage: "NEGOTIATING",
+        estimatedValue: "900000",
+        expectedCloseDate: "2026-11-01T00:00:00Z",
+      }),
       // No close date — excluded.
       lead({ id: 5, stage: "QUOTED", estimatedValue: "700000" }),
       // Lost this quarter — excluded.
-      lead({ id: 6, stage: "LOST", estimatedValue: "500000", expectedCloseDate: "2026-08-05T00:00:00Z" }),
+      lead({
+        id: 6,
+        stage: "LOST",
+        estimatedValue: "500000",
+        expectedCloseDate: "2026-08-05T00:00:00Z",
+      }),
     ],
     2027,
     1,
@@ -291,7 +373,14 @@ test("computeForecast splits expected, weighted, won and banked", () => {
 
 test("computeForecast counts a won deal once, not twice", () => {
   const forecast = computeForecast(
-    [lead({ id: 1, stage: "WON", estimatedValue: "1000000", expectedCloseDate: "2026-08-01T00:00:00Z" })],
+    [
+      lead({
+        id: 1,
+        stage: "WON",
+        estimatedValue: "1000000",
+        expectedCloseDate: "2026-08-01T00:00:00Z",
+      }),
+    ],
     2027,
     1,
   );
@@ -302,7 +391,14 @@ test("computeForecast counts a won deal once, not twice", () => {
 
 test("computeForecast includes a deal on the quarter's last local day", () => {
   const forecast = computeForecast(
-    [lead({ id: 1, stage: "QUOTED", estimatedValue: "100000", expectedCloseDate: "2026-09-30T13:59:00Z" })],
+    [
+      lead({
+        id: 1,
+        stage: "QUOTED",
+        estimatedValue: "100000",
+        expectedCloseDate: "2026-09-30T13:59:00Z",
+      }),
+    ],
     2027,
     1,
   );
@@ -311,7 +407,14 @@ test("computeForecast includes a deal on the quarter's last local day", () => {
 
 test("computeForecast excludes a deal at the next quarter's first local midnight", () => {
   const forecast = computeForecast(
-    [lead({ id: 1, stage: "QUOTED", estimatedValue: "100000", expectedCloseDate: "2026-09-30T14:00:00Z" })],
+    [
+      lead({
+        id: 1,
+        stage: "QUOTED",
+        estimatedValue: "100000",
+        expectedCloseDate: "2026-09-30T14:00:00Z",
+      }),
+    ],
     2027,
     1,
   );
@@ -320,7 +423,12 @@ test("computeForecast excludes a deal at the next quarter's first local midnight
 
 test("an empty forecast is all zeros and never NaN", () => {
   const forecast = computeForecast([], 2027, 1);
-  for (const field of [forecast.expectedValue, forecast.weightedValue, forecast.wonValue, forecast.bankedValue]) {
+  for (const field of [
+    forecast.expectedValue,
+    forecast.weightedValue,
+    forecast.wonValue,
+    forecast.bankedValue,
+  ]) {
     assert.equal(field.isNaN(), false);
     assert.equal(field.toString(), "0");
   }

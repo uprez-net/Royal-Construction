@@ -24,9 +24,7 @@ export function ReplyBanner({ email, onCancel }: ReplyBannerProps) {
         <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Replying to
         </p>
-        <p className="truncate text-xs text-foreground">
-          {plainBody}
-        </p>
+        <p className="truncate text-xs text-foreground">{plainBody}</p>
       </div>
 
       <button

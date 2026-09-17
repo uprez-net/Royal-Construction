@@ -19,7 +19,10 @@ export function useToast() {
     };
   }, []);
 
-  const showToast = (message: string, type: "success" | "info" | "error" = "success") => {
+  const showToast = (
+    message: string,
+    type: "success" | "info" | "error" = "success",
+  ) => {
     const id = uuidv4();
     setToasts((prev) => [...prev, { id, message, type }]);
     const timeoutId = setTimeout(
@@ -57,8 +60,13 @@ export function ToastContainer({
                   ? "rgba(22,163,74,0.1)"
                   : toast.type === "error"
                     ? "rgba(220,38,38,0.1)"
-                  : "rgba(37,99,235,0.1)",
-              color: toast.type === "success" ? "#16A34A" : toast.type === "error" ? "#DC2626" : "#2563EB",
+                    : "rgba(37,99,235,0.1)",
+              color:
+                toast.type === "success"
+                  ? "#16A34A"
+                  : toast.type === "error"
+                    ? "#DC2626"
+                    : "#2563EB",
             }}
           >
             {toast.type === "success" ? (

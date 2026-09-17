@@ -1,7 +1,11 @@
-import { createGraphContext, type EmailInput } from '@/lib/graph/client';
-import { getGraphConfig } from '@/lib/graph/config';
-import { requireAdminToken } from '@/lib/graph/route-utils';
-import { successResponse, errorResponse, badRequestResponse } from '@/utils/validators';
+import { createGraphContext, type EmailInput } from "@/lib/graph/client";
+import { getGraphConfig } from "@/lib/graph/config";
+import { requireAdminToken } from "@/lib/graph/route-utils";
+import {
+  successResponse,
+  errorResponse,
+  badRequestResponse,
+} from "@/utils/validators";
 
 function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
   const trimmed = rawBody.trim();
@@ -19,7 +23,7 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate) as Partial<EmailInput>;
-      if (parsed && typeof parsed === 'object') {
+      if (parsed && typeof parsed === "object") {
         return parsed;
       }
     } catch {
@@ -27,14 +31,14 @@ function parseEmailPayload(rawBody: string): Partial<EmailInput> | null {
     }
   }
 
-  if (trimmed.includes('=')) {
+  if (trimmed.includes("=")) {
     const params = new URLSearchParams(trimmed);
     if ([...params.keys()].length > 0) {
       return {
-        to: params.get('to') ?? undefined,
-        subject: params.get('subject') ?? undefined,
-        body: params.get('body') ?? undefined,
-        cc: params.get('cc') ?? undefined,
+        to: params.get("to") ?? undefined,
+        subject: params.get("subject") ?? undefined,
+        body: params.get("body") ?? undefined,
+        cc: params.get("cc") ?? undefined,
       } as Partial<EmailInput>;
     }
   }
@@ -53,23 +57,26 @@ export async function POST(request: Request): Promise<Response> {
     const rawBody = await request.text();
     const payload = parseEmailPayload(rawBody);
     if (!payload) {
-      console.error('Invalid body for /api/graph/send');
-      return badRequestResponse('Invalid request body format');
+      console.error("Invalid body for /api/graph/send");
+      return badRequestResponse("Invalid request body format");
     }
 
     const to = payload.to ?? config.defaultRecipient;
     const cc = payload.cc ?? config.cc; // Use default CC if not provided in payload
     if (!to) {
-      return badRequestResponse('Recipient address (to) is required');
+      return badRequestResponse("Recipient address (to) is required");
     }
 
     const subject = payload.subject ?? config.defaultSubject;
     const body = payload.body ?? config.defaultBody;
     const client = await createGraphContext(config);
     await client.sendMail({ to, subject, body, cc });
-    return successResponse({ status: 'sent' }, { status: 202 });
+    return successResponse({ status: "sent" }, { status: 202 });
   } catch (error) {
-    console.error('Graph send failed', error);
-    return errorResponse('Failed to send email', { status: 500, code: 'GRAPH_ERROR' });
+    console.error("Graph send failed", error);
+    return errorResponse("Failed to send email", {
+      status: 500,
+      code: "GRAPH_ERROR",
+    });
   }
 }

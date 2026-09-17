@@ -139,10 +139,7 @@ async function requireEngagement(
 function requireDeveloper(
   engagement: CertifierEngagementDetail,
 ): ComplianceOutreachDetail {
-  const developer = outreachForParty(
-    engagement,
-    CompliancePartyType.DEVELOPER,
-  );
+  const developer = outreachForParty(engagement, CompliancePartyType.DEVELOPER);
   if (!developer) {
     throw new Error(
       "Nobody has been asked to approve the bushfire report on this job.",
@@ -233,8 +230,7 @@ export async function recordDeveloperDecision(params: {
     params.documentType ?? ComplianceDocumentType.BUSHFIRE_REPORT;
   const documentLabel = complianceDocumentLabel(documentType).toLowerCase();
 
-  const rejecting =
-    params.decision === ComplianceApprovalDecision.REJECTED;
+  const rejecting = params.decision === ComplianceApprovalDecision.REJECTED;
   const reason = params.reason?.trim() || null;
 
   if (rejecting && !reason) {
@@ -733,9 +729,7 @@ export async function resendDeveloperApproval(params: {
     (row) => row.documentType === documentType,
   );
   if (!document || document.files.length === 0) {
-    throw new Error(
-      `There is no ${documentLabel} on the file to send them.`,
-    );
+    throw new Error(`There is no ${documentLabel} on the file to send them.`);
   }
 
   const extras = await resolveExtraAttachments(

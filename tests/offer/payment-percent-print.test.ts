@@ -60,11 +60,36 @@ function snapshotWith(
 
 // Foundation split into two 12.5% stages; still sums to 100%.
 const HALF_PERCENT_SCHEDULE: readonly OfferPaymentScheduleRow[] = [
-  { id: "p1", stageName: "Deposit", percentOfContract: 0.05, trigger: "On signing" },
-  { id: "p2", stageName: "Base", percentOfContract: 0.125, trigger: "Slab poured" },
-  { id: "p3", stageName: "Slab", percentOfContract: 0.125, trigger: "Slab cured" },
-  { id: "p4", stageName: "Frame", percentOfContract: 0.25, trigger: "Frame inspected" },
-  { id: "p5", stageName: "Lock-up", percentOfContract: 0.25, trigger: "Lock-up" },
+  {
+    id: "p1",
+    stageName: "Deposit",
+    percentOfContract: 0.05,
+    trigger: "On signing",
+  },
+  {
+    id: "p2",
+    stageName: "Base",
+    percentOfContract: 0.125,
+    trigger: "Slab poured",
+  },
+  {
+    id: "p3",
+    stageName: "Slab",
+    percentOfContract: 0.125,
+    trigger: "Slab cured",
+  },
+  {
+    id: "p4",
+    stageName: "Frame",
+    percentOfContract: 0.25,
+    trigger: "Frame inspected",
+  },
+  {
+    id: "p5",
+    stageName: "Lock-up",
+    percentOfContract: 0.25,
+    trigger: "Lock-up",
+  },
   { id: "p6", stageName: "Handover", percentOfContract: 0.2, trigger: "Keys" },
 ];
 
@@ -107,6 +132,10 @@ test("the printed offer agrees with the other two", () => {
 });
 
 test("a whole-number schedule prints as it always did", () => {
-  assert.ok(tender(INITIAL_PAYMENT_SCHEDULE).includes('<td class="c-pay-pct">5%</td>'));
-  assert.ok(emailed(INITIAL_PAYMENT_SCHEDULE).includes('<td class="amt">5% - '));
+  assert.ok(
+    tender(INITIAL_PAYMENT_SCHEDULE).includes('<td class="c-pay-pct">5%</td>'),
+  );
+  assert.ok(
+    emailed(INITIAL_PAYMENT_SCHEDULE).includes('<td class="amt">5% - '),
+  );
 });

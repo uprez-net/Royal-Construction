@@ -1,22 +1,28 @@
 import { NextRequest } from "next/server";
-import { milestoneUpdateSchema, parseBodyWithResponse, successResponse } from "@/utils/validators";
+import {
+  milestoneUpdateSchema,
+  parseBodyWithResponse,
+  successResponse,
+} from "@/utils/validators";
 import { SafeMilestone } from "@/types/project";
 import { updateMilestone } from "@/lib/data/milestones";
 
-
 export async function PATCH(
-    request: NextRequest,
-    { params }: { params: Promise<{ projectId: string; milestoneId: string }> },
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string; milestoneId: string }> },
 ) {
-    const { milestoneId } = await params;
-    const validationResult = await parseBodyWithResponse(request, milestoneUpdateSchema);
-    if (!validationResult.success) {
-        return validationResult.response;
-    }
+  const { milestoneId } = await params;
+  const validationResult = await parseBodyWithResponse(
+    request,
+    milestoneUpdateSchema,
+  );
+  if (!validationResult.success) {
+    return validationResult.response;
+  }
 
-    const updateData = validationResult.data;
+  const updateData = validationResult.data;
 
-    const updated = await updateMilestone(milestoneId, updateData);
+  const updated = await updateMilestone(milestoneId, updateData);
 
-    return successResponse(updated as SafeMilestone);
+  return successResponse(updated as SafeMilestone);
 }

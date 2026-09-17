@@ -96,7 +96,10 @@ test("gold text on the light-gold chip clears AA in light", () => {
   const text = themeColour(css, ":root", "--royal-gold-ink-text");
 
   const measured = contrastRatio(chip, text);
-  assert.ok(measured >= AA_TEXT, `gold on --royal-gold-light measures ${ratio(measured)}`);
+  assert.ok(
+    measured >= AA_TEXT,
+    `gold on --royal-gold-light measures ${ratio(measured)}`,
+  );
 });
 
 test("the dark hover is a darker step of the dark ink", () => {
@@ -259,7 +262,8 @@ test("no class list pairs a base --royal-gold fill with white text", () => {
         const whiteChild =
           children !== null &&
           classListUnits(children).some(
-            (child) => WHITE_TEXT.test(child.text) && !OWN_FILL.test(child.text),
+            (child) =>
+              WHITE_TEXT.test(child.text) && !OWN_FILL.test(child.text),
           );
         if (WHITE_TEXT.test(unit.text) || whiteChild) {
           hits.push(source.slice(0, fill).split("\n").length - 1);
@@ -315,7 +319,11 @@ test("the offer print template keeps its fills when background graphics are off"
   const printBlocks: string[] = [];
   for (const match of bare.matchAll(/@media print \{/g)) {
     let depth = 0;
-    for (let i = (match.index ?? 0) + match[0].length - 1; i < bare.length; i++) {
+    for (
+      let i = (match.index ?? 0) + match[0].length - 1;
+      i < bare.length;
+      i++
+    ) {
       if (bare[i] === "{") {
         depth += 1;
       } else if (bare[i] === "}") {

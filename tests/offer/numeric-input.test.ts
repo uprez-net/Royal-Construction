@@ -37,7 +37,10 @@ assert.equal(parseNonNegativeNumberInput(""), 0);
 assert.equal(numberInputValue(parseNonNegativeNumberInput("") as number), "");
 
 // Typing into a now-empty field yields exactly what was typed.
-assert.equal(numberInputValue(parseNonNegativeNumberInput("4000") as number), "4000");
+assert.equal(
+  numberInputValue(parseNonNegativeNumberInput("4000") as number),
+  "4000",
+);
 
 // ─── Optional price inputs survive the cents round-trip as a blank field ───
 // An un-entered price persists as 0 cents; it must rehydrate as "" and not the

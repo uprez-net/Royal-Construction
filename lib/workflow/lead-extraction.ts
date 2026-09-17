@@ -1,18 +1,21 @@
-import { FatalError } from 'workflow';
+import { FatalError } from "workflow";
 
-import { createGraphContext } from '@/lib/graph/client';
-import { getGraphConfig } from '@/lib/graph/config';
+import { createGraphContext } from "@/lib/graph/client";
+import { getGraphConfig } from "@/lib/graph/config";
 import {
   collectLeadAttachments,
   hydrateLeadAttachments,
   type LeadAttachmentReport,
-} from '@/lib/graph/lead-attachments';
-import { extractLeadFromMessage, type LeadExtraction } from '@/lib/graph/lead-extractor';
-import { archiveLeadAttachments } from '@/lib/leads/archive-lead-attachments';
-import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
-import { renderEmailHtml } from '@/lib/leads/render-email-html';
-import { isOwnMailbox, resolveLeadEmail } from '@/lib/graph/mailbox';
-import prisma from '@/lib/prisma';
+} from "@/lib/graph/lead-attachments";
+import {
+  extractLeadFromMessage,
+  type LeadExtraction,
+} from "@/lib/graph/lead-extractor";
+import { archiveLeadAttachments } from "@/lib/leads/archive-lead-attachments";
+import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
+import { renderEmailHtml } from "@/lib/leads/render-email-html";
+import { isOwnMailbox, resolveLeadEmail } from "@/lib/graph/mailbox";
+import prisma from "@/lib/prisma";
 
 /**
  * The message, flattened to what the extraction actually needs.
@@ -28,11 +31,11 @@ export interface InboundLeadMessage {
 }
 
 export type InboundLeadOutcome =
-  | { status: 'created'; leadId: number; archived: number }
-  | { status: 'duplicate'; leadId: number }
-  | { status: 'already-a-lead' }
-  | { status: 'spam' }
-  | { status: 'not-extracted' };
+  | { status: "created"; leadId: number; archived: number }
+  | { status: "duplicate"; leadId: number }
+  | { status: "already-a-lead" }
+  | { status: "spam" }
+  | { status: "not-extracted" };
 
 // ---------------------------------------------------------------------------
 // Steps — each one is retried on its own and its result is persisted, so a
@@ -53,8 +56,10 @@ async function graphClient() {
  * every OCR call happens here, once, and what comes back is a description
  * rather than the bytes.
  */
-async function readAttachments(messageId: string): Promise<LeadAttachmentReport> {
-  'use step';
+async function readAttachments(
+  messageId: string,
+): Promise<LeadAttachmentReport> {
+  "use step";
   const client = await graphClient();
   const report = await collectLeadAttachments(client, messageId);
 
@@ -63,8 +68,8 @@ async function readAttachments(messageId: string): Promise<LeadAttachmentReport>
       `Attachments on ${messageId}: ${report.files.length} read, ` +
         `${report.skipped.length} skipped` +
         (report.skipped.length > 0
-          ? ` — ${report.skipped.map((item) => `${item.name}: ${item.reason}`).join('; ')}`
-          : ''),
+          ? ` — ${report.skipped.map((item) => `${item.name}: ${item.reason}`).join("; ")}`
+          : ""),
     );
   }
 
@@ -79,9 +84,13 @@ async function extractLead(
   message: InboundLeadMessage,
   report: LeadAttachmentReport,
 ): Promise<LeadExtraction | null> {
-  'use step';
+  "use step";
   const client = await graphClient();
-  const attachments = await hydrateLeadAttachments(report, client, message.messageId);
+  const attachments = await hydrateLeadAttachments(
+    report,
+    client,
+    message.messageId,
+  );
 
   return extractLeadFromMessage(message.subject, message.body, attachments);
 }
@@ -98,14 +107,16 @@ async function saveLead(
   message: InboundLeadMessage,
   extracted: LeadExtraction,
 ): Promise<{ leadId: number; created: boolean } | null> {
-  'use step';
+  "use step";
 
   const existing = await prisma.lead.findUnique({
     where: { MicrosoftmessageId: message.messageId },
     select: { id: true },
   });
   if (existing) {
-    console.log(`Lead for message ${message.messageId} already exists (${existing.id}).`);
+    console.log(
+      `Lead for message ${message.messageId} already exists (${existing.id}).`,
+    );
     return { leadId: existing.id, created: false };
   }
 
@@ -114,13 +125,15 @@ async function saveLead(
   // the sender is our own mailbox — a website form notification is sent by
   // that mailbox to itself, so the envelope names us rather than the client.
   const leadEmail = resolveLeadEmail(message.from, extracted.Email);
-  const phoneVal = extracted.ContactNo ?? '';
+  const phoneVal = extracted.ContactNo ?? "";
 
   // Only reachable when the sender is our own mailbox and the model found no
   // address in the body. Logged distinctly rather than treated as a reason to
   // drop the enquiry: the phone and notes may still be a reachable lead.
   if (!leadEmail) {
-    console.warn(`No client email resolved for message ${message.messageId}; saving lead without one.`);
+    console.warn(
+      `No client email resolved for message ${message.messageId}; saving lead without one.`,
+    );
   }
 
   // The same person writing in from a second address, or a form that fires
@@ -135,19 +148,21 @@ async function saveLead(
 
   const lead = await prisma.lead.create({
     data: {
-      name: extracted.Name || 'Unknown Lead',
+      name: extracted.Name || "Unknown Lead",
       email: leadEmail,
       phone: phoneVal,
-      location: extracted.Address || '',
-      sourceDetail: 'Website',
-      stage: 'CONTACTED',
+      location: extracted.Address || "",
+      sourceDetail: "Website",
+      stage: "CONTACTED",
       type: extracted.Type || [],
-      notes: extracted.Info || '',
+      notes: extracted.Info || "",
       MicrosoftmessageId: message.messageId,
     },
   });
 
-  console.log(`Lead saved with ID ${lead.id} for message ${message.messageId}.`);
+  console.log(
+    `Lead saved with ID ${lead.id} for message ${message.messageId}.`,
+  );
   return { leadId: lead.id, created: true };
 }
 
@@ -156,7 +171,7 @@ async function archiveAttachments(
   messageId: string,
   report: LeadAttachmentReport,
 ): Promise<number> {
-  'use step';
+  "use step";
   const client = await graphClient();
   return archiveLeadAttachments(leadId, client, messageId, report);
 }
@@ -169,7 +184,7 @@ async function archiveAttachments(
  * in the client's inbox, and an unsent one is the smaller failure.
  */
 async function sendWelcomeEmail(leadId: number): Promise<boolean> {
-  'use step';
+  "use step";
 
   try {
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
@@ -183,7 +198,7 @@ async function sendWelcomeEmail(leadId: number): Promise<boolean> {
     const config = getGraphConfig();
     const client = await createGraphContext(config);
 
-    const htmlBody = await renderEmailHtml('Welcome', {
+    const htmlBody = await renderEmailHtml("Welcome", {
       id: lead.id,
       name: lead.name,
       email: lead.email,
@@ -194,14 +209,14 @@ async function sendWelcomeEmail(leadId: number): Promise<boolean> {
     });
 
     if (!htmlBody) {
-      console.warn('  ⚠️ Failed to render welcome email HTML. No email sent.');
+      console.warn("  ⚠️ Failed to render welcome email HTML. No email sent.");
       return false;
     }
 
     await client.sendMail({
       to: lead.email,
       subject:
-        'Welcome to Royal Constructions — Your Home Building Journey Starts Here',
+        "Welcome to Royal Constructions — Your Home Building Journey Starts Here",
       body: htmlBody,
       cc: config.cc,
     });
@@ -209,7 +224,7 @@ async function sendWelcomeEmail(leadId: number): Promise<boolean> {
     console.log(`  ✅ Welcome email successfully sent to ${lead.email}`);
     return true;
   } catch (error) {
-    console.error('  ❌ Failed to send welcome email:', error);
+    console.error("  ❌ Failed to send welcome email:", error);
     return false;
   }
 }
@@ -235,33 +250,35 @@ async function sendWelcomeEmail(leadId: number): Promise<boolean> {
 export const processInboundLead = async (
   message: InboundLeadMessage,
 ): Promise<InboundLeadOutcome> => {
-  'use workflow';
+  "use workflow";
 
   if (!message.messageId) {
     // Nothing downstream can be made idempotent without it, so this is not
     // worth retrying.
-    throw new FatalError('processInboundLead requires a messageId.');
+    throw new FatalError("processInboundLead requires a messageId.");
   }
 
   const report = await readAttachments(message.messageId);
   const extracted = await extractLead(message, report);
 
   if (!extracted) {
-    console.log(`No lead could be extracted from message ${message.messageId}.`);
-    return { status: 'not-extracted' };
+    console.log(
+      `No lead could be extracted from message ${message.messageId}.`,
+    );
+    return { status: "not-extracted" };
   }
 
   console.log(`Extracted lead: ${JSON.stringify(extracted)}`);
 
   if (extracted.Status !== false) {
-    console.log('  Lead Extracted Found as Spam, Ignoring the lead');
-    return { status: 'spam' };
+    console.log("  Lead Extracted Found as Spam, Ignoring the lead");
+    return { status: "spam" };
   }
 
   const saved = await saveLead(message, extracted);
 
   if (!saved) {
-    return { status: 'already-a-lead' };
+    return { status: "already-a-lead" };
   }
 
   const { leadId, created } = saved;
@@ -269,7 +286,7 @@ export const processInboundLead = async (
   if (!created) {
     // A concurrent notification for the same message got there first. Its run
     // owns the attachments and the welcome email.
-    return { status: 'duplicate', leadId };
+    return { status: "duplicate", leadId };
   }
 
   const archived =
@@ -279,5 +296,5 @@ export const processInboundLead = async (
 
   await sendWelcomeEmail(leadId);
 
-  return { status: 'created', leadId, archived };
+  return { status: "created", leadId, archived };
 };

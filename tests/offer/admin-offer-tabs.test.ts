@@ -52,16 +52,17 @@ test("no tab is marked while every section is saved", () => {
 });
 
 test("an unsaved cost schedule marks only the Cost Schedule tab", () => {
-  assert.deepEqual(markedTabs(dirtyByTab({ ...allSaved, costSchedule: true })), [
-    "cost-schedule",
-  ]);
+  assert.deepEqual(
+    markedTabs(dirtyByTab({ ...allSaved, costSchedule: true })),
+    ["cost-schedule"],
+  );
 });
 
 test("unsaved offer content marks both screens that edit it", () => {
-  assert.deepEqual(markedTabs(dirtyByTab({ ...allSaved, offerContent: true })), [
-    "offer-content",
-    "offer-inclusions",
-  ]);
+  assert.deepEqual(
+    markedTabs(dirtyByTab({ ...allSaved, offerContent: true })),
+    ["offer-content", "offer-inclusions"],
+  );
 });
 
 const noneDirty = dirtyByTab(allSaved);
@@ -85,7 +86,9 @@ const textOf = (html: string) => html.replace(/<[^>]*>/g, "");
 
 // What a screen reader names the button: its text, minus aria-hidden subtrees.
 const accessibleNameOf = (button: string) =>
-  textOf(button.replace(/<div\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/div>/g, ""));
+  textOf(
+    button.replace(/<div\b[^>]*aria-hidden="true"[^>]*>[\s\S]*?<\/div>/g, ""),
+  );
 
 test("opening the last tab ticks nothing and numbers the tabs before it", () => {
   const markup = renderStrip("HBFC-claim");
@@ -141,7 +144,9 @@ test("every tab has a stable id, and only the open one claims a panel", () => {
   // One panel is rendered at a time, so an aria-controls on a closed tab would
   // point at an element that is not in the document. Only the open tab may
   // claim one — this is the assertion that catches a dangling reference.
-  const claimed = [...markup.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]);
+  const claimed = [...markup.matchAll(/aria-controls="([^"]+)"/g)].map(
+    (m) => m[1],
+  );
   assert.deepEqual(claimed, ["admin-offer-panel-cost-schedule"]);
   assert.match(buttons[1], /aria-controls="admin-offer-panel-cost-schedule"/);
 });

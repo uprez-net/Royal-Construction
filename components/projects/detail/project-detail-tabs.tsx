@@ -27,7 +27,13 @@ import { ProjectCommunicationTabs } from "./project-communication-tabs";
 import { ProjectComplianceTab } from "./compliance-tab/project-compliance-tab";
 import { Role } from "@prisma/client";
 
-export function ProjectDetailTabs({ project, role }: { project: ProjectDetail; role: Role }) {
+export function ProjectDetailTabs({
+  project,
+  role,
+}: {
+  project: ProjectDetail;
+  role: Role;
+}) {
   const isAdmin = role === "ADMIN";
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -101,7 +107,9 @@ export function ProjectDetailTabs({ project, role }: { project: ProjectDetail; r
         {activeTab === "tradies" ? (
           <ProjectTradiesTab project={project} />
         ) : null}
-        {activeTab === "docs" ? <ProjectQuotesTab project={project} isAdmin={isAdmin} /> : null}
+        {activeTab === "docs" ? (
+          <ProjectQuotesTab project={project} isAdmin={isAdmin} />
+        ) : null}
         {activeTab === "history" ? (
           <ProjectHistoryTabs project={project} />
         ) : null}

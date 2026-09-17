@@ -266,7 +266,9 @@ export function JobSetupPanel({
               <AreaField
                 label="Alfresco sqm"
                 value={job.alfrescoPorchSqm}
-                onChange={(alfrescoPorchSqm) => onJobChange({ alfrescoPorchSqm })}
+                onChange={(alfrescoPorchSqm) =>
+                  onJobChange({ alfrescoPorchSqm })
+                }
               />
               <AreaField
                 label="Porch sqm"
@@ -292,9 +294,7 @@ export function JobSetupPanel({
                 onChange={(balconySqm) => onJobChange({ balconySqm })}
               />
               <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
-                <p className={FIELD_LABEL_CLASS}>
-                  Total building area
-                </p>
+                <p className={FIELD_LABEL_CLASS}>Total building area</p>
                 <p className="font-mono text-lg font-semibold">
                   {formatArea(totalArea)}
                 </p>
@@ -400,18 +400,10 @@ function SpecFields({
           stay decimal on purpose — a powder room is half a bathroom, see
           workspace-print-template.ts and the "2.5 bathrooms" test. */}
       <Field label="Number of bedrooms">
-        <CountField
-          step="1"
-          value={bedrooms}
-          onChange={onBedroomsChange}
-        />
+        <CountField step="1" value={bedrooms} onChange={onBedroomsChange} />
       </Field>
       <Field label="Number of bathrooms">
-        <CountField
-          step="0.5"
-          value={bathrooms}
-          onChange={onBathroomsChange}
-        />
+        <CountField step="0.5" value={bathrooms} onChange={onBathroomsChange} />
       </Field>
       <Field label="Garage spaces">
         <CountField
@@ -685,9 +677,7 @@ function OwnersSection({
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <span className={GROUP_HEADING_CLASS}>
-          Owners
-        </span>
+        <span className={GROUP_HEADING_CLASS}>Owners</span>
         <Button
           size="sm"
           type="button"

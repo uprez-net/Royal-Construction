@@ -27,7 +27,12 @@ export const OFFER_STATUS_BUCKETS: Readonly<
     "CONTRACT_SIGNED",
     "PROJECT",
   ],
-  rejected: ["REJECTED", "OFFER_DECLINED", "TENDER_DECLINED", "CONTRACT_DECLINED"],
+  rejected: [
+    "REJECTED",
+    "OFFER_DECLINED",
+    "TENDER_DECLINED",
+    "CONTRACT_DECLINED",
+  ],
   // OFFER_SENT: the acceptance is out with the customer for signature.
   sent: ["SENT", "OFFER_SENT", "TENDER_SENT", "CONTRACT_SENT"],
 };

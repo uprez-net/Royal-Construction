@@ -32,7 +32,9 @@ export function buildMilestoneTree<T extends TreeMilestone>(
 
   const roots: WithChildren<T>[] = [];
   for (const milestone of byId.values()) {
-    const parent = milestone.parentId ? byId.get(milestone.parentId) : undefined;
+    const parent = milestone.parentId
+      ? byId.get(milestone.parentId)
+      : undefined;
     if (parent) {
       parent.childrenMilestones.push(milestone);
     } else {

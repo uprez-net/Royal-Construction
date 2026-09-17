@@ -1323,7 +1323,8 @@ export const EXTERNAL_APPLICATION_COPY: Readonly<
     alertType: ComplianceAlertType.CDC_DETERMINATION_OVERDUE,
     instruction:
       "Lodge the CDC application on the NSW Planning Portal with the approved checklist pack, and appoint the certifier as principal certifier in the same sitting. Record the date and the application number here.",
-    turnaround: "the 20 calendar days the regulation allows, about 14 working days",
+    turnaround:
+      "the 20 calendar days the regulation allows, about 14 working days",
   },
   [ComplianceExternalApplicationKind.CONSTRUCTION_CERTIFICATE]: {
     label: "Construction certificate",
@@ -1333,7 +1334,8 @@ export const EXTERNAL_APPLICATION_COPY: Readonly<
     alertType: ComplianceAlertType.CC_DETERMINATION_OVERDUE,
     instruction:
       "Lodge the construction certificate application on the NSW Planning Portal with the consent and the approved checklist pack. Record the date and the application number here.",
-    turnaround: "the 40 calendar days before a deemed refusal, about 28 working days",
+    turnaround:
+      "the 40 calendar days before a deemed refusal, about 28 working days",
   },
 };
 

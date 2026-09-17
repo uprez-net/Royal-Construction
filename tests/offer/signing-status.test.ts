@@ -74,7 +74,10 @@ test("does not cross documents — a signed tender leaves the contract awaiting"
   // Same person signs both documents; the tender being signed must not make the
   // contract row show as signed.
   const statuses = [customer("a@example.com", "SIGNED", "TENDER")];
-  assert.equal(findSignerStatus(statuses, "CONTRACT", "a@example.com"), undefined);
+  assert.equal(
+    findSignerStatus(statuses, "CONTRACT", "a@example.com"),
+    undefined,
+  );
 });
 
 test("never matches the builder row when looking up a customer", () => {
@@ -208,7 +211,11 @@ test("signed and declined are both terminal, so neither replaces the other", () 
 });
 
 test("the webhook's where clause lists exactly the statuses below the next one", () => {
-  assert.deepEqual(signerStatusesBelow("SIGNED"), ["CREATED", "SENT", "DELIVERED"]);
+  assert.deepEqual(signerStatusesBelow("SIGNED"), [
+    "CREATED",
+    "SENT",
+    "DELIVERED",
+  ]);
   assert.deepEqual(signerStatusesBelow("DELIVERED"), ["CREATED", "SENT"]);
   assert.deepEqual(signerStatusesBelow("CREATED"), []);
 });

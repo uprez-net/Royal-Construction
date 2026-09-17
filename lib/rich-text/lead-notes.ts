@@ -71,7 +71,9 @@ export function normalizeRichTextLink(value: string) {
 }
 
 function sanitizeAnchorAttributes(attributes: string) {
-  const hrefMatch = attributes.match(/\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  const hrefMatch = attributes.match(
+    /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i,
+  );
   const href = hrefMatch?.[1] ?? hrefMatch?.[2] ?? hrefMatch?.[3] ?? "";
   const normalizedHref = normalizeRichTextLink(href);
   if (!normalizedHref) return "";
@@ -84,16 +86,25 @@ export function sanitizeLeadNotesHtml(value: string) {
 
   return normalizedValue
     .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<(script|style|iframe|object|embed|link|meta|svg|math)[\s\S]*?<\/\1>/gi, "")
-    .replace(/<(script|style|iframe|object|embed|link|meta|svg|math)\b[^>]*\/?>/gi, "")
-    .replace(/<\/?([a-z][\w:-]*)([^>]*)>/gi, (match, rawTag: string, attributes: string) => {
-      const tag = rawTag.toLowerCase();
-      if (!allowedTags.has(tag)) return "";
-      if (match.startsWith("</")) return `</${tag}>`;
-      if (tag === "br") return "<br>";
-      if (tag === "a") return `<a${sanitizeAnchorAttributes(attributes)}>`;
-      return `<${tag}>`;
-    });
+    .replace(
+      /<(script|style|iframe|object|embed|link|meta|svg|math)[\s\S]*?<\/\1>/gi,
+      "",
+    )
+    .replace(
+      /<(script|style|iframe|object|embed|link|meta|svg|math)\b[^>]*\/?>/gi,
+      "",
+    )
+    .replace(
+      /<\/?([a-z][\w:-]*)([^>]*)>/gi,
+      (match, rawTag: string, attributes: string) => {
+        const tag = rawTag.toLowerCase();
+        if (!allowedTags.has(tag)) return "";
+        if (match.startsWith("</")) return `</${tag}>`;
+        if (tag === "br") return "<br>";
+        if (tag === "a") return `<a${sanitizeAnchorAttributes(attributes)}>`;
+        return `<${tag}>`;
+      },
+    );
 }
 
 function isRichTextNode(value: unknown): value is LeadRichTextNode {
@@ -132,9 +143,7 @@ function nodeToHtml(node: LeadRichTextNode): string {
     const content = Array.isArray(node.children)
       ? node.children.filter(isRichTextNode).map(nodeToHtml).join("")
       : "";
-    return href
-      ? `<a href="${escapeAttribute(href)}">${content}</a>`
-      : content;
+    return href ? `<a href="${escapeAttribute(href)}">${content}</a>` : content;
   }
 
   const children = Array.isArray(node.children)
@@ -234,7 +243,9 @@ function parseEmailHtml(html: string): ParsedEmailNode[] {
 }
 
 function emailHref(attributes: string) {
-  const match = attributes.match(/\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+  const match = attributes.match(
+    /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i,
+  );
   return normalizeRichTextLink(
     decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? ""),
   );
@@ -266,7 +277,13 @@ function inlineEmailNodes(
     if (node.tag === "a") {
       const href = emailHref(node.attributes);
       return href
-        ? [{ type: "a", url: href, children: inlineEmailNodes(node.children, marks) }]
+        ? [
+            {
+              type: "a",
+              url: href,
+              children: inlineEmailNodes(node.children, marks),
+            },
+          ]
         : inlineEmailNodes(node.children, marks);
     }
 
@@ -277,7 +294,9 @@ function inlineEmailNodes(
 function emailBlockNodes(nodes: ParsedEmailNode[]): LeadRichTextNode[] {
   return nodes.flatMap((node) => {
     if ("text" in node) {
-      return node.text.trim() ? [{ type: "p", children: [{ text: node.text.trim() }] }] : [];
+      return node.text.trim()
+        ? [{ type: "p", children: [{ text: node.text.trim() }] }]
+        : [];
     }
 
     if (node.tag === "ul" || node.tag === "ol") {
@@ -286,8 +305,12 @@ function emailBlockNodes(nodes: ParsedEmailNode[]): LeadRichTextNode[] {
           type: node.tag,
           children: node.children
             .filter(
-              (child): child is Extract<ParsedEmailNode, { children: ParsedEmailNode[] }> =>
-                !("text" in child) && child.tag === "li",
+              (
+                child,
+              ): child is Extract<
+                ParsedEmailNode,
+                { children: ParsedEmailNode[] }
+              > => !("text" in child) && child.tag === "li",
             )
             .map((child) => ({
               type: "li",
@@ -306,7 +329,9 @@ function emailBlockNodes(nodes: ParsedEmailNode[]): LeadRichTextNode[] {
       ];
     }
 
-    return node.children.some((child) => !("text" in child) && ["p", "ul", "ol"].includes(child.tag))
+    return node.children.some(
+      (child) => !("text" in child) && ["p", "ul", "ol"].includes(child.tag),
+    )
       ? emailBlockNodes(node.children)
       : [{ type: "p", children: inlineEmailNodes([node]) }];
   });
@@ -318,7 +343,9 @@ export function createLeadNotesDocument(input: {
   value?: LeadRichTextNode[] | null;
 }): LeadRichTextDocument {
   const value = Array.isArray(input.value) ? input.value : null;
-  const plainText = (input.plainText ?? (value ? valueToPlainText(value) : "")).trim();
+  const plainText = (
+    input.plainText ?? (value ? valueToPlainText(value) : "")
+  ).trim();
   const html = value
     ? valueToHtml(value)
     : input.html?.trim()
@@ -336,7 +363,9 @@ export function createLeadNotesDocument(input: {
 }
 
 /** Creates an editable rich-text document from an outreach email's HTML body. */
-export function emailHtmlToLeadNotesDocument(html: string): LeadRichTextDocument {
+export function emailHtmlToLeadNotesDocument(
+  html: string,
+): LeadRichTextDocument {
   const sanitizedHtml = sanitizeLeadNotesHtml(html);
   const value = emailBlockNodes(parseEmailHtml(sanitizedHtml));
   return createLeadNotesDocument({

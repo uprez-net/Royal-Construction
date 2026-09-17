@@ -1,4 +1,8 @@
-import { MetricCardSkeleton, PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+import {
+  MetricCardSkeleton,
+  PageSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
 
 export default function DashboardSkeleton() {
   return (
@@ -97,7 +101,10 @@ export default function DashboardSkeleton() {
               </div>
               <div className="space-y-4 p-4">
                 {Array.from({ length: 4 }).map((_, row) => (
-                  <div key={row} className="grid grid-cols-5 items-center gap-4">
+                  <div
+                    key={row}
+                    className="grid grid-cols-5 items-center gap-4"
+                  >
                     <div className="flex items-center gap-3">
                       <Skeleton className="size-10 rounded-full" />
                       <Skeleton className="h-4 w-28" />

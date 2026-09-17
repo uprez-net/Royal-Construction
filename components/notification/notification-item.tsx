@@ -19,7 +19,9 @@ const isAdminApprovalNotification = (url: string): boolean => {
 };
 
 const isLeadActionNotification = (url: string): boolean => {
-  return url.includes("action=followup") || url.includes("action=meetingReview");
+  return (
+    url.includes("action=followup") || url.includes("action=meetingReview")
+  );
 };
 
 /**
@@ -81,7 +83,8 @@ const getLeadActionFromUrl = (
   );
 
   const params = new URLSearchParams(queryString);
-  const action = params.get("action") === "meetingReview" ? "meetingReview" : "followup";
+  const action =
+    params.get("action") === "meetingReview" ? "meetingReview" : "followup";
   return {
     leadId: params.get("leadId")!,
     action,

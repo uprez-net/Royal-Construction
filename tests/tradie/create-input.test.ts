@@ -21,7 +21,10 @@ test("CreateTradieInput matches the Tradie columns", async () => {
   let close = open;
   for (let i = open; i < types.length; i++) {
     if (types[i] === "{") depth++;
-    else if (types[i] === "}" && --depth === 0) { close = i; break; }
+    else if (types[i] === "}" && --depth === 0) {
+      close = i;
+      break;
+    }
   }
   const body = stripComments(types.slice(open + 1, close));
 
@@ -33,7 +36,10 @@ test("CreateTradieInput matches the Tradie columns", async () => {
   );
 
   const fields = [...body.matchAll(/^\s*(\w+)\??\s*:/gm)].map((m) => m[1]);
-  assert.ok(fields.length >= 8, `only parsed ${fields.length} fields — parser is wrong`);
+  assert.ok(
+    fields.length >= 8,
+    `only parsed ${fields.length} fields — parser is wrong`,
+  );
   for (const field of fields) {
     assert.ok(
       columns.has(field),

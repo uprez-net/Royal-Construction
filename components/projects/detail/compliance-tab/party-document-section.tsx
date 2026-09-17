@@ -266,7 +266,9 @@ export function PartyDocumentSection({
         // a reader coming back to the tab actually wants from this line.
         outreach?.mode === ComplianceOutreachMode.SELF_SUPPLIED
           ? "Supplied by the client."
-          : (outreach?.contactName ?? outreach?.contactEmail ?? section.description)
+          : (outreach?.contactName ??
+            outreach?.contactEmail ??
+            section.description)
       }
       icon={PARTY_ICON[party]}
       progress={progress}
@@ -291,7 +293,12 @@ export function PartyDocumentSection({
         // and a button there would offer to skip the queue.
         blockedReason === null && !isCouncil ? (
           <>
-            <Button type="button" size="sm" disabled={isBusy} onClick={onConnect}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isBusy}
+              onClick={onConnect}
+            >
               Connect with {label}
             </Button>
             <Button
@@ -333,9 +340,7 @@ export function PartyDocumentSection({
         ) : (
           <ExternalApplicationBlock
             projectId={projectId}
-            kind={
-              ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7
-            }
+            kind={ComplianceExternalApplicationKind.PLANNING_CERTIFICATE_10_7}
             application={planningCertificate}
             readOnly={orderedFromDa}
             documentRows={rows}

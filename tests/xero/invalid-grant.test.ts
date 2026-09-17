@@ -15,7 +15,10 @@ const axiosError = (status: number, data: unknown) =>
   });
 
 test("recognises a rejected refresh token", () => {
-  assert.equal(isInvalidGrant(axiosError(400, { error: "invalid_grant" })), true);
+  assert.equal(
+    isInvalidGrant(axiosError(400, { error: "invalid_grant" })),
+    true,
+  );
 });
 
 // Some gateways hand back the body as text rather than parsed JSON.
@@ -27,7 +30,10 @@ test("recognises invalid_grant in an unparsed body", () => {
 });
 
 test("a rate limit is not a rejected token", () => {
-  assert.equal(isInvalidGrant(axiosError(429, { error: "rate_limit_exceeded" })), false);
+  assert.equal(
+    isInvalidGrant(axiosError(429, { error: "rate_limit_exceeded" })),
+    false,
+  );
 });
 
 test("a Xero outage is not a rejected token", () => {
@@ -37,7 +43,10 @@ test("a Xero outage is not a rejected token", () => {
 test("bad client credentials are not a rejected token", () => {
   // invalid_client means the app's secret is wrong — a config problem to fix,
   // not a connection to tear down.
-  assert.equal(isInvalidGrant(axiosError(401, { error: "invalid_client" })), false);
+  assert.equal(
+    isInvalidGrant(axiosError(401, { error: "invalid_client" })),
+    false,
+  );
 });
 
 test("a network failure with no response is not a rejected token", () => {

@@ -66,7 +66,9 @@ async function recipientDomainAcceptsMail(
       ),
     ]);
     if (records === null) {
-      console.error(`[offer] MX lookup for "${domain}" timed out; allowing the send`);
+      console.error(
+        `[offer] MX lookup for "${domain}" timed out; allowing the send`,
+      );
       return { ok: true };
     }
     // A domain with no usable MX host cannot take delivery.
@@ -153,7 +155,6 @@ export async function sendOfferDocument(input: {
       error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
     };
   }
-
 
   // Recipients = EVERY customer signatory (individual owners + company
   // directors), not just primary + secondary. The old flat projection dropped

@@ -145,7 +145,9 @@ export function ContractPanel({
           isSent={isSent}
           isSigned={isSigned}
           isTenderSigned={isTenderSigned}
-          customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
+          customerName={
+            formatOwnerNamesLine(job.owners ?? []) || job.clientNames
+          }
           signers={collectOfferSigners(job.owners ?? []).map((s) => ({
             label: offerSignerLabel(s),
             email: s.signatory.email,
@@ -253,9 +255,7 @@ function ContractParticularsForm({
     );
     return (
       <section className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-4">
-        <h4 className={GROUP_HEADING_CLASS}>
-          Contract particulars
-        </h4>
+        <h4 className={GROUP_HEADING_CLASS}>Contract particulars</h4>
         {filled.length === 0 ? (
           <p className="text-sm text-muted-foreground/80">
             No particulars were captured — these fields appear blank on the
@@ -302,9 +302,7 @@ function ContractParticularsForm({
         }
         return (
           <div key={group} className="grid gap-3">
-            <p className={GROUP_HEADING_CLASS}>
-              {title}
-            </p>
+            <p className={GROUP_HEADING_CLASS}>{title}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {fields.map((field) => (
                 <label
@@ -377,7 +375,10 @@ function ContractActions({
   // DocuSign recipient set, replacing the single hardcoded customer row.
   // Email joins a row to its persisted EnvelopeSignature — labels are not
   // unique, emails are (enforced by collectOwnerIssues).
-  readonly signers: readonly { readonly label: string; readonly email: string }[];
+  readonly signers: readonly {
+    readonly label: string;
+    readonly email: string;
+  }[];
   readonly signerStatuses: readonly OfferSignerStatus[];
   readonly contractValueIncGst: number;
   readonly offerReference: string;
@@ -510,7 +511,10 @@ function ContractActions({
 
       {isDraft && missingRecommended.length > 0 ? (
         <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <AlertTriangle
+            className="mt-0.5 size-3.5 shrink-0"
+            aria-hidden="true"
+          />
           <span>
             Recommended particulars still blank:{" "}
             <span className="font-medium">
@@ -558,7 +562,10 @@ function ContractScheduleToSend({
     <div className="grid gap-2">
       {showRefusal && terms.refusal ? (
         <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <AlertTriangle
+            className="mt-0.5 size-3.5 shrink-0"
+            aria-hidden="true"
+          />
           <span>{terms.refusal}</span>
         </p>
       ) : null}
@@ -736,9 +743,7 @@ function ContractPreview({
           schedule: the send takes them from the signed Tender, and a sent
           Contract shows the values it went out with. */}
       <div>
-        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
-          Progress payments
-        </p>
+        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Progress payments</p>
         {contractTerms === null ? (
           <p className="text-sm text-muted-foreground/80">
             The payment schedule the Contract takes from the signed Tender

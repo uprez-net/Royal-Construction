@@ -13,7 +13,6 @@ import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 export default function TradieCoordinationSkeleton() {
   return (
     <PageSkeleton label="Loading tradie coordination" className="space-y-6">
-
       {/* Header card */}
       <div className="rounded-lg border border-border/70 bg-card p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">

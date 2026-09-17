@@ -165,7 +165,9 @@ export function StepGlyph({
     "grid size-5 shrink-0 place-items-center rounded-full font-mono text-[0.625rem] font-semibold";
   if (state === "complete") {
     return (
-      <span className={cn(base, "bg-success-light text-success-ink", className)}>
+      <span
+        className={cn(base, "bg-success-light text-success-ink", className)}
+      >
         <Check className="size-3" aria-hidden="true" />
       </span>
     );
@@ -719,7 +721,10 @@ export function PricingRail({
       {compact ? null : (
         <dl className="grid gap-1.5 border-t border-border/70 pt-3 text-sm">
           {PRICING.rows.map(([label, value]) => (
-            <div key={label} className="flex items-baseline justify-between gap-3">
+            <div
+              key={label}
+              className="flex items-baseline justify-between gap-3"
+            >
               <dt className="text-muted-foreground">{label}</dt>
               <dd className="font-mono tabular-nums">
                 {formatCurrency(value)}

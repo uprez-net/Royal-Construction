@@ -82,10 +82,14 @@ export type SignedTenderExclusions = {
  */
 export function resolveSignedTenderExclusions(input: {
   readonly tenderDocumentData: unknown;
-  readonly snapshot: Pick<OfferWorkspaceSnapshot, "draft" | "exclusions" | "job">;
+  readonly snapshot: Pick<
+    OfferWorkspaceSnapshot,
+    "draft" | "exclusions" | "job"
+  >;
 }): SignedTenderExclusions {
   const data =
-    typeof input.tenderDocumentData === "object" && input.tenderDocumentData !== null
+    typeof input.tenderDocumentData === "object" &&
+    input.tenderDocumentData !== null
       ? (input.tenderDocumentData as Record<string, unknown>)
       : null;
   const draft = data?.draft;
@@ -112,7 +116,10 @@ export function resolveSignedTenderExclusions(input: {
       source: "tender-document",
     };
   }
-  return { lines: tenderExclusionLines(input.snapshot), source: "agreed-snapshot" };
+  return {
+    lines: tenderExclusionLines(input.snapshot),
+    source: "agreed-snapshot",
+  };
 }
 
 export function tenderExclusionLines(

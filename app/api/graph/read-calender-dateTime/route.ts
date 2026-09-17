@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { ClientSecretCredential } from '@azure/identity';
+import { NextRequest, NextResponse } from "next/server";
+import { ClientSecretCredential } from "@azure/identity";
 
 interface GraphConfig {
   mode: string;
@@ -38,37 +38,40 @@ interface CalendarEvent {
 
 interface CalendarPage {
   value?: CalendarEvent[];
-  '@odata.nextLink'?: string;
+  "@odata.nextLink"?: string;
 }
 
 function getGraphConfig(): GraphConfig {
   return {
-    mode: process.env.GRAPH_MODE || '',
-    tenantId: process.env.AZURE_TENANT_ID || '',
-    clientId: process.env.AZURE_CLIENT_ID || '',
-    clientSecret: process.env.AZURE_CLIENT_SECRET || '',
-    senderUpn: process.env.GRAPH_SENDER_UPN || process.env.BUSINESS_EMAIL || '',
+    mode: process.env.GRAPH_MODE || "",
+    tenantId: process.env.AZURE_TENANT_ID || "",
+    clientId: process.env.AZURE_CLIENT_ID || "",
+    clientSecret: process.env.AZURE_CLIENT_SECRET || "",
+    senderUpn: process.env.GRAPH_SENDER_UPN || process.env.BUSINESS_EMAIL || "",
   };
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  console.log('Received request to read calendar with query:', searchParams.toString());
-  const daysToFetch = parseInt(searchParams.get('days') || '30', 10);
+  console.log(
+    "Received request to read calendar with query:",
+    searchParams.toString(),
+  );
+  const daysToFetch = parseInt(searchParams.get("days") || "30", 10);
 
   const config = getGraphConfig();
 
-  if (config.mode !== 'app-only') {
+  if (config.mode !== "app-only") {
     return NextResponse.json(
-      { error: 'Requires GRAPH_MODE=app-only with application permissions.' },
-      { status: 500 }
+      { error: "Requires GRAPH_MODE=app-only with application permissions." },
+      { status: 500 },
     );
   }
 
   if (!config.senderUpn) {
     return NextResponse.json(
-      { error: 'GRAPH_SENDER_UPN (or BUSINESS_EMAIL) must be set.' },
-      { status: 500 }
+      { error: "GRAPH_SENDER_UPN (or BUSINESS_EMAIL) must be set." },
+      { status: 500 },
     );
   }
 
@@ -79,16 +82,22 @@ export async function GET(req: NextRequest) {
       config.clientId,
       config.clientSecret,
     );
-    const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
+    const tokenResult = await credential.getToken(
+      "https://graph.microsoft.com/.default",
+    );
     const accessToken = tokenResult?.token;
 
     if (!accessToken) {
-      throw new Error('Unable to acquire Graph access token');
+      throw new Error("Unable to acquire Graph access token");
     }
 
     // 2. Define Date Range (From start of today to X days in the future)
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
 
     const futureDate = new Date(startOfDay);
     futureDate.setDate(futureDate.getDate() + daysToFetch);
@@ -107,7 +116,7 @@ export async function GET(req: NextRequest) {
     const headers = {
       Authorization: `Bearer ${accessToken}`,
       // This header forces Graph to return dates in the Sydney timezone instead of UTC
-      'Prefer': 'outlook.timezone="Australia/Sydney"',
+      Prefer: 'outlook.timezone="Australia/Sydney"',
     };
 
     const rawEvents: CalendarEvent[] = [];
@@ -119,50 +128,58 @@ export async function GET(req: NextRequest) {
     while (nextUrl && pagesFetched < MAX_PAGES) {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) {
-        console.error('Calendar read exceeded its overall time budget; refusing to serve partial availability.');
+        console.error(
+          "Calendar read exceeded its overall time budget; refusing to serve partial availability.",
+        );
         return NextResponse.json(
-          { error: 'Calendar read timed out; availability cannot be determined.' },
-          { status: 504 }
+          {
+            error:
+              "Calendar read timed out; availability cannot be determined.",
+          },
+          { status: 504 },
         );
       }
 
       let response: Response;
       try {
         response = await fetch(nextUrl, {
-          method: 'GET',
+          method: "GET",
           headers,
           signal: AbortSignal.timeout(Math.min(PAGE_TIMEOUT_MS, remainingMs)),
         });
       } catch (pageError) {
         // A timed-out page is an upstream slowness problem, not a bad request —
         // report it the same way as blowing the overall budget.
-        if (pageError instanceof Error && pageError.name === 'TimeoutError') {
-          console.error('Graph calendar page request timed out:', pageError);
+        if (pageError instanceof Error && pageError.name === "TimeoutError") {
+          console.error("Graph calendar page request timed out:", pageError);
           return NextResponse.json(
-            { error: 'Calendar read timed out; availability cannot be determined.' },
-            { status: 504 }
+            {
+              error:
+                "Calendar read timed out; availability cannot be determined.",
+            },
+            { status: 504 },
           );
         }
 
-        console.error('Graph calendar page request failed:', pageError);
+        console.error("Graph calendar page request failed:", pageError);
         return NextResponse.json(
-          { error: 'Failed to read calendar events from Microsoft Graph.' },
-          { status: 500 }
+          { error: "Failed to read calendar events from Microsoft Graph." },
+          { status: 500 },
         );
       }
 
       if (!response.ok) {
         const detail = await response.text();
-        console.error('Graph calendar read failed:', detail);
+        console.error("Graph calendar read failed:", detail);
         return NextResponse.json(
-          { error: 'Failed to read calendar events from Microsoft Graph.' },
-          { status: 500 }
+          { error: "Failed to read calendar events from Microsoft Graph." },
+          { status: 500 },
         );
       }
 
       const page = (await response.json()) as CalendarPage;
       rawEvents.push(...(page.value ?? []));
-      nextUrl = page['@odata.nextLink'];
+      nextUrl = page["@odata.nextLink"];
       pagesFetched += 1;
     }
 
@@ -175,14 +192,17 @@ export async function GET(req: NextRequest) {
         `Calendar read stopped at the ${MAX_PAGES}-page ceiling with more results pending; refusing to serve partial availability.`,
       );
       return NextResponse.json(
-        { error: 'Calendar is too large to read in full; availability cannot be determined.' },
-        { status: 500 }
+        {
+          error:
+            "Calendar is too large to read in full; availability cannot be determined.",
+        },
+        { status: 500 },
       );
     }
 
     // 4. Format the response for the frontend
     const events = rawEvents.map((event) => ({
-      subject: event.subject || '(No Title)',
+      subject: event.subject || "(No Title)",
       start: event.start,
       end: event.end,
       isAllDay: event.isAllDay || false,
@@ -197,12 +217,11 @@ export async function GET(req: NextRequest) {
       count: events.length,
       events,
     });
-
   } catch (error) {
-    console.error('Read calendar failed:', error);
+    console.error("Read calendar failed:", error);
     return NextResponse.json(
-      { error: 'An unexpected error occurred while reading the calendar.' },
-      { status: 500 }
+      { error: "An unexpected error occurred while reading the calendar." },
+      { status: 500 },
     );
   }
 }
