@@ -7,6 +7,8 @@ import { OfferContentHeader } from "./offer-content-header";
 import {
   ADMIN_OFFER_TABS,
   type AdminOfferTabs,
+  adminPanelId,
+  adminTabId,
   dirtyByTab,
 } from "./offer-content-tabs";
 import { JobSetupScreen } from "./job-setup-screen";
@@ -55,8 +57,16 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
       {/* The screens title their cards h3. With the hero now the page's h1,
           this h2 keeps the outline from skipping a level; the tab strip
           already shows the name, so it is only for screen readers. */}
-      <section aria-labelledby="admin-offer-section-title">
-        <h2 id="admin-offer-section-title" className="sr-only">
+      {/* The panel the open tab controls. aria-labelledby points at that tab,
+          so the tab names the panel and the sr-only heading is no longer the
+          only thing tying them together. */}
+      <section
+        role="tabpanel"
+        id={adminPanelId(activeTab)}
+        aria-labelledby={adminTabId(activeTab)}
+        tabIndex={0}
+      >
+        <h2 className="sr-only">
           {ADMIN_OFFER_TABS.find((tab) => tab.id === activeTab)?.label}
         </h2>
         {activeTab === "job-setup" && <JobSetupScreen />}

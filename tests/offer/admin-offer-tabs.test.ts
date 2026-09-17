@@ -100,16 +100,47 @@ test("opening the last tab ticks nothing and numbers the tabs before it", () => 
   });
 });
 
-test("the open tab's button is the one element marked current", () => {
+// These buttons switch a panel rendered in place, so they are tabs, not links:
+// aria-current said "this is where you are" without telling anyone that the
+// thing beside it is what the tab controls.
+test("exactly one tab is selected, and it is the open one", () => {
   const markup = renderStrip("cost-schedule");
   const buttons = buttonsOf(markup);
 
-  assert.equal(markup.match(/aria-current=/g)?.length, 1);
-  assert.match(buttons[1], /^<button\b[^>]*aria-current="true"/);
+  assert.match(markup, /role="tablist"/);
+  assert.equal(markup.match(/aria-selected="true"/g)?.length, 1);
+  assert.doesNotMatch(markup, /aria-current=/);
+  assert.match(buttons[1], /^<button\b[^>]*aria-selected="true"/);
   for (const button of buttons) {
+    assert.match(button, /^<button\b[^>]*role="tab"/);
     assert.doesNotMatch(button, /^<button\b[^>]*aria-label=/);
   }
   assert.equal(accessibleNameOf(buttons[1]), "Cost Schedule");
+});
+
+// Only the open tab is in the tab order: Tab reaches the strip once and the
+// arrows move within it.
+test("the strip has a single tab stop", () => {
+  const buttons = buttonsOf(renderStrip("cost-schedule"));
+
+  assert.equal(
+    buttons.filter((button) => /tabindex="0"/i.test(button)).length,
+    1,
+    "every tab should be skipped by Tab except the open one",
+  );
+});
+
+test("each tab names the panel it controls", () => {
+  const markup = renderStrip("cost-schedule");
+  const buttons = buttonsOf(markup);
+
+  ADMIN_OFFER_TABS.forEach((tab, index) => {
+    assert.match(buttons[index], new RegExp(`id="admin-offer-tab-${tab.id}"`));
+    assert.match(
+      buttons[index],
+      new RegExp(`aria-controls="admin-offer-panel-${tab.id}"`),
+    );
+  });
 });
 
 test("an unsaved section is announced only on its own tab", () => {
