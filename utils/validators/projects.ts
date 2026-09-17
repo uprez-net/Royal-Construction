@@ -1,6 +1,9 @@
-import { ProjectStatus } from "@prisma/client";
+import { Prisma, ProjectStatus } from "@prisma/client";
 import { z } from "zod";
 import type { ProjectListSortBy } from "@/lib/data/projects";
+import type { OfferWorkspaceCostLine } from "@/lib/offer/workspace-model";
+import type { ProjectExtractionData } from "@/types/project-extraction";
+import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { PRE_CONSTRUCTION_FILTER } from "@/types/project";
 import {
   emailSchema,
@@ -30,12 +33,16 @@ const customerModeSchema = z.enum(["existing", "new"]);
 const handoffDateSchema = (message: string) =>
   z.union([z.iso.date(message), z.iso.datetime(message)]);
 
-const sourceDocumentSchema = z.object({
-  fileId: z.string().trim().min(1, "The document is missing its file id"),
-  fileName: z.string().trim().min(1, "The document is missing its file name"),
-  url: z.string().trim().url("The document URL is not a valid URL"),
-  kind: z.enum(["tender", "contract", "hbcfInsurance"]),
-});
+// The kind is fixed per position: the two slots are the Tender and the
+// Contract specifically, and accepting either (or an HBCF certificate) in
+// both would let a contract be stored as the tender.
+const sourceDocumentSchema = <K extends "tender" | "contract">(kind: K) =>
+  z.object({
+    fileId: z.string().trim().min(1, "The document is missing its file id"),
+    fileName: z.string().trim().min(1, "The document is missing its file name"),
+    url: z.string().trim().url("The document URL is not a valid URL"),
+    kind: z.literal(kind),
+  });
 
 /**
  * The browser-supplied payload behind `createProjectWithLeadAction`.
@@ -73,12 +80,17 @@ export const createProjectWithLeadSchema = z.object({
   customerEmail: z.union([emailSchema, z.literal("")]).nullish(),
   customerPhone: z.string().trim().nullish(),
   customerAddress: z.string().trim().nullish(),
-  parties: z.unknown().nullish(),
-  extraction: z.unknown().nullish(),
-  costLines: z.array(z.unknown()).optional(),
+  // Structural pass-throughs: owned by their own types and written straight
+  // through, so they are carried rather than re-described here. Typed as what
+  // the writer takes so the parsed payload is what it is handed.
+  parties: z.custom<Prisma.InputJsonValue>().nullish(),
+  extraction: z
+    .custom<ProjectRequirementsPayload | ProjectExtractionData>()
+    .nullish(),
+  costLines: z.array(z.custom<OfferWorkspaceCostLine>()).optional(),
   sourceDocuments: z.object({
-    tender: sourceDocumentSchema,
-    contract: sourceDocumentSchema,
+    tender: sourceDocumentSchema("tender"),
+    contract: sourceDocumentSchema("contract"),
   }),
   confirmDateBlockers: z.boolean().optional(),
 });

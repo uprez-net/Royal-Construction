@@ -76,7 +76,9 @@ export async function createProjectWithLeadAction(
   }
 
   try {
-    const project = await createProjectWithLead(input);
+    // parsed.data, not input: the schema trims the strings and coerces
+    // lotSize, and the writer persists whatever it is handed.
+    const project = await createProjectWithLead(parsed.data);
     return { ok: true, project };
   } catch (error) {
     // `createProjectWithLead` already logged the raw error with its stack.

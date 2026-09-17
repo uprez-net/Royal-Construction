@@ -965,6 +965,7 @@ const handler = createMcpHandler((server) => {
                 return toToolResult({ fileId });
             } catch (error) {
                 return {
+                    isError: true,
                     content: [{ type: "text" as const, text: `Error uploading file ${error instanceof Error ? error.message : String(error)}` }],
                 }
             }

@@ -29,7 +29,7 @@ test("the wizard's action authorizes the lead before converting it", () => {
   const check = body.indexOf("authorizeLeadAccess(input.leadId)");
   assert.ok(check >= 0, "createProjectWithLeadAction never authorizes the lead");
   assert.ok(
-    check < body.indexOf("createProjectWithLead(input)"),
+    check < body.indexOf("createProjectWithLead(parsed.data)"),
     "the lead is converted before the caller is checked",
   );
 });
@@ -43,7 +43,7 @@ test("the whole payload is parsed before the lead is converted", () => {
   const parse = body.indexOf("createProjectWithLeadSchema.safeParse(input)");
   assert.ok(parse >= 0, "createProjectWithLeadAction no longer parses its input");
   assert.ok(
-    parse < body.indexOf("createProjectWithLead(input)"),
+    parse < body.indexOf("createProjectWithLead(parsed.data)"),
     "the lead is converted before the payload is validated",
   );
   assert.match(body, /failure: failureFromThrownError\(parsed\.error\)/);
