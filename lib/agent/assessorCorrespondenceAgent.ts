@@ -158,7 +158,7 @@ export async function readAssessorCorrespondence(params: {
       model: gateway("google/gemini-2.5-flash"),
       system: INSTRUCTION(params.assessor),
       prompt: `Subject: ${params.subject}\n\n${clean}`,
-      experimental_output: Output.object({
+      output: Output.object({
         schema: assessorCorrespondenceSchema,
       }),
     });

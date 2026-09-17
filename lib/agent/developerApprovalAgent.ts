@@ -87,7 +87,7 @@ export async function detectDeveloperVerdict(params: {
       model: gateway("google/gemini-2.5-flash"),
       system: INSTRUCTION,
       prompt: `Subject: ${params.subject}\n\n${clean}`,
-      experimental_output: Output.object({ schema: developerVerdictSchema }),
+      output: Output.object({ schema: developerVerdictSchema }),
     });
 
     if (output.decision === "approved") {
