@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { extractTradieScheduleInfoFromMessage } from '@/lib/graph/tradie-schedule-info-extractor';
 import { updateTradieSchedule } from '@/lib/data/tradieSchedules';
 import { saveLeadEmailTrail } from '@/lib/graph/save-lead-email-trail';
+import { isOwnMailbox } from '@/lib/graph/mailbox';
 import { evaluateEmail } from '@/utils/spam-detector';
 import { extractOfferReplyToken, recordOfferReply } from '@/lib/graph/offer-reply-tracker';
 import {
@@ -32,7 +33,6 @@ import { checkLeadPresentWithEmailPhone } from '@/lib/leads/existing-lead';
 import { processInboundLead } from '@/lib/workflow/lead-extraction';
 import { start } from 'workflow/api';
 import { after } from 'next/server';
-import { isOwnMailbox } from '@/lib/graph/mailbox';
 import { graphResourceBelongsToMailbox } from '@/lib/graph/resource';
 
 // export const runtime = 'nodejs';
