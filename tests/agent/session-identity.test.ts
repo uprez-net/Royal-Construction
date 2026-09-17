@@ -4,6 +4,7 @@ import {
   getEveSessionIdFromRequest,
   isAgentFeatureEnabled,
 } from "../../agent/lib/session-identity";
+import { waitForOwnedAgentSession } from "../../agent/lib/session-owner";
 
 test("extracts session IDs from send, stream, and control routes", () => {
   for (const path of [
@@ -36,4 +37,34 @@ test("the rollout flag is fail closed", () => {
   assert.equal(isAgentFeatureEnabled("false"), false);
   assert.equal(isAgentFeatureEnabled("TRUE"), false);
   assert.equal(isAgentFeatureEnabled("true"), true);
+});
+
+test("waits for a new session ownership row before rejecting the stream", async () => {
+  let reads = 0;
+  const owner = await waitForOwnedAgentSession(
+    async () => {
+      reads += 1;
+      return reads < 3 ? null : "user_123";
+    },
+    "wrun_123",
+    "user_123",
+  );
+
+  assert.equal(owner, true);
+  assert.equal(reads, 3);
+});
+
+test("rejects a known foreign session without waiting", async () => {
+  let reads = 0;
+  const owner = await waitForOwnedAgentSession(
+    async () => {
+      reads += 1;
+      return "user_other";
+    },
+    "wrun_123",
+    "user_123",
+  );
+
+  assert.equal(owner, false);
+  assert.equal(reads, 1);
 });

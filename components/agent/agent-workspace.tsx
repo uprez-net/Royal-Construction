@@ -70,6 +70,12 @@ export function AgentWorkspace({
   const [annotationResults, setAnnotationResults] = useState<AgentAnnotation[]>(
     [],
   );
+  const [messageAnnotations, setMessageAnnotations] = useState<
+    Record<string, AgentAnnotation[]>
+  >({});
+  const [pendingMessageAnnotations, setPendingMessageAnnotations] = useState<
+    AgentAnnotation[] | null
+  >(null);
   const [forkContext, setForkContext] = useState<string | null>(() =>
     typeof window === "undefined"
       ? null
@@ -81,6 +87,7 @@ export function AgentWorkspace({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const pendingMessageAnnotationsRef = useRef<AgentAnnotation[] | null>(null);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
   const stickToBottomRef = useRef(true);
 
@@ -129,11 +136,30 @@ export function AgentWorkspace({
     initialSession: selectedSessionId
       ? { sessionId: selectedSessionId, streamIndex: 0 }
       : undefined,
-    onFinish: () => router.refresh(),
+    // Eve already owns the live transcript in this client store. Refreshing
+    // the server route after every turn can remount the workspace while the
+    // stream is settling and makes the conversation visibly jump.
+    onEvent: (event) => {
+      if (event.type !== "message.received") return;
+      const pending = pendingMessageAnnotationsRef.current;
+      if (pending === null) return;
+
+      setMessageAnnotations((current) => ({
+        ...current,
+        [`${event.data.turnId}:user`]: pending,
+      }));
+      pendingMessageAnnotationsRef.current = null;
+      setPendingMessageAnnotations(null);
+    },
     onSessionChange,
     prepareSend: (payload) => ({
       ...payload,
       clientContext: {
+        ...(payload.clientContext &&
+        typeof payload.clientContext === "object" &&
+        !Array.isArray(payload.clientContext)
+          ? payload.clientContext
+          : {}),
         route: window.location.pathname,
       },
     }),
@@ -240,6 +266,8 @@ export function AgentWorkspace({
           mediaType: file.fileType,
         })),
       ];
+      pendingMessageAnnotationsRef.current = annotations;
+      setPendingMessageAnnotations(annotations);
       await agent.send(content, {
         clientContext: {
           route: window.location.pathname,
@@ -258,6 +286,8 @@ export function AgentWorkspace({
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
     } catch (error) {
+      pendingMessageAnnotationsRef.current = null;
+      setPendingMessageAnnotations(null);
       setSendError(
         error instanceof Error
           ? error.message
@@ -594,6 +624,12 @@ export function AgentWorkspace({
                   canRespond={!busy}
                   isStreaming={agent.status === "streaming"}
                   key={message.id}
+                  annotations={
+                    messageAnnotations[message.id] ??
+                    (message.metadata?.optimistic
+                      ? pendingMessageAnnotations ?? undefined
+                      : undefined)
+                  }
                   onAction={runAction}
                   onEditMessage={editMessage}
                   message={message}

@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { isInternalHref } from "@/utils/safe-links";
+import type { AgentAnnotation } from "./agent-annotations";
 
 export type AgentInputResponse = {
   optionId?: string;
@@ -51,6 +52,7 @@ export function AgentMessage({
   canRespond,
   isStreaming,
   message,
+  annotations,
   onAction,
   onEditMessage,
   onInputResponses,
@@ -58,6 +60,7 @@ export function AgentMessage({
   canRespond: boolean;
   isStreaming: boolean;
   message: EveMessage;
+  annotations?: readonly Pick<AgentAnnotation, "id" | "label" | "type">[];
   onAction: (action: {
     id: string;
     label: string;
@@ -92,6 +95,19 @@ export function AgentMessage({
   return (
     <Message from={message.role}>
       <MessageContent>
+        {message.role === "user" && annotations?.length ? (
+          <div
+            aria-label="Message annotations"
+            className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-blue-600 dark:text-blue-400"
+          >
+            {annotations.map((annotation) => (
+              <span key={`${annotation.type}:${annotation.id}`}>
+                <span aria-hidden="true">@</span>
+                {annotation.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {message.parts.map((part, index) => (
           <AgentMessagePart
             canRespond={canRespond}

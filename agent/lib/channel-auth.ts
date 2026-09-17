@@ -10,6 +10,7 @@ import {
   getEveSessionIdFromRequest,
   isAgentFeatureEnabled,
 } from "@/agent/lib/session-identity";
+import { waitForOwnedAgentSession } from "@/agent/lib/session-owner";
 
 const clerkClient = createClerkClient({
   publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
@@ -65,8 +66,12 @@ export function clerkInternalUserAuth(): AuthFn<Request> {
 
       const eveSessionId = getEveSessionIdFromRequest(request);
       if (eveSessionId) {
-        const ownerUserId = await findSessionOwner(eveSessionId);
-        if (ownerUserId !== user.id) {
+        const ownsSession = await waitForOwnedAgentSession(
+          findSessionOwner,
+          eveSessionId,
+          user.id,
+        );
+        if (!ownsSession) {
           throw new ForbiddenError({
             code: "agent_session_access_denied",
             message: "The requested agent session is unavailable.",
