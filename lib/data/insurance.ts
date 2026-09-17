@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import { ProjectStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";

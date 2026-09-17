@@ -1,5 +1,5 @@
 // Shared, framework-agnostic error model for the "create project from lead"
-// flow. Imported by BOTH the server action (`lib/data/projectsWrite.ts`) and
+// flow. Imported by BOTH the server action (`lib/actions/projects.ts`) and
 // the client wizard (`components/projects/create-project-modal.tsx`), so it
 // must stay free of `prisma`, `next/*` and any other server-only import.
 //
@@ -51,6 +51,7 @@ export type CreateProjectFailureCode =
   | "VALIDATION"
   | "DATE_BLOCKERS"
   | "LEAD_NOT_FOUND"
+  | "FORBIDDEN"
   | "PROJECT_ALREADY_EXISTS_FOR_LEAD"
   | "PROJECT_DETAIL_NOT_FOUND"
   | "SITE_MANAGER_NOT_FOUND"

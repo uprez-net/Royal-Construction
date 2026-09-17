@@ -16,6 +16,7 @@ import {
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
@@ -33,6 +34,9 @@ type TenderGatePanelProps = {
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  // The lifecycle action running, or null. Create revision disables while any
+  // runs, as it does on the Send & negotiate panel.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function TenderGatePanel({
@@ -43,6 +47,7 @@ export function TenderGatePanel({
   onCreateRevision,
   canRevise,
   revising,
+  lifecycleBusy,
 }: TenderGatePanelProps) {
   const gateStatus = deriveTenderGateStatus(tenderGate);
   const planNeeded = tenderGate.needsArchitecturalPlan;
@@ -179,7 +184,10 @@ export function TenderGatePanel({
                         </p>
                         <div>
                           <Button
-                            disabled={!canRevise || revising}
+                            aria-busy={lifecycleBusy === "revision" || undefined}
+                            disabled={
+                              !canRevise || revising || lifecycleBusy !== null
+                            }
                             onClick={onCreateRevision}
                             size="sm"
                             type="button"

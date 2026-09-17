@@ -52,6 +52,11 @@ import {
   type ContractParticularKey,
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
+import {
+  contractPreviewTerms,
+  type ContractPreviewTerms,
+} from "@/lib/offer/contract-terms";
+import { hasContractTerms } from "@/lib/offer/contract-terms-status";
 import type {
   OfferSignerStatus,
   OfferSignerStatusValue,
@@ -108,6 +113,11 @@ type LoadedOfferWorkspace = {
   // The project a handed-off (PROJECT) offer created, so Open Project links to
   // it after a reload. Null when there is none; absent below PROJECT.
   projectId?: string | null;
+  // The payment schedule, deposit and exclusions the Contract step shows: until
+  // the BC4 is sent, resolved from the signed Tender the way the send resolves
+  // them; after, the tab values the sent BC4 carried. Null before TENDER_SIGNED
+  // or when the stored state cannot be read.
+  contractTerms?: ContractPreviewTerms | null;
 };
 
 type OfferRow = {
@@ -351,6 +361,50 @@ async function attachProjectId(
   return { ...loaded, projectId: lead?.project?.id ?? null };
 }
 
+// Reads the rows sendContractForSignature reads, plus the sent Contract's tabs,
+// and returns only the terms: the Tender's documentData is the whole render
+// input and stays on the server.
+async function loadContractTerms(
+  offerId: string,
+  status: OfferStatus,
+): Promise<ContractPreviewTerms | null> {
+  if (!hasContractTerms(status)) {
+    return null;
+  }
+  const offer = await prisma.offer.findUnique({
+    where: { id: offerId },
+    select: {
+      agreedSnapshot: true,
+      workspaceState: true,
+      tender: { select: { documentData: true } },
+      contract: { select: { documentData: true } },
+    },
+  });
+  if (!offer) {
+    return null;
+  }
+  try {
+    return contractPreviewTerms({ status, row: offer });
+  } catch (error) {
+    // Opening the workspace must not fail on the preview; the send resolves the
+    // terms again and refuses on its own.
+    console.error(
+      `[offer] resolving contract terms for offer ${offerId} failed:`,
+      error,
+    );
+    return null;
+  }
+}
+
+async function attachContractTerms(
+  loaded: LoadedOfferWorkspace,
+): Promise<LoadedOfferWorkspace> {
+  return {
+    ...loaded,
+    contractTerms: await loadContractTerms(loaded.offerId, loaded.status),
+  };
+}
+
 // Mint the next base reference (RC-Q-YYYY-NNN) inside a transaction.
 async function mintOfferReference(
   tx: Prisma.TransactionClient,
@@ -393,26 +447,30 @@ export async function loadActiveOfferWorkspace(
         });
       });
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
-      return attachProjectId(
+      return attachContractTerms(
+        await attachProjectId(
+          await attachSignerStatus(
+            await attachContractParticulars(
+              await attachDeclineReason(
+                await reapplyAdminContentIfStale(toLoaded(healed)),
+              ),
+            ),
+          ),
+          leadId,
+        ),
+      );
+    }
+    return attachContractTerms(
+      await attachProjectId(
         await attachSignerStatus(
           await attachContractParticulars(
             await attachDeclineReason(
-              await reapplyAdminContentIfStale(toLoaded(healed)),
+              await reapplyAdminContentIfStale(toLoaded(existing)),
             ),
           ),
         ),
         leadId,
-      );
-    }
-    return attachProjectId(
-      await attachSignerStatus(
-        await attachContractParticulars(
-          await attachDeclineReason(
-            await reapplyAdminContentIfStale(toLoaded(existing)),
-          ),
-        ),
       ),
-      leadId,
     );
   }
 
@@ -456,6 +514,8 @@ export type OfferSigningStatusPoll =
       stateVersion: number;
       signerStatuses: OfferSignerStatus[];
       declineReason: string | null;
+      // Null unless the caller asked with needsContractTerms.
+      contractTerms: ContractPreviewTerms | null;
     }
   | { ok: false; error: string };
 
@@ -469,6 +529,10 @@ export type OfferSigningStatusPoll =
 // status rather than erroring.
 export async function pollOfferSigningStatus(input: {
   offerId: string;
+  // The workspace holds no Contract terms for the offer's status, which it
+  // reached without a load. Not sent on the signing ticks: the terms are two
+  // stored documents, too heavy to re-read every few seconds.
+  needsContractTerms?: boolean;
 }): Promise<OfferSigningStatusPoll> {
   const access = await authorizeOfferAccess(input.offerId, {
     allowInactive: true,
@@ -483,9 +547,12 @@ export async function pollOfferSigningStatus(input: {
   if (!offer) {
     return { ok: false, error: "Offer not found." };
   }
-  const [signerStatuses, declineReason] = await Promise.all([
+  const [signerStatuses, declineReason, contractTerms] = await Promise.all([
     loadOfferSignerStatuses(input.offerId),
     loadDeclineReason(input.offerId, offer.offerStatus),
+    input.needsContractTerms === true
+      ? loadContractTerms(input.offerId, offer.offerStatus)
+      : null,
   ]);
   return {
     ok: true,
@@ -493,6 +560,7 @@ export async function pollOfferSigningStatus(input: {
     stateVersion: offer.stateVersion,
     signerStatuses,
     declineReason,
+    contractTerms,
   };
 }
 

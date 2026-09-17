@@ -203,7 +203,7 @@ export function OfferWorkspaceImages({
                     the label is what a keyboard user sees. has-[:focus-visible]
                     puts the ring on the label when the hidden input takes focus;
                     without it, tabbing to Upload showed nothing at all. */}
-                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
+                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-royal-gold-ink">
                   {url ? "Replace" : "Upload"}
                   <input
                     accept="image/png,image/jpeg,image/webp"

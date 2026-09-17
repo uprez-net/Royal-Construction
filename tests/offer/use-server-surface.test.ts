@@ -3,22 +3,23 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-// These three modules opened with "use server", which makes every export a
-// Server Action: an endpoint that becomes callable over the network the moment
-// any client module imports it. None of them authorizes its caller — saveFile
+// These modules opened with "use server", which makes every export a Server
+// Action: an endpoint that becomes callable over the network the moment any
+// client module imports it. None of them authorizes its caller — saveFile
 // writes a File row for whatever userId it is handed, generatePDF runs headless
-// Chromium on arbitrary HTML, handleProjectSpecsGeneration spends model tokens.
-// Every real caller is already server-side (route handlers, workflow steps and
-// other action modules), so they are plain server modules guarded by
-// "server-only" instead. That closes only the direct endpoints: an action that
-// calls one of them must still authorize its own caller, and projectsWrite's
-// createProjectWithLeadAction does not yet.
+// Chromium on arbitrary HTML, handleProjectSpecsGeneration spends model tokens,
+// createProjectWithLead converts whatever lead id it is handed. Every real
+// caller is server-side (route handlers, workflow steps and other action
+// modules), so they are plain server modules guarded by "server-only" instead.
+// That closes only the direct endpoints: an action that calls one of them must
+// still authorize its own caller, as lib/actions/projects.ts does.
 
 const ROOT = join(__dirname, "..", "..");
 
 const SERVER_HELPERS = [
   "lib/agent/projectCreationAgent.ts",
   "lib/data/file.ts",
+  "lib/data/projectsWrite.ts",
   "lib/utils/generatePDF.ts",
 ];
 

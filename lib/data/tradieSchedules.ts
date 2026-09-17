@@ -11,6 +11,7 @@ import { currency, dateFormat } from "@/utils/formatters";
 import { after } from "next/server"
 import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
@@ -688,15 +689,37 @@ export async function requestTradieScheduleDeletion(input: DeleteScheduleInput) 
 }
 
 /**
- * Sends a reminder email to a tradie regarding their scheduled task.
- * @param to - The email address of the tradie.
+ * Sends a reminder email to the tradie booked on a schedule.
+ *
+ * Staff only, and always to that schedule's tradie. This used to take the
+ * recipient from the browser and check nobody, so any signed-in user could
+ * send any subject and body to any address from Royal's mailbox.
+ *
+ * @param scheduleId - The schedule whose tradie is reminded.
  * @param subject - The subject of the reminder email.
  * @param body - The body content of the reminder email.
- * @returns An object indicating the success or failure of the email sending operation.
+ * @returns `success: false` with a message for a refusal or a tradie with no email.
  * @throws {Error} If the email sending operation fails.
  */
-export async function sendTradieScheduleReminder({ to, subject, body }: { to: string; subject: string; body: string }) {
+export async function sendTradieScheduleReminder({ scheduleId, subject, body }: { scheduleId: string; subject: string; body: string }) {
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    return { success: false, message: access.error };
+  }
+
   try {
+    const schedule = await prisma.tradieSchedule.findUnique({
+      where: { id: scheduleId },
+      select: { tradie: { select: { email: true } } },
+    });
+    if (!schedule) {
+      return { success: false, message: "Schedule not found." };
+    }
+    const to = schedule.tradie.email.trim();
+    if (!to) {
+      return { success: false, message: "This tradie has no email address." };
+    }
+
     await sendEmail({
       to,
       subject,

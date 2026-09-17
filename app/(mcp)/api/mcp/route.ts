@@ -61,6 +61,7 @@ import { put } from "@vercel/blob"
 import { buildBlobPath } from "@/utils/formatters";
 import { v4 as uuid } from "uuid";
 import { saveFile } from "@/lib/data/file";
+import { assertCanAttachToProject } from "@/lib/data/project-access";
 import { auth } from '@clerk/nextjs/server'
 import { verifyClerkToken } from '@clerk/mcp-tools/next'
 import { parseLeadStageFilter } from "@/lib/leads/types";
@@ -928,11 +929,19 @@ const handler = createMcpHandler((server) => {
             }),
         },
         async ({ fileBase64, fileName, fileSize, projectId, milestoneId }, { authInfo }) => {
-            const userId = authInfo?.extra?.userId as string | undefined;
+            const clerkId = authInfo?.extra?.userId as string | undefined;
             try {
-                if (!userId) {
+                if (!clerkId) {
                     throw new Error("Authenticated user is required");
                 }
+                // The token carries a Clerk id, but File.uploadedBy references
+                // User.id, and the project and milestone ids are the caller's.
+                // Resolve the one and authorize the other before storing anything.
+                const user = await getUserByClerkIdCached(clerkId);
+                if (!user) {
+                    throw new Error("User not found");
+                }
+                await assertCanAttachToProject(user, { projectId, milestoneId });
                 const fileId = uuid();
                 const pathname = buildBlobPath({
                     fileId: fileId,
@@ -943,7 +952,7 @@ const handler = createMcpHandler((server) => {
                 const file = Buffer.from(fileBase64, "base64");
                 const blob = await put(pathname, file, { access: "public" });
                 await saveFile({
-                    userId,
+                    userId: user.id,
                     projectId: projectId,
                     milestoneId: milestoneId ?? undefined,
                     fileId: fileId,
@@ -956,6 +965,7 @@ const handler = createMcpHandler((server) => {
                 return toToolResult({ fileId });
             } catch (error) {
                 return {
+                    isError: true,
                     content: [{ type: "text" as const, text: `Error uploading file ${error instanceof Error ? error.message : String(error)}` }],
                 }
             }

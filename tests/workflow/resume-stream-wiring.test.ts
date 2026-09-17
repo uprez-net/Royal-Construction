@@ -54,9 +54,11 @@ test("resume-stream opens only the run the caller's capability grants", () => {
 test("the extraction routes hand the client a capability, never the bare run id", () => {
   for (const file of STARTERS) {
     const source = read(file);
+    // extract-project-data takes its user from the lead check (access.user),
+    // extract-checklist from the compliance gate; both are the signed-in user.
     assert.match(
       source,
-      /runId: signRunCapability\(\{ runId: run\.runId, userId: user\.id \}\)/,
+      /runId: signRunCapability\(\{ runId: run\.runId, userId: (?:access\.)?user\.id \}\)/,
       `${file} does not bind the run to the signed-in user`,
     );
     assert.doesNotMatch(source, BARE_RUN_ID, `${file} returns the bare run id`);

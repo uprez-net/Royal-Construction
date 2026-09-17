@@ -97,6 +97,12 @@ import {
   isSupportedCalcVersion,
 } from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
+import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
+import { hasContractTerms } from "@/lib/offer/contract-terms-status";
+import {
+  lifecycleActionFor,
+  type LifecycleAction,
+} from "@/lib/offer/lifecycle-busy";
 import {
   isUnsafeToLeave,
   type OfferSaveState,
@@ -306,10 +312,13 @@ export function NewOfferWorkspace({
   // because the pre-transition save reconciled to another tab or failed — without
   // it the button looked like a silent no-op (codex #4).
   const [transitionError, setTransitionError] = useState<string | null>(null);
-  // True while a status change or a revision is running. Double-clicking a
+  // The status change, recall or revision running, or null. Double-clicking a
   // lifecycle button used to fire its server action twice: the ref blocks
-  // re-entry synchronously, the state drives the screen's busy line.
-  const [transitioning, setTransitioning] = useState(false);
+  // re-entry synchronously, and the state drives the screen's busy line and
+  // disables every lifecycle button, marking the one that started.
+  const [lifecycleBusy, setLifecycleBusy] = useState<LifecycleAction | null>(
+    null,
+  );
   const transitioningRef = useRef(false);
   // The mount load failed, so there is no offer to show or save.
   const [loadFailed, setLoadFailed] = useState(false);
@@ -336,6 +345,11 @@ export function NewOfferWorkspace({
     useState<ProjectHandoffResult | null>(null);
   // The handed-off project, from the handoff or from the loader after a reload.
   const [projectId, setProjectId] = useState<string | null>(null);
+  // What the BC4 carries, from the loader, so the Contract preview shows the
+  // signed Tender's terms (or the sent Contract's) rather than this tab's
+  // payment schedule.
+  const [contractTerms, setContractTerms] =
+    useState<ContractPreviewTerms | null>(null);
   const [prefilling, setPrefilling] = useState(false);
   const [checking, setChecking] = useState(false);
   const [draftingHighlights, setDraftingHighlights] = useState(false);
@@ -1128,6 +1142,7 @@ export function NewOfferWorkspace({
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
                 setHydrated(true);
                 setSignerStatuses(loaded.signerStatuses ?? []);
+                setContractTerms(loaded.contractTerms ?? null);
                 if (loaded.snapshot) {
                   hydrateSnapshot(
                     loaded.snapshot,
@@ -1201,6 +1216,7 @@ export function NewOfferWorkspace({
       // untouched — that is the case worth telling the operator about.
       setAdminContentStale(loaded.adminContentStale === true);
       setSignerStatuses(loaded.signerStatuses ?? []);
+      setContractTerms(loaded.contractTerms ?? null);
       setProjectId(loaded.projectId ?? null);
       // The customer declined the last envelope — tell the operator why (the
       // reason comes straight from DocuSign) and point them at a new revision.
@@ -1281,6 +1297,46 @@ export function NewOfferWorkspace({
       cancelled = true;
     };
   }, [leadId, hydrateSnapshot, adoptOffer]);
+
+  // Every load brings the Contract step's terms. A status reached without one,
+  // a signing poll that saw the Tender signed or a lifecycle click, asks once:
+  // the preview otherwise sat on "reload the page", and the signing ticks do
+  // not re-read the terms.
+  useEffect(() => {
+    if (
+      leadId === undefined ||
+      contractTerms !== null ||
+      !hasContractTerms(status)
+    ) {
+      return;
+    }
+    const offerId = offerIdRef.current;
+    if (offerId === null) {
+      return;
+    }
+    let cancelled = false;
+    void pollOfferSigningStatus({ offerId, needsContractTerms: true })
+      .then((result) => {
+        // The same identity check as the signing poll: a revision forked
+        // meanwhile must not take this offer's terms.
+        if (
+          !cancelled &&
+          offerIdRef.current === offerId &&
+          result.ok &&
+          result.contractTerms
+        ) {
+          setContractTerms(result.contractTerms);
+        }
+      })
+      .catch((error) => {
+        // Best effort: the preview says the terms can't be shown, and the send
+        // resolves them again itself.
+        console.error("[offer] loading the contract terms failed:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, status, contractTerms]);
 
   // Live signing updates. While an envelope is out for signature, the DocuSign
   // Connect webhook updates the database in the background, but an already-open
@@ -1472,7 +1528,7 @@ export function NewOfferWorkspace({
         return;
       }
       transitioningRef.current = true;
-      setTransitioning(true);
+      setLifecycleBusy(lifecycleActionFor(next, recallScope));
       setTransitionError(null);
       void (async () => {
         try {
@@ -1537,6 +1593,7 @@ export function NewOfferWorkspace({
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
+            setContractTerms(loaded.contractTerms ?? null);
             if (loaded.snapshot) {
               hydrateSnapshot(
                 loaded.snapshot,
@@ -1549,7 +1606,7 @@ export function NewOfferWorkspace({
           }
         } finally {
           transitioningRef.current = false;
-          setTransitioning(false);
+          setLifecycleBusy(null);
         }
       })();
     },
@@ -1576,7 +1633,7 @@ export function NewOfferWorkspace({
       return;
     }
     transitioningRef.current = true;
-    setTransitioning(true);
+    setLifecycleBusy("revision");
     setRevising(true);
     setRevisionNotice(null);
     void (async () => {
@@ -1611,6 +1668,7 @@ export function NewOfferWorkspace({
         autosaveHaltedRef.current = false;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
         setSignerStatuses(loaded.signerStatuses ?? []);
+        setContractTerms(loaded.contractTerms ?? null);
         setProjectId(loaded.projectId ?? null);
         // A forked revision starts with no contract — clear any in-memory
         // particulars so they can't be saved onto the new revision's contract.
@@ -1649,7 +1707,7 @@ export function NewOfferWorkspace({
       } finally {
         setRevising(false);
         transitioningRef.current = false;
-        setTransitioning(false);
+        setLifecycleBusy(null);
       }
     })();
   }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer, stampRevisionLabel]);
@@ -1723,6 +1781,7 @@ export function NewOfferWorkspace({
               stateVersionRef.current = loaded.stateVersion;
               setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
               setSignerStatuses(loaded.signerStatuses ?? []);
+              setContractTerms(loaded.contractTerms ?? null);
             } catch {
               // Reload failed — leave the UI as-is; the error message still shows.
             }
@@ -1741,6 +1800,7 @@ export function NewOfferWorkspace({
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
+            setContractTerms(loaded.contractTerms ?? null);
           } catch {
             // Reload failed too — leave the UI as-is.
           }
@@ -1861,6 +1921,11 @@ export function NewOfferWorkspace({
         }
         const result = await sendContractForSignature({ offerId });
         if (result.ok) {
+          // The send returns no replacement terms, and the loader effect exits
+          // on contractTerms !== null, so without this the preview keeps the
+          // pre-send Tender terms until a reload. Cleared so the effect reloads
+          // the terms the Contract actually went out with.
+          setContractTerms(null);
           setStatus("contract_sent");
         } else {
           setContractSendError(result.error);
@@ -1948,7 +2013,7 @@ export function NewOfferWorkspace({
         calcVersion={calcVersion}
         hydrated={hydrated}
         loadFailed={loadFailed}
-        transitioning={transitioning}
+        lifecycleBusy={lifecycleBusy}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}
@@ -2029,6 +2094,7 @@ export function NewOfferWorkspace({
         sentInfo={sentInfo}
         transitionError={transitionError}
         signerStatuses={signerStatuses}
+        contractTerms={contractTerms}
         onSendOfferForSignature={sendOfferAccept}
         offerSignSending={offerSignSending}
         offerSignError={offerSignError}

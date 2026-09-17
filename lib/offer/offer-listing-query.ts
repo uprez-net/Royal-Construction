@@ -75,6 +75,51 @@ export function toOfferListRow(
   };
 }
 
+/**
+ * The lead's own columns the offers listing renders (and mostly searches). The
+ * listing is cached, so updateLead expires it when a write changes any of
+ * these; a test holds this list to the listing's select.
+ */
+export const OFFER_LISTING_LEAD_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "location",
+  "type",
+] as const;
+
+type OfferListingLeadValues = Partial<
+  Record<(typeof OFFER_LISTING_LEAD_FIELDS)[number], unknown>
+>;
+
+function sameListedValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((value, index) => value === b[index])
+    );
+  }
+  return (a ?? null) === (b ?? null);
+}
+
+/**
+ * Whether a lead write changes anything the offers listing shows. `written` is
+ * the data about to be stored, where an absent field is one the write leaves
+ * alone; `current` is the row before it, or null when there is none to compare.
+ */
+export function offerListingLeadChanged(
+  current: OfferListingLeadValues | null,
+  written: OfferListingLeadValues,
+): boolean {
+  return OFFER_LISTING_LEAD_FIELDS.some(
+    (field) =>
+      written[field] !== undefined &&
+      (current === null || !sameListedValue(written[field], current[field])),
+  );
+}
+
 // Lead ids and revision numbers are Postgres int4; a longer number typed into
 // search must not reach Prisma, which rejects an out-of-range Int instead of
 // matching nothing.
