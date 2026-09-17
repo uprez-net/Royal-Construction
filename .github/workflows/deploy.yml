@@ -1,0 +1,158 @@
+name: Deploy to Vercel
+
+on:
+  # This workflow is deliberately independent from Quality Checks. It consumes
+  # the completed workflow's decision artifact rather than depending on jobs
+  # in another workflow, which GitHub Actions does not support directly.
+  workflow_run:
+    workflows: [Quality Checks]
+    types: [completed]
+
+concurrency:
+  group: vercel-deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+  CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+  CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
+  BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+  GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+  GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  BUSINESS_EMAIL: "info@royalconstructions.com.au"
+  BUSINESS_ADMIN_EMAIL: "admin@royalconstructions.com.au"
+  GRAPH_SENDER_UPN: "info@royalconstructions.com.au"
+  GRAPH_ADMIN_SENDER_UPN: "admin@royalconstructions.com.au"
+  GRAPH_ADMIN_MAIL_CC: "nabeel.wasif+admin@uprez.net"
+  GRAPH_MODE: "app-only"
+  WEBHOOK_PATH: "/api/graph/notifications"
+  WEBHOOK_PORT: "3000"
+  GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
+  GRAPH_ADMIN_WEBHOOK_CLIENT_STATE: "royal-leadgen-admin-webhook"
+  GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
+  GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+  GRAPH_ADMIN_SUBSCRIPTION_RESOURCE: ${{ secrets.GRAPH_ADMIN_SUBSCRIPTION_RESOURCE }}
+  NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
+  NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+  MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
+  AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+  SCRAPEDO_TOKEN: ${{ secrets.SCRAPEDO_TOKEN }}
+  PUPPETEER_SKIP_DOWNLOAD: "true"
+  XERO_CLIENT_ID: ${{ secrets.XERO_CLIENT_ID }}
+  XERO_CLIENT_SECRET: ${{ secrets.XERO_CLIENT_SECRET }}
+  XERO_REDIRECT_URI: ${{ secrets.XERO_REDIRECT_URI }}
+  XERO_WEBHOOK_SECRET: ${{ secrets.XERO_WEBHOOK_SECRET }}
+  XERO_SALES_ACCOUNT_CODE: ${{ secrets.XERO_SALES_ACCOUNT_CODE }}
+  XERO_SALES_TAX_TYPE: ${{ secrets.XERO_SALES_TAX_TYPE }}
+
+jobs:
+  decide-deployment:
+    name: Decide deployment
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      contains(fromJSON('["main", "staging"]'), github.event.workflow_run.head_branch)
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.decision.outputs.deploy }}
+      branch: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Download CI decision
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-decision
+          path: decision
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Read CI decision
+        id: decision
+        run: |
+          node -e 'const fs = require("node:fs"); const decision = JSON.parse(fs.readFileSync("decision/ci-decision.json", "utf8")); fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy=${decision.deploy}\n`); console.log(`Deployment decision: ${decision.reason}.`);'
+
+  vercel-deploy-production:
+    name: Deploy production
+    if: needs.decide-deployment.outputs.deploy == 'true' && needs.decide-deployment.outputs.branch == 'main'
+    needs: decide-deployment
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Setup project
+        uses: ./.github/actions/setup
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.event.workflow_run.head_sha }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
+      - name: Run Prisma migrate
+        env:
+          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
+        run: |
+          export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
+          pnpm prisma:migrate-deploy
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build Vercel Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  vercel-deploy-staging:
+    name: Deploy staging
+    if: needs.decide-deployment.outputs.deploy == 'true' && needs.decide-deployment.outputs.branch == 'staging'
+    needs: decide-deployment
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Setup project
+        uses: ./.github/actions/setup
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.event.workflow_run.head_sha }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
+      - name: Run Prisma migrate
+        env:
+          PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: "1"
+        run: |
+          export DATABASE_URL="$(node -e 'const url = new URL(process.env.DATABASE_URL); url.hostname = url.hostname.replace("-pooler.", "."); url.searchParams.delete("pgbouncer"); console.log(url.toString());')"
+          pnpm prisma:migrate-deploy
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel
+      - name: Pull Preview Environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build Vercel Project for Staging
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy to Vercel for Staging
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}

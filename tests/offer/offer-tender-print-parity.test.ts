@@ -18,7 +18,7 @@ import {
 // document from its HTML alone and runs everywhere) because CI sets
 // PUPPETEER_SKIP_DOWNLOAD and never installs Chrome. This file is therefore
 // excluded from `test:unit` alongside offer-document-print-pages.test.ts — see
-// the note in package.json and .github/workflows/main.yml.
+// the note in package.json and .github/workflows/quality.yml.
 //
 // It fails loudly rather than skipping when Chrome is missing: a silently
 // skipped print test is how the "footer says 10, prints 11" class of bug

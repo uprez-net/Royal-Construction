@@ -13,6 +13,12 @@
       "skillPath": "skills/frameworks/clerk-nextjs-patterns/SKILL.md",
       "computedHash": "cdcb9f08d567058fca7563ad8c67a4a2a2f3b9f286294e1caeb1ea5407dfebc6"
     },
+    "create-github-action-workflow-specification": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/create-github-action-workflow-specification/SKILL.md",
+      "computedHash": "527e6c77d921d58a9d0059aa95d0d14b441d2166f9c20518263048a56ca8fbbb"
+    },
     "eve": {
       "source": "vercel/eve",
       "sourceType": "github",
