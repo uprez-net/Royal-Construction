@@ -28,6 +28,12 @@ import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+type AgentSessionTitleDetail = {
+  path: string;
+  sessionId: string;
+  title: string;
+};
+
 export function AppShell({
   isAdmin,
   isSignedIn,
@@ -46,13 +52,34 @@ export function AppShell({
   const [queryClient] = useState(() => new QueryClient());
   const [time, setTime] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [agentSessionTitle, setAgentSessionTitle] = useState<AgentSessionTitleDetail | null>(null);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
   const activeTradie = useAppSelector((state) => state.tradieManagement.selectedTradieDetails);
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
   const sectionSlug = getShellSectionSlug(pathName);
   const titleSlug = isUUID(lastSegment) ? "Loading..." : lastSegment;
-  const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(titleSlug);
+  const isAgentSessionRoute = pathName.startsWith("/agent/");
+  const title = activeProject
+    ? activeProject.name
+    : activeTradie
+      ? activeTradie.name
+      : isAgentSessionRoute && agentSessionTitle?.path === pathName
+        ? agentSessionTitle.title
+        : isAgentSessionRoute
+          ? "Conversation"
+          : getScreenTitle(titleSlug);
+
+  useEffect(() => {
+    const handleAgentSessionTitle = (event: Event) => {
+      const detail = (event as CustomEvent<AgentSessionTitleDetail>).detail;
+      if (!detail?.path || !detail.title) return;
+      setAgentSessionTitle(detail);
+    };
+
+    window.addEventListener("agent-session-title", handleAgentSessionTitle);
+    return () => window.removeEventListener("agent-session-title", handleAgentSessionTitle);
+  }, []);
   useEffect(() => {
     const tick = () => {
       const now = new Date();

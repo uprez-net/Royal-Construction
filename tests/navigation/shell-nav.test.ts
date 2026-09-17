@@ -22,6 +22,7 @@ test("a nested route keeps its section active", () => {
 });
 
 test("a numeric segment is titled as the lead", () => {
+  assert.equal(getScreenTitle("agent"), "Operations Agent");
   assert.equal(getScreenTitle("123"), "Lead #123");
   assert.equal(getScreenTitle(""), "Dashboard");
   assert.equal(getScreenTitle("tradie-management"), "Tradie Management");

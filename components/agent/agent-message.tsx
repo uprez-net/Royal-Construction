@@ -7,18 +7,24 @@ import type {
   EveMessageInputRequest,
   EveMessagePart,
 } from "eve/react";
-import { useState } from "react";
+import { toast } from "sonner";
+import { useEffect, useState } from "react";
 import {
+  Check,
   CheckCircle2,
   CircleDashed,
+  Copy,
   ExternalLink,
   FileText,
   KeyRound,
+  Pencil,
   Wrench,
   XCircle,
 } from "lucide-react";
 import {
   Message,
+  MessageAction,
+  MessageActions,
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
@@ -45,18 +51,38 @@ export function AgentMessage({
   isStreaming,
   message,
   onAction,
+  onEditMessage,
   onInputResponses,
 }: {
   canRespond: boolean;
   isStreaming: boolean;
   message: EveMessage;
   onAction: (action: { id: string; label: string; operation: string }) => Promise<void>;
+  onEditMessage: (messageId: string, text: string) => void;
   onInputResponses: (responses: readonly AgentInputResponse[]) => Promise<void>;
 }) {
   const lastTextIndex = message.parts.reduce(
     (last, part, index) => (part.type === "text" ? index : last),
     -1,
   );
+  const text = getMessageText(message);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1_800);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function copyMessage() {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      toast.error("Could not copy this message.");
+    }
+  }
 
   return (
     <Message from={message.role}>
@@ -76,8 +102,36 @@ export function AgentMessage({
           />
         ))}
       </MessageContent>
+      {text ? (
+        <MessageActions className="self-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <MessageAction
+            label={copied ? "Copied" : "Copy message"}
+            onClick={() => void copyMessage()}
+            tooltip={copied ? "Copied" : "Copy message"}
+          >
+            {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          </MessageAction>
+          {message.role === "user" ? (
+            <MessageAction
+              label="Edit message"
+              onClick={() => onEditMessage(message.id, text)}
+              tooltip="Edit message"
+            >
+              <Pencil aria-hidden="true" />
+            </MessageAction>
+          ) : null}
+        </MessageActions>
+      ) : null}
     </Message>
   );
+}
+
+function getMessageText(message: EveMessage) {
+  return message.parts
+    .filter((part): part is Extract<EveMessage["parts"][number], { type: "text" }> => part.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
 }
 
 function AgentMessagePart({

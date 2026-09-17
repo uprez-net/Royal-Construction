@@ -20,7 +20,6 @@ export function defineRCSpecialist(description: string) {
           model,
           modelContextWindowTokens: 1_000_000,
           reasoning: "low",
-          defaultTools: false,
           outputSchema: agentResultEnvelopeSchema,
           limits: {
             maxInputTokensPerSession: 40_000,

@@ -10,6 +10,8 @@ import {
   Archive,
   History,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Paperclip,
   GitFork,
@@ -63,7 +65,10 @@ export function AgentWorkspace({
   const [annotationResults, setAnnotationResults] = useState<Array<{ type: string; id: string; label: string; href: string; group: string }>>([]);
   const [forkContext, setForkContext] = useState<string | null>(() => typeof window === "undefined" ? null : sessionStorage.getItem("rc-agent-fork-context"));
   const [sessions, setSessions] = useState(initialSessions);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
 
   const onSessionChange = useCallback(
@@ -90,10 +95,10 @@ export function AgentWorkspace({
       });
       if (!sessionPathUpdated.current) {
         sessionPathUpdated.current = true;
-        window.history.replaceState(null, "", `/agent/${session.sessionId}`);
+        router.replace(`/agent/${session.sessionId}`, { scroll: false });
       }
     },
-    [],
+    [router],
   );
 
   const agent = useEveAgent({
@@ -115,11 +120,29 @@ export function AgentWorkspace({
   const canSend = !busy && (composer.trim().length > 0 || attachments.length > 0);
   const annotationQuery = useMemo(() => composer.match(/(?:^|\s)@([^\s@]*)$/)?.[1] ?? "", [composer]);
   const statusLabel = useMemo(() => agentStatusLabel(agent.status), [agent.status]);
+  const activeSessionId = agent.session?.sessionId ?? selectedSessionId;
+  const activeSessionTitle = initialSessions.find((session) => session.eveSessionId === activeSessionId)?.title
+    ?? sessions.find((session) => session.eveSessionId === activeSessionId)?.title
+    ?? "New conversation";
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    window.dispatchEvent(new CustomEvent("agent-session-title", {
+      detail: {
+        path: window.location.pathname,
+        sessionId: activeSessionId,
+        title: activeSessionTitle,
+      },
+    }));
+  }, [activeSessionId, activeSessionTitle]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [agent.data.messages, agent.status]);
 
   useEffect(() => {
@@ -155,6 +178,7 @@ export function AgentWorkspace({
     await agent.send(content, { clientContext: { route: window.location.pathname, forkContext, annotations: annotations.map(({ type, id, label }) => ({ type, id, label })) } });
     setAttachments([]);
     setForkContext(null);
+    setEditingMessageId(null);
     sessionStorage.removeItem("rc-agent-fork-context");
   }
 
@@ -178,9 +202,15 @@ export function AgentWorkspace({
     router.push("/agent");
   }
 
+  function editMessage(messageId: string, text: string) {
+    setEditingMessageId(messageId);
+    setComposer(text);
+    window.requestAnimationFrame(() => composerRef.current?.focus());
+  }
+
   return (
-    <section className="grid min-h-[40rem] flex-1 overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm md:h-[calc(100dvh-10.5rem)] md:grid-cols-[18rem_minmax(0,1fr)]">
-      <aside className="order-2 flex min-h-0 flex-col border-b border-border/70 bg-muted/25 md:order-1 md:border-b-0 md:border-r">
+    <section className={cn("grid h-full min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 md:h-[calc(100dvh-10.5rem)]", historyOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[0_minmax(0,1fr)]")}>
+      <aside aria-hidden={!historyOpen} className={cn("order-2 flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border/70 bg-muted/25 transition-[max-height,opacity] duration-200 md:order-1 md:border-b-0 md:border-r md:transition-opacity", historyOpen ? "max-h-80 opacity-100 md:max-h-none" : "pointer-events-none max-h-0 opacity-0 md:max-h-none")} id="agent-conversation-history">
         <div className="flex items-center justify-between gap-3 p-4">
           <div>
             <p className="font-heading text-base font-semibold text-foreground">Conversations</p>
@@ -201,12 +231,16 @@ export function AgentWorkspace({
                 Your conversations will appear here.
               </div>
             ) : (
-              sessions.map((session, index) => {
-                const active = session.eveSessionId === (agent.session?.sessionId ?? selectedSessionId);
+              sessions.map((session) => {
+                const active = session.eveSessionId === activeSessionId;
+                const title = initialSessions.find((item) => item.eveSessionId === session.eveSessionId)?.title
+                  || session.title
+                  || (active ? activeSessionTitle : null)
+                  || "New conversation";
                 return (
                   <div className="group relative" key={session.eveSessionId}>
                     <Link aria-current={active ? "page" : undefined} className={cn("block min-w-64 rounded-lg border px-3 py-3 pr-9 transition-colors md:min-w-0", active ? "border-royal-gold/50 bg-royal-gold-light/55" : "border-transparent hover:border-border hover:bg-white")} href={`/agent/${session.eveSessionId}`}>
-                      <div className="flex items-start gap-2"><MessageSquareText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-foreground">{session.title || `Operations conversation ${sessions.length - index}`}</p><div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-xs text-muted-foreground">{formatSessionDate(session.lastEventAt ?? session.updatedAt)}</span><span className={cn("size-1.5 shrink-0 rounded-full", statusDot(session.status))} /></div></div></div>
+                      <div className="flex items-start gap-2"><MessageSquareText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-foreground">{title}</p><div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-xs text-muted-foreground">{formatSessionDate(session.lastEventAt ?? session.updatedAt)}</span><span className={cn("size-1.5 shrink-0 rounded-full", statusDot(session.status))} /></div></div></div>
                     </Link>
                     <Button aria-label="Archive conversation" className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" onClick={async (event) => { event.preventDefault(); const response = await fetch(`/api/agent/sessions/${session.eveSessionId}/archive`, { method: "POST" }); if (response.ok) setSessions((items) => items.filter((item) => item.eveSessionId !== session.eveSessionId)); }} size="icon-sm" type="button" variant="ghost"><Archive /></Button>
                   </div>
@@ -220,6 +254,9 @@ export function AgentWorkspace({
       <div className="order-1 flex min-h-0 min-w-0 flex-col md:order-2">
         <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
+            <Button aria-controls="agent-conversation-history" aria-expanded={historyOpen} aria-label={historyOpen ? "Collapse conversation history" : "Expand conversation history"} onClick={() => setHistoryOpen((open) => !open)} size="icon-sm" type="button" variant="outline">
+              {historyOpen ? <PanelLeftClose aria-hidden="true" /> : <PanelLeftOpen aria-hidden="true" />}
+            </Button>
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink">
               <Bot aria-hidden="true" />
             </span>
@@ -247,7 +284,7 @@ export function AgentWorkspace({
           </div>
         </header>
 
-        <ScrollArea className="min-h-0 flex-1" viewportRef={viewportRef}>
+        <ScrollArea className="min-h-0 flex-1 overflow-hidden" viewportRef={viewportRef}>
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
             {agent.data.messages.length === 0 && agent.status !== "resuming" ? (
               <Empty className="min-h-[24rem] border-0">
@@ -287,6 +324,7 @@ export function AgentWorkspace({
                 isStreaming={agent.status === "streaming"}
                 key={message.id}
                 onAction={runAction}
+                onEditMessage={editMessage}
                 message={message}
                 onInputResponses={respond}
               />
@@ -301,7 +339,7 @@ export function AgentWorkspace({
           </div>
         </ScrollArea>
 
-        <footer className="border-t border-border/70 bg-white p-3 sm:p-4">
+        <footer className="shrink-0 border-t border-border/70 bg-white p-3 sm:p-4">
           <form
             className="mx-auto max-w-4xl"
             onSubmit={(event) => {
@@ -309,6 +347,7 @@ export function AgentWorkspace({
               void sendMessage(composer);
             }}
           >
+            {editingMessageId ? <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-royal-gold/30 bg-royal-gold-light/35 px-3 py-2 text-xs text-muted-foreground"><span>Editing a previous message. Send it to start a new turn.</span><Button onClick={() => { setEditingMessageId(null); setComposer(""); }} size="xs" type="button" variant="ghost">Cancel</Button></div> : null}
             {annotations.length > 0 ? <div className="mb-2 flex flex-wrap gap-2">{annotations.map((annotation) => <Badge key={`${annotation.type}:${annotation.id}`} variant="secondary">{annotation.label}<button aria-label={`Remove ${annotation.label}`} className="ml-1" onClick={() => setAnnotations((items) => items.filter((item) => item.id !== annotation.id))} type="button"><X className="size-3" /></button></Badge>)}</div> : null}
             {annotationQuery.length >= 2 && annotationResults.length > 0 ? <div className="mb-2 max-h-48 overflow-auto rounded-lg border bg-white p-1 shadow-lg">{annotationResults.map((annotation) => <button className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted" key={`${annotation.type}:${annotation.id}`} onClick={() => selectAnnotation(annotation)} type="button"><span>{annotation.label}</span><span className="text-xs text-muted-foreground">{annotation.group}</span></button>)}</div> : null}
             {attachments.length > 0 ? <div className="mb-2 flex flex-wrap gap-2">{attachments.map((file) => <Badge key={`${file.name}:${file.lastModified}`} variant="outline"><span className="max-w-48 truncate">{file.name}</span><button aria-label={`Remove ${file.name}`} className="ml-1" onClick={() => setAttachments((items) => items.filter((item) => item !== file))} type="button"><X className="size-3" /></button></Badge>)}</div> : null}
@@ -325,6 +364,7 @@ export function AgentWorkspace({
                   }
                 }}
                 placeholder="Ask about a lead, offer, task or project…"
+                ref={composerRef}
                 value={composer}
               />
               <InputGroupAddon align="block-end" className="justify-between">
