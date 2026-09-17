@@ -123,8 +123,11 @@ test("Tailwind exposes the hover token as a colour utility", () => {
 // forms such as text-white/90 match because "/" ends the name.
 const BASE_GOLD_FILL = /(?<![\w-])bg-royal-gold(?![\w-])/;
 const WHITE_TEXT = /(?<![\w-])text-(?:white|primary-foreground|card)(?![\w-])/;
-// A child that paints its own background is not sitting on the gold.
-const OWN_FILL = /(?<![\w-])bg-(?!royal-gold(?![\w-]))[\w[]/;
+// A child that paints its own background is not sitting on the gold. The fill
+// has to be the resting one: a variant-only fill (hover:bg-black, md:bg-slate-900)
+// leaves the normal state on the gold, so requiring a class-token boundary
+// rather than any non-word character keeps those from exempting themselves.
+const OWN_FILL = /(?:^|[\s"'`])bg-(?!royal-gold(?![\w-]))[\w[]/;
 
 const CLOSING: Readonly<Record<string, string>> = { "{": "}", "(": ")" };
 
