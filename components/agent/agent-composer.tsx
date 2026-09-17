@@ -47,7 +47,7 @@ export function AgentComposer({
   setAttachments: React.Dispatch<React.SetStateAction<File[]>>;
 }) {
   return (
-    <footer className="relative z-10 order-3 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4">
+    <footer className="relative z-10 order-3 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4 md:col-start-2">
       <form
         className="relative mx-auto max-w-4xl"
         onSubmit={(event) => {
