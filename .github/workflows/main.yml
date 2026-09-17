@@ -48,7 +48,6 @@ env:
   MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
   AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
   SCRAPEDO_TOKEN: ${{ secrets.SCRAPEDO_TOKEN }}
-  REDIS_URL: ${{ secrets.REDIS_URL }}
   # `puppeteer`'s postinstall downloads a ~170MB Chrome build on every install,
   # in every job. Nothing in CI launches a browser: production PDF rendering
   # uses puppeteer-core + @sparticuz/chromium (see lib/utils/generatePDF.ts, the
