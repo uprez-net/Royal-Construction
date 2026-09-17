@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 import {
   getAgentSessionTitle,
   setAgentSessionTitleIfMissing,
-} from "@/lib/data/agent-sessions";
+} from "@/lib/data/agent-session-titles";
 
 const EVENT_SESSION_STATUS: Partial<Record<HookEvent["type"], AgentSessionStatus>> = {
   "session.started": AgentSessionStatus.ACTIVE,

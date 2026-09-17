@@ -2,6 +2,9 @@ import "server-only";
 
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
+import { getAgentSessionTitle, setAgentSessionTitleIfMissing } from "@/lib/data/agent-session-titles";
+
+export { getAgentSessionTitle, setAgentSessionTitleIfMissing };
 
 const SESSION_REGISTRY_RETRY_DELAYS_MS = [40, 100, 200, 400, 800, 1_200] as const;
 
@@ -16,25 +19,6 @@ async function waitForOwnedSession(ownerUserId: string, eveSessionId: string) {
     if (delay !== undefined) await new Promise((resolve) => setTimeout(resolve, delay));
   }
   return false;
-}
-
-export async function getAgentSessionTitle(eveSessionId: string) {
-  const session = await prisma.agentSession.findUnique({
-    where: { eveSessionId },
-    select: { title: true },
-  });
-  return session?.title ?? null;
-}
-
-export async function setAgentSessionTitleIfMissing(
-  eveSessionId: string,
-  ownerUserId: string,
-  title: string,
-) {
-  await prisma.agentSession.updateMany({
-    where: { eveSessionId, ownerUserId, title: null },
-    data: { title },
-  });
 }
 
 export type AgentSessionListItem = {
