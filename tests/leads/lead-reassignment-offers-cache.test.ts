@@ -20,7 +20,6 @@ import {
 const text = readFileSync(join(process.cwd(), "lib/data/leads.ts"), "utf8");
 const listing = readFileSync(join(process.cwd(), "lib/data/offer-listing.ts"), "utf8");
 
-// A top-level function runs from its signature to the first unindented `}`.
 function functionBody(name: string): string {
   const start = text.indexOf(`async function ${name}(`);
   assert.ok(start >= 0, `${name} not found in leads.ts`);
@@ -39,17 +38,12 @@ test("updateLead expires the offers listing once the write is committed", () => 
     body.indexOf("prisma.$transaction(") < invalidation,
     "the listing is expired before the lead is written",
   );
+  // Union of both triggers: the assignee side is unconditional on being SET
+  // (a pre-transaction compare could skip an expiry it owed), the listed-field
+  // side compares what is about to be stored.
   assert.match(
     body,
-    /if \(assigneeChanged \|\| listedFieldsChanged\) \{\s*revalidateTag\(\s*"offers"/,
-  );
-});
-
-test("the invalidation is keyed off a real change of assignee", () => {
-  const body = functionBody("updateLead");
-  assert.match(
-    body,
-    /const assigneeChanged =\s*input\.assignedId !== undefined &&[^;]*existingLead\?\.assignedId/,
+    /if \(input\.assignedId !== undefined \|\| listedFieldsChanged\) \{/,
   );
 });
 
@@ -101,6 +95,32 @@ test("a write changes the listing only when a listed value differs", () => {
   assert.equal(offerListingLeadChanged(null, { email: "ann@example.com" }), true);
 });
 
+
+test("the expiry cannot fail the save", () => {
+  const body = functionBody("updateLead");
+  const at = body.search(/revalidateTag\(\s*"offers"/);
+  assert.ok(at >= 0, "updateLead never expires the offers listing");
+  assert.match(
+    body.slice(Math.max(0, at - 260), at + 260),
+    /try \{[\s\S]*revalidateTag\(\s*"offers"[\s\S]*catch/,
+    "the expiry is not guarded, so a cache failure would fail the lead save",
+  );
+});
+
 test("updateLead does not use updateTag, which throws outside a Server Action", () => {
   assert.doesNotMatch(functionBody("updateLead"), /\bupdateTag\(/);
+});
+test("updateLead does not use updateTag, which throws outside a Server Action", () => {
+  assert.doesNotMatch(functionBody("updateLead"), /\bupdateTag\(/);
+});
+
+test("the expiry cannot fail the save", () => {
+  const body = functionBody("updateLead");
+  const at = body.search(/revalidateTag\(\s*"offers"/);
+  assert.ok(at >= 0, "updateLead never expires the offers listing");
+  assert.match(
+    body.slice(Math.max(0, at - 200), at + 200),
+    /try \{[\s\S]*revalidateTag\(\s*"offers"[\s\S]*catch/,
+    "the expiry is not guarded, so a cache failure would fail the lead save",
+  );
 });

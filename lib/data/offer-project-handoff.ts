@@ -14,7 +14,7 @@ import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   buildHandoffCommercials,
   describeMissingExecutedDocuments,
-  tenderExclusionLines,
+  resolveSignedTenderExclusions,
   type MissingExecutedDocument,
 } from "@/lib/offer/project-handoff-commercials";
 import {
@@ -317,12 +317,25 @@ export async function createProjectFromOffer(input: {
       warnings.push(scheduleDrift);
     }
 
+    // The exclusions the signed Tender printed. The workspace can still be
+    // written after the offer is agreed, so rebuilding them from the snapshot
+    // could hand the project a list the customer never signed.
+    const signedExclusions = resolveSignedTenderExclusions({
+      tenderDocumentData: offer.tender?.documentData ?? null,
+      snapshot,
+    });
+    if (signedExclusions.source === "agreed-snapshot") {
+      console.warn(
+        `[offer] handoff for offer ${offer.id}: no readable exclusions on the Tender row, using the agreed snapshot's`,
+      );
+    }
     const extraction = buildExtractionPayload(
       snapshot,
       contractValue,
       reference,
       sourceDocuments,
       payment,
+      signedExclusions.lines,
     );
 
     // The start date defaults to +14 days from today; the signed date written
@@ -529,6 +542,9 @@ function buildExtractionPayload(
   reference: string,
   sourceDocuments: { tender: ProjectSourceDocumentReference; contract: ProjectSourceDocumentReference },
   payment: Pick<ContractPaymentSource, "paymentSchedule" | "deposit">,
+  // Resolved by the caller, which can read the Tender row: the exclusions the
+  // SIGNED Tender printed, not whatever the workspace holds now.
+  signedExclusions: readonly string[],
 ): ProjectRequirementsPayload {
   const job = snapshot.job;
   // Owner contacts for the project-extraction legalAdministration block, now
@@ -612,7 +628,7 @@ function buildExtractionPayload(
     },
     inclusionsAndExclusions: {
       inclusions: [...snapshot.draft.inclusionHighlights],
-      exclusions: tenderExclusionLines(snapshot),
+      exclusions: [...signedExclusions],
     },
     utilityInfrastructure: {
       electricalPhase: null, communicationConduit: null, gasConnection: null,

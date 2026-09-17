@@ -16,11 +16,32 @@ export const RUN_CAPABILITY_SECRET_ENV = "WORKFLOW_RUN_CAPABILITY_SECRET";
 const RUN_ID = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
 const USER_ID = /^[A-Za-z0-9_-]+$/;
 
+// A signed-in user can read their own capability, which hands them a message
+// and its MAC. A short or guessable secret is then a matter of offline compute,
+// after which they can mint a capability for anyone's run. So a weak value is
+// treated as no value: the callers already refuse to start a run without one,
+// and refusing is better than streaming someone else's run.
+//
+// Counted in characters, not bytes: 32 random bytes are what we ask for, and
+// they arrive base64-encoded as 44 characters (`openssl rand -base64 32`). A
+// 32-character floor accepts that and every stronger encoding of it, while
+// rejecting the hand-typed values this exists to catch.
+export const RUN_CAPABILITY_SECRET_MIN_LENGTH = 32;
+
 export function runCapabilitySecret(
   env: Record<string, string | undefined> = process.env,
 ): string | null {
   const secret = env[RUN_CAPABILITY_SECRET_ENV]?.trim();
-  return secret ? secret : null;
+  if (!secret) {
+    return null;
+  }
+  if (secret.length < RUN_CAPABILITY_SECRET_MIN_LENGTH) {
+    console.error(
+      `${RUN_CAPABILITY_SECRET_ENV} is set but too weak (${secret.length} characters, minimum ${RUN_CAPABILITY_SECRET_MIN_LENGTH}); treating it as unset. Generate one with: openssl rand -base64 32`,
+    );
+    return null;
+  }
+  return secret;
 }
 
 function mac(runId: string, userId: string, secret: string): string {

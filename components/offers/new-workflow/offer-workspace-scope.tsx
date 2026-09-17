@@ -73,14 +73,15 @@ export function ScopePanel({
             icon: (
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
             ),
-            text: "These allowances appear on the Offer document. Items exceeding their allowance trigger a variation per the rule specified.",
+            text: "The signed Tender lists every allowance ticked for it. The Offer document shows only the ones ticked for the Offer. Items exceeding their allowance trigger a variation per the rule specified.",
           }}
           items={allowances}
           title="PC allowances"
           singular="Allowance"
           documentLabel="Show on Offer document"
+          tenderLabel="Show on Tender"
           addLabel="Add allowance"
-          emptyLabel="No allowances yet. Add prime-cost or provisional-sum items to show on the Offer."
+          emptyLabel="No allowances yet. Add the prime-cost or provisional-sum items in the price."
           onItemChange={onAllowanceChange}
           onAddItem={onAddAllowance}
           onRemoveItem={onRemoveAllowance}
@@ -125,6 +126,7 @@ function ScopeList({
   title,
   singular,
   documentLabel,
+  tenderLabel,
   addLabel,
   emptyLabel,
 }: {
@@ -144,6 +146,9 @@ function ScopeList({
   readonly title: string;
   readonly singular: string;
   readonly documentLabel: string;
+  // Allowances only: a second box for whether the signed Tender lists the item,
+  // with a warning on the row when it does not.
+  readonly tenderLabel?: string;
   readonly addLabel: string;
   readonly emptyLabel: string;
 }) {
@@ -287,7 +292,29 @@ function ScopeList({
                     />
                     {documentLabel}
                   </label>
+                  {tenderLabel ? (
+                    <label className="flex h-9 shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        checked={item.includedInTender}
+                        className="size-4 accent-royal-gold"
+                        type="checkbox"
+                        onChange={(event) =>
+                          onItemChange(item.id, {
+                            includedInTender: event.target.checked,
+                          })
+                        }
+                      />
+                      {tenderLabel}
+                    </label>
+                  ) : null}
                 </div>
+
+                {tenderLabel && !item.includedInTender ? (
+                  <p className="flex items-center gap-2 text-xs font-medium text-amber-700">
+                    <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                    In the price but not listed in the signed Tender.
+                  </p>
+                ) : null}
 
                 <AmountControl item={item} onItemChange={onItemChange} />
               </div>

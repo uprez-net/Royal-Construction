@@ -339,7 +339,11 @@ export function buildWelcomeParagraphs(
 ): readonly string[] {
   // The same total the cover and the Tender print; this one left out balcony and
   // void, so the letter quoted a smaller home than the page before it.
-  const totalArea = Math.round(rawTotalAreaSqm(offerAreaBasisFromJob(job)));
+  // Up to two decimals, like formatArea on the cover and in the Tender, so a
+  // 435.5 m² home is not quoted here as 436.
+  const totalArea = new Intl.NumberFormat("en-AU", {
+    maximumFractionDigits: 2,
+  }).format(rawTotalAreaSqm(offerAreaBasisFromJob(job)));
   // Only assert what we can derive from this job (client, site, area). Specific
   // design features, "photos match your home", and finish guarantees were
   // hard-coded and often wrong (e.g. "double storey" on a single-storey build),

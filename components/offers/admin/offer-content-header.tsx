@@ -1,7 +1,13 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { ADMIN_OFFER_TABS, type AdminOfferTabs } from "./offer-content-tabs";
+import {
+  ADMIN_OFFER_TABS,
+  adminPanelId,
+  adminTabId,
+  type AdminOfferTabs,
+} from "./offer-content-tabs";
 
 interface OfferContentHeaderProps {
   activeTab: AdminOfferTabs;
@@ -14,12 +20,41 @@ export function OfferContentHeader({
   onTabChange,
   dirtyTabs,
 }: OfferContentHeaderProps) {
+  // Selection follows focus, as the tabs pattern expects: the arrows change
+  // the open tab, and focus moves with it. Without moving focus, roving
+  // tabIndex would strand the keyboard on a tab that is no longer selected.
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+  const movedByKeyboard = useRef(false);
+
+  useEffect(() => {
+    if (!movedByKeyboard.current) return;
+    movedByKeyboard.current = false;
+    activeTabRef.current?.focus();
+  }, [activeTab]);
+
+  function onTabKeyDown(
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    const last = ADMIN_OFFER_TABS.length - 1;
+    const next =
+      event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+      : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+      : event.key === "Home" ? 0
+      : event.key === "End" ? last
+      : null;
+    if (next === null) return;
+    event.preventDefault();
+    movedByKeyboard.current = true;
+    onTabChange(ADMIN_OFFER_TABS[next].id);
+  }
+
   return (
     <nav
       aria-label="Offer pre-fill sections"
       className="max-w-full overflow-x-auto rounded-lg border border-border/70 bg-white/95 px-4 py-3 shadow-sm"
     >
-      <ol className="flex min-w-190">
+      <ol role="tablist" aria-orientation="horizontal" className="flex min-w-190">
         {ADMIN_OFFER_TABS.map((tab, index) => {
           const isCurrent = tab.id === activeTab;
           const isDirty = dirtyTabs[tab.id];
@@ -33,7 +68,18 @@ export function OfferContentHeader({
                   its index number would otherwise be read into the name. */}
               <button
                 type="button"
-                aria-current={isCurrent ? "true" : undefined}
+                role="tab"
+                id={adminTabId(tab.id)}
+                aria-selected={isCurrent}
+                // Only the open tab claims a panel. One panel is rendered at
+                // a time, so pointing every tab at its own id would leave five
+                // of six referencing elements that are not in the document.
+                aria-controls={isCurrent ? adminPanelId(tab.id) : undefined}
+                // Roving tabIndex: Tab reaches the strip once and lands on the
+                // open tab; the arrows move between tabs from there.
+                tabIndex={isCurrent ? 0 : -1}
+                ref={isCurrent ? activeTabRef : undefined}
+                onKeyDown={(event) => onTabKeyDown(event, index)}
                 onClick={() => onTabChange(tab.id)}
                 className="group flex w-full cursor-pointer flex-col items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-royal-gold-ink"
               >

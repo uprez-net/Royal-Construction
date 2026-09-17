@@ -443,7 +443,11 @@ test("the save action writes the plan and prices the money columns from it", () 
   );
   const start = text.indexOf("async function saveOfferWorkspace(");
   assert.ok(start >= 0, "saveOfferWorkspace not found");
-  const body = text.slice(start, text.indexOf("\n}\n", start));
+  const end = text.indexOf("\n}\n", start);
+  // Without this, a missing terminator slices to -1 — the whole rest of the
+  // file — and the assertions below would match some other function and pass.
+  assert.ok(end > start, "saveOfferWorkspace has no closing brace");
+  const body = text.slice(start, end);
 
   assert.match(body, /planWorkspaceSave\(/);
   assert.match(body, /workspaceState:\s*saved\b/);

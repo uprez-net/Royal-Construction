@@ -81,7 +81,9 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
    | --- | --- |
    | `GOOGLE_MAPS_API_KEY`, `GEOSCAPE_API_KEY` | Address lookup |
    | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Microsoft Graph |
-   | `GRAPH_MODE`, `GRAPH_SENDER_UPN`, `BUSINESS_EMAIL` | Graph email / leadgen |
+   | `GRAPH_MODE`, `GRAPH_SENDER_UPN`, `BUSINESS_EMAIL` | Business Graph email / leadgen |
+   | `GRAPH_ADMIN_SENDER_UPN`, `BUSINESS_ADMIN_EMAIL`, `GRAPH_ADMIN_MAIL_CC` | Compliance Graph mailbox |
+   | `GRAPH_ADMIN_WEBHOOK_CLIENT_STATE`, `GRAPH_ADMIN_SUBSCRIPTION_RESOURCE` | Admin Graph webhook (client state must be unique) |
    | `GEMINI_API_KEY` | AI lead extraction |
    | `TWILIO_*` | Outbound IVR (see `docs/twillo-outbound-ivr.md`) |
 

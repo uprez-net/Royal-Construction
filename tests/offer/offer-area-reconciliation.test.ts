@@ -198,3 +198,26 @@ test("the printed snapshot carries the dwelling specifications the emailed one d
   assert.match(dual, /Major House Specifications/);
   assert.match(dual, /Granny Home Specifications/);
 });
+
+test("a single-storey job prints no First Floor cell", () => {
+  const singleStorey = { ...AREAS, firstFloorSqm: 0 };
+  const job = { ...INITIAL_OFFER_JOB, ...singleStorey };
+  assert.equal(
+    buildAreaBreakdown(job).cells.some((cell) => cell.label === "First Floor"),
+    false,
+    "a zero First Floor still has a cell",
+  );
+  assert.doesNotMatch(emailed(singleStorey), /<div class="cap">First Floor<\/div>/);
+  assert.equal(printed(singleStorey).includes(">First Floor</p>"), false);
+  assert.match(emailed(singleStorey), emailedCell("Total Area", "285 m²"));
+});
+
+test("the welcome letter keeps a fractional area", () => {
+  const fractional = { ...AREAS, porchSqm: 5.5 };
+  const job = { ...INITIAL_OFFER_JOB, ...fractional };
+  assert.ok(
+    buildWelcomeParagraphs(job).some((p) => p.includes("all 435.5 square metres")),
+  );
+  assert.ok(emailed(fractional).includes("all 435.5 square metres"));
+  assert.ok(printed(fractional).includes("all 435.5 square metres"));
+});

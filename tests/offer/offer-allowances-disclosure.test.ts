@@ -20,6 +20,7 @@ import {
   CHARS_PER_LINE_ALLOWANCE_ITEM,
   CHARS_PER_LINE_ALLOWANCE_RULE,
   chunkAllowanceRows,
+  createOfferScopeItem,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   estimateWrappedLines,
   INITIAL_ALLOWANCES,
@@ -31,8 +32,11 @@ import {
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import {
+  deserializeWorkspace,
   INITIAL_TENDER_GATE,
   LEGACY_CALC_VERSION,
+  parseWorkspaceState,
+  serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
 
@@ -71,10 +75,21 @@ function snapshotWith(
   };
 }
 
-const shown = INITIAL_ALLOWANCES.filter((item) => item.includedInOfferDocument);
+// Allowances default off the Offer document and on the Tender, so the offer
+// tests tick the Offer box on the seeded rows themselves.
+const offerTicked = INITIAL_ALLOWANCES.map((item) => ({
+  ...item,
+  includedInOfferDocument: true,
+}));
+const shown = offerTicked;
 const hidden = INITIAL_ALLOWANCES.map((item) => ({
   ...item,
   includedInOfferDocument: false,
+}));
+// Ticked for neither document.
+const tenderHidden = hidden.map((item) => ({
+  ...item,
+  includedInTender: false,
 }));
 
 function reactMarkup(snapshot: OfferWorkspaceSnapshot): string {
@@ -93,13 +108,13 @@ function declaredPageTotal(html: string): number {
 }
 
 test("the fixture actually has allowances to disclose", () => {
-  // Guards every assertion below: if the defaults ever stop ticking
-  // includedInOfferDocument, these tests would pass vacuously.
+  // Guards every assertion below: without a row ticked for the Offer, these
+  // tests would pass vacuously.
   assert.ok(shown.length > 0, "no default allowance is shown on the offer");
 });
 
 test("scopeRows still carries the ticked allowances", () => {
-  const data = buildOfferPrintTemplateData(buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)));
+  const data = buildOfferPrintTemplateData(buildProposalInput(snapshotWith(offerTicked)));
   assert.equal(data.scopeRows.length, shown.length);
   assert.deepEqual(
     data.scopeRows.map((row) => row.label),
@@ -113,7 +128,7 @@ test("unticked allowances never reach scopeRows", () => {
 });
 
 test("the printed offer discloses every ticked allowance", () => {
-  const html = reactMarkup(snapshotWith(INITIAL_ALLOWANCES));
+  const html = reactMarkup(snapshotWith(offerTicked));
   assert.match(html, /Prime cost &amp; provisional sums/);
   for (const item of shown) {
     assert.ok(
@@ -125,7 +140,7 @@ test("the printed offer discloses every ticked allowance", () => {
 
 test("the emailed offer discloses every ticked allowance", () => {
   const html = buildProposalHtml(
-    buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)),
+    buildProposalInput(snapshotWith(offerTicked)),
     EMPTY_OFFER_IMAGES,
   );
   assert.match(html, /Prime cost &amp; provisional sums/);
@@ -140,7 +155,7 @@ test("the emailed offer discloses every ticked allowance", () => {
 test("the disclosure states the variation rule, not just the amount", () => {
   // An allowance without its variation rule is the part that causes the dispute:
   // the customer needs to know what happens when the real cost differs.
-  const html = reactMarkup(snapshotWith(INITIAL_ALLOWANCES));
+  const html = reactMarkup(snapshotWith(offerTicked));
   assert.match(html, /adjusted by written variation/);
 });
 
@@ -171,12 +186,12 @@ test("an allowance whose description repeats its variation rule prints it once",
 
 test("a genuinely distinct description is still printed", () => {
   const data = buildOfferPrintTemplateData(
-    buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)),
+    buildProposalInput(snapshotWith(offerTicked)),
   );
   const withDescription = data.scopeRows.find((row) => row.description !== "");
   assert.ok(withDescription, "the dedupe swallowed every description");
   assert.ok(
-    reactMarkup(snapshotWith(INITIAL_ALLOWANCES)).includes(
+    reactMarkup(snapshotWith(offerTicked)).includes(
       withDescription.description,
     ),
   );
@@ -192,7 +207,7 @@ test("an offer with no ticked allowances adds no page to either renderer", () =>
     EMPTY_OFFER_IMAGES,
   );
   const emailedSome = buildProposalHtml(
-    buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)),
+    buildProposalInput(snapshotWith(offerTicked)),
     EMPTY_OFFER_IMAGES,
   );
   assert.equal(
@@ -206,7 +221,7 @@ test("both renderers agree on the page count with allowances present", () => {
   // The three renderers have drifted before, which is why the template data is
   // derived once and shared. A page added to one and not the other is that same
   // failure, and the footers are where it shows.
-  const snapshot = snapshotWith(INITIAL_ALLOWANCES);
+  const snapshot = snapshotWith(offerTicked);
   assert.equal(
     declaredPageTotal(reactMarkup(snapshot)),
     declaredPageTotal(
@@ -368,19 +383,41 @@ test("both offer renderers count every allowance page in their footer", () => {
 // variations and the provisional/prime-cost allowances noted in the inclusions
 // schedule" — and the Tender printed no such list. The client signed a price
 // subject to allowances the document never stated.
+//
+// It now lists every allowance ticked "Show on Tender", independently of the
+// Offer box, beneath the exclusions while they fit.
 
 function tenderWith(allowances: readonly OfferWorkspaceScopeItem[]): string {
   return buildTenderHtml(buildProposalInput(snapshotWith(allowances)));
 }
 
-test("the Tender prints a prime cost and provisional sums page", () => {
+function tenderPages(html: string): string[] {
+  return html.split('<div class="page">').slice(1);
+}
+
+const allowanceCell = (label: string) => `<td class="c-alw-item"><b>${label}</b>`;
+
+test("new allowances start off the Offer document and on the Tender", () => {
+  const allowance = createOfferScopeItem("allowance-new", "prime_cost");
+  assert.equal(allowance.includedInOfferDocument, false);
+  assert.equal(allowance.includedInTender, true);
+  const exclusion = createOfferScopeItem("exclusion-new", "exclusion");
+  assert.equal(exclusion.includedInOfferDocument, true);
+  for (const item of INITIAL_ALLOWANCES) {
+    assert.equal(item.includedInOfferDocument, false, `${item.label} defaults onto the Offer`);
+    assert.equal(item.includedInTender, true, `${item.label} defaults off the Tender`);
+  }
+});
+
+test("the Tender lists every allowance ticked for it", () => {
   const html = tenderWith(INITIAL_ALLOWANCES);
   const data = buildOfferPrintTemplateData(
     buildProposalInput(snapshotWith(INITIAL_ALLOWANCES)),
   );
+  assert.equal(data.tenderScopeRows.length, INITIAL_ALLOWANCES.length);
   assert.ok(html.includes("Prime Cost &amp; Provisional Sums"));
-  for (const row of data.scopeRows) {
-    assert.ok(html.includes(row.label), `the Tender never names "${row.label}"`);
+  for (const row of data.tenderScopeRows) {
+    assert.ok(html.includes(allowanceCell(row.label)), `the Tender never names "${row.label}"`);
     assert.ok(
       html.includes(row.amountLabel),
       `the Tender never states the ${row.label} allowance of ${row.amountLabel}`,
@@ -389,21 +426,90 @@ test("the Tender prints a prime cost and provisional sums page", () => {
   assert.match(html, /allowances set out in this Tender/);
 });
 
-test("the Tender counts its allowances page in the footer", () => {
+test("an allowance hidden from the Offer document is still listed in the Tender", () => {
+  const html = tenderWith(hidden);
+  for (const item of hidden) {
+    assert.ok(
+      html.includes(allowanceCell(item.label)),
+      `the Tender dropped "${item.label}" because its Offer box was unticked`,
+    );
+  }
+  assert.match(html, /allowances set out in this Tender/);
+});
+
+test("an allowance unticked for the Tender is left out of it", () => {
+  const [first, ...rest] = INITIAL_ALLOWANCES;
+  const html = tenderWith([{ ...first, includedInTender: false }, ...rest]);
+  assert.equal(html.includes(allowanceCell(first.label)), false);
+  for (const item of rest) {
+    assert.ok(html.includes(allowanceCell(item.label)));
+  }
+});
+
+test("seeded allowances share the Exclusions & Important Notes page", () => {
+  const html = tenderWith(INITIAL_ALLOWANCES);
   assert.equal(
-    declaredPageTotal(tenderWith(INITIAL_ALLOWANCES)) -
-      declaredPageTotal(tenderWith(hidden)),
-    1,
+    declaredPageTotal(html),
+    declaredPageTotal(tenderWith(tenderHidden)),
+    "two seeded allowances added a page instead of sharing one",
   );
-  assert.equal(
-    declaredPageTotal(tenderWith(manyLongAllowances)) -
-      declaredPageTotal(tenderWith(hidden)),
-    chunkAllowanceRows(manyLongAllowances).length,
+  const shared = tenderPages(html).find((page) =>
+    page.includes("Exclusions &amp; Important Notes"),
+  );
+  assert.ok(
+    shared?.includes("Prime Cost &amp; Provisional Sums"),
+    "the allowances are not on the exclusions page",
   );
 });
 
-test("a Tender with no allowances neither prints nor cites them", () => {
-  const html = tenderWith(hidden);
+test("a long allowance list continues on counted pages and prints every row once", () => {
+  const html = tenderWith(manyLongAllowances);
+  const extra =
+    declaredPageTotal(html) - declaredPageTotal(tenderWith(tenderHidden));
+  assert.ok(extra >= 1, "30 long allowances all fitted beneath the exclusions");
+  const pages = tenderPages(html);
+  const shared = pages.find((page) =>
+    page.includes("Exclusions &amp; Important Notes"),
+  );
+  const sharedCarriesSome = Boolean(
+    shared?.includes("Prime Cost &amp; Provisional Sums"),
+  );
+  const allowancePages = pages.filter((page) =>
+    page.includes("Prime Cost &amp; Provisional Sums"),
+  );
+  assert.equal(allowancePages.length - (sharedCarriesSome ? 1 : 0), extra);
+  for (const item of manyLongAllowances) {
+    assert.equal(
+      html.split(allowanceCell(item.label)).length - 1,
+      1,
+      `"${item.label}" printed the wrong number of times`,
+    );
+  }
+});
+
+test("a Tender with no allowances ticked for it neither prints nor cites them", () => {
+  const html = tenderWith(tenderHidden);
   assert.equal(html.includes("Prime Cost &amp; Provisional Sums"), false);
   assert.doesNotMatch(html, /allowances (noted|set out)/);
+});
+
+test("offers saved before the split list every allowance on the Tender", () => {
+  const legacy = JSON.parse(JSON.stringify(serializeWorkspace(snapshotWith(offerTicked))));
+  for (const item of legacy.allowances) {
+    delete item.includedInTender;
+  }
+  const reloaded = deserializeWorkspace(parseWorkspaceState(legacy));
+  assert.ok(reloaded.allowances.length > 0);
+  for (const item of reloaded.allowances) {
+    assert.equal(item.includedInTender, true, `${item.label} lost its Tender default`);
+    assert.equal(item.includedInOfferDocument, true, `${item.label} lost its Offer box`);
+  }
+});
+
+test("an unticked Tender box survives a save", () => {
+  const saved = JSON.parse(JSON.stringify(serializeWorkspace(snapshotWith(tenderHidden))));
+  const reloaded = deserializeWorkspace(parseWorkspaceState(saved));
+  for (const item of reloaded.allowances) {
+    assert.equal(item.includedInTender, false, `${item.label} came back on the Tender`);
+  }
 });

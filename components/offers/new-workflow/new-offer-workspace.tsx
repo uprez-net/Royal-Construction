@@ -105,7 +105,10 @@ import {
   collectOfferSendBlockers,
   describeOfferExpiry,
 } from "@/lib/offer/offer-readiness";
-import { findGrannyExclusionConflicts } from "@/lib/offer/granny-exclusion";
+import {
+  buildIncludesGrannyFlat,
+  withoutGrannyOutOfScopeLines,
+} from "@/lib/offer/granny-exclusion";
 import {
   EMPTY_OFFER_IMAGES,
   setOfferImage,
@@ -475,11 +478,6 @@ export function NewOfferWorkspace({
     [job.owners],
   );
   const ownersComplete = ownerIssues.length === 0;
-  // The check every send action makes server-side, surfaced before the send.
-  const grannyExclusionConflicts = useMemo(
-    () => findGrannyExclusionConflicts({ job, draft, exclusions }),
-    [job, draft, exclusions],
-  );
   const sendBlockers = useMemo(
     () =>
       collectOfferSendBlockers({
@@ -488,11 +486,9 @@ export function NewOfferWorkspace({
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
         adminContentStale,
-        grannyExclusionConflicts,
       }),
     [
       adminContentStale,
-      grannyExclusionConflicts,
       leadId,
       customerPrice.needsOverrideReason,
       offerExpiry,
@@ -500,9 +496,40 @@ export function NewOfferWorkspace({
     ],
   );
 
+  // A build that includes a granny flat must not also say the granny flat is
+  // out of scope. The estimator used to have to find and delete that line
+  // before any send would go through; it is now removed as soon as the build
+  // says there is one. Job setup is editable only while the offer is pending,
+  // and Scope and the offer document are editable then too, so this only ever
+  // runs on lists the estimator can still change. The documents filter the same
+  // lines at build time, which covers a locked offer and the admin defaults.
+  function dropGrannyExclusionsFor(nextJob: OfferWorkspaceJob) {
+    if (!buildIncludesGrannyFlat(nextJob)) {
+      return;
+    }
+    setExclusions((current) => [
+      ...withoutGrannyOutOfScopeLines(true, current, (item) => [
+        item.label,
+        item.description,
+        item.variationRule,
+      ]),
+    ]);
+    setDraft((current) => {
+      const bullets = withoutGrannyOutOfScopeLines(
+        true,
+        current.exclusionBullets,
+        (line) => line,
+      );
+      return bullets.length === current.exclusionBullets.length
+        ? current
+        : { ...current, exclusionBullets: [...bullets] };
+    });
+  }
+
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
     const nextJob = { ...job, ...patch };
     setJob(nextJob);
+    dropGrannyExclusionsFor(nextJob);
     if (status === "contract_draft") {
       setContractParticulars((current) =>
         reconcileContractParticularDefaults(
@@ -741,6 +768,14 @@ export function NewOfferWorkspace({
       hasGrannyHome:
         result.areaBasis.grannyFlatSqm > 0 ? true : current.hasGrannyHome,
     }));
+    // Imported areas can introduce the granny flat, so the same removal applies.
+    if (result.areaBasis.grannyFlatSqm > 0) {
+      dropGrannyExclusionsFor({
+        ...job,
+        grannyFlatSqm: result.areaBasis.grannyFlatSqm,
+        hasGrannyHome: true,
+      });
+    }
   }
 
   function addLine() {
@@ -1401,6 +1436,10 @@ export function NewOfferWorkspace({
     }
     autosaveHaltedRef.current = false;
     lockedReloadRef.current = false;
+    // Before the await, not after: the chip otherwise kept saying "Not saved"
+    // for the whole retry, so nothing showed the click had registered and the
+    // estimator could fire several retries at once.
+    setSaveState("saving");
     void (async () => {
       const workspace = await flushWorkspace(offerId);
       const particulars =
@@ -1983,8 +2022,7 @@ export function NewOfferWorkspace({
         canSend={
           leadId !== undefined &&
           !customerPrice.needsOverrideReason &&
-          ownersComplete &&
-          grannyExclusionConflicts.length === 0
+          ownersComplete
         }
         sending={sending}
         sendError={sendError}

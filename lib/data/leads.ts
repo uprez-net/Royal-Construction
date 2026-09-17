@@ -1173,9 +1173,6 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
           }),
         ]
       : [];
-  const assigneeChanged =
-    input.assignedId !== undefined &&
-    (input.assignedId?.trim() || null) !== (existingLead?.assignedId ?? null);
   const listedFieldsChanged = offerListingLeadChanged(existingLead, updateData);
 
   const [updated] = await prisma.$transaction([
@@ -1194,18 +1191,29 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     ...reassignOpenTasks,
   ]);
 
-  // The offers listing is cached under "offers" per access scope, and a user
-  // outside the internal roles sees only the leads assigned to them. Left
+  // The offers list is cached per access scope (lib/data/offer-listing.ts), and
+  // a user outside the internal roles sees only the leads assigned to them. Left
   // alone, a reassigned lead stayed on its old owner's list and off its new
   // owner's until the cache expired. The listing also shows the lead's name,
-  // contact details, location and type, so an edit to one of those left the
-  // old value on screen (and in search) just as long. revalidateTag rather
-  // than updateTag, because updateLead also runs from Route Handlers (the lead
-  // PATCH, MCP and booking routes), where updateTag throws. expire: 0 so
-  // nobody gets one more stale read of a list that decides which offers they
-  // can see.
-  if (assigneeChanged || listedFieldsChanged) {
-    revalidateTag("offers", { expire: 0 });
+  // contact details, location and type, so an edit to one of those left the old
+  // value on screen (and in search) just as long.
+  //
+  // The assignee side expires whenever an update SETS it, with no comparison
+  // against the lead read before the transaction: a concurrent reassignment can
+  // commit in between, which made that comparison skip an expiry it owed
+  // (CodeRabbit, #246). The listed-field side compares what is about to be
+  // stored, which no concurrent write can invalidate the same way.
+  //
+  // revalidateTag rather than updateTag, because updateLead also runs from Route
+  // Handlers (the lead PATCH, MCP and booking routes), where updateTag throws.
+  // expire: 0 so nobody gets one more stale read of a list that decides which
+  // offers they can see. The catch keeps a cache failure from failing the save.
+  if (input.assignedId !== undefined || listedFieldsChanged) {
+    try {
+      revalidateTag("offers", { expire: 0 });
+    } catch (error) {
+      console.error(`[Lead ${id}] Failed to expire the offers list cache`, error);
+    }
   }
 
   for (const annotation of annotationInputs) {

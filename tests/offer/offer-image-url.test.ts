@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isAllowedOfferImageUrl } from "../../lib/offer/offer-image-url";
+import {
+  ROYAL_BLOB_HOST,
+  allowedOfferImageHost,
+  isAllowedOfferImageUrl,
+} from "../../lib/offer/offer-image-url";
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
@@ -41,6 +45,8 @@ test("rejects anything outside Blob storage", () => {
     // The suffix must be the host's, not part of a path or a lookalike host.
     "https://evil.example/x.public.blob.vercel-storage.com/hero.png",
     "https://public.blob.vercel-storage.com.evil.example/hero.png",
+    // Another Vercel Blob tenant: same domain, someone else's storage.
+    "https://attacker.public.blob.vercel-storage.com/x.png",
     "https://user:pass@udafiztdzg1cn8u2.public.blob.vercel-storage.com/a.png",
     "javascript:alert(1)",
     "/images/hero.png",
@@ -50,6 +56,43 @@ test("rejects anything outside Blob storage", () => {
   }
   assert.equal(isAllowedOfferImageUrl(undefined), false);
   assert.equal(isAllowedOfferImageUrl(42), false);
+});
+
+test("follows the store in BLOB_READ_WRITE_TOKEN, and falls back to Royal's", () => {
+  assert.equal(BLOB_URL.startsWith(`https://${ROYAL_BLOB_HOST}/`), true);
+  // process.env is typed here with the app's keys required, so go through a
+  // view that admits one can be absent — the case this test is about.
+  const env = process.env as Record<string, string | undefined>;
+  const before = env.BLOB_READ_WRITE_TOKEN;
+  try {
+    // A token names the store that writes the images; the host follows it, so
+    // replacing the store doesn't leave the allowlist pointing at the old one.
+    env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_Rep1acement_secret";
+    assert.equal(
+      allowedOfferImageHost(),
+      "rep1acement.public.blob.vercel-storage.com",
+    );
+    assert.equal(
+      isAllowedOfferImageUrl(
+        "https://rep1acement.public.blob.vercel-storage.com/a.png",
+      ),
+      true,
+    );
+    assert.equal(isAllowedOfferImageUrl(BLOB_URL), false);
+
+    // No token (build, tests, the browser) or an unreadable one: Royal's host.
+    delete env.BLOB_READ_WRITE_TOKEN;
+    assert.equal(allowedOfferImageHost(), ROYAL_BLOB_HOST);
+    env.BLOB_READ_WRITE_TOKEN = "not-a-blob-token";
+    assert.equal(allowedOfferImageHost(), ROYAL_BLOB_HOST);
+    assert.equal(isAllowedOfferImageUrl(BLOB_URL), true);
+  } finally {
+    if (before === undefined) {
+      delete env.BLOB_READ_WRITE_TOKEN;
+    } else {
+      env.BLOB_READ_WRITE_TOKEN = before;
+    }
+  }
 });
 
 const SNAPSHOT: OfferWorkspaceSnapshot = {

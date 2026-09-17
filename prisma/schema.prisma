@@ -454,6 +454,11 @@ enum CertifierEmailDirection {
   OUTBOUND
 }
 
+enum GraphMailbox {
+  BUSINESS
+  ADMIN
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -1317,6 +1322,10 @@ model CertifierEngagement {
   certifierEmail String?
   certifierPhone String?
 
+  /// The Graph mailbox that owns this compliance thread. Existing rows are
+  /// business-mailbox rows; new compliance engagements use the admin mailbox.
+  graphMailbox GraphMailbox @default(BUSINESS)
+
   /// The Graph id of the most recent inbound message on this thread.
   ///
   /// Replies are built with Graph's createReply against it, which is the only
@@ -1328,6 +1337,13 @@ model CertifierEngagement {
   lastInboundMessageId String?
 
   status CertifierEngagementStatus @default(NOT_STARTED)
+
+  /// Whether the compliance file needs a development application.
+  ///
+  /// Null means nobody has answered the question shown at the top of the
+  /// compliance tab. Both true and false are recorded answers; true also opens
+  /// the DA branch by raising a DA_APPROVAL_REQUIRED alert.
+  developmentApplicationRequired Boolean?
 
   /// Whether the lot sits in an estate whose developer has to approve the
   /// bushfire report before it is lodged.
@@ -1565,6 +1581,9 @@ model CertifierEmail {
   /// are the same shape and are read by the same components, so they share the
   /// table rather than growing a near-identical one per party.
   outreachId String?
+
+  /// The mailbox in which this message was received or sent.
+  graphMailbox GraphMailbox @default(BUSINESS)
 
   createdAt DateTime @default(now())
 
@@ -1900,6 +1919,10 @@ model ComplianceOutreach {
   contactName  String?
   contactEmail String?
   contactPhone String?
+
+  /// The Graph mailbox that owns this outreach thread. Existing rows remain on
+  /// business so their stored message ids continue to resolve there.
+  graphMailbox GraphMailbox @default(BUSINESS)
 
   /// See CertifierEngagement.lastInboundMessageId -- Graph will not set
   /// In-Reply-To through internetMessageHeaders, so a reply has to be built

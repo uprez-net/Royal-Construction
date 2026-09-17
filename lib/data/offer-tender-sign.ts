@@ -29,10 +29,6 @@ import { createDocusignContext } from "@/lib/docusign/client";
 import { createTenderEnvelope } from "@/lib/docusign/tender-envelope";
 import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
-import {
-  describeGrannyExclusionConflicts,
-  findGrannyExclusionConflicts,
-} from "@/lib/offer/granny-exclusion";
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -93,18 +89,6 @@ export async function sendTenderForSignature(input: {
     };
   }
 
-  // A granny flat priced on one page and excluded on another. Checked on the
-  // workspace the Tender renders from; the Offer steps are locked by now, so
-  // the fix is a revision.
-  const grannyConflicts = findGrannyExclusionConflicts(snapshot);
-  if (grannyConflicts.length > 0) {
-    return {
-      ok: false,
-      error: describeGrannyExclusionConflicts(grannyConflicts, {
-        revisionNeeded: true,
-      }),
-    };
-  }
 
   // A Tender is a fixed-price contract: its progress-payment schedule must sum
   // to exactly the contract value (100%), or the customer is asked to sign a
@@ -272,15 +256,34 @@ export async function sendTenderForSignature(input: {
   );
 
   const stillClaimed = await prisma.$transaction(async (tx) => {
+    // Claim first, then write. Returning from a transaction callback COMMITS
+    // it (only a throw rolls back), so a recall or Create revision that ran
+    // while DocuSign was creating the envelope used to have the writes below
+    // land anyway: the stored document was replaced and executedPdfUrl cleared
+    // on a document that may already be executed, even though the raced
+    // envelope is voided straight after. The envelope row is still written, so
+    // the raced envelope stays on the audit trail and can be cancelled.
+    const stillSent = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        offerStatus: OfferStatus.TENDER_SENT,
+        isActive: true,
+      },
+      data: { offerStatus: OfferStatus.TENDER_SENT },
+    });
+    const claimed = stillSent.count > 0;
     const tender = await tx.tender.upsert({
       where: { offerId: offer.id },
-      update: {
-        version: offer.revisionNumber,
-        documentData,
-        // A new envelope replaces the document, so the last envelope's executed
-        // PDF no longer describes it. The webhook files this one's on completion.
-        executedPdfUrl: null,
-      },
+      // A new envelope replaces the document, so the last envelope's executed
+      // PDF no longer describes it. The webhook files this one's on completion.
+      // A raced send owns nothing, so it leaves the stored document alone.
+      update: claimed
+        ? {
+            version: offer.revisionNumber,
+            documentData,
+            executedPdfUrl: null,
+          }
+        : {},
       create: {
         offerId: offer.id,
         version: offer.revisionNumber,
@@ -312,20 +315,7 @@ export async function sendTenderForSignature(input: {
         },
       },
     });
-    // Only over the status this send claimed, on the live revision. A recall or
-    // Create revision that ran while DocuSign was creating the envelope has
-    // moved the offer on, and writing TENDER_SENT back put a recalled offer out
-    // for signature again. The envelope row is still written above, so the
-    // envelope stays on the audit trail and can be cancelled.
-    const stillSent = await tx.offer.updateMany({
-      where: {
-        id: offer.id,
-        offerStatus: OfferStatus.TENDER_SENT,
-        isActive: true,
-      },
-      data: { offerStatus: OfferStatus.TENDER_SENT },
-    });
-    if (stillSent.count === 0) {
+    if (!claimed) {
       return false;
     }
     await tx.offerStatusEvent.create({

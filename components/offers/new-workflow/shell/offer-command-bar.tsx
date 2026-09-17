@@ -38,6 +38,10 @@ type OfferCommandBarProps = {
   readonly status: OfferWorkspaceStatus;
   readonly onDownloadPreview: () => void;
   readonly onRetrySave: () => void;
+  // The print template renders from the workspace state, which is seeded until
+  // the offer loads. Downloading before then handed the estimator a document
+  // built from placeholder content, looking exactly like the customer's offer.
+  readonly awaitingOffer: boolean;
 };
 
 export function OfferCommandBar({
@@ -49,6 +53,7 @@ export function OfferCommandBar({
   status,
   onDownloadPreview,
   onRetrySave,
+  awaitingOffer,
 }: OfferCommandBarProps) {
   const activeRevisionNumber =
     Number.parseInt(job.revision.replace(/\D/g, ""), 10) || 1;
@@ -94,6 +99,8 @@ export function OfferCommandBar({
           size="sm"
           type="button"
           variant="outline"
+          disabled={awaitingOffer}
+          title={awaitingOffer ? "Waiting for the offer to load" : undefined}
           onClick={onDownloadPreview}
         >
           <Download className="size-3.5" aria-hidden="true" />

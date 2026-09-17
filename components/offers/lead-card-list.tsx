@@ -210,7 +210,7 @@ export function LeadCardList({
                 {/* The check marks the selection without relying on the ring's
                     colour alone. */}
                 {lead.id === selectedLeadId ? (
-                  <Check aria-hidden className="size-4 text-royal-gold-ink" />
+                  <Check aria-hidden className="size-4 text-royal-gold-ink-text" />
                 ) : (
                   <List aria-hidden className="size-4 text-muted-foreground" />
                 )}

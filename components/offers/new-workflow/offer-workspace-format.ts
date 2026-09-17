@@ -15,10 +15,13 @@ export function formatCurrency(
   }).format(value);
 }
 
-// Sub-dollar money deltas keep their cents. The send gate compares prices to the
-// cent, so a 37-cent override blocks Send and must not print as "$0".
+// A money delta keeps its cents whenever it has any. The send gate compares
+// prices to the cent, so a 37-cent override blocks Send and must not print as
+// "$0" — and a $1.50 one must not print as "+$2", which overstates the very
+// difference this chip reports. Whole-dollar deltas stay unadorned: "-$50,000"
+// reads better than "-$50,000.00" beside the hero figure.
 export function moneyDeltaFractionDigits(delta: number): number {
-  return delta !== 0 && Math.abs(delta) < 1 ? 2 : 0;
+  return Number.isInteger(delta) ? 0 : 2;
 }
 
 // A signed money delta, "+$0.37" or "-$50,000", for the override chip and the

@@ -23,6 +23,7 @@ import { OfferCardHeading } from "@/components/offers/new-workflow/offer-workspa
 import { FilePenLine } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
 import { BulletListEditor } from "./shared/bullet-list-editor";
+import { EXCLUSION_BULLET_UNDO_TOAST_ID, INCLUSION_BULLET_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -84,6 +85,7 @@ export function OfferContentPage() {
         <label>
           <FieldLabel>Inclusion bullets</FieldLabel>
           <BulletListEditor
+            undoToastId={INCLUSION_BULLET_UNDO_TOAST_ID}
             value={inclusions}
             onChange={(lines) => dispatch(inclusionsChanged(lines))}
             onRestore={(bullet, index) =>
@@ -96,6 +98,7 @@ export function OfferContentPage() {
         <label>
           <FieldLabel>Exclusion bullets</FieldLabel>
           <BulletListEditor
+            undoToastId={EXCLUSION_BULLET_UNDO_TOAST_ID}
             value={exclusions}
             onChange={(lines) => dispatch(exclusionsListChanged(lines))}
             onRestore={(bullet, index) =>

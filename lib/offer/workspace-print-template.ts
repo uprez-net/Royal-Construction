@@ -11,6 +11,10 @@ import {
 } from "@/lib/offer/workspace-area";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
+import {
+  buildIncludesGrannyFlat,
+  withoutGrannyOutOfScopeLines,
+} from "./granny-exclusion";
 
 export const COMPANY_LINE =
   "ROYAL CONSTRUCTIONS PTY LTD | Licence No. 383992C | ABN 56 644 111 580 | MBA Accredited";
@@ -54,6 +58,10 @@ export type OfferPrintTemplateData = {
   readonly preparedDateLabel: string;
   readonly savingAmount: number | null;
   readonly scopeRows: readonly OfferPrintScopeRow[];
+  // The allowances the signed Tender lists: every one ticked "Show on Tender",
+  // whatever its Offer box says. The Tender makes its price subject to exactly
+  // these, so they are derived here with the offer's rows, not in the renderer.
+  readonly tenderScopeRows: readonly OfferPrintScopeRow[];
   // The "This price includes" list on the Investment Summary page, derived from
   // the inclusions schedule's summary labels. Derived HERE rather than in each
   // renderer — the three renderers have drifted before.
@@ -104,8 +112,19 @@ export function buildOfferPrintTemplateData({
     // exclusions remain available to the Tender via `exclusionRows` below,
     // but must not reappear here after an estimator removes them from the
     // Offer document.
-    exclusionBullets: getOfferDocumentExclusions(draft),
-    exclusionRows: getVisibleExclusionRows(draft, exclusions),
+    // A build that includes a granny flat never prints a line saying the
+    // granny flat is out of scope, whatever is stored on the offer. Covers a
+    // locked offer and an admin default, which the workspace cannot strip.
+    exclusionBullets: withoutGrannyOutOfScopeLines(
+      buildIncludesGrannyFlat(job),
+      getOfferDocumentExclusions(draft),
+      (line) => line,
+    ),
+    exclusionRows: withoutGrannyOutOfScopeLines(
+      buildIncludesGrannyFlat(job),
+      getVisibleExclusionRows(draft, exclusions),
+      (row) => [row.label, row.description, row.variationRule],
+    ),
     footerBase: `${job.siteAddress} | Prepared by ${job.preparedBy}`,
     paymentRows: paymentSchedule.map((row) => ({
       ...row,
@@ -116,26 +135,34 @@ export function buildOfferPrintTemplateData({
     savingAmount,
     scopeRows: allowances
       .filter((item) => item.includedInOfferDocument)
-      .map((item) => ({
-        amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
-        // Estimators routinely put the same sentence in both fields — across
-        // real offers most rows have description === variationRule, and many
-        // leave the description blank. Printing it twice side by side on a
-        // fixed-price proposal reads as a rendering fault, so the duplicate is
-        // dropped HERE rather than in each renderer: the offer and the emailed
-        // PDF must not diverge on this.
-        description:
-          item.description.trim() === item.variationRule.trim()
-            ? ""
-            : item.description,
-        id: item.id,
-        label: item.label,
-        variationRule: item.variationRule,
-      })),
+      .map(toScopeRow),
     summaryInclusions: draft.inclusionHighlights
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
+    tenderScopeRows: allowances
+      .filter((item) => item.includedInTender)
+      .map(toScopeRow),
     validUntilLabel: formatDateDisplay(job.validUntil),
+  };
+}
+
+// One allowance as the offer documents and the Tender print it.
+function toScopeRow(item: OfferWorkspaceScopeItem): OfferPrintScopeRow {
+  return {
+    amountLabel: formatScopeAmount(item.amountType, item.amount, item.unit),
+    // Estimators routinely put the same sentence in both fields — across
+    // real offers most rows have description === variationRule, and many
+    // leave the description blank. Printing it twice side by side on a
+    // fixed-price proposal reads as a rendering fault, so the duplicate is
+    // dropped HERE rather than in each renderer: the offer and the emailed
+    // PDF must not diverge on this.
+    description:
+      item.description.trim() === item.variationRule.trim()
+        ? ""
+        : item.description,
+    id: item.id,
+    label: item.label,
+    variationRule: item.variationRule,
   };
 }
 
@@ -270,7 +297,12 @@ export function buildAreaBreakdown(job: OfferWorkspaceJob): OfferAreaBreakdown {
   if (job.grannyFlatSqm !== 0) {
     cells.push({ label: "Granny Flat", sqm: job.grannyFlatSqm });
   }
-  return { cells, totalSqm: getTotalAreaSqm(job) };
+  // A base cell with no area (a single-storey job's First Floor, a job with no
+  // porch) is dropped like Void and Granny Flat above, so nothing prints "0 m²".
+  return {
+    cells: cells.filter((cell) => cell.sqm !== 0),
+    totalSqm: getTotalAreaSqm(job),
+  };
 }
 
 function getAreaLabel(totalAreaSqm: number): string {

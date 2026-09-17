@@ -43,15 +43,69 @@ test("the royal hover is a darker step of the ink", () => {
   assert.ok(hover.lightness < ink.lightness);
 });
 
-// The app ships light-only, but .dark must still define the token so the
-// utility never resolves to an undefined var, and its step must still carry
-// the variant's white text.
-test("the dark theme defines a royal hover that still carries white text", () => {
+// The app ships light-only, but .dark must still define the tokens so the
+// utility never resolves to an undefined var, and both steps must carry the
+// variant's white text. Checking only the hover is how the dark REST state sat
+// at 3.75:1 unnoticed — and rest is what variant="royal" paints until someone
+// points at it.
+test("the dark theme carries white text at rest and on hover", () => {
+  const ink = themeColour(css, ".dark", "--royal-gold-ink");
   const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
 
   assert.ok(
+    contrastRatio(WHITE, ink) >= AA_TEXT,
+    `white on the dark --royal-gold-ink measures ${ratio(contrastRatio(WHITE, ink))}`,
+  );
+  assert.ok(
     contrastRatio(WHITE, hover) >= AA_TEXT,
     `white on the dark --royal-gold-ink-hover measures ${ratio(contrastRatio(WHITE, hover))}`,
+  );
+});
+
+// Gold serves two roles and they pull opposite ways in dark: the fill carries
+// white text so it must darken, while gold AS TEXT sits on a dark surface and
+// must lighten. Darkening the fill for the button silently dropped the text use
+// to 3.66:1, which is why both are pinned here.
+test("dark gold-as-text clears AA on the surfaces it sits on", () => {
+  const text = themeColour(css, ".dark", "--royal-gold-ink-text");
+
+  for (const surface of ["--card", "--background", "--muted"] as const) {
+    const measured = contrastRatio(themeColour(css, ".dark", surface), text);
+    assert.ok(
+      measured >= AA_TEXT,
+      `--royal-gold-ink-text on ${surface} measures ${ratio(measured)}`,
+    );
+  }
+});
+
+// The light theme's two gold tokens must stay the same colour: the split exists
+// for dark only, and a drift in light would go unnoticed otherwise.
+test("light gold-as-text matches the light fill", () => {
+  const fill = themeColour(css, ":root", "--royal-gold-ink");
+  const text = themeColour(css, ":root", "--royal-gold-ink-text");
+
+  assert.deepEqual(text, fill);
+});
+
+// Gold text on the light-gold chip: --royal-gold-light is never redefined for
+// dark, so it stays near-white there while the dark text token lightens. That
+// pairing measured 2.81:1 in dark, which is why the dashed add-dwelling hover
+// switches to a gold FILL with white text under .dark instead.
+test("gold text on the light-gold chip clears AA in light", () => {
+  const chip = themeColour(css, ":root", "--royal-gold-light");
+  const text = themeColour(css, ":root", "--royal-gold-ink-text");
+
+  const measured = contrastRatio(chip, text);
+  assert.ok(measured >= AA_TEXT, `gold on --royal-gold-light measures ${ratio(measured)}`);
+});
+
+test("the dark hover is a darker step of the dark ink", () => {
+  const ink = themeColour(css, ".dark", "--royal-gold-ink");
+  const hover = themeColour(css, ".dark", "--royal-gold-ink-hover");
+
+  assert.ok(
+    hover.lightness < ink.lightness,
+    "the dark hover must darken, as the light one does",
   );
 });
 
@@ -84,27 +138,6 @@ const KNOWN_GAPS: ReadonlyArray<readonly [file: string, classes: string]> = [
   [
     "app/book-consultation/page.tsx",
     "w-full gap-2 bg-royal-gold py-6 font-condensed text-[15px] font-medium uppercase tracking-wide text-card hover:bg-royal-gold-dark",
-  ],
-  ["components/offers/admin/admin-offer-page.tsx", "bg-royal-gold text-white"],
-  [
-    "components/offers/admin/offer-content-header.tsx",
-    "border-2 border-royal-gold bg-royal-gold text-white",
-  ],
-  [
-    "components/offers/create-offer-modal.tsx",
-    "h-10 rounded-[10px] bg-royal-gold px-4 text-[12.5px] font-semibold text-primary-foreground hover:bg-royal-gold-dark",
-  ],
-  [
-    "components/offers/new-workflow/offer-workspace-project-handoff.tsx",
-    "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark",
-  ],
-  [
-    "components/offers/new-workflow/shell/offer-command-bar.tsx",
-    "shrink-0 bg-royal-gold font-mono text-white",
-  ],
-  [
-    "components/offers/new-workflow/shell/offer-step-rail.tsx",
-    "bg-royal-gold text-white",
   ],
 ];
 

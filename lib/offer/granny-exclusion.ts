@@ -1,4 +1,3 @@
-import { OFFER_WORKFLOW_STEPS } from "./workflow-steps";
 import type { OfferWorkspaceSnapshot } from "./workspace-persistence";
 
 // A build that includes a granny flat must not go out with an exclusion saying
@@ -7,8 +6,11 @@ import type { OfferWorkspaceSnapshot } from "./workspace-persistence";
 // who adds a granny flat sends a document that prices it on one page and
 // excludes it on another.
 //
-// Directive-free so the rule is shared by the send-readiness strip and every
-// send action, and can be unit-tested.
+// Nothing gates a send on this any more: the workspace removes the line as soon
+// as the build says there is a granny flat, and every document filters it when
+// it is built (withoutGrannyOutOfScopeLines). findGrannyExclusionConflicts is
+// kept as the detector those rules are specified against — it reports WHERE a
+// line sits, which the filters do not need but a future warning would.
 
 type GrannyExclusionStepId = "offer-step-offer-document" | "offer-step-scope";
 
@@ -44,8 +46,11 @@ const NOT_IN_SCOPE = /\bnot in (?:the )?(?:current )?scope\b/;
 
 // What must be left once that statement and its brackets or dashes are gone:
 // the granny flat alone, singular or plural.
+// "secondary dwelling" is the planning term for the same thing, and is a
+// complete subject on its own: "Secondary dwelling (not in scope)" contradicts
+// a build that includes one exactly as the granny wording does.
 const GRANNY_FLAT_ALONE =
-  /^(?:(?:the|a|any) )?(?:secondary dwelling )?granny ?(?:flat|home)s?(?: secondary dwelling)?(?: (?:is|are))?$/;
+  /^(?:(?:the|a|any) )?(?:(?:secondary dwellings?)|(?:secondary dwellings? )?granny ?(?:flat|home)s?(?: secondary dwellings?)?)(?: (?:is|are))?$/;
 
 // Narrow on purpose: the granny flat must be the whole subject of the line.
 // "Granny flat landscaping (not in current scope)" and "Granny flat site costs"
@@ -92,77 +97,35 @@ export function findGrannyExclusionConflicts(
   return [...conflicts.values()];
 }
 
-function stepLabel(stepId: GrannyExclusionStepId): string {
-  return (
-    OFFER_WORKFLOW_STEPS.find((step) => step.sectionId === stepId)?.label ??
-    stepId
-  );
-}
-
-function joinAnd(items: readonly string[]): string {
-  return items.length <= 1
-    ? (items[0] ?? "")
-    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
-function quotedLines(conflicts: readonly GrannyExclusionConflict[]): string[] {
-  return [...new Set(conflicts.map((c) => `"${c.line}"`))];
-}
-
-function stillSays(conflicts: readonly GrannyExclusionConflict[]): string {
-  return `This build includes a granny flat, but its exclusions still say ${joinAnd(quotedLines(conflicts))}.`;
-}
-
 // The refusal and the readiness label. `revisionNeeded` is for the Tender send:
 // by then the Offer document and Scope steps are locked, so the line can only be
 // removed on a new revision, which is still allowed there. The Contract send
-// uses decideContractGrannyExclusionGate.
-export function describeGrannyExclusionConflicts(
-  conflicts: readonly GrannyExclusionConflict[],
-  options: { readonly revisionNeeded: boolean },
-): string {
-  const lines = quotedLines(conflicts);
-  const steps = [...new Set(conflicts.map((c) => stepLabel(c.stepId)))];
-  const those = lines.length === 1 ? "that line" : "those lines";
-  const where = `on the ${joinAnd(steps)} step${steps.length === 1 ? "" : "s"}`;
-  const fix = options.revisionNeeded
-    ? `Create a revision and remove ${those} ${where} before sending.`
-    : `Remove ${those} ${where} before sending.`;
-  return `${stillSays(conflicts)} ${fix}`;
-}
 
-export type ContractGrannyExclusionGate =
-  | { readonly kind: "clear" }
-  | { readonly kind: "as-signed"; readonly warning: string }
-  | { readonly kind: "refuse"; readonly error: string };
-
-// The Contract is sent only from TENDER_SIGNED or CONTRACT_DRAFT, where
-// createOfferRevision is locked, so nothing in the app can remove the line any
-// more and telling the estimator to create a revision left the deal stuck.
-//
-// - A Tender sent before this check may carry the line, and the customer signed
-//   it. Refusing would leave the deal with no way to its Contract, so the
-//   Contract carries the exclusions the customer signed and the send logs it.
-// - A Tender sent with the check could not carry it, so the agreed snapshot has
-//   moved away from the signed Tender. That is refused, without advice the app
-//   cannot follow.
-export function decideContractGrannyExclusionGate(input: {
-  readonly conflicts: readonly GrannyExclusionConflict[];
-  readonly tenderSentWithCheck: boolean;
-}): ContractGrannyExclusionGate {
-  const { conflicts } = input;
-  if (conflicts.length === 0) {
-    return { kind: "clear" };
+/**
+ * The same list with any "granny flat is out of scope" line taken out, when the
+ * build includes one. Nothing that prints or stores an exclusion list should
+ * carry a line contradicting the build, and asking the estimator to notice and
+ * delete it (the old readiness blocker and the server refusals) put the work on
+ * the wrong side. The narrowness of isGrannyOutOfScopeLine is what makes this
+ * safe: only a line whose whole subject is the granny flat is dropped, so
+ * "Granny flat landscaping (not in current scope)" survives.
+ */
+export function withoutGrannyOutOfScopeLines<T>(
+  includesGrannyFlat: boolean,
+  items: readonly T[],
+  // Every text the item contributes to a document, not just its heading: a
+  // Scope exclusion carries a description and a variation rule, and the Tender
+  // prints both beside the label, so the contradiction can sit in any of them.
+  // findGrannyExclusionConflicts reads all three for the same reason.
+  textsOf: (item: T) => readonly string[] | string,
+): readonly T[] {
+  if (!includesGrannyFlat) {
+    return items;
   }
-  const those = quotedLines(conflicts).length === 1 ? "that line" : "those lines";
-  if (!input.tenderSentWithCheck) {
-    return {
-      kind: "as-signed",
-      warning: `${stillSays(conflicts)} The Tender went out before that was checked and the customer signed it with ${those}, so the Contract carries the same exclusions.`,
-    };
-  }
-  return {
-    kind: "refuse",
-    error: `${stillSays(conflicts)} The signed Tender did not carry ${those}, so the Contract was not sent. A signed Tender cannot be revised in the app, so the agreed offer needs reconciling by hand first.`,
-  };
+  const kept = items.filter((item) => {
+    const texts = textsOf(item);
+    const lines = typeof texts === "string" ? [texts] : texts;
+    return !lines.some((line) => isGrannyOutOfScopeLine(line));
+  });
+  return kept.length === items.length ? items : kept;
 }

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { InclusionScheduleRow } from "@/types/admin-offer-content";
 import { INCLUSION_CATEGORY_SUGGESTIONS } from "./inclusion-schedule";
+import { INCLUSION_SCHEDULE_UNDO_TOAST_ID } from "./undo-toast-ids";
 
 interface InclusionScheduleEditorProps {
   value: InclusionScheduleRow[];
@@ -58,6 +59,7 @@ export function InclusionScheduleEditor({
     next.splice(index, 1);
     onChange(next);
     toast("Inclusion removed", {
+      id: INCLUSION_SCHEDULE_UNDO_TOAST_ID,
       action: {
         label: "Undo",
         onClick: () => onRestore(removed, index),

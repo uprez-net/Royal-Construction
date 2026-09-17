@@ -4,6 +4,10 @@ import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
 import type { OfferWorkspaceSnapshot } from "./workspace-persistence";
 import { getVisibleExclusionRows } from "./workspace-print-template";
 import { splitContractValueByGst } from "./workspace-pricing";
+import {
+  buildIncludesGrannyFlat,
+  withoutGrannyOutOfScopeLines,
+} from "./granny-exclusion";
 
 // The commercial figures the BC4 contract and the project handoff derive from
 // an offer, kept out of the "use server" modules so they can be tested. The two
@@ -60,12 +64,67 @@ export function paymentScheduleLine(
 // exclusion table is. The contract and the project read draft.exclusionBullets
 // alone, so a ticked Scope exclusion the customer signed on the Tender was
 // missing from both.
+export type SignedTenderExclusions = {
+  readonly lines: readonly string[];
+  // "tender-document": the exclusions the signed Tender actually printed.
+  // "agreed-snapshot": a Tender row with nothing readable on it, so the offer's
+  // own snapshot stands in — what both consumers always used.
+  readonly source: "tender-document" | "agreed-snapshot";
+};
+
+/**
+ * The exclusions the Contract and the project must carry: the ones the SIGNED
+ * Tender printed, read from `Tender.documentData` (the render input stored at
+ * send). The consumers used to rebuild them from `agreedSnapshot ?? workspaceState`,
+ * which `saveOfferWorkspace` still accepts writes to after the offer is agreed,
+ * so an edit between the Tender send and the Contract made the two disagree.
+ * Mirrors resolveContractPaymentSource, which does this for the schedule.
+ */
+export function resolveSignedTenderExclusions(input: {
+  readonly tenderDocumentData: unknown;
+  readonly snapshot: Pick<OfferWorkspaceSnapshot, "draft" | "exclusions" | "job">;
+}): SignedTenderExclusions {
+  const data =
+    typeof input.tenderDocumentData === "object" && input.tenderDocumentData !== null
+      ? (input.tenderDocumentData as Record<string, unknown>)
+      : null;
+  const draft = data?.draft;
+  const exclusions = data?.exclusions;
+  if (
+    typeof draft === "object" &&
+    draft !== null &&
+    Array.isArray((draft as { exclusionBullets?: unknown }).exclusionBullets) &&
+    Array.isArray(exclusions)
+  ) {
+    // The signed Tender's own list, minus any granny line: a Tender signed
+    // before the build gained its granny flat (or before this rule) must not
+    // put that contradiction on the BC4. Deliberate: the contract then differs
+    // from the signed Tender on that line.
+    return {
+      lines: withoutGrannyOutOfScopeLines(
+        buildIncludesGrannyFlat(input.snapshot.job),
+        getVisibleExclusionRows(
+          draft as OfferWorkspaceSnapshot["draft"],
+          exclusions as OfferWorkspaceSnapshot["exclusions"],
+        ),
+        (row) => [row.label, row.description, row.variationRule],
+      ).map((row) => row.label),
+      source: "tender-document",
+    };
+  }
+  return { lines: tenderExclusionLines(input.snapshot), source: "agreed-snapshot" };
+}
+
 export function tenderExclusionLines(
-  snapshot: Pick<OfferWorkspaceSnapshot, "draft" | "exclusions">,
+  snapshot: Pick<OfferWorkspaceSnapshot, "draft" | "exclusions" | "job">,
 ): string[] {
-  return getVisibleExclusionRows(snapshot.draft, snapshot.exclusions).map(
-    (row) => row.label,
-  );
+  return [
+    ...withoutGrannyOutOfScopeLines(
+      buildIncludesGrannyFlat(snapshot.job),
+      getVisibleExclusionRows(snapshot.draft, snapshot.exclusions),
+      (row) => [row.label, row.description, row.variationRule],
+    ),
+  ].map((row) => row.label);
 }
 
 export type HandoffPaymentStage = {

@@ -120,7 +120,11 @@ test("the viewer and its loader pass the latest send through", () => {
   );
   const start = data.indexOf("async function loadOfferRevisionSnapshot(");
   assert.ok(start >= 0, "loadOfferRevisionSnapshot not found");
-  const loader = data.slice(start, data.indexOf("\n}\n", start));
+  const end = data.indexOf("\n}\n", start);
+  // Without this, a missing terminator slices to -1 — the whole rest of the
+  // file — and the assertions below would match some other loader and pass.
+  assert.ok(end > start, "loadOfferRevisionSnapshot has no closing brace");
+  const loader = data.slice(start, end);
   assert.match(
     loader,
     /documentSends:\s*\{\s*select:\s*\{\s*sentAt:\s*true\s*\},\s*orderBy:\s*\{\s*sentAt:\s*"desc"\s*\}/,

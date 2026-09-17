@@ -37,3 +37,9 @@ export function dirtyByTab(
   }
   return byTab;
 }
+
+// Stable ids tying each tab to the panel it controls. Derived from the tab id
+// rather than written out, because one of them ("HBFC-claim") is mixed case and
+// a hand-typed copy would drift.
+export const adminTabId = (tab: AdminOfferTabs): string => `admin-offer-tab-${tab}`;
+export const adminPanelId = (tab: AdminOfferTabs): string => `admin-offer-panel-${tab}`;
