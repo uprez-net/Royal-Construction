@@ -36,6 +36,11 @@ const isPublicRoute = createRouteMatcher([
   "/book-consultation",
   "/api/upload(.*)",
   "/api/resume-stream(.*)",
+  // Eve owns authentication for its browser-facing HTTP channel. Keeping the
+  // route out of Clerk's page/API protection is important: auth.protect() can
+  // turn an unauthenticated fetch into a redirect (and, after the redirect,
+  // an HTML 404), while Eve must return its own structured 401/403 response.
+  "/eve/v1(.*)",
 ]);
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
 const isDevAuthRoute = createRouteMatcher([

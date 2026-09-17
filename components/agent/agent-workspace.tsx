@@ -108,10 +108,21 @@ export function AgentWorkspace({
       });
       if (!sessionPathUpdated.current) {
         sessionPathUpdated.current = true;
-        router.replace(`/agent/${session.sessionId}`, { scroll: false });
+        // The session ID is returned before Eve's first event hook has
+        // necessarily registered the session in our application database.
+        // A router navigation would immediately render the server page, which
+        // deliberately 404s unknown/unowned IDs during that small window.
+        // Update the address bar without starting a second server render; the
+        // active Eve store remains mounted and reloads still use the durable
+        // URL normally.
+        window.history.replaceState(
+          null,
+          "",
+          `/agent/${encodeURIComponent(session.sessionId)}`,
+        );
       }
     },
-    [router],
+    [],
   );
 
   const agent = useEveAgent({

@@ -26,7 +26,7 @@ export function createConversationTitleGenerator({
 
     try {
       const result = await generateText({
-        model: gateway("meta/llama-3.1-8b-instruct"),
+        model: gateway("meta/llama-4-scout"),
         abortSignal: AbortSignal.timeout(5_000),
         maxOutputTokens: 24,
         temperature: 0.2,
