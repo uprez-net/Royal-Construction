@@ -2,12 +2,21 @@ import "server-only";
 
 import prisma from "@/lib/prisma";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
-import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
+import {
+  mapLead,
+  stageToPrismaMap,
+  historyTypeToPrisma,
+  LeadAnalyticsData,
+} from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
 import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
-import { closeDatePatch, isClosedUnsuccessful, stageDef } from "@/lib/leads/pipeline-stages";
+import {
+  closeDatePatch,
+  isClosedUnsuccessful,
+  stageDef,
+} from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
 import { LeadValidationError } from "@/lib/leads/lead-validation-error";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
@@ -50,7 +59,10 @@ import { offerListingLeadChanged } from "@/lib/offer/offer-listing-query";
 import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { getAllEmailThreads } from "@/utils/email-parser";
-import { EMAIL_FOOTER_HTML, EMAIL_HEADER_HTML } from '@/constants/email-artifacts';
+import {
+  EMAIL_FOOTER_HTML,
+  EMAIL_HEADER_HTML,
+} from "@/constants/email-artifacts";
 import {
   buildFollowupConfirmedHistoryEntry,
   buildFollowupNotRequiredHistoryEntry,
@@ -58,7 +70,6 @@ import {
   buildMeetingDidNotTakePlaceHistoryEntry,
   buildMeetingReviewedHistoryEntry,
 } from "@/lib/leads/lead-helpers";
-
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -71,7 +82,9 @@ function hasHtmlMarkup(value: string) {
 }
 
 function markdownToHtml(value: string) {
-  const paragraphs = normalizeEmailBody(value).split(/\n\s*\n/).filter(Boolean);
+  const paragraphs = normalizeEmailBody(value)
+    .split(/\n\s*\n/)
+    .filter(Boolean);
 
   if (paragraphs.length === 0) {
     return "";
@@ -81,7 +94,12 @@ function markdownToHtml(value: string) {
     .map((paragraph) => {
       const formattedParagraph = paragraph
         .split("\n")
-        .map((line) => escapeEmailHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
+        .map((line) =>
+          escapeEmailHtml(line).replace(
+            /\*\*(.+?)\*\*/g,
+            "<strong>$1</strong>",
+          ),
+        )
         .join("<br>");
 
       return `<p>${formattedParagraph}</p>`;
@@ -97,7 +115,6 @@ function buildLeadEmailHtml(body: string, name: string) {
 
   return `${bodyHtml}<p style="margin:16px 0 0;">Thanks &amp; Regards, <br>${escapeEmailHtml(name)} <br>Royal Constructions.</p>`;
 }
-
 
 /**
  * Escapes HTML-sensitive characters to prevent HTML injection when embedding
@@ -131,7 +148,9 @@ function getLeadDedupeLockKeys(email: string, phone: string) {
   return [
     email === "" ? null : `lead:email:${email.toLowerCase()}`,
     phone === "" ? null : `lead:phone:${phone}`,
-  ].filter((key): key is string => key !== null).sort();
+  ]
+    .filter((key): key is string => key !== null)
+    .sort();
 }
 
 /**
@@ -144,7 +163,10 @@ function getLeadDedupeLockKeys(email: string, phone: string) {
  * @param tx - Prisma transaction client.
  * @param keys - Advisory lock keys to acquire.
  */
-async function lockLeadDedupeKeys(tx: Prisma.TransactionClient, keys: string[]) {
+async function lockLeadDedupeKeys(
+  tx: Prisma.TransactionClient,
+  keys: string[],
+) {
   for (const key of keys) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
   }
@@ -179,7 +201,9 @@ async function sendLeadMentionEmails(input: {
 
   const config = getGraphConfig();
   const graphClient = await createGraphContext(config);
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://royal-construction-chi.vercel.app";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "https://royal-construction-chi.vercel.app";
   const crmUrl = `${baseUrl}/leads`;
   const leadName = escapeEmailHtml(input.leadName);
   const selectedText = escapeEmailHtml(input.selectedText);
@@ -187,7 +211,9 @@ async function sendLeadMentionEmails(input: {
 
   const recipients = users.filter((user) => user.email);
   if (recipients.length === 0) {
-    console.warn(`[Lead ${input.leadId}] No email addresses found for mentioned users.`);
+    console.warn(
+      `[Lead ${input.leadId}] No email addresses found for mentioned users.`,
+    );
     return;
   }
 
@@ -217,7 +243,10 @@ async function sendLeadMentionEmails(input: {
     .filter(({ result }) => result.status === "rejected");
 
   if (failed.length > 0) {
-    console.error(`[Lead ${input.leadId}] Failed to email ${failed.length} mentioned user(s).`, failed);
+    console.error(
+      `[Lead ${input.leadId}] Failed to email ${failed.length} mentioned user(s).`,
+      failed,
+    );
   }
 }
 
@@ -298,7 +327,7 @@ export async function getAllLeads(): Promise<UiLead[]> {
 }
 
 /**
- * Retrieves a paginated list of leads with optional search, stage filtering, 
+ * Retrieves a paginated list of leads with optional search, stage filtering,
  * date-range filtering, and filtering for leads without an associated project.
  *
  * Supports filtering by:
@@ -330,22 +359,28 @@ export async function getLeads(
   pendingFollowUps?: boolean,
   upcomingFollowUps?: boolean,
   pendingMeetings?: boolean,
-  upcomingMeetings?: boolean): Promise<PaginatedLeadsResult> {
+  upcomingMeetings?: boolean,
+): Promise<PaginatedLeadsResult> {
   const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
+  const safeLimit =
+    Number.isFinite(limit) && limit > 0
+      ? Math.min(Math.floor(limit), 50)
+      : defaultLookupPageSize;
   const search = normalizeSearch(query);
 
   // 1. Determine if a timing filter should be active (skip if undefined or 'all')
-  const hasTimingFilter = filterTiming && filterTiming !== 'all';
+  const hasTimingFilter = filterTiming && filterTiming !== "all";
   let timingFilter = {};
   const timeZone = "Australia/Sydney";
 
   // Current date in Sydney
   const sydneyNow = toZonedTime(new Date(), timeZone);
-  const isMeetingScheduledFilterActive = pendingMeetings !== undefined || upcomingMeetings !== undefined || (status?.includes('MEETING_SCHEDULED') && status?.length === 1);
+  const isMeetingScheduledFilterActive =
+    pendingMeetings !== undefined ||
+    upcomingMeetings !== undefined ||
+    (status?.includes("MEETING_SCHEDULED") && status?.length === 1);
 
   if (hasTimingFilter) {
-
     let startSydney: Date;
     let endSydney: Date;
 
@@ -392,24 +427,43 @@ export async function getLeads(
     };
   }
 
-
-
-
-  const where: Prisma.LeadWhereInput | undefined = search.length > 0
-    ? {
-      OR: [
-        { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { secondaryName: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { secondaryEmail: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { secondaryPhone: { contains: search, mode: Prisma.QueryMode.insensitive } },
-      ],
-    }
-    : undefined;
+  const where: Prisma.LeadWhereInput | undefined =
+    search.length > 0
+      ? {
+          OR: [
+            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            {
+              location: {
+                contains: search,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              secondaryName: {
+                contains: search,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              secondaryEmail: {
+                contains: search,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              secondaryPhone: {
+                contains: search,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+          ],
+        }
+      : undefined;
   try {
-    const statusCleaned = status?.filter(s => undefined !== s && s !== null) ?? null;
+    const statusCleaned =
+      status?.filter((s) => undefined !== s && s !== null) ?? null;
     const finalWhere: Prisma.LeadWhereInput = {
       ...where,
       ...(filterLeadsWithoutProject && {
@@ -425,14 +479,14 @@ export async function getLeads(
       ...(pendingFollowUps !== undefined && {
         followupDate: {
           not: null,
-          lte: fromZonedTime(startOfDay(sydneyNow), timeZone)
-        }
+          lte: fromZonedTime(startOfDay(sydneyNow), timeZone),
+        },
       }),
       ...(upcomingFollowUps !== undefined && {
         followupDate: {
           not: null,
-          gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
-        }
+          gte: fromZonedTime(endOfDay(sydneyNow), timeZone),
+        },
       }),
       // Leads carrying scheduled work. Replaces filtering the Follow-ups tab by
       // stage: a lead at Quoted or Negotiating can have a follow-up booked, and
@@ -447,28 +501,38 @@ export async function getLeads(
       // them; the tasks are the source of truth from here.
       ...(hasOpenTask && {
         AND: [
-          { stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] as LeadStage[] } },
+          {
+            stage: {
+              notIn: [
+                "CONVERTED",
+                "WON",
+                "LOST",
+                "CANCELLED",
+                "DISQUALIFIED",
+              ] as LeadStage[],
+            },
+          },
           { tasks: { some: { completedAt: null } } },
         ],
       }),
       ...(isMeetingScheduledFilterActive && {
         meetingDate: {
           not: null,
-        }
+        },
       }),
       ...(pendingMeetings !== undefined && {
         meetingDate: {
           not: null,
-          lte: fromZonedTime(startOfDay(sydneyNow), timeZone)
-        }
+          lte: fromZonedTime(startOfDay(sydneyNow), timeZone),
+        },
       }),
       ...(upcomingMeetings !== undefined && {
         meetingDate: {
           not: null,
-          gte: fromZonedTime(endOfDay(sydneyNow), timeZone)
-        }
+          gte: fromZonedTime(endOfDay(sydneyNow), timeZone),
+        },
       }),
-    }
+    };
     const leads = await prisma.lead.findMany({
       where: finalWhere,
       include: {
@@ -532,14 +596,14 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
     include: {
       history: {
         orderBy: { actionDate: "asc" },
-        include: { author: true }
+        include: { author: true },
       },
       chatSessions: true,
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
-      files: true
-    }
+      files: true,
+    },
   });
   if (!lead) return null;
   return mapLead(lead);
@@ -566,8 +630,8 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
       assignedUser: { select: { id: true, name: true, email: true } },
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
-      files: true
-    }
+      files: true,
+    },
   });
   if (!lead) return null;
 
@@ -713,7 +777,10 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
  * @param options - Optional creation behaviour flags.
  * @returns The newly created lead or the existing duplicate lead.
  */
-export async function createLead(input: CreateLeadInput, options?: CreateLeadOptions): Promise<UiLead | { message: string; existingLead: UiLead }> {
+export async function createLead(
+  input: CreateLeadInput,
+  options?: CreateLeadOptions,
+): Promise<UiLead | { message: string; existingLead: UiLead }> {
   const stageValue = input.stage;
   const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
   const createdValue = coerceMoney(input.estimatedValue);
@@ -746,10 +813,22 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   });
 
   if (historyCreate.length === 0) {
-    if (input.stage !== 'In Follow-up') {
-      historyCreate.push({ action: "Lead created", detail: "Lead manually created", type: "SYSTEM", actionDate: new Date(), ...(actingUserId ? { authorId: actingUserId } : {}) });
+    if (input.stage !== "In Follow-up") {
+      historyCreate.push({
+        action: "Lead created",
+        detail: "Lead manually created",
+        type: "SYSTEM",
+        actionDate: new Date(),
+        ...(actingUserId ? { authorId: actingUserId } : {}),
+      });
     } else {
-      historyCreate.push({ action: "Lead created with Follow-up set", detail: "Lead manually created and Also Assign the Follow-up Stage", type: "SYSTEM", actionDate: new Date(), ...(actingUserId ? { authorId: actingUserId } : {}) });
+      historyCreate.push({
+        action: "Lead created with Follow-up set",
+        detail: "Lead manually created and Also Assign the Follow-up Stage",
+        type: "SYSTEM",
+        actionDate: new Date(),
+        ...(actingUserId ? { authorId: actingUserId } : {}),
+      });
     }
   }
 
@@ -786,7 +865,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
     assignedUser: { select: { id: true, name: true, email: true } },
     noteAnnotations: { orderBy: { createdAt: "desc" } },
     emails: { orderBy: { createdAt: "desc" } },
-    files: true
+    files: true,
   } satisfies Prisma.LeadInclude;
 
   const leadCreateResult = await prisma.$transaction(async (tx) => {
@@ -817,7 +896,9 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         source: input.source,
         sourceDetail: input.sourceDetail,
         stage: mappedStage,
-        ...(input.assignedId ? { assignedUser: { connect: { id: input.assignedId } } } : {}),
+        ...(input.assignedId
+          ? { assignedUser: { connect: { id: input.assignedId } } }
+          : {}),
         budget: input.budget,
         // A lead created with a value is manually owned until an offer exists;
         // the offer sync then takes over only if the source is not MANUAL.
@@ -851,7 +932,10 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   });
 
   if (leadCreateResult.existingLead) {
-    return { message: "A lead with the same email or phone number already exists.", existingLead: mapLead(leadCreateResult.existingLead) };
+    return {
+      message: "A lead with the same email or phone number already exists.",
+      existingLead: mapLead(leadCreateResult.existingLead),
+    };
   }
 
   const created = leadCreateResult.createdLead;
@@ -863,18 +947,29 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
   const notificationPayload = createNotification("leadCreated", {
     leadId: res.id.toString(),
     leadType: res.type,
-    budget: res.budget ? (!isNaN(parseFloat(res.budget)) ? parseFloat(res.budget) : 0) : 0,
+    budget: res.budget
+      ? !isNaN(parseFloat(res.budget))
+        ? parseFloat(res.budget)
+        : 0
+      : 0,
     location: res.location ?? "Not specified",
     customerName: res.name ?? "Not specified",
     customerEmail: res.email ?? "Not specified",
-    customerPhone: res.phone ?? "Not specified"
-  })
+    customerPhone: res.phone ?? "Not specified",
+  });
   await triggerNotification([], notificationPayload);
   // ═══════════════════════════════════════════════════════
   // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
   // ═══════════════════════════════════════════════════════
-  if (!options?.skipWelcomeEmail && created.email && created.name && input.stage !== 'In Follow-up') {
-    console.log(`[Lead ${created.id}] Sending welcome email to newly created lead...`);
+  if (
+    !options?.skipWelcomeEmail &&
+    created.email &&
+    created.name &&
+    input.stage !== "In Follow-up"
+  ) {
+    console.log(
+      `[Lead ${created.id}] Sending welcome email to newly created lead...`,
+    );
     try {
       // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
       const leadPreview = {
@@ -888,7 +983,7 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
       };
 
       // 2. Generate the HTML body using your React Email template
-      const htmlBody = await renderEmailHtml('Welcome', leadPreview);
+      const htmlBody = await renderEmailHtml("Welcome", leadPreview);
 
       if (htmlBody) {
         // 3. Initialize Graph Client
@@ -896,7 +991,8 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
         const graphClient = await createGraphContext(config);
 
         // 4. Define the subject line
-        const emailSubject = 'Welcome to Royal Constructions — Your Home Building Journey Starts Here';
+        const emailSubject =
+          "Welcome to Royal Constructions — Your Home Building Journey Starts Here";
 
         // 5. Send the email directly using the Graph Client
         await graphClient.sendMail({
@@ -906,16 +1002,23 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
           cc: config.cc,
         });
 
-        console.log(`[Lead ${created.id}] ✅ Welcome email successfully sent to ${created.email}`);
+        console.log(
+          `[Lead ${created.id}] ✅ Welcome email successfully sent to ${created.email}`,
+        );
       } else {
-        console.warn(`[Lead ${created.id}] ⚠️ Failed to render welcome email HTML. No email sent.`);
+        console.warn(
+          `[Lead ${created.id}] ⚠️ Failed to render welcome email HTML. No email sent.`,
+        );
       }
     } catch (emailError) {
-      console.error(`[Lead ${created.id}] ❌ Failed to send welcome email:`, emailError);
+      console.error(
+        `[Lead ${created.id}] ❌ Failed to send welcome email:`,
+        emailError,
+      );
     }
   }
 
-  return res
+  return res;
 }
 
 /**
@@ -936,7 +1039,10 @@ export async function createLead(input: CreateLeadInput, options?: CreateLeadOpt
  * @param input - Updated lead values.
  * @returns The updated lead.
  */
-export async function updateLead(id: number, input: UpdateLeadInput): Promise<UiLead> {
+export async function updateLead(
+  id: number,
+  input: UpdateLeadInput,
+): Promise<UiLead> {
   const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
   const updateData: Prisma.LeadUpdateInput = {};
   const actingUserId = await resolveActingUserId();
@@ -950,11 +1056,15 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
   if (input.email !== undefined) updateData.email = input.email ?? "";
   if (input.location !== undefined) updateData.location = input.location ?? "";
-  if (input.secondaryName !== undefined) updateData.secondaryName = input.secondaryName;
-  if (input.secondaryEmail !== undefined) updateData.secondaryEmail = input.secondaryEmail;
-  if (input.secondaryPhone !== undefined) updateData.secondaryPhone = input.secondaryPhone;
+  if (input.secondaryName !== undefined)
+    updateData.secondaryName = input.secondaryName;
+  if (input.secondaryEmail !== undefined)
+    updateData.secondaryEmail = input.secondaryEmail;
+  if (input.secondaryPhone !== undefined)
+    updateData.secondaryPhone = input.secondaryPhone;
   if (input.source !== undefined) updateData.source = input.source;
-  if (input.sourceDetail !== undefined) updateData.sourceDetail = input.sourceDetail;
+  if (input.sourceDetail !== undefined)
+    updateData.sourceDetail = input.sourceDetail;
   // NOTE: `stage` is deliberately NOT written here. The follow-up branches
   // further down can also set it, so both inputs are resolved together after
   // them and stamped once — see the resolveLeadStage call below.
@@ -986,7 +1096,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   }
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;
-  if (input.notesDoc !== undefined) updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
+  if (input.notesDoc !== undefined)
+    updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
   // Setting a date reopens the task: a lead carries one meeting and one
   // follow-up at a time, so a fresh date must not inherit the last one's
   // completion stamp and show up already done.
@@ -994,16 +1105,22 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     updateData.meetingDate = input.meetingDate;
     if (input.meetingDate !== null) updateData.meetingCompletedAt = null;
   }
-  if (input.meetingTime !== undefined) updateData.meetingTime = input.meetingTime;
-  if (input.meetingMode !== undefined) updateData.meetingMode = input.meetingMode;
+  if (input.meetingTime !== undefined)
+    updateData.meetingTime = input.meetingTime;
+  if (input.meetingMode !== undefined)
+    updateData.meetingMode = input.meetingMode;
   if (input.followupDate !== undefined) {
     updateData.followupDate = input.followupDate;
     if (input.followupDate !== null) updateData.followupCompletedAt = null;
   }
-  if (input.followupTime !== undefined) updateData.followupTime = input.followupTime;
-  if (input.followupNotes !== undefined) updateData.followupNotes = input.followupNotes;
-  if (input.followupReminderSentAt !== undefined) updateData.followupReminderSentAt = input.followupReminderSentAt;
-  if (input.meetingReminderSentAt !== undefined) updateData.meetingReminderSentAt = input.meetingReminderSentAt;
+  if (input.followupTime !== undefined)
+    updateData.followupTime = input.followupTime;
+  if (input.followupNotes !== undefined)
+    updateData.followupNotes = input.followupNotes;
+  if (input.followupReminderSentAt !== undefined)
+    updateData.followupReminderSentAt = input.followupReminderSentAt;
+  if (input.meetingReminderSentAt !== undefined)
+    updateData.meetingReminderSentAt = input.meetingReminderSentAt;
   if (input.lostReason !== undefined) updateData.lostReason = input.lostReason;
   if (input.urgent !== undefined) updateData.urgent = Boolean(input.urgent);
 
@@ -1033,7 +1150,8 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     const nextFollowupDate = new Date();
     nextFollowupDate.setDate(nextFollowupDate.getDate() + 1);
     updateData.followupDate = nextFollowupDate;
-    updateData.followupTime = input.followupTime ?? existingLead?.followupTime ?? null;
+    updateData.followupTime =
+      input.followupTime ?? existingLead?.followupTime ?? null;
     updateData.followupReminderSentAt = null;
     updateData.followupCompletedAt = null;
   }
@@ -1090,7 +1208,9 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
 
     if (enteringClosedStage || clearingReason) {
       const reason =
-        input.lostReason !== undefined ? input.lostReason : existingLead?.lostReason;
+        input.lostReason !== undefined
+          ? input.lostReason
+          : existingLead?.lostReason;
       if (!reason?.trim()) {
         throw new LeadValidationError(
           `Add a reason before moving this lead to ${stageDef(effectiveStage).label}.`,
@@ -1102,43 +1222,63 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
   if (input.meetingReviewOutcome === "no") {
     updateData.meetingReminderSentAt = new Date();
   } else if (input.meetingReviewOutcome === "yes") {
-    updateData.meetingMode = input.meetingMode ?? existingLead?.meetingMode ?? null;
+    updateData.meetingMode =
+      input.meetingMode ?? existingLead?.meetingMode ?? null;
     updateData.meetingReminderSentAt = new Date();
   }
 
-  if ((input.history?.length ?? 0) > 0 || annotationInputs.length > 0 || input.followupResponseOutcome || input.meetingReviewOutcome) {
-    const responseHistory = input.followupResponseOutcome === "yes"
-      ? [buildFollowupConfirmedHistoryEntry()]
-      : input.followupResponseOutcome === "notRequired"
-        ? [buildFollowupNotRequiredHistoryEntry()]
-        : input.followupResponseOutcome === "reschedule"
-          ? [buildFollowupRescheduledHistoryEntry(
-            // Sydney, so the history line agrees with the date the operator
-            // picked rather than reading a day earlier all afternoon.
-            sydneyDateOnly(
-              (updateData.followupDate as Date | null | undefined) ??
-                existingLead?.followupDate ??
-                new Date(),
-            ),
-            String(updateData.followupTime ?? existingLead?.followupTime ?? ""),
-          )]
-          : [];
+  if (
+    (input.history?.length ?? 0) > 0 ||
+    annotationInputs.length > 0 ||
+    input.followupResponseOutcome ||
+    input.meetingReviewOutcome
+  ) {
+    const responseHistory =
+      input.followupResponseOutcome === "yes"
+        ? [buildFollowupConfirmedHistoryEntry()]
+        : input.followupResponseOutcome === "notRequired"
+          ? [buildFollowupNotRequiredHistoryEntry()]
+          : input.followupResponseOutcome === "reschedule"
+            ? [
+                buildFollowupRescheduledHistoryEntry(
+                  // Sydney, so the history line agrees with the date the operator
+                  // picked rather than reading a day earlier all afternoon.
+                  sydneyDateOnly(
+                    (updateData.followupDate as Date | null | undefined) ??
+                      existingLead?.followupDate ??
+                      new Date(),
+                  ),
+                  String(
+                    updateData.followupTime ?? existingLead?.followupTime ?? "",
+                  ),
+                ),
+              ]
+            : [];
 
-    const meetingHistory = input.meetingReviewOutcome === "no"
-      ? [buildMeetingDidNotTakePlaceHistoryEntry()]
-      : input.meetingReviewOutcome === "yes"
-        ? [buildMeetingReviewedHistoryEntry({
-          meetingMode: String(updateData.meetingMode ?? existingLead?.meetingMode ?? input.meetingMode ?? "Unknown"),
-          discussionNotes: String(input.discussionNotes ?? ""),
-          buildScope: String(input.buildScope ?? ""),
-        })]
-        : [];
+    const meetingHistory =
+      input.meetingReviewOutcome === "no"
+        ? [buildMeetingDidNotTakePlaceHistoryEntry()]
+        : input.meetingReviewOutcome === "yes"
+          ? [
+              buildMeetingReviewedHistoryEntry({
+                meetingMode: String(
+                  updateData.meetingMode ??
+                    existingLead?.meetingMode ??
+                    input.meetingMode ??
+                    "Unknown",
+                ),
+                discussionNotes: String(input.discussionNotes ?? ""),
+                buildScope: String(input.buildScope ?? ""),
+              }),
+            ]
+          : [];
 
     const annotationHistory = annotationInputs.map((annotation) => {
       const now = new Date();
       return {
         action: "Lead note mention added",
-        detail: annotation.comment || `Selected text: ${annotation.selectedText}`,
+        detail:
+          annotation.comment || `Selected text: ${annotation.selectedText}`,
         type: "system" as const,
         date: sydneyDateOnly(now),
         time: sydneyTimeOnly(now),
@@ -1146,11 +1286,18 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     });
 
     updateData.history = {
-      create: [...(input.history ?? []), ...responseHistory, ...meetingHistory, ...annotationHistory].map((h) => ({
+      create: [
+        ...(input.history ?? []),
+        ...responseHistory,
+        ...meetingHistory,
+        ...annotationHistory,
+      ].map((h) => ({
         action: h.action,
         detail: h.detail || "",
-        type: h.type ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL") : "SYSTEM",
-        actionDate: new Date(`${h.date}T${h.time || '00:00'}`),
+        type: h.type
+          ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL")
+          : "SYSTEM",
+        actionDate: new Date(`${h.date}T${h.time || "00:00"}`),
         ...(actingUserId ? { authorId: actingUserId } : {}),
       })),
     };
@@ -1177,16 +1324,16 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
 
   const [updated] = await prisma.$transaction([
     prisma.lead.update({
-    where: { id },
-    data: updateData,
-    include: {
-      history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-      chatSessions: true,
-      assignedUser: { select: { id: true, name: true, email: true } },
-      noteAnnotations: { orderBy: { createdAt: "desc" } },
-      emails: { orderBy: { createdAt: "desc" } },
-      files: true
-    },
+      where: { id },
+      data: updateData,
+      include: {
+        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
+        chatSessions: true,
+        assignedUser: { select: { id: true, name: true, email: true } },
+        noteAnnotations: { orderBy: { createdAt: "desc" } },
+        emails: { orderBy: { createdAt: "desc" } },
+        files: true,
+      },
     }),
     ...reassignOpenTasks,
   ]);
@@ -1212,7 +1359,10 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     try {
       revalidateTag("offers", { expire: 0 });
     } catch (error) {
-      console.error(`[Lead ${id}] Failed to expire the offers list cache`, error);
+      console.error(
+        `[Lead ${id}] Failed to expire the offers list cache`,
+        error,
+      );
     }
   }
 
@@ -1240,9 +1390,15 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
       customerEmail: res.email ?? "Not specified",
       customerPhone: res.phone ?? "Not specified",
       status: res.stage,
-      change: mappedStage === existingLead?.stage ? "updated with more information" : undefined,
-    })
-    await triggerNotification(res.assignedId ? [res.assignedId] : [], notificationPayload);
+      change:
+        mappedStage === existingLead?.stage
+          ? "updated with more information"
+          : undefined,
+    });
+    await triggerNotification(
+      res.assignedId ? [res.assignedId] : [],
+      notificationPayload,
+    );
   } else {
     if (res.assignedId) {
       const notificationPayload = createNotification("leadAssigned", {
@@ -1253,7 +1409,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
         customerEmail: res.email ?? "Not specified",
         customerPhone: res.phone ?? "Not specified",
         assignedTo: res.assignedUser?.name ?? "Unknown",
-      })
+      });
       await triggerNotification([res.assignedId], notificationPayload);
     }
   }
@@ -1263,7 +1419,7 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
 
 /**
  * Soft-deletes a lead by marking it as archived.
- * 
+ *
  * This allows for potential recovery or auditing of leads without permanently removing them from the database.
  *
  * @param id - Lead identifier.
@@ -1475,7 +1631,7 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
         leads: Number(row.leads),
         converted: Number(row.converted),
       },
-    ])
+    ]),
   );
 
   const monthlyTrend = Array.from({ length: 12 }, (_, i) => {
@@ -1503,7 +1659,9 @@ export async function getAnalyticsData(): Promise<LeadAnalyticsData> {
     conversionData,
     monthlyTrend,
     lostReasons,
-    pipelineMetrics: serializeMetrics(computePipelineMetrics(leadsForMetrics, now)),
+    pipelineMetrics: serializeMetrics(
+      computePipelineMetrics(leadsForMetrics, now),
+    ),
     forecast: serializeForecast(
       computeForecast(leadsForMetrics, current.fy, current.quarter),
     ),
@@ -1593,7 +1751,13 @@ export async function getForecast(
  *
  * @throws {Error} If the lead does not exist or the email could not be sent.
  */
-export async function sendLeadEmail(leadId: number, location: string, body: string, to: string, replyingToEmail?: LeadEmails): Promise<LeadEmails> {
+export async function sendLeadEmail(
+  leadId: number,
+  location: string,
+  body: string,
+  to: string,
+  replyingToEmail?: LeadEmails,
+): Promise<LeadEmails> {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -1603,7 +1767,9 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     if (!user) {
       throw new Error("Authenticated user not found");
     }
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+    });
     if (!existingLead) {
       throw new Error("Lead not found");
     }
@@ -1661,14 +1827,18 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
     `;
 
     // Generate a subject line using AI for the body
-    const aiSubject = replyingToEmail ? `Re: ${replyingToEmail.subject}` : await generateEmailSubject(escapeEmailHtml(signedBody));
+    const aiSubject = replyingToEmail
+      ? `Re: ${replyingToEmail.subject}`
+      : await generateEmailSubject(escapeEmailHtml(signedBody));
     await sendEmail({
       to,
       subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
       body: signedBody,
     });
     const strippedEmailBody = getAllEmailThreads(signedBody, {
-      from: normalizeEmailAddress(process.env.BUSINESS_EMAIL ?? 'info@royalconstructions.com.au'),
+      from: normalizeEmailAddress(
+        process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
+      ),
       to: normalizeEmailAddress(to),
       subject: `${aiSubject} - ${location}`,
       sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
@@ -1692,7 +1862,9 @@ export async function sendLeadEmail(leadId: number, location: string, body: stri
           sentAt: new Date(),
         },
       });
-      console.log(`[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`);
+      console.log(
+        `[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`,
+      );
       recordedEmail = emailRecord;
     }
 

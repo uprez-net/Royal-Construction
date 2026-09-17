@@ -56,8 +56,12 @@ export function PageHeroCard({
               </p>
             </div>
           </div>
-          {aside ? <div className="hidden shrink-0 sm:block">{aside}</div> : null}
-          {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+          {aside ? (
+            <div className="hidden shrink-0 sm:block">{aside}</div>
+          ) : null}
+          {actions ? (
+            <div className="flex flex-wrap gap-2">{actions}</div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

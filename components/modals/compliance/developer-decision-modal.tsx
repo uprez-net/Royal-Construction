@@ -99,7 +99,7 @@ export function DeveloperDecisionModal({
       ).unwrap();
       toast.success(
         isRejecting
-        ? `Recorded, and sent on to whoever produced the ${what}.`
+          ? `Recorded, and sent on to whoever produced the ${what}.`
           : "Developer approval recorded.",
       );
       close();
@@ -158,8 +158,8 @@ export function DeveloperDecisionModal({
               onChange={(event) => setReason(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Their words, not a summary. Whoever redoes the {what} has only this
-              to work from.
+              Their words, not a summary. Whoever redoes the {what} has only
+              this to work from.
             </p>
           </div>
         ) : null}

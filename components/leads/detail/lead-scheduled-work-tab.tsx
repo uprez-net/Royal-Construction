@@ -35,7 +35,10 @@ export function LeadScheduledWorkTab({
     <section className="space-y-4">
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Add a task
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -75,7 +78,10 @@ export function LeadScheduledWorkTab({
 
       <Card className="rounded-xl border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Open tasks
           </CardTitle>
           <p className="text-sm text-muted-foreground tabular-nums">
@@ -107,8 +113,8 @@ export function LeadScheduledWorkTab({
               {openTasks.map((task) => (
                 <li key={task.id} className="task-open-row">
                   <span className="fu-type-pill">
-                    {LEAD_TASK_TYPES.find((t) => t.value === task.type)?.label ??
-                      task.type}
+                    {LEAD_TASK_TYPES.find((t) => t.value === task.type)
+                      ?.label ?? task.type}
                   </span>
                   <span className="task-open-due">
                     {task.dueDate

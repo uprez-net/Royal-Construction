@@ -96,7 +96,7 @@ const statusToneMap: Record<
   COMPLETED: "neutral",
   AWAITING_QUOTE: "warning",
   QUOTE_RECEIVED: "warning",
-  AWAITING_ADMIN_APPROVAL: "warning"
+  AWAITING_ADMIN_APPROVAL: "warning",
 };
 
 function CalanderRow(scheduledData: string): ReactNode {
@@ -522,10 +522,7 @@ export function TradiesClient({
       {CalanderRow(row.scheduledDate)}
     </span>,
 
-    <StatusPill
-      key={`status-${row.id}`}
-      tone={statusToneMap[row.status]}
-    >
+    <StatusPill key={`status-${row.id}`} tone={statusToneMap[row.status]}>
       {statusLabelMap[row.status]}
     </StatusPill>,
 

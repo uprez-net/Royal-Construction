@@ -130,7 +130,13 @@ const uiSlice = createSlice({
   name: "ui",
   initialState,
   reducers: {
-    openModal(state, action: PayloadAction<{ type: Exclude<ModalType, null>; payload?: UIModalPayload }>) {
+    openModal(
+      state,
+      action: PayloadAction<{
+        type: Exclude<ModalType, null>;
+        payload?: UIModalPayload;
+      }>,
+    ) {
       state.modal.type = action.payload.type;
       state.modal.payload = action.payload.payload ?? null;
     },
@@ -151,7 +157,13 @@ const uiSlice = createSlice({
     setProjectSearchQuery(state, action: PayloadAction<string>) {
       state.projectFilters.searchQuery = action.payload;
     },
-    setProjectSort(state, action: PayloadAction<{ sortBy: UIState["projectFilters"]["sortBy"]; sortOrder?: "asc" | "desc" }>) {
+    setProjectSort(
+      state,
+      action: PayloadAction<{
+        sortBy: UIState["projectFilters"]["sortBy"];
+        sortOrder?: "asc" | "desc";
+      }>,
+    ) {
       state.projectFilters.sortBy = action.payload.sortBy;
       if (action.payload.sortOrder) {
         state.projectFilters.sortOrder = action.payload.sortOrder;

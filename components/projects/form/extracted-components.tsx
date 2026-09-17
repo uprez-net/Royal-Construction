@@ -489,7 +489,12 @@ interface TagListControlProps {
 /* removes without entering edit mode. Text truncates on one line with a     */
 /* native title tooltip for the full value.                                  */
 
-function TagRow({ value, icon, onCommit, onRemove }: TagRowProps): React.JSX.Element {
+function TagRow({
+  value,
+  icon,
+  onCommit,
+  onRemove,
+}: TagRowProps): React.JSX.Element {
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<string>(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -666,7 +671,10 @@ function TagListControl({
         )}
 
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
-          <Plus className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Plus
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             value={draft}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -1035,7 +1043,10 @@ export function FieldErrorBoundaryShell({
           "bg-destructive-light/40 p-2 -m-2 ring-1 ring-destructive/60 ring-offset-0",
       )}
     >
-      <div aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined}>
+      <div
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+      >
         {children}
       </div>
       {error ? (

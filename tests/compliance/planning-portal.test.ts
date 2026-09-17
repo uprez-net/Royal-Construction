@@ -75,13 +75,12 @@ describe("planning authority domains", () => {
 describe("planning vocabulary", () => {
   it("recognises what these systems actually send", () => {
     assert.equal(
-      mentionsPlanningMatter("Request for Additional Information - DA-2026/0412"),
+      mentionsPlanningMatter(
+        "Request for Additional Information - DA-2026/0412",
+      ),
       true,
     );
-    assert.equal(
-      mentionsPlanningMatter("Notice of Determination", null),
-      true,
-    );
+    assert.equal(mentionsPlanningMatter("Notice of Determination", null), true);
     assert.equal(mentionsPlanningMatter("Case PAN-1234567 updated"), true);
   });
 
@@ -99,7 +98,10 @@ describe("planning vocabulary", () => {
 
   it("stays quiet on ordinary building correspondence", () => {
     assert.equal(mentionsPlanningMatter("Revised plans attached"), false);
-    assert.equal(mentionsPlanningMatter("Invoice 4471", "Payment terms"), false);
+    assert.equal(
+      mentionsPlanningMatter("Invoice 4471", "Payment terms"),
+      false,
+    );
     assert.equal(mentionsPlanningMatter("", ""), false);
     assert.equal(mentionsPlanningMatter(null, null), false);
   });

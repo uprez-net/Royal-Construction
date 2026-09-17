@@ -16,7 +16,12 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 import { certifierEngagementInclude } from "@/types/compliance";
 
-export type ProjectListSortBy = "name" | "progress" | "budget" | "startDate" | "spent";
+export type ProjectListSortBy =
+  | "name"
+  | "progress"
+  | "budget"
+  | "startDate"
+  | "spent";
 
 export type ProjectListQuery = {
   /**
@@ -88,7 +93,7 @@ const projectInclude = {
           name: true,
           trade: true,
         },
-      }
+      },
     },
   },
 } as const;
@@ -194,7 +199,9 @@ function normalizeSearch(search?: string) {
  * @param query - Optional project list query parameters.
  * @returns A Prisma `ProjectWhereInput` object, or `undefined` when no filters are applied.
  */
-function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput | undefined {
+function buildProjectWhere(
+  query?: ProjectListQuery,
+): Prisma.ProjectWhereInput | undefined {
   const search = normalizeSearch(query?.search);
 
   const filters: Prisma.ProjectWhereInput[] = [];
@@ -210,8 +217,16 @@ function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput |
       OR: [
         { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { customer: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
-        { siteManager: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
+        {
+          customer: {
+            name: { contains: search, mode: Prisma.QueryMode.insensitive },
+          },
+        },
+        {
+          siteManager: {
+            name: { contains: search, mode: Prisma.QueryMode.insensitive },
+          },
+        },
       ],
     });
   }
@@ -240,7 +255,10 @@ function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput |
  * @param sortOrder - Sort direction.
  * @returns Prisma orderBy configuration.
  */
-function buildProjectOrderBy(sortBy?: ProjectListSortBy, sortOrder: "asc" | "desc" = "asc"): Prisma.ProjectOrderByWithRelationInput[] {
+function buildProjectOrderBy(
+  sortBy?: ProjectListSortBy,
+  sortOrder: "asc" | "desc" = "asc",
+): Prisma.ProjectOrderByWithRelationInput[] {
   const direction = sortOrder === "asc" ? "asc" : "desc";
 
   switch (sortBy) {
@@ -271,11 +289,18 @@ function buildProjectOrderBy(sortBy?: ProjectListSortBy, sortOrder: "asc" | "des
  * @param query - Pagination, filtering and sorting options.
  * @returns A paginated collection of projects with computed statistics.
  */
-async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProjectsResult> {
-  const safePage = Number.isFinite(query?.page ?? 1) && (query?.page ?? 1) > 0 ? Math.floor(query?.page ?? 1) : 1;
-  const safeLimit = Number.isFinite(query?.limit ?? defaultPageSize) && (query?.limit ?? defaultPageSize) > 0
-    ? Math.min(Math.floor(query?.limit ?? defaultPageSize), 100)
-    : defaultPageSize;
+async function getProjectsPage(
+  query?: ProjectListQuery,
+): Promise<PaginatedProjectsResult> {
+  const safePage =
+    Number.isFinite(query?.page ?? 1) && (query?.page ?? 1) > 0
+      ? Math.floor(query?.page ?? 1)
+      : 1;
+  const safeLimit =
+    Number.isFinite(query?.limit ?? defaultPageSize) &&
+    (query?.limit ?? defaultPageSize) > 0
+      ? Math.min(Math.floor(query?.limit ?? defaultPageSize), 100)
+      : defaultPageSize;
   const where = buildProjectWhere(query);
   const orderBy = buildProjectOrderBy(query?.sortBy, query?.sortOrder);
 
@@ -292,15 +317,21 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
 
   const mapped = projects.map(({ variations, invoices, ...project }) => {
     const milestoneCount = project.milestones.length;
-    const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
-    const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+    const completedMilestoneCount = project.milestones.filter((milestone) =>
+      ["DONE", "NOT_REQUIRED"].includes(milestone.status),
+    ).length;
+    const progressPercent =
+      milestoneCount === 0
+        ? 0
+        : Math.round((completedMilestoneCount / milestoneCount) * 100);
     const approvedVariationSpend = variations
       .filter((variation) => variation.status === "APPROVED")
       .reduce((sum, variation) => sum + Number(variation.cost), 0);
 
     return {
       ...project,
-      requirements: project.requirements as unknown as ProjectRequirementsPayload,
+      requirements:
+        project.requirements as unknown as ProjectRequirementsPayload,
       milestones: project.milestones.map((milestone) => ({
         ...milestone,
         tradies: milestone.tradies.map((tradie) => ({
@@ -341,7 +372,9 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
  * @param query - Pagination, search, filtering and sorting options.
  * @returns Paginated project list.
  */
-export async function getProjects(query?: ProjectListQuery): Promise<PaginatedProjectsResult> {
+export async function getProjects(
+  query?: ProjectListQuery,
+): Promise<PaginatedProjectsResult> {
   try {
     return await getProjectsPage(query);
   } catch (error) {
@@ -367,20 +400,35 @@ export async function getProjects(query?: ProjectListQuery): Promise<PaginatedPr
  * @param query - Optional search query matching project name or location.
  * @returns Paginated lookup result.
  */
-export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedProjectLookupResult> {
+export async function getProjectsForLookup(
+  page = 1,
+  limit = defaultLookupPageSize,
+  query?: string,
+): Promise<PaginatedProjectLookupResult> {
   try {
     const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
+    const safeLimit =
+      Number.isFinite(limit) && limit > 0
+        ? Math.min(Math.floor(limit), 50)
+        : defaultLookupPageSize;
     const search = normalizeSearch(query);
 
-    const where: Prisma.ProjectWhereInput | undefined = search.length > 0
-      ? {
-        OR: [
-          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        ],
-      }
-      : undefined;
+    const where: Prisma.ProjectWhereInput | undefined =
+      search.length > 0
+        ? {
+            OR: [
+              {
+                name: { contains: search, mode: Prisma.QueryMode.insensitive },
+              },
+              {
+                location: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : undefined;
 
     const [items, totalCount] = await prisma.$transaction([
       prisma.project.findMany({
@@ -438,7 +486,9 @@ export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSi
  *
  * @throws Re-throws any unexpected database errors.
  */
-export async function getProjectById(projectId: string): Promise<ProjectDetail | null> {
+export async function getProjectById(
+  projectId: string,
+): Promise<ProjectDetail | null> {
   try {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -458,7 +508,8 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
         location: project.Lead.location,
         emails: project.Lead.emails,
       },
-      requirements: project.requirements as unknown as ProjectRequirementsPayload,
+      requirements:
+        project.requirements as unknown as ProjectRequirementsPayload,
       materials: project.materials.map((material) => ({
         ...material,
         unitCost: material.unitCost.toString(),
@@ -502,11 +553,13 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
           lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
           rating: schedule.tradie.rating?.toString(),
         },
-        milestone: schedule.milestone ? {
-          ...schedule.milestone,
-          budget: schedule.milestone.budget.toString(),
-          spend: schedule.milestone.spend?.toString(),
-        } : undefined,
+        milestone: schedule.milestone
+          ? {
+              ...schedule.milestone,
+              budget: schedule.milestone.budget.toString(),
+              spend: schedule.milestone.spend?.toString(),
+            }
+          : undefined,
       })),
     };
   } catch (error) {
@@ -537,15 +590,21 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
 
     const mapped = projects.map(({ variations, invoices, ...project }) => {
       const milestoneCount = project.milestones.length;
-      const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
-      const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+      const completedMilestoneCount = project.milestones.filter((milestone) =>
+        ["DONE", "NOT_REQUIRED"].includes(milestone.status),
+      ).length;
+      const progressPercent =
+        milestoneCount === 0
+          ? 0
+          : Math.round((completedMilestoneCount / milestoneCount) * 100);
       const approvedVariationSpend = variations
         .filter((variation) => variation.status === "APPROVED")
         .reduce((sum, variation) => sum + Number(variation.cost), 0);
 
-    return {
-      ...project,
-      requirements: project.requirements as unknown as ProjectRequirementsPayload,
+      return {
+        ...project,
+        requirements:
+          project.requirements as unknown as ProjectRequirementsPayload,
         milestones: project.milestones.map((milestone) => ({
           ...milestone,
           tradies: milestone.tradies.map((tradie) => ({

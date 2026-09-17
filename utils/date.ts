@@ -156,7 +156,9 @@ export function normalizeDateString(input: string): string | null {
  * Returns `null` when the input is empty/nullish so the caller can render a
  * prose placeholder rather than a monospace fact.
  */
-export function formatDisplayDate(value: string | null | undefined): string | null {
+export function formatDisplayDate(
+  value: string | null | undefined,
+): string | null {
   if (!value) return null;
 
   const normalized = normalizeDateString(value);
@@ -178,7 +180,11 @@ export function formatDisplayDate(value: string | null | undefined): string | nu
  * (on-site commencement) date.
  */
 export type SignedStartComparisonResult = {
-  readonly state: "ok" | "start_before_signed" | "signed_far_before_start" | "unparseable";
+  readonly state:
+    | "ok"
+    | "start_before_signed"
+    | "signed_far_before_start"
+    | "unparseable";
   readonly normalizedSignedDate: string | null;
   readonly normalizedStartDate: string | null;
 };
@@ -205,7 +211,9 @@ export function compareSignedAndStartDates(
   signedDate: string | null | undefined,
   startDate: string | null | undefined,
 ): SignedStartComparisonResult {
-  const normalizedSignedDate = signedDate ? normalizeDateString(signedDate) : null;
+  const normalizedSignedDate = signedDate
+    ? normalizeDateString(signedDate)
+    : null;
   const normalizedStartDate = startDate ? normalizeDateString(startDate) : null;
 
   if (!normalizedSignedDate || !normalizedStartDate) {

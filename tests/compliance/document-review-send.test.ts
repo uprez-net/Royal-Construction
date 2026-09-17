@@ -21,7 +21,14 @@ const documentWith = (url?: string) =>
     documentType: ComplianceDocumentType.CHECKLIST_ITEM,
     status: ComplianceDocumentStatus.UPLOADED,
     files: url
-      ? [{ id: "file", url, filename: "report.pdf", fileType: "application/pdf" }]
+      ? [
+          {
+            id: "file",
+            url,
+            filename: "report.pdf",
+            fileType: "application/pdf",
+          },
+        ]
       : [],
   }) as unknown as ComplianceDocumentWithFiles;
 

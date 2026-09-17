@@ -40,7 +40,11 @@ export async function syncLeadStageForOffer(
   try {
     const offer = await prisma.offer.findUnique({
       where: { id: offerId },
-      select: { offerStatus: true, leadId: true, lead: { select: { stage: true, wonAt: true } } },
+      select: {
+        offerStatus: true,
+        leadId: true,
+        lead: { select: { stage: true, wonAt: true } },
+      },
     });
     if (!offer) return;
 
@@ -76,6 +80,9 @@ function expireOffersList(offerId: string): void {
   try {
     revalidateTag("offers", { expire: 0 });
   } catch (error) {
-    console.error(`[Offer ${offerId}] Failed to expire the offers list cache`, error);
+    console.error(
+      `[Offer ${offerId}] Failed to expire the offers list cache`,
+      error,
+    );
   }
 }

@@ -54,7 +54,9 @@ export function TeamTab({ project }: TeamTabProps) {
                         {managerPhone}
                       </a>
                     ) : (
-                      <span className="text-muted-foreground">Not recorded</span>
+                      <span className="text-muted-foreground">
+                        Not recorded
+                      </span>
                     )}
                   </dd>
                 </div>
@@ -72,7 +74,9 @@ export function TeamTab({ project }: TeamTabProps) {
                         {managerEmail}
                       </a>
                     ) : (
-                      <span className="text-muted-foreground">Not recorded</span>
+                      <span className="text-muted-foreground">
+                        Not recorded
+                      </span>
                     )}
                   </dd>
                 </div>
@@ -117,7 +121,10 @@ export function TeamTab({ project }: TeamTabProps) {
       <Card className="border border-dashed border-border/70 shadow-sm ring-0">
         <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-            <Users aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
+            <Users
+              aria-hidden="true"
+              className="h-6 w-6 text-muted-foreground"
+            />
           </div>
 
           <div className="space-y-1">

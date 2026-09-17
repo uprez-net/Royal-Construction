@@ -5,7 +5,9 @@ import { AppShellLoader } from "@/components/common/app-shell-loader";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 
 async function LayoutContent({ children }: { children: React.ReactNode }) {
-  const user = await auth().then(async ({ userId }) => userId ? await getUserByClerkIdCached(userId) : null);
+  const user = await auth().then(async ({ userId }) =>
+    userId ? await getUserByClerkIdCached(userId) : null,
+  );
 
   return (
     <AppShell

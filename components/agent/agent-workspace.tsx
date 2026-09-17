@@ -247,7 +247,11 @@ export function AgentWorkspace({
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
     } catch (error) {
-      setSendError(error instanceof Error ? error.message : "The message could not be sent.");
+      setSendError(
+        error instanceof Error
+          ? error.message
+          : "The message could not be sent.",
+      );
     }
   }
 
@@ -423,7 +427,10 @@ export function AgentWorkspace({
                             `/api/agent/sessions/${session.eveSessionId}/archive`,
                             { method: "POST" },
                           );
-                          if (!response.ok) throw new Error("The conversation could not be archived.");
+                          if (!response.ok)
+                            throw new Error(
+                              "The conversation could not be archived.",
+                            );
                           setSessions((items) =>
                             items.filter(
                               (item) =>
@@ -431,7 +438,11 @@ export function AgentWorkspace({
                             ),
                           );
                         } catch (error) {
-                          setArchiveError(error instanceof Error ? error.message : "The conversation could not be archived.");
+                          setArchiveError(
+                            error instanceof Error
+                              ? error.message
+                              : "The conversation could not be archived.",
+                          );
                         }
                       }}
                       size="icon-sm"
@@ -608,7 +619,9 @@ export function AgentWorkspace({
               ) : null}
               {archiveError ? (
                 <Alert variant="destructive">
-                  <AlertTitle>The conversation could not be archived</AlertTitle>
+                  <AlertTitle>
+                    The conversation could not be archived
+                  </AlertTitle>
                   <AlertDescription>{archiveError}</AlertDescription>
                 </Alert>
               ) : null}
@@ -665,10 +678,10 @@ export function AgentWorkspace({
             <InputGroup className="rounded-xl bg-muted/20 shadow-xs">
               <InputGroupTextarea
                 aria-label="Message the operations agent"
-                 className={cn(
-                   "min-h-20 max-h-40 px-3",
-                   annotations.length > 0 ? "pt-12" : "pt-3",
-                 )}
+                className={cn(
+                  "min-h-20 max-h-40 px-3",
+                  annotations.length > 0 ? "pt-12" : "pt-3",
+                )}
                 disabled={agent.status === "resuming"}
                 onChange={(event) => setComposer(event.target.value)}
                 onKeyDown={(event) => {

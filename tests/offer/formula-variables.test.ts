@@ -48,40 +48,22 @@ function formulaFor(taskName: string): string {
 }
 
 // ─── SLAB: Total slab cost − Total Drop edge beam cost ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Slab"), scope),
-  31500,
-);
+assert.equal(evaluateCostFormula(formulaFor("Slab"), scope), 31500);
 
 // ─── DROP EDGE BEAM: Total Drop edge beam cost ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Drop edge beam"), scope),
-  900,
-);
+assert.equal(evaluateCostFormula(formulaFor("Drop edge beam"), scope), 900);
 
 // ─── FRAME: Total GF Frame cost + Total FF Frame cost ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Frame"), scope),
-  32752.5,
-);
+assert.equal(evaluateCostFormula(formulaFor("Frame"), scope), 32752.5);
 
 // ─── STEEL: pass-through ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Steel"), scope),
-  10000,
-);
+assert.equal(evaluateCostFormula(formulaFor("Steel"), scope), 10000);
 
 // ─── INSTALLER: pass-through ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Installer"), scope),
-  15000,
-);
+assert.equal(evaluateCostFormula(formulaFor("Installer"), scope), 15000);
 
 // ─── EAVES: pass-through ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Eaves"), scope),
-  5000,
-);
+assert.equal(evaluateCostFormula(formulaFor("Eaves"), scope), 5000);
 
 // ─── BRICK LAYER MATERIAL WITH BARS: (sand + cement + tie) × 1.3 ───
 assert.equal(
@@ -96,10 +78,7 @@ assert.equal(
 );
 
 // ─── BRICK LAYER: Total bricks × BRICK_LAYING_PRICE_PER_BRICK ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Brick layer"), scope),
-  15500 * 50,
-);
+assert.equal(evaluateCostFormula(formulaFor("Brick layer"), scope), 15500 * 50);
 
 // ─── TILES: Total tiles × TILE_PRICE_PER_TILE ───
 assert.equal(
@@ -168,7 +147,8 @@ test("withDefaultRateConstants fills every rate constant, and an override wins",
   }
 
   assert.equal(
-    withDefaultRateConstants({ KITCHEN_COST_PER_SQM: 900 }).KITCHEN_COST_PER_SQM,
+    withDefaultRateConstants({ KITCHEN_COST_PER_SQM: 900 })
+      .KITCHEN_COST_PER_SQM,
     900,
   );
 });

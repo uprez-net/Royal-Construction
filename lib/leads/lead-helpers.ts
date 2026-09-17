@@ -56,7 +56,17 @@ export const LEAD_SOURCE_OPTIONS: LeadSource[] = [
  * apart from Converted and Lost.
  */
 export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
-  { label: "Active", stages: ["New", "Contacted", "Discovery", "Qualified", "Quoted", "Negotiating"] },
+  {
+    label: "Active",
+    stages: [
+      "New",
+      "Contacted",
+      "Discovery",
+      "Qualified",
+      "Quoted",
+      "Negotiating",
+    ],
+  },
   { label: "Won", stages: ["Converted"] },
   // No Response has its own group because it does not behave like the two
   // below it. Its outcome is STALLED, not LOST: it counts in nothing, and
@@ -70,7 +80,9 @@ export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
 ];
 
 /** Flat order, for the filter chips and anything that wants one list. */
-export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap((g) => g.stages);
+export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap(
+  (g) => g.stages,
+);
 
 export const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
   "system",
@@ -213,11 +225,24 @@ export interface LeadDetailFormData {
 /* ── Formatting ───────────────────────────────────────── */
 
 const MONTHS_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
-export function formatFollowup(date: string | null, time?: string | null): string {
+export function formatFollowup(
+  date: string | null,
+  time?: string | null,
+): string {
   if (!date) return "";
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return "";
@@ -237,9 +262,9 @@ export function formatLeadTaskDue(
   return dueTime ? `${label} · ${dueTime}` : label;
 }
 
-export function sortLeadOpenTasks<T extends { id: number; dueDate: string | null; dueTime: string | null }>(
-  tasks: T[],
-): T[] {
+export function sortLeadOpenTasks<
+  T extends { id: number; dueDate: string | null; dueTime: string | null },
+>(tasks: T[]): T[] {
   return [...tasks].sort((a, b) => {
     if (a.dueDate === b.dueDate) {
       return (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.id - b.id;
@@ -285,7 +310,8 @@ export function hydrateVariable(text: string, lead: Lead): string {
   const followup = lead.followupDate
     ? formatFollowup(lead.followupDate, lead.followupTime)
     : "next step";
-  const source = lead.sourceDetail || lead.source || "Royal Constructions enquiry";
+  const source =
+    lead.sourceDetail || lead.source || "Royal Constructions enquiry";
   const location = lead.location || "NSW";
 
   const values: Record<string, string> = {
@@ -367,7 +393,8 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     estimatedValue: lead.estimatedValue ?? "",
     estimatedValueSource: lead.estimatedValueSource ?? null,
     probabilityOverride:
-      lead.probabilityOverride === null || lead.probabilityOverride === undefined
+      lead.probabilityOverride === null ||
+      lead.probabilityOverride === undefined
         ? ""
         : String(lead.probabilityOverride),
     // <input type="date"> wants YYYY-MM-DD, not a full ISO timestamp.
@@ -422,8 +449,7 @@ export function shouldSetFollowupStage(
   formData: LeadDetailFormData,
 ): boolean {
   const isNewlyMovingToFollowup =
-    originalLead.stage !== formData.stage &&
-    formData.stage === "In Follow-up";
+    originalLead.stage !== formData.stage && formData.stage === "In Follow-up";
 
   const isReschedulingFollowup =
     (formData.followupDate !== originalLead.followupDate ||
@@ -431,12 +457,15 @@ export function shouldSetFollowupStage(
     formData.stage === "In Follow-up" &&
     originalLead.stage === "In Follow-up";
 
-const isFollowupDateTimeAdded =
-    !!((!originalLead.followupDate || !originalLead.followupTime) &&
+  const isFollowupDateTimeAdded = !!(
+    (!originalLead.followupDate || !originalLead.followupTime) &&
     formData.followupDate &&
-    formData.followupTime);
+    formData.followupTime
+  );
 
-  return isNewlyMovingToFollowup || isReschedulingFollowup || isFollowupDateTimeAdded;
+  return (
+    isNewlyMovingToFollowup || isReschedulingFollowup || isFollowupDateTimeAdded
+  );
 }
 
 export function buildFollowupHistoryEntry(
@@ -463,7 +492,11 @@ export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
   };
 }
 
-export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime: string, note?: string): HistoryItem {
+export function buildFollowupRescheduledHistoryEntry(
+  nextDate: string,
+  nextTime: string,
+  note?: string,
+): HistoryItem {
   return {
     action: "Follow-up rescheduled",
     detail: `Follow-up moved to ${nextDate} ${nextTime}${note ? ` \nNOTE: (${note})` : ""}`,
@@ -473,7 +506,9 @@ export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime:
   };
 }
 
-export function buildFollowupNotRequiredHistoryEntry(note?: string): HistoryItem {
+export function buildFollowupNotRequiredHistoryEntry(
+  note?: string,
+): HistoryItem {
   const now = new Date();
   return {
     action: "Follow-up not required",
@@ -495,7 +530,9 @@ export function buildFollowupCompletedHistoryEntry(note?: string): HistoryItem {
   };
 }
 
-export function buildMeetingDidNotTakePlaceHistoryEntry(reason?: string): HistoryItem {
+export function buildMeetingDidNotTakePlaceHistoryEntry(
+  reason?: string,
+): HistoryItem {
   const now = new Date();
   return {
     action: "Meeting did not take place",
@@ -568,7 +605,9 @@ export function isQuotingStage(stage: LeadStage): boolean {
  */
 const KPI_COHORT_METRICS = ["total", "converted", "pendingFollowup", "lost"];
 
-export function isKpiCohortMetric(activeMetric: string | null | undefined): boolean {
+export function isKpiCohortMetric(
+  activeMetric: string | null | undefined,
+): boolean {
   if (!activeMetric) return false;
   return KPI_COHORT_METRICS.some((metric) => activeMetric.includes(metric));
 }

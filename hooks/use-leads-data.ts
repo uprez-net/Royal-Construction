@@ -246,9 +246,9 @@ export function useLeadsData() {
         prev.map((lead) =>
           lead.id === leadId
             ? {
-              ...lead,
-              emails: [newEmail, ...lead.emails]
-            }
+                ...lead,
+                emails: [newEmail, ...lead.emails],
+              }
             : lead,
         ),
       );

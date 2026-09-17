@@ -69,7 +69,10 @@ const BASE_SNAPSHOT: OfferWorkspaceSnapshot = {
 
 test("an offer saved before the pin existed parses as legacy, not as current", () => {
   // Exactly the shape of the 14 rows already in production: no calcVersion key.
-  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<string, unknown>;
+  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<
+    string,
+    unknown
+  >;
   delete persisted.calcVersion;
 
   const restored = deserializeWorkspace(parseWorkspaceState(persisted));
@@ -93,7 +96,10 @@ test("an unrecognised version survives intact and is refused, not downgraded", (
   // A row written by a future build, opened by this one. Reading it as v1 would
   // have repriced it under rules it was never quoted on, so the version is kept
   // exactly as stored and rejected at the point of calculation instead.
-  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<string, unknown>;
+  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<
+    string,
+    unknown
+  >;
   persisted.calcVersion = 99;
 
   const restored = deserializeWorkspace(parseWorkspaceState(persisted));

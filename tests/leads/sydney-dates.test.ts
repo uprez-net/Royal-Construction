@@ -33,8 +33,14 @@ test("a Sydney day does not start at UTC midnight", () => {
 test("the offset follows daylight saving", () => {
   // AEST is +10, AEDT is +11. A hardcoded offset is wrong for a third of the
   // year, which is why these go through the zone rather than arithmetic.
-  assert.equal(sydneyStartOfDay("2026-08-21").toISOString(), "2026-08-20T14:00:00.000Z");
-  assert.equal(sydneyStartOfDay("2026-12-01").toISOString(), "2026-11-30T13:00:00.000Z");
+  assert.equal(
+    sydneyStartOfDay("2026-08-21").toISOString(),
+    "2026-08-20T14:00:00.000Z",
+  );
+  assert.equal(
+    sydneyStartOfDay("2026-12-01").toISOString(),
+    "2026-11-30T13:00:00.000Z",
+  );
 });
 
 test("a Sydney day ends just before the next one begins", () => {
@@ -60,7 +66,11 @@ test("a task due today reads as today all day long", () => {
   // The comparison both crons and the panel make. It has to hold at 1am and at
   // 11pm Sydney, which is 15:00Z the previous day and 13:00Z the same day.
   const due = sydneyMidnightIn(0, new Date("2026-08-21T06:00:00.000Z"));
-  for (const at of ["2026-08-20T15:00:00.000Z", "2026-08-21T02:00:00.000Z", "2026-08-21T12:59:00.000Z"]) {
+  for (const at of [
+    "2026-08-20T15:00:00.000Z",
+    "2026-08-21T02:00:00.000Z",
+    "2026-08-21T12:59:00.000Z",
+  ]) {
     assert.equal(sydneyDateOnly(due), sydneyDateOnly(new Date(at)), at);
   }
 });

@@ -193,7 +193,10 @@ test("every file carries the whole route, approval branch included", () => {
 test("a file with no development application has the branch dormant", () => {
   // Drawn and not live. The reader can see there is a road to development
   // approval; nothing about this job says it is on it.
-  const da = stage(complianceStageFlow(engagement(), MONDAY), "DEVELOPMENT_APPLICATION");
+  const da = stage(
+    complianceStageFlow(engagement(), MONDAY),
+    "DEVELOPMENT_APPLICATION",
+  );
 
   assert.equal(da.isActive, false);
   assert.equal(da.state, "upcoming");
@@ -642,7 +645,12 @@ test("a resubmitted DA counts from the latest round", () => {
         application(ComplianceExternalApplicationKind.DEVELOPMENT_APPLICATION, {
           appliedAt: sydney("2026-01-05T09:00:00"),
           submissions: [
-            { id: "round-2", round: 2, submittedAt: MONDAY, applicationRef: null },
+            {
+              id: "round-2",
+              round: 2,
+              submittedAt: MONDAY,
+              applicationRef: null,
+            },
             {
               id: "round-1",
               round: 1,
@@ -737,9 +745,7 @@ test("an open alert reddens its own stage and no other", () => {
   const stages = complianceStageFlow(
     engagement({
       outreaches: [outreach(CompliancePartyType.SURVEYOR)] as never,
-      alerts: [
-        alert(ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE),
-      ] as never,
+      alerts: [alert(ComplianceAlertType.SURVEYOR_RESPONSE_OVERDUE)] as never,
     }),
     TWELVE_WORKING_DAYS_LATER,
   );

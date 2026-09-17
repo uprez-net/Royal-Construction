@@ -41,7 +41,13 @@ test("every declined status and REJECTED are rejected, never approved", () => {
   );
   assert.ok(declined.length >= 4);
   for (const status of declined) {
-    assert.ok(OFFER_STATUS_BUCKETS.rejected.includes(status), `${status} not rejected`);
-    assert.ok(!OFFER_STATUS_BUCKETS.approved.includes(status), `${status} approved`);
+    assert.ok(
+      OFFER_STATUS_BUCKETS.rejected.includes(status),
+      `${status} not rejected`,
+    );
+    assert.ok(
+      !OFFER_STATUS_BUCKETS.approved.includes(status),
+      `${status} approved`,
+    );
   }
 });

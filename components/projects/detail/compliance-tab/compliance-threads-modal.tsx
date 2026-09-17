@@ -153,8 +153,7 @@ export function ComplianceThreadsModal({
       // tabs that moves under the reader.
       .slice()
       .sort(
-        (a, b) =>
-          PARTY_ORDER.indexOf(a.party) - PARTY_ORDER.indexOf(b.party),
+        (a, b) => PARTY_ORDER.indexOf(a.party) - PARTY_ORDER.indexOf(b.party),
       )
       .map((outreach) => ({
         key: outreach.id,
@@ -209,7 +208,9 @@ export function ComplianceThreadsModal({
       maxWidthClass="max-w-[820px]"
       isFullScreenable
       isFullScreen={isFullScreen}
-      onToggleFullScreen={(minimize) => setIsFullScreen(minimize ? false : true)}
+      onToggleFullScreen={(minimize) =>
+        setIsFullScreen(minimize ? false : true)
+      }
     >
       <div
         role="tablist"

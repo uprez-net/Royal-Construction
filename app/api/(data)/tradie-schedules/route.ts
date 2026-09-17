@@ -1,4 +1,7 @@
-import { getCachedTradieCoordinationDashboard, getCachedTradies } from "@/lib/data/tradies";
+import {
+  getCachedTradieCoordinationDashboard,
+  getCachedTradies,
+} from "@/lib/data/tradies";
 import { createTradieSchedule } from "@/lib/data/tradieSchedules";
 import {
   createTradieScheduleSchema,
@@ -24,7 +27,10 @@ export async function GET(request: Request) {
   const mode = url.searchParams.get("mode");
 
   if (mode === "coordination") {
-    const params = parseSearchParamsWithResponse(url, tradieCoordinationListQuerySchema);
+    const params = parseSearchParamsWithResponse(
+      url,
+      tradieCoordinationListQuerySchema,
+    );
     if (!params.success) return params.response;
 
     const payload = await getCachedTradieCoordinationDashboard(params.data);

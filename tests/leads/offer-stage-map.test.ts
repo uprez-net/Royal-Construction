@@ -10,31 +10,56 @@ import { stageDef } from "../../lib/leads/pipeline-stages";
 const NOW = new Date("2026-08-19T00:00:00.000Z");
 
 const ALL_STATUSES = [
-  "PENDING", "SENT", "ACCEPTED", "REJECTED", "OFFER_SENT", "OFFER_SIGNED",
-  "OFFER_DECLINED", "AGREED", "TENDER_DRAFT", "TENDER_SENT", "TENDER_SIGNED",
-  "TENDER_DECLINED", "CONTRACT_DRAFT", "CONTRACT_SENT", "CONTRACT_SIGNED",
-  "CONTRACT_DECLINED", "PROJECT", "SUPERSEDED",
+  "PENDING",
+  "SENT",
+  "ACCEPTED",
+  "REJECTED",
+  "OFFER_SENT",
+  "OFFER_SIGNED",
+  "OFFER_DECLINED",
+  "AGREED",
+  "TENDER_DRAFT",
+  "TENDER_SENT",
+  "TENDER_SIGNED",
+  "TENDER_DECLINED",
+  "CONTRACT_DRAFT",
+  "CONTRACT_SENT",
+  "CONTRACT_SIGNED",
+  "CONTRACT_DECLINED",
+  "PROJECT",
+  "SUPERSEDED",
 ] as const;
 
 test("every OfferStatus has a mapping", () => {
   for (const s of ALL_STATUSES) {
     assert.ok(s in OFFER_STATUS_LEAD_STAGE, `missing mapping for ${s}`);
   }
-  assert.equal(Object.keys(OFFER_STATUS_LEAD_STAGE).length, ALL_STATUSES.length);
+  assert.equal(
+    Object.keys(OFFER_STATUS_LEAD_STAGE).length,
+    ALL_STATUSES.length,
+  );
 });
 
 test("signing the contract wins the deal and stamps wonAt", () => {
   // CONVERTED, not WON: it is the same outcome, and the only one of the two
   // the stage picker offers. Writing WON would leave a badge on the lead that
   // an operator can neither reproduce nor undo.
-  const patch = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "NEGOTIATING", NOW, null);
+  const patch = leadStagePatchForOfferStatus(
+    "CONTRACT_SIGNED",
+    "NEGOTIATING",
+    NOW,
+    null,
+  );
   assert.deepEqual(patch, { stage: "CONVERTED", wonAt: NOW, lostAt: null });
 });
 
 test("starting the project keeps it won without re-dating the win", () => {
   // Already won from CONTRACT_SIGNED; PROJECT must not re-stamp.
   const won = new Date("2026-01-01T00:00:00.000Z");
-  assert.equal(leadStagePatchForOfferStatus("PROJECT", "CONVERTED", NOW, won), null);
+  assert.equal(
+    leadStagePatchForOfferStatus("PROJECT", "CONVERTED", NOW, won),
+    null,
+  );
 });
 
 test("a lead already won under the other name is left where it is", () => {
@@ -48,7 +73,13 @@ test("a lead already won under the other name is left where it is", () => {
 });
 
 test("a won deal is never reopened by a late or replayed earlier event", () => {
-  for (const s of ["CONTRACT_SENT", "TENDER_SENT", "AGREED", "SENT", "PENDING"] as const) {
+  for (const s of [
+    "CONTRACT_SENT",
+    "TENDER_SENT",
+    "AGREED",
+    "SENT",
+    "PENDING",
+  ] as const) {
     assert.equal(
       leadStagePatchForOfferStatus(s, "WON", NOW, NOW),
       null,
@@ -62,8 +93,16 @@ test("no offer status can mark a lead lost", () => {
   for (const s of ALL_STATUSES) {
     const patch = leadStagePatchForOfferStatus(s, "NEGOTIATING", NOW, null);
     assert.notEqual(patch?.stage, "LOST", `${s} must not map to LOST`);
-    assert.notEqual(patch?.stage, "CANCELLED", `${s} must not map to CANCELLED`);
-    assert.notEqual(patch?.stage, "DISQUALIFIED", `${s} must not map to DISQUALIFIED`);
+    assert.notEqual(
+      patch?.stage,
+      "CANCELLED",
+      `${s} must not map to CANCELLED`,
+    );
+    assert.notEqual(
+      patch?.stage,
+      "DISQUALIFIED",
+      `${s} must not map to DISQUALIFIED`,
+    );
   }
 });
 
@@ -101,16 +140,27 @@ test("declines keep the deal open rather than closing it", () => {
 test("a superseded offer says nothing about the lead", () => {
   assert.equal(OFFER_STATUS_LEAD_STAGE.SUPERSEDED, null);
   for (const stage of ["NEW", "NEGOTIATING", "WON"] as const) {
-    assert.equal(leadStagePatchForOfferStatus("SUPERSEDED", stage, NOW, null), null);
+    assert.equal(
+      leadStagePatchForOfferStatus("SUPERSEDED", stage, NOW, null),
+      null,
+    );
   }
 });
 
 test("applying the same status twice is a no-op", () => {
   // This is what makes a replayed DocuSign webhook safe without a dedupe table.
-  const first = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "NEGOTIATING", NOW, null);
+  const first = leadStagePatchForOfferStatus(
+    "CONTRACT_SIGNED",
+    "NEGOTIATING",
+    NOW,
+    null,
+  );
   assert.ok(first);
   const second = leadStagePatchForOfferStatus(
-    "CONTRACT_SIGNED", first.stage, NOW, first.wonAt ?? null,
+    "CONTRACT_SIGNED",
+    first.stage,
+    NOW,
+    first.wonAt ?? null,
   );
   assert.equal(second, null);
 });
@@ -123,14 +173,24 @@ test("an early-stage offer moves a cold lead to Quoted", () => {
 });
 
 test("a null current stage is tolerated", () => {
-  const patch = leadStagePatchForOfferStatus("CONTRACT_SIGNED", null, NOW, null);
+  const patch = leadStagePatchForOfferStatus(
+    "CONTRACT_SIGNED",
+    null,
+    NOW,
+    null,
+  );
   assert.equal(patch?.stage, "CONVERTED");
 });
 
 test("a legacy converted lead with no wonAt gets one when its contract signs", () => {
   // CONVERTED pre-dates the wonAt column. The stage does not move, so
   // closeDatePatch stamps nothing, and the lead stays invisible to win rate.
-  const patch = leadStagePatchForOfferStatus("CONTRACT_SIGNED", "CONVERTED", NOW, null);
+  const patch = leadStagePatchForOfferStatus(
+    "CONTRACT_SIGNED",
+    "CONVERTED",
+    NOW,
+    null,
+  );
   assert.equal(patch?.stage, "CONVERTED");
   assert.equal(patch?.wonAt?.toISOString(), NOW.toISOString());
 });
@@ -147,10 +207,20 @@ test("an existing wonAt is never re-dated", () => {
 test("no won stage is ever produced without a wonAt", () => {
   // The invariant the whole forecast rests on.
   for (const s of ALL_STATUSES) {
-    for (const from of ["NEW", "NEGOTIATING", "QUOTED", "CONVERTED", "WON", null] as const) {
+    for (const from of [
+      "NEW",
+      "NEGOTIATING",
+      "QUOTED",
+      "CONVERTED",
+      "WON",
+      null,
+    ] as const) {
       const patch = leadStagePatchForOfferStatus(s, from, NOW, null);
       if (patch && (patch.stage === "WON" || patch.stage === "CONVERTED")) {
-        assert.ok(patch.wonAt, `${from} -> ${s} produced a won stage with no wonAt`);
+        assert.ok(
+          patch.wonAt,
+          `${from} -> ${s} produced a won stage with no wonAt`,
+        );
       }
     }
   }
@@ -162,9 +232,18 @@ test("the map never sends a later status to a lower stage", () => {
   // The invariant the whole split rests on. While everything mapped to
   // NEGOTIATING this held by accident; now it has to be checked.
   const SEQUENCE = [
-    "PENDING", "SENT", "OFFER_SENT", "OFFER_SIGNED", "AGREED",
-    "TENDER_DRAFT", "TENDER_SENT", "TENDER_SIGNED",
-    "CONTRACT_DRAFT", "CONTRACT_SENT", "CONTRACT_SIGNED", "PROJECT",
+    "PENDING",
+    "SENT",
+    "OFFER_SENT",
+    "OFFER_SIGNED",
+    "AGREED",
+    "TENDER_DRAFT",
+    "TENDER_SENT",
+    "TENDER_SIGNED",
+    "CONTRACT_DRAFT",
+    "CONTRACT_SENT",
+    "CONTRACT_SIGNED",
+    "PROJECT",
   ] as const;
 
   let floor = 0;
@@ -172,7 +251,10 @@ test("the map never sends a later status to a lower stage", () => {
     const stage = OFFER_STATUS_LEAD_STAGE[status];
     assert.ok(stage, `${status} should map somewhere`);
     const p = stageDef(stage!).probability;
-    assert.ok(p >= floor, `${status} -> ${stage} (${p}%) drops below ${floor}%`);
+    assert.ok(
+      p >= floor,
+      `${status} -> ${stage} (${p}%) drops below ${floor}%`,
+    );
     floor = p;
   }
 });
@@ -189,26 +271,46 @@ test("a decline never outranks the paperwork it came from", () => {
   ] as const) {
     const livePct = stageDef(OFFER_STATUS_LEAD_STAGE[live]!).probability;
     const deadPct = stageDef(OFFER_STATUS_LEAD_STAGE[declined]!).probability;
-    assert.ok(deadPct <= livePct, `${declined} (${deadPct}%) outranks ${live} (${livePct}%)`);
+    assert.ok(
+      deadPct <= livePct,
+      `${declined} (${deadPct}%) outranks ${live} (${livePct}%)`,
+    );
   }
 });
 
 test("an offer reset to PENDING does not demote a lead in negotiation", () => {
   // offer-workspace allows OFFER_DECLINED -> PENDING, so this is a real path,
   // not a hypothetical. Without the guard the lead drops 70% to 40%.
-  assert.equal(leadStagePatchForOfferStatus("PENDING", "NEGOTIATING", NOW, null), null);
-  assert.equal(leadStagePatchForOfferStatus("SENT", "NEGOTIATING", NOW, null), null);
+  assert.equal(
+    leadStagePatchForOfferStatus("PENDING", "NEGOTIATING", NOW, null),
+    null,
+  );
+  assert.equal(
+    leadStagePatchForOfferStatus("SENT", "NEGOTIATING", NOW, null),
+    null,
+  );
 });
 
 test("a revise cycle does not bounce the stage", () => {
   // OFFER_SENT -> declined -> revised SENT -> declined again. Levelling the
   // decline with the status it follows makes the whole loop a no-op after the
   // first move, so the stage and the forecast sit still through every revision.
-  const sent = leadStagePatchForOfferStatus("OFFER_SENT", "CONTACTED", NOW, null);
+  const sent = leadStagePatchForOfferStatus(
+    "OFFER_SENT",
+    "CONTACTED",
+    NOW,
+    null,
+  );
   assert.equal(sent?.stage, "QUOTED");
-  assert.equal(leadStagePatchForOfferStatus("OFFER_DECLINED", "QUOTED", NOW, null), null);
+  assert.equal(
+    leadStagePatchForOfferStatus("OFFER_DECLINED", "QUOTED", NOW, null),
+    null,
+  );
   assert.equal(leadStagePatchForOfferStatus("SENT", "QUOTED", NOW, null), null);
-  assert.equal(leadStagePatchForOfferStatus("OFFER_DECLINED", "QUOTED", NOW, null), null);
+  assert.equal(
+    leadStagePatchForOfferStatus("OFFER_DECLINED", "QUOTED", NOW, null),
+    null,
+  );
 });
 
 test("a stalled lead can still re-enter the pipeline", () => {
@@ -219,8 +321,14 @@ test("a stalled lead can still re-enter the pipeline", () => {
 });
 
 test("an early lead is advanced by offer activity", () => {
-  assert.equal(leadStagePatchForOfferStatus("PENDING", "NEW", NOW, null)?.stage, "QUALIFIED");
-  assert.equal(leadStagePatchForOfferStatus("SENT", "CONTACTED", NOW, null)?.stage, "QUOTED");
+  assert.equal(
+    leadStagePatchForOfferStatus("PENDING", "NEW", NOW, null)?.stage,
+    "QUALIFIED",
+  );
+  assert.equal(
+    leadStagePatchForOfferStatus("SENT", "CONTACTED", NOW, null)?.stage,
+    "QUOTED",
+  );
   assert.equal(
     leadStagePatchForOfferStatus("CONTRACT_SENT", "QUOTED", NOW, null)?.stage,
     "NEGOTIATING",

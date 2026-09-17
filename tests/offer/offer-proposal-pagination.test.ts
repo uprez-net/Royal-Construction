@@ -23,7 +23,10 @@ import {
   type OfferOwner,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
@@ -134,7 +137,10 @@ test("the max-signer proposal emits a page element per declared page (PR #124)",
   // Signatures are paginated onto their own page(s), and no owner is dropped.
   assert.match(html, /Acceptance &amp; signatures/);
   for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
-    assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the proposal`);
+    assert.ok(
+      html.includes(`Owner ${i}`),
+      `owner ${i} missing from the proposal`,
+    );
   }
 });
 
@@ -158,7 +164,10 @@ test("the React print path also foots its true page count at max signers (PR #12
 
   assert.match(html, /Acceptance &amp; signatures/);
   for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
-    assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the print view`);
+    assert.ok(
+      html.includes(`Owner ${i}`),
+      `owner ${i} missing from the print view`,
+    );
   }
 });
 

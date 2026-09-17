@@ -77,9 +77,7 @@ export function TradieBody() {
 
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">
-          {filtersActive
-            ? "No tradies match these filters"
-            : "No tradies yet"}
+          {filtersActive ? "No tradies match these filters" : "No tradies yet"}
         </p>
 
         <p className="text-xs text-muted-foreground">

@@ -21,7 +21,10 @@ import type { XeroContext } from "./client";
  */
 export async function resolveXeroContactId(
   context: XeroContext,
-  customer: Pick<Customer, "id" | "name" | "email" | "phone" | "address" | "xeroContactId">,
+  customer: Pick<
+    Customer,
+    "id" | "name" | "email" | "phone" | "address" | "xeroContactId"
+  >,
 ): Promise<string> {
   if (customer.xeroContactId) {
     return customer.xeroContactId;
@@ -69,10 +72,21 @@ async function createContact(
         name: customer.name,
         emailAddress: customer.email,
         ...(customer.phone
-          ? { phones: [{ phoneType: "DEFAULT" as never, phoneNumber: customer.phone }] }
+          ? {
+              phones: [
+                { phoneType: "DEFAULT" as never, phoneNumber: customer.phone },
+              ],
+            }
           : {}),
         ...(customer.address
-          ? { addresses: [{ addressType: "STREET" as never, addressLine1: customer.address }] }
+          ? {
+              addresses: [
+                {
+                  addressType: "STREET" as never,
+                  addressLine1: customer.address,
+                },
+              ],
+            }
           : {}),
       },
     ],

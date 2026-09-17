@@ -1,27 +1,26 @@
 import { LOGO_EMAIL, RC_COLORS, RC_URLS } from "@/lib/graph/Email/email-theme";
 import { TradieScheduleListItem } from "@/types/project";
 
-
 export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
-    subject: string;
-    html: string;
+  subject: string;
+  html: string;
 } {
-    const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
-        "en-AU",
-        {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-        }
-    );
+  const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
+    "en-AU",
+    {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    },
+  );
 
-    const subject = input.requiresQuote
-        ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
-        : `Availability Confirmation Required – ${input.projectName}`;
+  const subject = input.requiresQuote
+    ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
+    : `Availability Confirmation Required – ${input.projectName}`;
 
-    const intro = input.requiresQuote
-        ? `
+  const intro = input.requiresQuote
+    ? `
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
         Dear ${input.tradieName},
       </p>
@@ -37,7 +36,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
         specifications and milestone information, will be attached to this email for your review.
       </p>
     `
-        : `
+    : `
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
         Dear ${input.tradieName},
       </p>
@@ -54,22 +53,22 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
       </p>
     `;
 
-    const actionText = input.requiresQuote
-        ? `
+  const actionText = input.requiresQuote
+    ? `
       Please review the attached documentation and submit your quotation based on
       the requested scope of works. Your quotation should include labour,
       materials (where applicable), exclusions and any assumptions relevant
       to your pricing.
     `
-        : `
+    : `
       Please confirm whether you are available to complete these works on the
       scheduled date. If you are unavailable, notify the site manager as soon
       as possible so alternative arrangements can be made.
     `;
 
-    return {
-        subject,
-        html: `
+  return {
+    subject,
+    html: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -178,8 +177,9 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             </td>
             </tr>
 
-            ${!input.requiresQuote
-                            ? `
+            ${
+              !input.requiresQuote
+                ? `
             <tr>
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Agreed Price
@@ -262,5 +262,5 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             </body>
             </html>
             `,
-    };
+  };
 }

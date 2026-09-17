@@ -106,7 +106,6 @@ export async function sendOfferForSignature(input: {
     };
   }
 
-
   const proposalInput = buildProposalInput(snapshot);
   // A manual price override without a stated reason must not be put out for a
   // binding acceptance — mirror the email send / client-side guard.
@@ -377,7 +376,9 @@ function describeDocusignError(error: unknown): string {
   if (response?.body) {
     const body = response.body as { errorCode?: string; message?: string };
     if (body.message) {
-      return body.errorCode ? `${body.errorCode}: ${body.message}` : body.message;
+      return body.errorCode
+        ? `${body.errorCode}: ${body.message}`
+        : body.message;
     }
   }
   return (error as Error).message ?? "Unknown error";

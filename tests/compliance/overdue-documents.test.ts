@@ -125,13 +125,12 @@ test("an overdue surveyor marks the documents they still owe", () => {
   );
 
   assert.ok(overdue.types.has(ComplianceDocumentType.SURVEY));
-  assert.ok(overdue.types.has(ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL));
+  assert.ok(
+    overdue.types.has(ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL),
+  );
   // The one they already sent. A row carrying a document and an Overdue badge
   // is a row saying two things that cannot both be true.
-  assert.equal(
-    overdue.types.has(ComplianceDocumentType.DEPOSITED_PLAN),
-    false,
-  );
+  assert.equal(overdue.types.has(ComplianceDocumentType.DEPOSITED_PLAN), false);
 });
 
 test("a line marked not required is answered, not late", () => {
@@ -322,13 +321,13 @@ test("a late consultant marks the lines they were engaged against, by id", () =>
         }),
       ] as never,
       documents: [
-        supplied(ComplianceDocumentType.CHECKLIST_ITEM, { id: "item-drawings" }),
+        supplied(ComplianceDocumentType.CHECKLIST_ITEM, {
+          id: "item-drawings",
+        }),
         document(ComplianceDocumentType.CHECKLIST_ITEM, { id: "item-geotech" }),
         document(ComplianceDocumentType.CHECKLIST_ITEM, { id: "item-other" }),
       ] as never,
-      alerts: [
-        alert(ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE),
-      ] as never,
+      alerts: [alert(ComplianceAlertType.STRUCTURAL_RESPONSE_OVERDUE)] as never,
     }),
   );
 
@@ -336,10 +335,7 @@ test("a late consultant marks the lines they were engaged against, by id", () =>
   assert.deepEqual([...overdue.documentIds], ["item-geotech"]);
   // And not the type, which twenty lines share. Reddening CHECKLIST_ITEM would
   // redden the whole list over one late report.
-  assert.equal(
-    overdue.types.has(ComplianceDocumentType.CHECKLIST_ITEM),
-    false,
-  );
+  assert.equal(overdue.types.has(ComplianceDocumentType.CHECKLIST_ITEM), false);
 });
 
 test("a consultant engaged before the deliverables table falls back to the column", () => {

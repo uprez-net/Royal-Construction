@@ -102,7 +102,9 @@ const SECTION_INDEX_BY_FIELD: Record<string, number> = (() => {
  * when the field lives in the always-visible header block (site location,
  * site manager, start date) or is not a field at all (lead, documents).
  */
-export function sectionIndexForField(field: ProjectFormFieldKey): number | null {
+export function sectionIndexForField(
+  field: ProjectFormFieldKey,
+): number | null {
   return SECTION_INDEX_BY_FIELD[field] ?? null;
 }
 
@@ -179,7 +181,9 @@ export function fieldPathToFormField(
   // `legalAdministration` + `signedDate` -> `legalAdministrationSignedDate`.
   const flattened = segments
     .map((segment, index) =>
-      index === 0 ? segment : segment.charAt(0).toUpperCase() + segment.slice(1),
+      index === 0
+        ? segment
+        : segment.charAt(0).toUpperCase() + segment.slice(1),
     )
     .join("");
 
@@ -301,7 +305,10 @@ export function validateCreateProjectForm({
   for (const [field, value] of [
     ["commercialsAndClaimsTotalContractSum", contractSum],
     ["commercialsAndClaimsContractPrice", contractPrice],
-    ["commercialsAndClaimsTenderTotalPrice", extraction.commercialsAndClaimsTenderTotalPrice],
+    [
+      "commercialsAndClaimsTenderTotalPrice",
+      extraction.commercialsAndClaimsTenderTotalPrice,
+    ],
     ["commercialsAndClaimsDepositValue", deposit],
     ["commercialsAndClaimsGstAmount", extraction.commercialsAndClaimsGstAmount],
   ] as const) {
@@ -383,7 +390,11 @@ export function toCreateProjectFailure(error: unknown): CreateProjectFailure {
   }
 
   if (typeof error === "string" && error.trim()) {
-    return createProjectFailure("UNKNOWN", "Could not create the project", error);
+    return createProjectFailure(
+      "UNKNOWN",
+      "Could not create the project",
+      error,
+    );
   }
 
   const message =
@@ -453,10 +464,12 @@ export function failureFromThrownError(error: unknown): CreateProjectFailure {
   }
 
   if (error instanceof ZodError) {
-    const fieldErrors = error.issues.flatMap<CreateProjectFieldError>((issue) => {
-      const field = fieldPathToFormField(issue.path.join("."));
-      return field ? [{ field, message: issue.message }] : [];
-    });
+    const fieldErrors = error.issues.flatMap<CreateProjectFieldError>(
+      (issue) => {
+        const field = fieldPathToFormField(issue.path.join("."));
+        return field ? [{ field, message: issue.message }] : [];
+      },
+    );
 
     return createProjectFailure(
       "VALIDATION",

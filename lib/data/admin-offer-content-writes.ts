@@ -47,10 +47,14 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
     const created = await prisma.adminOfferContent.create({
       data: {
         buildScope: EMPTY_ADMIN_OFFER_CONTENT.buildScope,
-        costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
-        offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
-        offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
-        hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
+        costSchedule:
+          EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
+        offerScope:
+          EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
+        offerContent:
+          EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+        hbfcClaim:
+          EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -126,10 +130,14 @@ export async function resolveSingletonId(): Promise<string> {
   const created = await prisma.adminOfferContent.create({
     data: {
       buildScope: EMPTY_ADMIN_OFFER_CONTENT.buildScope,
-      costSchedule: EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
-      offerScope: EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
-      offerContent: EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
-      hbfcClaim: EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
+      costSchedule:
+        EMPTY_ADMIN_OFFER_CONTENT.costSchedule as unknown as Prisma.InputJsonValue,
+      offerScope:
+        EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
+      offerContent:
+        EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
+      hbfcClaim:
+        EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -159,9 +167,7 @@ export async function updateCostSchedule(
   });
 }
 
-export async function updateOfferScope(
-  data: OfferScopeData,
-): Promise<void> {
+export async function updateOfferScope(data: OfferScopeData): Promise<void> {
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
@@ -185,9 +191,7 @@ export async function updateOfferContent(
   });
 }
 
-export async function updateHBFCClaim(
-  data: HBFCClaimData,
-): Promise<void> {
+export async function updateHBFCClaim(data: HBFCClaimData): Promise<void> {
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },

@@ -101,9 +101,7 @@ export function ResolveMeetingModal({
                 // Omitted rather than defaulted here. The server falls back to
                 // the booked time, and sending a value the admin did not type
                 // would put a date on the record that nobody stated.
-                heldAt: heldAt
-                  ? new Date(heldAt).toISOString()
-                  : undefined,
+                heldAt: heldAt ? new Date(heldAt).toISOString() : undefined,
                 note: note.trim() || undefined,
               }
             : {
@@ -122,7 +120,9 @@ export function ResolveMeetingModal({
       onOpenChange(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not update the meeting.",
+        error instanceof Error
+          ? error.message
+          : "Could not update the meeting.",
       );
     }
   };

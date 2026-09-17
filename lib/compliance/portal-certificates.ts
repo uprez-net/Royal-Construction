@@ -68,9 +68,9 @@ export type CertificateApplicationKind =
 export function isCertificateApplication(
   kind: ComplianceExternalApplicationKind,
 ): kind is CertificateApplicationKind {
-  return (CERTIFICATE_APPLICATION_KINDS as readonly ComplianceExternalApplicationKind[]).includes(
-    kind,
-  );
+  return (
+    CERTIFICATE_APPLICATION_KINDS as readonly ComplianceExternalApplicationKind[]
+  ).includes(kind);
 }
 
 /**
@@ -176,8 +176,7 @@ export function certificateKindFor(
 ): CertificateApplicationKind {
   const held = engagement.documents.find(
     (document) =>
-      isCertificateDocument(document.documentType) &&
-      document.files.length > 0,
+      isCertificateDocument(document.documentType) && document.files.length > 0,
   );
   if (held) {
     return held.documentType ===
@@ -203,9 +202,7 @@ export function certificateDocumentTypeFor(
 }
 
 /** The certificate application row on this file, or null before it is lodged. */
-export function certificateApplication(
-  engagement: CertifierEngagementDetail,
-) {
+export function certificateApplication(engagement: CertifierEngagementDetail) {
   return externalApplication(engagement, certificateKindFor(engagement));
 }
 
@@ -240,10 +237,7 @@ export function certifierHasPassedChecklist(
 
 /** Whether the principal certifier appointment has been recorded. */
 export function hasPrincipalCertifier(
-  engagement: Pick<
-    CertifierEngagementDetail,
-    "principalCertifierAppointedAt"
-  >,
+  engagement: Pick<CertifierEngagementDetail, "principalCertifierAppointedAt">,
 ): boolean {
   return engagement.principalCertifierAppointedAt !== null;
 }

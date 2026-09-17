@@ -10,7 +10,7 @@ import {
   Link,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -18,43 +18,47 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 const PROJECT_BRIEF_ITEMS = [
   {
-    title: 'Land information',
+    title: "Land information",
     description:
-      'Let us know whether you already own the land, are reviewing a block, or are still searching.',
+      "Let us know whether you already own the land, are reviewing a block, or are still searching.",
   },
   {
-    title: 'Project priorities',
+    title: "Project priorities",
     description:
-      'Share what matters most to you, such as layout, finishes, number of rooms, outdoor space, or energy efficiency.',
+      "Share what matters most to you, such as layout, finishes, number of rooms, outdoor space, or energy efficiency.",
   },
   {
-    title: 'Build type',
+    title: "Build type",
     description:
-      'Tell us if this is a new home, duplex, knockdown rebuild, extension, renovation, or another build type.',
+      "Tell us if this is a new home, duplex, knockdown rebuild, extension, renovation, or another build type.",
   },
   {
-    title: 'Location or address',
-    description: 'Provide the suburb, lot details, or full site address if you already have it.',
+    title: "Location or address",
+    description:
+      "Provide the suburb, lot details, or full site address if you already have it.",
   },
   {
-    title: 'Timeline',
+    title: "Timeline",
     description:
-      'Share when you would like to start design, approvals, construction, or move in.',
+      "Share when you would like to start design, approvals, construction, or move in.",
   },
   {
-    title: 'Existing documents and ideas',
+    title: "Existing documents and ideas",
     description:
-      'Send any plans, surveys, council notes, inspiration images, sketches, or design ideas you already have.',
+      "Send any plans, surveys, council notes, inspiration images, sketches, or design ideas you already have.",
   },
 ];
 
@@ -72,12 +76,12 @@ function Step({
   return (
     <Section
       style={{
-        padding: '1.5rem 0',
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        padding: "1.5rem 0",
+        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
       }}
     >
       <Row>
-        <Column style={{ width: 44, verticalAlign: 'top' }}>
+        <Column style={{ width: 44, verticalAlign: "top" }}>
           <Text
             className="m-0"
             style={{
@@ -138,8 +142,8 @@ function GetStartedCard({
   return (
     <Section
       style={{
-        padding: '1.5rem 0',
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        padding: "1.5rem 0",
+        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
       }}
     >
       <Row>
@@ -175,7 +179,7 @@ function GetStartedCard({
               fontWeight: 450,
               fontSize: 15,
               color: RC_COLORS.gold,
-              textDecoration: 'none',
+              textDecoration: "none",
             }}
           >
             {linkLabel}&nbsp;→
@@ -188,13 +192,13 @@ function GetStartedCard({
 
 function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
   return (
-    <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
+    <EmailSectionWhite style={{ padding: "2rem 1.5rem" }}>
       <Section
         style={{
           backgroundColor: RC_COLORS.light,
           borderRadius: 6,
           border: `2px solid ${RC_COLORS.gold}`,
-          padding: '1.5rem',
+          padding: "1.5rem",
         }}
       >
         <Row>
@@ -205,7 +209,7 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
                 fontFamily: FONTS.condensed,
                 fontWeight: 500,
                 fontSize: 13,
-                letterSpacing: '0.6px',
+                letterSpacing: "0.6px",
                 color: RC_COLORS.gold,
               }}
             >
@@ -233,10 +237,15 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
                 color: RC_COLORS.textMutedOnLight,
               }}
             >
-              Please use the link below to add a consultation to the builder calendar. This gives
-              the team a fixed time to review your project and answer your questions.
+              Please use the link below to add a consultation to the builder
+              calendar. This gives the team a fixed time to review your project
+              and answer your questions.
             </Text>
-            <EmailCtaButton href={bookingUrl} label="Book Appointment" align="left" />
+            <EmailCtaButton
+              href={bookingUrl}
+              label="Book Appointment"
+              align="left"
+            />
             <Text
               className="m-0 mt-4"
               style={{
@@ -247,7 +256,8 @@ function AppointmentBookingCard({ bookingUrl }: { bookingUrl: string }) {
                 color: RC_COLORS.textMutedOnLight,
               }}
             >
-              If no suitable time is available, reply to this email and we will help arrange one.
+              If no suitable time is available, reply to this email and we will
+              help arrange one.
             </Text>
           </Column>
         </Row>
@@ -263,7 +273,7 @@ interface WelcomeEmailProps {
 }
 
 export default function WelcomeEmail({
-  name = 'Homeowner',
+  name = "Homeowner",
   bookingUrl = RC_URLS.bookConsultation,
   leadContext,
 }: WelcomeEmailProps) {
@@ -288,9 +298,11 @@ export default function WelcomeEmail({
           }}
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Thanks for your interest in Royal Constructions — send your project details and book a
-            builder calendar slot.
-            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
+            Thanks for your interest in Royal Constructions — send your project
+            details and book a builder calendar slot.
+            <div>
+              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
+            </div>
           </div>
 
           <Container
@@ -300,7 +312,7 @@ export default function WelcomeEmail({
             <EmailHeader showGoldBar />
 
             {/* Hero — original welcome copy */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="mobile_font-40 m-0 uppercase"
                 style={{
@@ -308,7 +320,7 @@ export default function WelcomeEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.2px',
+                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -323,30 +335,31 @@ export default function WelcomeEmail({
                   fontWeight: 350,
                   fontSize: 14,
                   lineHeight: 1.7,
-                  letterSpacing: '0.3px',
+                  letterSpacing: "0.3px",
                   color: RC_COLORS.textMutedOnLight,
                   maxWidth: 490,
                 }}
               >
-                Dear {name}, thank you for your interest in building with Royal Constructions. The
-                next step is to book an appointment with the builder, then reply with any project
-                ideas you already have so we can prepare before your consultation.
+                Dear {name}, thank you for your interest in building with Royal
+                Constructions. The next step is to book an appointment with the
+                builder, then reply with any project ideas you already have so
+                we can prepare before your consultation.
               </Text>
             </EmailSectionLight>
 
             <EmailLeadContextSummary context={leadContext} />
 
             {/* Hero image */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2rem" }}>
               <Img
                 alt="Luxury home by Royal Constructions"
                 src={RC_URLS.heroDefault}
                 width={592}
                 style={{
-                  display: 'block',
-                  width: '100%',
+                  display: "block",
+                  width: "100%",
                   maxWidth: 592,
-                  height: 'auto',
+                  height: "auto",
                   borderRadius: 4,
                 }}
               />
@@ -355,13 +368,13 @@ export default function WelcomeEmail({
             <AppointmentBookingCard bookingUrl={bookingUrl} />
 
             {/* Before your appointment — original 6-item brief */}
-            <EmailSectionLight style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionLight style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '1.5rem',
+                  border: "1px solid #E2E8F0",
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -388,8 +401,9 @@ export default function WelcomeEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      Please reply with whatever details you already have so we can prepare for the
-                      consultation. It is okay if some items are still undecided.
+                      Please reply with whatever details you already have so we
+                      can prepare for the consultation. It is okay if some items
+                      are still undecided.
                     </Text>
                     {PROJECT_BRIEF_ITEMS.map((item) => (
                       <Text
@@ -402,7 +416,11 @@ export default function WelcomeEmail({
                           color: RC_COLORS.textMutedOnLight,
                         }}
                       >
-                        <span style={{ color: RC_COLORS.gold, fontWeight: 500 }}>{item.title}:</span>{' '}
+                        <span
+                          style={{ color: RC_COLORS.gold, fontWeight: 500 }}
+                        >
+                          {item.title}:
+                        </span>{" "}
                         {item.description}
                       </Text>
                     ))}
@@ -412,7 +430,7 @@ export default function WelcomeEmail({
             </EmailSectionLight>
 
             {/* What happens next — original 3 steps */}
-            <EmailSectionWhite style={{ padding: '2.5rem 1.5rem 1rem' }}>
+            <EmailSectionWhite style={{ padding: "2.5rem 1.5rem 1rem" }}>
               <Text
                 className="m-0 mb-6 uppercase"
                 style={{
@@ -444,12 +462,12 @@ export default function WelcomeEmail({
             </EmailSectionWhite>
 
             {/* Booking context notice */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -464,8 +482,8 @@ export default function WelcomeEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      The booking button above is the appointment action. These next steps show how
-                      we prepare once your time is reserved.
+                      The booking button above is the appointment action. These
+                      next steps show how we prepare once your time is reserved.
                     </Text>
                   </Column>
                 </Row>
@@ -473,7 +491,7 @@ export default function WelcomeEmail({
             </EmailSectionLight>
 
             {/* Get started */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -502,8 +520,10 @@ export default function WelcomeEmail({
             </EmailSectionWhite>
 
             {/* Sign-off */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section
+                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+              >
                 <Row>
                   <Column>
                     <Text
@@ -516,7 +536,8 @@ export default function WelcomeEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      We look forward to building something extraordinary with you.
+                      We look forward to building something extraordinary with
+                      you.
                     </Text>
                     <Text
                       className="m-0 mb-1"
@@ -536,7 +557,10 @@ export default function WelcomeEmail({
                     </Text>
                     <Text
                       className="m-0"
-                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
+                      style={{
+                        fontSize: 13,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
                     >
                       Royal Constructions Pty Ltd
                     </Text>

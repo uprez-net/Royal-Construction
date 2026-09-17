@@ -57,11 +57,12 @@ export type RecallEdge = {
 // The only way back from a document that is out for signature, keyed by the
 // status it is recalled from. The scope is derived from here, never taken from
 // the caller.
-export const RECALL_EDGES: Readonly<Partial<Record<OfferStatus, RecallEdge>>> = {
-  OFFER_SENT: { scope: "offer", to: OfferStatus.SENT },
-  TENDER_SENT: { scope: "tender", to: OfferStatus.TENDER_DRAFT },
-  CONTRACT_SENT: { scope: "contract", to: OfferStatus.CONTRACT_DRAFT },
-};
+export const RECALL_EDGES: Readonly<Partial<Record<OfferStatus, RecallEdge>>> =
+  {
+    OFFER_SENT: { scope: "offer", to: OfferStatus.SENT },
+    TENDER_SENT: { scope: "tender", to: OfferStatus.TENDER_DRAFT },
+    CONTRACT_SENT: { scope: "contract", to: OfferStatus.CONTRACT_DRAFT },
+  };
 
 // Written only by sendTenderForSignature, sendContractForSignature and
 // createProjectFromOffer, each of which does the real work in the same step.

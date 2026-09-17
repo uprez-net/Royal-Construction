@@ -35,7 +35,9 @@ function revokeQueuedFiles(files: QueuedUploadFile[]) {
   files.forEach((file) => URL.revokeObjectURL(file.previewUrl));
 }
 
-export function useUploadQueue({ maxFiles = Number.POSITIVE_INFINITY }: UseUploadQueueOptions = {}) {
+export function useUploadQueue({
+  maxFiles = Number.POSITIVE_INFINITY,
+}: UseUploadQueueOptions = {}) {
   const [files, setFiles] = useState<QueuedUploadFile[]>([]);
   const filesRef = useRef<QueuedUploadFile[]>([]);
 

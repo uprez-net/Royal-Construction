@@ -70,11 +70,16 @@ test("the royal focus ring stands out from the page and from its own fill", () =
   const rings = classes
     .map(
       (name) =>
-        name.match(/^focus-visible:ring-(?!offset-)([a-z][\w-]*(?:\/\d+)?)$/)?.[1],
+        name.match(
+          /^focus-visible:ring-(?!offset-)([a-z][\w-]*(?:\/\d+)?)$/,
+        )?.[1],
     )
     .filter((name): name is string => name !== undefined);
   const ring = rings[rings.length - 1];
-  assert.ok(ring, `the royal variant has no focus ring colour: ${classes.join(" ")}`);
+  assert.ok(
+    ring,
+    `the royal variant has no focus ring colour: ${classes.join(" ")}`,
+  );
   assert.doesNotMatch(
     ring,
     /\//,

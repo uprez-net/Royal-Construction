@@ -341,9 +341,7 @@ test("a CC needs the consent document, not the appointment", () => {
 
   const withConsent = engagement({
     alerts: [openAlert(ComplianceAlertType.DA_APPROVAL_REQUIRED)] as never,
-    documents: [
-      document(ComplianceDocumentType.DEVELOPMENT_CONSENT),
-    ] as never,
+    documents: [document(ComplianceDocumentType.DEVELOPMENT_CONSENT)] as never,
   });
 
   assert.equal(certificateLodgementBlockedReason(withConsent), null);

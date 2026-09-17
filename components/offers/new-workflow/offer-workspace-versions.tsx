@@ -71,52 +71,52 @@ export function OfferVersionsMenu({
 
   return (
     <>
-    <Popover open={open} onOpenChange={handleOpenChange} modal>
-      <PopoverTrigger asChild>
-        <Button ref={triggerRef} size="sm" type="button" variant="outline">
-          <History className="size-4" aria-hidden="true" />
-          Versions
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
-        <div className="border-b border-border/70 px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Version history
-          </p>
-        </div>
-        {loading ? (
-          <div className="flex items-center gap-2 px-3 py-5 text-sm text-muted-foreground">
-            <Loader2
-              className="size-4 animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-            Loading…
+      <Popover open={open} onOpenChange={handleOpenChange} modal>
+        <PopoverTrigger asChild>
+          <Button ref={triggerRef} size="sm" type="button" variant="outline">
+            <History className="size-4" aria-hidden="true" />
+            Versions
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 p-0">
+          <div className="border-b border-border/70 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Version history
+            </p>
           </div>
-        ) : error ? (
-          <p className="px-3 py-5 text-sm text-destructive">{error}</p>
-        ) : versions && versions.length > 0 ? (
-          <ul className="max-h-80 divide-y divide-border/70 overflow-y-auto">
-            {versions.map((version) => (
-              <VersionRow
-                key={version.offerId}
-                version={version}
-                isActive={version.revisionNumber === activeRevisionNumber}
-                onSelect={() => handleSelect(version.offerId)}
+          {loading ? (
+            <div className="flex items-center gap-2 px-3 py-5 text-sm text-muted-foreground">
+              <Loader2
+                className="size-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
               />
-            ))}
-          </ul>
-        ) : (
-          <p className="px-3 py-5 text-sm text-muted-foreground">
-            No versions yet.
-          </p>
-        )}
-      </PopoverContent>
-    </Popover>
-    <OfferRevisionViewerDialog
-      offerId={viewingOfferId}
-      onClose={() => setViewingOfferId(null)}
-      restoreFocusRef={triggerRef}
-    />
+              Loading…
+            </div>
+          ) : error ? (
+            <p className="px-3 py-5 text-sm text-destructive">{error}</p>
+          ) : versions && versions.length > 0 ? (
+            <ul className="max-h-80 divide-y divide-border/70 overflow-y-auto">
+              {versions.map((version) => (
+                <VersionRow
+                  key={version.offerId}
+                  version={version}
+                  isActive={version.revisionNumber === activeRevisionNumber}
+                  onSelect={() => handleSelect(version.offerId)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="px-3 py-5 text-sm text-muted-foreground">
+              No versions yet.
+            </p>
+          )}
+        </PopoverContent>
+      </Popover>
+      <OfferRevisionViewerDialog
+        offerId={viewingOfferId}
+        onClose={() => setViewingOfferId(null)}
+        restoreFocusRef={triggerRef}
+      />
     </>
   );
 }

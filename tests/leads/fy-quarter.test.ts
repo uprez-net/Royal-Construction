@@ -16,17 +16,35 @@ test("August 2026 is FY2027 Q1", () => {
 
 test("each FY quarter classifies its months", () => {
   // Sydney is UTC+10/+11, so use early-UTC times that stay inside the same local day.
-  assert.deepEqual(fyQuarterOf(new Date("2026-07-15T02:00:00Z")), { fy: 2027, quarter: 1 });
-  assert.deepEqual(fyQuarterOf(new Date("2026-11-15T02:00:00Z")), { fy: 2027, quarter: 2 });
-  assert.deepEqual(fyQuarterOf(new Date("2027-02-15T02:00:00Z")), { fy: 2027, quarter: 3 });
-  assert.deepEqual(fyQuarterOf(new Date("2027-05-15T02:00:00Z")), { fy: 2027, quarter: 4 });
+  assert.deepEqual(fyQuarterOf(new Date("2026-07-15T02:00:00Z")), {
+    fy: 2027,
+    quarter: 1,
+  });
+  assert.deepEqual(fyQuarterOf(new Date("2026-11-15T02:00:00Z")), {
+    fy: 2027,
+    quarter: 2,
+  });
+  assert.deepEqual(fyQuarterOf(new Date("2027-02-15T02:00:00Z")), {
+    fy: 2027,
+    quarter: 3,
+  });
+  assert.deepEqual(fyQuarterOf(new Date("2027-05-15T02:00:00Z")), {
+    fy: 2027,
+    quarter: 4,
+  });
 });
 
 test("the financial year rolls over on 1 July, Sydney time", () => {
   // 30 Jun 2026 23:00 Sydney == 2026-06-30T13:00Z -> still FY2026 Q4
-  assert.deepEqual(fyQuarterOf(new Date("2026-06-30T13:00:00Z")), { fy: 2026, quarter: 4 });
+  assert.deepEqual(fyQuarterOf(new Date("2026-06-30T13:00:00Z")), {
+    fy: 2026,
+    quarter: 4,
+  });
   // 1 Jul 2026 00:30 Sydney == 2026-06-30T14:30Z -> FY2027 Q1
-  assert.deepEqual(fyQuarterOf(new Date("2026-06-30T14:30:00Z")), { fy: 2027, quarter: 1 });
+  assert.deepEqual(fyQuarterOf(new Date("2026-06-30T14:30:00Z")), {
+    fy: 2027,
+    quarter: 1,
+  });
 });
 
 test("FY2027 Q1 starts at Sydney midnight on 1 July 2026", () => {
@@ -43,7 +61,11 @@ test("bounds are half-open and contiguous across the year", () => {
   for (let i = 0; i < quarters.length - 1; i++) {
     const a = fyQuarterBounds(2027, quarters[i]);
     const b = fyQuarterBounds(2027, quarters[i + 1]);
-    assert.equal(a.endExclusive.getTime(), b.start.getTime(), `gap after Q${quarters[i]}`);
+    assert.equal(
+      a.endExclusive.getTime(),
+      b.start.getTime(),
+      `gap after Q${quarters[i]}`,
+    );
   }
   // Q4 of FY2027 ends where Q1 of FY2028 starts.
   assert.equal(

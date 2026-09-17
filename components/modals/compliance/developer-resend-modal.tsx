@@ -112,7 +112,7 @@ export function DeveloperResendModal({
           ? error
           : error instanceof Error
             ? error.message
-          : `Could not send the ${label} back.`,
+            : `Could not send the ${label} back.`,
       );
     } finally {
       setIsSending(false);
@@ -142,8 +142,8 @@ export function DeveloperResendModal({
               </p>
               <p className="mt-1 text-sm text-foreground">{previousReason}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Check the revised {label} actually answers this before you send it
-                — a second refusal is another two weeks.
+                Check the revised {label} actually answers this before you send
+                it — a second refusal is another two weeks.
               </p>
             </div>
           ) : null}

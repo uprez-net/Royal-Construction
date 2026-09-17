@@ -47,7 +47,9 @@ export const INITIAL_PAYMENT_SCHEDULE: readonly OfferPaymentScheduleRow[] = [
 export function getPaymentScheduleTotalPct(
   rows: readonly OfferPaymentScheduleRow[],
 ): number {
-  return Math.round(
-    rows.reduce((sum, row) => sum + row.percentOfContract, 0) * 10000,
-  ) / 10000;
+  return (
+    Math.round(
+      rows.reduce((sum, row) => sum + row.percentOfContract, 0) * 10000,
+    ) / 10000
+  );
 }

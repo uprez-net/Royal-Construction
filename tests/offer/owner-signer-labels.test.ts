@@ -22,8 +22,22 @@ function rakhiCompany(): OfferOwner {
     abn: "92345689",
     currentLocation: "224 Pacific Hwy, Crows Nest NSW 2065",
     signatories: [
-      { id: "d1", name: "Raki", email: "director1@example.com", phone: "", mobile: "", capacity: "Director" },
-      { id: "d2", name: "Pop", email: "director2@example.com", phone: "", mobile: "", capacity: "Director" },
+      {
+        id: "d1",
+        name: "Raki",
+        email: "director1@example.com",
+        phone: "",
+        mobile: "",
+        capacity: "Director",
+      },
+      {
+        id: "d2",
+        name: "Pop",
+        email: "director2@example.com",
+        phone: "",
+        mobile: "",
+        capacity: "Director",
+      },
     ],
   };
 }
@@ -33,7 +47,14 @@ test("an individual + a company with two directors yields three signer labels", 
     ...createIndividualOwner("owner-1"),
     displayName: "Radhika",
     signatories: [
-      { id: "s1", name: "Radhika", email: "owner@example.com", phone: "0400000000", mobile: "", capacity: "Owner" },
+      {
+        id: "s1",
+        name: "Radhika",
+        email: "owner@example.com",
+        phone: "0400000000",
+        mobile: "",
+        capacity: "Owner",
+      },
     ],
   };
 
@@ -55,7 +76,14 @@ test("a single individual owner yields one plain label", () => {
     ...createIndividualOwner("owner-1"),
     displayName: "Jane Smith",
     signatories: [
-      { id: "s1", name: "Jane Smith", email: "jane@example.com", phone: "", mobile: "", capacity: "Owner" },
+      {
+        id: "s1",
+        name: "Jane Smith",
+        email: "jane@example.com",
+        phone: "",
+        mobile: "",
+        capacity: "Owner",
+      },
     ],
   };
   assert.deepEqual(collectOfferSignerLabels([solo]), ["Jane Smith"]);

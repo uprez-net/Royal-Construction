@@ -3,9 +3,9 @@ import {
   DeviceCodeCredential,
   type DeviceCodeCredentialOptions,
   type DeviceCodeInfo,
-} from '@azure/identity';
-import { type GraphConfig } from './config';
-import { type EmailHeaders } from '@/utils/spam-detector';
+} from "@azure/identity";
+import { type GraphConfig } from "./config";
+import { type EmailHeaders } from "@/utils/spam-detector";
 
 export interface EmailAttachment {
   name: string;
@@ -52,14 +52,20 @@ const GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES = 3 * 1024 * 1024;
 // `Get-Mailbox <upn> | fl MaxSendSize` and set GRAPH_MAX_SEND_SIZE_MB to match
 // rather than assuming either the 35 MB default or the documented maximum.
 function resolveMaxSendSizeBytes(): number {
-  const configured = Number.parseInt(process.env.GRAPH_MAX_SEND_SIZE_MB || '', 10);
-  const megabytes = Number.isFinite(configured) && configured > 0 ? configured : 35;
+  const configured = Number.parseInt(
+    process.env.GRAPH_MAX_SEND_SIZE_MB || "",
+    10,
+  );
+  const megabytes =
+    Number.isFinite(configured) && configured > 0 ? configured : 35;
   return megabytes * 1024 * 1024;
 }
 
 const EXCHANGE_MAX_SEND_SIZE_BYTES = resolveMaxSendSizeBytes();
 const BASE64_INFLATION = 4 / 3;
-const MAX_TOTAL_ATTACHMENT_BYTES = Math.floor(EXCHANGE_MAX_SEND_SIZE_BYTES / BASE64_INFLATION);
+const MAX_TOTAL_ATTACHMENT_BYTES = Math.floor(
+  EXCHANGE_MAX_SEND_SIZE_BYTES / BASE64_INFLATION,
+);
 
 // Graph's guidance is "keep each byte range less than 4 MB" for throughput —
 // a recommendation, not an enforced cap. The 320 KiB alignment is the murkier
@@ -76,7 +82,9 @@ interface DecodedAttachment {
   raw: Buffer;
 }
 
-function decodeAttachments(attachments: EmailAttachment[]): DecodedAttachment[] {
+function decodeAttachments(
+  attachments: EmailAttachment[],
+): DecodedAttachment[] {
   return attachments.map((attachment) => ({
     attachment,
     raw: Buffer.from(attachment.contentBytes, "base64"),
@@ -113,12 +121,12 @@ async function uploadAttachmentToDraft(
   { attachment, raw }: DecodedAttachment,
 ): Promise<void> {
   const session = await graphRequest<{ uploadUrl?: string }>(
-    'POST',
+    "POST",
     `${messageUrl}/attachments/createUploadSession`,
     token,
     {
       AttachmentItem: {
-        attachmentType: 'file',
+        attachmentType: "file",
         name: attachment.name,
         size: raw.byteLength,
         contentType: attachment.contentType,
@@ -127,7 +135,9 @@ async function uploadAttachmentToDraft(
   );
 
   if (!session?.uploadUrl) {
-    throw new Error(`Graph returned no upload URL for attachment "${attachment.name}".`);
+    throw new Error(
+      `Graph returned no upload URL for attachment "${attachment.name}".`,
+    );
   }
 
   for (let start = 0; start < raw.byteLength; start += UPLOAD_CHUNK_BYTES) {
@@ -135,12 +145,12 @@ async function uploadAttachmentToDraft(
     const chunk = raw.subarray(start, end + 1);
 
     const response = await fetch(session.uploadUrl, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': String(chunk.byteLength),
+        "Content-Type": "application/octet-stream",
+        "Content-Length": String(chunk.byteLength),
         // 0-based, end inclusive, against the total file size.
-        'Content-Range': `bytes ${start}-${end}/${raw.byteLength}`,
+        "Content-Range": `bytes ${start}-${end}/${raw.byteLength}`,
       },
       body: new Uint8Array(chunk),
     });
@@ -233,9 +243,15 @@ export interface GraphContext {
   replyToMessage(input: ReplyInput): Promise<void>;
   listInbox(top?: number, includeBody?: boolean): Promise<GraphMessage[]>;
   getTokenPreview(): Promise<string>;
-  getMessageByResource(resource: string, includeBody?: boolean): Promise<GraphMessage>;
+  getMessageByResource(
+    resource: string,
+    includeBody?: boolean,
+  ): Promise<GraphMessage>;
   listMessageAttachments(messageId: string): Promise<GraphAttachmentMetadata[]>;
-  downloadMessageAttachment(messageId: string, attachmentId: string): Promise<Buffer>;
+  downloadMessageAttachment(
+    messageId: string,
+    attachmentId: string,
+  ): Promise<Buffer>;
   createMailboxSubscription(args: {
     notificationUrl: string;
     clientState: string;
@@ -294,7 +310,7 @@ interface GraphApiAttachment {
   contentType?: string;
   size?: number;
   isInline?: boolean;
-  '@odata.type'?: string;
+  "@odata.type"?: string;
 }
 
 async function toJson(response: Response): Promise<unknown> {
@@ -320,7 +336,7 @@ export class GraphRequestError extends Error {
 
   constructor(message: string, status: number, retryAfterMs?: number) {
     super(message);
-    this.name = 'GraphRequestError';
+    this.name = "GraphRequestError";
     this.status = status;
     this.retryAfterMs = retryAfterMs;
   }
@@ -329,7 +345,7 @@ export class GraphRequestError extends Error {
 // Graph answers a throttle with Retry-After in seconds. The HTTP-date form is
 // legal too, so both are handled rather than silently parsing to NaN.
 function retryAfterMsOf(response: Response): number | undefined {
-  const header = response.headers.get('retry-after');
+  const header = response.headers.get("retry-after");
   if (!header) {
     return undefined;
   }
@@ -343,7 +359,10 @@ function retryAfterMsOf(response: Response): number | undefined {
   return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
 }
 
-async function throwGraphError(response: Response, context = ''): Promise<never> {
+async function throwGraphError(
+  response: Response,
+  context = "",
+): Promise<never> {
   const data = await toJson(response);
   throw new GraphRequestError(
     `Graph error ${response.status}${context}: ${JSON.stringify(data)}`,
@@ -364,7 +383,7 @@ async function graphRequest<T>(
     method,
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...customHeaders, // Spread custom headers here
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -382,36 +401,30 @@ async function graphRequest<T>(
 }
 
 function extractEmailHeaders(
-  headers?: GraphInternetMessageHeader[]
+  headers?: GraphInternetMessageHeader[],
 ): EmailHeaders {
   if (!headers?.length) {
     return {};
   }
 
   const getHeader = (name: string) =>
-    headers.find(
-      (header) => header.name.toLowerCase() === name.toLowerCase()
-    )?.value;
+    headers.find((header) => header.name.toLowerCase() === name.toLowerCase())
+      ?.value;
 
   return {
-    from: getHeader('From'),
-    replyTo: getHeader('Reply-To'),
-    listUnsubscribe: getHeader('List-Unsubscribe'),
+    from: getHeader("From"),
+    replyTo: getHeader("Reply-To"),
+    listUnsubscribe: getHeader("List-Unsubscribe"),
     // Machine-mail markers. Already inside the $select projection, so reading
     // them costs no extra Graph round-trip.
-    autoSubmitted: getHeader('Auto-Submitted'),
-    returnPath: getHeader('Return-Path'),
-    contentType: getHeader('Content-Type'),
+    autoSubmitted: getHeader("Auto-Submitted"),
+    returnPath: getHeader("Return-Path"),
+    contentType: getHeader("Content-Type"),
   };
 }
 
-function mapMessage(
-  item: GraphApiMessage,
-  includeBody: boolean
-): GraphMessage {
-  const mapRecipients = (
-    recipients?: GraphRecipient[]
-  ): string[] => {
+function mapMessage(item: GraphApiMessage, includeBody: boolean): GraphMessage {
+  const mapRecipients = (recipients?: GraphRecipient[]): string[] => {
     return (
       recipients
         ?.map((recipient) => recipient.emailAddress?.address)
@@ -420,10 +433,10 @@ function mapMessage(
   };
 
   return {
-    id: item.id ?? '',
-    subject: item.subject ?? '(No Subject)',
+    id: item.id ?? "",
+    subject: item.subject ?? "(No Subject)",
 
-    from: item.from?.emailAddress?.address ?? 'Unknown',
+    from: item.from?.emailAddress?.address ?? "Unknown",
 
     to: mapRecipients(item.toRecipients),
     cc: mapRecipients(item.ccRecipients),
@@ -431,7 +444,7 @@ function mapMessage(
 
     headers: extractEmailHeaders(item.internetMessageHeaders),
 
-    receivedDateTime: item.receivedDateTime ?? '',
+    receivedDateTime: item.receivedDateTime ?? "",
     isRead: item.isRead ?? false,
 
     hasAttachments: item.hasAttachments ?? false,
@@ -440,9 +453,9 @@ function mapMessage(
 
     body: includeBody
       ? {
-        contentType: item.body?.contentType ?? 'text',
-        content: item.body?.content ?? '',
-      }
+          contentType: item.body?.contentType ?? "text",
+          content: item.body?.content ?? "",
+        }
       : undefined,
   };
 }
@@ -451,110 +464,112 @@ function buildGraphUrl(resource: string, select: string): string {
   const trimmed = resource.trim();
   const normalized = /^https?:\/\//i.test(trimmed)
     ? trimmed
-    : `https://graph.microsoft.com/v1.0/${trimmed.replace(/^\//, '')}`;
-  const separator = normalized.includes('?') ? '&' : '?';
+    : `https://graph.microsoft.com/v1.0/${trimmed.replace(/^\//, "")}`;
+  const separator = normalized.includes("?") ? "&" : "?";
   return `${normalized}${separator}$select=${select}`;
 }
 
 function normalizeSubscriptionResource(resource: string | undefined): string {
-  return (resource ?? '')
+  return (resource ?? "")
     .trim()
-    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0\//i, '')
-    .replace(/^\//, '')
-    .split('?')[0]
-    .replace(/\/$/, '')
+    .replace(/^https?:\/\/graph\.microsoft\.com\/v1\.0\//i, "")
+    .replace(/^\//, "")
+    .split("?")[0]
+    .replace(/\/$/, "")
     .toLowerCase();
 }
 
-export async function createGraphContext(config: GraphConfig): Promise<GraphContext> {
+export async function createGraphContext(
+  config: GraphConfig,
+): Promise<GraphContext> {
   const normalizedSender = config.senderUpn?.trim();
-  const useExplicitMailbox = config.mode === 'app-only' || config.mailbox === 'admin';
+  const useExplicitMailbox =
+    config.mode === "app-only" || config.mailbox === "admin";
 
   if (useExplicitMailbox && !normalizedSender) {
     throw new Error(
-      `${config.mailbox === 'admin' ? 'Admin Graph mailbox' : 'GRAPH_SENDER_UPN'} ` +
-        'is required for an explicit mailbox context.',
+      `${config.mailbox === "admin" ? "Admin Graph mailbox" : "GRAPH_SENDER_UPN"} ` +
+        "is required for an explicit mailbox context.",
     );
   }
 
   const credential: TokenProvider =
-    config.mode === 'delegated'
+    config.mode === "delegated"
       ? (() => {
-        const options: DeviceCodeCredentialOptions = {
-          clientId: config.clientId,
-          tenantId: config.tenantId,
-          userPromptCallback: (info: DeviceCodeInfo) => {
-            console.log(info.message);
-          },
-        };
-        const deviceCred = new DeviceCodeCredential(options);
-        return {
-          getToken: async (scopes: string | string[]) => {
-            const tokenResult = await deviceCred.getToken(scopes);
-            if (!tokenResult?.token) {
-              throw new Error('No delegated token returned');
-            }
-            return tokenResult.token;
-          },
-        };
-      })()
+          const options: DeviceCodeCredentialOptions = {
+            clientId: config.clientId,
+            tenantId: config.tenantId,
+            userPromptCallback: (info: DeviceCodeInfo) => {
+              console.log(info.message);
+            },
+          };
+          const deviceCred = new DeviceCodeCredential(options);
+          return {
+            getToken: async (scopes: string | string[]) => {
+              const tokenResult = await deviceCred.getToken(scopes);
+              if (!tokenResult?.token) {
+                throw new Error("No delegated token returned");
+              }
+              return tokenResult.token;
+            },
+          };
+        })()
       : (() => {
-        if (!config.clientSecret) {
-          throw new Error('AZURE_CLIENT_SECRET is required for app-only mode');
-        }
+          if (!config.clientSecret) {
+            throw new Error(
+              "AZURE_CLIENT_SECRET is required for app-only mode",
+            );
+          }
 
-        const secretCred = new ClientSecretCredential(
-          config.tenantId,
-          config.clientId,
-          config.clientSecret,
-        );
+          const secretCred = new ClientSecretCredential(
+            config.tenantId,
+            config.clientId,
+            config.clientSecret,
+          );
 
-        return {
-          getToken: async (scopes: string | string[]) => {
-            const tokenResult = await secretCred.getToken(scopes);
-            if (!tokenResult?.token) {
-              throw new Error('No app-only token returned');
-            }
-            return tokenResult.token;
-          },
-        };
-      })();
+          return {
+            getToken: async (scopes: string | string[]) => {
+              const tokenResult = await secretCred.getToken(scopes);
+              if (!tokenResult?.token) {
+                throw new Error("No app-only token returned");
+              }
+              return tokenResult.token;
+            },
+          };
+        })();
 
   const getToken = async () =>
-    config.mode === 'delegated'
+    config.mode === "delegated"
       ? credential.getToken([
-        'https://graph.microsoft.com/Mail.Read',
-        // Mail.ReadWrite is what allows the draft used by the large-attachment
-        // path; it does not imply send rights, so Mail.Send stays too.
-        'https://graph.microsoft.com/Mail.ReadWrite',
-        'https://graph.microsoft.com/Mail.Send',
-      ])
-      : credential.getToken('https://graph.microsoft.com/.default');
+          "https://graph.microsoft.com/Mail.Read",
+          // Mail.ReadWrite is what allows the draft used by the large-attachment
+          // path; it does not imply send rights, so Mail.Send stays too.
+          "https://graph.microsoft.com/Mail.ReadWrite",
+          "https://graph.microsoft.com/Mail.Send",
+        ])
+      : credential.getToken("https://graph.microsoft.com/.default");
 
   const getAccessToken = async () => {
     const token = await getToken();
     if (!token) {
-      throw new Error('Unable to acquire Graph access token');
+      throw new Error("Unable to acquire Graph access token");
     }
     return token;
   };
 
-  const sendPath =
-    !useExplicitMailbox
-      ? '/me/sendMail'
-      : `/users/${encodeURIComponent(normalizedSender || '')}/sendMail`;
+  const sendPath = !useExplicitMailbox
+    ? "/me/sendMail"
+    : `/users/${encodeURIComponent(normalizedSender || "")}/sendMail`;
 
-  const inboxPath =
-    !useExplicitMailbox
-      ? '/me/mailFolders/inbox/messages'
-      : `/users/${encodeURIComponent(normalizedSender || '')}/mailFolders/inbox/messages`;
+  const inboxPath = !useExplicitMailbox
+    ? "/me/mailFolders/inbox/messages"
+    : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders/inbox/messages`;
 
   // Draft creation for the large-attachment path. Needs Mail.ReadWrite, which is
   // a separate grant from the Mail.Send used by the inline path.
-  const messagesPath =
-    !useExplicitMailbox
-      ? '/me/messages'
-      : `/users/${encodeURIComponent(normalizedSender || '')}/messages`;
+  const messagesPath = !useExplicitMailbox
+    ? "/me/messages"
+    : `/users/${encodeURIComponent(normalizedSender || "")}/messages`;
 
   return {
     getTokenPreview: async () => {
@@ -564,14 +579,16 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
     listInbox: async (top = 10, includeBody = false) => {
       const token = await getAccessToken();
       const select = includeBody
-        ? 'subject,from,receivedDateTime,isRead,body,bodyPreview'
-        : 'subject,from,receivedDateTime,isRead,bodyPreview';
+        ? "subject,from,receivedDateTime,isRead,body,bodyPreview"
+        : "subject,from,receivedDateTime,isRead,bodyPreview";
 
       // Request plain text body to save LLM tokens if body is included
-      const headers = includeBody ? { 'Prefer': 'outlook.body-content-type="text"' } : undefined;
+      const headers = includeBody
+        ? { Prefer: 'outlook.body-content-type="text"' }
+        : undefined;
 
       const list = await graphRequest<{ value: GraphApiMessage[] }>(
-        'GET',
+        "GET",
         `https://graph.microsoft.com/v1.0${inboxPath}?$top=${top}&$select=${select}&$orderby=receivedDateTime desc`,
         token,
         undefined,
@@ -583,14 +600,22 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
     getMessageByResource: async (resource: string, includeBody = true) => {
       const token = await getAccessToken();
       const select = includeBody
-        ? 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,hasAttachments,body,bodyPreview,internetMessageHeaders'
-        : 'subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,hasAttachments,bodyPreview,internetMessageHeaders';
+        ? "subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,hasAttachments,body,bodyPreview,internetMessageHeaders"
+        : "subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,isRead,hasAttachments,bodyPreview,internetMessageHeaders";
       const url = buildGraphUrl(resource, select);
 
       // 2. Request plain text body to save LLM tokens if body is included
-      const headers = includeBody ? { 'Prefer': 'outlook.body-content-type="text"' } : undefined;
+      const headers = includeBody
+        ? { Prefer: 'outlook.body-content-type="text"' }
+        : undefined;
 
-      const message = await graphRequest<GraphApiMessage>('GET', url, token, undefined, headers);
+      const message = await graphRequest<GraphApiMessage>(
+        "GET",
+        url,
+        token,
+        undefined,
+        headers,
+      );
       return mapMessage(message, includeBody);
     },
     listMessageAttachments: async (messageId: string) => {
@@ -601,26 +626,30 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       // mail carrying three large files is downloaded in full just to find out
       // what is there.
       const list = await graphRequest<{ value: GraphApiAttachment[] }>(
-        'GET',
+        "GET",
         `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(messageId)}` +
-          '/attachments?$select=id,name,contentType,size,isInline',
+          "/attachments?$select=id,name,contentType,size,isInline",
         token,
       );
 
       return (list.value ?? [])
-        .filter((attachment): attachment is GraphApiAttachment & { id: string } =>
-          Boolean(attachment.id),
+        .filter(
+          (attachment): attachment is GraphApiAttachment & { id: string } =>
+            Boolean(attachment.id),
         )
         .map((attachment) => ({
           id: attachment.id,
-          name: attachment.name ?? 'attachment',
-          contentType: attachment.contentType ?? '',
+          name: attachment.name ?? "attachment",
+          contentType: attachment.contentType ?? "",
           size: attachment.size ?? 0,
           isInline: attachment.isInline ?? false,
-          odataType: attachment['@odata.type'] ?? '',
+          odataType: attachment["@odata.type"] ?? "",
         }));
     },
-    downloadMessageAttachment: async (messageId: string, attachmentId: string) => {
+    downloadMessageAttachment: async (
+      messageId: string,
+      attachmentId: string,
+    ) => {
       const token = await getAccessToken();
 
       // $value streams the raw file. Fetching the attachment resource itself
@@ -635,14 +664,19 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       });
 
       if (!response.ok) {
-        await throwGraphError(response, ` downloading attachment ${attachmentId}`);
+        await throwGraphError(
+          response,
+          ` downloading attachment ${attachmentId}`,
+        );
       }
 
       return Buffer.from(await response.arrayBuffer());
     },
     replyToMessage: async ({ messageId, body, attachments, to, cc }) => {
       const decodedAttachments =
-        attachments && attachments.length > 0 ? decodeAttachments(attachments) : [];
+        attachments && attachments.length > 0
+          ? decodeAttachments(attachments)
+          : [];
 
       if (decodedAttachments.length > 0) {
         assertAttachmentsSendable(decodedAttachments);
@@ -655,14 +689,13 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       // References and the conversation id, with the original quoted into its
       // body. Everything below edits that draft rather than composing afresh,
       // which is what keeps the reply in the thread.
-      const draft = await graphRequest<{ id?: string; body?: { content?: string } }>(
-        'POST',
-        `${originalUrl}/createReply`,
-        token,
-      );
+      const draft = await graphRequest<{
+        id?: string;
+        body?: { content?: string };
+      }>("POST", `${originalUrl}/createReply`, token);
 
       if (!draft?.id) {
-        throw new Error('Graph did not return a reply draft id.');
+        throw new Error("Graph did not return a reply draft id.");
       }
 
       const draftUrl = `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(draft.id)}`;
@@ -670,23 +703,23 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       try {
         const formatRecipients = (value?: string | string[]) =>
           value
-            ? (Array.isArray(value) ? value : [value]).map(email => ({
-              emailAddress: {
-                address: email,
-              },
-            }))
+            ? (Array.isArray(value) ? value : [value]).map((email) => ({
+                emailAddress: {
+                  address: email,
+                },
+              }))
             : undefined;
 
         const toRecipients = formatRecipients(to);
         const ccRecipients = formatRecipients(cc);
 
-        await graphRequest('PATCH', draftUrl, token, {
+        await graphRequest("PATCH", draftUrl, token, {
           body: {
-            contentType: 'HTML',
+            contentType: "HTML",
             // Prepended rather than replacing: Graph put the quoted original
             // in here, and dropping it leaves the certifier reading a bare
             // line with no idea which of their messages it answers.
-            content: `${body}${draft.body?.content ?? ''}`,
+            content: `${body}${draft.body?.content ?? ""}`,
           },
           ...(toRecipients && { toRecipients }),
           ...(ccRecipients && { ccRecipients }),
@@ -696,11 +729,11 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
           await uploadAttachmentToDraft(draftUrl, token, decoded);
         }
 
-        await graphRequest('POST', `${draftUrl}/send`, token);
+        await graphRequest("POST", `${draftUrl}/send`, token);
       } catch (error) {
         // Same cleanup the large-attachment send path does: a failed upload
         // otherwise leaves a half-built draft in the mailbox forever.
-        await graphRequest('DELETE', draftUrl, token).catch((cleanupError) => {
+        await graphRequest("DELETE", draftUrl, token).catch((cleanupError) => {
           console.error(
             `Failed to delete orphaned Graph reply draft ${draft.id}; it will need clearing by hand.`,
             cleanupError,
@@ -712,11 +745,11 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
     sendMail: async ({ to, subject, body, cc, bcc, attachments }) => {
       const formatRecipients = (value?: string | string[]) =>
         value
-          ? (Array.isArray(value) ? value : [value]).map(email => ({
-            emailAddress: {
-              address: email,
-            },
-          }))
+          ? (Array.isArray(value) ? value : [value]).map((email) => ({
+              emailAddress: {
+                address: email,
+              },
+            }))
           : undefined;
 
       const toRecipients = formatRecipients(to);
@@ -724,7 +757,9 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const bccRecipients = formatRecipients(bcc);
 
       const decodedAttachments =
-        attachments && attachments.length > 0 ? decodeAttachments(attachments) : [];
+        attachments && attachments.length > 0
+          ? decodeAttachments(attachments)
+          : [];
 
       if (decodedAttachments.length > 0) {
         assertAttachmentsSendable(decodedAttachments);
@@ -734,15 +769,18 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
 
       // Anything past the inline ceiling can't ride along in the sendMail body,
       // so build it as a draft, stream the files in, and send that instead.
-      if (totalAttachmentBytesOf(decodedAttachments) > GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES) {
+      if (
+        totalAttachmentBytesOf(decodedAttachments) >
+        GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES
+      ) {
         const draft = await graphRequest<{ id?: string }>(
-          'POST',
+          "POST",
           `https://graph.microsoft.com/v1.0${messagesPath}`,
           token,
           {
             subject,
             body: {
-              contentType: 'HTML',
+              contentType: "HTML",
               content: body,
             },
             toRecipients,
@@ -752,7 +790,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
         );
 
         if (!draft?.id) {
-          throw new Error('Graph did not return a draft message id.');
+          throw new Error("Graph did not return a draft message id.");
         }
 
         const messageUrl = `https://graph.microsoft.com/v1.0${messagesPath}/${encodeURIComponent(draft.id)}`;
@@ -764,30 +802,32 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
 
           // Sending a draft files it in Sent Items automatically, so there is no
           // saveToSentItems equivalent to pass here.
-          await graphRequest('POST', `${messageUrl}/send`, token);
+          await graphRequest("POST", `${messageUrl}/send`, token);
         } catch (error) {
           // A failed upload otherwise leaves a half-built draft sitting in the
           // mailbox forever. Best-effort cleanup that must not mask the real error.
-          await graphRequest('DELETE', messageUrl, token).catch((cleanupError) => {
-            console.error(
-              `Failed to delete orphaned Graph draft ${draft.id}; it will need clearing by hand.`,
-              cleanupError,
-            );
-          });
+          await graphRequest("DELETE", messageUrl, token).catch(
+            (cleanupError) => {
+              console.error(
+                `Failed to delete orphaned Graph draft ${draft.id}; it will need clearing by hand.`,
+                cleanupError,
+              );
+            },
+          );
           throw error;
         }
         return;
       }
 
       await graphRequest(
-        'POST',
+        "POST",
         `https://graph.microsoft.com/v1.0${sendPath}`,
         token,
         {
           message: {
             subject,
             body: {
-              contentType: 'HTML',
+              contentType: "HTML",
               content: body,
             },
             toRecipients,
@@ -817,20 +857,22 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       const token = await getAccessToken();
       const now = Date.now();
       const subscriptionBody = {
-        changeType: 'created',
+        changeType: "created",
         notificationUrl,
         resource:
           resource ??
           (!useExplicitMailbox
             ? "/me/mailFolders('Inbox')/messages"
-            : `/users/${encodeURIComponent(normalizedSender || '')}/mailFolders('Inbox')/messages`),
-        expirationDateTime: new Date(now + expirationMinutes * 60 * 1000).toISOString(),
+            : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders('Inbox')/messages`),
+        expirationDateTime: new Date(
+          now + expirationMinutes * 60 * 1000,
+        ).toISOString(),
         clientState,
       };
 
       const subscription = await graphRequest<GraphSubscription>(
-        'POST',
-        'https://graph.microsoft.com/v1.0/subscriptions',
+        "POST",
+        "https://graph.microsoft.com/v1.0/subscriptions",
         token,
         subscriptionBody,
       );
@@ -848,10 +890,10 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
         resource ??
         (!useExplicitMailbox
           ? "/me/mailFolders('Inbox')/messages"
-          : `/users/${encodeURIComponent(normalizedSender || '')}/mailFolders('Inbox')/messages`);
+          : `/users/${encodeURIComponent(normalizedSender || "")}/mailFolders('Inbox')/messages`);
       const subscriptions = await graphRequest<{ value?: GraphSubscription[] }>(
-        'GET',
-        'https://graph.microsoft.com/v1.0/subscriptions',
+        "GET",
+        "https://graph.microsoft.com/v1.0/subscriptions",
         token,
       );
       const target = normalizeSubscriptionResource(targetResource);
@@ -866,7 +908,7 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       if (existing?.id) {
         try {
           return await graphRequest<GraphSubscription>(
-            'PATCH',
+            "PATCH",
             `https://graph.microsoft.com/v1.0/subscriptions/${encodeURIComponent(existing.id)}`,
             token,
             { expirationDateTime, notificationUrl },
@@ -881,11 +923,11 @@ export async function createGraphContext(config: GraphConfig): Promise<GraphCont
       }
 
       return graphRequest<GraphSubscription>(
-        'POST',
-        'https://graph.microsoft.com/v1.0/subscriptions',
+        "POST",
+        "https://graph.microsoft.com/v1.0/subscriptions",
         token,
         {
-          changeType: 'created',
+          changeType: "created",
           notificationUrl,
           resource: targetResource,
           expirationDateTime,

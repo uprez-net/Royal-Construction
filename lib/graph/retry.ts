@@ -30,12 +30,12 @@ export function isRetryableGraphError(error: unknown): boolean {
 
 function statusOf(error: unknown): number | undefined {
   const status = (error as { status?: unknown })?.status;
-  return typeof status === 'number' ? status : undefined;
+  return typeof status === "number" ? status : undefined;
 }
 
 function retryAfterMsOf(error: unknown): number | undefined {
   const retryAfterMs = (error as { retryAfterMs?: unknown })?.retryAfterMs;
-  return typeof retryAfterMs === 'number' ? retryAfterMs : undefined;
+  return typeof retryAfterMs === "number" ? retryAfterMs : undefined;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,7 +76,9 @@ export async function withGraphRetry<T>(
       const message = error instanceof Error ? error.message : String(error);
 
       if (attempt === attempts || !shouldRetry(error)) {
-        console.warn(`[${label}] failed on attempt ${attempt}/${attempts}: ${message}`);
+        console.warn(
+          `[${label}] failed on attempt ${attempt}/${attempts}: ${message}`,
+        );
         throw error;
       }
 

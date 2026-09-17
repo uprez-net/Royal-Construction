@@ -1,12 +1,15 @@
-import { createGraphContext } from '@/lib/graph/client';
-import { getGraphConfig, type GraphMailbox } from '@/lib/graph/config';
-import { NextResponse } from 'next/server';
+import { createGraphContext } from "@/lib/graph/client";
+import { getGraphConfig, type GraphMailbox } from "@/lib/graph/config";
+import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   // Verify it is a Vercel cron request (standard security check on Vercel environment)
-  const authHeader = request.headers.get('authorization');
-  if (process.env.NODE_ENV === 'production' && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response('Unauthorized', { status: 401 });
+  const authHeader = request.headers.get("authorization");
+  if (
+    process.env.NODE_ENV === "production" &&
+    authHeader !== `Bearer ${process.env.CRON_SECRET}`
+  ) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
   const renew = async (mailbox: GraphMailbox) => {
@@ -20,36 +23,47 @@ export async function GET(request: Request) {
     // 4230 minutes keeps the existing deployment safely below Graph's
     // Outlook subscription lifetime while the cron runs well before expiry.
     const expirationMinutes = 4230;
-    console.log(`Renewing ${mailbox} Graph subscription for resource: ${resource}`);
+    console.log(
+      `Renewing ${mailbox} Graph subscription for resource: ${resource}`,
+    );
     const client = await createGraphContext(config);
     const subscription = await client.ensureMailboxSubscription({
       notificationUrl,
       expirationMinutes,
       resource,
-      clientState: config.webhookClientState ?? '',
+      clientState: config.webhookClientState ?? "",
     });
-    console.log(`${mailbox} Graph subscription is active. ID: ${subscription.id}`);
+    console.log(
+      `${mailbox} Graph subscription is active. ID: ${subscription.id}`,
+    );
     return { mailbox, subscription };
   };
 
-  const results = await Promise.allSettled([
-    renew('business'),
-    renew('admin'),
-  ]);
+  const results = await Promise.allSettled([renew("business"), renew("admin")]);
   const failures = results
-    .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-    .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason));
+    .filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    )
+    .map((result) =>
+      result.reason instanceof Error
+        ? result.reason.message
+        : String(result.reason),
+    );
 
   if (failures.length > 0) {
-    console.error('Cron: Graph subscription renewal failed:', failures);
-    return NextResponse.json({ success: false, errors: failures }, { status: 500 });
+    console.error("Cron: Graph subscription renewal failed:", failures);
+    return NextResponse.json(
+      { success: false, errors: failures },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({
     success: true,
     subscriptions: results.map(
       (result) =>
-        (result as PromiseFulfilledResult<Awaited<ReturnType<typeof renew>>>).value,
+        (result as PromiseFulfilledResult<Awaited<ReturnType<typeof renew>>>)
+          .value,
     ),
   });
 }

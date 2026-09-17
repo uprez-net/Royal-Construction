@@ -70,9 +70,7 @@ export async function POST(
     if (refusal) return refusal;
     console.error("Failed to set a compliance document as not required", error);
     return errorResponse(
-      error instanceof Error
-        ? error.message
-        : "Failed to update the document.",
+      error instanceof Error ? error.message : "Failed to update the document.",
     );
   }
 }

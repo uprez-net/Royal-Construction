@@ -200,7 +200,11 @@ export function hbcfNeedRange(lead: {
   budget?: string | null;
 }): HbcfNeedRange | null {
   const recorded = Number(lead.estimatedValue);
-  if (lead.estimatedValue != null && Number.isFinite(recorded) && recorded > 0) {
+  if (
+    lead.estimatedValue != null &&
+    Number.isFinite(recorded) &&
+    recorded > 0
+  ) {
     return {
       low: Math.round(recorded * (1 - HBCF_NEED_BAND)),
       high: Math.round(recorded * (1 + HBCF_NEED_BAND)),
@@ -452,7 +456,8 @@ export function hbcfAssessment({
   // Only claims that have not already lapsed can free anything further.
   const upcoming = [...claims]
     .filter(
-      (claim) => hbcfParseDate(claim.insuranceClaimEndDate).getTime() >= today.getTime(),
+      (claim) =>
+        hbcfParseDate(claim.insuranceClaimEndDate).getTime() >= today.getTime(),
     )
     .sort(
       (a, b) =>
@@ -461,10 +466,7 @@ export function hbcfAssessment({
     );
 
   for (const claim of upcoming) {
-    const dayAfterEnd = addDays(
-      hbcfParseDate(claim.insuranceClaimEndDate),
-      1,
-    );
+    const dayAfterEnd = addDays(hbcfParseDate(claim.insuranceClaimEndDate), 1);
     if (totalSumAssured - hbcfUsedAt(claims, dayAfterEnd) >= needRange.high) {
       const start = claim.insuranceClaimEndDate;
       return {

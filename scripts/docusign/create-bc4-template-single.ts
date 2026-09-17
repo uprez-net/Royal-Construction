@@ -171,7 +171,9 @@ function ownerTabs(): docusign.Tabs {
       signHereTab("signed_by_owners_value"),
       signHereTab("acknowledgement_of_owner_docusign_0_signature_value"),
     ],
-    dateSignedTabs: [dateSignedTab("acknowledgement_of_owner_docusign_0_date_value")],
+    dateSignedTabs: [
+      dateSignedTab("acknowledgement_of_owner_docusign_0_date_value"),
+    ],
     textTabs: [
       // ── 1a. Derived from the signed Tender (send fills value + locks) ──
       textTab("contract_price_value", "contractPrice", { width: 160 }),
@@ -179,63 +181,190 @@ function ownerTabs(): docusign.Tabs {
       textTab("owners_0_owner_name_value", "ownerNames", { width: 380 }),
       textTab("owners_0_owner_email_value", "ownerEmail", { width: 300 }),
       textTab("site_address_value", "siteAddress", { width: 440 }),
-      textTab("percentage_allowed_on_variations_value", "variationPercent", { width: 100 }),
+      textTab("percentage_allowed_on_variations_value", "variationPercent", {
+        width: 100,
+      }),
       textTab("installments_0_installment_item_value", "paymentSchedule", {
-        width: 470, height: 22, fontSize: "size7",
+        width: 470,
+        height: 22,
+        fontSize: "size7",
       }),
       textTab("deposit_value", "depositAmount", { width: 140 }),
-      textTab("days_not_included_value", "excludedDays", { width: 170, height: 24, fontSize: "size8" }),
-      textTab("defects_liability_period_value", "defectsLiabilityWeeks", { width: 120 }),
-      textTab("description_of_the_work_to_be_completed_value", "workDescription", {
-        width: 480, height: 24, fontSize: "size8",
+      textTab("days_not_included_value", "excludedDays", {
+        width: 170,
+        height: 24,
+        fontSize: "size8",
       }),
-      textTab("exclusions_value", "exclusionsList", { width: 490, height: 90, fontSize: "size8" }),
+      textTab("defects_liability_period_value", "defectsLiabilityWeeks", {
+        width: 120,
+      }),
+      textTab(
+        "description_of_the_work_to_be_completed_value",
+        "workDescription",
+        {
+          width: 480,
+          height: 24,
+          fontSize: "size8",
+        },
+      ),
+      textTab("exclusions_value", "exclusionsList", {
+        width: 490,
+        height: 90,
+        fontSize: "size8",
+      }),
       // ── 1b. Estimator's BC4 particulars (issue #98) — locked; blank ones stay
       //        read-only. The send fills the ones the estimator entered. ──
-      textTab("owners_0_owner_address_value", "ownerAddress", { ...locked, width: 380 }),
-      textTab("owners_0_owner_telephone_value", "ownerPhone", { ...locked, width: 120 }),
-      textTab("owners_0_owner_mobile_value", "ownerMobile", { ...locked, width: 160 }),
-      textTab("funding_lending_authority_value", "lendingAuthority", { ...locked, width: 200 }),
+      textTab("owners_0_owner_address_value", "ownerAddress", {
+        ...locked,
+        width: 380,
+      }),
+      textTab("owners_0_owner_telephone_value", "ownerPhone", {
+        ...locked,
+        width: 120,
+      }),
+      textTab("owners_0_owner_mobile_value", "ownerMobile", {
+        ...locked,
+        width: 160,
+      }),
+      textTab("funding_lending_authority_value", "lendingAuthority", {
+        ...locked,
+        width: 200,
+      }),
       textTab("funding_owner_value", "fundingOwner", { ...locked, width: 200 }),
-      textTab("home_building_compensation_fund_insurance_cover_amount_value", "hbcfCost", { ...locked, width: 120 }),
-      textTab("terms_for_claims_value", "paymentDays", { ...locked, width: 60 }),
-      textTab("interest_rate_on_late_payments_value", "interestRate", { ...locked, width: 60 }),
-      textTab("proposed_commencement_value", "commencementDate", { ...locked, width: 150 }),
-      textTab("construction_period_value", "constructionDays", { ...locked, width: 100 }),
-      textTab("demolition_materials_value", "demolitionMaterials", { ...locked, width: 480, height: 30, fontSize: "size8" }),
-      textTab("pre_contract_costs_value", "preContractCosts", { ...locked, width: 140 }),
-      textTab("special_conditions_value", "specialConditions", { ...locked, width: 500, height: 200, fontSize: "size8" }),
+      textTab(
+        "home_building_compensation_fund_insurance_cover_amount_value",
+        "hbcfCost",
+        { ...locked, width: 120 },
+      ),
+      textTab("terms_for_claims_value", "paymentDays", {
+        ...locked,
+        width: 60,
+      }),
+      textTab("interest_rate_on_late_payments_value", "interestRate", {
+        ...locked,
+        width: 60,
+      }),
+      textTab("proposed_commencement_value", "commencementDate", {
+        ...locked,
+        width: 150,
+      }),
+      textTab("construction_period_value", "constructionDays", {
+        ...locked,
+        width: 100,
+      }),
+      textTab("demolition_materials_value", "demolitionMaterials", {
+        ...locked,
+        width: 480,
+        height: 30,
+        fontSize: "size8",
+      }),
+      textTab("pre_contract_costs_value", "preContractCosts", {
+        ...locked,
+        width: 140,
+      }),
+      textTab("special_conditions_value", "specialConditions", {
+        ...locked,
+        width: 500,
+        height: 200,
+        fontSize: "size8",
+      }),
       // ── 2. Builder identity: locked constants baked into the template ──
-      textTab("business_name_value", "builderName", { value: BUILDER_STATICS.businessName, ...locked, width: 300 }),
-      textTab("builder_address_value", "builderAddress", { value: BUILDER_STATICS.address, ...locked, width: 380 }),
-      textTab("builder_telephone_value", "builderPhone", { value: BUILDER_STATICS.telephone, ...locked, width: 120 }),
-      textTab("builder_mobile_value", "builderMobile", { value: BUILDER_STATICS.mobile, ...locked, width: 160 }),
-      textTab("builder_email_value", "builderEmail", { value: BUILDER_STATICS.email, ...locked, width: 300 }),
-      textTab("builder_licence_no_value", "builderLicenceNo", { value: BUILDER_STATICS.licenceNo, ...locked, width: 150 }),
-      textTab("builder_abn_no_value", "builderAbn", { value: BUILDER_STATICS.abn, ...locked, width: 150 }),
-      textTab("builder_bank_account_name_value", "builderBankName", { value: BUILDER_STATICS.bankAccountName, ...locked, width: 300 }),
-      textTab("builder_bank_account_bsb_value", "builderBankBsb", { value: BUILDER_STATICS.bankBsb, ...locked, width: 120 }),
-      textTab("builder_bank_account_number_value", "builderBankNumber", { value: BUILDER_STATICS.bankAccountNumber, ...locked, width: 160 }),
+      textTab("business_name_value", "builderName", {
+        value: BUILDER_STATICS.businessName,
+        ...locked,
+        width: 300,
+      }),
+      textTab("builder_address_value", "builderAddress", {
+        value: BUILDER_STATICS.address,
+        ...locked,
+        width: 380,
+      }),
+      textTab("builder_telephone_value", "builderPhone", {
+        value: BUILDER_STATICS.telephone,
+        ...locked,
+        width: 120,
+      }),
+      textTab("builder_mobile_value", "builderMobile", {
+        value: BUILDER_STATICS.mobile,
+        ...locked,
+        width: 160,
+      }),
+      textTab("builder_email_value", "builderEmail", {
+        value: BUILDER_STATICS.email,
+        ...locked,
+        width: 300,
+      }),
+      textTab("builder_licence_no_value", "builderLicenceNo", {
+        value: BUILDER_STATICS.licenceNo,
+        ...locked,
+        width: 150,
+      }),
+      textTab("builder_abn_no_value", "builderAbn", {
+        value: BUILDER_STATICS.abn,
+        ...locked,
+        width: 150,
+      }),
+      textTab("builder_bank_account_name_value", "builderBankName", {
+        value: BUILDER_STATICS.bankAccountName,
+        ...locked,
+        width: 300,
+      }),
+      textTab("builder_bank_account_bsb_value", "builderBankBsb", {
+        value: BUILDER_STATICS.bankBsb,
+        ...locked,
+        width: 120,
+      }),
+      textTab("builder_bank_account_number_value", "builderBankNumber", {
+        value: BUILDER_STATICS.bankAccountNumber,
+        ...locked,
+        width: 160,
+      }),
       // ── 3. Owner's own agreement/acknowledgment fields (owner completes) ──
       textTab("signed_date_value", "signedDay", { width: 40 }),
       textTab("signed_month_value", "signedMonth", { width: 100 }),
       textTab("signed_year_value", "signedYear", { width: 40 }),
-      textTab("acknowledgement_of_owner_docusign_0_name_value", "ownerPrintName", { width: 220 }),
-      textTab("acknowledgement_of_owner_docusign_0_capacity_value", "ownerCapacity", { width: 220 }),
+      textTab(
+        "acknowledgement_of_owner_docusign_0_name_value",
+        "ownerPrintName",
+        { width: 220 },
+      ),
+      textTab(
+        "acknowledgement_of_owner_docusign_0_capacity_value",
+        "ownerCapacity",
+        { width: 220 },
+      ),
     ],
     checkboxTabs: [
       // Derived contract terms — value set by the send action, LOCKED so the
       // customer can't toggle them before signing (defined here + at send time).
-      checkboxTab("contract_price_gst_Inclusive of GST_value", "gstInclusive", { yOffset: 8, locked: true }),
-      checkboxTab("included_in_the_contract_price__Yes_value", "hbcfIncluded", { yOffset: 8, locked: true }),
-      checkboxTab("_b_exclusions_Yes_value", "exclusionsYes", { yOffset: 8, locked: true }),
+      checkboxTab("contract_price_gst_Inclusive of GST_value", "gstInclusive", {
+        yOffset: 8,
+        locked: true,
+      }),
+      checkboxTab("included_in_the_contract_price__Yes_value", "hbcfIncluded", {
+        yOffset: 8,
+        locked: true,
+      }),
+      checkboxTab("_b_exclusions_Yes_value", "exclusionsYes", {
+        yOffset: 8,
+        locked: true,
+      }),
       // Schedule 1 statutory checklist — pre-ticked + locked constants.
       ...SCHEDULE1_YES_TOKENS.map((token, index) =>
-        checkboxTab(token, `sch1Yes${index + 1}`, { selected: true, locked: true }),
+        checkboxTab(token, `sch1Yes${index + 1}`, {
+          selected: true,
+          locked: true,
+        }),
       ),
       // Owner's own acknowledgment ticks (owner completes these).
-      checkboxTab("acknowledgement_of_owner_consumer_building_guide_value", "ownerAckGuide"),
-      checkboxTab("acknowledgement_of_owner_checklist_all_yes_value", "ownerAckChecklist"),
+      checkboxTab(
+        "acknowledgement_of_owner_consumer_building_guide_value",
+        "ownerAckGuide",
+      ),
+      checkboxTab(
+        "acknowledgement_of_owner_checklist_all_yes_value",
+        "ownerAckChecklist",
+      ),
     ],
   } as docusign.Tabs;
 }
@@ -243,7 +372,9 @@ function ownerTabs(): docusign.Tabs {
 async function main() {
   const pdfPath = process.argv[2];
   if (!pdfPath || !existsSync(pdfPath)) {
-    console.error("Usage: tsx scripts/docusign/create-bc4-template-single.ts <blank-BC4.pdf>");
+    console.error(
+      "Usage: tsx scripts/docusign/create-bc4-template-single.ts <blank-BC4.pdf>",
+    );
     process.exit(1);
   }
   const pdfBase64 = readFileSync(pdfPath).toString("base64");
@@ -305,7 +436,10 @@ async function main() {
     if (/^DOCUSIGN_CONTRACT_TEMPLATE_ID=.*$/m.test(env)) {
       writeFileSync(
         ".env",
-        env.replace(/^DOCUSIGN_CONTRACT_TEMPLATE_ID=.*$/m, `DOCUSIGN_CONTRACT_TEMPLATE_ID=${templateId}`),
+        env.replace(
+          /^DOCUSIGN_CONTRACT_TEMPLATE_ID=.*$/m,
+          `DOCUSIGN_CONTRACT_TEMPLATE_ID=${templateId}`,
+        ),
       );
       console.log(".env updated with DOCUSIGN_CONTRACT_TEMPLATE_ID");
     } else {
@@ -317,6 +451,10 @@ async function main() {
 
 void main().catch((error) => {
   const body = (error as { response?: { body?: unknown } }).response?.body;
-  console.error("FAILED:", (error as Error).message, body ? JSON.stringify(body) : "");
+  console.error(
+    "FAILED:",
+    (error as Error).message,
+    body ? JSON.stringify(body) : "",
+  );
   process.exit(1);
 });

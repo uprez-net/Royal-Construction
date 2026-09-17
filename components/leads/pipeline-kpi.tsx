@@ -46,7 +46,11 @@ export function PipelineKpi({ metrics, forecast }: PipelineKpiProps) {
           tone="success"
         />
         <MetricCard
-          title={forecast.label ? `Banked · ${forecast.label}` : "Banked This Quarter"}
+          title={
+            forecast.label
+              ? `Banked · ${forecast.label}`
+              : "Banked This Quarter"
+          }
           value={forecast.bankedValue}
           isCurrency
           Icon={CalendarCheck}

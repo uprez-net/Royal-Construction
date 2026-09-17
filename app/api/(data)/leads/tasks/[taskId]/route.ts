@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 
-import { completeLeadTask, deleteLeadTask, reopenLeadTask } from "@/lib/data/lead-tasks";
+import {
+  completeLeadTask,
+  deleteLeadTask,
+  reopenLeadTask,
+} from "@/lib/data/lead-tasks";
 import {
   badRequestResponse,
   errorResponse,
@@ -49,9 +53,14 @@ export async function PATCH(
 
     const taskId = Number(parsed.data.taskId);
     const task =
-      action === "reopen" ? await reopenLeadTask(taskId) : await completeLeadTask(taskId);
+      action === "reopen"
+        ? await reopenLeadTask(taskId)
+        : await completeLeadTask(taskId);
     if (!task) {
-      return errorResponse("Task not found", { status: 404, code: "LEAD_TASK_NOT_FOUND" });
+      return errorResponse("Task not found", {
+        status: 404,
+        code: "LEAD_TASK_NOT_FOUND",
+      });
     }
     return successResponse(task);
   } catch (error) {

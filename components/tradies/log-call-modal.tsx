@@ -108,7 +108,10 @@ export function LogCallModal({
       dispatch(
         updateTradieScheduleStatus({
           scheduleId: schedule.id,
-          status: status === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : status as TradieScheduleStatus,
+          status:
+            status === "CONFIRMED"
+              ? "AWAITING_ADMIN_APPROVAL"
+              : (status as TradieScheduleStatus),
           notes,
         }),
       )
@@ -132,7 +135,7 @@ export function LogCallModal({
         className={cn(
           "max-w-[calc(100%-2rem)] gap-0 sm:max-w-[680px] overflow-hidden rounded-[14px] border border-border/70 bg-card p-0 shadow-2xl",
           "sm:rounded-[14px]",
-          "max-h-[60vh] overflow-y-auto"
+          "max-h-[60vh] overflow-y-auto",
         )}
       >
         {/* Header */}

@@ -2,7 +2,12 @@ import type { ProjectStage } from "@prisma/client";
 import { ReceiptText } from "lucide-react";
 
 import { PROJECT_STAGE_LABELS, ProjectWithStats } from "@/types/project";
-import { compactCurrency, currency, dateFormat, formatStatus } from "@/utils/formatters";
+import {
+  compactCurrency,
+  currency,
+  dateFormat,
+  formatStatus,
+} from "@/utils/formatters";
 import { invoiceTone } from "@/lib/projects/invoice-display";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { DataTable } from "../common/data-table";
@@ -188,10 +193,16 @@ export function FinancialTab({ project }: FinancialTabProps) {
             </span>,
             PROJECT_STAGE_LABELS[invoice.projectStage as ProjectStage] ??
               invoice.projectStage,
-            <span key="total" className="font-mono tabular-nums text-foreground">
+            <span
+              key="total"
+              className="font-mono tabular-nums text-foreground"
+            >
               {currency.format(Number(invoice.total))}
             </span>,
-            <span key="paid" className="font-mono tabular-nums text-success-ink">
+            <span
+              key="paid"
+              className="font-mono tabular-nums text-success-ink"
+            >
               {currency.format(Number(invoice.amountPaid))}
             </span>,
             dateFormat.format(new Date(invoice.dueDate)),

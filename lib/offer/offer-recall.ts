@@ -1,8 +1,5 @@
 import type { OfferStatus, Prisma } from "@prisma/client";
-import {
-  RECALL_EDGES,
-  type RecallScope,
-} from "./offer-workflow-transitions";
+import { RECALL_EDGES, type RecallScope } from "./offer-workflow-transitions";
 
 // Recall decisions, kept out of the "use server" module so they can be tested.
 // recallOfferEnvelope is a Server Action: every argument it receives comes from
@@ -72,7 +69,11 @@ export function resolveRecall(
         "Nothing on this offer is out for signature, so there is nothing to recall. Refresh to see its current status.",
     };
   }
-  if (typeof scope !== "string" || scope !== edge.scope || toStatus !== edge.to) {
+  if (
+    typeof scope !== "string" ||
+    scope !== edge.scope ||
+    toStatus !== edge.to
+  ) {
     return {
       ok: false,
       error:
@@ -196,5 +197,7 @@ export function describeUnconfirmedVoid(input: {
 }
 
 function envelopeNames(ids: readonly string[]): string {
-  return ids.length === 1 ? `envelope ${ids[0]}` : `envelopes ${ids.join(", ")}`;
+  return ids.length === 1
+    ? `envelope ${ids[0]}`
+    : `envelopes ${ids.join(", ")}`;
 }

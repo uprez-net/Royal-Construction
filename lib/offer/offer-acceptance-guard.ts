@@ -49,8 +49,7 @@ const BLOCKED: Record<OfferStatus, string | null> = {
     "This offer is already agreed. The tender is the next document to send.",
   TENDER_DRAFT:
     "This offer has moved on to the tender. Send the tender for signature instead.",
-  TENDER_SENT:
-    "The tender for this offer is already out for signature.",
+  TENDER_SENT: "The tender for this offer is already out for signature.",
   TENDER_DECLINED:
     "The customer declined the tender. Create a revision to start again.",
   TENDER_SIGNED:
@@ -68,7 +67,9 @@ const BLOCKED: Record<OfferStatus, string | null> = {
     "This offer has been handed off to a project. Changes now need a contract variation.",
 };
 
-export function describeAcceptanceSendBlock(status: OfferStatus): string | null {
+export function describeAcceptanceSendBlock(
+  status: OfferStatus,
+): string | null {
   return BLOCKED[status];
 }
 

@@ -32,7 +32,11 @@ test("fixed 18500 -> formula -> fixed keeps 18500", () => {
 });
 
 test("formula 'A*B' -> none -> formula keeps 'A*B'", () => {
-  const formula: CostScheduleRow = { ...base, priceMode: "formula", formula: "A*B" };
+  const formula: CostScheduleRow = {
+    ...base,
+    priceMode: "formula",
+    formula: "A*B",
+  };
 
   const back = withMode(withMode(formula, "none"), "formula");
   assert.equal(back.priceMode === "formula" ? back.formula : undefined, "A*B");

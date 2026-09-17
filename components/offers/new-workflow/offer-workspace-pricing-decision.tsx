@@ -113,9 +113,7 @@ export function PricingDecisionPanel({
           ) : null}
         </label>
         <div className="rounded-lg border border-border bg-background/70 p-3">
-          <p className={FIELD_LABEL_CLASS}>
-            Computed build-up
-          </p>
+          <p className={FIELD_LABEL_CLASS}>Computed build-up</p>
           <p className="font-mono text-sm tabular-nums text-muted-foreground">
             {formatCurrency(customerPrice.computedContractValueIncGst)}
           </p>
@@ -124,8 +122,7 @@ export function PricingDecisionPanel({
           </p>
           {saving !== null && saving > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {priceAdjustmentLabel || "Adjustment"}{" "}
-              {formatCurrency(saving)}
+              {priceAdjustmentLabel || "Adjustment"} {formatCurrency(saving)}
             </p>
           ) : null}
         </div>

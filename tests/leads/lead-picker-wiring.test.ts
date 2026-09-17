@@ -20,11 +20,17 @@ test("a new search resets the page through pageAfterQueryChange", () => {
   const start = hook.indexOf("const setQuery = useCallback(");
   assert.ok(start >= 0, "setQuery is not a useCallback in useLeadSearch");
   const setQuery = hook.slice(start, hook.indexOf("}, []);", start));
-  assert.match(setQuery, /setPageInfo\(\(prev\) => \{[\s\S]*pageAfterQueryChange\(/);
+  assert.match(
+    setQuery,
+    /setPageInfo\(\(prev\) => \{[\s\S]*pageAfterQueryChange\(/,
+  );
 });
 
 test("every fetched page is folded in by mergeLeadPage", () => {
-  assert.match(hook, /setItems\(\(prev\) => mergeLeadPage\(prev, data\.items, page\)\)/);
+  assert.match(
+    hook,
+    /setItems\(\(prev\) => mergeLeadPage\(prev, data\.items, page\)\)/,
+  );
 });
 
 test("the fetch reruns on a search or page change, not when the list grows", () => {
@@ -40,7 +46,10 @@ test("a response that lands after the search changed is dropped", () => {
     hook,
     /const superseded = \(\) =>\s*controller\.signal\.aborted \|\| queryRef\.current\.trim\(\) !== searchTerm;/,
   );
-  const success = hook.slice(hook.indexOf("await fetchJson"), hook.indexOf("setItems("));
+  const success = hook.slice(
+    hook.indexOf("await fetchJson"),
+    hook.indexOf("setItems("),
+  );
   assert.match(success, /if \(superseded\(\)\) return;/);
   assert.match(hook, /catch \(err\) \{[\s\S]*?if \(superseded\(\)\) return;/);
   assert.match(hook, /finally \{[\s\S]*?if \(!superseded\(\)\) \{/);
@@ -50,7 +59,10 @@ test("the empty-state copy goes by the search the results came from", () => {
   // It read the input box, which runs ahead of the results: clearing a search
   // that matched nothing showed and announced "No leads are ready for an
   // offer." until the full list loaded.
-  assert.match(hook, /setPageInfo\(\{[\s\S]*?\}\);\s*setResultQuery\(searchTerm\);/);
+  assert.match(
+    hook,
+    /setPageInfo\(\{[\s\S]*?\}\);\s*setResultQuery\(searchTerm\);/,
+  );
   for (const path of [
     "components/offers/create-offer-modal.tsx",
     "components/projects/create-project-modal.tsx",
@@ -65,7 +77,10 @@ test("confirming uses the chosen lead only while its card is shown", () => {
   // A search hid the chosen lead but Open Offer Workspace stayed enabled and
   // opened it, creating an Offer row for a lead the user could not see.
   const offer = read("components/offers/create-offer-modal.tsx");
-  assert.match(offer, /const chosenLeadId = shownSelection\(\s*selectedLeadId,\s*leadSearch\.items,\s*leadSearch\.loading,?\s*\)/);
+  assert.match(
+    offer,
+    /const chosenLeadId = shownSelection\(\s*selectedLeadId,\s*leadSearch\.items,\s*leadSearch\.loading,?\s*\)/,
+  );
   assert.match(offer, /disabled=\{!chosenLeadId\}/);
   assert.match(offer, /router\.push\(`\/offers\/\$\{chosenLeadId\}`\)/);
 
@@ -73,7 +88,10 @@ test("confirming uses the chosen lead only while its card is shown", () => {
   const start = project.indexOf("const handleExtract = async () => {");
   assert.ok(start >= 0, "handleExtract not found in create-project-modal");
   const guard = project.slice(start, project.indexOf("return;", start));
-  assert.match(guard, /shownSelection\(selectedLeadId, leadSearch\.items, leadSearch\.loading\)/);
+  assert.match(
+    guard,
+    /shownSelection\(selectedLeadId, leadSearch\.items, leadSearch\.loading\)/,
+  );
   assert.match(guard, /if \(!selectedLeadId \|\| !shownLeadId\)/);
 });
 
@@ -82,8 +100,14 @@ test("the no-leads message is announced from a live region that outlives the ske
   // skeleton swapped out, and screen readers often skip a region like that.
   assert.equal(cards.match(/role="status"/g)?.length, 1);
   assert.match(cards, /const liveRegion = \(\s*<p role="status"/);
-  assert.match(cards, /if \(loading\) \{\s*return \(\s*<>\s*\{liveRegion\}\s*<LeadCardListSkeleton/);
-  assert.match(cards, /return \(\s*<>\s*\{liveRegion\}\s*<div ref=\{scrollContainerRef\}/);
+  assert.match(
+    cards,
+    /if \(loading\) \{\s*return \(\s*<>\s*\{liveRegion\}\s*<LeadCardListSkeleton/,
+  );
+  assert.match(
+    cards,
+    /return \(\s*<>\s*\{liveRegion\}\s*<div ref=\{scrollContainerRef\}/,
+  );
 });
 
 test("the lead cards' keyboard focus ring is not cancelled by outline-none", () => {

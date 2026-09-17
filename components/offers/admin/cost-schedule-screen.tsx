@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -79,9 +84,9 @@ export function OfferCostScheduleScreen() {
   // Track validity per formula row so the Save button stays disabled until
   // every formula row parses cleanly and references only known variables/
   // functions. Keyed by row id; cleared when a row leaves formula mode.
-  const [formulaValidity, setFormulaValidity] = useState<
-    Map<string, boolean>
-  >(() => new Map());
+  const [formulaValidity, setFormulaValidity] = useState<Map<string, boolean>>(
+    () => new Map(),
+  );
   const handleFormulaValidation = (rowId: string, valid: boolean) => {
     setFormulaValidity((prev) => {
       const next = new Map(prev);

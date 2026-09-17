@@ -40,7 +40,9 @@ function hostFromBlobToken(token: string | undefined): string | null {
 }
 
 export function allowedOfferImageHost(): string {
-  return hostFromBlobToken(process.env.BLOB_READ_WRITE_TOKEN) ?? ROYAL_BLOB_HOST;
+  return (
+    hostFromBlobToken(process.env.BLOB_READ_WRITE_TOKEN) ?? ROYAL_BLOB_HOST
+  );
 }
 
 export function isAllowedOfferImageUrl(url: unknown): boolean {

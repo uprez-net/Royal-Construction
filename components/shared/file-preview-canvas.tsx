@@ -146,11 +146,24 @@ export interface FilePreviewCanvasProps {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-function detectFileKind(url: string, fileName?: string | null, fileType?: string | null): FileKind {
+function detectFileKind(
+  url: string,
+  fileName?: string | null,
+  fileType?: string | null,
+): FileKind {
   const mime = fileType?.toLowerCase() ?? "";
   if (mime === "application/pdf") return "pdf";
-  if (mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return "docx";
-  if (mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || mime === "application/vnd.ms-excel.sheet.macroenabled.12") return "xlsx";
+  if (
+    mime ===
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  )
+    return "docx";
+  if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "application/vnd.ms-excel.sheet.macroenabled.12"
+  )
+    return "xlsx";
   const path = (fileName || url).split("?")[0].split("#")[0];
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "pdf") return "pdf";
@@ -426,8 +439,14 @@ export default function FilePreviewCanvas({
   fileType,
   onClose,
 }: FilePreviewCanvasProps) {
-  const kind = React.useMemo(() => detectFileKind(url, fileName, fileType), [url, fileName, fileType]);
-  const displayFileName = React.useMemo(() => getFileName(url, fileName), [url, fileName]);
+  const kind = React.useMemo(
+    () => detectFileKind(url, fileName, fileType),
+    [url, fileName, fileType],
+  );
+  const displayFileName = React.useMemo(
+    () => getFileName(url, fileName),
+    [url, fileName],
+  );
   const meta = FILE_META[kind];
 
   const [open, setOpen] = React.useState(true);

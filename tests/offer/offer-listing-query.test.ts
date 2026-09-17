@@ -49,7 +49,9 @@ test("an offer reference searches the revisions' baseReference", () => {
         JSON.stringify(clause) ===
         JSON.stringify({
           offers: {
-            some: { baseReference: { contains: "RC-0042", mode: "insensitive" } },
+            some: {
+              baseReference: { contains: "RC-0042", mode: "insensitive" },
+            },
           },
         }),
     ),

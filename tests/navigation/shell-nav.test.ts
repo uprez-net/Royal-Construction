@@ -59,6 +59,9 @@ test("the shell highlights nav items by the section slug", () => {
   const compared = [...shell.matchAll(/item\.slug\s*[!=]==?\s*([\w$.]+)/g)].map(
     (match) => match[1],
   );
-  assert.ok(compared.length >= 5, `expected 5 comparisons, found ${compared.length}`);
+  assert.ok(
+    compared.length >= 5,
+    `expected 5 comparisons, found ${compared.length}`,
+  );
   assert.deepEqual(new Set(compared), new Set(["sectionSlug"]));
 });

@@ -1,50 +1,59 @@
-import { LeadStage as DBLeadStage, RunStatus, LeadEmails } from "@prisma/client";
+import {
+  LeadStage as DBLeadStage,
+  RunStatus,
+  LeadEmails,
+} from "@prisma/client";
 
 export type LeadStage =
-  | 'New'
-  | 'Contacted'
-  | 'Discovery'
-  | 'Qualified'
-  | 'Quoted'
-  | 'Negotiating'
-  | 'Won'
-  | 'Lost'
-  | 'Meeting Scheduled'
-  | 'In Follow-up'
-  | 'No Response'
-  | 'Converted'
-  | 'Cancelled'
-  | 'Disqualified';
+  | "New"
+  | "Contacted"
+  | "Discovery"
+  | "Qualified"
+  | "Quoted"
+  | "Negotiating"
+  | "Won"
+  | "Lost"
+  | "Meeting Scheduled"
+  | "In Follow-up"
+  | "No Response"
+  | "Converted"
+  | "Cancelled"
+  | "Disqualified";
 export type LeadSource =
-  | 'Google Ads'
-  | 'Referral'
-  | 'Facebook Ads'
-  | 'Walk-in'
-  | 'Repeat Client'
-  | 'Website'
-  | 'Personal'
-  | 'Business';
-export type BudgetRange = 'Not Discussed' | '$200K - $350K' | '$350K - $500K' | '$500K - $700K' | '$700K+';
+  | "Google Ads"
+  | "Referral"
+  | "Facebook Ads"
+  | "Walk-in"
+  | "Repeat Client"
+  | "Website"
+  | "Personal"
+  | "Business";
+export type BudgetRange =
+  | "Not Discussed"
+  | "$200K - $350K"
+  | "$350K - $500K"
+  | "$500K - $700K"
+  | "$700K+";
 export type ProjectType =
-  | 'Not Specified'
-  | 'New Home'
-  | 'Duplex'
-  | 'Renovation'
-  | 'Granny Flat'
-  | 'Townhouse'
-  | 'Dual Occupancy'
-  | 'Single Storey'
-  | 'Double Storey'
-  | 'House and Granny'
-  | 'Knockdown and rebuild'
-  | 'House + land package';
+  | "Not Specified"
+  | "New Home"
+  | "Duplex"
+  | "Renovation"
+  | "Granny Flat"
+  | "Townhouse"
+  | "Dual Occupancy"
+  | "Single Storey"
+  | "Double Storey"
+  | "House and Granny"
+  | "Knockdown and rebuild"
+  | "House + land package";
 
 export interface HistoryItem {
   date: string;
   time: string;
   action: string;
   detail: string;
-  type: 'system' | 'call' | 'email' | 'referral';
+  type: "system" | "call" | "email" | "referral";
   author?: {
     id: string;
     name: string;
@@ -66,7 +75,7 @@ export type LeadRichTextNode = {
   value?: unknown;
   children?: LeadRichTextNode[];
   [key: string]: unknown;
-}
+};
 
 export interface LeadNoteAnnotation {
   id: string;
@@ -98,8 +107,9 @@ export interface Lead {
   source: LeadSource;
   sourceDetail: string;
   stage: LeadStage;
-  assignedId?: string | null;          // <-- NEW: The User ID
-  assignedUser?: {                     // <-- NEW: The populated User object from Prisma
+  assignedId?: string | null; // <-- NEW: The User ID
+  assignedUser?: {
+    // <-- NEW: The populated User object from Prisma
     id: string;
     name: string;
     email: string;
@@ -177,7 +187,7 @@ export const LeadStageToLeadStageDBMapping: Record<LeadStage, DBLeadStage> = {
   "No Response": DBLeadStage.NO_RESPONSE,
   Converted: DBLeadStage.CONVERTED,
   Cancelled: DBLeadStage.CANCELLED,
-  Disqualified: DBLeadStage.DISQUALIFIED
+  Disqualified: DBLeadStage.DISQUALIFIED,
 };
 
 /**
@@ -223,7 +233,10 @@ export function parseLeadStageFilter(raw: string): {
 } {
   const stages: DBLeadStage[] = [];
   const unknown: string[] = [];
-  for (const label of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
+  for (const label of raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     const resolved = resolveLeadStageFilter(label);
     if (resolved) stages.push(resolved);
     else unknown.push(label);

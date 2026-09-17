@@ -125,7 +125,9 @@ export function ProjectQuotesTab({ project, isAdmin }: ProjectQuotesTabProps) {
             );
             if (action) dispatch(openModal(action));
           }}
-          rowLabel={(index) => `Open ${visibleFiles[index]?.filename ?? "document"}`}
+          rowLabel={(index) =>
+            `Open ${visibleFiles[index]?.filename ?? "document"}`
+          }
           caption="Documents uploaded to this project, with size, type, linked milestone and upload time."
           headers={["#", "Name", "Size", "Type", "Milestone", "Uploaded"]}
           align={["end", "start", "end", "start", "start", "start"]}

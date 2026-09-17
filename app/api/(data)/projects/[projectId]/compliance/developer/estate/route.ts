@@ -63,9 +63,9 @@ export async function POST(
     const refusal = complianceErrorResponse(error);
     if (refusal) return refusal;
     console.error("Failed to record the estate developer", error);
-    return errorResponse(
-      "Failed to record the estate developer.",
-      { status: 500, code: "ESTATE_DEVELOPER_FAILED" },
-    );
+    return errorResponse("Failed to record the estate developer.", {
+      status: 500,
+      code: "ESTATE_DEVELOPER_FAILED",
+    });
   }
 }

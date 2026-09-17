@@ -32,7 +32,11 @@ test("created and sent envelopes are live", () => {
 
 test("completed, declined and voided envelopes are not live", () => {
   for (const status of TERMINAL) {
-    assert.equal(isLiveEnvelopeStatus(status), false, `${status} treated as live`);
+    assert.equal(
+      isLiveEnvelopeStatus(status),
+      false,
+      `${status} treated as live`,
+    );
   }
 });
 

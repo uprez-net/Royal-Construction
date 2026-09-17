@@ -54,7 +54,10 @@ test("only unsettled claims count as pending", () => {
 });
 
 test("parses a plain Xero calendar date", () => {
-  assert.equal(parseXeroDate("2026-09-02")?.toISOString(), "2026-09-02T00:00:00.000Z");
+  assert.equal(
+    parseXeroDate("2026-09-02")?.toISOString(),
+    "2026-09-02T00:00:00.000Z",
+  );
 });
 
 // The shape that broke production. The SDK types every Xero date as `string`,

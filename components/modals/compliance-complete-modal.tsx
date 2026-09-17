@@ -89,7 +89,11 @@ export function ComplianceCompleteModal({
           >
             Not yet
           </Button>
-          <Button type="button" disabled={isSending} onClick={() => void handleSend()}>
+          <Button
+            type="button"
+            disabled={isSending}
+            onClick={() => void handleSend()}
+          >
             {isSending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             ) : (

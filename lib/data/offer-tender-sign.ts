@@ -74,7 +74,9 @@ export async function sendTenderForSignature(input: {
     };
   }
 
-  const snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
+  const snapshot = deserializeWorkspace(
+    parseWorkspaceState(offer.workspaceState),
+  );
 
   // Server-side owner gate (PR #124): re-validate owner completeness — crucially,
   // UNIQUE signer emails. Two signers sharing an address would create DocuSign
@@ -88,7 +90,6 @@ export async function sendTenderForSignature(input: {
       error: `Complete the owner details before sending the Tender: ${ownerIssues.join(" ")}`,
     };
   }
-
 
   // A Tender is a fixed-price contract: its progress-payment schedule must sum
   // to exactly the contract value (100%), or the customer is asked to sign a
@@ -255,83 +256,84 @@ export async function sendTenderForSignature(input: {
     JSON.stringify(withTenderPaymentTerms(proposalInput)),
   );
 
-  const stillClaimed = await prisma.$transaction(async (tx) => {
-    // Claim first, then write. Returning from a transaction callback COMMITS
-    // it (only a throw rolls back), so a recall or Create revision that ran
-    // while DocuSign was creating the envelope used to have the writes below
-    // land anyway: the stored document was replaced and executedPdfUrl cleared
-    // on a document that may already be executed, even though the raced
-    // envelope is voided straight after. The envelope row is still written, so
-    // the raced envelope stays on the audit trail and can be cancelled.
-    const stillSent = await tx.offer.updateMany({
-      where: {
-        id: offer.id,
-        offerStatus: OfferStatus.TENDER_SENT,
-        isActive: true,
-      },
-      data: { offerStatus: OfferStatus.TENDER_SENT },
-    });
-    const claimed = stillSent.count > 0;
-    const tender = await tx.tender.upsert({
-      where: { offerId: offer.id },
-      // A new envelope replaces the document, so the last envelope's executed
-      // PDF no longer describes it. The webhook files this one's on completion.
-      // A raced send owns nothing, so it leaves the stored document alone.
-      update: claimed
-        ? {
-            version: offer.revisionNumber,
-            documentData,
-            executedPdfUrl: null,
-          }
-        : {},
-      create: {
-        offerId: offer.id,
-        version: offer.revisionNumber,
-        documentData,
-      },
-    });
-    await tx.envelope.create({
-      data: {
-        docType: EnvelopeDocType.TENDER,
-        tenderId: tender.id,
-        docusignId: envelope.envelopeId,
-        status: EnvelopeStatus.SENT,
-        documentVersion: offer.revisionNumber,
-        sentAt: new Date(),
-        signatures: {
-          create: envelope.recipients.map((recipient) => ({
-            recipientRole:
-              recipient.role === "BUILDER"
-                ? SignerRole.BUILDER
-                : SignerRole.CUSTOMER,
-            name: recipient.name,
-            email: recipient.email,
-            routingOrder: recipient.routingOrder,
-            docusignRecipientId: recipient.recipientId,
-            capacity: recipient.capacity ?? null,
-            entityName: recipient.entityName ?? null,
-            entityAbn: recipient.entityAbn ?? null,
-          })),
+  const stillClaimed = await prisma
+    .$transaction(async (tx) => {
+      // Claim first, then write. Returning from a transaction callback COMMITS
+      // it (only a throw rolls back), so a recall or Create revision that ran
+      // while DocuSign was creating the envelope used to have the writes below
+      // land anyway: the stored document was replaced and executedPdfUrl cleared
+      // on a document that may already be executed, even though the raced
+      // envelope is voided straight after. The envelope row is still written, so
+      // the raced envelope stays on the audit trail and can be cancelled.
+      const stillSent = await tx.offer.updateMany({
+        where: {
+          id: offer.id,
+          offerStatus: OfferStatus.TENDER_SENT,
+          isActive: true,
         },
-      },
-    });
-    if (!claimed) {
-      return false;
-    }
-    await tx.offerStatusEvent.create({
-      data: {
-        offerId: offer.id,
-        fromStatus: offer.offerStatus,
-        toStatus: OfferStatus.TENDER_SENT,
-        actorId: access.user.id,
-        // Record the ACTUAL customer recipients (every owner/director the envelope
-        // routed to), not just the resolved customerEmail — which may not even be
-        // the primary signer's address (PR #124 review).
-        note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
-      },
-    });
-    return true;
-  })
+        data: { offerStatus: OfferStatus.TENDER_SENT },
+      });
+      const claimed = stillSent.count > 0;
+      const tender = await tx.tender.upsert({
+        where: { offerId: offer.id },
+        // A new envelope replaces the document, so the last envelope's executed
+        // PDF no longer describes it. The webhook files this one's on completion.
+        // A raced send owns nothing, so it leaves the stored document alone.
+        update: claimed
+          ? {
+              version: offer.revisionNumber,
+              documentData,
+              executedPdfUrl: null,
+            }
+          : {},
+        create: {
+          offerId: offer.id,
+          version: offer.revisionNumber,
+          documentData,
+        },
+      });
+      await tx.envelope.create({
+        data: {
+          docType: EnvelopeDocType.TENDER,
+          tenderId: tender.id,
+          docusignId: envelope.envelopeId,
+          status: EnvelopeStatus.SENT,
+          documentVersion: offer.revisionNumber,
+          sentAt: new Date(),
+          signatures: {
+            create: envelope.recipients.map((recipient) => ({
+              recipientRole:
+                recipient.role === "BUILDER"
+                  ? SignerRole.BUILDER
+                  : SignerRole.CUSTOMER,
+              name: recipient.name,
+              email: recipient.email,
+              routingOrder: recipient.routingOrder,
+              docusignRecipientId: recipient.recipientId,
+              capacity: recipient.capacity ?? null,
+              entityName: recipient.entityName ?? null,
+              entityAbn: recipient.entityAbn ?? null,
+            })),
+          },
+        },
+      });
+      if (!claimed) {
+        return false;
+      }
+      await tx.offerStatusEvent.create({
+        data: {
+          offerId: offer.id,
+          fromStatus: offer.offerStatus,
+          toStatus: OfferStatus.TENDER_SENT,
+          actorId: access.user.id,
+          // Record the ACTUAL customer recipients (every owner/director the envelope
+          // routed to), not just the resolved customerEmail — which may not even be
+          // the primary signer's address (PR #124 review).
+          note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
+        },
+      });
+      return true;
+    })
     .catch((error) => {
       // The envelope is ALREADY with the client and cannot be un-sent, so this
       // must never release the claim (that would let a retry double-send a
@@ -376,7 +378,9 @@ function describeDocusignError(error: unknown): string {
   if (response?.body) {
     const body = response.body as { errorCode?: string; message?: string };
     if (body.message) {
-      return body.errorCode ? `${body.errorCode}: ${body.message}` : body.message;
+      return body.errorCode
+        ? `${body.errorCode}: ${body.message}`
+        : body.message;
     }
   }
   return (error as Error).message ?? "Unknown error";

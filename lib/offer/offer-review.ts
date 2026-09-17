@@ -51,11 +51,12 @@ const currency = new Intl.NumberFormat("en-AU", {
 });
 
 function section(
-  s: Omit<OfferReviewSection, "status"> & { readonly issues: readonly string[] },
+  s: Omit<OfferReviewSection, "status"> & {
+    readonly issues: readonly string[];
+  },
 ): OfferReviewSection {
   return { ...s, status: s.issues.length === 0 ? "complete" : "incomplete" };
 }
-
 
 export function buildOfferReview(
   input: OfferReviewInput,
@@ -63,7 +64,10 @@ export function buildOfferReview(
   const { job, lines, allowances, exclusions, draft, customerPrice } = input;
   const totalAreaSqm = getAreaBasisTotalSqm(offerAreaBasisFromJob(job));
   const pricedLines = lines.filter((line) => line.costExGst > 0);
-  const directTotal = pricedLines.reduce((sum, line) => sum + line.costExGst, 0);
+  const directTotal = pricedLines.reduce(
+    (sum, line) => sum + line.costExGst,
+    0,
+  );
   const shownAllowances = allowances.filter(
     (item) => item.includedInOfferDocument,
   );
@@ -94,7 +98,8 @@ export function buildOfferReview(
       rows: [
         {
           label: (job.owners?.length ?? 0) > 1 ? "Owners" : "Owner",
-          value: formatOwnerNamesLine(job.owners ?? []) || job.clientNames || "—",
+          value:
+            formatOwnerNamesLine(job.owners ?? []) || job.clientNames || "—",
         },
         { label: "Current Location", value: job.currentLocation || "—" },
         { label: "Site Location", value: job.siteAddress || "—" },
@@ -124,8 +129,7 @@ export function buildOfferReview(
           "No customer price set.",
         customerPrice.needsOverrideReason &&
           "Add the commercial reason for the price override.",
-      ]
-        .filter((v): v is string => Boolean(v)),
+      ].filter((v): v is string => Boolean(v)),
       rows: [
         {
           label: "Fixed price inc GST",

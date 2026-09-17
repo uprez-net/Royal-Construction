@@ -111,7 +111,11 @@ export async function runAuditedAgentOperation<T>(params: {
     return { auditId: audit.id, operationId: operation.id, replay: null };
   }
 
-  async function finalizeSuccess(tx: TransactionClient, prepared: { operationId: string; auditId: string }, output: T) {
+  async function finalizeSuccess(
+    tx: TransactionClient,
+    prepared: { operationId: string; auditId: string },
+    output: T,
+  ) {
     const outputRecord =
       typeof output === "object" && output !== null && !Array.isArray(output)
         ? (output as Record<string, unknown>)
@@ -130,22 +134,31 @@ export async function runAuditedAgentOperation<T>(params: {
         data: {
           completedAt: new Date(),
           outputSummary: toInputJson({
-            kind: typeof outputRecord?.kind === "string" ? outputRecord.kind : "completed",
+            kind:
+              typeof outputRecord?.kind === "string"
+                ? outputRecord.kind
+                : "completed",
           }),
-          ...(params.targetIdFromOutput ? { targetId: params.targetIdFromOutput(output) } : {}),
+          ...(params.targetIdFromOutput
+            ? { targetId: params.targetIdFromOutput(output) }
+            : {}),
           status: AgentActionStatus.SUCCEEDED,
         },
       }),
     ]);
   }
 
-  async function finalizeFailure(tx: TransactionClient, prepared: { operationId: string; auditId: string }) {
+  async function finalizeFailure(
+    tx: TransactionClient,
+    prepared: { operationId: string; auditId: string },
+  ) {
     await Promise.all([
       tx.agentOperation.update({
         where: { id: prepared.operationId },
         data: {
           completedAt: new Date(),
-          failureReason: "Tool execution failed; inspect current state before retrying.",
+          failureReason:
+            "Tool execution failed; inspect current state before retrying.",
           status: AgentOperationStatus.FAILED,
         },
       }),
@@ -153,7 +166,8 @@ export async function runAuditedAgentOperation<T>(params: {
         where: { id: prepared.auditId },
         data: {
           completedAt: new Date(),
-          failureReason: "Tool execution failed; details omitted from the audit record.",
+          failureReason:
+            "Tool execution failed; details omitted from the audit record.",
           status: AgentActionStatus.FAILED,
         },
       }),
@@ -176,12 +190,15 @@ export async function runAuditedAgentOperation<T>(params: {
   }
 
   try {
-    return await prisma.$transaction(async (tx) => {
-      await params.authorize?.(tx);
-      const output = params.outputSchema.parse(await params.execute(tx));
-      await finalizeSuccess(tx, prepared, output);
-      return output;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    return await prisma.$transaction(
+      async (tx) => {
+        await params.authorize?.(tx);
+        const output = params.outputSchema.parse(await params.execute(tx));
+        await finalizeSuccess(tx, prepared, output);
+        return output;
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (error) {
     await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
     throw error;

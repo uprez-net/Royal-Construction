@@ -1,8 +1,8 @@
-import { createGraphContext } from '@/lib/graph/client';
-import { getGraphConfig } from '@/lib/graph/config';
-import { requireAdminToken } from '@/lib/graph/route-utils';
-import { successResponse, errorResponse } from '@/utils/validators';
-import { unstable_rethrow } from 'next/navigation';
+import { createGraphContext } from "@/lib/graph/client";
+import { getGraphConfig } from "@/lib/graph/config";
+import { requireAdminToken } from "@/lib/graph/route-utils";
+import { successResponse, errorResponse } from "@/utils/validators";
+import { unstable_rethrow } from "next/navigation";
 
 // The local copy of requireAdminToken that used to live here failed open when
 // GRAPH_ADMIN_TOKEN was unset. Use the shared guard, which fails closed.
@@ -29,9 +29,9 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const { searchParams } = new URL(request.url);
-    const top = Math.min(parseNumber(searchParams.get('top'), 10), 50);
-    const includeBody = ['1', 'true', 'yes'].includes(
-      (searchParams.get('body') || '').toLowerCase(),
+    const top = Math.min(parseNumber(searchParams.get("top"), 10), 50);
+    const includeBody = ["1", "true", "yes"].includes(
+      (searchParams.get("body") || "").toLowerCase(),
     );
 
     const client = await createGraphContext(config);
@@ -39,7 +39,10 @@ export async function GET(request: Request): Promise<Response> {
     return successResponse({ items });
   } catch (error) {
     unstable_rethrow(error);
-    console.error('Graph list failed', error);
-    return errorResponse('Failed to list inbox', { status: 500, code: 'GRAPH_ERROR' });
+    console.error("Graph list failed", error);
+    return errorResponse("Failed to list inbox", {
+      status: 500,
+      code: "GRAPH_ERROR",
+    });
   }
 }

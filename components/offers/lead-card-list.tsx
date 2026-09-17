@@ -114,7 +114,10 @@ export function LeadCardList({
   }, [loading, totalPages]);
 
   const toggleLead = (lead: Lead) =>
-    setSelectedLeadId(lead.id === selectedLeadId ? null : lead.id, lead.location);
+    setSelectedLeadId(
+      lead.id === selectedLeadId ? null : lead.id,
+      lead.location,
+    );
 
   // One live region for both branches, so it stays mounted while the skeleton
   // swaps out. A region inserted with its text already in it is often not
@@ -205,12 +208,17 @@ export function LeadCardList({
                 )}
                 <div>
                   <p className="font-medium text-slate-950">{lead.name}</p>
-                  <p className="text-sm text-muted-foreground">{lead.location}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {lead.location}
+                  </p>
                 </div>
                 {/* The check marks the selection without relying on the ring's
                     colour alone. */}
                 {lead.id === selectedLeadId ? (
-                  <Check aria-hidden className="size-4 text-royal-gold-ink-text" />
+                  <Check
+                    aria-hidden
+                    className="size-4 text-royal-gold-ink-text"
+                  />
                 ) : (
                   <List aria-hidden className="size-4 text-muted-foreground" />
                 )}
@@ -241,9 +249,7 @@ export function LeadCardList({
         {!error && items.length === 0 && (
           <div className="col-span-full px-4 py-8 text-center text-sm">
             <p className="font-medium text-foreground">{emptyMessage}</p>
-            <p className="mt-1 text-muted-foreground">
-              {emptyHint}
-            </p>
+            <p className="mt-1 text-muted-foreground">{emptyHint}</p>
           </div>
         )}
 
@@ -256,11 +262,14 @@ export function LeadCardList({
             <LeadCardSkeleton key={`more-${i}`} />
           ))}
 
-        {!error && items.length > 0 && currentPage >= totalPages && totalPages > 0 && (
-          <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
-            You&apos;ve reached the end of the list.
-          </p>
-        )}
+        {!error &&
+          items.length > 0 &&
+          currentPage >= totalPages &&
+          totalPages > 0 && (
+            <p className="text-center text-sm text-muted-foreground col-span-full mt-2">
+              You&apos;ve reached the end of the list.
+            </p>
+          )}
       </div>
     </>
   );

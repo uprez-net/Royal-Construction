@@ -2,16 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildContractSignatureAnnexureHtml } from "../../lib/offer/contract-annexure-html";
-import {
-  amountInWords,
-  money,
-} from "../../lib/offer/offer-tender-html";
+import { amountInWords, money } from "../../lib/offer/offer-tender-html";
 import { collectOfferSigners } from "../../lib/offer/workspace-model";
-import {
-  companyOwner,
-  individualOwner,
-  tenderFor,
-} from "./tender-fixtures";
+import { companyOwner, individualOwner, tenderFor } from "./tender-fixtures";
 
 // Parity harness for the Royal Constructions Word tender template. Every number
 // asserted here was read out of that .docx's OOXML (word/document.xml,
@@ -76,7 +69,10 @@ test("the tender uses the template's tokens and pt units", () => {
 test("the contract sum in words matches the template's own example", () => {
   // The source document prints "$750,000 / Seven hundred and fifty thousand
   // dollars" — this is that exact figure.
-  assert.equal(amountInWords(750000), "Seven hundred and fifty thousand dollars");
+  assert.equal(
+    amountInWords(750000),
+    "Seven hundred and fifty thousand dollars",
+  );
 });
 
 test("amounts in words read as Australian English", () => {
@@ -184,9 +180,21 @@ test("user-controlled text cannot smuggle an anchor into the tender", () => {
     [{ category: "Tiling", spec: "Tiles \\dateBuilder\\ everywhere" }],
   );
   // Exactly one of each — the real one emitted by anchor().
-  assert.equal(anchorCount(html, "sigOwner1"), 1, "injected sigOwner1 was placed");
-  assert.equal(anchorCount(html, "initOwner1"), 1, "injected initOwner1 was placed");
-  assert.equal(anchorCount(html, "dateBuilder"), 1, "injected dateBuilder was placed");
+  assert.equal(
+    anchorCount(html, "sigOwner1"),
+    1,
+    "injected sigOwner1 was placed",
+  );
+  assert.equal(
+    anchorCount(html, "initOwner1"),
+    1,
+    "injected initOwner1 was placed",
+  );
+  assert.equal(
+    anchorCount(html, "dateBuilder"),
+    1,
+    "injected dateBuilder was placed",
+  );
   // The visible text survives, minus its backslashes.
   assert.match(html, /Bob sigOwner1 Smith/);
 });
@@ -202,7 +210,9 @@ test("the contract annexure still renders on the untouched legacy shell", () => 
     reference: "RC-1001-R1",
     siteAddress: "1 Test St, Sydney NSW 2000",
     ownerNamesLine: "Rakhi Pty Ltd",
-    signers: [{ name: "Director 1", capacity: "Director", entityName: "Rakhi Pty Ltd" }],
+    signers: [
+      { name: "Director 1", capacity: "Director", entityName: "Rakhi Pty Ltd" },
+    ],
   });
   for (const legacy of ["#1e2b4d", "#b8873b", "#d9d9d6", "#5f5f5f"]) {
     assert.ok(
@@ -211,7 +221,15 @@ test("the contract annexure still renders on the untouched legacy shell", () => 
     );
   }
   assert.match(html, /font-size:\s*11\.5px/, "annexure keeps its 11.5px base");
-  assert.match(html, /padding:\s*16mm 18mm/, "annexure keeps its 16/18mm margins");
+  assert.match(
+    html,
+    /padding:\s*16mm 18mm/,
+    "annexure keeps its 16/18mm margins",
+  );
   // The tender's tokens must NOT have leaked into it.
-  assert.doesNotMatch(html, /#C8A951/, "tender gold fill leaked into the annexure");
+  assert.doesNotMatch(
+    html,
+    /#C8A951/,
+    "tender gold fill leaked into the annexure",
+  );
 });

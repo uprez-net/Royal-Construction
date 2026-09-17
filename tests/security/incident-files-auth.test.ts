@@ -9,7 +9,10 @@ import { test } from "node:test";
 // cascades on delete, so removing the incident removed the file. The module
 // loads Prisma and Clerk, so this reads the source.
 
-const source = readFileSync(join(process.cwd(), "lib/data/tradie-management.ts"), "utf8");
+const source = readFileSync(
+  join(process.cwd(), "lib/data/tradie-management.ts"),
+  "utf8",
+);
 
 function reportBody(): string {
   const start = source.indexOf("export async function reportTradieIncident(");
@@ -27,8 +30,14 @@ test("an incident no longer connects file ids it was handed", () => {
 
 test("an incident attaches only the reporter's unattached uploads, or fails", () => {
   const body = reportBody();
-  const attach = /tx\.file\.updateMany\(\{\s*where: \{([\s\S]*?)\},\s*data: \{ incidentId: incident\.id \},/.exec(body);
-  assert.ok(attach, "the incident's files are not attached through a scoped updateMany");
+  const attach =
+    /tx\.file\.updateMany\(\{\s*where: \{([\s\S]*?)\},\s*data: \{ incidentId: incident\.id \},/.exec(
+      body,
+    );
+  assert.ok(
+    attach,
+    "the incident's files are not attached through a scoped updateMany",
+  );
   const where = attach[1];
   for (const clause of [
     /id: \{ in: fileIds \}/,
@@ -41,6 +50,12 @@ test("an incident attaches only the reporter's unattached uploads, or fails", ()
   ]) {
     assert.match(where, clause);
   }
-  assert.match(body, /if \(attached\.count !== fileIds\.length\) \{\s*throw new Error\(/);
-  assert.match(body, /const fileIds = \[\.\.\.new Set\(input\.fileIds \?\? \[\]\)\];/);
+  assert.match(
+    body,
+    /if \(attached\.count !== fileIds\.length\) \{\s*throw new Error\(/,
+  );
+  assert.match(
+    body,
+    /const fileIds = \[\.\.\.new Set\(input\.fileIds \?\? \[\]\)\];/,
+  );
 });

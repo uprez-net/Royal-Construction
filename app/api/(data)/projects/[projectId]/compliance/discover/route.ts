@@ -1,4 +1,7 @@
-import { ComplianceDocumentStatus, ComplianceDocumentType } from "@prisma/client";
+import {
+  ComplianceDocumentStatus,
+  ComplianceDocumentType,
+} from "@prisma/client";
 import { NextRequest } from "next/server";
 
 import { complianceDocumentLabel } from "@/constants/complianceDocuments";
@@ -86,7 +89,12 @@ export async function POST(
       matchesByName(file.filename, documentType),
     );
     if (byName) {
-      const document = await claim(engagementId, documentType, byName.id, existing?.id);
+      const document = await claim(
+        engagementId,
+        documentType,
+        byName.id,
+        existing?.id,
+      );
       return successResponse({
         documentType,
         found: true,
@@ -108,7 +116,12 @@ export async function POST(
       if (result.documentType !== documentType) {
         continue;
       }
-      const document = await claim(engagementId, documentType, file.id, existing?.id);
+      const document = await claim(
+        engagementId,
+        documentType,
+        file.id,
+        existing?.id,
+      );
       return successResponse({
         documentType,
         found: true,
@@ -127,7 +140,10 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
-    console.error(`Discovery failed for ${documentType} on ${projectId}`, error);
+    console.error(
+      `Discovery failed for ${documentType} on ${projectId}`,
+      error,
+    );
     return errorResponse("Failed to look for this document.");
   }
 }
@@ -164,7 +180,9 @@ async function claim(
             engagementId,
             documentType,
             status: ComplianceDocumentStatus.UPLOADED,
-            order: await tx.complianceDocument.count({ where: { engagementId } }),
+            order: await tx.complianceDocument.count({
+              where: { engagementId },
+            }),
           },
         });
 
@@ -206,19 +224,28 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
   // uploaded by hand when a surveyor is engaged. Listed so the record stays
   // exhaustive over the enum, which is what makes a new document type a
   // compile error here rather than a silently unmatchable one.
-  [ComplianceDocumentType.LAND_DEED]: [["land deed", "certificate of title", "deed"]],
+  [ComplianceDocumentType.LAND_DEED]: [
+    ["land deed", "certificate of title", "deed"],
+  ],
   [ComplianceDocumentType.INVOICE]: [["invoice", "tax invoice"]],
-  [ComplianceDocumentType.FEE_PROPOSAL]: [["fee proposal", "quotation", "quote"]],
+  [ComplianceDocumentType.FEE_PROPOSAL]: [
+    ["fee proposal", "quotation", "quote"],
+  ],
   [ComplianceDocumentType.CDC_FORM]: [["cdc"], ["form", "application"]],
   [ComplianceDocumentType.CHECKLIST]: [["checklist"]],
-  [ComplianceDocumentType.SIGNED_FEE_PROPOSAL]: [["signed"], ["fee", "proposal"]],
+  [ComplianceDocumentType.SIGNED_FEE_PROPOSAL]: [
+    ["signed"],
+    ["fee", "proposal"],
+  ],
   [ComplianceDocumentType.SIGNED_CDC_FORM]: [["signed"], ["cdc"]],
   [ComplianceDocumentType.CHECKLIST_ITEM]: [],
   // A line of a council's request for more information, written by the DA
   // extraction rather than found on disk -- the same reason CHECKLIST_ITEM
   // above matches nothing.
   [ComplianceDocumentType.DA_ITEM]: [],
-  [ComplianceDocumentType.HOME_INSURANCE]: [["hbcf", "home warranty", "home building compensation"]],
+  [ComplianceDocumentType.HOME_INSURANCE]: [
+    ["hbcf", "home warranty", "home building compensation"],
+  ],
   [ComplianceDocumentType.BASIX_CERTIFICATE]: [["basix"]],
   // Deliberately demanding two hits. "Certificate" alone appears in the
   // filename of half the documents on a compliance file, and reading a BASIX
@@ -262,9 +289,7 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
   [ComplianceDocumentType.ROAD_OPENING_PERMIT]: [
     ["road opening", "vehicle crossing", "driveway crossing", "kerb"],
   ],
-  [ComplianceDocumentType.LONG_SERVICE_LEVY]: [
-    ["long service"],
-  ],
+  [ComplianceDocumentType.LONG_SERVICE_LEVY]: [["long service"]],
   [ComplianceDocumentType.MINE_SUBSIDENCE_APPROVAL]: [
     ["mine subsidence", "subsidence advisory"],
   ],
@@ -285,11 +310,15 @@ const NAME_HINTS: Record<ComplianceDocumentType, string[][]> = {
     ["consent"],
   ],
   [ComplianceDocumentType.DEVELOPMENT_CONSENT]: [
-    ["development consent", "notice of determination", "da approval", "da consent"],
+    [
+      "development consent",
+      "notice of determination",
+      "da approval",
+      "da consent",
+    ],
   ],
   [ComplianceDocumentType.UNKNOWN]: [],
 };
-
 
 function matchesByName(
   filename: string,

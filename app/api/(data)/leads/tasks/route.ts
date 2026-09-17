@@ -43,12 +43,16 @@ export async function GET(request: NextRequest) {
     // parameter and ignore it — which reads as working — say it is not there.
     if (state === "completed") {
       if (parsedLeadIds.leadIds !== undefined) {
-        return badRequestResponse("leadIds is not supported with state=completed");
+        return badRequestResponse(
+          "leadIds is not supported with state=completed",
+        );
       }
       return successResponse(await listCompletedTasks());
     }
 
-    return successResponse(await listOpenTasks({ leadIds: parsedLeadIds.leadIds }));
+    return successResponse(
+      await listOpenTasks({ leadIds: parsedLeadIds.leadIds }),
+    );
   } catch (error) {
     console.error("/api/leads/tasks GET error", error);
     return errorResponse("Failed to fetch tasks", {

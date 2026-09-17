@@ -302,6 +302,9 @@ importers:
       just-bash:
         specifier: ^3.4.2
         version: 3.4.2
+      prettier:
+        specifier: 3.8.3
+        version: 3.8.3
       prisma:
         specifier: ^7.10.0
         version: 7.10.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)

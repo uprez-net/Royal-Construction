@@ -108,8 +108,8 @@ export function RouteError({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Retry once; if the error returns, the server logs will hold the
-            cause. Quote this reference when raising it — it identifies the exact
-            request.
+            cause. Quote this reference when raising it — it identifies the
+            exact request.
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">

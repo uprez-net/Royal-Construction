@@ -23,16 +23,49 @@ import { individualOwner, snapshotOf } from "./tender-fixtures";
 
 // The schedule the customer signed on the Tender: a half-percent deposit.
 const SIGNED_SCHEDULE: readonly OfferPaymentScheduleRow[] = [
-  { id: "deposit", stageName: "Deposit", percentOfContract: 0.025, trigger: "On signing" },
-  { id: "slab", stageName: "Slab", percentOfContract: 0.175, trigger: "Slab poured" },
-  { id: "frame", stageName: "Frame", percentOfContract: 0.25, trigger: "Frame up" },
-  { id: "lockup", stageName: "Lock-up", percentOfContract: 0.25, trigger: "Locked up" },
-  { id: "fitout", stageName: "Fit-out", percentOfContract: 0.2, trigger: "Fit-out done" },
-  { id: "handover", stageName: "Handover", percentOfContract: 0.1, trigger: "Keys" },
+  {
+    id: "deposit",
+    stageName: "Deposit",
+    percentOfContract: 0.025,
+    trigger: "On signing",
+  },
+  {
+    id: "slab",
+    stageName: "Slab",
+    percentOfContract: 0.175,
+    trigger: "Slab poured",
+  },
+  {
+    id: "frame",
+    stageName: "Frame",
+    percentOfContract: 0.25,
+    trigger: "Frame up",
+  },
+  {
+    id: "lockup",
+    stageName: "Lock-up",
+    percentOfContract: 0.25,
+    trigger: "Locked up",
+  },
+  {
+    id: "fitout",
+    stageName: "Fit-out",
+    percentOfContract: 0.2,
+    trigger: "Fit-out done",
+  },
+  {
+    id: "handover",
+    stageName: "Handover",
+    percentOfContract: 0.1,
+    trigger: "Keys",
+  },
 ];
 
 function tenderSnapshot(): OfferWorkspaceSnapshot {
-  return { ...snapshotOf([individualOwner(1)]), paymentSchedule: SIGNED_SCHEDULE };
+  return {
+    ...snapshotOf([individualOwner(1)]),
+    paymentSchedule: SIGNED_SCHEDULE,
+  };
 }
 
 // Exactly what sendTenderForSignature writes to Tender.documentData.
@@ -59,7 +92,8 @@ test("the signed Tender's schedule wins over a drifted agreed snapshot", () => {
   assert.equal(resolved.deposit?.percentOfContract, 0.025);
   assert.equal(
     resolved.tenderContractValueIncGst,
-    buildProposalInput(tenderSnapshot()).customerPrice.selectedContractValueIncGst,
+    buildProposalInput(tenderSnapshot()).customerPrice
+      .selectedContractValueIncGst,
   );
 });
 
@@ -185,12 +219,19 @@ test("no handoff warning when the Contract records its source or printed the sam
     tenderDocumentData: sentTenderDocumentData(tenderSnapshot()),
     agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE,
   });
-  const base = { agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE, resolved, contractValueIncGst: 650_000 };
+  const base = {
+    agreedPaymentSchedule: INITIAL_PAYMENT_SCHEDULE,
+    resolved,
+    contractValueIncGst: 650_000,
+  };
 
   assert.equal(
     describeLegacyContractScheduleDrift({
       ...base,
-      contractDocumentData: { ...LEGACY_CONTRACT_DATA, paymentScheduleSource: "tender-terms" },
+      contractDocumentData: {
+        ...LEGACY_CONTRACT_DATA,
+        paymentScheduleSource: "tender-terms",
+      },
     }),
     null,
   );

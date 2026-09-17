@@ -1,5 +1,9 @@
 import { OFFER_TABLE_HEADERS } from "@/components/offers/offer-table-columns";
-import { MetricCardSkeleton, PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+import {
+  MetricCardSkeleton,
+  PageSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
 
 // One skeleton column per real column, from the table's own list. A hard-coded
 // ten drifted from the eleven the table renders.
@@ -60,7 +64,10 @@ export default function OfferPageSkeleton() {
                 style={tableGrid}
               >
                 {OFFER_TABLE_HEADERS.map((header) => (
-                  <Skeleton key={header.label} className="h-4 w-full max-w-24" />
+                  <Skeleton
+                    key={header.label}
+                    className="h-4 w-full max-w-24"
+                  />
                 ))}
               </div>
             ))}

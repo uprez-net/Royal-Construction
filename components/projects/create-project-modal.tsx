@@ -89,10 +89,7 @@ import {
   sectionFields,
   updateExtractionField,
 } from "./form/extracted-components";
-import {
-  compareSignedAndStartDates,
-  formatDisplayDate,
-} from "@/utils/date";
+import { compareSignedAndStartDates, formatDisplayDate } from "@/utils/date";
 
 interface CreateProjectModalProps {
   open: boolean;
@@ -558,7 +555,12 @@ export function CreateProjectModal({
       return;
     }
 
-    if (!selectedLeadId || !selectedLocation || !selectedSiteManager || !sourceDocuments) {
+    if (
+      !selectedLeadId ||
+      !selectedLocation ||
+      !selectedSiteManager ||
+      !sourceDocuments
+    ) {
       return;
     }
 
@@ -578,12 +580,13 @@ export function CreateProjectModal({
             "Some extracted fields are not valid",
             "Review the highlighted fields and create the project again.",
             {
-              fieldErrors: parsedExtraction.error.issues.flatMap<CreateProjectFieldError>(
-                (issue) => {
-                  const field = fieldPathToFormField(issue.path.join("."));
-                  return field ? [{ field, message: issue.message }] : [];
-                },
-              ),
+              fieldErrors:
+                parsedExtraction.error.issues.flatMap<CreateProjectFieldError>(
+                  (issue) => {
+                    const field = fieldPathToFormField(issue.path.join("."));
+                    return field ? [{ field, message: issue.message }] : [];
+                  },
+                ),
             },
           ),
         );
@@ -687,16 +690,22 @@ export function CreateProjectModal({
     // existing review-stage inputs.
     const signedDateRaw = extraction.legalAdministrationSignedDate;
     const effectiveStartDate =
-      normalizeDateString(signedDateRaw) || startDate || format(new Date(), "yyyy-MM-dd");
+      normalizeDateString(signedDateRaw) ||
+      startDate ||
+      format(new Date(), "yyyy-MM-dd");
 
-    const comparison = compareSignedAndStartDates(signedDateRaw, effectiveStartDate);
+    const comparison = compareSignedAndStartDates(
+      signedDateRaw,
+      effectiveStartDate,
+    );
 
     if (
       comparison.state === "start_before_signed" ||
       comparison.state === "signed_far_before_start"
     ) {
       setDateConfirmPrompt({
-        signedDate: comparison.normalizedSignedDate ?? signedDateRaw ?? "(not set)",
+        signedDate:
+          comparison.normalizedSignedDate ?? signedDateRaw ?? "(not set)",
         startDate: comparison.normalizedStartDate ?? effectiveStartDate,
         state: comparison.state,
       });
@@ -1044,7 +1053,10 @@ export function CreateProjectModal({
                         </span>
                         {sectionErrorCount > 0 ? (
                           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold">
-                            <AlertCircle className="size-3.5" aria-hidden="true" />
+                            <AlertCircle
+                              className="size-3.5"
+                              aria-hidden="true"
+                            />
                             {sectionErrorCount}
                           </span>
                         ) : index === activeSectionIndex ? (
@@ -1140,7 +1152,10 @@ export function CreateProjectModal({
             {dateConfirmPrompt ? (
               <div className="rounded-2xl border border-warning/40 bg-warning-light p-5">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning-ink" aria-hidden="true" />
+                  <AlertTriangle
+                    className="mt-0.5 size-5 shrink-0 text-warning-ink"
+                    aria-hidden="true"
+                  />
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-warning-ink">
                       {dateConfirmPrompt.state === "start_before_signed"
@@ -1150,12 +1165,14 @@ export function CreateProjectModal({
                     <p className="text-sm text-warning-ink/90">
                       Signed (contract executed):{" "}
                       <span className="font-mono tabular-nums">
-                        {formatDisplayDate(dateConfirmPrompt.signedDate) ?? dateConfirmPrompt.signedDate}
+                        {formatDisplayDate(dateConfirmPrompt.signedDate) ??
+                          dateConfirmPrompt.signedDate}
                       </span>
                       <br />
                       Start date (on-site):{" "}
                       <span className="font-mono tabular-nums">
-                        {formatDisplayDate(dateConfirmPrompt.startDate) ?? dateConfirmPrompt.startDate}
+                        {formatDisplayDate(dateConfirmPrompt.startDate) ??
+                          dateConfirmPrompt.startDate}
                       </span>
                     </p>
                     <p className="text-xs text-warning-ink/80">
@@ -1236,7 +1253,6 @@ export function CreateProjectModal({
     </Dialog>
   );
 }
-
 
 /**
  * One place where every create-project failure is rendered: the headline, the

@@ -12,7 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { useTradieSearch } from "@/hooks/useTradieSearch";
 
-export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function TradieDirectoryModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const tradieSearch = useTradieSearch("");
   const [search, setSearch] = useState("");
 
@@ -33,13 +39,14 @@ export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; on
     onOpenChange(nextOpen);
   };
 
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[60vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tradie Directory</DialogTitle>
-          <DialogDescription>Read-only directory of all active tradies in the database.</DialogDescription>
+          <DialogDescription>
+            Read-only directory of all active tradies in the database.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -53,7 +60,10 @@ export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; on
           {tradieSearch.loading ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-2xl border border-border bg-background p-4">
+                <div
+                  key={i}
+                  className="animate-pulse rounded-2xl border border-border bg-background p-4"
+                >
                   <div className="h-4 w-3/4 rounded bg-muted" />
                   <div className="mt-3 space-y-1">
                     <div className="h-3 w-1/2 rounded bg-muted" />
@@ -65,11 +75,18 @@ export function TradieDirectoryModal({ open, onOpenChange }: { open: boolean; on
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {tradieSearch.items.map((tradie) => (
-                <div key={tradie.id} className="rounded-2xl border border-border bg-background p-4 shadow-sm">
+                <div
+                  key={tradie.id}
+                  className="rounded-2xl border border-border bg-background p-4 shadow-sm"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-slate-950">{tradie.name}</p>
-                      <p className="text-sm text-muted-foreground">{tradie.company ?? "Independent"}</p>
+                      <p className="font-medium text-slate-950">
+                        {tradie.name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {tradie.company ?? "Independent"}
+                      </p>
                     </div>
                     <List className="size-4 text-teal-700" />
                   </div>

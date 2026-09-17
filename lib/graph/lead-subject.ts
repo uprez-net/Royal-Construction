@@ -267,7 +267,9 @@ export const LEAD_SUBJECT_PATTERNS: readonly RegExp[] = [
   // intention outright, with no second vocabulary anywhere in the subject. The
   // allowlist holds only the website form's quoted variant, so before this the
   // most explicit enquiry a person can write was the one shape that missed.
-  new RegExp(String.raw`\b(?:want|wants|wanting|keen|hoping|planning|looking) to (?:build|renovate)\b`),
+  new RegExp(
+    String.raw`\b(?:want|wants|wanting|keen|hoping|planning|looking) to (?:build|renovate)\b`,
+  ),
 
   // "New build" — the whole subject is the work and nothing else. Anchored, so
   // it cannot fire on a build word buried in a sentence about something else.
@@ -361,7 +363,10 @@ function domainOf(address: string | null | undefined): string | null {
   const at = bare.lastIndexOf("@");
   if (at < 0) return null;
 
-  const domain = bare.slice(at + 1).toLowerCase().replace(/[>\s]+$/, "");
+  const domain = bare
+    .slice(at + 1)
+    .toLowerCase()
+    .replace(/[>\s]+$/, "");
   return domain.includes(".") ? domain : null;
 }
 
@@ -399,7 +404,13 @@ export function isLeadMessage(
   from: string | null | undefined,
   businessAddress: string | null | undefined,
 ): boolean {
-  if (isLeadSubject(subject) && LEAD_SUBJECT_LINES.has(normalizeSubject(subject).replace(MAIL_GATEWAY_LABEL, ""))) return true;
+  if (
+    isLeadSubject(subject) &&
+    LEAD_SUBJECT_LINES.has(
+      normalizeSubject(subject).replace(MAIL_GATEWAY_LABEL, ""),
+    )
+  )
+    return true;
   if (isOwnDomainSender(from, businessAddress)) return false;
   return isLeadSubject(subject);
 }

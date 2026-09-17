@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseLeadStageFilter, resolveLeadStageFilter } from "../../lib/leads/types";
+import {
+  parseLeadStageFilter,
+  resolveLeadStageFilter,
+} from "../../lib/leads/types";
 
 test("current stage labels resolve to their DB enum member", () => {
   assert.equal(resolveLeadStageFilter("Won"), "WON");
@@ -44,7 +47,10 @@ test("unknown labels are reported, never silently dropped", () => {
 });
 
 test("blank and whitespace-only segments are ignored, not treated as unknown", () => {
-  assert.deepEqual(parseLeadStageFilter("Won, ,"), { stages: ["WON"], unknown: [] });
+  assert.deepEqual(parseLeadStageFilter("Won, ,"), {
+    stages: ["WON"],
+    unknown: [],
+  });
   assert.deepEqual(parseLeadStageFilter(""), { stages: [], unknown: [] });
 });
 
@@ -52,7 +58,12 @@ test("inherited Object.prototype members are not stages", () => {
   // A bare `map[label]` lookup resolves these to FUNCTIONS off the prototype
   // chain. They then passed the unknown-label guard and were pushed into the
   // array that becomes a Prisma `where` clause.
-  for (const label of ["toString", "constructor", "valueOf", "hasOwnProperty"]) {
+  for (const label of [
+    "toString",
+    "constructor",
+    "valueOf",
+    "hasOwnProperty",
+  ]) {
     assert.equal(resolveLeadStageFilter(label), undefined, label);
   }
   const parsed = parseLeadStageFilter("toString,constructor");

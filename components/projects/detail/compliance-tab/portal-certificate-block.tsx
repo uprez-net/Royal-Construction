@@ -27,7 +27,10 @@ export type PortalCertificateValues = {
 
 export function portalCertificateValues(params: {
   engagement: CertifierEngagementDetail;
-  documentsByType: ReadonlyMap<ComplianceDocumentType, ComplianceDocumentWithFiles>;
+  documentsByType: ReadonlyMap<
+    ComplianceDocumentType,
+    ComplianceDocumentWithFiles
+  >;
   developerBlocked: string | null;
 }): PortalCertificateValues {
   const certificateKind = certificateKindFor(params.engagement);
@@ -37,9 +40,10 @@ export function portalCertificateValues(params: {
     certificateDocument: params.documentsByType.get(
       CERTIFICATE_DOCUMENT_TYPE[certificateKind],
     ),
-    certificateApplicationRow: params.engagement.externalApplications.find(
-      (application) => application.kind === certificateKind,
-    ) ?? null,
+    certificateApplicationRow:
+      params.engagement.externalApplications.find(
+        (application) => application.kind === certificateKind,
+      ) ?? null,
     portalBlocked: certificateLodgementBlockedReason(
       params.engagement,
       params.developerBlocked,

@@ -1,23 +1,23 @@
 import "server-only";
 
-import prisma from '@/lib/prisma';
-import { createActivityLogEntry } from '@/types/activityLog';
-import { CACHE_PROFILES } from '@/types/cache';
-import { revalidateTag } from 'next/cache';
-import { after } from 'next/server'
-import { logAction } from './actionLog';
+import prisma from "@/lib/prisma";
+import { createActivityLogEntry } from "@/types/activityLog";
+import { CACHE_PROFILES } from "@/types/cache";
+import { revalidateTag } from "next/cache";
+import { after } from "next/server";
+import { logAction } from "./actionLog";
 
 interface SaveFileParams {
-    userId: string;
-    projectId?: string;
-    milestoneId?: string;
-    leadId?: string;
-    fileId?: string;
-    fileUrl: string;
-    storagePath?: string;
-    fileName: string;
-    fileType: string;
-    fileSize: number;
+  userId: string;
+  projectId?: string;
+  milestoneId?: string;
+  leadId?: string;
+  fileId?: string;
+  fileUrl: string;
+  storagePath?: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
 }
 
 /**
@@ -54,51 +54,61 @@ interface SaveFileParams {
  *
  * @throws Re-throws any database errors encountered while saving the file.
  */
-export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, storagePath, fileName, fileType, fileSize, leadId }: SaveFileParams) {
-    try {
-        const newFile = await prisma.file.create({
-            data: {
-                id: fileId,
-                uploadedBy: userId,
-                projectId,
-                milestoneId,
-                url: fileUrl,
-                storagePath,
-                filename: fileName,
-                fileType,
-                filesize: fileSize,
-                leadId: leadId ? parseInt(leadId) : null,
-            }
+export async function saveFile({
+  userId,
+  projectId,
+  milestoneId,
+  fileId,
+  fileUrl,
+  storagePath,
+  fileName,
+  fileType,
+  fileSize,
+  leadId,
+}: SaveFileParams) {
+  try {
+    const newFile = await prisma.file.create({
+      data: {
+        id: fileId,
+        uploadedBy: userId,
+        projectId,
+        milestoneId,
+        url: fileUrl,
+        storagePath,
+        filename: fileName,
+        fileType,
+        filesize: fileSize,
+        leadId: leadId ? parseInt(leadId) : null,
+      },
+    });
+
+    after(async () => {
+      if (projectId || milestoneId) {
+        revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
+        const activityEntryLog = createActivityLogEntry("fileUploaded", {
+          projectId: projectId!,
+          milestoneId: milestoneId,
+          fileId: newFile.id,
+          fileName: newFile.filename,
+          fileType: newFile.fileType,
+          fileSize: newFile.filesize,
         });
+        await logAction(activityEntryLog);
+      }
+      if (leadId) {
+        revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
+      }
+    });
 
-        after(async () => {
-            if (projectId || milestoneId) {
-                revalidateTag(`project-${projectId}`, CACHE_PROFILES.SHORT);
-                const activityEntryLog = createActivityLogEntry('fileUploaded', {
-                    projectId: projectId!,
-                    milestoneId: milestoneId,
-                    fileId: newFile.id,
-                    fileName: newFile.filename,
-                    fileType: newFile.fileType,
-                    fileSize: newFile.filesize,
-                });
-                await logAction(activityEntryLog);
-            }
-            if (leadId) {
-                revalidateTag(`chat-session-lead-${leadId}`, CACHE_PROFILES.SHORT);
-            }
-        })
-
-        return {
-            success: true,
-            file: newFile,
-            message: 'File saved successfully',
-        }
-    } catch (error) {
-        console.error('Error saving file to database', error);
-        throw error;
-    }
-
+    return {
+      success: true,
+      file: newFile,
+      message: "File saved successfully",
+    };
+  } catch (error) {
+    console.error("Error saving file to database", error);
+    throw error;
+  }
 }
 
 /**
@@ -117,21 +127,20 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
  * @throws Re-throws any database errors encountered during retrieval.
  */
 export async function getFilesByLeadId(leadId: number) {
-    try {
-        const files = await prisma.file.findMany({
-            where: {
-                leadId,
-            },
-        });
+  try {
+    const files = await prisma.file.findMany({
+      where: {
+        leadId,
+      },
+    });
 
-        return {
-            success: true,
-            count: files.length,
-            files,
-        }
-    }
-    catch (error) {
-        console.error('Error fetching files for lead', error);
-        throw error;
-    }
+    return {
+      success: true,
+      count: files.length,
+      files,
+    };
+  } catch (error) {
+    console.error("Error fetching files for lead", error);
+    throw error;
+  }
 }

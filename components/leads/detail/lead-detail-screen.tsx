@@ -45,9 +45,15 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
     }));
   }, []);
 
-  const appendEmailToLead = useCallback((_leadId: number, email: LeadEmails) => {
-    setLead((current) => ({ ...current, emails: [email, ...current.emails] }));
-  }, []);
+  const appendEmailToLead = useCallback(
+    (_leadId: number, email: LeadEmails) => {
+      setLead((current) => ({
+        ...current,
+        emails: [email, ...current.emails],
+      }));
+    },
+    [],
+  );
 
   return (
     <div className="space-y-4 pb-4">

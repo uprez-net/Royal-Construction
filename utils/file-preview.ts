@@ -85,7 +85,11 @@ export type FilePreviewModalAction =
     }
   | {
       type: "previewFile";
-      payload: { fileUrl: string; fileName?: string | null; fileType?: string | null };
+      payload: {
+        fileUrl: string;
+        fileName?: string | null;
+        fileType?: string | null;
+      };
     };
 
 /**

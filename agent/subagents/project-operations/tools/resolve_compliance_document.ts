@@ -5,10 +5,16 @@ import { resolveComplianceDocumentInputSchema } from "@/agent/lib/project-contra
 import { resolveAuthorizedComplianceDocument } from "@/agent/lib/project-operations";
 
 export default defineTool({
-  description: "Approve or reject uploaded/received evidence on an approvable compliance checklist row, enforcing evidence and rejection-reason gates. Require owner approval.",
+  description:
+    "Approve or reject uploaded/received evidence on an approvable compliance checklist row, enforcing evidence and rejection-reason gates. Require owner approval.",
   inputSchema: resolveComplianceDocumentInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  label: { start: ({ decision }) => `${decision === "approved" ? "Approve" : "Reject"} compliance evidence` },
-  execute(input, ctx) { return resolveAuthorizedComplianceDocument(ctx, input); },
+  label: {
+    start: ({ decision }) =>
+      `${decision === "approved" ? "Approve" : "Reject"} compliance evidence`,
+  },
+  execute(input, ctx) {
+    return resolveAuthorizedComplianceDocument(ctx, input);
+  },
 });

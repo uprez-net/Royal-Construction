@@ -107,7 +107,9 @@ export function stageState(milestones: LedgerMilestone[]): StageState {
 }
 
 /** Active first, then pending, then settled; ties broken by target date. */
-export function sortActivities<T extends LedgerMilestone>(milestones: T[]): T[] {
+export function sortActivities<T extends LedgerMilestone>(
+  milestones: T[],
+): T[] {
   return [...milestones].sort(
     (a, b) =>
       STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
@@ -124,10 +126,11 @@ export function partitionActivities<T extends LedgerMilestone>(
   milestones: T[],
 ): { open: T[]; settled: T[] } {
   return {
-    open: sortActivities(milestones.filter((milestone) => !isSettled(milestone))),
+    open: sortActivities(
+      milestones.filter((milestone) => !isSettled(milestone)),
+    ),
     settled: [...milestones.filter(isSettled)].sort(
-      (a, b) =>
-        (b.actualDate?.getTime() ?? 0) - (a.actualDate?.getTime() ?? 0),
+      (a, b) => (b.actualDate?.getTime() ?? 0) - (a.actualDate?.getTime() ?? 0),
     ),
   };
 }
@@ -175,7 +178,8 @@ export function nextActivity<T extends LedgerMilestone>(
     (milestone) => milestone.childrenMilestones.length === 0,
   );
 
-  const pick = [...leaves].sort(byUrgency)[0] ?? [...outstanding].sort(byUrgency)[0];
+  const pick =
+    [...leaves].sort(byUrgency)[0] ?? [...outstanding].sort(byUrgency)[0];
 
   return pick ? { activity: pick, parent: parentOf.get(pick) ?? null } : null;
 }

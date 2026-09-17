@@ -4,16 +4,37 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
-import { Link2, LinkIcon, Loader2, Paperclip, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import {
+  Link2,
+  LinkIcon,
+  Loader2,
+  Paperclip,
+  Plus,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useRef } from "react";
 import { GeneratingModal } from "@/components/leads/modal-ui/generating-modal";
 
-
-export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: { hook: ReturnType<typeof useEmailAdHock>, backgroundColor?: string, borderColor?: string }) {
+export function CustomTemplateCreation({
+  hook,
+  backgroundColor,
+  borderColor,
+}: {
+  hook: ReturnType<typeof useEmailAdHock>;
+  backgroundColor?: string;
+  borderColor?: string;
+}) {
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
-  if(hook.isGenerating) {
-    return <GeneratingModal backgroundColor={backgroundColor} borderColor={borderColor} />;
+  if (hook.isGenerating) {
+    return (
+      <GeneratingModal
+        backgroundColor={backgroundColor}
+        borderColor={borderColor}
+      />
+    );
   }
 
   return (
@@ -37,7 +58,8 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
             value={hook.description}
             onChange={(e) => {
               hook.setDescription(e.target.value);
-              if (hook.errors.description) hook.setErrors({ ...hook.errors, description: undefined });
+              if (hook.errors.description)
+                hook.setErrors({ ...hook.errors, description: undefined });
             }}
             placeholder="e.g. Write a follow-up email for a client named Kuldeep regarding his Double Storey project in Wilton, asking him to book a meeting..."
             className={cn(
@@ -45,11 +67,14 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
               "focus-visible:border-[var(--primary-color)]",
               "focus-visible:ring-0",
               "focus-visible:outline-none",
-              hook.errors.description && "border-red-500 !focus-visible:border-red-500 !focus-visible:ring-0"
+              hook.errors.description &&
+                "border-red-500 !focus-visible:border-red-500 !focus-visible:ring-0",
             )}
           />
           {hook.errors.description && (
-            <p className="mt-1 text-xs text-red-500 font-medium">{hook.errors.description}</p>
+            <p className="mt-1 text-xs text-red-500 font-medium">
+              {hook.errors.description}
+            </p>
           )}
         </div>
 
@@ -68,25 +93,29 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
                     <Input
                       placeholder="Button Label"
                       value={link.label}
-                      onChange={(e) => hook.updateLink(link.id, 'label', e.target.value)}
+                      onChange={(e) =>
+                        hook.updateLink(link.id, "label", e.target.value)
+                      }
                       className={cn(
                         "min-w-0 flex-1 border-slate-200",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        linkError?.label && "border-red-500"
+                        linkError?.label && "border-red-500",
                       )}
                     />
                     <Input
                       placeholder="https://link-to-page.com"
                       value={link.url}
-                      onChange={(e) => hook.updateLink(link.id, 'url', e.target.value)}
+                      onChange={(e) =>
+                        hook.updateLink(link.id, "url", e.target.value)
+                      }
                       className={cn(
                         "min-w-0 flex-[2] border-slate-200",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        linkError?.url && "border-red-500"
+                        linkError?.url && "border-red-500",
                       )}
                     />
                     <Button
@@ -137,13 +166,15 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
                     <Input
                       placeholder="File Name / Button Text"
                       value={file.label}
-                      onChange={(e) => hook.updateAttachment(file.id, 'label', e.target.value)}
+                      onChange={(e) =>
+                        hook.updateAttachment(file.id, "label", e.target.value)
+                      }
                       className={cn(
                         "min-w-0 flex-1 border-slate-200",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        fileError?.label && "border-red-500"
+                        fileError?.label && "border-red-500",
                       )}
                     />
 
@@ -151,24 +182,28 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
                     <div className="flex h-9 shrink-0 items-center overflow-hidden rounded-md border border-slate-200">
                       <button
                         type="button"
-                        onClick={() => hook.updateAttachment(file.id, 'mode', 'upload')}
+                        onClick={() =>
+                          hook.updateAttachment(file.id, "mode", "upload")
+                        }
                         className={cn(
                           "flex h-full items-center gap-1.5 px-3 text-xs font-medium transition-colors",
-                          file.mode === 'upload'
+                          file.mode === "upload"
                             ? "bg-[var(--primary-bg)]/10 text-[var(--primary-color)]"
-                            : "bg-white text-slate-500 hover:bg-slate-50"
+                            : "bg-white text-slate-500 hover:bg-slate-50",
                         )}
                       >
                         <Upload className="size-3.5" /> Upload
                       </button>
                       <button
                         type="button"
-                        onClick={() => hook.updateAttachment(file.id, 'mode', 'url')}
+                        onClick={() =>
+                          hook.updateAttachment(file.id, "mode", "url")
+                        }
                         className={cn(
                           "flex h-full items-center gap-1.5 border-l border-slate-200 px-3 text-xs font-medium transition-colors",
-                          file.mode === 'url'
+                          file.mode === "url"
                             ? "bg-[var(--primary-bg)]/10 text-[var(--primary-color)]"
-                            : "bg-white text-slate-500 hover:bg-slate-50"
+                            : "bg-white text-slate-500 hover:bg-slate-50",
                         )}
                       >
                         <LinkIcon className="size-3.5" /> URL
@@ -186,7 +221,7 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
                   </div>
 
                   {/* Row 2: Upload or URL Input based on Mode */}
-                  {file.mode === 'upload' ? (
+                  {file.mode === "upload" ? (
                     <div className="flex items-center gap-2">
                       <input
                         type="file"
@@ -196,7 +231,8 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
                         className="hidden"
                         onChange={(e) => {
                           const selectedFile = e.target.files?.[0];
-                          if (selectedFile) hook.handleAttachmentUpload(file.id, selectedFile);
+                          if (selectedFile)
+                            hook.handleAttachmentUpload(file.id, selectedFile);
                         }}
                       />
                       <Button
@@ -227,13 +263,15 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
                     <Input
                       placeholder="https://link-to-file.com"
                       value={file.url}
-                      onChange={(e) => hook.updateAttachment(file.id, 'url', e.target.value)}
+                      onChange={(e) =>
+                        hook.updateAttachment(file.id, "url", e.target.value)
+                      }
                       className={cn(
                         "min-w-0 border-slate-200",
                         "focus-visible:border-[var(--primary-color)]",
                         "focus-visible:ring-0",
                         "focus-visible:outline-none",
-                        fileError?.url && "border-red-500"
+                        fileError?.url && "border-red-500",
                       )}
                     />
                   )}
@@ -279,5 +317,5 @@ export function CustomTemplateCreation({ hook, backgroundColor, borderColor }: {
         </Button>
       </div>
     </div>
-  )
+  );
 }

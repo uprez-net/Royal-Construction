@@ -55,7 +55,8 @@ export function coerceMoney(
 
   try {
     const parsed = new Prisma.Decimal(trimmed);
-    if (parsed.isNaN() || !parsed.isFinite() || parsed.isNegative()) return null;
+    if (parsed.isNaN() || !parsed.isFinite() || parsed.isNegative())
+      return null;
     return parsed;
   } catch {
     return null;
@@ -246,7 +247,9 @@ export function computePipelineMetrics(
     bucket.weighted = bucket.weighted.add(weighted);
   }
 
-  const windowStart = new Date(now.getTime() - WIN_RATE_WINDOW_DAYS * MS_PER_DAY);
+  const windowStart = new Date(
+    now.getTime() - WIN_RATE_WINDOW_DAYS * MS_PER_DAY,
+  );
 
   return {
     openCount,

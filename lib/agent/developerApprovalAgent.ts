@@ -109,7 +109,10 @@ export async function detectDeveloperVerdict(params: {
 
     return nothing;
   } catch (error) {
-    console.error("Could not read the developer's verdict off their reply", error);
+    console.error(
+      "Could not read the developer's verdict off their reply",
+      error,
+    );
     return nothing;
   }
 }

@@ -115,7 +115,10 @@ export function CertificateAndCoverSection({
   const hasCover = Boolean(insurance?.files.length);
 
   const insuranceTarget = insurance?.files.length
-    ? { documentId: insurance.id, documentType: ComplianceDocumentType.HOME_INSURANCE }
+    ? {
+        documentId: insurance.id,
+        documentType: ComplianceDocumentType.HOME_INSURANCE,
+      }
     : { documentType: ComplianceDocumentType.HOME_INSURANCE };
 
   return (

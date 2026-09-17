@@ -93,9 +93,7 @@ export function ComplianceDocumentVault({
   onOpenChange: (open: boolean) => void;
 }) {
   const dispatch = useAppDispatch();
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const { sections, gallery } = useMemo(() => {
     const collect = (match: (type: ComplianceDocumentType) => boolean) =>
@@ -181,8 +179,7 @@ export function ComplianceDocumentVault({
       ) : (
         <div className="space-y-3">
           {sections.map((section, index) => {
-            const isSectionOpen =
-              openSections[section.heading] ?? index === 0;
+            const isSectionOpen = openSections[section.heading] ?? index === 0;
 
             return (
               <Collapsible
@@ -233,10 +230,7 @@ export function ComplianceDocumentVault({
                       headers={["#", "Name", "Document", "Size", "Uploaded"]}
                       align={["end", "start", "start", "end", "start"]}
                       rows={section.files.map((file, rowIndex) => [
-                        <span
-                          key={`index-${file.id}`}
-                          className="tabular-nums"
-                        >
+                        <span key={`index-${file.id}`} className="tabular-nums">
                           {rowIndex + 1}
                         </span>,
                         <span
@@ -248,10 +242,7 @@ export function ComplianceDocumentVault({
                         <span key={`type-${file.id}`}>
                           {file.documentLabel}
                         </span>,
-                        <span
-                          key={`size-${file.id}`}
-                          className="tabular-nums"
-                        >
+                        <span key={`size-${file.id}`} className="tabular-nums">
                           {formatFileSize(file.filesize)}
                         </span>,
                         <span

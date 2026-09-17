@@ -29,10 +29,10 @@ export function useTradieSearch(initialQuery = "") {
         `/api/tradies?search=${q}&limit=50`,
         { method: "GET" },
         "Failed to fetch tradies",
-        controller.signal
+        controller.signal,
       )
         .then((res) => {
-          const items = res.data
+          const items = res.data;
           setItems(Array.isArray(items) ? items : []);
         })
         .catch((err) => {

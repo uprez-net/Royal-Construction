@@ -36,7 +36,11 @@ interface StageBadgeSelectProps {
   disabled?: boolean;
 }
 
-export function StageBadgeSelect({ value, onChange, disabled }: StageBadgeSelectProps) {
+export function StageBadgeSelect({
+  value,
+  onChange,
+  disabled,
+}: StageBadgeSelectProps) {
   const [updating, setUpdating] = useState(false);
 
   async function handleSelect(stage: LeadStage) {
@@ -56,7 +60,7 @@ export function StageBadgeSelect({ value, onChange, disabled }: StageBadgeSelect
           className={cn(
             "cursor-pointer select-none gap-1 border-none font-medium",
             STAGE_STYLES[value],
-            (disabled || updating) && "cursor-default opacity-60"
+            (disabled || updating) && "cursor-default opacity-60",
           )}
         >
           {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : value}
@@ -73,8 +77,14 @@ export function StageBadgeSelect({ value, onChange, disabled }: StageBadgeSelect
           this picker, so no habit is being broken by narrowing it.
         */}
         {stageOptionsFor(value).map((stage) => (
-          <DropdownMenuItem key={stage} onSelect={() => handleSelect(stage)} className="gap-2">
-            <span className={cn("h-2 w-2 rounded-full", STAGE_DOT_STYLES[stage])} />
+          <DropdownMenuItem
+            key={stage}
+            onSelect={() => handleSelect(stage)}
+            className="gap-2"
+          >
+            <span
+              className={cn("h-2 w-2 rounded-full", STAGE_DOT_STYLES[stage])}
+            />
             <span className="flex-1">{stage}</span>
             {stage === value && <Check className="h-4 w-4 opacity-70" />}
           </DropdownMenuItem>

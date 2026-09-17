@@ -34,6 +34,9 @@ export async function requireInternalUser(): Promise<InternalUserGuard> {
   } catch (error) {
     // Fail closed. A lookup failure is not permission.
     console.error("[auth] Staff lookup failed:", error);
-    return { ok: false, error: "Could not verify your permissions. Try again." };
+    return {
+      ok: false,
+      error: "Could not verify your permissions. Try again.",
+    };
   }
 }

@@ -65,9 +65,9 @@ assert.deepEqual(
 // union check of the catalog's real contract (dedupe + drop-blanks + sort)
 // rather than silently depending on the source data never containing a blank.
 const everyMappingStep = new Set(
-  OFFER_SEQUENCE_MAPPINGS.flatMap((mapping) => mapping.buildingSequenceTasks).filter(
-    (step) => step.trim().length > 0,
-  ),
+  OFFER_SEQUENCE_MAPPINGS.flatMap(
+    (mapping) => mapping.buildingSequenceTasks,
+  ).filter((step) => step.trim().length > 0),
 );
 assert.equal(OFFER_BUILDING_SEQUENCE_STEPS.length, everyMappingStep.size);
 assert.equal(

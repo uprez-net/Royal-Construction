@@ -48,7 +48,10 @@ export interface CreateContractEnvelopeArgs {
   // a complete contract on open. The Builder (routingOrder 2) carries only its
   // signature — no data tabs.
   readonly ownerTextTabs: readonly ContractTabValue[];
-  readonly ownerCheckboxTabs: readonly { readonly tabLabel: string; readonly selected: boolean }[];
+  readonly ownerCheckboxTabs: readonly {
+    readonly tabLabel: string;
+    readonly selected: boolean;
+  }[];
 }
 
 export interface CreateContractEnvelopeResult {
@@ -130,7 +133,10 @@ export async function createContractEnvelope(
             {
               serverTemplates: [{ sequence: "1", templateId }],
               inlineTemplates: [
-                { sequence: "2", recipients: { signers: [builderRole, ownerRole] } },
+                {
+                  sequence: "2",
+                  recipients: { signers: [builderRole, ownerRole] },
+                },
               ],
             },
             {
@@ -150,40 +156,42 @@ export async function createContractEnvelope(
                       }
                     : {}),
                   recipients: {
-                    signers: owners.slice(1).map<docusign.Signer>((signer, index) => {
-                      const k = index + 1;
-                      return {
-                        recipientId: String(index + 3),
-                        // roleName lets us map DocuSign's re-numbered recipientId
-                        // back to this signer's capacity/entity on readback.
-                        roleName: `AnnexOwner${k}`,
-                        name: signer.name,
-                        email: signer.email,
-                        routingOrder: "1",
-                        tabs: {
-                          signHereTabs: [
-                            {
-                              anchorString: `sigAnnex${k}`,
-                              anchorUnits: "pixels",
-                              anchorXOffset: "0",
-                              anchorYOffset: "-8",
-                              // Fail loud if the schedule anchor is missing, rather
-                              // than silently leaving a signer with no signature tab.
-                              anchorIgnoreIfNotPresent: "false",
-                            },
-                          ],
-                          dateSignedTabs: [
-                            {
-                              anchorString: `dateAnnex${k}`,
-                              anchorUnits: "pixels",
-                              anchorXOffset: "0",
-                              anchorYOffset: "-3",
-                              anchorIgnoreIfNotPresent: "false",
-                            },
-                          ],
-                        } as docusign.Tabs,
-                      };
-                    }),
+                    signers: owners
+                      .slice(1)
+                      .map<docusign.Signer>((signer, index) => {
+                        const k = index + 1;
+                        return {
+                          recipientId: String(index + 3),
+                          // roleName lets us map DocuSign's re-numbered recipientId
+                          // back to this signer's capacity/entity on readback.
+                          roleName: `AnnexOwner${k}`,
+                          name: signer.name,
+                          email: signer.email,
+                          routingOrder: "1",
+                          tabs: {
+                            signHereTabs: [
+                              {
+                                anchorString: `sigAnnex${k}`,
+                                anchorUnits: "pixels",
+                                anchorXOffset: "0",
+                                anchorYOffset: "-8",
+                                // Fail loud if the schedule anchor is missing, rather
+                                // than silently leaving a signer with no signature tab.
+                                anchorIgnoreIfNotPresent: "false",
+                              },
+                            ],
+                            dateSignedTabs: [
+                              {
+                                anchorString: `dateAnnex${k}`,
+                                anchorUnits: "pixels",
+                                anchorXOffset: "0",
+                                anchorYOffset: "-3",
+                                anchorIgnoreIfNotPresent: "false",
+                              },
+                            ],
+                          } as docusign.Tabs,
+                        };
+                      }),
                   },
                 },
               ],
@@ -208,7 +216,11 @@ export async function createContractEnvelope(
         "recipient-completed",
         "recipient-declined",
       ],
-      eventData: { version: "restv2.1", format: "json", includeData: ["recipients"] },
+      eventData: {
+        version: "restv2.1",
+        format: "json",
+        includeData: ["recipients"],
+      },
     } as docusign.EventNotification;
   }
 
@@ -260,7 +272,9 @@ export async function createContractEnvelope(
         role,
         name: signer.name ?? source?.name ?? "",
         email: signer.email ?? source?.email ?? "",
-        routingOrder: Number(signer.routingOrder ?? (role === "BUILDER" ? 2 : 1)),
+        routingOrder: Number(
+          signer.routingOrder ?? (role === "BUILDER" ? 2 : 1),
+        ),
         recipientId: signer.recipientId ?? "",
         capacity: source?.capacity ?? null,
         entityName: source?.entityName ?? null,

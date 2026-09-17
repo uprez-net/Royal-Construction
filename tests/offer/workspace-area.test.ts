@@ -106,7 +106,16 @@ assert.deepEqual(
 // Zero/empty frame inputs
 assert.deepEqual(
   calculateFrame(
-    { ...basis, groundFloorSqm: 0, firstFloorSqm: 0, alfrescoSqm: 0, porchSqm: 0, garageSqm: 0, grannyFlatSqm: 0, balconySqm: 0 },
+    {
+      ...basis,
+      groundFloorSqm: 0,
+      firstFloorSqm: 0,
+      alfrescoSqm: 0,
+      porchSqm: 0,
+      garageSqm: 0,
+      grannyFlatSqm: 0,
+      balconySqm: 0,
+    },
     { steel: 0, installer: 0, eaves: 0 },
     {
       groundFloorFramePricePerSqm: 137.5,
@@ -127,7 +136,12 @@ assert.deepEqual(
 
 assert.deepEqual(
   calculateBricks(
-    { bricksGroundFloor: 10000, bricksFirstFloor: 5000, bricksPillar: 500, tieCost: 200 },
+    {
+      bricksGroundFloor: 10000,
+      bricksFirstFloor: 5000,
+      bricksPillar: 500,
+      tieCost: 200,
+    },
     {
       sandRatePerThousandBricks: 100,
       cementRatePerHundredBricks: 15,
@@ -165,7 +179,11 @@ assert.deepEqual(
 // ─── calculateTiles ───
 
 assert.deepEqual(
-  calculateTiles({ tilesGroundFloor: 1000, tilesBathroom: 200, tilesSteps: 50 }),
+  calculateTiles({
+    tilesGroundFloor: 1000,
+    tilesBathroom: 200,
+    tilesSteps: 50,
+  }),
   {
     tilesWasted: 125,
     totalTilesRequired: 1375,
@@ -215,7 +233,12 @@ assert.equal(calc.totalTilesRequired, 1375);
 
 // ─── All-zero calculator with defaults ───
 
-const zeroCalc = calculateOfferArea(basis, INITIAL_AREA_CALCULATOR, defaultRates, LEGACY_CALC_VERSION);
+const zeroCalc = calculateOfferArea(
+  basis,
+  INITIAL_AREA_CALCULATOR,
+  defaultRates,
+  LEGACY_CALC_VERSION,
+);
 assert.equal(zeroCalc.totalSlabCost, 28200);
 assert.equal(zeroCalc.totalDropEdgeBeamCost, 0);
 assert.equal(zeroCalc.totalTruckPrice, 0);

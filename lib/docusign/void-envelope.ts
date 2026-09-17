@@ -26,6 +26,9 @@ export async function getEnvelopeStatus(
   envelopeId: string,
 ): Promise<string | null> {
   const envelopesApi = new docusign.EnvelopesApi(context.apiClient);
-  const envelope = await envelopesApi.getEnvelope(context.accountId, envelopeId);
+  const envelope = await envelopesApi.getEnvelope(
+    context.accountId,
+    envelopeId,
+  );
   return envelope.status ?? null;
 }

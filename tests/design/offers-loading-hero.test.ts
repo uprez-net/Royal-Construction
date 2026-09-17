@@ -19,7 +19,10 @@ const hero = read("components/common/page-hero-card.tsx");
 const skeleton = read("app/(main)/offers/loading.tsx");
 
 // The first class list carrying a gold border is the skeleton's hero.
-const placeholder = classesOf(skeleton, /className="([^"]*border-royal-gold[^"]*)"/);
+const placeholder = classesOf(
+  skeleton,
+  /className="([^"]*border-royal-gold[^"]*)"/,
+);
 
 test("the /offers skeleton hero paints the real hero's surface", () => {
   const card = classesOf(hero, /<Card className="([^"]+)"/);

@@ -3,7 +3,6 @@ import { PageSkeleton, Skeleton } from "@/components/ui/skeleton";
 export default function TradieDetailsSkeleton() {
   return (
     <PageSkeleton label="Loading tradie details" className="space-y-4">
-
       {/* Back link */}
       <Skeleton className="h-8 w-36 rounded-lg" />
 

@@ -1,5 +1,9 @@
 import prisma from "@/lib/prisma";
-import { sydneyDateOnly, sydneyEndOfDay, sydneyToday } from "@/lib/dates/sydney";
+import {
+  sydneyDateOnly,
+  sydneyEndOfDay,
+  sydneyToday,
+} from "@/lib/dates/sydney";
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
 import { successResponse, errorResponse } from "@/utils/validators";
@@ -8,15 +12,16 @@ import { render } from "@react-email/components";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 
-
 export async function GET(request: Request) {
   // 1. Authorization check for Vercel Cron
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === "production") {
     if (!cronSecret) {
-      console.error("[CRON_ERROR] CRON_SECRET is not configured in production env.");
+      console.error(
+        "[CRON_ERROR] CRON_SECRET is not configured in production env.",
+      );
       return errorResponse("Cron not configured", {
         status: 500,
         code: "CONFIG_ERROR",
@@ -24,7 +29,9 @@ export async function GET(request: Request) {
     }
 
     if (authHeader !== `Bearer ${cronSecret}`) {
-      console.warn("[CRON_WARN] Unauthorized attempt to trigger followup-lead-reminder cron.");
+      console.warn(
+        "[CRON_WARN] Unauthorized attempt to trigger followup-lead-reminder cron.",
+      );
       return errorResponse("Unauthorized", {
         status: 401,
         code: "UNAUTHORIZED",
@@ -34,7 +41,9 @@ export async function GET(request: Request) {
 
   try {
     const todaySydneyStr = sydneyToday();
-    console.log(`[CRON] Starting followup-lead-reminder cron. Sydney Today: ${todaySydneyStr}`);
+    console.log(
+      `[CRON] Starting followup-lead-reminder cron. Sydney Today: ${todaySydneyStr}`,
+    );
 
     // 2. Fetch open tasks that are due, and the lead each belongs to.
     //
@@ -52,13 +61,17 @@ export async function GET(request: Request) {
         dueDate: { not: null, lte: sydneyEndOfDay(todaySydneyStr) },
         lead: {
           // Closed leads get no reminders.
-          stage: { notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"] },
+          stage: {
+            notIn: ["CONVERTED", "WON", "LOST", "CANCELLED", "DISQUALIFIED"],
+          },
         },
       },
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },
         lead: {
-          include: { assignedUser: { select: { id: true, name: true, email: true } } },
+          include: {
+            assignedUser: { select: { id: true, name: true, email: true } },
+          },
         },
       },
     });
@@ -73,7 +86,9 @@ export async function GET(request: Request) {
       (t) => t.dueDate !== null && sydneyDateOnly(t.dueDate) === todaySydneyStr,
     );
 
-    console.log(`[CRON] Found ${dueTasks.length} open due tasks. ${matching.length} matched today's Sydney date (${todaySydneyStr}).`);
+    console.log(
+      `[CRON] Found ${dueTasks.length} open due tasks. ${matching.length} matched today's Sydney date (${todaySydneyStr}).`,
+    );
 
     if (matching.length === 0) {
       return successResponse({
@@ -86,7 +101,9 @@ export async function GET(request: Request) {
     // 4. Initialize Microsoft Graph client
     const config = getGraphConfig();
     const graphClient = await createGraphContext(config);
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://royal-construction-chi.vercel.app";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "https://royal-construction-chi.vercel.app";
 
     const results = [];
 
@@ -97,8 +114,15 @@ export async function GET(request: Request) {
       // created, so this only differs once tasks can be reassigned.
       const assignee = task.assignedTo ?? lead.assignedUser;
       if (!assignee || !assignee.email) {
-        console.warn(`[CRON] Task ${task.id} on lead ${lead.id} has no assignee email.`);
-        results.push({ id: lead.id, taskId: task.id, name: lead.name, status: "skipped_no_email" });
+        console.warn(
+          `[CRON] Task ${task.id} on lead ${lead.id} has no assignee email.`,
+        );
+        results.push({
+          id: lead.id,
+          taskId: task.id,
+          name: lead.name,
+          status: "skipped_no_email",
+        });
         continue;
       }
 
@@ -113,7 +137,10 @@ export async function GET(request: Request) {
       // an undelivered in-app message would otherwise be invisible. The email
       // below is the channel that gates reminderSentAt, so a failure here does
       // not cost the reminder — but it should not be silent either.
-      const notified = await triggerNotification([assignee.id], notificationPayload);
+      const notified = await triggerNotification(
+        [assignee.id],
+        notificationPayload,
+      );
       if (!notified.success) {
         console.error(
           `[CRON] In-app notification not delivered for task ${task.id}: ${notified.error ?? "unknown reason"}`,
@@ -133,7 +160,7 @@ export async function GET(request: Request) {
           followupTime: task.dueTime || "Anytime today",
           followupNotes: task.notes || "",
           crmUrl: crmUrl,
-        })
+        }),
       );
 
       try {
@@ -142,16 +169,27 @@ export async function GET(request: Request) {
           subject: emailSubject,
           body: emailHtml,
         });
-        console.log(`[CRON] Reminder sent to ${assignee.email} for task ${task.id} on lead ${lead.id}`);
+        console.log(
+          `[CRON] Reminder sent to ${assignee.email} for task ${task.id} on lead ${lead.id}`,
+        );
         // Stamped on the TASK. A lead can carry several tasks now, and marking
         // the lead would silence every other one it has.
         await prisma.leadTask.update({
           where: { id: task.id },
           data: { reminderSentAt: new Date() },
         });
-        results.push({ id: lead.id, taskId: task.id, name: lead.name, status: "sent", email: assignee.email });
+        results.push({
+          id: lead.id,
+          taskId: task.id,
+          name: lead.name,
+          status: "sent",
+          email: assignee.email,
+        });
       } catch (err) {
-        console.error(`[CRON] Failed to send reminder for task ${task.id}:`, err);
+        console.error(
+          `[CRON] Failed to send reminder for task ${task.id}:`,
+          err,
+        );
         results.push({
           id: lead.id,
           taskId: task.id,
@@ -168,7 +206,10 @@ export async function GET(request: Request) {
       results,
     });
   } catch (error) {
-    console.error("[CRON_ERROR] Failed during followup-lead-reminder cron execution:", error);
+    console.error(
+      "[CRON_ERROR] Failed during followup-lead-reminder cron execution:",
+      error,
+    );
     return errorResponse("Failed to process follow-up reminders", {
       status: 500,
       code: "INTERNAL_ERROR",

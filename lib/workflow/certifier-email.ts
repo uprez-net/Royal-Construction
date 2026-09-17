@@ -123,7 +123,10 @@ async function graphClient(mailbox: GraphMailbox) {
  * already there. Lifted from archiveLeadAttachments, where the same problem
  * has the same shape.
  */
-function deterministicFileId(engagementId: string, attachmentId: string): string {
+function deterministicFileId(
+  engagementId: string,
+  attachmentId: string,
+): string {
   const digest = createHash("sha256")
     .update(`certifier:${engagementId}:attachment:${attachmentId}`)
     .digest("hex");
@@ -219,7 +222,12 @@ async function saveInboundEmails(
     const subject = thread.subject.trim() || message.subject;
     const from = normalizeEmailAddress(thread.from || message.from);
     const to = normalizeEmailAddress(thread.to || message.to);
-    const checksum = await generateEmailChecksum(subject, thread.body, from, to);
+    const checksum = await generateEmailChecksum(
+      subject,
+      thread.body,
+      from,
+      to,
+    );
 
     rows.push({
       engagementId,
@@ -271,7 +279,9 @@ async function archiveAttachments(
   messageId: string,
   report: LeadAttachmentReport,
   mailbox: GraphMailbox,
-): Promise<{ documentId: string; fileId: string; name: string; url: string }[]> {
+): Promise<
+  { documentId: string; fileId: string; name: string; url: string }[]
+> {
   "use step";
 
   if (report.files.length === 0) {
@@ -303,7 +313,12 @@ async function archiveAttachments(
 
       const existing = await prisma.file.findUnique({
         where: { id: fileId },
-        select: { id: true, url: true, filename: true, complianceDocumentId: true },
+        select: {
+          id: true,
+          url: true,
+          filename: true,
+          complianceDocumentId: true,
+        },
       });
       if (existing?.complianceDocumentId) {
         stored.push({
@@ -371,7 +386,10 @@ async function archiveAttachments(
         url: blob.url,
       });
     } catch (error) {
-      console.error(`  Failed to archive certifier attachment "${file.name}":`, error);
+      console.error(
+        `  Failed to archive certifier attachment "${file.name}":`,
+        error,
+      );
     }
   }
 
@@ -683,7 +701,10 @@ export const processInboundCertifierEmail = async (
     return { status: "no-matching-engagement" };
   }
 
-  const report = await readAttachments(message.messageId, engagement.graphMailbox);
+  const report = await readAttachments(
+    message.messageId,
+    engagement.graphMailbox,
+  );
   const stored = await archiveAttachments(
     engagement.id,
     engagement.projectId,

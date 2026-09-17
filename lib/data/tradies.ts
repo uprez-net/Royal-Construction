@@ -19,8 +19,9 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { getTradieCoordinationDashboard } from "./tradie-dashboard";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
 
-
-function toSafeTradie(tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>[number]): SafeTradie {
+function toSafeTradie(
+  tradie: Awaited<ReturnType<typeof prisma.tradie.findMany>>[number],
+): SafeTradie {
   return {
     ...tradie,
     lastQuotedPrice: tradie.lastQuotedPrice?.toString(),
@@ -77,16 +78,19 @@ export async function getTradieSchedules(filters?: {
       },
       project: {
         ...schedule.project,
-        requirements: schedule.project.requirements as unknown as ProjectRequirementsPayload,
+        requirements: schedule.project
+          .requirements as unknown as ProjectRequirementsPayload,
         lotSize: schedule.project.lotSize?.toString() ?? undefined,
         totalBudget: schedule.project.totalBudget.toString(),
         spent: schedule.project.spent.toString(),
       },
-      milestone: schedule.milestone ? {
-        ...schedule.milestone,
-        budget: schedule.milestone.budget.toString(),
-        spend: schedule.milestone.spend?.toString(),
-      } : undefined,
+      milestone: schedule.milestone
+        ? {
+            ...schedule.milestone,
+            budget: schedule.milestone.budget.toString(),
+            spend: schedule.milestone.spend?.toString(),
+          }
+        : undefined,
     }));
   } catch (error) {
     console.error("Error fetching tradie schedules:", error);
@@ -161,7 +165,6 @@ export async function getTradieScheduleKPIs(): Promise<TradieKPIs> {
   }
 }
 
-
 export async function getCachedTradies() {
   "use cache";
 
@@ -193,7 +196,6 @@ export async function getCachedTradieScheduleKPIs() {
 
   cacheTag("tradies-schedules");
 
-
   cacheLife(CACHE_PROFILES.MEDIUM);
 
   return getTradieScheduleKPIs();
@@ -216,21 +218,23 @@ export async function getTradiesForLookup(limit = 20, search = "", trade = "") {
   try {
     const search_ = search
       ? {
-        OR: [
-          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { abn: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { trade: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        ],
-      }
+          OR: [
+            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { abn: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { trade: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          ],
+        }
       : undefined;
 
     // ANDed with the search rather than replacing it, so a compliance picker
     // can narrow to surveyors and still let the user type a name. Exact,
     // because `trade` stores the label the combobox wrote.
-    const where =
-      trade
-        ? { ...(search_ ?? {}), trade: { equals: trade, mode: Prisma.QueryMode.insensitive } }
-        : search_;
+    const where = trade
+      ? {
+          ...(search_ ?? {}),
+          trade: { equals: trade, mode: Prisma.QueryMode.insensitive },
+        }
+      : search_;
 
     const tradies = await prisma.tradie.findMany({
       where,

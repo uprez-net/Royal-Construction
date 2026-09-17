@@ -15,7 +15,11 @@ export class AiRewriteError extends Error {
   status: number;
   details?: AiRewriteErrorResponse["details"];
 
-  constructor(message: string, status: number, details?: AiRewriteErrorResponse["details"]) {
+  constructor(
+    message: string,
+    status: number,
+    details?: AiRewriteErrorResponse["details"],
+  ) {
     super(message);
     this.name = "AiRewriteError";
     this.status = status;
@@ -39,7 +43,9 @@ interface UseAiRewriteResult {
   cancel: () => void;
 }
 
-export function useAiRewrite(options: UseAiRewriteOptions = {}): UseAiRewriteResult {
+export function useAiRewrite(
+  options: UseAiRewriteOptions = {},
+): UseAiRewriteResult {
   const { onSuccess, onError } = options;
 
   const [isLoading, setIsLoading] = useState(false);
@@ -104,9 +110,8 @@ export function useAiRewrite(options: UseAiRewriteOptions = {}): UseAiRewriteRes
           signal: controller.signal,
         });
 
-        const data: AiRewriteResponse | AiRewriteErrorResponse | null = await res
-          .json()
-          .catch(() => null);
+        const data: AiRewriteResponse | AiRewriteErrorResponse | null =
+          await res.json().catch(() => null);
 
         if (!res.ok) {
           const errData = data as AiRewriteErrorResponse | null;
@@ -135,7 +140,9 @@ export function useAiRewrite(options: UseAiRewriteOptions = {}): UseAiRewriteRes
           err instanceof AiRewriteError
             ? err
             : new AiRewriteError(
-                err instanceof Error ? err.message : "Failed to rewrite the note.",
+                err instanceof Error
+                  ? err.message
+                  : "Failed to rewrite the note.",
                 0,
               );
 

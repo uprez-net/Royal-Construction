@@ -59,7 +59,6 @@ test("the parsed schema version tracks the current schema version constant", () 
 
 // ─── One list: spec + optional summary ───
 
-
 test("every template schedule row survives as an entry, in order", () => {
   const specs = STANDARD_INCLUSION_ENTRIES.map((entry) => entry.spec);
 
@@ -70,9 +69,6 @@ test("every template schedule row survives as an entry, in order", () => {
     );
   }
 });
-
-
-
 
 test("a new offer draft seeds the full template entry list", () => {
   assert.deepEqual(
@@ -100,7 +96,10 @@ test("v2 snapshots migrate straight through to the current version", () => {
   };
 
   assert.equal(migrated.schemaVersion, CURRENT_WORKSPACE_SCHEMA_VERSION);
-  assert.deepEqual(migrated.draft.inclusionSchedule, STANDARD_INCLUSION_ENTRIES);
+  assert.deepEqual(
+    migrated.draft.inclusionSchedule,
+    STANDARD_INCLUSION_ENTRIES,
+  );
 });
 
 // v3 briefly stored the schedule as plain strings beside a separately-edited
@@ -230,7 +229,9 @@ test("the offer document uses only the exclusions set in the Offer phase", () =>
     includedInTender: true,
   };
 
-  assert.deepEqual(getOfferDocumentExclusions(draft), ["Client-facing exclusion"]);
+  assert.deepEqual(getOfferDocumentExclusions(draft), [
+    "Client-facing exclusion",
+  ]);
   assert.deepEqual(
     buildOfferPrintTemplateData(
       buildProposalInput({
@@ -270,7 +271,6 @@ function snapshotWithSchedule(
   } as OfferWorkspaceSnapshot;
 }
 
-
 test("an entry with no summary never reaches the investment page", () => {
   const html = buildProposalHtml(
     buildProposalInput(
@@ -279,8 +279,9 @@ test("an entry with no summary never reaches the investment page", () => {
     EMPTY_OFFER_IMAGES,
   );
   const investmentPage =
-    html.split('class="page"').find((page) => page.includes("Investment summary")) ??
-    "";
+    html
+      .split('class="page"')
+      .find((page) => page.includes("Investment summary")) ?? "";
 
   assert.doesNotMatch(investmentPage, /Schedule only, no summary\./);
 });
@@ -356,12 +357,16 @@ test("an unmapped or missing category falls into Other Inclusions, last", () => 
     { spec: "Slab", category: "Concrete Slab" },
   ]);
 
-  assert.deepEqual(sections.map((section) => section.name), [
-    "Building",
-    OTHER_INCLUSIONS_SECTION,
-  ]);
+  assert.deepEqual(
+    sections.map((section) => section.name),
+    ["Building", OTHER_INCLUSIONS_SECTION],
+  );
   const other = sections[sections.length - 1];
-  assert.equal(other.name, OTHER_INCLUSIONS_SECTION, "Other Inclusions is last");
+  assert.equal(
+    other.name,
+    OTHER_INCLUSIONS_SECTION,
+    "Other Inclusions is last",
+  );
   assert.deepEqual(
     other.rows.map((row) => row.ref),
     ["2.1", "2.2"],
@@ -380,7 +385,10 @@ test("a section holding exactly one entry still renders as a section", () => {
   assert.equal(sections.length, 1);
   assert.equal(sections[0].name, "Council & Statutory Authority Requirements");
   assert.equal(sections[0].index, 1, "a lone section is numbered 1, not 3");
-  assert.deepEqual(sections[0].rows.map((row) => row.ref), ["1.1"]);
+  assert.deepEqual(
+    sections[0].rows.map((row) => row.ref),
+    ["1.1"],
+  );
 });
 
 test("an empty schedule renders zero sections, not an empty table", () => {
@@ -404,7 +412,9 @@ test("label matching ignores case, dash style and repeated whitespace", () => {
     "rendering - full facade",
     "RENDERING  –  FULL   FACADE",
   ]) {
-    const sections = buildInclusionSections([{ spec: "Render", category: label }]);
+    const sections = buildInclusionSections([
+      { spec: "Render", category: label },
+    ]);
     assert.equal(
       sections[0].name,
       "Building",
@@ -424,7 +434,11 @@ test("the tender prints a three-column schedule with hierarchical refs", () => {
   assert.match(html, /<th class="c-ref">Ref<\/th>/);
   assert.match(html, /<th class="c-desc">Description<\/th>/);
   assert.match(html, /<th class="c-status">Status<\/th>/);
-  assert.doesNotMatch(html, /<th[^>]*>Category<\/th>/, "the Category column is gone");
+  assert.doesNotMatch(
+    html,
+    /<th[^>]*>Category<\/th>/,
+    "the Category column is gone",
+  );
   // The trade label leads the description cell in bold, above its detail.
   assert.match(html, /<b>Tiling<\/b><br \/>Tender spec/);
   // "Tiling" maps to the Building section. It is the only entry here, so
@@ -440,9 +454,14 @@ test("the tender prints a three-column schedule with hierarchical refs", () => {
 // Inclusions" section instead, so it is still visibly classified rather than
 // printing an empty cell on a fixed-price contract.
 test("an entry with no category is still classified on both documents", () => {
-  const snapshot = snapshotWithSchedule([{ spec: "Pulled from cost schedule." }]);
+  const snapshot = snapshotWithSchedule([
+    { spec: "Pulled from cost schedule." },
+  ]);
 
-  const offer = buildProposalHtml(buildProposalInput(snapshot), EMPTY_OFFER_IMAGES);
+  const offer = buildProposalHtml(
+    buildProposalInput(snapshot),
+    EMPTY_OFFER_IMAGES,
+  );
   const tender = buildTenderHtml(buildProposalInput(snapshot));
 
   assert.match(offer, new RegExp(UNCATEGORISED_INCLUSION_LABEL));
@@ -472,7 +491,10 @@ test("v4 entries regain their category by matching the seeded spec", () => {
       introText: "I",
       exclusionBullets: [],
       termsSummary: "T",
-      inclusionSchedule: [{ spec: seeded.spec }, { spec: "An estimator wrote this." }],
+      inclusionSchedule: [
+        { spec: seeded.spec },
+        { spec: "An estimator wrote this." },
+      ],
     },
   }) as {
     schemaVersion: number;
@@ -523,7 +545,9 @@ test("tender numbering continues across page breaks", () => {
 // ─── Pagination budgets by height, because the specs are estimator-editable ───
 
 test("long specifications paginate more conservatively than short ones", () => {
-  const short = Array.from({ length: 30 }, (_, i) => ({ spec: `Item ${i + 1}` }));
+  const short = Array.from({ length: 30 }, (_, i) => ({
+    spec: `Item ${i + 1}`,
+  }));
   const long = Array.from({ length: 30 }, (_, i) => ({
     spec: `Item ${i + 1}: ${"supply and install all materials, fixings and labour to complete this element in full accordance with the approved plans and the relevant Australian Standards. ".repeat(2)}`,
   }));
@@ -588,16 +612,29 @@ test("v5 summaries become the highlight list, in schedule order", () => {
       exclusionBullets: [],
       termsSummary: "T",
       inclusionSchedule: [
-        { spec: "Engineered slab.", summary: "All structural works", category: "Concrete Slab" },
+        {
+          spec: "Engineered slab.",
+          summary: "All structural works",
+          category: "Concrete Slab",
+        },
         { spec: "Timber frame." },
-        { spec: "40mm stone.", summary: "40mm stone benchtops", summaryFromSpec: "40mm stone." },
+        {
+          spec: "40mm stone.",
+          summary: "40mm stone benchtops",
+          summaryFromSpec: "40mm stone.",
+        },
       ],
     },
   }) as {
     schemaVersion: number;
     draft: {
       inclusionHighlights: string[];
-      inclusionSchedule: { spec: string; category?: string; summary?: unknown; summaryFromSpec?: unknown }[];
+      inclusionSchedule: {
+        spec: string;
+        category?: string;
+        summary?: unknown;
+        summaryFromSpec?: unknown;
+      }[];
     };
   };
 
@@ -607,7 +644,11 @@ test("v5 summaries become the highlight list, in schedule order", () => {
     "40mm stone benchtops",
   ]);
   for (const entry of migrated.draft.inclusionSchedule) {
-    assert.equal(entry.summary, undefined, "selling copy must not survive on a contract row");
+    assert.equal(
+      entry.summary,
+      undefined,
+      "selling copy must not survive on a contract row",
+    );
     assert.equal(entry.summaryFromSpec, undefined);
   }
   assert.equal(migrated.draft.inclusionSchedule[0].spec, "Engineered slab.");
@@ -619,7 +660,10 @@ test("a v5 offer with no summaries migrates to an empty highlight list", () => {
     schemaVersion: 5,
     job: {},
     draft: {
-      headline: "H", introText: "I", exclusionBullets: [], termsSummary: "T",
+      headline: "H",
+      introText: "I",
+      exclusionBullets: [],
+      termsSummary: "T",
       inclusionSchedule: [{ spec: "Only a spec." }],
     },
   }) as { draft: { inclusionHighlights: string[] } };
@@ -632,7 +676,10 @@ test("a v6 offer is left alone", () => {
     schemaVersion: 6,
     job: {},
     draft: {
-      headline: "H", introText: "I", exclusionBullets: [], termsSummary: "T",
+      headline: "H",
+      introText: "I",
+      exclusionBullets: [],
+      termsSummary: "T",
       inclusionHighlights: ["Mine"],
       inclusionSchedule: [{ spec: "S" }],
     },
@@ -685,7 +732,9 @@ test("an unresolved mismatch warns before send, never blocks", () => {
 
 test("one mismatch reads in the singular", () => {
   const blockers = collectOfferSendBlockers({
-    hasLead: true, needsOverrideReason: false, expiryState: "valid",
+    hasLead: true,
+    needsOverrideReason: false,
+    expiryState: "valid",
     inclusionFindingCount: 1,
   });
 
@@ -697,11 +746,16 @@ test("one mismatch reads in the singular", () => {
 
 test("no findings, no blocker", () => {
   const blockers = collectOfferSendBlockers({
-    hasLead: true, needsOverrideReason: false, expiryState: "valid",
+    hasLead: true,
+    needsOverrideReason: false,
+    expiryState: "valid",
     inclusionFindingCount: 0,
   });
 
-  assert.equal(blockers.some((b) => b.id === "inclusion-consistency"), false);
+  assert.equal(
+    blockers.some((b) => b.id === "inclusion-consistency"),
+    false,
+  );
 });
 
 // ─── Exclusion detail reaches the tender ───
@@ -733,7 +787,10 @@ test("a scope exclusion carries its detail through to print", () => {
 // A free-text bullet has no detail to carry. Printing it blank is honest;
 // inventing a description for it would be text nobody wrote.
 test("a free-text bullet prints label-only, with nothing invented", () => {
-  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Boundary fencing"] };
+  const draft = {
+    ...INITIAL_OFFER_DRAFT,
+    exclusionBullets: ["Boundary fencing"],
+  };
 
   assert.deepEqual(getVisibleExclusionRows(draft, []), [
     { label: "Boundary fencing", description: "", variationRule: "" },
@@ -741,7 +798,10 @@ test("a free-text bullet prints label-only, with nothing invented", () => {
 });
 
 test("a scope item's detail wins over a bare bullet of the same label", () => {
-  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: ["Swimming pool or spa"] };
+  const draft = {
+    ...INITIAL_OFFER_DRAFT,
+    exclusionBullets: ["Swimming pool or spa"],
+  };
   const item = {
     ...INITIAL_EXCLUSIONS[0],
     id: "scope-2",
@@ -776,7 +836,10 @@ test("the tender prints Scope exclusion detail; the offer uses its short list", 
   } as OfferWorkspaceSnapshot;
 
   const tender = buildTenderHtml(buildProposalInput(withDetail));
-  const offer = buildProposalHtml(buildProposalInput(withDetail), EMPTY_OFFER_IMAGES);
+  const offer = buildProposalHtml(
+    buildProposalInput(withDetail),
+    EMPTY_OFFER_IMAGES,
+  );
 
   assert.match(tender, /Priced separately on request\./);
   assert.match(tender, /<th class="c-exc-means">What this means<\/th>/);

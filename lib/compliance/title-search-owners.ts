@@ -101,7 +101,9 @@ export function nameTokens(value: string | null | undefined): string[] {
 
   const tokens = raw
     .split(" ")
-    .filter((token) => token && !NAME_NOISE.has(token) && !ENTITY_NOISE.has(token));
+    .filter(
+      (token) => token && !NAME_NOISE.has(token) && !ENTITY_NOISE.has(token),
+    );
 
   return [...new Set(tokens)].sort();
 }
@@ -134,7 +136,9 @@ export function isSameOwnerName(left: string, right: string): boolean {
   // little to identify anybody, and the commonest surnames would match half a
   // suburb.
   if (shorter.length < 2) {
-    return shorter.length === 1 && longer.length === 1 && shorter[0] === longer[0];
+    return (
+      shorter.length === 1 && longer.length === 1 && shorter[0] === longer[0]
+    );
   }
 
   const set = new Set(longer);

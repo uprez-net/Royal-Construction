@@ -240,7 +240,10 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
     // No rate on file is "unknown", not "$0" — and Number(null) is 0, so the
     // nullish check has to come before the finite check.
-    if (tradie.tradie.lastQuotedPrice == null || !Number.isFinite(lastQuotedPrice)) {
+    if (
+      tradie.tradie.lastQuotedPrice == null ||
+      !Number.isFinite(lastQuotedPrice)
+    ) {
       return "—";
     }
 
@@ -401,7 +404,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     size="icon"
                     aria-label={`Send a reminder to ${tradie.tradie.name}`}
                     className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
-                    disabled={["AWAITING_ADMIN_APPROVAL", "DECLINED", "CONFIRMED"].includes(tradie.status)}
+                    disabled={[
+                      "AWAITING_ADMIN_APPROVAL",
+                      "DECLINED",
+                      "CONFIRMED",
+                    ].includes(tradie.status)}
                     onClick={(event) => {
                       // The row itself is a control; without this the row's
                       // own handler fires too and two modals race.
@@ -427,7 +434,11 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   size="icon"
                   aria-label={`Log a call with ${tradie.tradie.name}`}
                   className="size-8 rounded-lg text-muted-foreground hover:border-primary hover:bg-muted/40 hover:text-primary"
-                  disabled={["AWAITING_ADMIN_APPROVAL", "DECLINED", "CONFIRMED"].includes(tradie.status)}
+                  disabled={[
+                    "AWAITING_ADMIN_APPROVAL",
+                    "DECLINED",
+                    "CONFIRMED",
+                  ].includes(tradie.status)}
                   onClick={(event) => {
                     event.stopPropagation();
                     dispatch(
@@ -481,7 +492,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                   schedule: {
                     id: tradie.id,
                     tradieName: tradie.tradie.name,
-    lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
+                    lastQuotedPriceUnit: tradie.tradie.lastQuotedPriceUnit,
                     tradeType: tradie.tradie.trade,
                     abn: tradie.tradie.abn,
                     projectName: project.name,
@@ -489,9 +500,7 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
                     taskLabel: tradie.milestone?.name
                       ? `${tradie.tradie.trade} for ${tradie.milestone.name}`
                       : tradie.tradie.trade,
-                    scheduledDate: new Date(
-                      tradie.scheduledDate,
-                    ).toISOString(),
+                    scheduledDate: new Date(tradie.scheduledDate).toISOString(),
                     daysLeft: differenceInDays(
                       new Date(tradie.scheduledDate),
                       new Date(),

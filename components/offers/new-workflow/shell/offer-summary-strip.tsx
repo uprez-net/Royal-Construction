@@ -123,44 +123,44 @@ export function OfferSummaryStrip({
           </p>
         ) : (
           <>
-        {/* An override means the build-up and the offer disagree. Say so, rather
+            {/* An override means the build-up and the offer disagree. Say so, rather
             than showing two large numbers in different places and letting the
             operator discover the gap on the document. */}
-        {figures.overridden ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
-            <TriangleAlert className="size-3" aria-hidden="true" />
-            {formatMoneyDelta(figures.overrideDeltaIncGst)} vs{" "}
-            {formatCurrency(customerPrice.computedContractValueIncGst, {
-              // A cents override would otherwise read "+$0.37 vs $950,000"
-              // beside a $950,000 hero, with nothing visibly different.
-              maximumFractionDigits: moneyDeltaFractionDigits(
-                figures.overrideDeltaIncGst,
-              ),
-            })}{" "}
-            build-up
-          </span>
-        ) : null}
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-            marginToneClass(effectiveMargin.marginStatus),
-          )}
-        >
-          {/* Unpriced has no margin, so no verdict icon and no 0% beside it. */}
-          {!priced ? null : effectiveMargin.marginStatus === "at_target" ? (
-            <Check className="size-3" aria-hidden="true" />
-          ) : (
-            <TriangleAlert className="size-3" aria-hidden="true" />
-          )}
-          {getMarginStatusLabel(effectiveMargin.marginStatus)}
-          {priced
-            ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)}`
-            : null}
-        </span>
-        <p className="font-heading text-lg font-semibold tabular-nums">
-          <span className="sr-only">Contract value including GST: </span>
-          {formatCurrency(selected)}
-        </p>
+            {figures.overridden ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
+                <TriangleAlert className="size-3" aria-hidden="true" />
+                {formatMoneyDelta(figures.overrideDeltaIncGst)} vs{" "}
+                {formatCurrency(customerPrice.computedContractValueIncGst, {
+                  // A cents override would otherwise read "+$0.37 vs $950,000"
+                  // beside a $950,000 hero, with nothing visibly different.
+                  maximumFractionDigits: moneyDeltaFractionDigits(
+                    figures.overrideDeltaIncGst,
+                  ),
+                })}{" "}
+                build-up
+              </span>
+            ) : null}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                marginToneClass(effectiveMargin.marginStatus),
+              )}
+            >
+              {/* Unpriced has no margin, so no verdict icon and no 0% beside it. */}
+              {!priced ? null : effectiveMargin.marginStatus === "at_target" ? (
+                <Check className="size-3" aria-hidden="true" />
+              ) : (
+                <TriangleAlert className="size-3" aria-hidden="true" />
+              )}
+              {getMarginStatusLabel(effectiveMargin.marginStatus)}
+              {priced
+                ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)}`
+                : null}
+            </span>
+            <p className="font-heading text-lg font-semibold tabular-nums">
+              <span className="sr-only">Contract value including GST: </span>
+              {formatCurrency(selected)}
+            </p>
           </>
         )}
       </div>

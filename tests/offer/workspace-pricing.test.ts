@@ -57,7 +57,11 @@ assert.deepEqual(pricing, {
 const ewing = calculateOfferWorkspacePricing({
   totalAreaSqm: 0,
   directTotal: 948981,
-  settings: { ...SETTINGS, royalConstructionOverheadPct: 0, royalConstructionFeePct: 0.2 },
+  settings: {
+    ...SETTINGS,
+    royalConstructionOverheadPct: 0,
+    royalConstructionFeePct: 0.2,
+  },
 });
 assert.equal(ewing.royalConstructionFee, 189796.2);
 assert.equal(ewing.totalIncludingConstruction, 1138777.2);
@@ -394,7 +398,10 @@ assert.deepEqual(calculateHbcfPremiumBreakdown(650000, 0.00966, 5), {
   totalPremium: 7904.95,
 });
 // Zero loading leaves the icare figure untouched (every legacy caller's path).
-assert.equal(calculateHbcfPremiumBreakdown(650000, 0.00966, 0).totalPremium, 7528.52);
+assert.equal(
+  calculateHbcfPremiumBreakdown(650000, 0.00966, 0).totalPremium,
+  7528.52,
+);
 assert.equal(calculateHbcfPremium(650000, 0.00966, 5), 7904.95);
 assert.equal(calculateHbcfPremium(0, 0.00966, 5), 0);
 

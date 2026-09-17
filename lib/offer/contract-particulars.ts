@@ -168,7 +168,7 @@ export const CONTRACT_PARTICULAR_FIELDS: readonly ContractParticularField[] = [
   {
     key: "interestRate",
     label: "Interest rate on overdue amounts",
-    hint: "Contract interest rate (e.g. \"10% p.a.\") — entered per job by the estimator.",
+    hint: 'Contract interest rate (e.g. "10% p.a.") — entered per job by the estimator.',
     group: "financial",
     recommendedBeforeSend: true,
   },
@@ -266,8 +266,7 @@ export function parseContractParticularOverrides(
       ...new Set(
         stored.filter(
           (key): key is ContractParticularKey =>
-            isContractParticularKey(key) &&
-            particulars[key].trim().length > 0,
+            isContractParticularKey(key) && particulars[key].trim().length > 0,
         ),
       ),
     ];
@@ -309,9 +308,7 @@ export function serializeContractParticulars(
   return {
     ...normalized,
     [MANUAL_OVERRIDES_KEY]: [
-      ...new Set(
-        overrides.filter((key) => normalized[key].length > 0),
-      ),
+      ...new Set(overrides.filter((key) => normalized[key].length > 0)),
     ],
   };
 }
@@ -341,6 +338,7 @@ export function missingRecommendedParticulars(
 ): readonly ContractParticularField[] {
   const normalized = normalizeContractParticulars(particulars);
   return CONTRACT_PARTICULAR_FIELDS.filter(
-    (field) => field.recommendedBeforeSend && normalized[field.key].length === 0,
+    (field) =>
+      field.recommendedBeforeSend && normalized[field.key].length === 0,
   );
 }

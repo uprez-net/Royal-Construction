@@ -416,7 +416,9 @@ export function ProjectsClient({
                     key={project.id}
                     role={role}
                     project={project}
-                    onDetailsClick={() => openQuickView(project, role === "ADMIN")}
+                    onDetailsClick={() =>
+                      openQuickView(project, role === "ADMIN")
+                    }
                   />
                 ))}
               </div>

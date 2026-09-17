@@ -43,7 +43,8 @@ test("an over-allocated schedule does not read as balanced", () => {
 
 test("the balance check (=== 1) is exact for balanced non-default schedules", () => {
   assert.equal(
-    getPaymentScheduleTotalPct(scheduleFromPercents([0.1, 0.2, 0.3, 0.4])) === 1,
+    getPaymentScheduleTotalPct(scheduleFromPercents([0.1, 0.2, 0.3, 0.4])) ===
+      1,
     true,
   );
   assert.equal(

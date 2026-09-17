@@ -1,5 +1,9 @@
 import { TradieScheduleStatus } from "@prisma/client";
-import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 
 import type { RootState } from "@/lib/store";
 import type {
@@ -94,7 +98,10 @@ export interface TradiesState {
   replacementRequired: string[];
   pendingScheduleIds: string[];
   lastQueryKey: string | null;
-  cache: Record<string, { data: TradieCoordinationDashboard; fetchedAt: number }>;
+  cache: Record<
+    string,
+    { data: TradieCoordinationDashboard; fetchedAt: number }
+  >;
   projectLookup: {
     items: ProjectLookupItem[];
     page: number;
@@ -186,7 +193,7 @@ export const fetchTradieCoordinationDashboard = createAsyncThunk<
   const response = await fetchJson<TradieCoordinationDashboard>(
     `/api/tradie-schedules?${params.toString()}`,
     { method: "GET" },
-    "Failed to load tradie coordination data"
+    "Failed to load tradie coordination data",
   );
 
   return response.data;
@@ -195,27 +202,30 @@ export const fetchTradieCoordinationDashboard = createAsyncThunk<
 export const fetchTradieProjectLookup = createAsyncThunk<
   ProjectLookupResponse,
   { page?: number; limit?: number; query?: string }
->("tradies/fetchProjectLookup", async ({ page = 1, limit = 10, query = "" }) => {
-  const params = new URLSearchParams({
-    mode: "lookup",
-    page: String(page),
-    limit: String(limit),
-  });
+>(
+  "tradies/fetchProjectLookup",
+  async ({ page = 1, limit = 10, query = "" }) => {
+    const params = new URLSearchParams({
+      mode: "lookup",
+      page: String(page),
+      limit: String(limit),
+    });
 
-  if (query.trim()) {
-    params.set("q", query.trim());
-  }
+    if (query.trim()) {
+      params.set("q", query.trim());
+    }
 
-  const response = await fetchJson<ProjectLookupResponse>(
-    `/api/projects?${params.toString()}`,
-    {
-      method: "GET",
-    },
-    "Failed to load projects"
-  );
+    const response = await fetchJson<ProjectLookupResponse>(
+      `/api/projects?${params.toString()}`,
+      {
+        method: "GET",
+      },
+      "Failed to load projects",
+    );
 
-  return response.data;
-});
+    return response.data;
+  },
+);
 
 export const createTradieSchedule = createAsyncThunk<
   TradieScheduleListItem,
@@ -228,7 +238,7 @@ export const createTradieSchedule = createAsyncThunk<
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
-    "Failed to create tradie schedule"
+    "Failed to create tradie schedule",
   );
 
   return response.data;
@@ -247,7 +257,7 @@ export const updateTradieScheduleStatus = createAsyncThunk<
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, notes }),
     },
-    "Failed to update schedule status"
+    "Failed to update schedule status",
   );
 
   return response.data;
@@ -257,7 +267,10 @@ const tradiesSlice = createSlice({
   name: "tradies",
   initialState,
   reducers: {
-    hydrateTradieCoordination(state, action: PayloadAction<TradieCoordinationDashboard>) {
+    hydrateTradieCoordination(
+      state,
+      action: PayloadAction<TradieCoordinationDashboard>,
+    ) {
       const payload = action.payload;
       state.schedules = payload.schedules;
       state.filters = {
@@ -291,7 +304,10 @@ const tradiesSlice = createSlice({
     setTradies(state, action: PayloadAction<SafeTradie[]>) {
       state.tradies = action.payload;
     },
-    setTradieFilters(state, action: PayloadAction<Partial<TradiesState["filters"]>>) {
+    setTradieFilters(
+      state,
+      action: PayloadAction<Partial<TradiesState["filters"]>>,
+    ) {
       state.filters = { ...state.filters, ...action.payload };
       state.pagination.page = 1;
       state.selectedScheduleIds = [];
@@ -320,7 +336,9 @@ const tradiesSlice = createSlice({
     },
     toggleScheduleSelection(state, action: PayloadAction<string>) {
       if (state.selectedScheduleIds.includes(action.payload)) {
-        state.selectedScheduleIds = state.selectedScheduleIds.filter((id) => id !== action.payload);
+        state.selectedScheduleIds = state.selectedScheduleIds.filter(
+          (id) => id !== action.payload,
+        );
       } else {
         state.selectedScheduleIds.push(action.payload);
       }
@@ -337,7 +355,9 @@ const tradiesSlice = createSlice({
       }
     },
     removePendingSchedule(state, action: PayloadAction<string>) {
-      state.pendingScheduleIds = state.pendingScheduleIds.filter((scheduleId) => scheduleId !== action.payload);
+      state.pendingScheduleIds = state.pendingScheduleIds.filter(
+        (scheduleId) => scheduleId !== action.payload,
+      );
     },
     flagReplacementRequired(state, action: PayloadAction<string>) {
       if (!state.replacementRequired.includes(action.payload)) {
@@ -345,7 +365,9 @@ const tradiesSlice = createSlice({
       }
     },
     clearReplacementFlag(state, action: PayloadAction<string>) {
-      state.replacementRequired = state.replacementRequired.filter((milestoneId) => milestoneId !== action.payload);
+      state.replacementRequired = state.replacementRequired.filter(
+        (milestoneId) => milestoneId !== action.payload,
+      );
     },
   },
   extraReducers(builder) {
@@ -378,14 +400,21 @@ const tradiesSlice = createSlice({
         state.lastQueryKey = key;
         state.cache[key] = { data: payload, fetchedAt: Date.now() };
 
-        state.selectedScheduleIds = state.selectedScheduleIds.filter((id) => payload.schedules.some((row) => row.id === id));
+        state.selectedScheduleIds = state.selectedScheduleIds.filter((id) =>
+          payload.schedules.some((row) => row.id === id),
+        );
       })
       .addCase(fetchTradieCoordinationDashboard.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message ?? "Failed to load tradie coordination dashboard";
+        state.error =
+          action.error.message ??
+          "Failed to load tradie coordination dashboard";
       })
       .addCase(fetchTradieProjectLookup.pending, (state, action) => {
-        if ((action.meta.arg.page ?? 1) > 1 && state.projectLookup.items.length > 0) {
+        if (
+          (action.meta.arg.page ?? 1) > 1 &&
+          state.projectLookup.items.length > 0
+        ) {
           state.projectLookup.loadingMore = true;
         } else {
           state.projectLookup.loading = true;
@@ -400,9 +429,14 @@ const tradiesSlice = createSlice({
         state.projectLookup.items = isFirstPage
           ? nextItems
           : [
-            ...state.projectLookup.items,
-            ...nextItems.filter((item) => !state.projectLookup.items.some((existing) => existing.id === item.id)),
-          ];
+              ...state.projectLookup.items,
+              ...nextItems.filter(
+                (item) =>
+                  !state.projectLookup.items.some(
+                    (existing) => existing.id === item.id,
+                  ),
+              ),
+            ];
         state.projectLookup.page = action.payload.page;
         state.projectLookup.limit = action.payload.limit;
         state.projectLookup.totalCount = action.payload.totalCount;
@@ -413,7 +447,8 @@ const tradiesSlice = createSlice({
       .addCase(fetchTradieProjectLookup.rejected, (state, action) => {
         state.projectLookup.loading = false;
         state.projectLookup.loadingMore = false;
-        state.projectLookup.error = action.error.message ?? "Failed to load projects";
+        state.projectLookup.error =
+          action.error.message ?? "Failed to load projects";
       });
 
     builder
@@ -443,7 +478,9 @@ const tradiesSlice = createSlice({
       .addCase(updateTradieScheduleStatus.fulfilled, (state, action) => {
         const { schedule } = action.payload;
         // remove from pending
-        state.pendingScheduleIds = state.pendingScheduleIds.filter((id) => id !== schedule.id);
+        state.pendingScheduleIds = state.pendingScheduleIds.filter(
+          (id) => id !== schedule.id,
+        );
 
         // update schedule in-place immutably
         const idx = state.schedules.findIndex((s) => s.id === schedule.id);
@@ -461,8 +498,11 @@ const tradiesSlice = createSlice({
       })
       .addCase(updateTradieScheduleStatus.rejected, (state, action) => {
         const scheduleId = action.meta.arg.scheduleId;
-        state.pendingScheduleIds = state.pendingScheduleIds.filter((id) => id !== scheduleId);
-        state.error = action.error.message ?? "Failed to update schedule status";
+        state.pendingScheduleIds = state.pendingScheduleIds.filter(
+          (id) => id !== scheduleId,
+        );
+        state.error =
+          action.error.message ?? "Failed to update schedule status";
       });
   },
 });

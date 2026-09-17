@@ -43,7 +43,10 @@ export const fetchCustomers = createAsyncThunk<
   CustomerLookupResponse,
   { page?: number; limit?: number; query?: string }
 >("customers/fetch", async ({ page = 1, limit = 10, query = "" }) => {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
   if (query.trim()) {
     params.set("q", query.trim());
   }
@@ -51,7 +54,7 @@ export const fetchCustomers = createAsyncThunk<
   const response = await fetchJson<CustomerLookupResponse>(
     `/api/customers?${params.toString()}`,
     { method: "GET" },
-    "Unable to load customers"
+    "Unable to load customers",
   );
 
   return response.data;
@@ -86,7 +89,13 @@ const customersSlice = createSlice({
 
         state.items = isFirstPage
           ? nextItems
-          : [...state.items, ...nextItems.filter((item) => !state.items.some((existing) => existing.id === item.id))];
+          : [
+              ...state.items,
+              ...nextItems.filter(
+                (item) =>
+                  !state.items.some((existing) => existing.id === item.id),
+              ),
+            ];
         state.page = action.payload.page;
         state.limit = action.payload.limit;
         state.totalCount = action.payload.totalCount;

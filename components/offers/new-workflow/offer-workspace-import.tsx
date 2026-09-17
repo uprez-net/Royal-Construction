@@ -74,13 +74,8 @@ export function WorkbookImportControl({
             </p>
           </div>
         </div>
-        <label
-          className="grid w-full gap-1"
-          htmlFor="offer-workbook-import"
-        >
-          <span className={FIELD_LABEL_CLASS}>
-            Workbook file
-          </span>
+        <label className="grid w-full gap-1" htmlFor="offer-workbook-import">
+          <span className={FIELD_LABEL_CLASS}>Workbook file</span>
           <Input
             accept=".xlsx,.xlsm"
             className="bg-white/95"

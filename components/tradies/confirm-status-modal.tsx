@@ -188,14 +188,21 @@ export function ConfirmStatusModal({
         .unwrap()
         .then(() => {
           setActiveLoading(null);
-          setStatus(nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus);
-          dispatch(updateProjectTradieSchedule({
-            scheduleId: schedule.id,
-            projectId: schedule.projectId,
-            update: {
-              status: nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus as TradieScheduleStatus,
-            }
-          }))
+          setStatus(
+            nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus,
+          );
+          dispatch(
+            updateProjectTradieSchedule({
+              scheduleId: schedule.id,
+              projectId: schedule.projectId,
+              update: {
+                status:
+                  nextStatus === "CONFIRMED"
+                    ? "AWAITING_ADMIN_APPROVAL"
+                    : (nextStatus as TradieScheduleStatus),
+              },
+            }),
+          );
           onOpenChange(false);
           onSuccess();
           router.refresh();
@@ -263,7 +270,12 @@ export function ConfirmStatusModal({
                 activeLoading === option.value ||
                 (pendingFromStore && isPending);
 
-              if(!TRADIE_SCHEDULE_STATE_MACHINE[schedule.status].includes(option.value as TradieScheduleStatus)) return null;
+              if (
+                !TRADIE_SCHEDULE_STATE_MACHINE[schedule.status].includes(
+                  option.value as TradieScheduleStatus,
+                )
+              )
+                return null;
 
               return (
                 <button

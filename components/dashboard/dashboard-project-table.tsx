@@ -115,7 +115,10 @@ export function DashboardProjectTable({
             />
           </div>
 
-          <Button className="sm:shrink-0" onClick={() => router.push("/projects")}>
+          <Button
+            className="sm:shrink-0"
+            onClick={() => router.push("/projects")}
+          >
             View All
           </Button>
         </div>

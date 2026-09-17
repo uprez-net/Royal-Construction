@@ -93,11 +93,7 @@ Project Information
 Budget: ${lead.budget ?? "Not specified"}
 
 Project Types Selected:
-${
-  lead.type.length
-    ? lead.type.map((t) => `- ${t}`).join("\n")
-    : "None"
-}
+${lead.type.length ? lead.type.map((t) => `- ${t}`).join("\n") : "None"}
 
 Sales Notes
 -----------
@@ -105,11 +101,7 @@ ${lead.notes?.trim() || "No notes available."}
 
 Follow Up
 ---------
-Date: ${
-    lead.followupDate
-      ? sydneyDateOnly(lead.followupDate)
-      : "Not scheduled"
-}
+Date: ${lead.followupDate ? sydneyDateOnly(lead.followupDate) : "Not scheduled"}
 
 Time: ${lead.followupTime ?? "Not specified"}
 

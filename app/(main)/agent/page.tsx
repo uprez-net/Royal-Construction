@@ -7,7 +7,8 @@ import { getAgentWorkspaceData } from "@/lib/data/agent-sessions";
 
 export const metadata: Metadata = {
   title: "Operations Agent",
-  description: "Work with Royal Constructions business operations through the authenticated agent.",
+  description:
+    "Work with Royal Constructions business operations through the authenticated agent.",
 };
 
 async function NewAgentWorkspace() {

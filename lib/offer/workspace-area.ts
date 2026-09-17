@@ -176,13 +176,13 @@ export function rawTotalAreaSqm(basis: OfferAreaBasis): number {
 export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
   return roundCurrency(
     basis.groundFloorSqm +
-    basis.firstFloorSqm +
-    basis.alfrescoSqm +
-    basis.porchSqm +
-    basis.garageSqm +
-    basis.voidSqm +
-    basis.grannyFlatSqm +
-    basis.balconySqm,
+      basis.firstFloorSqm +
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.garageSqm +
+      basis.voidSqm +
+      basis.grannyFlatSqm +
+      basis.balconySqm,
   );
 }
 
@@ -190,8 +190,14 @@ export function getAreaBasisTotalSqm(basis: OfferAreaBasis): number {
 
 export function calculateSlab(
   basis: OfferAreaBasis,
-  area: Pick<OfferAreaCalculator, "slabCost" | "dropEdgeBeamSurfaceArea" | "numberOfTrucks">,
-  rates: Pick<AreaRateConstants, "dropEdgeBeamCostPerSurfaceArea" | "priceOfEachTruck" | "slabCostPerSqm">,
+  area: Pick<
+    OfferAreaCalculator,
+    "slabCost" | "dropEdgeBeamSurfaceArea" | "numberOfTrucks"
+  >,
+  rates: Pick<
+    AreaRateConstants,
+    "dropEdgeBeamCostPerSurfaceArea" | "priceOfEachTruck" | "slabCostPerSqm"
+  >,
 ): {
   readonly totalDropEdgeBeamCost: number;
   readonly totalTruckPrice: number;
@@ -205,7 +211,12 @@ export function calculateSlab(
     area.numberOfTrucks * rates.priceOfEachTruck,
   );
   const slabCost = roundCurrency(
-    (basis.groundFloorSqm + basis.alfrescoSqm + basis.porchSqm + basis.garageSqm + basis.grannyFlatSqm) * rates.slabCostPerSqm
+    (basis.groundFloorSqm +
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.garageSqm +
+      basis.grannyFlatSqm) *
+      rates.slabCostPerSqm,
   );
   const totalSlabCost = roundCurrency(
     slabCost + totalDropEdgeBeamCost + totalTruckPrice,
@@ -253,7 +264,10 @@ function frameFirstFloorAreaSqm(
 export function calculateFrame(
   basis: OfferAreaBasis,
   area: Pick<OfferAreaCalculator, "steel" | "installer" | "eaves">,
-  rates: Pick<AreaRateConstants, "groundFloorFramePricePerSqm" | "firstFloorFramePricePerSqm">,
+  rates: Pick<
+    AreaRateConstants,
+    "groundFloorFramePricePerSqm" | "firstFloorFramePricePerSqm"
+  >,
   calcVersion: number,
 ): {
   readonly totalGroundFloorArea: number;
@@ -264,10 +278,10 @@ export function calculateFrame(
 } {
   const totalGroundFloorArea = roundCurrency(
     basis.groundFloorSqm +
-    basis.alfrescoSqm +
-    basis.porchSqm +
-    basis.garageSqm +
-    basis.grannyFlatSqm,
+      basis.alfrescoSqm +
+      basis.porchSqm +
+      basis.garageSqm +
+      basis.grannyFlatSqm,
   );
   const totalGroundFloorFrameCost = roundCurrency(
     totalGroundFloorArea * rates.groundFloorFramePricePerSqm,
@@ -278,10 +292,10 @@ export function calculateFrame(
   );
   const totalFrameCost = roundCurrency(
     totalGroundFloorFrameCost +
-    totalFirstFloorFrameCost +
-    area.steel +
-    area.installer +
-    area.eaves,
+      totalFirstFloorFrameCost +
+      area.steel +
+      area.installer +
+      area.eaves,
   );
   return {
     totalGroundFloorArea,
@@ -293,8 +307,14 @@ export function calculateFrame(
 }
 
 export function calculateBricks(
-  area: Pick<OfferAreaCalculator, "bricksGroundFloor" | "bricksFirstFloor" | "bricksPillar" | "tieCost">,
-  rates: Pick<AreaRateConstants, "sandRatePerThousandBricks" | "cementRatePerHundredBricks">,
+  area: Pick<
+    OfferAreaCalculator,
+    "bricksGroundFloor" | "bricksFirstFloor" | "bricksPillar" | "tieCost"
+  >,
+  rates: Pick<
+    AreaRateConstants,
+    "sandRatePerThousandBricks" | "cementRatePerHundredBricks"
+  >,
 ): {
   readonly totalBricksRequired: number;
   readonly sandRequiredForBricks: number;
@@ -328,7 +348,10 @@ export function calculateBricks(
 }
 
 export function calculateTiles(
-  area: Pick<OfferAreaCalculator, "tilesGroundFloor" | "tilesBathroom" | "tilesSteps">,
+  area: Pick<
+    OfferAreaCalculator,
+    "tilesGroundFloor" | "tilesBathroom" | "tilesSteps"
+  >,
 ): {
   readonly tilesWasted: number;
   readonly totalTilesRequired: number;
@@ -336,7 +359,7 @@ export function calculateTiles(
   const baseTiles = roundCurrency(
     area.tilesGroundFloor + area.tilesBathroom + area.tilesSteps,
   );
-  const tilesWasted = roundCurrency(baseTiles * 0.10);
+  const tilesWasted = roundCurrency(baseTiles * 0.1);
   const totalTilesRequired = roundCurrency(baseTiles + tilesWasted);
   return { tilesWasted, totalTilesRequired };
 }

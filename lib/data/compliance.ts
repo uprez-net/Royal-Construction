@@ -81,8 +81,6 @@ import type {
 } from "@/utils/validators/compliance";
 import { logAction } from "./actionLog";
 
-
-
 const engagementInclude = certifierEngagementInclude;
 
 /**
@@ -104,7 +102,9 @@ export async function ensureDevelopmentApplicationDocuments(
     },
     select: { documentType: true },
   });
-  const existingTypes = new Set(existing.map((document) => document.documentType));
+  const existingTypes = new Set(
+    existing.map((document) => document.documentType),
+  );
   const missing = DA_DOCUMENTS.filter(
     (document) => !existingTypes.has(document.type),
   );
@@ -555,9 +555,7 @@ async function sendUpdatedRequiredDocuments(
     );
   }
 
-  const labels = updated
-    .map((doc) => escapeEmailHtml(doc.label))
-    .join(", ");
+  const labels = updated.map((doc) => escapeEmailHtml(doc.label)).join(", ");
 
   return sendCertifierReply(engagement.id, {
     body: [
@@ -624,9 +622,9 @@ export async function sendCertifierReply(
   const requested = input.attachments ?? [];
   const files = requested.length
     ? await prisma.file.findMany({
-      where: { id: { in: requested.map((item) => item.fileId) } },
-      select: { id: true, url: true, filename: true, fileType: true },
-    })
+        where: { id: { in: requested.map((item) => item.fileId) } },
+        select: { id: true, url: true, filename: true, fileType: true },
+      })
     : [];
 
   const attachments = await Promise.all(files.map(toEmailAttachment));
@@ -738,84 +736,82 @@ export async function attachComplianceDocumentFile(params: {
     throw new Error(`File ${params.fileId} not found.`);
   }
 
-  const {
-    document,
-    sentBackFor,
-    superseded,
-  } = await prisma.$transaction(async (tx) => {
-    let target = params.documentId
-      ? await tx.complianceDocument.findFirst({
-        where: { id: params.documentId, engagementId: params.engagementId },
-      })
-      : params.documentType
+  const { document, sentBackFor, superseded } = await prisma.$transaction(
+    async (tx) => {
+      let target = params.documentId
         ? await tx.complianceDocument.findFirst({
-          where: {
+            where: { id: params.documentId, engagementId: params.engagementId },
+          })
+        : params.documentType
+          ? await tx.complianceDocument.findFirst({
+              where: {
+                engagementId: params.engagementId,
+                documentType: params.documentType,
+              },
+              orderBy: { order: "asc" },
+            })
+          : null;
+
+      if (!target) {
+        if (!params.documentType) {
+          throw new Error("No compliance document to attach this file to.");
+        }
+        // The signed copies and home insurance have no seeded row — they only
+        // come into existence when someone uploads one.
+        const nextOrder = await tx.complianceDocument.count({
+          where: { engagementId: params.engagementId },
+        });
+        target = await tx.complianceDocument.create({
+          data: {
             engagementId: params.engagementId,
             documentType: params.documentType,
+            status: ComplianceDocumentStatus.PENDING,
+            order: nextOrder,
           },
-          orderBy: { order: "asc" },
-        })
-        : null;
-
-    if (!target) {
-      if (!params.documentType) {
-        throw new Error("No compliance document to attach this file to.");
+        });
       }
-      // The signed copies and home insurance have no seeded row — they only
-      // come into existence when someone uploads one.
-      const nextOrder = await tx.complianceDocument.count({
-        where: { engagementId: params.engagementId },
+
+      // Every upload control on the tab is a single-file "Replace": one row
+      // holds one document, not a growing pile of attempts at it. Appending
+      // instead left the old copy attached — rendered on the row, offered to the
+      // certifier by the next send, and counted by the vault — with its blob
+      // never reclaimed. Read inside the transaction so the row cannot be left
+      // pointing at two files even briefly.
+      const superseded = await tx.file.findMany({
+        where: { complianceDocumentId: target.id, id: { not: file.id } },
+        select: { id: true, url: true },
       });
-      target = await tx.complianceDocument.create({
+
+      if (superseded.length > 0) {
+        await tx.file.deleteMany({
+          where: { id: { in: superseded.map((stale) => stale.id) } },
+        });
+      }
+
+      await tx.file.update({
+        where: { id: file.id },
+        data: { complianceDocumentId: target.id },
+      });
+
+      // Read before the update wipes it. A reason on the row means the certifier
+      // sent this document back, and this upload is the answer to that — which is
+      // both worth telling them about and impossible to know a moment later.
+      const sentBackFor = target.rejectionReason;
+
+      // Clearing rejectionReason is half the point of a re-upload: the document
+      // is back in play, and leaving the old reason on it would keep showing why
+      // the previous attempt failed as though it were still current.
+      const document = await tx.complianceDocument.update({
+        where: { id: target.id },
         data: {
-          engagementId: params.engagementId,
-          documentType: params.documentType,
-          status: ComplianceDocumentStatus.PENDING,
-          order: nextOrder,
+          status: ComplianceDocumentStatus.UPLOADED,
+          rejectionReason: null,
         },
       });
-    }
 
-    // Every upload control on the tab is a single-file "Replace": one row
-    // holds one document, not a growing pile of attempts at it. Appending
-    // instead left the old copy attached — rendered on the row, offered to the
-    // certifier by the next send, and counted by the vault — with its blob
-    // never reclaimed. Read inside the transaction so the row cannot be left
-    // pointing at two files even briefly.
-    const superseded = await tx.file.findMany({
-      where: { complianceDocumentId: target.id, id: { not: file.id } },
-      select: { id: true, url: true },
-    });
-
-    if (superseded.length > 0) {
-      await tx.file.deleteMany({
-        where: { id: { in: superseded.map((stale) => stale.id) } },
-      });
-    }
-
-    await tx.file.update({
-      where: { id: file.id },
-      data: { complianceDocumentId: target.id },
-    });
-
-    // Read before the update wipes it. A reason on the row means the certifier
-    // sent this document back, and this upload is the answer to that — which is
-    // both worth telling them about and impossible to know a moment later.
-    const sentBackFor = target.rejectionReason;
-
-    // Clearing rejectionReason is half the point of a re-upload: the document
-    // is back in play, and leaving the old reason on it would keep showing why
-    // the previous attempt failed as though it were still current.
-    const document = await tx.complianceDocument.update({
-      where: { id: target.id },
-      data: {
-        status: ComplianceDocumentStatus.UPLOADED,
-        rejectionReason: null,
-      },
-    });
-
-    return { document, sentBackFor, superseded };
-  });
+      return { document, sentBackFor, superseded };
+    },
+  );
 
   const documentLabel = complianceDocumentLabel(
     document.documentType,
@@ -875,8 +871,7 @@ export async function attachComplianceDocumentFile(params: {
   }
 
   if (
-    document.documentType ===
-    ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
+    document.documentType === ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN
   ) {
     after(async () => {
       await recordArchitecturalDesignRevisionArrival({
@@ -955,7 +950,8 @@ export async function attachComplianceDocumentFile(params: {
   // upload as well as on the inbound path: an admin dragging in the copy the
   // surveyor emailed them is the same document with the same problem.
   if (
-    document.documentType === ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
+    document.documentType ===
+    ComplianceDocumentType.TITLE_SEARCH_DETAIL_AND_LEVEL
   ) {
     after(async () => {
       await verifyTitleSearchOwners({
@@ -1186,13 +1182,13 @@ export async function resolveComplianceDocument(params: {
     },
     data: approving
       ? {
-        status: ComplianceDocumentStatus.APPROVED,
-        rejectionReason: null,
-      }
+          status: ComplianceDocumentStatus.APPROVED,
+          rejectionReason: null,
+        }
       : {
-        status: ComplianceDocumentStatus.PENDING,
-        rejectionReason: params.rejectionReason ?? null,
-      },
+          status: ComplianceDocumentStatus.PENDING,
+          rejectionReason: params.rejectionReason ?? null,
+        },
   });
 
   if (claim.count === 0) {
@@ -1229,20 +1225,20 @@ export async function resolveComplianceDocument(params: {
     await logAction(
       approving
         ? createActivityLogEntry("complianceDocumentApproved", {
-          projectId: params.projectId,
-          engagementId: document.engagementId,
-          documentId: document.id,
-          documentLabel,
-          resolvedBy: params.resolvedBy,
-        })
+            projectId: params.projectId,
+            engagementId: document.engagementId,
+            documentId: document.id,
+            documentLabel,
+            resolvedBy: params.resolvedBy,
+          })
         : createActivityLogEntry("complianceDocumentRejected", {
-          projectId: params.projectId,
-          engagementId: document.engagementId,
-          documentId: document.id,
-          documentLabel,
-          resolvedBy: params.resolvedBy,
-          rejectionReason: params.rejectionReason ?? "",
-        }),
+            projectId: params.projectId,
+            engagementId: document.engagementId,
+            documentId: document.id,
+            documentLabel,
+            resolvedBy: params.resolvedBy,
+            rejectionReason: params.rejectionReason ?? "",
+          }),
     );
   });
 
@@ -1426,25 +1422,28 @@ export async function sendComplianceDocumentForReview(
     throw new Error("Compliance document not found on this project.");
   }
   if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM) {
-    throw new Error("Only a checklist item can be sent for early verification.");
+    throw new Error(
+      "Only a checklist item can be sent for early verification.",
+    );
   }
   if (isNotRequired(document.status) || document.files.length === 0) {
-    throw new Error("Upload the checklist document before sending it for verification.");
+    throw new Error(
+      "Upload the checklist document before sending it for verification.",
+    );
   }
   if (document.status === ComplianceDocumentStatus.APPROVED) {
     throw new Error("This checklist document has already been approved.");
   }
   if (document.rejectionReason) {
-    throw new Error("Upload the revised document before sending it back to the certifier.");
+    throw new Error(
+      "Upload the revised document before sending it back to the certifier.",
+    );
   }
   if (hasSentCurrentDocument(engagement, document)) {
     return { subject: "", attachmentCount: 0, alreadySent: true as const };
   }
 
-  const label = complianceDocumentLabel(
-    document.documentType,
-    document.label,
-  );
+  const label = complianceDocumentLabel(document.documentType, document.label);
   return sendCertifierReply(engagementId, {
     body: [
       engagement.certifierName
@@ -1549,14 +1548,13 @@ export async function sendComplianceForReview(engagementId: string) {
   // Size is not second-guessed here: `sendCertifierReply` hands these to Graph,
   // which asserts the total against the mailbox's MaxSendSize and switches to
   // an upload session past the inline ceiling on its own.
-  const attachments = unsentEvidence
-    .flatMap((doc) =>
-      doc.files.map((file) => ({
-        fileId: file.id,
-        name: file.filename,
-        url: file.url,
-      })),
-    );
+  const attachments = unsentEvidence.flatMap((doc) =>
+    doc.files.map((file) => ({
+      fileId: file.id,
+      name: file.filename,
+      url: file.url,
+    })),
+  );
 
   const isRemainingSend = unsentEvidence.length < requiredEvidence.length;
   let sent;
@@ -1767,7 +1765,11 @@ export async function classifyReceivedDocument(params: {
   documentId: string;
   documentType: ComplianceDocumentType;
 }) {
-  if (!CERTIFIER_RESPONSE_DOCUMENTS.some((doc) => doc.type === params.documentType)) {
+  if (
+    !CERTIFIER_RESPONSE_DOCUMENTS.some(
+      (doc) => doc.type === params.documentType,
+    )
+  ) {
     throw new Error("That is not a document type the certifier sends.");
   }
 

@@ -98,7 +98,9 @@ export const checklistExtractionSchema = z.object({
         ),
     })
     .default({ header: [], notes: [] })
-    .describe("What the document says about itself, rather than about an item."),
+    .describe(
+      "What the document says about itself, rather than about an item.",
+    ),
 });
 
 export type ChecklistExtractionData = z.infer<typeof checklistExtractionSchema>;

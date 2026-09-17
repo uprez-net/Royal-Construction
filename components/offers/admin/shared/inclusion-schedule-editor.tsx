@@ -18,7 +18,10 @@ interface InclusionScheduleEditorProps {
 
 // An emptied category drops the key rather than storing "", so a cleared row
 // reads the same as one that never had a category.
-function withCategory(row: InclusionScheduleRow, category: string): InclusionScheduleRow {
+function withCategory(
+  row: InclusionScheduleRow,
+  category: string,
+): InclusionScheduleRow {
   return category === "" ? { spec: row.spec } : { spec: row.spec, category };
 }
 
@@ -88,7 +91,10 @@ export function InclusionScheduleEditor({
             const specId = `${id}-spec-${index}`;
             const categoryId = `${id}-category-${index}`;
             return (
-              <li key={index} className="flex flex-wrap items-center gap-2 py-2">
+              <li
+                key={index}
+                className="flex flex-wrap items-center gap-2 py-2"
+              >
                 <Label htmlFor={specId} className="sr-only">
                   Inclusion {index + 1} specification
                 </Label>
@@ -109,7 +115,9 @@ export function InclusionScheduleEditor({
                   id={categoryId}
                   list={categoryListId}
                   value={row.category ?? ""}
-                  onChange={(e) => updateAt(index, withCategory(row, e.target.value))}
+                  onChange={(e) =>
+                    updateAt(index, withCategory(row, e.target.value))
+                  }
                   placeholder="Category"
                   className="w-56"
                 />
@@ -129,7 +137,10 @@ export function InclusionScheduleEditor({
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-60 flex-1 space-y-1">
-          <Label htmlFor={draftSpecId} className="text-xs text-muted-foreground">
+          <Label
+            htmlFor={draftSpecId}
+            className="text-xs text-muted-foreground"
+          >
             New inclusion
           </Label>
           <Input
@@ -142,7 +153,10 @@ export function InclusionScheduleEditor({
           />
         </div>
         <div className="w-56 space-y-1">
-          <Label htmlFor={draftCategoryId} className="text-xs text-muted-foreground">
+          <Label
+            htmlFor={draftCategoryId}
+            className="text-xs text-muted-foreground"
+          >
             Category
           </Label>
           <Input

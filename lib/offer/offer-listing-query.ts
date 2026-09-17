@@ -144,7 +144,9 @@ export function offerSearchClauses(q: string): Prisma.LeadWhereInput[] {
     { email: { contains: q, mode: "insensitive" } },
     { phone: { contains: q, mode: "insensitive" } },
     { location: { contains: q, mode: "insensitive" } },
-    { offers: { some: { baseReference: { contains: q, mode: "insensitive" } } } },
+    {
+      offers: { some: { baseReference: { contains: q, mode: "insensitive" } } },
+    },
   ];
 
   // Every PDF, email and envelope quotes the revision's full reference,
@@ -157,7 +159,10 @@ export function offerSearchClauses(q: string): Prisma.LeadWhereInput[] {
       clauses.push({
         offers: {
           some: {
-            baseReference: { contains: revisionReference[1], mode: "insensitive" },
+            baseReference: {
+              contains: revisionReference[1],
+              mode: "insensitive",
+            },
             revisionNumber,
           },
         },

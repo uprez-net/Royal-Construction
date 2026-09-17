@@ -4,8 +4,11 @@ import { listTradieSchedulesInputSchema } from "@/agent/lib/tradie-contracts";
 import { listAuthorizedTradieSchedules } from "@/agent/lib/tradie-operations";
 
 export default defineTool({
-  description: "List authorized tradie bookings, filtered by project, tradie, status, date window, or search text.",
+  description:
+    "List authorized tradie bookings, filtered by project, tradie, status, date window, or search text.",
   inputSchema: listTradieSchedulesInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  async execute(input, ctx) { return await listAuthorizedTradieSchedules(ctx, input); },
+  async execute(input, ctx) {
+    return await listAuthorizedTradieSchedules(ctx, input);
+  },
 });

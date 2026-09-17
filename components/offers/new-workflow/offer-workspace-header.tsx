@@ -14,7 +14,11 @@ import type { OfferSaveState } from "./offer-workspace-screen";
 // Offer-validity chip. Silent until a date is set; escalates muted → warning →
 // destructive as the fixed price approaches and passes its validity date, so an
 // expired offer can never be emailed unnoticed.
-export function ExpiryChip({ expiry }: { readonly expiry: OfferExpiry | null }) {
+export function ExpiryChip({
+  expiry,
+}: {
+  readonly expiry: OfferExpiry | null;
+}) {
   if (!expiry || expiry.state === "none") {
     return null;
   }

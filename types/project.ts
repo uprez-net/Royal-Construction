@@ -1,9 +1,29 @@
 import type { TradiePriceUnit } from "@prisma/client";
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, ProjectStatus, LeadEmails, Invoice } from "@prisma/client";
+import {
+  Milestone,
+  Project,
+  Tradie,
+  Variation,
+  File as ProjectFile,
+  SiteUpdate,
+  User,
+  TradieSchedule,
+  TradieScheduleStatus,
+  Customer,
+  ActivityLog,
+  Material,
+  ProjectStage,
+  ProjectStatus,
+  LeadEmails,
+  Invoice,
+} from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
 import type { CertifierEngagementDetail } from "./compliance";
 
-export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize" | "requirements"> {
+export interface SafeProject extends Omit<
+  Project,
+  "totalBudget" | "spent" | "lotSize" | "requirements"
+> {
   totalBudget: string;
   spent: string;
   lotSize?: string;
@@ -17,16 +37,15 @@ export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lo
  * not survive serialization, so consumers do their own `Number(...)` — the same
  * contract `SafeProject` and `SafeMilestone` follow.
  */
-export interface SafeInvoice
-  extends Omit<
-    Invoice,
-    | "subTotal"
-    | "totalTax"
-    | "total"
-    | "amountDue"
-    | "amountPaid"
-    | "amountCredited"
-  > {
+export interface SafeInvoice extends Omit<
+  Invoice,
+  | "subTotal"
+  | "totalTax"
+  | "total"
+  | "amountDue"
+  | "amountPaid"
+  | "amountCredited"
+> {
   subTotal: string;
   totalTax: string;
   total: string;
@@ -154,7 +173,7 @@ export interface ProjectWithStats extends SafeProject {
     tradies: {
       name: string;
       tradeType: string;
-    }[]
+    }[];
   }[];
   milestoneCount: number;
   completedMilestoneCount: number;
@@ -244,9 +263,20 @@ export type TradieKPIs = {
   completed: number;
 };
 
-export type TradieCoordinationTab = "all" | "week" | "confirmed" | "pending" | "overdue" | "completed";
+export type TradieCoordinationTab =
+  | "all"
+  | "week"
+  | "confirmed"
+  | "pending"
+  | "overdue"
+  | "completed";
 
-export type TradieCoordinationSortBy = "scheduledDate" | "tradieName" | "tradeType" | "projectName" | "status";
+export type TradieCoordinationSortBy =
+  | "scheduledDate"
+  | "tradieName"
+  | "tradeType"
+  | "projectName"
+  | "status";
 
 export type TradieCoordinationQuery = {
   page?: number;
@@ -404,7 +434,11 @@ export type ProjectMutationState = {
   error: string | null;
 };
 
-export type ProjectUploadStatus = "queued" | "uploading" | "completed" | "failed";
+export type ProjectUploadStatus =
+  | "queued"
+  | "uploading"
+  | "completed"
+  | "failed";
 
 export type ProjectUploadRecord = {
   id: string;
@@ -460,13 +494,13 @@ export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
   Lockup: "Lock Up",
   Interior_Fit_Out: "Interior Fit-Out",
   Final: "Final",
-}
+};
 
 export const PROJECT_STAGE_PERCENTAGE: Record<ProjectStage, number> = {
   Deposit: 0.05,
   Slab: 0.15,
   Frame: 0.25,
   Lockup: 0.25,
-  Interior_Fit_Out: 0.20,
-  Final: 0.10,
-}
+  Interior_Fit_Out: 0.2,
+  Final: 0.1,
+};

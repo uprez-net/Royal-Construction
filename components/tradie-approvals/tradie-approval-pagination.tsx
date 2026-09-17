@@ -37,7 +37,7 @@ export function TradieApprovalPagination() {
 
   const onPageChange = (newPage: number) => {
     dispatch(setQuery({ page: newPage }));
-  }
+  };
 
   return (
     <>

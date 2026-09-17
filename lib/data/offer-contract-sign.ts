@@ -104,7 +104,11 @@ export async function sendContractForSignature(input: {
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
-  if (!config.contractTemplateId || !config.contractDefaultTemplateId || !config.contractMultipleOwnersTemplateId) {
+  if (
+    !config.contractTemplateId ||
+    !config.contractDefaultTemplateId ||
+    !config.contractMultipleOwnersTemplateId
+  ) {
     return {
       ok: false,
       error:
@@ -178,7 +182,7 @@ export async function sendContractForSignature(input: {
   // "Director of ABC Pty Ltd".
   const capacityLabel = primaryEntityName
     ? `${primarySigner?.capacity ?? "Director"} of ${primaryEntityName}`
-    : primarySigner?.capacity ?? "Owner";
+    : (primarySigner?.capacity ?? "Owner");
 
   // Ordered customer-side signers for the envelope — each individual owner + each
   // company director (collectOfferSigners order). The primary carries the data
@@ -263,7 +267,11 @@ export async function sendContractForSignature(input: {
   // ── Tab values (labels defined by scripts/docusign/create-bc4-template.ts;
   // unlocked particulars live in the template and are completed by the
   // builder while signing) ──
-  const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
+  const locked = (tabLabel: string, value: string): ContractTabValue => ({
+    tabLabel,
+    value,
+    locked: true,
+  });
 
   const priceLabel = formatContractMoney(contractValue);
 
@@ -284,7 +292,10 @@ export async function sendContractForSignature(input: {
       where: { offerId: offer.id },
       select: { particulars: true },
     });
-    return { claimed: true as const, particulars: contract?.particulars ?? null };
+    return {
+      claimed: true as const,
+      particulars: contract?.particulars ?? null,
+    };
   });
   if (!claim.claimed) {
     return {
@@ -316,9 +327,12 @@ export async function sendContractForSignature(input: {
     (primarySigner?.phone ?? "").trim() || parsedParticulars.ownerPhone.trim();
   const ownerMobileValue = parsedParticulars.ownerMobile.trim();
   const ownerContactTabs: ContractTabValue[] = [];
-  if (ownerAddressValue) ownerContactTabs.push(locked("ownerAddress", ownerAddressValue));
-  if (ownerPhoneValue) ownerContactTabs.push(locked("ownerPhone", ownerPhoneValue));
-  if (ownerMobileValue) ownerContactTabs.push(locked("ownerMobile", ownerMobileValue));
+  if (ownerAddressValue)
+    ownerContactTabs.push(locked("ownerAddress", ownerAddressValue));
+  if (ownerPhoneValue)
+    ownerContactTabs.push(locked("ownerPhone", ownerPhoneValue));
+  if (ownerMobileValue)
+    ownerContactTabs.push(locked("ownerMobile", ownerMobileValue));
 
   // Owners 2–4 (issue #142): page ii's "ADDITIONAL OWNERS" table carries one
   // row per extra owner with NAME / ADDRESS / TELEPHONE / MOBILE. Each value is
@@ -343,10 +357,14 @@ export async function sendContractForSignature(input: {
       additionalOwnerTabs.push(locked(`owner${tabSuffix}PrintName`, name));
       additionalOwnerTabs.push(locked(`owner${tabSuffix}Name`, name));
     }
-    if (address) additionalOwnerTabs.push(locked(`owner${tabSuffix}Address`, address));
-    if (phone) additionalOwnerTabs.push(locked(`owner${tabSuffix}Phone`, phone));
-    if (mobile) additionalOwnerTabs.push(locked(`owner${tabSuffix}Mobile`, mobile));
-    if (capacity) additionalOwnerTabs.push(locked(`owner${tabSuffix}Capacity`, capacity));
+    if (address)
+      additionalOwnerTabs.push(locked(`owner${tabSuffix}Address`, address));
+    if (phone)
+      additionalOwnerTabs.push(locked(`owner${tabSuffix}Phone`, phone));
+    if (mobile)
+      additionalOwnerTabs.push(locked(`owner${tabSuffix}Mobile`, mobile));
+    if (capacity)
+      additionalOwnerTabs.push(locked(`owner${tabSuffix}Capacity`, capacity));
   }
 
   // The DocuSign OWNER recipient routes to ownerSigners[0].email (the primary
@@ -371,7 +389,10 @@ export async function sendContractForSignature(input: {
     locked("depositAmount", contractTerms.depositAmount),
     locked("excludedDays", "Saturdays, Sundays and NSW Public Holidays"),
     locked("defectsLiabilityWeeks", "12 Weeks"),
-    locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
+    locked(
+      "workDescription",
+      [job.buildType, ...job.buildScope].filter(Boolean).join(". "),
+    ),
     locked("exclusionsList", exclusions.join("\n")),
     // Owner address/contact — sourced from the primary owner's Current Location +
     // contact (ADR 0003).
@@ -388,7 +409,8 @@ export async function sendContractForSignature(input: {
     // The owner address/phone/mobile are excluded here — sourced above from the
     // owner party — so we never send a duplicate tab label.
     ...contractParticularsToLockedTabs(parsedParticulars).filter(
-      (tab) => !["ownerAddress", "ownerPhone", "ownerMobile"].includes(tab.tabLabel),
+      (tab) =>
+        !["ownerAddress", "ownerPhone", "ownerMobile"].includes(tab.tabLabel),
     ),
     locked("ownerPrintName", primaryOwner),
   ];
@@ -400,13 +422,16 @@ export async function sendContractForSignature(input: {
       context,
       config,
       templateId:
-        ownerSigners.length === 1 ?
-          config.contractTemplateId :
-          ownerSigners.length === 2 ?
-            config.contractDefaultTemplateId :
-            config.contractMultipleOwnersTemplateId,
+        ownerSigners.length === 1
+          ? config.contractTemplateId
+          : ownerSigners.length === 2
+            ? config.contractDefaultTemplateId
+            : config.contractMultipleOwnersTemplateId,
       emailSubject: `Residential Building Contract (BC4) — ${reference}`,
-      builder: { name: config.builderSignerName, email: config.builderSignerEmail },
+      builder: {
+        name: config.builderSignerName,
+        email: config.builderSignerEmail,
+      },
       owners: ownerSigners,
       // annexurePdfBase64,
       ownerTextTabs,
@@ -447,7 +472,10 @@ export async function sendContractForSignature(input: {
       where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SENT },
       data: { offerStatus: offer.offerStatus },
     });
-    return { ok: false, error: `DocuSign envelope failed: ${describeDocusignError(error)}` };
+    return {
+      ok: false,
+      error: `DocuSign envelope failed: ${describeDocusignError(error)}`,
+    };
   }
 
   const documentData = {
@@ -457,76 +485,87 @@ export async function sendContractForSignature(input: {
     paymentScheduleSource: payment.source,
   };
 
-  const stillClaimed = await prisma.$transaction(async (tx) => {
-    // Claim first, then write. Returning from a transaction callback COMMITS
-    // it (only a throw rolls back), so a recall or Create revision that ran
-    // while DocuSign was creating the envelope used to have the writes below
-    // land anyway: the stored document was replaced and executedPdfUrl cleared
-    // on a document that may already be executed, even though the raced
-    // envelope is voided straight after. The envelope row is still written, so
-    // the raced envelope stays on the audit trail and can be cancelled.
-    const stillSent = await tx.offer.updateMany({
-      where: {
-        id: offer.id,
-        offerStatus: OfferStatus.CONTRACT_SENT,
-        isActive: true,
-      },
-      data: { offerStatus: OfferStatus.CONTRACT_SENT },
-    });
-    const claimed = stillSent.count > 0;
-    const contract = await tx.contract.upsert({
-      where: { offerId: offer.id },
-      // A new envelope replaces the document, so the last envelope's executed
-      // PDF no longer describes it. The webhook files this one's on completion.
-      // A raced send owns nothing, so it leaves the stored document alone.
-      update: claimed
-        ? { version: offer.revisionNumber, documentData, executedPdfUrl: null }
-        : {},
-      create: { offerId: offer.id, version: offer.revisionNumber, documentData },
-    });
-    await tx.envelope.create({
-      data: {
-        docType: EnvelopeDocType.CONTRACT,
-        contractId: contract.id,
-        docusignId: envelope.envelopeId,
-        status: EnvelopeStatus.SENT,
-        documentVersion: offer.revisionNumber,
-        sentAt: new Date(),
-        signatures: {
-          create: envelope.recipients.map((recipient) => ({
-            recipientRole:
-              recipient.role === "BUILDER" ? SignerRole.BUILDER : SignerRole.CUSTOMER,
-            name: recipient.name,
-            email: recipient.email,
-            routingOrder: recipient.routingOrder,
-            // Empty id means "unknown" (composite readback failure) — persist
-            // null so the webhook matches by email, not a wrong id (codex #3).
-            docusignRecipientId: recipient.recipientId || null,
-            capacity: recipient.capacity ?? null,
-            entityName: recipient.entityName ?? null,
-            entityAbn: recipient.entityAbn ?? null,
-          })),
+  const stillClaimed = await prisma
+    .$transaction(async (tx) => {
+      // Claim first, then write. Returning from a transaction callback COMMITS
+      // it (only a throw rolls back), so a recall or Create revision that ran
+      // while DocuSign was creating the envelope used to have the writes below
+      // land anyway: the stored document was replaced and executedPdfUrl cleared
+      // on a document that may already be executed, even though the raced
+      // envelope is voided straight after. The envelope row is still written, so
+      // the raced envelope stays on the audit trail and can be cancelled.
+      const stillSent = await tx.offer.updateMany({
+        where: {
+          id: offer.id,
+          offerStatus: OfferStatus.CONTRACT_SENT,
+          isActive: true,
         },
-      },
-    });
-    if (!claimed) {
-      return false;
-    }
-    await tx.offerStatusEvent.create({
-      data: {
-        offerId: offer.id,
-        fromStatus: offer.offerStatus,
-        toStatus: OfferStatus.CONTRACT_SENT,
-        actorId: access.user.id,
-        // Record EVERY customer recipient the envelope routed to, not just the
-        // primary — the contract fans out to each owner/director exactly like the
-        // Tender does, and a single-address note misrepresents the audit trail
-        // (PR #124 sweep; the identical defect was fixed on the Tender note).
-        note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners.map((signer) => signer.email).join(", ")}`,
-      },
-    });
-    return true;
-  })
+        data: { offerStatus: OfferStatus.CONTRACT_SENT },
+      });
+      const claimed = stillSent.count > 0;
+      const contract = await tx.contract.upsert({
+        where: { offerId: offer.id },
+        // A new envelope replaces the document, so the last envelope's executed
+        // PDF no longer describes it. The webhook files this one's on completion.
+        // A raced send owns nothing, so it leaves the stored document alone.
+        update: claimed
+          ? {
+              version: offer.revisionNumber,
+              documentData,
+              executedPdfUrl: null,
+            }
+          : {},
+        create: {
+          offerId: offer.id,
+          version: offer.revisionNumber,
+          documentData,
+        },
+      });
+      await tx.envelope.create({
+        data: {
+          docType: EnvelopeDocType.CONTRACT,
+          contractId: contract.id,
+          docusignId: envelope.envelopeId,
+          status: EnvelopeStatus.SENT,
+          documentVersion: offer.revisionNumber,
+          sentAt: new Date(),
+          signatures: {
+            create: envelope.recipients.map((recipient) => ({
+              recipientRole:
+                recipient.role === "BUILDER"
+                  ? SignerRole.BUILDER
+                  : SignerRole.CUSTOMER,
+              name: recipient.name,
+              email: recipient.email,
+              routingOrder: recipient.routingOrder,
+              // Empty id means "unknown" (composite readback failure) — persist
+              // null so the webhook matches by email, not a wrong id (codex #3).
+              docusignRecipientId: recipient.recipientId || null,
+              capacity: recipient.capacity ?? null,
+              entityName: recipient.entityName ?? null,
+              entityAbn: recipient.entityAbn ?? null,
+            })),
+          },
+        },
+      });
+      if (!claimed) {
+        return false;
+      }
+      await tx.offerStatusEvent.create({
+        data: {
+          offerId: offer.id,
+          fromStatus: offer.offerStatus,
+          toStatus: OfferStatus.CONTRACT_SENT,
+          actorId: access.user.id,
+          // Record EVERY customer recipient the envelope routed to, not just the
+          // primary — the contract fans out to each owner/director exactly like the
+          // Tender does, and a single-address note misrepresents the audit trail
+          // (PR #124 sweep; the identical defect was fixed on the Tender note).
+          note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners.map((signer) => signer.email).join(", ")}`,
+        },
+      });
+      return true;
+    })
     .catch((error) => {
       // Same invariant as the Tender: the executed contract envelope is already
       // with the customer and cannot be un-sent, so never release the claim — a
@@ -587,8 +626,10 @@ export async function saveContractParticulars(input: {
   if (
     CONTRACT_PARTICULAR_FIELDS.some(
       (field) =>
-        normalizedParticulars[field.key].length > CONTRACT_PARTICULAR_MAX_LENGTH,
-    ) || totalLength > CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH
+        normalizedParticulars[field.key].length >
+        CONTRACT_PARTICULAR_MAX_LENGTH,
+    ) ||
+    totalLength > CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH
   ) {
     return {
       ok: false,
@@ -677,7 +718,9 @@ function describeDocusignError(error: unknown): string {
   if (response?.body) {
     const body = response.body as { errorCode?: string; message?: string };
     if (body.message) {
-      return body.errorCode ? `${body.errorCode}: ${body.message}` : body.message;
+      return body.errorCode
+        ? `${body.errorCode}: ${body.message}`
+        : body.message;
     }
   }
   return (error as Error).message ?? "Unknown error";

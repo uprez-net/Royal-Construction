@@ -13,10 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  ComplianceAlertStatus,
-  ComplianceOutreachMode,
-} from "@prisma/client";
+import { ComplianceAlertStatus, ComplianceOutreachMode } from "@prisma/client";
 
 import { StatusPill } from "@/components/common/status-pill";
 import { Button } from "@/components/ui/button";
@@ -154,9 +151,7 @@ function ComplianceAlertRow({
               via the {ALERT_SOURCE_LABEL[alert.raisedBySource]}
             </StatusPill>
           ) : null}
-          {isPositive ? (
-            <StatusPill tone="success">Approved</StatusPill>
-          ) : null}
+          {isPositive ? <StatusPill tone="success">Approved</StatusPill> : null}
           {!isOpen ? <StatusPill tone="success">Resolved</StatusPill> : null}
         </div>
 
@@ -394,7 +389,7 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
     const outreach = outreachForParty(engagement, party);
     return Boolean(
       outreach?.contactEmail &&
-        outreach.mode === ComplianceOutreachMode.OUTREACH,
+      outreach.mode === ComplianceOutreachMode.OUTREACH,
     );
   };
 

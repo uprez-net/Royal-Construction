@@ -251,13 +251,7 @@ export function ConnectPartyModal({
         estate: developer?.estate,
         client: party === CompliancePartyType.ARCHITECT ? customer : null,
       }),
-    [
-      customer,
-      developer?.estate,
-      party,
-      resolvedContact?.name,
-      subjectAddress,
-    ],
+    [customer, developer?.estate, party, resolvedContact?.name, subjectAddress],
   );
   const generatedEmailDocument = useMemo(
     () => emailHtmlToLeadNotesDocument(generatedBodyHtml),
@@ -305,7 +299,9 @@ export function ConnectPartyModal({
       toast.success(`${file.name} attached.`);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : `Could not upload ${file.name}.`,
+        error instanceof Error
+          ? error.message
+          : `Could not upload ${file.name}.`,
       );
     } finally {
       // In a finally, so a failed transfer or a rejected attach releases the
@@ -338,7 +334,9 @@ export function ConnectPartyModal({
       onOpenChange(false);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : `Could not engage the ${label.toLowerCase()}.`,
+        error instanceof Error
+          ? error.message
+          : `Could not engage the ${label.toLowerCase()}.`,
       );
     }
   };
@@ -368,25 +366,31 @@ export function ConnectPartyModal({
               {isApproval
                 ? "They are sent the bushfire report with the plans and the survey it was assessed against, and asked to approve it. A reply saying yes or no is read off the thread and recorded here; you can also record their answer by hand."
                 : needsDeed
-                ? "They are sent the land deed and asked for the deposited plan, title search and survey. Their reply is matched back by the reference in the subject line."
-                : isConsultant
-                  ? // What they are sent is listed below rather than described
-                    // here, because it now differs per consultant: a bushfire
-                    // assessor reads the certificate, a structural engineer
-                    // reads the full design, and a sentence naming one of those
-                    // sets would be wrong for the other.
-                    `They are asked for the ${wanted}, with what they need to work from attached. What they send back answers the checklist ${
-                      deliverables.length > 1 ? "items" : "item"
-                    } this was raised from.`
-                  : "They are sent the surveyor's set and the planning certificate, the client's details so they can sit down with the owners, and asked for the plans. Their reply is matched back by the reference in the subject line."}
+                  ? "They are sent the land deed and asked for the deposited plan, title search and survey. Their reply is matched back by the reference in the subject line."
+                  : isConsultant
+                    ? // What they are sent is listed below rather than described
+                      // here, because it now differs per consultant: a bushfire
+                      // assessor reads the certificate, a structural engineer
+                      // reads the full design, and a sentence naming one of those
+                      // sets would be wrong for the other.
+                      `They are asked for the ${wanted}, with what they need to work from attached. What they send back answers the checklist ${
+                        deliverables.length > 1 ? "items" : "item"
+                      } this was raised from.`
+                    : "They are sent the surveyor's set and the planning certificate, the client's details so they can sit down with the owners, and asked for the plans. Their reply is matched back by the reference in the subject line."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-6 py-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.8fr)]">
-            <section className="min-w-0 space-y-2" aria-labelledby="party-email-body-label">
+            <section
+              className="min-w-0 space-y-2"
+              aria-labelledby="party-email-body-label"
+            >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p id="party-email-body-label" className="text-sm font-semibold text-foreground">
+                  <p
+                    id="party-email-body-label"
+                    className="text-sm font-semibold text-foreground"
+                  >
                     Email body
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -422,130 +426,148 @@ export function ConnectPartyModal({
                 </p>
                 <Label>{label}</Label>
                 {isApproval ? (
-                // Its own picker rather than the directory's. A developer is
-                // not a trade, is never scheduled and is never paid, and the
-                // list they come from is keyed by the estate a lot sits in.
-                <DeveloperPicker
-                  council={council}
-                  location={location}
-                  value={developer}
-                  onChange={setDeveloper}
-                  disabled={isPending}
-                />
-              ) : trade ? (
-                <ContactPicker
-                  trade={trade}
-                  label={label}
-                  value={contact}
-                  onChange={setContact}
-                  disabled={isPending}
-                />
+                  // Its own picker rather than the directory's. A developer is
+                  // not a trade, is never scheduled and is never paid, and the
+                  // list they come from is keyed by the estate a lot sits in.
+                  <DeveloperPicker
+                    council={council}
+                    location={location}
+                    value={developer}
+                    onChange={setDeveloper}
+                    disabled={isPending}
+                  />
+                ) : trade ? (
+                  <ContactPicker
+                    trade={trade}
+                    label={label}
+                    value={contact}
+                    onChange={setContact}
+                    disabled={isPending}
+                  />
                 ) : null}
               </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="party-subject-address">Site address</Label>
-              {/* Read-only. It is the engagement's, set when the certifier was
+              <div className="space-y-2">
+                <Label htmlFor="party-subject-address">Site address</Label>
+                {/* Read-only. It is the engagement's, set when the certifier was
                   connected, and every thread on this file has to quote the same
                   one — the inbound correlation matches a subject against it. */}
-              <Input id="party-subject-address" value={subjectAddress} readOnly disabled />
-            </div>
-
-            {needsDeed ? (
-              <div className="space-y-2">
-                <Label>{LAND_DEED_DOCUMENT.label}</Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (file) void handleDeed(file);
-                  }}
+                <Input
+                  id="party-subject-address"
+                  value={subjectAddress}
+                  readOnly
+                  disabled
                 />
-                {deed ? (
-                  <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2">
-                    <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 truncate text-sm">{deed.name}</span>
+              </div>
+
+              {needsDeed ? (
+                <div className="space-y-2">
+                  <Label>{LAND_DEED_DOCUMENT.label}</Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void handleDeed(file);
+                    }}
+                  />
+                  {deed ? (
+                    <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2">
+                      <FileText
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {deed.name}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isPending || isDeedBusy}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {isDeedBusy ? (
+                          <Loader2
+                            className="size-4 animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        Replace
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="sm"
+                      variant="outline"
+                      className="w-full"
                       disabled={isPending || isDeedBusy}
                       onClick={() => fileInputRef.current?.click()}
                     >
                       {isDeedBusy ? (
-                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                      ) : null}
-                      Replace
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={isPending || isDeedBusy}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {isDeedBusy ? (
-                      <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Upload className="size-4" aria-hidden="true" />
-                    )}
-                    {/* The label follows the operation rather than staying put,
+                        <Loader2
+                          className="size-4 animate-spin"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Upload className="size-4" aria-hidden="true" />
+                      )}
+                      {/* The label follows the operation rather than staying put,
                         because the slow half is the part after the bytes have
                         gone: a spinner still reading "Upload the land deed"
                         looks stuck rather than busy. */}
-                    {isDeedBusy ? "Attaching…" : "Upload the land deed"}
-                  </Button>
+                      {isDeedBusy ? "Attaching…" : "Upload the land deed"}
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Sent with the request — the surveyor cannot start without
+                    it.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <Label>Attachments sent with this request</Label>
+                {attachments.length > 0 ? (
+                  <ul className="space-y-1 rounded-md border border-border/70 bg-muted/40 p-2">
+                    {attachments.map((attachment) => (
+                      <li
+                        key={attachment.url}
+                        className="flex items-center gap-2 px-1 py-0.5 text-sm"
+                      >
+                        <Paperclip
+                          className="size-3.5 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 truncate">
+                          {attachment.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
+                    <X className="size-3.5 shrink-0" aria-hidden="true" />
+                    Nothing on the file to send yet.
+                  </p>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Sent with the request — the surveyor cannot start without it.
-                </p>
               </div>
-            ) : null}
 
-            <div className="space-y-2">
-              <Label>Attachments sent with this request</Label>
-              {attachments.length > 0 ? (
-                <ul className="space-y-1 rounded-md border border-border/70 bg-muted/40 p-2">
-                  {attachments.map((attachment) => (
-                    <li
-                      key={attachment.url}
-                      className="flex items-center gap-2 px-1 py-0.5 text-sm"
-                    >
-                      <Paperclip
-                        className="size-3.5 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0 truncate">{attachment.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
-                  <X className="size-3.5 shrink-0" aria-hidden="true" />
-                  Nothing on the file to send yet.
-                </p>
-              )}
-            </div>
-
-            <ExtraAttachmentsField
-              onUploadingChange={setIsAttachingExtras}
-              projectId={projectId}
-              value={extras}
-              onChange={setExtras}
-              vaultOptions={vaultOptions}
-              disabled={isPending}
-              hint={
-                isApproval
-                  ? "The covenant schedule, the contract of sale — anything the estate asks to see alongside the report."
-                  : "Anything else this request should carry, on top of what is listed above."
-              }
-            />
-
+              <ExtraAttachmentsField
+                onUploadingChange={setIsAttachingExtras}
+                projectId={projectId}
+                value={extras}
+                onChange={setExtras}
+                vaultOptions={vaultOptions}
+                disabled={isPending}
+                hint={
+                  isApproval
+                    ? "The covenant schedule, the contract of sale — anything the estate asks to see alongside the report."
+                    : "Anything else this request should carry, on top of what is listed above."
+                }
+              />
             </aside>
           </div>
 

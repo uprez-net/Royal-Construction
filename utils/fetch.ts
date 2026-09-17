@@ -1,4 +1,3 @@
-
 export class FetchError extends Error {
   status: number;
   /**
@@ -23,7 +22,11 @@ export class FetchError extends Error {
  * @returns extracted error message or the fallback
  */
 export function fetchErrorMessage(responseBody: unknown, fallback: string) {
-  if (responseBody && typeof responseBody === "object" && "error" in responseBody) {
+  if (
+    responseBody &&
+    typeof responseBody === "object" &&
+    "error" in responseBody
+  ) {
     const message = (responseBody as { error?: unknown }).error;
 
     if (typeof message === "string" && message.trim()) {
@@ -49,11 +52,20 @@ interface FetchJsonResponse<T> {
  * @param signal - optional AbortSignal
  * @returns parsed JSON response
  */
-export async function fetchJson<T>(input: RequestInfo | URL, init: RequestInit, fallback: string, signal?: AbortSignal): Promise<FetchJsonResponse<T>> {
+export async function fetchJson<T>(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  fallback: string,
+  signal?: AbortSignal,
+): Promise<FetchJsonResponse<T>> {
   const response = await fetch(input, { ...init, signal });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new FetchError(fetchErrorMessage(body, fallback), response.status, body);
+    throw new FetchError(
+      fetchErrorMessage(body, fallback),
+      response.status,
+      body,
+    );
   }
 
   return body as FetchJsonResponse<T>;

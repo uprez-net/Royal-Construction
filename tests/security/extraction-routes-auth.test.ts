@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { blobStoreIdFromToken, isBlobStorageUrl, isBlobStoreUrl } from "../../lib/blob-url";
+import {
+  blobStoreIdFromToken,
+  isBlobStorageUrl,
+  isBlobStoreUrl,
+} from "../../lib/blob-url";
 
 // Both extraction routes start a durable run from ids and URLs in the request
 // body. extract-project-data checked only that someone was signed in, so any
@@ -27,20 +31,29 @@ function before(text: string, first: string, second: string) {
 
 test("the tender extraction authorizes the lead before starting the run", () => {
   before(projectRoute, "authorizeLeadAccess(input.leadId)", "start(");
-  assert.match(projectRoute, /if \(!access\.ok\) \{\s*return forbiddenResponse\(access\.error\);/);
+  assert.match(
+    projectRoute,
+    /if \(!access\.ok\) \{\s*return forbiddenResponse\(access\.error\);/,
+  );
 });
 
 test("the tender extraction only OCRs files in this deployment's Blob store", () => {
   // Any Vercel Blob store passed before, so a file in someone else's free
   // store could be OCR'd at Royal's cost.
-  assert.match(projectRoute, /const storeId = blobStoreIdFromToken\(process\.env\.BLOB_READ_WRITE_TOKEN\);/);
+  assert.match(
+    projectRoute,
+    /const storeId = blobStoreIdFromToken\(process\.env\.BLOB_READ_WRITE_TOKEN\);/,
+  );
   before(projectRoute, "isBlobStoreUrl(input.tenderUrl, storeId)", "start(");
   before(projectRoute, "isBlobStoreUrl(input.contractUrl, storeId)", "start(");
   assert.doesNotMatch(projectRoute, /isBlobStorageUrl\(/);
 });
 
 test("the store id is read from the read-write token as @vercel/blob reads it", () => {
-  assert.equal(blobStoreIdFromToken("vercel_blob_rw_UdAFiztDZG1cn8u2_s3cr3tPart"), "udafiztdzg1cn8u2");
+  assert.equal(
+    blobStoreIdFromToken("vercel_blob_rw_UdAFiztDZG1cn8u2_s3cr3tPart"),
+    "udafiztdzg1cn8u2",
+  );
   assert.equal(blobStoreIdFromToken("  vercel_blob_rw_abc123_x  "), "abc123");
   assert.equal(blobStoreIdFromToken(undefined), null);
   assert.equal(blobStoreIdFromToken(""), null);
@@ -49,7 +62,8 @@ test("the store id is read from the read-write token as @vercel/blob reads it", 
 });
 
 test("only a file in the pinned store passes", () => {
-  const own = "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/leads/12/abc-tender.pdf";
+  const own =
+    "https://udafiztdzg1cn8u2.public.blob.vercel-storage.com/leads/12/abc-tender.pdf";
   assert.equal(isBlobStoreUrl(own, "udafiztdzg1cn8u2"), true);
   assert.equal(isBlobStoreUrl(own, "UdAFiztDZG1cn8u2"), true);
   for (const url of [
@@ -72,14 +86,27 @@ test("only a file in the pinned store passes", () => {
 test("the run capability is issued to the user the lead check resolved", () => {
   // #249's capability binds the run to a user; it must be the one that passed
   // the check, not a second lookup that could disagree with it.
-  assert.match(projectRoute, /signRunCapability\(\{ runId: run\.runId, userId: access\.user\.id \}\)/);
+  assert.match(
+    projectRoute,
+    /signRunCapability\(\{ runId: run\.runId, userId: access\.user\.id \}\)/,
+  );
 });
 
 test("the checklist extraction applies the compliance project gate before starting", () => {
   before(checklistRoute, "requireComplianceAccess(input.projectId)", "start(");
-  before(checklistRoute, "requireComplianceAccess(input.projectId)", "prisma.complianceDocument.findFirst(");
-  assert.match(checklistRoute, /const refusal = complianceAccessResponse\(error\);\s*if \(refusal\) return refusal;/);
-  assert.match(checklistRoute, /signRunCapability\(\{ runId: run\.runId, userId: user\.id \}\)/);
+  before(
+    checklistRoute,
+    "requireComplianceAccess(input.projectId)",
+    "prisma.complianceDocument.findFirst(",
+  );
+  assert.match(
+    checklistRoute,
+    /const refusal = complianceAccessResponse\(error\);\s*if \(refusal\) return refusal;/,
+  );
+  assert.match(
+    checklistRoute,
+    /signRunCapability\(\{ runId: run\.runId, userId: user\.id \}\)/,
+  );
 });
 
 test("a Blob upload passes and anything else does not", () => {

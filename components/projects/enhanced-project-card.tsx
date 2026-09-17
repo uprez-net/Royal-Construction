@@ -138,7 +138,9 @@ export function EnhancedProjectCard({
             <div className="text-center">
               <p className="font-medium text-muted-foreground">Cleared</p>
               <p className="font-mono text-sm font-semibold tabular-nums text-success-ink">
-                {Number.isFinite(cleared) ? compactCurrency.format(cleared) : "—"}
+                {Number.isFinite(cleared)
+                  ? compactCurrency.format(cleared)
+                  : "—"}
               </p>
             </div>
             <div className="text-center">

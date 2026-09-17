@@ -41,7 +41,12 @@ interface AddMaterialFormData {
 
 type MaterialFieldErrors = Partial<
   Record<
-    "name" | "category" | "specifications" | "quantity" | "unitCost" | "totalCost",
+    | "name"
+    | "category"
+    | "specifications"
+    | "quantity"
+    | "unitCost"
+    | "totalCost",
     string
   >
 >;
@@ -286,9 +291,7 @@ export function AddMaterialModal({
                 className={fieldClassName}
                 aria-invalid={Boolean(fieldErrors.specifications)}
                 aria-describedby={
-                  fieldErrors.specifications
-                    ? "material-spec-error"
-                    : undefined
+                  fieldErrors.specifications ? "material-spec-error" : undefined
                 }
               />
               {fieldErrors.specifications ? (

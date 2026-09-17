@@ -8,7 +8,10 @@ export type AdminOfferTabs =
   | "offer-inclusions"
   | "offer-content";
 
-export const ADMIN_OFFER_TABS: readonly { id: AdminOfferTabs; label: string }[] = [
+export const ADMIN_OFFER_TABS: readonly {
+  id: AdminOfferTabs;
+  label: string;
+}[] = [
   { id: "job-setup", label: "Job Setup" },
   { id: "cost-schedule", label: "Cost Schedule" },
   { id: "offer-scope", label: "Scope" },
@@ -19,7 +22,9 @@ export const ADMIN_OFFER_TABS: readonly { id: AdminOfferTabs; label: string }[] 
 
 // The slice section each tab saves. Inclusions and Offer Document are two
 // screens over the one offerContent save, so an edit on either marks both.
-export const TAB_SECTION: Readonly<Record<AdminOfferTabs, AdminOfferContentSection>> = {
+export const TAB_SECTION: Readonly<
+  Record<AdminOfferTabs, AdminOfferContentSection>
+> = {
   "job-setup": "buildScope",
   "cost-schedule": "costSchedule",
   "offer-scope": "offerScope",
@@ -41,5 +46,7 @@ export function dirtyByTab(
 // Stable ids tying each tab to the panel it controls. Derived from the tab id
 // rather than written out, because one of them ("HBFC-claim") is mixed case and
 // a hand-typed copy would drift.
-export const adminTabId = (tab: AdminOfferTabs): string => `admin-offer-tab-${tab}`;
-export const adminPanelId = (tab: AdminOfferTabs): string => `admin-offer-panel-${tab}`;
+export const adminTabId = (tab: AdminOfferTabs): string =>
+  `admin-offer-tab-${tab}`;
+export const adminPanelId = (tab: AdminOfferTabs): string =>
+  `admin-offer-panel-${tab}`;

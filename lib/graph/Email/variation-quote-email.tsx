@@ -9,7 +9,7 @@ import {
   Text,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -17,13 +17,16 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -44,11 +47,11 @@ interface VariationQuoteEmailProps {
 }
 
 export default function VariationQuoteEmail({
-  name = 'Client',
-  project = 'Your Project',
-  originalAmount = '$0',
-  variationAmount = '$0',
-  revisedAmount = '$0',
+  name = "Client",
+  project = "Your Project",
+  originalAmount = "$0",
+  variationAmount = "$0",
+  revisedAmount = "$0",
   approveUrl = RC_URLS.website,
   leadContext,
 }: VariationQuoteEmailProps) {
@@ -73,15 +76,21 @@ export default function VariationQuoteEmail({
           }}
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Your quotation has been updated — review the variation and approve to proceed
-            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
+            Your quotation has been updated — review the variation and approve
+            to proceed
+            <div>
+              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
+            </div>
           </div>
 
-          <Container className="max-w-[640px] mx-auto" style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}>
+          <Container
+            className="max-w-[640px] mx-auto"
+            style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}
+          >
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -89,7 +98,7 @@ export default function VariationQuoteEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -102,7 +111,7 @@ export default function VariationQuoteEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.4px',
+                  letterSpacing: "-1.4px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -113,7 +122,7 @@ export default function VariationQuoteEmail({
             </EmailSectionLight>
 
             {/* ── Intro ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
                 <Column>
                   <Text
@@ -123,7 +132,7 @@ export default function VariationQuoteEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                     }}
                   >
@@ -136,13 +145,16 @@ export default function VariationQuoteEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                       maxWidth: 480,
                     }}
                   >
-                    Following your recent selections from our catalogue, there are some variations to the original quotation for{' '}
-                    <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>
+                    Following your recent selections from our catalogue, there
+                    are some variations to the original quotation for{" "}
+                    <span
+                      style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}
+                    >
                       {project}
                     </span>
                     . Please review the updated breakdown below.
@@ -154,11 +166,11 @@ export default function VariationQuoteEmail({
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Variation Comparison Card ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
                 <Column
                   className="rounded-md overflow-hidden"
-                  style={{ border: '1px solid #E2E8F0' }}
+                  style={{ border: "1px solid #E2E8F0" }}
                 >
                   {/* Card Header */}
                   <Row>
@@ -171,8 +183,8 @@ export default function VariationQuoteEmail({
                             fontWeight: 500,
                             fontSize: 13,
                             lineHeight: 1,
-                            letterSpacing: '0.6px',
-                            color: '#FFFFFF',
+                            letterSpacing: "0.6px",
+                            color: "#FFFFFF",
                           }}
                         >
                           Variation Summary
@@ -182,12 +194,12 @@ export default function VariationQuoteEmail({
                   </Row>
 
                   {/* Row 1 — Original Quote */}
-                  <Row style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  <Row style={{ borderBottom: "1px solid #E2E8F0" }}>
                     <Column className="py-5 px-6">
                       <Row>
                         <Column
                           className="mobile_amount_stack"
-                          style={{ width: '50%', verticalAlign: 'middle' }}
+                          style={{ width: "50%", verticalAlign: "middle" }}
                         >
                           <Text
                             className="m-0 uppercase"
@@ -195,14 +207,17 @@ export default function VariationQuoteEmail({
                               fontFamily: FONTS.body,
                               fontWeight: 500,
                               fontSize: 10,
-                              letterSpacing: '0.8px',
+                              letterSpacing: "0.8px",
                               color: RC_COLORS.textMutedOnLight,
                             }}
                           >
                             Original Quote
                           </Text>
                         </Column>
-                        <Column className="mobile_amount_stack" style={{ textAlign: 'right' }}>
+                        <Column
+                          className="mobile_amount_stack"
+                          style={{ textAlign: "right" }}
+                        >
                           <Text
                             className="m-0"
                             style={{
@@ -211,7 +226,7 @@ export default function VariationQuoteEmail({
                               fontSize: 18,
                               lineHeight: 1.2,
                               color: RC_COLORS.dimmed, // Lighter slate for crossed out
-                              textDecoration: 'line-through',
+                              textDecoration: "line-through",
                               textDecorationColor: RC_COLORS.dimmed,
                             }}
                           >
@@ -223,25 +238,41 @@ export default function VariationQuoteEmail({
                   </Row>
 
                   {/* Row 2 — Variation Amount */}
-                  <Row style={{ borderBottom: '1px solid #E2E8F0', backgroundColor: '#FDF6E3' }}> {/* Soft gold tint */}
+                  <Row
+                    style={{
+                      borderBottom: "1px solid #E2E8F0",
+                      backgroundColor: "#FDF6E3",
+                    }}
+                  >
+                    {" "}
+                    {/* Soft gold tint */}
                     <Column className="py-5 px-6">
                       <Row>
                         <Column
                           className="mobile_amount_stack"
-                          style={{ width: '50%', verticalAlign: 'middle' }}
+                          style={{ width: "50%", verticalAlign: "middle" }}
                         >
                           <Row>
-                            <Column className="pr-2" style={{ width: 20, verticalAlign: 'middle' }}>
-                              <Img alt="" height={16} src={ICONS.trend} width={16} className="block outline-none border-none" />
+                            <Column
+                              className="pr-2"
+                              style={{ width: 20, verticalAlign: "middle" }}
+                            >
+                              <Img
+                                alt=""
+                                height={16}
+                                src={ICONS.trend}
+                                width={16}
+                                className="block outline-none border-none"
+                              />
                             </Column>
-                            <Column style={{ verticalAlign: 'middle' }}>
+                            <Column style={{ verticalAlign: "middle" }}>
                               <Text
                                 className="m-0 uppercase"
                                 style={{
                                   fontFamily: FONTS.body,
                                   fontWeight: 500,
                                   fontSize: 10,
-                                  letterSpacing: '0.8px',
+                                  letterSpacing: "0.8px",
                                   color: RC_COLORS.gold,
                                 }}
                               >
@@ -250,7 +281,10 @@ export default function VariationQuoteEmail({
                             </Column>
                           </Row>
                         </Column>
-                        <Column className="mobile_amount_stack" style={{ textAlign: 'right' }}>
+                        <Column
+                          className="mobile_amount_stack"
+                          style={{ textAlign: "right" }}
+                        >
                           <Text
                             className="m-0"
                             style={{
@@ -274,7 +308,7 @@ export default function VariationQuoteEmail({
                       <Row>
                         <Column
                           className="mobile_amount_stack"
-                          style={{ width: '50%', verticalAlign: 'middle' }}
+                          style={{ width: "50%", verticalAlign: "middle" }}
                         >
                           <Text
                             className="m-0 uppercase"
@@ -282,14 +316,17 @@ export default function VariationQuoteEmail({
                               fontFamily: FONTS.body,
                               fontWeight: 600,
                               fontSize: 13,
-                              letterSpacing: '0.3px',
+                              letterSpacing: "0.3px",
                               color: RC_COLORS.textOnLight,
                             }}
                           >
                             Revised Total
                           </Text>
                         </Column>
-                        <Column className="mobile_amount_stack" style={{ textAlign: 'right' }}>
+                        <Column
+                          className="mobile_amount_stack"
+                          style={{ textAlign: "right" }}
+                        >
                           <Text
                             className="m-0"
                             style={{
@@ -311,12 +348,12 @@ export default function VariationQuoteEmail({
             </EmailSectionWhite>
 
             {/* ── What Changed Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -331,10 +368,11 @@ export default function VariationQuoteEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      This variation reflects your recent material and finish selections. As always, we&apos;re happy to{' '}
+                      This variation reflects your recent material and finish
+                      selections. As always, we&apos;re happy to{" "}
                       <span style={{ fontWeight: 600, color: RC_COLORS.gold }}>
                         walk you through
-                      </span>{' '}
+                      </span>{" "}
                       any changes in detail.
                     </Text>
                   </Column>
@@ -343,14 +381,18 @@ export default function VariationQuoteEmail({
             </EmailSectionLight>
 
             {/* ── Approve CTA ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ textAlign: 'center' }}>
-                <EmailCtaButton href={approveUrl} label="Approve Variation" align="center" />
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section style={{ textAlign: "center" }}>
+                <EmailCtaButton
+                  href={approveUrl}
+                  label="Approve Variation"
+                  align="center"
+                />
               </Section>
             </EmailSectionWhite>
 
             {/* ── Signed Copy Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Row>
                 <Column className="text-center">
                   <Text
@@ -360,19 +402,22 @@ export default function VariationQuoteEmail({
                       fontWeight: 350,
                       fontSize: 12,
                       lineHeight: 1.5,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                     }}
                   >
-                    A signed copy of the updated quotation is required to proceed with your project.
+                    A signed copy of the updated quotation is required to
+                    proceed with your project.
                   </Text>
                 </Column>
               </Row>
             </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section
+                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+              >
                 <Row>
                   <Column>
                     <Text
@@ -387,7 +432,10 @@ export default function VariationQuoteEmail({
                     >
                       We look forward to your approval to proceed.
                     </Text>
-                    <Text className="m-0 mb-1" style={{ fontSize: 14, color: RC_COLORS.textOnLight }}>
+                    <Text
+                      className="m-0 mb-1"
+                      style={{ fontSize: 14, color: RC_COLORS.textOnLight }}
+                    >
                       Kind regards,
                     </Text>
                     <Text
@@ -402,7 +450,10 @@ export default function VariationQuoteEmail({
                     </Text>
                     <Text
                       className="m-0"
-                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
+                      style={{
+                        fontSize: 13,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
                     >
                       Royal Constructions Pty Ltd
                     </Text>

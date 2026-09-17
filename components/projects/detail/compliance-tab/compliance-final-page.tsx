@@ -117,7 +117,7 @@ function FinalDivisionGroup({
             "flex w-full items-center gap-3 px-4 py-3.5 text-left transition",
             "hover:bg-primary/[0.035] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
           )}
-          >
+        >
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <DivisionIcon index={index} heading={division.heading} />
           </span>
@@ -206,9 +206,7 @@ export function ComplianceFinalPage({
 }: ComplianceFinalPageProps) {
   const dispatch = useAppDispatch();
   const [isThreadOpen, setIsThreadOpen] = useState(false);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
   const previewFiles = useMemo(
     () =>
@@ -315,7 +313,10 @@ export function ComplianceFinalPage({
             </span>
           </div>
           <div className="col-span-2 flex items-center gap-2 border-t border-success/20 px-5 py-3 text-sm sm:col-span-1 sm:border-l sm:border-t-0">
-            <BadgeCheck className="size-4 text-success-ink" aria-hidden="true" />
+            <BadgeCheck
+              className="size-4 text-success-ink"
+              aria-hidden="true"
+            />
             <span className="font-medium text-success-ink">Approved pack</span>
           </div>
         </div>

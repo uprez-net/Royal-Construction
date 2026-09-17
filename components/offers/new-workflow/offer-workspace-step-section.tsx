@@ -110,11 +110,7 @@ export function OfferStepBody({
 }
 
 // Shown in the pane when a later-phase step has not unlocked yet.
-export function OfferPhaseLockNotice({
-  hint,
-}: {
-  readonly hint: string;
-}) {
+export function OfferPhaseLockNotice({ hint }: { readonly hint: string }) {
   return (
     <div className="flex items-start gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
       <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

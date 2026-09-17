@@ -1,20 +1,30 @@
-import { stripEmailThread, stripHtml } from '@/utils/formatters';
-import { z } from 'zod';
-import { generateText, Output } from 'ai';
-import { gateway } from '../model';
-
+import { stripEmailThread, stripHtml } from "@/utils/formatters";
+import { z } from "zod";
+import { generateText, Output } from "ai";
+import { gateway } from "../model";
 
 const tradieScheduleInfoSchema = z.object({
-    scheduleDate: z.string().describe('The date of the scheduled appointment in YYYY-MM-DD format.'),
-    scheduleConfirmation: z.boolean().describe('True if the appointment is confirmed, false otherwise.'),
-    scheduleQuote: z.string().optional().describe("The bare quoted amount for the scheduled appointment, if any, only in case when standard rates weren't applicable. Amount only, no unit words and no other numbers. eg. $5000.00"),
-    scheduleQuoteBasis: z
-        .enum(['FIXED', 'HOURLY', 'DAILY'])
-        .optional()
-        .describe(
-            "What the quoted amount is charged against: FIXED for the whole job, HOURLY per hour, DAILY per day. Only set when scheduleQuote is set.",
-        ),
-    projectLocation: z.string().describe('The location of the project or appointment.'),
+  scheduleDate: z
+    .string()
+    .describe("The date of the scheduled appointment in YYYY-MM-DD format."),
+  scheduleConfirmation: z
+    .boolean()
+    .describe("True if the appointment is confirmed, false otherwise."),
+  scheduleQuote: z
+    .string()
+    .optional()
+    .describe(
+      "The bare quoted amount for the scheduled appointment, if any, only in case when standard rates weren't applicable. Amount only, no unit words and no other numbers. eg. $5000.00",
+    ),
+  scheduleQuoteBasis: z
+    .enum(["FIXED", "HOURLY", "DAILY"])
+    .optional()
+    .describe(
+      "What the quoted amount is charged against: FIXED for the whole job, HOURLY per hour, DAILY per day. Only set when scheduleQuote is set.",
+    ),
+  projectLocation: z
+    .string()
+    .describe("The location of the project or appointment."),
 });
 
 type TradieScheduleInfo = z.infer<typeof tradieScheduleInfoSchema>;
@@ -37,7 +47,7 @@ Your task is to extract the following information:
    - DAILY: a rate per day ("$950 a day", "$950 per day", "day rate").
    If the tradie states an amount with no basis at all, treat it as FIXED - a quote for a specific job is a lump sum unless they say otherwise.
 5. Project Location: The location of the project or appointment.
-`
+`;
 /**
  * Extracts structured tradie scheduling information from an email message using an AI model.
  *
@@ -60,34 +70,33 @@ Your task is to extract the following information:
  * @returns A promise that resolves to the extracted schedule information, or `null` if extraction fails.
  */
 export async function extractTradieScheduleInfoFromMessage(
-    subject: string,
-    content: string,
+  subject: string,
+  content: string,
 ): Promise<TradieScheduleInfo | null> {
-    try {
-        // 1. Strip the previous email history thread
-        const threadBody = stripEmailThread(content);
-        const cleanBody = stripHtml(threadBody);
+  try {
+    // 1. Strip the previous email history thread
+    const threadBody = stripEmailThread(content);
+    const cleanBody = stripHtml(threadBody);
 
-        const { output } = await generateText({
-            model: gateway("google/gemini-2.5-flash"),
-            system: INSTRUCTION,
-            temperature: 0.15,
-            topK: 20,
-            prompt: `
+    const { output } = await generateText({
+      model: gateway("google/gemini-2.5-flash"),
+      system: INSTRUCTION,
+      temperature: 0.15,
+      topK: 20,
+      prompt: `
                 Subject: ${subject}
                 Email Body: ${cleanBody}
 
                 Please extract the tradie schedule information in JSON format according to the schema:
             `,
-            output: Output.object({
-                schema: tradieScheduleInfoSchema,
-            }),
+      output: Output.object({
+        schema: tradieScheduleInfoSchema,
+      }),
+    });
 
-        })
-
-        return output as TradieScheduleInfo;
-    } catch (error) {
-        console.error('Error extracting tradie schedule info:', error);
-        return null;
-    }
+    return output as TradieScheduleInfo;
+  } catch (error) {
+    console.error("Error extracting tradie schedule info:", error);
+    return null;
+  }
 }

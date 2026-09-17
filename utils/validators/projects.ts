@@ -106,15 +106,9 @@ const baseProjectSchema = z.object({
     .min(1, "Project name is required")
     .max(255, "Project name is too long"),
 
-  propertyType: z
-    .string()
-    .trim()
-    .optional(),
+  propertyType: z.string().trim().optional(),
 
-  type: z
-    .string()
-    .trim()
-    .optional(),
+  type: z.string().trim().optional(),
 
   customerMode: customerModeSchema.optional(),
 
@@ -128,44 +122,24 @@ const baseProjectSchema = z.object({
 
   estimatedEndDate: isoDateStringSchema.optional(),
 
-  estEnd: z
-    .string()
-    .trim()
-    .optional()
-    .nullable(),
+  estEnd: z.string().trim().optional().nullable(),
 
   budget: nonNegativeSchema,
 
   lotSize: nonNegativeSchema,
 
-  notes: z
-    .string()
-    .trim()
-    .max(2000, "Notes are too long")
-    .optional(),
+  notes: z.string().trim().max(2000, "Notes are too long").optional(),
 
-  siteManagerId: z
-    .string()
-    .trim()
-    .optional()
-    .nullable(),
+  siteManagerId: z.string().trim().optional().nullable(),
 
-  customerId: z
-    .string()
-    .trim()
-    .optional(),
+  customerId: z.string().trim().optional(),
 
   customerName: normalizedStringSchema.optional(),
 
-  customerPhone: z
-    .string()
-    .trim()
-    .optional(),
+  customerPhone: z.string().trim().optional(),
 
   customerEmail: emailSchema.optional(),
-  quoteFile: z
-    .instanceof(File)
-    .optional(),
+  quoteFile: z.instanceof(File).optional(),
 });
 
 /**
@@ -176,18 +150,11 @@ export const createProjectSchema = baseProjectSchema
   .transform((data) => ({
     ...data,
     propertyType:
-      data.propertyType?.trim() ||
-      data.type?.trim() ||
-      "Custom Build",
+      data.propertyType?.trim() || data.type?.trim() || "Custom Build",
 
-    customerMode:
-      data.customerMode ??
-      (data.customerId ? "existing" : "new"),
+    customerMode: data.customerMode ?? (data.customerId ? "existing" : "new"),
 
-    estimatedEndDate:
-      data.estimatedEndDate ??
-      data.estEnd ??
-      null,
+    estimatedEndDate: data.estimatedEndDate ?? data.estEnd ?? null,
   }))
   .superRefine((data, ctx) => {
     if (data.customerMode === "existing") {
@@ -274,7 +241,9 @@ const tradieCoordinationSortBySchema = z.enum([
   "status",
 ]);
 
-export type TradieCoordinationSortBy = z.infer<typeof tradieCoordinationSortBySchema>;
+export type TradieCoordinationSortBy = z.infer<
+  typeof tradieCoordinationSortBySchema
+>;
 
 /**
  * Query for tradie coordination dashboard
@@ -284,10 +253,7 @@ export const tradieCoordinationQuerySchema = z
     mode: z.literal("coordination"),
     ...paginationSchema.shape,
 
-    search: z
-      .string()
-      .trim()
-      .default(""),
+    search: z.string().trim().default(""),
 
     projectId: z
       .string()
@@ -303,11 +269,7 @@ export const tradieCoordinationQuerySchema = z
       .optional()
       .transform((value) => value || null),
 
-    status: z
-      .nativeEnum(ProjectStatus)
-      .nullable()
-      .optional()
-      .catch(undefined),
+    status: z.nativeEnum(ProjectStatus).nullable().optional().catch(undefined),
 
     tab: tradieCoordinationTabSchema.default("all"),
 
@@ -317,7 +279,9 @@ export const tradieCoordinationQuerySchema = z
   })
   .strict();
 
-export type TradieCoordinationQuery = z.infer<typeof tradieCoordinationQuerySchema>;
+export type TradieCoordinationQuery = z.infer<
+  typeof tradieCoordinationQuerySchema
+>;
 
 /**
  * Project lookup query (for dropdowns/autocomplete)
@@ -327,10 +291,7 @@ export const projectLookupQuerySchema = z
     mode: z.literal("lookup"),
     ...paginationSchema.shape,
 
-    q: z
-      .string()
-      .trim()
-      .default(""),
+    q: z.string().trim().default(""),
   })
   .strict();
 
@@ -341,9 +302,7 @@ export type ProjectLookupQuery = z.infer<typeof projectLookupQuerySchema>;
  */
 export const projectListQuerySchema = z
   .object({
-    mode: z
-      .string()
-      .optional(),
+    mode: z.string().optional(),
 
     status: z
       .union([z.enum(ProjectStatus), z.literal(PRE_CONSTRUCTION_FILTER)])
@@ -352,19 +311,13 @@ export const projectListQuerySchema = z
 
     ...paginationSchema.shape,
 
-    search: z
-      .string()
-      .trim()
-      .default(""),
+    search: z.string().trim().default(""),
 
     sortBy: z
-      .enum([
-        "name",
-        "progress",
-        "budget",
-        "startDate",
-        "spent",
-      ] satisfies [ProjectListSortBy, ...ProjectListSortBy[]])
+      .enum(["name", "progress", "budget", "startDate", "spent"] satisfies [
+        ProjectListSortBy,
+        ...ProjectListSortBy[],
+      ])
       .optional()
       .catch(undefined),
 
@@ -410,7 +363,9 @@ export const createVariationSchema = z.object({
     .min(1, "Description is required")
     .max(2000, "Description is too long"),
 
-  cost: nonNegativeSchema.refine(hasAtMostTwoDecimalPlaces, { message: "Cost must have at most two decimal places." }),
+  cost: nonNegativeSchema.refine(hasAtMostTwoDecimalPlaces, {
+    message: "Cost must have at most two decimal places.",
+  }),
 
   requestedDate: isoDateStringSchema.optional(),
 });
@@ -440,18 +395,14 @@ export const createProjectUpdateSchema = z.object({
     .min(1, "Update notes are required")
     .max(5000, "Update notes are too long"),
 
-  milestoneId: z
-    .string()
-    .trim()
-    .optional()
-    .nullable(),
+  milestoneId: z.string().trim().optional().nullable(),
 
-  photoUrls: z
-    .array(z.string().url("Invalid photo URL"))
-    .optional(),
+  photoUrls: z.array(z.string().url("Invalid photo URL")).optional(),
 });
 
-export type CreateProjectUpdateInput = z.infer<typeof createProjectUpdateSchema>;
+export type CreateProjectUpdateInput = z.infer<
+  typeof createProjectUpdateSchema
+>;
 
 // ============================================================================
 // Milestones
@@ -465,7 +416,6 @@ export const milestoneParamSchema = projectParamSchema.extend({
 });
 
 export type MilestoneParam = z.infer<typeof milestoneParamSchema>;
-
 
 /**
  * The project detail tabs that actually exist.
@@ -499,7 +449,9 @@ export type ProjectDetailTabKey = z.infer<typeof projectTabsValidator>;
  */
 export const insuranceClaimDatesSchema = z
   .object({
-    insuranceClaimStartDate: z.iso.date("Insurance claim start date is required"),
+    insuranceClaimStartDate: z.iso.date(
+      "Insurance claim start date is required",
+    ),
     insuranceClaimEndDate: z.iso.date("Insurance claim end date is required"),
   })
   .superRefine((data, ctx) => {
@@ -515,4 +467,6 @@ export const insuranceClaimDatesSchema = z
     }
   });
 
-export type InsuranceClaimDatesInput = z.infer<typeof insuranceClaimDatesSchema>;
+export type InsuranceClaimDatesInput = z.infer<
+  typeof insuranceClaimDatesSchema
+>;

@@ -42,9 +42,15 @@ export const updateOfferDetailsInputSchema = z.object({
   expectedStateVersion: z.number().int().nonnegative(),
   patch: z
     .record(z.string().min(1).max(80), jsonValueSchema)
-    .refine((value) => Object.keys(value).every((key) => (workspacePatchKeys as readonly string[]).includes(key)), {
-      message: "Patch contains an unsupported offer workspace section.",
-    })
+    .refine(
+      (value) =>
+        Object.keys(value).every((key) =>
+          (workspacePatchKeys as readonly string[]).includes(key),
+        ),
+      {
+        message: "Patch contains an unsupported offer workspace section.",
+      },
+    )
     .refine((value) => JSON.stringify(value).length <= 250_000, {
       message: "Offer workspace patch is too large.",
     }),
@@ -113,12 +119,13 @@ const contractParticularKeys = [
 export const saveContractParticularsInputSchema = z.object({
   offerId: offerIdSchema,
   particulars: z.object(
-    Object.fromEntries(contractParticularKeys.map((key) => [key, z.string().trim().max(10_000)])) as Record<
-      (typeof contractParticularKeys)[number],
-      z.ZodString
-    >,
+    Object.fromEntries(
+      contractParticularKeys.map((key) => [key, z.string().trim().max(10_000)]),
+    ) as Record<(typeof contractParticularKeys)[number], z.ZodString>,
   ),
-  manualOverrides: z.array(z.enum(contractParticularKeys)).max(contractParticularKeys.length),
+  manualOverrides: z
+    .array(z.enum(contractParticularKeys))
+    .max(contractParticularKeys.length),
 });
 
 export const logOfferChangeRequestInputSchema = z.object({

@@ -11,7 +11,13 @@ import {
 import { PaginatedOfferGroupResult } from "@/types/offer";
 import { useMemo } from "react";
 
-export function OfferPagination({ offers, onPageChange }: { offers: PaginatedOfferGroupResult; onPageChange: (page: number) => void }) {
+export function OfferPagination({
+  offers,
+  onPageChange,
+}: {
+  offers: PaginatedOfferGroupResult;
+  onPageChange: (page: number) => void;
+}) {
   // Read the page off the fetched result rather than holding a second copy in
   // state: a local `useState(offers.page)` initialiser never re-syncs, so the
   // window of page numbers and the highlighted page drifted apart after a

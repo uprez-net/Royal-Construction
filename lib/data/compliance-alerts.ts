@@ -9,9 +9,7 @@ import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 
 import { notifyCompliance } from "@/lib/compliance/notify";
-import {
-  ensureDevelopmentApplicationDocuments,
-} from "@/lib/data/compliance";
+import { ensureDevelopmentApplicationDocuments } from "@/lib/data/compliance";
 import prisma from "@/lib/prisma";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";

@@ -121,7 +121,7 @@ export async function getHbcfTimelineForLead(
       select: { id: true, budget: true, estimatedValue: true },
     }),
     getActiveHbcfClaims(),
-    getAdminOfferContent()
+    getAdminOfferContent(),
   ]);
 
   if (!lead) return null;

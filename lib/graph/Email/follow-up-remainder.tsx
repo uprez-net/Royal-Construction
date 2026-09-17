@@ -9,19 +9,19 @@ import {
   Text,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_COLORS,
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -50,23 +50,21 @@ function DetailRow({
   return (
     <Row
       style={{
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
       }}
     >
-      <Column style={{ padding: '1rem 1.5rem' }}>
+      <Column style={{ padding: "1rem 1.5rem" }}>
         <Row>
-          <Column
-            style={{ width: 36, verticalAlign: 'top', paddingTop: 2 }}
-          >
+          <Column style={{ width: 36, verticalAlign: "top", paddingTop: 2 }}>
             <Img
               alt=""
               height={20}
               src={icon}
               width={20}
               style={{
-                display: 'block',
-                outline: 'none',
-                border: 'none',
+                display: "block",
+                outline: "none",
+                border: "none",
               }}
             />
           </Column>
@@ -78,7 +76,7 @@ function DetailRow({
                 fontWeight: 300,
                 fontSize: 11,
                 lineHeight: 1.4,
-                letterSpacing: '0.4px',
+                letterSpacing: "0.4px",
                 color: RC_COLORS.textMutedOnLight,
               }}
             >
@@ -117,23 +115,20 @@ interface FollowUpReminderEmailProps {
 }
 
 export default function FollowUpReminderEmail({
-  assigneeName = 'Team',
-  leadName = 'Unknown Lead',
-  leadPhone = 'Not provided',
-  leadEmail = 'Not provided',
-  leadLocation = 'Not provided',
-  followupTime = 'Anytime today',
-  followupNotes = '',
-  crmUrl = 'https://royalconstructions.com.au/',
+  assigneeName = "Team",
+  leadName = "Unknown Lead",
+  leadPhone = "Not provided",
+  leadEmail = "Not provided",
+  leadLocation = "Not provided",
+  followupTime = "Anytime today",
+  followupNotes = "",
+  crmUrl = "https://royalconstructions.com.au/",
 }: FollowUpReminderEmailProps) {
   return (
     <Tailwind config={TAILWIND_CONFIG}>
       <Html lang="en" dir="ltr">
         <Head>
-          <meta
-            content="text/html; charset=UTF-8"
-            httpEquiv="Content-Type"
-          />
+          <meta content="text/html; charset=UTF-8" httpEquiv="Content-Type" />
           <meta name="x-apple-disable-message-reformatting" />
           <style>{RESPONSIVE_CSS}</style>
           <style>{FONT_FACES_CSS}</style>
@@ -165,7 +160,7 @@ export default function FollowUpReminderEmail({
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -173,7 +168,7 @@ export default function FollowUpReminderEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -186,7 +181,7 @@ export default function FollowUpReminderEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.2px',
+                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -201,7 +196,7 @@ export default function FollowUpReminderEmail({
                   fontWeight: 350,
                   fontSize: 14,
                   lineHeight: 1.7,
-                  letterSpacing: '0.3px',
+                  letterSpacing: "0.3px",
                   color: RC_COLORS.textMutedOnLight,
                   maxWidth: 490,
                 }}
@@ -213,13 +208,13 @@ export default function FollowUpReminderEmail({
             </EmailSectionLight>
 
             {/* ── Lead Details Card ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  overflow: 'hidden',
+                  border: "1px solid #E2E8F0",
+                  overflow: "hidden",
                 }}
               >
                 {/* Card Header with gold bar */}
@@ -230,9 +225,9 @@ export default function FollowUpReminderEmail({
                 >
                   <Column
                     style={{
-                      width: '70%',
-                      verticalAlign: 'middle',
-                      padding: '0.875rem 1.5rem',
+                      width: "70%",
+                      verticalAlign: "middle",
+                      padding: "0.875rem 1.5rem",
                     }}
                   >
                     <Text
@@ -242,7 +237,7 @@ export default function FollowUpReminderEmail({
                         fontWeight: 500,
                         fontSize: 13,
                         lineHeight: 1,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.white,
                       }}
                     >
@@ -251,28 +246,28 @@ export default function FollowUpReminderEmail({
                   </Column>
                   <Column
                     style={{
-                      width: '30%',
-                      verticalAlign: 'middle',
-                      padding: '0.875rem 1.5rem',
-                      textAlign: 'right',
+                      width: "30%",
+                      verticalAlign: "middle",
+                      padding: "0.875rem 1.5rem",
+                      textAlign: "right",
                     }}
                   >
                     <Section
                       style={{
                         backgroundColor: RC_COLORS.white,
                         borderRadius: 50,
-                        display: 'inline-block',
+                        display: "inline-block",
                       }}
                     >
                       <Row>
-                        <Column style={{ padding: '4px 12px' }}>
+                        <Column style={{ padding: "4px 12px" }}>
                           <Text
                             className="m-0 uppercase"
                             style={{
                               fontFamily: FONTS.body,
                               fontWeight: 700,
                               fontSize: 10,
-                              letterSpacing: '0.5px',
+                              letterSpacing: "0.5px",
                               color: RC_COLORS.gold,
                             }}
                           >
@@ -320,12 +315,12 @@ export default function FollowUpReminderEmail({
 
             {/* ── Context & Notes Block ── */}
             {followupNotes && (
-              <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+              <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
                 <Section
                   style={{
                     backgroundColor: RC_COLORS.white,
                     borderLeft: `3px solid ${RC_COLORS.gold}`,
-                    padding: '1rem 1.25rem',
+                    padding: "1rem 1.25rem",
                   }}
                 >
                   <Row>
@@ -336,7 +331,7 @@ export default function FollowUpReminderEmail({
                           fontFamily: FONTS.body,
                           fontWeight: 700,
                           fontSize: 10,
-                          letterSpacing: '0.5px',
+                          letterSpacing: "0.5px",
                           color: RC_COLORS.textMutedOnLight,
                         }}
                       >
@@ -349,7 +344,7 @@ export default function FollowUpReminderEmail({
                           fontWeight: 350,
                           fontSize: 13,
                           lineHeight: 1.65,
-                          fontStyle: 'italic',
+                          fontStyle: "italic",
                           color: RC_COLORS.textMutedOnLight,
                         }}
                       >
@@ -362,13 +357,13 @@ export default function FollowUpReminderEmail({
             )}
 
             {/* ── Open CRM CTA Card ── */}
-            <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionWhite style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.light,
                   borderRadius: 6,
                   border: `2px solid ${RC_COLORS.gold}`,
-                  padding: '1.5rem',
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -379,7 +374,7 @@ export default function FollowUpReminderEmail({
                         fontFamily: FONTS.condensed,
                         fontWeight: 500,
                         fontSize: 13,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.gold,
                       }}
                     >
@@ -434,11 +429,11 @@ export default function FollowUpReminderEmail({
             </EmailSectionWhite>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: '1px solid #E2E8F0',
-                  paddingTop: '1.5rem',
+                  borderTop: "1px solid #E2E8F0",
+                  paddingTop: "1.5rem",
                 }}
               >
                 <Row>

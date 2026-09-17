@@ -20,36 +20,77 @@ export const listApprovalsInputSchema = z.object({
   limit: z.number().int().min(1).max(100).default(50),
 });
 
-export const getApprovalInputSchema = z.object({ approvalId: z.string().uuid() });
-
-export const resolveApprovalInputSchema = z.object({
+export const getApprovalInputSchema = z.object({
   approvalId: z.string().uuid(),
-  resolution: z.enum(["approved", "rejected"]),
-  rejectionReason: z.string().trim().max(2_000).optional(),
-  incidentResolution: z.string().trim().max(10_000).optional(),
-}).refine((value) => value.resolution !== "rejected" || Boolean(value.rejectionReason), {
-  message: "A rejection reason is required.",
-  path: ["rejectionReason"],
 });
+
+export const resolveApprovalInputSchema = z
+  .object({
+    approvalId: z.string().uuid(),
+    resolution: z.enum(["approved", "rejected"]),
+    rejectionReason: z.string().trim().max(2_000).optional(),
+    incidentResolution: z.string().trim().max(10_000).optional(),
+  })
+  .refine(
+    (value) =>
+      value.resolution !== "rejected" || Boolean(value.rejectionReason),
+    {
+      message: "A rejection reason is required.",
+      path: ["rejectionReason"],
+    },
+  );
 
 export const getAdminContentInputSchema = z.object({});
 
 export const updateAdminContentInputSchema = z.discriminatedUnion("section", [
-  z.object({ section: z.literal("buildScope"), expectedVersion: z.number().int().positive(), data: buildScopeSchema }),
-  z.object({ section: z.literal("costSchedule"), expectedVersion: z.number().int().positive(), data: costScheduleDataSchema }),
-  z.object({ section: z.literal("offerScope"), expectedVersion: z.number().int().positive(), data: offerScopeDataSchema }),
-  z.object({ section: z.literal("offerContent"), expectedVersion: z.number().int().positive(), data: offerContentDataSchema }),
-  z.object({ section: z.literal("hbfcClaim"), expectedVersion: z.number().int().positive(), data: hbfcClaimDataSchema }),
+  z.object({
+    section: z.literal("buildScope"),
+    expectedVersion: z.number().int().positive(),
+    data: buildScopeSchema,
+  }),
+  z.object({
+    section: z.literal("costSchedule"),
+    expectedVersion: z.number().int().positive(),
+    data: costScheduleDataSchema,
+  }),
+  z.object({
+    section: z.literal("offerScope"),
+    expectedVersion: z.number().int().positive(),
+    data: offerScopeDataSchema,
+  }),
+  z.object({
+    section: z.literal("offerContent"),
+    expectedVersion: z.number().int().positive(),
+    data: offerContentDataSchema,
+  }),
+  z.object({
+    section: z.literal("hbfcClaim"),
+    expectedVersion: z.number().int().positive(),
+    data: hbfcClaimDataSchema,
+  }),
 ]);
 
-export const listTeamInputSchema = z.object({ query: z.string().trim().max(120).default(""), limit: z.number().int().min(1).max(100).default(50) });
+export const listTeamInputSchema = z.object({
+  query: z.string().trim().max(120).default(""),
+  limit: z.number().int().min(1).max(100).default(50),
+});
 
-export const inviteTeamMemberInputSchema = z.object({ email: z.email().trim().toLowerCase(), role: z.enum(Role).default(Role.GUEST) });
+export const inviteTeamMemberInputSchema = z.object({
+  email: z.email().trim().toLowerCase(),
+  role: z.enum(Role).default(Role.GUEST),
+});
 
-export const updateTeamRoleInputSchema = z.object({ userId: z.string().trim().min(1).max(200), newRole: z.enum(Role) });
+export const updateTeamRoleInputSchema = z.object({
+  userId: z.string().trim().min(1).max(200),
+  newRole: z.enum(Role),
+});
 
-export const revokeTeamInvitationInputSchema = z.object({ invitationId: z.string().trim().min(1).max(200) });
+export const revokeTeamInvitationInputSchema = z.object({
+  invitationId: z.string().trim().min(1).max(200),
+});
 
-export const disconnectXeroInputSchema = z.object({ reason: z.string().trim().min(1).max(1_000) });
+export const disconnectXeroInputSchema = z.object({
+  reason: z.string().trim().min(1).max(1_000),
+});
 
 export const adminJsonPayloadSchema = jsonValueSchema;

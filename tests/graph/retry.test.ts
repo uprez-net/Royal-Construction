@@ -9,13 +9,31 @@ import { isRetryableGraphError, withGraphRetry } from "../../lib/graph/retry";
 const NO_WAIT = { baseDelayMs: 0 };
 
 test("a throttle and a bad gateway are worth repeating; a refusal is not", () => {
-  assert.equal(isRetryableGraphError(new GraphRequestError("throttled", 429)), true);
-  assert.equal(isRetryableGraphError(new GraphRequestError("bad gateway", 502)), true);
-  assert.equal(isRetryableGraphError(new GraphRequestError("timeout", 408)), true);
+  assert.equal(
+    isRetryableGraphError(new GraphRequestError("throttled", 429)),
+    true,
+  );
+  assert.equal(
+    isRetryableGraphError(new GraphRequestError("bad gateway", 502)),
+    true,
+  );
+  assert.equal(
+    isRetryableGraphError(new GraphRequestError("timeout", 408)),
+    true,
+  );
 
-  assert.equal(isRetryableGraphError(new GraphRequestError("forbidden", 403)), false);
-  assert.equal(isRetryableGraphError(new GraphRequestError("gone", 404)), false);
-  assert.equal(isRetryableGraphError(new GraphRequestError("too large", 413)), false);
+  assert.equal(
+    isRetryableGraphError(new GraphRequestError("forbidden", 403)),
+    false,
+  );
+  assert.equal(
+    isRetryableGraphError(new GraphRequestError("gone", 404)),
+    false,
+  );
+  assert.equal(
+    isRetryableGraphError(new GraphRequestError("too large", 413)),
+    false,
+  );
 });
 
 test("a failure that never got a status is treated as a transport blip", () => {
@@ -88,7 +106,8 @@ test("shouldRetry can widen the policy for Graph's indexing lag", async () => {
     {
       ...NO_WAIT,
       shouldRetry: (error) =>
-        isRetryableGraphError(error) || (error as { status?: number })?.status === 404,
+        isRetryableGraphError(error) ||
+        (error as { status?: number })?.status === 404,
     },
   );
 

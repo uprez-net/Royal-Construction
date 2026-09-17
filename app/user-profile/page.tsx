@@ -1,6 +1,6 @@
-import { UserProfile } from "@clerk/nextjs"
+import { UserProfile } from "@clerk/nextjs";
 
-import { AuthShell } from "@/components/auth/auth-shell"
+import { AuthShell } from "@/components/auth/auth-shell";
 
 export default function UserProfilePage() {
   return (
@@ -12,5 +12,5 @@ export default function UserProfilePage() {
         <UserProfile routing="path" path="/user-profile" />
       </div>
     </AuthShell>
-  )
+  );
 }

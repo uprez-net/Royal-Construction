@@ -123,7 +123,9 @@ export function executedPdfPathname(
   docusignId: string,
   options?: { readonly unexpected?: boolean },
 ): string {
-  const folder = options?.unexpected ? "offer-signed/unexpected" : "offer-signed";
+  const folder = options?.unexpected
+    ? "offer-signed/unexpected"
+    : "offer-signed";
   return `${folder}/${prefix}-${docusignId}.pdf`;
 }
 

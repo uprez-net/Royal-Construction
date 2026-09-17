@@ -27,7 +27,10 @@ type VariationStatusInput = "APPROVED" | "REJECTED";
  * @param input - Validated variation creation payload.
  * @returns The newly created variation with its cost serialized as a string.
  */
-export async function createVariation(projectId: string, input: CreateVariationInput) {
+export async function createVariation(
+  projectId: string,
+  input: CreateVariationInput,
+) {
   const { project, ...variation } = await prisma.variation.create({
     data: {
       projectId,
@@ -38,9 +41,9 @@ export async function createVariation(projectId: string, input: CreateVariationI
     },
     include: {
       project: {
-        select: { name: true, siteManagerId: true }
+        select: { name: true, siteManagerId: true },
       },
-    }
+    },
   });
 
   after(async () => {
@@ -58,9 +61,12 @@ export async function createVariation(projectId: string, input: CreateVariationI
       variationAmount: currency.format(parseFloat(variation.cost.toString())),
     });
     await logAction(activityLogEntry);
-    await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+    await triggerNotification(
+      siteManagerId ? [siteManagerId] : [],
+      notificationPayload,
+    );
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-  })
+  });
 
   return {
     ...variation,
@@ -87,15 +93,21 @@ export async function createVariation(projectId: string, input: CreateVariationI
  *
  * @throws Re-throws any database or delay application errors encountered during execution.
  */
-export async function updateVariationStatus(variationId: string, status: VariationStatusInput) {
+export async function updateVariationStatus(
+  variationId: string,
+  status: VariationStatusInput,
+) {
   const { project, ...variation } = await prisma.variation.update({
     where: { id: variationId },
-    data: status === "APPROVED" ? { status: VariationStatus.APPROVED, approvedDate: new Date() } : { status: VariationStatus.REJECTED, approvedDate: null },
+    data:
+      status === "APPROVED"
+        ? { status: VariationStatus.APPROVED, approvedDate: new Date() }
+        : { status: VariationStatus.REJECTED, approvedDate: null },
     include: {
       project: {
-        select: { name: true, siteManagerId: true }
+        select: { name: true, siteManagerId: true },
       },
-    }
+    },
   });
 
   after(async () => {
@@ -116,13 +128,16 @@ export async function updateVariationStatus(variationId: string, status: Variati
       status: variation.status,
     });
     await logAction(activityLogEntry);
-    await triggerNotification(siteManagerId ? [siteManagerId] : [], notificationPayload);
+    await triggerNotification(
+      siteManagerId ? [siteManagerId] : [],
+      notificationPayload,
+    );
 
     if (status === "APPROVED") {
       await applyVariationDelay(variation.id);
     }
     revalidateTag(`project-${variation.projectId}`, CACHE_PROFILES.MEDIUM);
-  })
+  });
 
   return variation;
 }

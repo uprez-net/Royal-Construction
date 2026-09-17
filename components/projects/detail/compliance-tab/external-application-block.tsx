@@ -369,10 +369,7 @@ export function ExternalApplicationBlock({
       <dl className="space-y-1 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm">
         <DetailRow label="Lodged" value={appliedAtLabel ?? "—"} />
         {application?.applicationRef ? (
-          <DetailRow
-            label="Application"
-            value={application.applicationRef}
-          />
+          <DetailRow label="Application" value={application.applicationRef} />
         ) : null}
         {application?.lodgedWith ? (
           <DetailRow label="With" value={application.lodgedWith} />
@@ -467,8 +464,8 @@ export function ExternalApplicationBlock({
               />
             ) : null}
             <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-              Tick this off the portal&apos;s approval email. It stops us chasing{" "}
-              {copy.portal} and puts the download on the alert panel.
+              Tick this off the portal&apos;s approval email. It stops us
+              chasing {copy.portal} and puts the download on the alert panel.
             </span>
           </span>
         </label>

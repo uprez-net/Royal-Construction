@@ -148,7 +148,9 @@ export function WasteManagementModal({
                         className="size-3.5 shrink-0 text-muted-foreground"
                         aria-hidden="true"
                       />
-                      <span className="min-w-0 truncate">{attachment.name}</span>
+                      <span className="min-w-0 truncate">
+                        {attachment.name}
+                      </span>
                     </li>
                   ))}
                 </ul>

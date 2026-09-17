@@ -33,43 +33,41 @@ function addEditableBody(html: string) {
     .replace(/<body([^>]*)>/i, (_match, attrs: string) => {
       const attrsWithClass = /class=/.test(attrs)
         ? attrs.replace(
-          /class=(["'])(.*?)\1/,
-          'class="$2 editable-email-preview"',
-        )
+            /class=(["'])(.*?)\1/,
+            'class="$2 editable-email-preview"',
+          )
         : `${attrs} class="editable-email-preview"`;
 
       return `<body${attrsWithClass} contenteditable="true" tabindex="0">`;
     });
 }
 
-export const ReactEmailIframe = forwardRef<HTMLIFrameElement, ReactEmailPreviewProps>(
-  ({ category, lead, editable = true }, ref) => {
-    const { data: html, isLoading } = useQuery({
-      queryKey: ["email-preview", category, lead?.id],
-      queryFn: () => renderEmailHtml(category, lead),
-    });
+export const ReactEmailIframe = forwardRef<
+  HTMLIFrameElement,
+  ReactEmailPreviewProps
+>(({ category, lead, editable = true }, ref) => {
+  const { data: html, isLoading } = useQuery({
+    queryKey: ["email-preview", category, lead?.id],
+    queryFn: () => renderEmailHtml(category, lead),
+  });
 
-    if (isLoading) {
-      return <Spinner />;
-    }
-
-    const previewHtml = editable && html ? addEditableBody(html) : (html ?? "");
-    return (
-      <div
-        className="overflow-hidden rounded-lg"
-        style={{ height: 480 }}
-      >
-        <iframe
-          ref={ref}
-          title={`${category} Email Preview`}
-          srcDoc={getEditablePreviewHtml(previewHtml)}
-          className="w-full h-full"
-          sandbox="allow-same-origin allow-scripts"
-          style={{ border: "none" }}
-        />
-      </div>
-    );
+  if (isLoading) {
+    return <Spinner />;
   }
-);
+
+  const previewHtml = editable && html ? addEditableBody(html) : (html ?? "");
+  return (
+    <div className="overflow-hidden rounded-lg" style={{ height: 480 }}>
+      <iframe
+        ref={ref}
+        title={`${category} Email Preview`}
+        srcDoc={getEditablePreviewHtml(previewHtml)}
+        className="w-full h-full"
+        sandbox="allow-same-origin allow-scripts"
+        style={{ border: "none" }}
+      />
+    </div>
+  );
+});
 
 ReactEmailIframe.displayName = "ReactEmailIframe";

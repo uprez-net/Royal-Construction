@@ -5,10 +5,18 @@ import { setComplianceDocumentRequiredInputSchema } from "@/agent/lib/project-co
 import { setAuthorizedComplianceDocumentRequired } from "@/agent/lib/project-operations";
 
 export default defineTool({
-  description: "Mark a checklist or conditional DA compliance row not required, or restore it to required, without deleting evidence. Approved rows cannot be reopened; require owner approval.",
+  description:
+    "Mark a checklist or conditional DA compliance row not required, or restore it to required, without deleting evidence. Approved rows cannot be reopened; require owner approval.",
   inputSchema: setComplianceDocumentRequiredInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  label: { start: ({ notRequired }) => notRequired ? "Mark compliance not required" : "Restore compliance requirement" },
-  execute(input, ctx) { return setAuthorizedComplianceDocumentRequired(ctx, input); },
+  label: {
+    start: ({ notRequired }) =>
+      notRequired
+        ? "Mark compliance not required"
+        : "Restore compliance requirement",
+  },
+  execute(input, ctx) {
+    return setAuthorizedComplianceDocumentRequired(ctx, input);
+  },
 });

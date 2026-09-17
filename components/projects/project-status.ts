@@ -34,7 +34,10 @@ const PROJECT_STATUS_CONFIG: Record<string, ProjectStatusConfig> = {
     stripe: "bg-[var(--stage-3)]",
   },
   ACTIVE: { badge: "bg-info-light text-info-ink", stripe: "bg-info" },
-  ON_TRACK: { badge: "bg-success-light text-success-ink", stripe: "bg-success" },
+  ON_TRACK: {
+    badge: "bg-success-light text-success-ink",
+    stripe: "bg-success",
+  },
   COMPLETED: {
     badge: "bg-success-light text-success-ink",
     stripe: "bg-success",

@@ -104,7 +104,9 @@ let redisClient: Redis | null | undefined;
 function getRedisClient() {
   if (redisClient !== undefined) return redisClient;
   const config = upstashConfig();
-  redisClient = config ? new Redis({ url: config.url, token: config.token }) : null;
+  redisClient = config
+    ? new Redis({ url: config.url, token: config.token })
+    : null;
   return redisClient;
 }
 
@@ -141,9 +143,9 @@ async function writeCachedMemory(
     await redis.set(
       cacheKey(ownerUserId, scope),
       JSON.stringify({
-      cacheVersion: MEMORY_CACHE_VERSION,
-      databaseVersion,
-      document,
+        cacheVersion: MEMORY_CACHE_VERSION,
+        databaseVersion,
+        document,
       }),
       { ex: MEMORY_CACHE_TTL_SECONDS },
     );
@@ -206,8 +208,13 @@ function requireMemoryOwner(
 function approvalForOwner(ownerUserId: string) {
   return {
     request: always(),
-    response: ({ responder }: { responder: { principalId: string; principalType: string } }) =>
-      responder.principalType === "user" && responder.principalId === ownerUserId
+    response: ({
+      responder,
+    }: {
+      responder: { principalId: string; principalType: string };
+    }) =>
+      responder.principalType === "user" &&
+      responder.principalId === ownerUserId
         ? { status: "allowed" as const }
         : {
             status: "rejected" as const,

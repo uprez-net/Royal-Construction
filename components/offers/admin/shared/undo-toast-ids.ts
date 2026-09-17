@@ -6,6 +6,9 @@
 export const COST_SCHEDULE_UNDO_TOAST_ID = "admin-undo-cost-schedule-row";
 export const ALLOWANCE_UNDO_TOAST_ID = "admin-undo-offer-scope-allowance";
 export const EXCLUSION_UNDO_TOAST_ID = "admin-undo-offer-scope-exclusion";
-export const INCLUSION_BULLET_UNDO_TOAST_ID = "admin-undo-offer-content-inclusion-bullet";
-export const EXCLUSION_BULLET_UNDO_TOAST_ID = "admin-undo-offer-content-exclusion-bullet";
-export const INCLUSION_SCHEDULE_UNDO_TOAST_ID = "admin-undo-inclusion-schedule-row";
+export const INCLUSION_BULLET_UNDO_TOAST_ID =
+  "admin-undo-offer-content-inclusion-bullet";
+export const EXCLUSION_BULLET_UNDO_TOAST_ID =
+  "admin-undo-offer-content-exclusion-bullet";
+export const INCLUSION_SCHEDULE_UNDO_TOAST_ID =
+  "admin-undo-inclusion-schedule-row";

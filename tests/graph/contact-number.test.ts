@@ -13,13 +13,19 @@ test("an Australian mobile keeps its leading zero", () => {
 
 test("an international number keeps the plus that makes it international", () => {
   assert.equal(normalizeContactNumber("+61 433 100 349"), "+61 433 100 349");
-  assert.equal(normalizeContactNumber("+61 (0)2 9876 5432"), "+61 (0)2 9876 5432");
+  assert.equal(
+    normalizeContactNumber("+61 (0)2 9876 5432"),
+    "+61 (0)2 9876 5432",
+  );
 });
 
 test("long numbers are not rewritten by floating point", () => {
   // Past 15 digits Number() alters digits outright, and past 21 it switches to
   // exponential notation. Both used to be written into Lead.phone verbatim.
-  assert.equal(normalizeContactNumber("12345678901234567"), "12345678901234567");
+  assert.equal(
+    normalizeContactNumber("12345678901234567"),
+    "12345678901234567",
+  );
   assert.equal(
     normalizeContactNumber("1234567890123456789012"),
     "1234567890123456789012",
@@ -27,7 +33,10 @@ test("long numbers are not rewritten by floating point", () => {
 });
 
 test("an extension survives instead of being welded onto the number", () => {
-  assert.equal(normalizeContactNumber("02 9876 5432 ext 12"), "02 9876 5432 ext 12");
+  assert.equal(
+    normalizeContactNumber("02 9876 5432 ext 12"),
+    "02 9876 5432 ext 12",
+  );
 });
 
 test("surrounding and repeated whitespace is tidied", () => {

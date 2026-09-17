@@ -1,7 +1,7 @@
 // ─── Loading Modal Component ────────────────────────────────────────────────
 
 import { Sparkles } from "lucide-react";
-import { useState , useEffect} from "react";
+import { useState, useEffect } from "react";
 
 interface GeneratingModalProps {
   /** The accent/border color for the spinner, progress bar, and text */
@@ -10,28 +10,31 @@ interface GeneratingModalProps {
   backgroundColor?: string;
 }
 
-export function GeneratingModal({ borderColor = "#C6923A", backgroundColor = "#C6923A" }: GeneratingModalProps) {
+export function GeneratingModal({
+  borderColor = "#C6923A",
+  backgroundColor = "#C6923A",
+}: GeneratingModalProps) {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
 
   const messages = [
-    'Analyzing your requirements...',
-    'Drafting the email layout...',
-    'Applying Royal Constructions theme...',
-    'Generating interactive elements...',
-    'Polishing the final touches...',
+    "Analyzing your requirements...",
+    "Drafting the email layout...",
+    "Applying Royal Constructions theme...",
+    "Generating interactive elements...",
+    "Polishing the final touches...",
   ];
 
   useEffect(() => {
     // Simulate a smooth progress bar over ~20 seconds
-    const duration = 2000; 
+    const duration = 2000;
     const interval = 100;
     const step = 100 / (duration / interval);
 
     const timer = setInterval(() => {
       setProgress((prev) => {
         if (prev >= 98) return prev; // Pause at 98% until actually finished
-        return prev + (step / 100);
+        return prev + step / 100;
       });
     }, interval);
 
@@ -50,7 +53,6 @@ export function GeneratingModal({ borderColor = "#C6923A", backgroundColor = "#C
   return (
     <div className="flex items-center justify-center py-10 w-full">
       <div className="relative flex flex-col items-center gap-8 w-full overflow-hidden px-4 py-8">
-        
         {/* Decorative background glow */}
         <div
           className="absolute -top-20 left-1/2 -translate-x-1/2 h-64 w-64 rounded-full blur-3xl transition-all animate-pulse"
@@ -62,9 +64,13 @@ export function GeneratingModal({ borderColor = "#C6923A", backgroundColor = "#C
           {/* Rotating Ring */}
           <div
             className="absolute inset-0 rounded-full border-2 border-transparent animate-spin"
-            style={{ borderTopColor: borderColor, borderRightColor: `${borderColor}80`, animationDuration: '1.5s' }}
+            style={{
+              borderTopColor: borderColor,
+              borderRightColor: `${borderColor}80`,
+              animationDuration: "1.5s",
+            }}
           ></div>
-          
+
           {/* Inner Pulsing Circle */}
           <div className="absolute inset-2 rounded-full bg-[#F7F6F2] border border-[#E2E8F0] animate-pulse"></div>
 
@@ -79,31 +85,35 @@ export function GeneratingModal({ borderColor = "#C6923A", backgroundColor = "#C
           <h3 className="text-2xl font-semibold text-slate-900 tracking-tight">
             Generating Your Email
           </h3>
-          
+
           {/* Dynamic Message with fade transition */}
           <div className="h-6 flex items-center justify-center">
-            <p 
-              key={messageIndex} 
+            <p
+              key={messageIndex}
               className="text-sm font-medium animate-fade-in-down"
               style={{ color: borderColor }}
             >
               {messages[messageIndex]}
             </p>
           </div>
-          
+
           <p className="text-sm text-slate-500 leading-relaxed max-w-xs">
-            Our AI is crafting your custom HTML template. This usually takes about 15-20 seconds.
+            Our AI is crafting your custom HTML template. This usually takes
+            about 15-20 seconds.
           </p>
         </div>
 
         {/* Progress Bar */}
         <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden z-10">
-          <div 
+          <div
             className="h-2 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${Math.min(progress, 100)}%`, backgroundColor: borderColor }}
+            style={{
+              width: `${Math.min(progress, 100)}%`,
+              backgroundColor: borderColor,
+            }}
           ></div>
         </div>
-        
+
         <p className="text-xs text-slate-400 z-10">
           Please don&apos;t close or refresh this page
         </p>

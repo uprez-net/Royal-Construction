@@ -1,4 +1,8 @@
-import { IncidentSeverity, TradiePriceUnit, TradieScheduleStatus } from "@prisma/client";
+import {
+  IncidentSeverity,
+  TradiePriceUnit,
+  TradieScheduleStatus,
+} from "@prisma/client";
 import { z } from "zod";
 
 export const tradieIdSchema = z.string().uuid();
@@ -30,14 +34,21 @@ export const createTradieInputSchema = z.object({
 
 export const updateTradieInputSchema = z.object({
   tradieId: tradieIdSchema,
-  patch: z.object({
-    email: z.email().trim().toLowerCase().optional(),
-    additionalEmails: z.array(z.email().trim().toLowerCase()).max(10).optional(),
-    phone: z.string().trim().min(1).max(80).optional(),
-    location: z.string().trim().max(300).nullable().optional(),
-    note: z.string().trim().max(4_000).nullable().optional(),
-    isFavourite: z.boolean().optional(),
-  }).refine((value) => Object.keys(value).length > 0, { message: "At least one tradie field is required." }),
+  patch: z
+    .object({
+      email: z.email().trim().toLowerCase().optional(),
+      additionalEmails: z
+        .array(z.email().trim().toLowerCase())
+        .max(10)
+        .optional(),
+      phone: z.string().trim().min(1).max(80).optional(),
+      location: z.string().trim().max(300).nullable().optional(),
+      note: z.string().trim().max(4_000).nullable().optional(),
+      isFavourite: z.boolean().optional(),
+    })
+    .refine((value) => Object.keys(value).length > 0, {
+      message: "At least one tradie field is required.",
+    }),
 });
 
 export const requestTradiePriceChangeInputSchema = z.object({

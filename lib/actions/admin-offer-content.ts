@@ -63,7 +63,9 @@ export async function saveBuildScopeAction(
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
-    return invalid(error instanceof Error ? error.message : "Failed to save build scope.");
+    return invalid(
+      error instanceof Error ? error.message : "Failed to save build scope.",
+    );
   }
 }
 
@@ -84,7 +86,9 @@ export async function saveCostScheduleAction(
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
-    return invalid(error instanceof Error ? error.message : "Failed to save cost schedule.");
+    return invalid(
+      error instanceof Error ? error.message : "Failed to save cost schedule.",
+    );
   }
 }
 
@@ -105,7 +109,9 @@ export async function saveOfferScopeAction(
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
-    return invalid(error instanceof Error ? error.message : "Failed to save offer scope.");
+    return invalid(
+      error instanceof Error ? error.message : "Failed to save offer scope.",
+    );
   }
 }
 
@@ -126,7 +132,9 @@ export async function saveOfferContentAction(
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
-    return invalid(error instanceof Error ? error.message : "Failed to save offer content.");
+    return invalid(
+      error instanceof Error ? error.message : "Failed to save offer content.",
+    );
   }
 }
 
@@ -151,6 +159,8 @@ export async function saveHBFCClaimAction(
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
-    return invalid(error instanceof Error ? error.message : "Failed to save HBCF claim.");
+    return invalid(
+      error instanceof Error ? error.message : "Failed to save HBCF claim.",
+    );
   }
 }

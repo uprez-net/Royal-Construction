@@ -4,7 +4,7 @@
  * @returns A string representing the generated phone number with the country code.
  */
 export const randomPhoneNumberGenerator = (
-  countryCode: string = "+61"
+  countryCode: string = "+61",
 ): string => {
   // Seed using current time
   let seed = Date.now();
@@ -16,7 +16,7 @@ export const randomPhoneNumberGenerator = (
 
   // Generate 9 random digits
   const number = Array.from({ length: 9 }, () =>
-    Math.floor(seededRandom() * 10)
+    Math.floor(seededRandom() * 10),
   ).join("");
 
   return `${countryCode}${number}`;
@@ -48,8 +48,7 @@ export const randomColourHexGenerator = (key: string): string => {
   }
   const index = Math.abs(hash) % PIE_CHART_COLORS.length;
   return PIE_CHART_COLORS[index];
-}
-
+};
 
 /**
  * Generates a deterministic SHA-256 checksum for an email.
@@ -77,10 +76,7 @@ export async function generateEmailChecksum(
       .replace(/\r\n/g, "\n")
       // Remove mailto duplicates:
       // test@gmail.com<mailto:test@gmail.com>
-      .replace(
-        /([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})<mailto:\1>/gi,
-        "$1"
-      )
+      .replace(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})<mailto:\1>/gi, "$1")
       // Remove remaining html tags
       .replace(/<[^>]*>/g, "")
       // Remove invisible chars
@@ -98,7 +94,7 @@ export async function generateEmailChecksum(
 
   const buffer = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(payload)
+    new TextEncoder().encode(payload),
   );
 
   return [...new Uint8Array(buffer)]

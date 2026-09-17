@@ -3,7 +3,10 @@ import { ownerOnlyApproval } from "@/agent/lib/agent-approval";
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
 import { requireCurrentAgentActor } from "@/agent/lib/actor";
 import { createLeadTaskInputSchema } from "@/agent/lib/lead-contracts";
-import { authorizeLeadTaskMutation, createAuthorizedLeadTask } from "@/agent/lib/lead-operations";
+import {
+  authorizeLeadTaskMutation,
+  createAuthorizedLeadTask,
+} from "@/agent/lib/lead-operations";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 export default defineTool({
@@ -13,7 +16,8 @@ export default defineTool({
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   label: {
-    start: ({ leadId, type }) => `Create ${type.toLowerCase()} task for lead ${leadId}`,
+    start: ({ leadId, type }) =>
+      `Create ${type.toLowerCase()} task for lead ${leadId}`,
   },
   async execute(input, ctx) {
     const actor = await requireCurrentAgentActor(ctx);

@@ -1,7 +1,6 @@
 import { Mistral } from "@mistralai/mistralai";
 import type { OCRPageObject } from "@mistralai/mistralai/models/components";
 
-
 // Checked at call time rather than on import. The Graph webhook now reaches
 // this module, and a module-scope throw would take the whole route down at
 // import — turning a missing OCR key into dropped leads instead of leads
@@ -22,7 +21,6 @@ export async function processPDFWithMistral(pdfLink: string) {
   const client = new Mistral({ apiKey: requireApiKey() });
 
   try {
-    
     const response = await client.ocr.process({
       model: "mistral-ocr-latest",
       document: {
@@ -50,7 +48,8 @@ export async function processPDFWithMistral(pdfLink: string) {
 export function ocrPagesToText(pages: OCRPageObject[]): string {
   return pages
     .map((page) => {
-      const tables = page.tables?.map((table) => table.content.trim()).join("\n\n") ?? "";
+      const tables =
+        page.tables?.map((table) => table.content.trim()).join("\n\n") ?? "";
       return [page.markdown.trim(), tables].filter(Boolean).join("\n\n");
     })
     .filter(Boolean)

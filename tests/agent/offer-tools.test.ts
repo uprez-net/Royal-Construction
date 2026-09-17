@@ -10,8 +10,14 @@ import {
 } from "../../agent/lib/offer-contracts";
 
 test("offer tool inputs require exact bounded identifiers", () => {
-  assert.equal(searchOffersInputSchema.safeParse({ query: "a" }).success, false);
-  assert.equal(getOfferInputSchema.safeParse({ offerId: "not-a-uuid" }).success, false);
+  assert.equal(
+    searchOffersInputSchema.safeParse({ query: "a" }).success,
+    false,
+  );
+  assert.equal(
+    getOfferInputSchema.safeParse({ offerId: "not-a-uuid" }).success,
+    false,
+  );
   assert.equal(
     listOfferRevisionsInputSchema.safeParse({ leadId: 0, limit: 26 }).success,
     false,

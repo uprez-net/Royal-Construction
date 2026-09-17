@@ -39,9 +39,7 @@ const apiEngagement = () =>
     externalApplications: [
       {
         appliedAt: "2026-09-14T00:00:00.000Z",
-        submissions: [
-          { submittedAt: "2026-09-14T00:00:00.000Z" },
-        ],
+        submissions: [{ submittedAt: "2026-09-14T00:00:00.000Z" }],
       },
     ],
     alerts: [
@@ -59,7 +57,9 @@ test("revives compliance dates returned as JSON strings", () => {
   assert.ok(revived.createdAt instanceof Date);
   assert.ok(revived.documents[0].files[0].createdAt instanceof Date);
   assert.ok(revived.outreaches[0].meetings[0].scheduledFor instanceof Date);
-  assert.ok(revived.externalApplications[0].submissions[0].submittedAt instanceof Date);
+  assert.ok(
+    revived.externalApplications[0].submissions[0].submittedAt instanceof Date,
+  );
 });
 
 test("the revived engagement can drive the stage flow after a mutation", () => {

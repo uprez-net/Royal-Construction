@@ -108,9 +108,7 @@ export function HbcfCapacityBadge({ projectId }: { projectId: string }) {
             </span>{" "}
             of that, from{" "}
             <span className="font-mono tabular-nums">
-              {dateFormat.format(
-                hbcfParseDate(breach.insuranceClaimStartDate),
-              )}
+              {dateFormat.format(hbcfParseDate(breach.insuranceClaimStartDate))}
             </span>{" "}
             to{" "}
             <span className="font-mono tabular-nums">

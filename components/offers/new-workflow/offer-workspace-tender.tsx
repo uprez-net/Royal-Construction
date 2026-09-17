@@ -148,12 +148,14 @@ export function TenderPanel({
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
-            customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
+            customerName={
+              formatOwnerNamesLine(job.owners ?? []) || job.clientNames
+            }
             signers={collectOfferSigners(job.owners ?? []).map((s) => ({
-            label: offerSignerLabel(s),
-            email: s.signatory.email,
-          }))}
-          signerStatuses={signerStatuses}
+              label: offerSignerLabel(s),
+              email: s.signatory.email,
+            }))}
+            signerStatuses={signerStatuses}
             contractValueIncGst={customerPrice.selectedContractValueIncGst}
             offerReference={formatOfferReference(job.reference, job.revision)}
             scheduleBalanced={scheduleBalanced}
@@ -258,7 +260,10 @@ function TenderActions({
   // DocuSign recipient set. The email is what joins a row to its persisted
   // EnvelopeSignature — labels are not unique, emails are (enforced by
   // collectOwnerIssues).
-  readonly signers: readonly { readonly label: string; readonly email: string }[];
+  readonly signers: readonly {
+    readonly label: string;
+    readonly email: string;
+  }[];
   // Per-recipient status from the Connect webhook. Empty before the envelope is
   // sent, in which case rows fall back to their routing-derived state.
   readonly signerStatuses: readonly OfferSignerStatus[];
@@ -325,8 +330,8 @@ function TenderActions({
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           Sending creates a DocuSign envelope from the generated Tender PDF —
-          signature tabs auto-place onto the document&apos;s anchor strings,
-          the customer signs first, then the builder counter-signs. The Connect
+          signature tabs auto-place onto the document&apos;s anchor strings, the
+          customer signs first, then the builder counter-signs. The Connect
           webhook records each signature and files the executed PDF.
         </p>
       )}
@@ -355,9 +360,7 @@ function TenderActions({
             onClick={() => setConfirming(true)}
           >
             <Send className="size-4" aria-hidden="true" />
-            {sending
-              ? "Sending envelope…"
-              : "Send for signature via DocuSign"}
+            {sending ? "Sending envelope…" : "Send for signature via DocuSign"}
           </Button>
         ) : null}
 
@@ -447,7 +450,8 @@ function TenderPreview({
   // Render every signer from owners[] (the exact DocuSign recipient set) — not
   // the legacy primary/secondary projection, which showed a company owner as one
   // "Customer — <company>" line and dropped its directors.
-  const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
+  const ownerNamesLine =
+    formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
   const signers = collectOfferSigners(job.owners ?? []);
   // Same resolver the tender PDF uses. This previously treated the draft
   // bullets as an OVERRIDE that suppressed the Scope items, so the on-screen
@@ -468,7 +472,11 @@ function TenderPreview({
     standardPriceIncGst: null,
   }).tenderScopeRows;
   const stateLabel =
-    state === "signed" ? "Executed" : state === "sent" ? "Out for signature" : "Draft";
+    state === "signed"
+      ? "Executed"
+      : state === "sent"
+        ? "Out for signature"
+        : "Draft";
 
   return (
     <article className="grid gap-4 rounded-lg border border-border bg-background p-4">
@@ -535,9 +543,7 @@ function TenderPreview({
       />
 
       <div>
-        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
-          Payment schedule
-        </p>
+        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Payment schedule</p>
         <div className="overflow-hidden rounded-lg border border-border/70">
           <table className="w-full text-[13px]">
             <tbody>
@@ -605,9 +611,7 @@ function TenderList({
 }) {
   return (
     <div>
-      <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
-        {title}
-      </p>
+      <p className={cn("mb-2", GROUP_HEADING_CLASS)}>{title}</p>
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (

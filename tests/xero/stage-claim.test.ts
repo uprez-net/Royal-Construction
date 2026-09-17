@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { contractClaimTotal, resolveStageClaims } from "../../lib/projects/stage-claim";
+import {
+  contractClaimTotal,
+  resolveStageClaims,
+} from "../../lib/projects/stage-claim";
 
 const BUDGET = 900_000;
 

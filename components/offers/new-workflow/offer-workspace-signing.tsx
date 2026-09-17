@@ -58,9 +58,7 @@ export function SigningTracker({
 }) {
   return (
     <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
-      <p className={GROUP_HEADING_CLASS}>
-        DocuSign envelope
-      </p>
+      <p className={GROUP_HEADING_CLASS}>DocuSign envelope</p>
       {recipients.map((recipient) => {
         const pill = SIGNER_PILL[recipient.state];
         const pillLabel =
@@ -147,7 +145,10 @@ export function EnvelopeSendConfirm({
         <Row label="Reference" mono value={reference} />
       </dl>
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <AlertTriangle
+          className="mt-0.5 size-3.5 shrink-0"
+          aria-hidden="true"
+        />
         Creates a DocuSign envelope and routes it to{" "}
         {customerOnly
           ? "the customer to sign as acceptance"

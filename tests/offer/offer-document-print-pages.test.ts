@@ -26,7 +26,10 @@ import {
   type OfferWorkspaceScopeItem,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
@@ -191,7 +194,9 @@ for (const nameLength of [70, 110, MAX_OWNER_NAME_LENGTH]) {
   const label = `10 companies, ${nameLength}-char legal names`;
 
   test(`Tender prints what it declares — ${label}`, async () => {
-    const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+    const html = buildTenderHtml(
+      buildProposalInput(snapshotWithOwners(owners)),
+    );
     const printed = await printedPageCount(html);
     const declared = declaredPageTotal(html);
     assert.equal(
@@ -249,7 +254,9 @@ for (const nameLength of [70, 110, MAX_OWNER_NAME_LENGTH]) {
 
 for (const { label, owners } of OWNER_CONFIGURATIONS) {
   test(`Tender prints what it declares — ${label}`, async () => {
-    const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+    const html = buildTenderHtml(
+      buildProposalInput(snapshotWithOwners(owners)),
+    );
     const printed = await printedPageCount(html);
     const declared = declaredPageTotal(html);
     assert.equal(
@@ -275,7 +282,9 @@ for (const { label, owners } of OWNER_CONFIGURATIONS) {
 }
 
 test("Tender prints exactly the number of pages it declares at max owners", async () => {
-  const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(maxOwners())));
+  const html = buildTenderHtml(
+    buildProposalInput(snapshotWithOwners(maxOwners())),
+  );
   const printed = await printedPageCount(html);
   const declared = declaredPageTotal(html);
   assert.equal(
@@ -416,10 +425,26 @@ const SHARED_SHEET_CONFIGURATIONS: ReadonlyArray<{
   readonly allowances: readonly OfferWorkspaceScopeItem[];
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
 }> = [
-  { label: "seeded allowances beneath seeded exclusions", allowances: INITIAL_ALLOWANCES, exclusions: INITIAL_EXCLUSIONS },
-  { label: "seeded allowances beneath a long exclusions table", allowances: INITIAL_ALLOWANCES, exclusions: LONG_EXCLUSIONS },
-  { label: "12 one-line allowances filling the shared sheet", allowances: SHORT_ALLOWANCES, exclusions: INITIAL_EXCLUSIONS },
-  { label: "30 long allowances beneath a long exclusions table", allowances: ALLOWANCE_CONFIGURATIONS[0].allowances, exclusions: LONG_EXCLUSIONS },
+  {
+    label: "seeded allowances beneath seeded exclusions",
+    allowances: INITIAL_ALLOWANCES,
+    exclusions: INITIAL_EXCLUSIONS,
+  },
+  {
+    label: "seeded allowances beneath a long exclusions table",
+    allowances: INITIAL_ALLOWANCES,
+    exclusions: LONG_EXCLUSIONS,
+  },
+  {
+    label: "12 one-line allowances filling the shared sheet",
+    allowances: SHORT_ALLOWANCES,
+    exclusions: INITIAL_EXCLUSIONS,
+  },
+  {
+    label: "30 long allowances beneath a long exclusions table",
+    allowances: ALLOWANCE_CONFIGURATIONS[0].allowances,
+    exclusions: LONG_EXCLUSIONS,
+  },
 ];
 
 for (const { label, allowances, exclusions } of SHARED_SHEET_CONFIGURATIONS) {

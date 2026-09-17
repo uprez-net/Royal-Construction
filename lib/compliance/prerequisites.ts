@@ -196,10 +196,7 @@ export function developerBlockedReason(
 export function clientHasApprovedPlans(
   engagement: CertifierEngagementDetail,
 ): boolean {
-  const architect = outreachForParty(
-    engagement,
-    CompliancePartyType.ARCHITECT,
-  );
+  const architect = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
   if (!architect) return true;
   if (architect.mode === ComplianceOutreachMode.SELF_SUPPLIED) return true;
   return architect.clientPlansApprovedAt !== null;

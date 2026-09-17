@@ -9,7 +9,7 @@ import {
   Text,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -17,13 +17,16 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 
@@ -51,18 +54,18 @@ function CategoryItem({
   return (
     <Section
       style={{
-        padding: '1.5rem 0',
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        padding: "1.5rem 0",
+        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
       }}
     >
       <Row>
-        <Column style={{ width: 44, verticalAlign: 'top' }}>
+        <Column style={{ width: 44, verticalAlign: "top" }}>
           <Img
             alt=""
             height={26}
             src={icon}
             width={26}
-            style={{ display: 'block', outline: 'none', border: 'none' }}
+            style={{ display: "block", outline: "none", border: "none" }}
           />
         </Column>
         <Column style={{ paddingLeft: 12 }}>
@@ -105,7 +108,7 @@ interface MaterialCatalogueEmailProps {
 }
 
 export default function MaterialCatalogueEmail({
-  name = 'Homeowner',
+  name = "Homeowner",
   catalogueUrl = RC_URLS.catalogue,
   leadContext,
 }: MaterialCatalogueEmailProps) {
@@ -144,7 +147,7 @@ export default function MaterialCatalogueEmail({
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -152,7 +155,7 @@ export default function MaterialCatalogueEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -165,7 +168,7 @@ export default function MaterialCatalogueEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.2px',
+                  letterSpacing: "-1.2px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -180,7 +183,7 @@ export default function MaterialCatalogueEmail({
                   fontWeight: 350,
                   fontSize: 14,
                   lineHeight: 1.7,
-                  letterSpacing: '0.3px',
+                  letterSpacing: "0.3px",
                   color: RC_COLORS.textMutedOnLight,
                   maxWidth: 490,
                 }}
@@ -194,29 +197,29 @@ export default function MaterialCatalogueEmail({
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Hero Image ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2rem" }}>
               <Img
                 alt="Premium home finishes and materials"
                 src={RC_URLS.heroDefault}
                 width={592}
                 style={{
-                  display: 'block',
-                  width: '100%',
+                  display: "block",
+                  width: "100%",
                   maxWidth: 592,
-                  height: 'auto',
+                  height: "auto",
                   borderRadius: 4,
                 }}
               />
             </EmailSectionWhite>
 
             {/* ── Browse Catalogue CTA Card ── */}
-            <EmailSectionWhite style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionWhite style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.light,
                   borderRadius: 6,
                   border: `2px solid ${RC_COLORS.gold}`,
-                  padding: '1.5rem',
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -227,7 +230,7 @@ export default function MaterialCatalogueEmail({
                         fontFamily: FONTS.condensed,
                         fontWeight: 500,
                         fontSize: 13,
-                        letterSpacing: '0.6px',
+                        letterSpacing: "0.6px",
                         color: RC_COLORS.gold,
                       }}
                     >
@@ -282,13 +285,13 @@ export default function MaterialCatalogueEmail({
             </EmailSectionWhite>
 
             {/* ── Selection Categories ── */}
-            <EmailSectionLight style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionLight style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '1.5rem',
+                  border: "1px solid #E2E8F0",
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -354,12 +357,12 @@ export default function MaterialCatalogueEmail({
             </EmailSectionLight>
 
             {/* ── Variation Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -375,7 +378,7 @@ export default function MaterialCatalogueEmail({
                       }}
                     >
                       Selecting premium finishes may apply variations to your
-                      quotation. We will notify you of any{' '}
+                      quotation. We will notify you of any{" "}
                       <span
                         style={{
                           color: RC_COLORS.gold,
@@ -383,7 +386,7 @@ export default function MaterialCatalogueEmail({
                         }}
                       >
                         cost adjustments
-                      </span>{' '}
+                      </span>{" "}
                       before finalizing your selections.
                     </Text>
                   </Column>
@@ -392,11 +395,11 @@ export default function MaterialCatalogueEmail({
             </EmailSectionLight>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Section
                 style={{
-                  borderTop: '1px solid #E2E8F0',
-                  paddingTop: '1.5rem',
+                  borderTop: "1px solid #E2E8F0",
+                  paddingTop: "1.5rem",
                 }}
               >
                 <Row>

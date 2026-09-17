@@ -129,7 +129,8 @@ export function PlanningPortalSection({
   const copy = EXTERNAL_APPLICATION_COPY[kind];
   const documentType = CERTIFICATE_DOCUMENT_TYPE[kind];
   const isCdc =
-    kind === ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE;
+    kind ===
+    ComplianceExternalApplicationKind.COMPLYING_DEVELOPMENT_CERTIFICATE;
 
   const hasCertificate = Boolean(certificate?.files.length);
   const isLodged = Boolean(application?.appliedAt);
@@ -265,9 +266,7 @@ export function PlanningPortalSection({
               className="size-4 shrink-0 text-success-ink"
               aria-hidden="true"
             />
-            <p className="font-medium text-foreground">
-              {copy.label} approved
-            </p>
+            <p className="font-medium text-foreground">{copy.label} approved</p>
             <StatusPill tone="success">Ready to download</StatusPill>
           </div>
 
@@ -284,7 +283,11 @@ export function PlanningPortalSection({
           </p>
 
           <Button asChild type="button" size="sm" className="mt-3">
-            <a href={PLANNING_PORTAL_URL} target="_blank" rel="noopener noreferrer">
+            <a
+              href={PLANNING_PORTAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Open the NSW Planning Portal
               <ExternalLink className="size-3" aria-hidden="true" />
             </a>
@@ -358,8 +361,8 @@ function PrincipalCertifierPanel({
         typeof error === "string"
           ? error
           : error instanceof Error
-          ? error.message
-          : "Could not record the appointment.",
+            ? error.message
+            : "Could not record the appointment.",
       );
     }
   };
@@ -385,9 +388,10 @@ function PrincipalCertifierPanel({
         </p>
       ) : (
         <p className="mt-1 text-sm text-muted-foreground">
-          Appoint {certifierName ?? "the certifier"} as principal certifier on the
-          NSW Planning Portal, then record it here. A CDC cannot be determined
-          without the appointment, so this has to go in with the application.{" "}
+          Appoint {certifierName ?? "the certifier"} as principal certifier on
+          the NSW Planning Portal, then record it here. A CDC cannot be
+          determined without the appointment, so this has to go in with the
+          application.{" "}
           <a
             href={PLANNING_PORTAL_URL}
             target="_blank"

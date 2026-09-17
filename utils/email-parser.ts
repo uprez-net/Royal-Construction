@@ -41,36 +41,53 @@ export interface ThreadContext {
  * Safety limits — protect against pathological / malicious input.
  * ========================================================================== */
 const MAX_INPUT_LENGTH = 2_000_000; // ~2 MB; far beyond any real email body
-const MAX_RECURSION_DEPTH = 60;     // a thread 60 replies deep is absurd
+const MAX_RECURSION_DEPTH = 60; // a thread 60 replies deep is absurd
 
 /* ========================================================================== *
  * HTML entity decoding (no DOM required)
  * ========================================================================== */
 const NAMED_ENTITIES: Record<string, string> = {
-  "&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">",
-  "&quot;": '"', "&#39;": "'", "&apos;": "'",
-  "&mdash;": "\u2014", "&ndash;": "\u2013", "&hellip;": "\u2026",
-  "&lsquo;": "\u2018", "&rsquo;": "\u2019",
-  "&ldquo;": "\u201c", "&rdquo;": "\u201d",
-  "&copy;": "\u00a9", "&reg;": "\u00ae", "&trade;": "\u2122",
+  "&nbsp;": " ",
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&apos;": "'",
+  "&mdash;": "\u2014",
+  "&ndash;": "\u2013",
+  "&hellip;": "\u2026",
+  "&lsquo;": "\u2018",
+  "&rsquo;": "\u2019",
+  "&ldquo;": "\u201c",
+  "&rdquo;": "\u201d",
+  "&copy;": "\u00a9",
+  "&reg;": "\u00ae",
+  "&trade;": "\u2122",
 };
 
 const NAMED_ENTITY_RE = new RegExp(
   Object.keys(NAMED_ENTITIES)
     .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|"),
-  "g"
+  "g",
 );
 
 function safeCodePoint(code: number): string {
-  try { return String.fromCodePoint(code); } catch { return ""; }
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return "";
+  }
 }
 
 function decodeEntities(s: string): string {
   return s
     .replace(NAMED_ENTITY_RE, (m) => NAMED_ENTITIES[m] ?? m)
     .replace(/&#(\d+);/g, (_, d: string) => safeCodePoint(parseInt(d, 10)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => safeCodePoint(parseInt(h, 16)));
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) =>
+      safeCodePoint(parseInt(h, 16)),
+    );
 }
 
 /* ========================================================================== *
@@ -94,7 +111,8 @@ function decodeEntities(s: string): string {
 export function parseEmailDate(value?: string): Date | null {
   if (!value) return null;
 
-  let n = value.trim()
+  let n = value
+    .trim()
     .replace(/\bat\b/i, "")
     .replace(/\s*\(UTC[+-]\d{2}:\d{2}\).*$/i, "")
     .replace(/\s+/g, " ")
@@ -103,7 +121,10 @@ export function parseEmailDate(value?: string): Date | null {
   let d = new Date(n);
   if (!Number.isNaN(d.getTime())) return d;
 
-  n = n.replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/i, "");
+  n = n.replace(
+    /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/i,
+    "",
+  );
   d = new Date(n);
   return Number.isNaN(d.getTime()) ? null : d;
 }
@@ -192,10 +213,15 @@ interface Range {
   end: number;
 }
 
-function findBalancedRange(html: string, openTagStart: number, tagName: string): Range {
+function findBalancedRange(
+  html: string,
+  openTagStart: number,
+  tagName: string,
+): Range {
   const firstClose = html.indexOf(">", openTagStart);
   if (firstClose === -1) return { start: openTagStart, end: html.length };
-  if (html[firstClose - 1] === "/") return { start: openTagStart, end: firstClose + 1 };
+  if (html[firstClose - 1] === "/")
+    return { start: openTagStart, end: firstClose + 1 };
 
   const re = new RegExp(`<\\/?${tagName}(?=[\\s>/])[^>]*>`, "gi");
   re.lastIndex = firstClose + 1;
@@ -227,8 +253,16 @@ function stripAllSignatures(html: string): string {
   let guard = 0;
   while (guard++ < 20) {
     const before = out;
-    out = stripElement(out, /<div[^>]*class="[^"]*gmail_signature[^"]*"/i, "div");
-    out = stripElement(out, /<div[^>]*class="[^"]*outlook_signature[^"]*"/i, "div");
+    out = stripElement(
+      out,
+      /<div[^>]*class="[^"]*gmail_signature[^"]*"/i,
+      "div",
+    );
+    out = stripElement(
+      out,
+      /<div[^>]*class="[^"]*outlook_signature[^"]*"/i,
+      "div",
+    );
     if (out === before) break;
   }
   return out;
@@ -271,20 +305,30 @@ function htmlToText(html: string): string {
  *   → Split at the marker; for divRplyFwdMsg, extract the header text and
  *     prepend it so downstream header-field parsing still finds it.
  * ========================================================================== */
-interface WrapMarker { re: RegExp; tag: string; }
+interface WrapMarker {
+  re: RegExp;
+  tag: string;
+}
 const WRAP_MARKERS: WrapMarker[] = [
   { re: /<blockquote(?=[\s>])/i, tag: "blockquote" },
   { re: /<div[^>]*class="[^"]*gmail_quote[^"]*"/i, tag: "div" },
   { re: /<span[^>]*id="OLK_SRC_BODY_SECTION"/i, tag: "span" },
-  { re: /<div[^>]*style="[^"]*border-top:\s*(?:solid|none)[^"]*"[^>]*>/i, tag: "div" },
+  {
+    re: /<div[^>]*style="[^"]*border-top:\s*(?:solid|none)[^"]*"[^>]*>/i,
+    tag: "div",
+  },
 ];
 
-interface WrapMatch { index: number; tag: string; }
+interface WrapMatch {
+  index: number;
+  tag: string;
+}
 function findFirstWrapMarker(html: string): WrapMatch | null {
   let best: WrapMatch | null = null;
   for (const marker of WRAP_MARKERS) {
     const m = marker.re.exec(html);
-    if (m && (!best || m.index < best.index)) best = { index: m.index, tag: marker.tag };
+    if (m && (!best || m.index < best.index))
+      best = { index: m.index, tag: marker.tag };
   }
   return best;
 }
@@ -297,13 +341,19 @@ function findFirstFlatMarker(html: string): FlatMatch | null {
   const candidates: FlatMatch[] = [];
   const dr = /<div[^>]*id="divRplyFwdMsg"/i.exec(html);
   if (dr) candidates.push({ kind: "divRplyFwdMsg", index: dr.index });
-  const hr = /<hr[^>]*(?:id="stopSpelling"|tabindex="-1"|width:\s*98%)[^>]*>/i.exec(html);
+  const hr =
+    /<hr[^>]*(?:id="stopSpelling"|tabindex="-1"|width:\s*98%)[^>]*>/i.exec(
+      html,
+    );
   if (hr) candidates.push({ kind: "hr", index: hr.index, raw: hr[0] });
   if (!candidates.length) return null;
   return candidates.sort((a, b) => a.index - b.index)[0];
 }
 
-interface PeelResult { current: string; rest: string; }
+interface PeelResult {
+  current: string;
+  rest: string;
+}
 
 function peelOneHtmlLayer(html: string): PeelResult | null {
   const wrap = findFirstWrapMarker(html);
@@ -333,14 +383,19 @@ function peelOneHtmlLayer(html: string): PeelResult | null {
   // divRplyFwdMsg: extract its header text and prepend to the rest so that
   // From:/To:/Subject:/Sent: fields are still visible to downstream parsing.
   const range = findBalancedRange(html, f.index, "div");
-  const headerText = htmlToText(html.slice(html.indexOf(">", f.index) + 1, range.end));
+  const headerText = htmlToText(
+    html.slice(html.indexOf(">", f.index) + 1, range.end),
+  );
   const current = html.slice(0, f.index);
   // OWA appends an <hr> immediately after divRplyFwdMsg. Consume it here so
   // the recursive call doesn't treat it as a second flat boundary.
   let afterStart = range.end;
   const trailingHr = /^\s*<hr[^>]*>/i.exec(html.slice(afterStart));
   if (trailingHr) afterStart += trailingHr[0].length;
-  return { current, rest: (headerText ? headerText + "\n\n" : "") + html.slice(afterStart) };
+  return {
+    current,
+    rest: (headerText ? headerText + "\n\n" : "") + html.slice(afterStart),
+  };
 }
 
 /* ========================================================================== *
@@ -395,7 +450,8 @@ function extractLeadingHeaders(body: string): ExtractedHeaders {
     } else {
       consecutiveNonHeaderNonBlank++;
       // Two consecutive real content lines after at least one header = body
-      if (Object.keys(fields).length > 0 && consecutiveNonHeaderNonBlank >= 2) break;
+      if (Object.keys(fields).length > 0 && consecutiveNonHeaderNonBlank >= 2)
+        break;
     }
   }
 
@@ -403,10 +459,10 @@ function extractLeadingHeaders(body: string): ExtractedHeaders {
   const credible = !!fields["from"] && Object.keys(fields).length >= 2;
   const cleanedBody = credible
     ? lines
-      .filter((_, i) => !headerLineIndices.has(i))
-      .join("\n")
-      .replace(/^\n+/, "")
-      .trim()
+        .filter((_, i) => !headerLineIndices.has(i))
+        .join("\n")
+        .replace(/^\n+/, "")
+        .trim()
     : body;
 
   return {
@@ -440,11 +496,17 @@ function extractLeadingHeaders(body: string): ExtractedHeaders {
  *  body lines between them), the attribution is forwarded to the next
  *  non-empty segment rather than silently dropped.
  * ========================================================================== */
-interface StrippedLine { depth: number; content: string; }
+interface StrippedLine {
+  depth: number;
+  content: string;
+}
 function stripQuoteMarker(line: string): StrippedLine {
   const m = /^(\s*>)+\s?/.exec(line);
   if (!m) return { depth: 0, content: line };
-  return { depth: (m[0].match(/>/g) ?? []).length, content: line.slice(m[0].length) };
+  return {
+    depth: (m[0].match(/>/g) ?? []).length,
+    content: line.slice(m[0].length),
+  };
 }
 
 function isOnWroteLine(content: string): boolean {
@@ -558,7 +620,10 @@ function splitPlainTextThread(text: string): EmailThread[] {
 
   return segments
     .map((seg): EmailThread => {
-      const rawBody = seg.lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+      const rawBody = seg.lines
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
       const extracted = extractLeadingHeaders(rawBody);
       const attr: Partial<Attribution> = seg.pendingAttribution ?? {};
       return {
@@ -569,7 +634,9 @@ function splitPlainTextThread(text: string): EmailThread[] {
         body: extracted.cleanedBody,
       };
     })
-    .filter((t) => t.body.length > 0 || t.from.length > 0 || t.subject.length > 0);
+    .filter(
+      (t) => t.body.length > 0 || t.from.length > 0 || t.subject.length > 0,
+    );
 }
 
 /* ========================================================================== *
@@ -605,7 +672,8 @@ function extractMessages(content: string, depth: number): EmailThread[] {
         if (attribution) {
           const first = restMessages[0];
           if (!first.from && attribution.from) first.from = attribution.from;
-          if (!first.sentAt && attribution.sentAt) first.sentAt = attribution.sentAt;
+          if (!first.sentAt && attribution.sentAt)
+            first.sentAt = attribution.sentAt;
         }
       }
     }
@@ -657,10 +725,11 @@ function extractMessages(content: string, depth: number): EmailThread[] {
  */
 export function getAllEmailThreads(
   text: string,
-  context: ThreadContext = {}
+  context: ThreadContext = {},
 ): EmailThread[] {
   if (!text?.trim()) return [];
-  const input = text.length > MAX_INPUT_LENGTH ? text.slice(0, MAX_INPUT_LENGTH) : text;
+  const input =
+    text.length > MAX_INPUT_LENGTH ? text.slice(0, MAX_INPUT_LENGTH) : text;
 
   const threads = extractMessages(input, 0);
 

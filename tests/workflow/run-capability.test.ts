@@ -58,13 +58,28 @@ test("a bare run id, the form the route used to accept, is refused", () => {
 });
 
 test("malformed tokens are refused rather than thrown on", () => {
-  for (const token of ["", ".", "..", `${RUN}.${ALICE}.`, `.${ALICE}.abc`, `${RUN}..abc`, `${RUN}.${ALICE}`]) {
-    assert.equal(verifyRunCapability(token, ALICE, SECRET), null, `accepted ${JSON.stringify(token)}`);
+  for (const token of [
+    "",
+    ".",
+    "..",
+    `${RUN}.${ALICE}.`,
+    `.${ALICE}.abc`,
+    `${RUN}..abc`,
+    `${RUN}.${ALICE}`,
+  ]) {
+    assert.equal(
+      verifyRunCapability(token, ALICE, SECRET),
+      null,
+      `accepted ${JSON.stringify(token)}`,
+    );
   }
 });
 
 test("a capability signed with a different secret is refused", () => {
-  const token = signRunCapability({ runId: RUN, userId: ALICE }, "some-other-secret");
+  const token = signRunCapability(
+    { runId: RUN, userId: ALICE },
+    "some-other-secret",
+  );
   assert.equal(verifyRunCapability(token, ALICE, SECRET), null);
 });
 
@@ -78,8 +93,14 @@ test("a run id carrying a dot still round-trips", () => {
 
 test("without a configured secret nothing is issued and nothing verifies", () => {
   assert.equal(runCapabilitySecret({}), null);
-  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: "   " }), null);
-  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: SECRET }), SECRET);
+  assert.equal(
+    runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: "   " }),
+    null,
+  );
+  assert.equal(
+    runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: SECRET }),
+    SECRET,
+  );
 
   assert.throws(() => signRunCapability({ runId: RUN, userId: ALICE }, null));
   const token = signRunCapability({ runId: RUN, userId: ALICE }, SECRET);
@@ -90,7 +111,9 @@ test("an id that would make the token ambiguous is not signed", () => {
   assert.throws(() => signRunCapability({ runId: "", userId: ALICE }, SECRET));
   assert.throws(() => signRunCapability({ runId: RUN, userId: "" }, SECRET));
   assert.throws(() => signRunCapability({ runId: RUN, userId: "a.b" }, SECRET));
-  assert.throws(() => signRunCapability({ runId: "wrun/../x", userId: ALICE }, SECRET));
+  assert.throws(() =>
+    signRunCapability({ runId: "wrun/../x", userId: ALICE }, SECRET),
+  );
 });
 
 // A capability is an HMAC the holder can read, so its secret must not be
@@ -103,7 +126,11 @@ test("a secret too short to resist offline guessing counts as unset", () => {
     seen.push(String(message));
   };
   try {
-    for (const weak of ["dev", "secret", "a".repeat(RUN_CAPABILITY_SECRET_MIN_LENGTH - 1)]) {
+    for (const weak of [
+      "dev",
+      "secret",
+      "a".repeat(RUN_CAPABILITY_SECRET_MIN_LENGTH - 1),
+    ]) {
       assert.equal(
         runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: weak }),
         null,
@@ -119,14 +146,23 @@ test("a secret too short to resist offline guessing counts as unset", () => {
 
 test("a secret at the floor, and a real generated one, are accepted", () => {
   const atFloor = "b".repeat(RUN_CAPABILITY_SECRET_MIN_LENGTH);
-  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: atFloor }), atFloor);
+  assert.equal(
+    runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: atFloor }),
+    atFloor,
+  );
 
   // What `openssl rand -base64 32` produces: 32 bytes as 44 characters.
   const generated = Buffer.from("c".repeat(32)).toString("base64");
   assert.equal(generated.length, 44);
-  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: generated }), generated);
+  assert.equal(
+    runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: generated }),
+    generated,
+  );
 });
 
 test("a weak secret cannot be smuggled past the trim", () => {
-  assert.equal(runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: `  dev  ` }), null);
+  assert.equal(
+    runCapabilitySecret({ [RUN_CAPABILITY_SECRET_ENV]: `  dev  ` }),
+    null,
+  );
 });

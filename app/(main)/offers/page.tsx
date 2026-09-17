@@ -34,9 +34,9 @@ async function OfferPageClient() {
   const scope = user ? leadListScope(user) : null;
   const [offerKPIs, offers] = scope
     ? await Promise.all([
-      getOfferKPIsCached(scope),
-      getOfferGroupsCached(1, 10, "", "all", scope),
-    ])
+        getOfferKPIsCached(scope),
+        getOfferGroupsCached(1, 10, "", "all", scope),
+      ])
     : [emptyOfferKPIs(), emptyOfferGroupResult(1, 10)];
 
   return (

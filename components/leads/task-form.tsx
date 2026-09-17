@@ -32,7 +32,12 @@ interface TaskFormProps {
  * separate notes expressing a due date in prose, including the same interval
  * written as "1 Day" and "1 day".
  */
-export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProps) {
+export function TaskForm({
+  leadId,
+  leadName,
+  onCreated,
+  onCancel,
+}: TaskFormProps) {
   const [type, setType] = useState<LeadTaskType>("CALL");
   /**
    * Two ways to answer "when": a preset interval, or a picked date.
@@ -208,7 +213,13 @@ export function TaskForm({ leadId, leadName, onCreated, onCancel }: TaskFormProp
 
       <div className="mt-4 flex justify-end gap-2">
         {onCancel && (
-          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            disabled={saving}
+          >
             Cancel
           </Button>
         )}

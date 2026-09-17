@@ -89,8 +89,11 @@ export function hydratePricingFromStoredTotal(
 export function calculateOfferTotals(lines: PricedOfferLine[]): OfferTotals {
   return {
     amount: roundCurrency(lines.reduce((sum, line) => sum + line.netLine, 0)),
-    gstAmount: roundCurrency(lines.reduce((sum, line) => sum + line.gstAmount, 0)),
-    totalAmount: roundCurrency(lines.reduce((sum, line) => sum + line.totalPrice, 0)),
+    gstAmount: roundCurrency(
+      lines.reduce((sum, line) => sum + line.gstAmount, 0),
+    ),
+    totalAmount: roundCurrency(
+      lines.reduce((sum, line) => sum + line.totalPrice, 0),
+    ),
   };
 }
-

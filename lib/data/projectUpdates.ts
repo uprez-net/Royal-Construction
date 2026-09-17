@@ -4,16 +4,21 @@ import { revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
-import { after } from "next/server"
+import { after } from "next/server";
 
-export async function createProjectUpdate(input: {
-  projectId: string;
-  authorId: string;
-} & CreateProjectUpdateInput) {
+export async function createProjectUpdate(
+  input: {
+    projectId: string;
+    authorId: string;
+  } & CreateProjectUpdateInput,
+) {
   const { projectId, milestoneId, authorId, notes, photoUrls = [] } = input;
 
   const milestone = milestoneId
-    ? await prisma.milestone.findUnique({ where: { id: milestoneId }, select: { id: true, isPhotoRequired: true } })
+    ? await prisma.milestone.findUnique({
+        where: { id: milestoneId },
+        select: { id: true, isPhotoRequired: true },
+      })
     : null;
 
   const updatedMilestone = await prisma.$transaction(async (tx) => {
@@ -41,7 +46,7 @@ export async function createProjectUpdate(input: {
       const updatedMilestone = await tx.milestone.update({
         where: { id: milestoneId },
         data: { status: "DONE", actualDate: new Date() },
-        include: { project: true }
+        include: { project: true },
       });
       return updatedMilestone;
     }
@@ -55,11 +60,16 @@ export async function createProjectUpdate(input: {
         milestoneName: updatedMilestone.name,
         updateNote: notes,
       });
-      await triggerNotification(updatedMilestone.project.siteManagerId ? [updatedMilestone.project.siteManagerId] : [], notificationPayload);
+      await triggerNotification(
+        updatedMilestone.project.siteManagerId
+          ? [updatedMilestone.project.siteManagerId]
+          : [],
+        notificationPayload,
+      );
     }
 
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
-  })
+  });
 
   return {
     milestoneWasPhotoRequired: Boolean(milestone?.isPhotoRequired),

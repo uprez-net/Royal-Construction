@@ -42,7 +42,10 @@ export function verifyConnectSignature(
       continue;
     }
     const actual = Buffer.from(presented);
-    if (actual.length === expected.length && timingSafeEqual(actual, expected)) {
+    if (
+      actual.length === expected.length &&
+      timingSafeEqual(actual, expected)
+    ) {
       matched = true;
     }
   }

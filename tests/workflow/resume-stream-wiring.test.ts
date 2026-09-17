@@ -38,16 +38,35 @@ function routeFiles(): string[] {
 test("resume-stream opens only the run the caller's capability grants", () => {
   const source = read(RESUME_STREAM);
 
-  const verified = /const (\w+) = verifyRunCapability\(\s*capability\s*,\s*user\.id\s*\)/.exec(source);
-  assert.ok(verified, "the path segment is not verified against the signed-in user");
+  const verified =
+    /const (\w+) = verifyRunCapability\(\s*capability\s*,\s*user\.id\s*\)/.exec(
+      source,
+    );
+  assert.ok(
+    verified,
+    "the path segment is not verified against the signed-in user",
+  );
   const runId = verified[1];
 
-  const refusal = new RegExp(`if \\(!${runId}\\) \\{\\s*return Response\\.json\\([^)]*\\{ status: 404 \\}`);
-  const refusedAt = indexIn(source, refusal, "a 404 when the capability grants nothing");
+  const refusal = new RegExp(
+    `if \\(!${runId}\\) \\{\\s*return Response\\.json\\([^)]*\\{ status: 404 \\}`,
+  );
+  const refusedAt = indexIn(
+    source,
+    refusal,
+    "a 404 when the capability grants nothing",
+  );
   const streamedAt = indexIn(source, /getRun\(/, "a getRun call");
-  assert.ok(verified.index < refusedAt && refusedAt < streamedAt, "the run is opened before the capability is checked");
+  assert.ok(
+    verified.index < refusedAt && refusedAt < streamedAt,
+    "the run is opened before the capability is checked",
+  );
 
-  assert.match(source, new RegExp(`getRun\\(${runId}\\)`), "getRun is not given the verified run id");
+  assert.match(
+    source,
+    new RegExp(`getRun\\(${runId}\\)`),
+    "getRun is not given the verified run id",
+  );
   assert.doesNotMatch(source, /getRun\(\s*capability\s*\)/);
 });
 
@@ -69,7 +88,11 @@ test("no other route streams a run or returns a bare run id", () => {
   for (const file of routeFiles()) {
     const source = readFileSync(join(process.cwd(), file), "utf8");
     if (/\bgetRun\b/.test(source)) {
-      assert.equal(file, join(RESUME_STREAM), `${file} opens a run without the capability check`);
+      assert.equal(
+        file,
+        join(RESUME_STREAM),
+        `${file} opens a run without the capability check`,
+      );
     }
     assert.doesNotMatch(source, BARE_RUN_ID, `${file} returns the bare run id`);
   }

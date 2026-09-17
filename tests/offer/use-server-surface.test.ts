@@ -37,8 +37,12 @@ function directives(source: string): string[] {
 }
 
 test("the directive reader sees a use-server prologue, even after comments", () => {
-  assert.deepEqual(directives(`"use server";\nimport x from "y";`), ["use server"]);
-  assert.deepEqual(directives(`// why\n/* more */\n'use server'\n`), ["use server"]);
+  assert.deepEqual(directives(`"use server";\nimport x from "y";`), [
+    "use server",
+  ]);
+  assert.deepEqual(directives(`// why\n/* more */\n'use server'\n`), [
+    "use server",
+  ]);
   assert.deepEqual(directives(`import "server-only";\n"use server";`), []);
 });
 

@@ -22,7 +22,10 @@ export function ProjectDetailActions({
         size="lg"
         onClick={() =>
           dispatch(
-            openModal({ type: "addUpdate", payload: { projectId, milestones } }),
+            openModal({
+              type: "addUpdate",
+              payload: { projectId, milestones },
+            }),
           )
         }
       >
@@ -35,7 +38,9 @@ export function ProjectDetailActions({
         variant="outline"
         size="lg"
         onClick={() =>
-          dispatch(openModal({ type: "createVariation", payload: { projectId } }))
+          dispatch(
+            openModal({ type: "createVariation", payload: { projectId } }),
+          )
         }
       >
         <FilePlus2 aria-hidden="true" />

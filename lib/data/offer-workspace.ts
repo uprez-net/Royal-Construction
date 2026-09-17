@@ -15,10 +15,7 @@ import {
   createDocusignContext,
   type DocusignContext,
 } from "@/lib/docusign/client";
-import {
-  getEnvelopeStatus,
-  voidEnvelope,
-} from "@/lib/docusign/void-envelope";
+import { getEnvelopeStatus, voidEnvelope } from "@/lib/docusign/void-envelope";
 import {
   LIVE_ENVELOPE_STATUSES,
   readRefusedVoid,
@@ -650,7 +647,8 @@ export async function saveOfferWorkspace(input: {
   // as pending after another tab sent it could otherwise change the cost lines
   // and reprice an issued offer. An accepted save still writes the frozen parts
   // as stored, so a tab's hydrated form of them never moves the price.
-  const storedStatus = storedRow.offerStatus.toLowerCase() as OfferWorkspaceStatus;
+  const storedStatus =
+    storedRow.offerStatus.toLowerCase() as OfferWorkspaceStatus;
   let storedState: PersistedOfferWorkspaceState | null = null;
   if (storedRow.workspaceState !== null) {
     try {

@@ -84,9 +84,13 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
     };
   });
 
-  const topSource = [...analytics.sourceData].sort((a, b) => b.value - a.value)[0];
+  const topSource = [...analytics.sourceData].sort(
+    (a, b) => b.value - a.value,
+  )[0];
   const latestMonth = analytics.monthlyTrend.at(-1);
-  const topLostReason = [...analytics.lostReasons].sort((a, b) => b.value - a.value)[0];
+  const topLostReason = [...analytics.lostReasons].sort(
+    (a, b) => b.value - a.value,
+  )[0];
 
   return (
     <div className="analytics-view">
@@ -101,7 +105,11 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
       <div className="analytics-summary" aria-label="Lead analytics summary">
         <div>
           <span>Top source</span>
-          <strong>{topSource ? `${topSource.name} (${topSource.value})` : "No source data"}</strong>
+          <strong>
+            {topSource
+              ? `${topSource.name} (${topSource.value})`
+              : "No source data"}
+          </strong>
         </div>
         <div>
           <span>Latest month</span>
@@ -114,7 +122,9 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
         <div>
           <span>Top lost reason</span>
           <strong>
-            {topLostReason ? `${topLostReason.name} (${topLostReason.value})` : "No lost reason data"}
+            {topLostReason
+              ? `${topLostReason.name} (${topLostReason.value})`
+              : "No lost reason data"}
           </strong>
         </div>
       </div>
@@ -178,7 +188,11 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="0%" stopColor={CHART.lead} stopOpacity={0.15} />
+                    <stop
+                      offset="0%"
+                      stopColor={CHART.lead}
+                      stopOpacity={0.15}
+                    />
                     <stop
                       offset="100%"
                       stopColor={CHART.lead}
@@ -192,7 +206,11 @@ export default function AnalyticsView({ analytics }: AnalyticsViewProps) {
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="0%" stopColor={CHART.success} stopOpacity={0.15} />
+                    <stop
+                      offset="0%"
+                      stopColor={CHART.success}
+                      stopOpacity={0.15}
+                    />
                     <stop
                       offset="100%"
                       stopColor={CHART.success}

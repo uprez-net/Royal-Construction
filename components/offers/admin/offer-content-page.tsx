@@ -23,7 +23,10 @@ import { OfferCardHeading } from "@/components/offers/new-workflow/offer-workspa
 import { FilePenLine } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
 import { BulletListEditor } from "./shared/bullet-list-editor";
-import { EXCLUSION_BULLET_UNDO_TOAST_ID, INCLUSION_BULLET_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
+import {
+  EXCLUSION_BULLET_UNDO_TOAST_ID,
+  INCLUSION_BULLET_UNDO_TOAST_ID,
+} from "./shared/undo-toast-ids";
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (

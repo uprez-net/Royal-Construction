@@ -5,10 +5,13 @@ import { saveContractParticularsInputSchema } from "@/agent/lib/offer-contracts"
 import { saveAuthorizedContractParticulars } from "@/agent/lib/offer-operations";
 
 export default defineTool({
-  description: "Save bounded BC4 contract particulars on one exact active CONTRACT_DRAFT. These values are frozen into the legal envelope; require owner approval.",
+  description:
+    "Save bounded BC4 contract particulars on one exact active CONTRACT_DRAFT. These values are frozen into the legal envelope; require owner approval.",
   inputSchema: saveContractParticularsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
   label: { start: () => "Save contract particulars" },
-  execute(input, ctx) { return saveAuthorizedContractParticulars(ctx, input); },
+  execute(input, ctx) {
+    return saveAuthorizedContractParticulars(ctx, input);
+  },
 });

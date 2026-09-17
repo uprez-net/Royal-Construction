@@ -364,9 +364,7 @@ test("the plans clock starts at the meeting, not at the outreach", () => {
     false,
   );
   assert.ok(
-    resolvedTypes(result).includes(
-      ComplianceAlertType.ARCHITECT_PLANS_OVERDUE,
-    ),
+    resolvedTypes(result).includes(ComplianceAlertType.ARCHITECT_PLANS_OVERDUE),
   );
 });
 
@@ -565,9 +563,7 @@ test("a type-only deliverable is settled by a document of that type", () => {
         ],
       }),
     ] as never,
-    documents: [
-      document(ComplianceDocumentType.TRAFFIC_CONTROL_PLAN),
-    ] as never,
+    documents: [document(ComplianceDocumentType.TRAFFIC_CONTROL_PLAN)] as never,
   });
 
   const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
@@ -859,9 +855,7 @@ test("a design nobody has put to the developer is not chased", () => {
   const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
 
   assert.ok(
-    resolvedTypes(result).includes(
-      ComplianceAlertType.DEVELOPER_PLANS_OVERDUE,
-    ),
+    resolvedTypes(result).includes(ComplianceAlertType.DEVELOPER_PLANS_OVERDUE),
   );
 });
 
@@ -877,9 +871,7 @@ test("a bushfire revision past its threshold chases the consultant", () => {
   const result = assessOverdueConditions(file, TWELVE_WORKING_DAYS_LATER);
 
   assert.ok(
-    raisedTypes(result).includes(
-      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
-    ),
+    raisedTypes(result).includes(ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE),
   );
 });
 
@@ -903,15 +895,10 @@ test("the revision clock runs from the refusal, not from the engagement", () => 
     ] as never,
   });
 
-  const result = assessOverdueConditions(
-    file,
-    sydney("2026-06-19T09:00:00"),
-  );
+  const result = assessOverdueConditions(file, sydney("2026-06-19T09:00:00"));
 
   assert.equal(
-    raisedTypes(result).includes(
-      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
-    ),
+    raisedTypes(result).includes(ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE),
     false,
   );
 });
@@ -943,7 +930,10 @@ test("a revision that has been answered stops being chased", () => {
 test("a file with no developer raises neither of their alerts", () => {
   // Most jobs. The lot is not in a covenanted estate, nobody is ever asked, and
   // an alert here would be permanent on every project in the system.
-  const result = assessOverdueConditions(engagement(), TWELVE_WORKING_DAYS_LATER);
+  const result = assessOverdueConditions(
+    engagement(),
+    TWELVE_WORKING_DAYS_LATER,
+  );
 
   assert.equal(
     raisedTypes(result).includes(
@@ -952,9 +942,7 @@ test("a file with no developer raises neither of their alerts", () => {
     false,
   );
   assert.equal(
-    raisedTypes(result).includes(
-      ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE,
-    ),
+    raisedTypes(result).includes(ComplianceAlertType.BUSHFIRE_REVISION_OVERDUE),
     false,
   );
 });
@@ -996,7 +984,11 @@ test("the clock restarts from the round the application was last lodged in", () 
       application({
         appliedAt: MONDAY,
         submissions: [
-          { round: 2, submittedAt: TWELVE_WORKING_DAYS_LATER, applicationRef: null },
+          {
+            round: 2,
+            submittedAt: TWELVE_WORKING_DAYS_LATER,
+            applicationRef: null,
+          },
           { round: 1, submittedAt: MONDAY, applicationRef: null },
         ],
       }),

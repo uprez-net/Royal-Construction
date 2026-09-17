@@ -108,7 +108,10 @@ test("a positive stored value is authoritative and is never recomputed", () => {
 test("a manual override is carried through the derivation", () => {
   // Given a revision the estimator capped at $600k
   const state = storedState(
-    makeSnapshot({ selectedPriceInput: "600000", overrideReason: "Client cap" }),
+    makeSnapshot({
+      selectedPriceInput: "600000",
+      overrideReason: "Client cap",
+    }),
   );
 
   // When the stored column is the old blank-override $0

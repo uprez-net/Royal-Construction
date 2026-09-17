@@ -410,8 +410,7 @@ export function ComplianceDocumentRow({
                       <p className="break-all">{file.filename}</p>
                       {sentBack ? (
                         <p className="border-t border-background/25 pt-1 text-background/80">
-                          Sent back by {sentBackBy}:{" "}
-                          {document?.rejectionReason}
+                          Sent back by {sentBackBy}: {document?.rejectionReason}
                         </p>
                       ) : null}
                     </TooltipContent>

@@ -50,7 +50,10 @@ export const paginationSchema = z.object({
     .number()
     .int("Limit must be an integer")
     .positive("Limit must be greater than 0")
-    .max(PAGINATION_DEFAULTS.maxLimit, `Limit cannot exceed ${PAGINATION_DEFAULTS.maxLimit}`)
+    .max(
+      PAGINATION_DEFAULTS.maxLimit,
+      `Limit cannot exceed ${PAGINATION_DEFAULTS.maxLimit}`,
+    )
     .default(PAGINATION_DEFAULTS.limit),
 });
 
@@ -60,15 +63,9 @@ export type PaginationInput = z.infer<typeof paginationSchema>;
  * Search pagination schema - pagination + searchable query
  */
 export const searchPaginationSchema = paginationSchema.extend({
-  search: z
-    .string()
-    .trim()
-    .default(""),
+  search: z.string().trim().default(""),
 
-  q: z
-    .string()
-    .trim()
-    .default(""),
+  q: z.string().trim().default(""),
 });
 
 export type SearchPaginationInput = z.infer<typeof searchPaginationSchema>;
@@ -179,18 +176,15 @@ export const dateRangeSchema = z
     startDate: optionalIsoDateSchema,
     endDate: optionalIsoDateSchema,
   })
-  .refine(
-    (data) => {
-      if (!data.startDate || !data.endDate) return true;
+  .refine((data) => {
+    if (!data.startDate || !data.endDate) return true;
 
-      const startTime = Date.parse(data.startDate);
-      const endTime = Date.parse(data.endDate);
+    const startTime = Date.parse(data.startDate);
+    const endTime = Date.parse(data.endDate);
 
-      if (Number.isNaN(startTime) || Number.isNaN(endTime)) return false;
-      return startTime <= endTime;
-    },
-    "Start date must be before end date"
-  );
+    if (Number.isNaN(startTime) || Number.isNaN(endTime)) return false;
+    return startTime <= endTime;
+  }, "Start date must be before end date");
 
 export type DateRange = z.infer<typeof dateRangeSchema>;
 
@@ -205,7 +199,7 @@ export type DateRange = z.infer<typeof dateRangeSchema>;
 export const coerceIntSchema = z.coerce
   .number()
   .int("Must be an integer")
-  .optional()
+  .optional();
 
 /**
  * Safely coerce string numbers to floats
@@ -214,7 +208,7 @@ export const coerceIntSchema = z.coerce
 export const coerceNumberSchema = z.coerce
   .number()
   .finite("Must be a finite number")
-  .optional()
+  .optional();
 
 /**
  * Positive integer (common for IDs, counts)
@@ -235,8 +229,10 @@ export const nonNegativeSchema = z.coerce
 /** Accept values representable as whole cents without exact float equality. */
 export function hasAtMostTwoDecimalPlaces(value: number): boolean {
   const scaled = value * 100;
-  return Math.abs(scaled - Math.round(scaled)) <=
-    Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8;
+  return (
+    Math.abs(scaled - Math.round(scaled)) <=
+    Number.EPSILON * Math.max(1, Math.abs(scaled)) * 8
+  );
 }
 
 // ============================================================================
@@ -263,10 +259,7 @@ export const emailSchema = z
 /**
  * URL validator
  */
-export const urlSchema = z
-  .string()
-  .trim()
-  .url("Invalid URL");
+export const urlSchema = z.string().trim().url("Invalid URL");
 
 /**
  * Phone number validator (basic - non-empty string)
@@ -289,9 +282,9 @@ export const phoneSchema = z
 export const coerceBoolSchema = z
   .union([
     z.boolean(),
-    z.enum(["true", "false", "1", "0"]).transform((val) =>
-      val === "true" || val === "1"
-    ),
+    z
+      .enum(["true", "false", "1", "0"])
+      .transform((val) => val === "true" || val === "1"),
   ])
   .default(false);
 
@@ -304,7 +297,7 @@ export const coerceBoolSchema = z
  * Returns undefined instead of throwing on invalid enum
  */
 export function safeEnumSchema<T extends Record<string, string | number>>(
-  enumObj: T
+  enumObj: T,
 ): z.ZodType<T[keyof T] | undefined> {
   return z.nativeEnum(enumObj).optional();
 }
@@ -313,7 +306,7 @@ export function safeEnumSchema<T extends Record<string, string | number>>(
  * Create optional enum validator
  */
 export function optionalEnumSchema<T extends Record<string, string | number>>(
-  enumObj: T
+  enumObj: T,
 ): z.ZodType<T[keyof T] | undefined | null> {
   return z
     .union([z.nativeEnum(enumObj), z.literal(""), z.null()])
@@ -345,7 +338,9 @@ export const validationErrorSchema = z.object({
 /**
  * Standard paginated list response wrapper
  */
-export const paginatedResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
+export const paginatedResponseSchema = <T extends z.ZodTypeAny>(
+  itemSchema: T,
+) =>
   z.object({
     data: z.array(itemSchema),
     pagination: z.object({
@@ -365,7 +360,7 @@ export const paginatedResponseSchema = <T extends z.ZodTypeAny>(itemSchema: T) =
  */
 export function parseSearchParams(
   url: URL,
-  schema: z.ZodSchema
+  schema: z.ZodSchema,
 ): ReturnType<typeof schema.safeParse> {
   const obj: Record<string, string | string[] | undefined> = {};
 
@@ -373,7 +368,9 @@ export function parseSearchParams(
     if (obj[key]) {
       // Handle multiple values for same key
       const existing = obj[key];
-      obj[key] = Array.isArray(existing) ? [...existing, value] : [existing as string, value];
+      obj[key] = Array.isArray(existing)
+        ? [...existing, value]
+        : [existing as string, value];
     } else {
       obj[key] = value;
     }
@@ -387,7 +384,7 @@ export function parseSearchParams(
  */
 export function parseRouteParams(
   params: Record<string, string | string[] | undefined>,
-  schema: z.ZodSchema
+  schema: z.ZodSchema,
 ): ReturnType<typeof schema.safeParse> {
   return schema.safeParse(params);
 }
@@ -397,10 +394,9 @@ export function parseRouteParams(
  */
 export async function safeParseBody<T extends z.ZodSchema>(
   request: NextRequest,
-  schema: T
+  schema: T,
 ): Promise<
-  | { success: true; data: z.infer<T> }
-  | { success: false; error: z.ZodError }
+  { success: true; data: z.infer<T> } | { success: false; error: z.ZodError }
 > {
   try {
     const body: unknown = await request.json();

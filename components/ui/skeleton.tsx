@@ -1,5 +1,5 @@
-import type { ReactNode } from "react"
-import { cn } from "@/lib/utils"
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -12,7 +12,7 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
       )}
       {...props}
     />
-  )
+  );
 }
 
 function PageSkeleton({
@@ -32,7 +32,7 @@ function PageSkeleton({
       <span className="sr-only">{label}</span>
       {children}
     </div>
-  )
+  );
 }
 
 function MetricCardSkeleton() {
@@ -45,21 +45,15 @@ function MetricCardSkeleton() {
       </div>
       <Skeleton className="h-5 w-12 rounded-md" />
     </div>
-  )
+  );
 }
 
-function skeletonTableRows(
-  columnCount: number,
-  rowCount = 5,
-): ReactNode[][] {
+function skeletonTableRows(columnCount: number, rowCount = 5): ReactNode[][] {
   return Array.from({ length: rowCount }, (_, row) =>
     Array.from({ length: columnCount }, (_, col) => (
-      <Skeleton
-        key={`${row}-${col}`}
-        className="h-4 w-full max-w-28"
-      />
+      <Skeleton key={`${row}-${col}`} className="h-4 w-full max-w-28" />
     )),
-  )
+  );
 }
 
-export { Skeleton, PageSkeleton, MetricCardSkeleton, skeletonTableRows }
+export { Skeleton, PageSkeleton, MetricCardSkeleton, skeletonTableRows };

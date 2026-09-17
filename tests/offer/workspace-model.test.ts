@@ -52,9 +52,13 @@ assert.deepEqual(
   ],
 );
 
-const updatedAllowances = updateOfferScopeItems(INITIAL_ALLOWANCES, "allowance-1", {
-  amount: 9500,
-});
+const updatedAllowances = updateOfferScopeItems(
+  INITIAL_ALLOWANCES,
+  "allowance-1",
+  {
+    amount: 9500,
+  },
+);
 
 assert.equal(updatedAllowances[0]?.amount, 9500);
 assert.equal(INITIAL_ALLOWANCES[0]?.amount, 8500);
@@ -63,10 +67,7 @@ assert.equal(updatedAllowances[1], INITIAL_ALLOWANCES[1]);
 // A fresh offer keeps the full cost-schedule structure but starts at $0 — no
 // sample figures (see INITIAL_COST_BY_TASK).
 assert.equal(INITIAL_COST_LINES.length, 71);
-assert.equal(
-  INITIAL_COST_LINES.filter((line) => line.costExGst > 0).length,
-  0,
-);
+assert.equal(INITIAL_COST_LINES.filter((line) => line.costExGst > 0).length, 0);
 assert.ok(INITIAL_COST_LINES.every((line) => line.costExGst === 0));
 
 const slabLine = INITIAL_COST_LINES.find((line) => line.itemName === "SLAB");
@@ -98,5 +99,7 @@ const blankMappedLine = applyTaskMappingToCostLine(
   "PLUMBER",
 );
 assert.equal(blankMappedLine.itemName, "PLUMBER");
-assert.ok(blankMappedLine.buildingSequenceTasks.includes("Stormwater plumbing"));
+assert.ok(
+  blankMappedLine.buildingSequenceTasks.includes("Stormwater plumbing"),
+);
 assert.ok(blankMappedLine.offerTenderLineItem.includes("final vanity/kitchen"));

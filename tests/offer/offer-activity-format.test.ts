@@ -50,17 +50,23 @@ test("REGRESSION: a completed envelope reads as signed, with the id aside", () =
 });
 
 test("a signature over a withdrawn envelope says it was kept aside", () => {
-  assert.deepEqual(formatActivityNote(unexpectedCompletionNote(ENVELOPE, "Tender")), {
-    text: "Tender signed after it was withdrawn — kept aside, not filed as the signed copy",
-    envelopeId: ENVELOPE,
-  });
+  assert.deepEqual(
+    formatActivityNote(unexpectedCompletionNote(ENVELOPE, "Tender")),
+    {
+      text: "Tender signed after it was withdrawn — kept aside, not filed as the signed copy",
+      envelopeId: ENVELOPE,
+    },
+  );
 });
 
 test("a decline over a withdrawn envelope says so", () => {
-  assert.deepEqual(formatActivityNote(unexpectedDeclineNote(ENVELOPE, "Contract")), {
-    text: "Contract declined after it was withdrawn",
-    envelopeId: ENVELOPE,
-  });
+  assert.deepEqual(
+    formatActivityNote(unexpectedDeclineNote(ENVELOPE, "Contract")),
+    {
+      text: "Contract declined after it was withdrawn",
+      envelopeId: ENVELOPE,
+    },
+  );
 });
 
 // These events are filed under the offer's current status, so an old Tender
@@ -69,14 +75,14 @@ test("a decline over a withdrawn envelope says so", () => {
 test("REGRESSION: a withdrawn-envelope entry names the document it was", () => {
   for (const document of ["Offer acceptance", "Tender", "Contract"]) {
     assert.ok(
-      formatActivityNote(unexpectedDeclineNote(ENVELOPE, document)).text.startsWith(
-        `${document} declined`,
-      ),
+      formatActivityNote(
+        unexpectedDeclineNote(ENVELOPE, document),
+      ).text.startsWith(`${document} declined`),
     );
     assert.ok(
-      formatActivityNote(unexpectedCompletionNote(ENVELOPE, document)).text.startsWith(
-        `${document} signed`,
-      ),
+      formatActivityNote(
+        unexpectedCompletionNote(ENVELOPE, document),
+      ).text.startsWith(`${document} signed`),
     );
   }
 });
@@ -95,13 +101,19 @@ test("every other note passes through unchanged", () => {
     "Declined via DocuSign: the price is too high",
     "DOCUSIGN_COMPLETEDX 123: not a webhook prefix",
   ]) {
-    assert.deepEqual(formatActivityNote(note), { text: note, envelopeId: null });
+    assert.deepEqual(formatActivityNote(note), {
+      text: note,
+      envelopeId: null,
+    });
   }
 });
 
 test("the timeline formats event notes instead of printing them raw", () => {
   const panel = readFileSync(
-    join(process.cwd(), "components/offers/new-workflow/offer-workspace-activity.tsx"),
+    join(
+      process.cwd(),
+      "components/offers/new-workflow/offer-workspace-activity.tsx",
+    ),
     "utf8",
   );
 

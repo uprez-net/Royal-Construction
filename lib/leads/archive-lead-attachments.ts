@@ -1,15 +1,15 @@
-import { createHash } from 'node:crypto';
-import { put } from '@vercel/blob';
+import { createHash } from "node:crypto";
+import { put } from "@vercel/blob";
 
-import prisma from '@/lib/prisma';
-import { saveFile } from '@/lib/data/file';
-import { getAllAdminUsersIds } from '@/lib/data/user';
+import prisma from "@/lib/prisma";
+import { saveFile } from "@/lib/data/file";
+import { getAllAdminUsersIds } from "@/lib/data/user";
 import type {
   LeadAttachmentReport,
   LeadAttachmentSource,
-} from '@/lib/graph/lead-attachments';
-import { withGraphRetry } from '@/lib/graph/retry';
-import { buildBlobPath } from '@/utils/formatters';
+} from "@/lib/graph/lead-attachments";
+import { withGraphRetry } from "@/lib/graph/retry";
+import { buildBlobPath } from "@/utils/formatters";
 
 /**
  * `File.uploadedBy` is a required relation, but nobody uploaded these — they
@@ -23,7 +23,10 @@ async function resolveUploaderId(): Promise<string | null> {
     const [adminId] = await getAllAdminUsersIds();
     return adminId ?? null;
   } catch (error) {
-    console.error('  Failed to resolve an uploader for lead attachments:', error);
+    console.error(
+      "  Failed to resolve an uploader for lead attachments:",
+      error,
+    );
     return null;
   }
 }
@@ -37,9 +40,9 @@ async function resolveUploaderId(): Promise<string | null> {
  * already there.
  */
 function deterministicFileId(leadId: number, attachmentId: string): string {
-  const digest = createHash('sha256')
+  const digest = createHash("sha256")
     .update(`lead:${leadId}:attachment:${attachmentId}`)
-    .digest('hex');
+    .digest("hex");
 
   // Shaped as a UUID so it reads like every other File id in the table.
   return [
@@ -48,7 +51,7 @@ function deterministicFileId(leadId: number, attachmentId: string): string {
     digest.slice(12, 16),
     digest.slice(16, 20),
     digest.slice(20, 32),
-  ].join('-');
+  ].join("-");
 }
 
 /**
@@ -108,7 +111,7 @@ export async function archiveLeadAttachments(
         buildBlobPath({ fileId, fileName: file.name, leadId: String(leadId) }),
         data,
         {
-          access: 'public',
+          access: "public",
           // The path is already unique through fileId, and a suffix here would
           // break the `leads/<id>/<fileId>-` shape the delete path checks for.
           addRandomSuffix: false,

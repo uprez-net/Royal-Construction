@@ -100,34 +100,34 @@ test("imports a SAMPLE QUOTE workbook", async () => {
     homeWarrantyHbcfFixed: 8500,
     impactFeeFixed: 0,
     loadingChargePercentage: 0,
-});
-assert.equal(result.areaBasis.groundFloorSqm, 110);
-assert.equal(result.areaBasis.firstFloorSqm, 90);
-assert.equal(result.areaCalculator.slabCost, 31020);
-assert.equal(result.areaCalculator.steel, 10000);
-assert.equal(result.areaCalculator.installer, 15000);
-assert.ok(
-  result.validationMessages.some((message) =>
-    message.includes("SAMPLE QUOTE J83 has #REF!"),
-  ),
-);
-assert.ok(
-  result.validationMessages.some((message) =>
-    message.includes("label says 20% but workbook formula implies 16%"),
-  ),
-);
-assert.deepEqual(result.ignoredProjectFields, [
-  "Actual",
-  "Difference",
-  "Comments and References",
-  "INVOICE NO",
-  "TRADES",
-  "COST EXCLUDE GST",
-  "GST 10%",
-  "COST INCLUDED GST",
-  "TOTAL COST INCLUDING GST",
-  "PAYMENTS",
-]);
+  });
+  assert.equal(result.areaBasis.groundFloorSqm, 110);
+  assert.equal(result.areaBasis.firstFloorSqm, 90);
+  assert.equal(result.areaCalculator.slabCost, 31020);
+  assert.equal(result.areaCalculator.steel, 10000);
+  assert.equal(result.areaCalculator.installer, 15000);
+  assert.ok(
+    result.validationMessages.some((message) =>
+      message.includes("SAMPLE QUOTE J83 has #REF!"),
+    ),
+  );
+  assert.ok(
+    result.validationMessages.some((message) =>
+      message.includes("label says 20% but workbook formula implies 16%"),
+    ),
+  );
+  assert.deepEqual(result.ignoredProjectFields, [
+    "Actual",
+    "Difference",
+    "Comments and References",
+    "INVOICE NO",
+    "TRADES",
+    "COST EXCLUDE GST",
+    "GST 10%",
+    "COST INCLUDED GST",
+    "TOTAL COST INCLUDING GST",
+    "PAYMENTS",
+  ]);
 });
 
 const v2QuoteRows = makeRows(160);
@@ -173,7 +173,10 @@ test("imports a v2 QUOTE workbook", async () => {
     { name: "SETTINGS", rows: v2SettingsRows },
   ]);
 
-  const v2Result = parseRoyalQuoteWorkbook(v2Workbook, "quote template v2.xlsx");
+  const v2Result = parseRoyalQuoteWorkbook(
+    v2Workbook,
+    "quote template v2.xlsx",
+  );
 
   assert.deepEqual(
     v2Result.costLines.map((line) => ({
@@ -209,12 +212,12 @@ test("imports a v2 QUOTE workbook", async () => {
     homeWarrantyHbcfFixed: 0,
     impactFeeFixed: 0,
     loadingChargePercentage: 0,
-});
-assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);
-assert.equal(v2Result.areaBasis.firstFloorSqm, 170.35);
-assert.equal(v2Result.areaBasis.alfrescoSqm, 27.5);
-assert.equal(v2Result.areaBasis.porchSqm, 8.5);
-assert.deepEqual(v2Result.validationMessages, []);
+  });
+  assert.equal(v2Result.areaBasis.groundFloorSqm, 202.2);
+  assert.equal(v2Result.areaBasis.firstFloorSqm, 170.35);
+  assert.equal(v2Result.areaBasis.alfrescoSqm, 27.5);
+  assert.equal(v2Result.areaBasis.porchSqm, 8.5);
+  assert.deepEqual(v2Result.validationMessages, []);
 });
 
 /**
@@ -228,7 +231,9 @@ async function buildWorkbookGrid(
   const { Workbook } = await loadExcelJs();
   const workbook = new Workbook();
   for (const sheet of sheets) {
-    workbook.addWorksheet(sheet.name).addRows(sheet.rows.map((row) => [...row]));
+    workbook
+      .addWorksheet(sheet.name)
+      .addRows(sheet.rows.map((row) => [...row]));
   }
 
   return readWorkbookGrid(await workbook.xlsx.writeBuffer());

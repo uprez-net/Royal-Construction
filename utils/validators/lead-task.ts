@@ -53,7 +53,10 @@ export function parseLeadIdsParam(raw: string | null): LeadIdsParam {
 
   const parts = raw.split(",").map((p) => p.trim());
   if (parts.some((p) => p === "")) {
-    return { ok: false, error: "leadIds must be a comma-separated list of ids" };
+    return {
+      ok: false,
+      error: "leadIds must be a comma-separated list of ids",
+    };
   }
   if (parts.some((p) => !/^\d+$/.test(p))) {
     return { ok: false, error: "leadIds must contain only numeric ids" };

@@ -80,7 +80,9 @@ const consentDocument = {
 // ---------------------------------------------------------------------------
 
 test("an open DA condition freezes the checklist", () => {
-  const blocked = checklistBlockedReason(engagement({ alerts: daAlert as never }));
+  const blocked = checklistBlockedReason(
+    engagement({ alerts: daAlert as never }),
+  );
 
   assert.ok(blocked);
   // The sentence is read by the card and thrown by the review send, so it has

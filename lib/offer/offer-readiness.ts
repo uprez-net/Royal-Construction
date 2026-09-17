@@ -1,4 +1,3 @@
-
 // Pure, framework-agnostic readiness helpers for the Offer phase: how close an
 // offer's validity is to expiring, and the enumerated blockers that stand
 // between the current draft and an email to the client. Kept side-effect free so
@@ -22,7 +21,11 @@ const EXPIRY_SOON_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).getTime();
 }
 
 // Parse an HTML date-input value ("YYYY-MM-DD") to a local day, or null.
@@ -62,7 +65,10 @@ export function describeOfferExpiry(
     return {
       state: "soon",
       daysRemaining,
-      label: daysRemaining === 1 ? "Expires tomorrow" : `Expires in ${daysRemaining} days`,
+      label:
+        daysRemaining === 1
+          ? "Expires tomorrow"
+          : `Expires in ${daysRemaining} days`,
     };
   }
   return { state: "valid", daysRemaining, label: `Valid until ${validUntil}` };
@@ -139,7 +145,8 @@ export function collectOfferSendBlockers({
   if (expiryState === "expired") {
     blockers.push({
       id: "expired",
-      label: "This offer's validity date has passed — extend it before sending an expired fixed price.",
+      label:
+        "This offer's validity date has passed — extend it before sending an expired fixed price.",
       stepId: "offer-step-job-setup",
       severity: "warn",
     });

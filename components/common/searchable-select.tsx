@@ -232,7 +232,9 @@ export function SearchableSelect({
                       [
                         item.email ? `Email: ${item.email}\n` : null,
                         item.phone ? `Phone: ${item.phone}\n` : null,
-                        item.role ? `Role: ${roleLabelConverter(item.role as Role)}\n` : null,
+                        item.role
+                          ? `Role: ${roleLabelConverter(item.role as Role)}\n`
+                          : null,
                         item.company ? `Company: ${item.company}\n` : null,
                         item.tradeType ? `Trade: ${item.tradeType}\n` : null,
                         item.location ? `Location: ${item.location}\n` : null,

@@ -48,8 +48,11 @@ export function OfferWorkspaceImages({
   >({});
   const [error, setError] = useState<string | null>(null);
   const [dropboxBusy, setDropboxBusy] = useState(false);
-  const { configured: dropboxConfigured, ready: dropboxReady, choose } =
-    useDropboxChooser();
+  const {
+    configured: dropboxConfigured,
+    ready: dropboxReady,
+    choose,
+  } = useDropboxChooser();
 
   async function handleGenerate(key: OfferImageSlotKey) {
     setError(null);
@@ -186,7 +189,11 @@ export function OfferWorkspaceImages({
                   />
                 ) : (
                   <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
-                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image yet"}
+                    {busy
+                      ? "Uploading…"
+                      : aiPending
+                        ? "Generating…"
+                        : "No image yet"}
                   </span>
                 )}
                 {isAi ? (

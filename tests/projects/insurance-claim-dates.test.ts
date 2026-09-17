@@ -11,7 +11,8 @@ import {
 import { projectExtractionSchema } from "../../lib/agent/projectExtraction-validators";
 
 function milestone(
-  overrides: Partial<MilestoneStageInfo> & Pick<MilestoneStageInfo, "id" | "order">,
+  overrides: Partial<MilestoneStageInfo> &
+    Pick<MilestoneStageInfo, "id" | "order">,
 ): MilestoneStageInfo {
   return {
     parentId: null,

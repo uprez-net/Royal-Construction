@@ -1042,7 +1042,10 @@ export function NewOfferWorkspace({
   // revision it was forked from. Show the loaded revision's own, as the mount
   // load does.
   const stampRevisionLabel = useCallback(
-    (loaded: { readonly reference: string; readonly revisionNumber: number }) => {
+    (loaded: {
+      readonly reference: string;
+      readonly revisionNumber: number;
+    }) => {
       setJob((current) => ({
         ...current,
         reference: loaded.reference.replace(/-R\d+$/, ""),

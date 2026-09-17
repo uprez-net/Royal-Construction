@@ -1,4 +1,3 @@
-
 import { TradiesClient } from "@/components/tradies/tradies-client";
 import { getTradies } from "@/lib/data/tradies";
 import { getTradieCoordinationDashboard } from "@/lib/data/tradie-dashboard";
@@ -7,7 +6,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Tradie Scheduling & Coordination",
-  description: "Manage and coordinate your tradies effectively for seamless project execution.",
+  description:
+    "Manage and coordinate your tradies effectively for seamless project execution.",
 };
 
 export default async function TradiePage() {
@@ -22,5 +22,7 @@ export default async function TradiePage() {
     getTradieCoordinationDashboard({ page: 1, limit: 10 }),
   ]);
 
-  return <TradiesClient initialTradies={tradies} initialDashboard={coordination} />;
+  return (
+    <TradiesClient initialTradies={tradies} initialDashboard={coordination} />
+  );
 }

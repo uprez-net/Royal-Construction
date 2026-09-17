@@ -50,7 +50,6 @@ import { MilestoneStatus, ProjectStage } from "@prisma/client";
 
 import { MilestoneCard } from "./milestone-tab/milestone-card";
 
-
 interface LedgerStage {
   stage: ProjectStage;
   label: string;
@@ -104,7 +103,9 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
           <span className="font-mono tabular-nums">
             {shortDate(new Date(next.activity.targetDate))}
           </span>
-          {ledgerStage.blockedBy ? ` · after ${ledgerStage.blockedBy.label}` : null}
+          {ledgerStage.blockedBy
+            ? ` · after ${ledgerStage.blockedBy.label}`
+            : null}
         </span>
       </>
     );
@@ -140,7 +141,8 @@ function NextUp({ ledgerStage }: { ledgerStage: LedgerStage }) {
 }
 
 function StageStatusPill({ state }: { state: StageState }) {
-  if (state === "complete") return <StatusPill tone="success">Complete</StatusPill>;
+  if (state === "complete")
+    return <StatusPill tone="success">Complete</StatusPill>;
   if (state === "active") return <StatusPill tone="warning">Active</StatusPill>;
   return <StatusPill tone="neutral">Upcoming</StatusPill>;
 }
@@ -181,20 +183,22 @@ export function ProjectMilestonesTab({
     const states = populated.map((entry) => stageState(entry.milestones));
     const workingIndex = findWorkingStageIndex(states);
 
-    const rows: LedgerStage[] = populated.map(({ stage, milestones }, index) => {
-      const { percentage, claim } = stageClaims[stage];
+    const rows: LedgerStage[] = populated.map(
+      ({ stage, milestones }, index) => {
+        const { percentage, claim } = stageClaims[stage];
 
-      return {
-        stage,
-        label: PROJECT_STAGE_LABELS[stage] ?? stage,
-        percentage,
-        claim,
-        milestones,
-        state: states[index],
-        isWorkable: index === workingIndex,
-        blockedBy: null,
-      };
-    });
+        return {
+          stage,
+          label: PROJECT_STAGE_LABELS[stage] ?? stage,
+          percentage,
+          claim,
+          milestones,
+          state: states[index],
+          isWorkable: index === workingIndex,
+          blockedBy: null,
+        };
+      },
+    );
 
     // A gated stage names the stage in front of it, which is the one currently
     // being worked — not simply the row above, which may itself be complete.
@@ -211,7 +215,9 @@ export function ProjectMilestonesTab({
   const [openStages, setOpenStages] = useState<ProjectStage[]>(() =>
     workingStage ? [workingStage.stage] : [],
   );
-  const [stagesShowingDone, setStagesShowingDone] = useState<ProjectStage[]>([]);
+  const [stagesShowingDone, setStagesShowingDone] = useState<ProjectStage[]>(
+    [],
+  );
 
   const toggleStage = (stage: ProjectStage) =>
     setOpenStages((open) =>
@@ -296,7 +302,10 @@ export function ProjectMilestonesTab({
     );
   };
 
-  const handleStatusUpdate = (milestoneId: string, status?: MilestoneStatus) => {
+  const handleStatusUpdate = (
+    milestoneId: string,
+    status?: MilestoneStatus,
+  ) => {
     dispatch(
       openModal({
         type: "updateMilestoneStatus",
@@ -538,13 +547,15 @@ export function ProjectMilestonesTab({
                                       />
                                       <span>
                                         <span className="font-medium text-foreground">
-                                          Opens when {ledgerStage.blockedBy?.label}{" "}
-                                          is complete
+                                          Opens when{" "}
+                                          {ledgerStage.blockedBy?.label} is
+                                          complete
                                         </span>
                                         {ledgerStage.blockedBy
                                           ? ` · ${
                                               stageRollup(
-                                                ledgerStage.blockedBy.milestones,
+                                                ledgerStage.blockedBy
+                                                  .milestones,
                                               ).remaining
                                             } ${ledgerStage.blockedBy.label} activities to go`
                                           : null}
@@ -560,7 +571,10 @@ export function ProjectMilestonesTab({
                                       handleAddMilestone(ledgerStage.stage)
                                     }
                                   >
-                                    <Plus className="size-4" aria-hidden="true" />
+                                    <Plus
+                                      className="size-4"
+                                      aria-hidden="true"
+                                    />
                                     Add activity
                                     <span className="sr-only">
                                       to {ledgerStage.label}
@@ -586,7 +600,9 @@ export function ProjectMilestonesTab({
                                         onStatusUpdate={handleStatusUpdate}
                                         onStartMilestone={handleStartMilestone}
                                         onSendReminder={handleSendReminder}
-                                        onOpenViewPicture={handleOpenViewPicture}
+                                        onOpenViewPicture={
+                                          handleOpenViewPicture
+                                        }
                                         onMarkasNotRequired={
                                           handleMarkAsNotRequired
                                         }

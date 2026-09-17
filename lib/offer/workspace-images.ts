@@ -29,13 +29,37 @@ export type AttachedOfferImageSlot = OfferImageSlot & {
 };
 
 export const OFFER_IMAGE_SLOTS: readonly OfferImageSlot[] = [
-  { key: "hero", label: "Hero — completed home / render", caption: "Cover image" },
-  { key: "exterior", label: "Exterior — full render facade", caption: "Completed facade" },
-  { key: "render", label: "3D perspective — render", caption: "Architect render" },
-  { key: "kitchen", label: "Kitchen & butler's pantry", caption: "Shaker kitchen, stone island" },
+  {
+    key: "hero",
+    label: "Hero — completed home / render",
+    caption: "Cover image",
+  },
+  {
+    key: "exterior",
+    label: "Exterior — full render facade",
+    caption: "Completed facade",
+  },
+  {
+    key: "render",
+    label: "3D perspective — render",
+    caption: "Architect render",
+  },
+  {
+    key: "kitchen",
+    label: "Kitchen & butler's pantry",
+    caption: "Shaker kitchen, stone island",
+  },
   { key: "living", label: "Living & open plan", caption: "Open plan living" },
-  { key: "bedroom", label: "Master bedroom & ensuite", caption: "Freestanding bath, FTC tiles" },
-  { key: "bathroom", label: "Second bathroom", caption: "Stone vanity, arched mirrors" },
+  {
+    key: "bedroom",
+    label: "Master bedroom & ensuite",
+    caption: "Freestanding bath, FTC tiles",
+  },
+  {
+    key: "bathroom",
+    label: "Second bathroom",
+    caption: "Stone vanity, arched mirrors",
+  },
 ];
 
 export const EMPTY_OFFER_IMAGES: OfferImageMap = {};
@@ -64,6 +88,9 @@ export function setOfferImage(
 }
 
 // Human-readable caption suffix for a slot, honest about AI-generated concepts.
-export function offerImageCaption(base: string, source?: OfferImageSource): string {
+export function offerImageCaption(
+  base: string,
+  source?: OfferImageSource,
+): string {
   return source === "ai" ? `${base} — AI concept, indicative only` : base;
 }

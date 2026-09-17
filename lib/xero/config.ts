@@ -73,7 +73,7 @@ export const XERO_SCOPES = [
   "email",
   "offline_access",
   "accounting.contacts",
-  "accounting.invoices"
+  "accounting.invoices",
 ] as const;
 
 export function getXeroConfig(): XeroConfig {
@@ -87,7 +87,9 @@ export function getXeroConfig(): XeroConfig {
     .filter(([, value]) => !value)
     .map(([name]) => name);
   if (missing.length > 0) {
-    throw new Error(`Xero is not configured — missing env: ${missing.join(", ")}`);
+    throw new Error(
+      `Xero is not configured — missing env: ${missing.join(", ")}`,
+    );
   }
 
   return {

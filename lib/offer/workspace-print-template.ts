@@ -131,7 +131,11 @@ export function buildOfferPrintTemplateData({
       amount: selectedPrice * row.percentOfContract,
     })),
     preparedDateLabel: formatDateDisplay(preparedDate ?? new Date()),
-    priceLine: getPriceLine(selectedPrice, standardPriceIncGst, priceAdjustmentLabel),
+    priceLine: getPriceLine(
+      selectedPrice,
+      standardPriceIncGst,
+      priceAdjustmentLabel,
+    ),
     savingAmount,
     scopeRows: allowances
       .filter((item) => item.includedInOfferDocument)
@@ -240,7 +244,8 @@ export function formatSiteParticulars(
 }
 
 export function formatDateDisplay(value: Date | string): string {
-  const date = typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
+  const date =
+    typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
 
   if (!Number.isFinite(date.getTime())) {
     return typeof value === "string" ? value : "-";

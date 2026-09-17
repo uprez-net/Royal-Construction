@@ -1,7 +1,11 @@
 import prisma from "@/lib/prisma";
 import { Role, type Prisma, type User } from "@prisma/client";
 
-const INTERNAL_ROLES = new Set<Role>([Role.ADMIN, Role.SITE_MANAGER, Role.GUEST]);
+const INTERNAL_ROLES = new Set<Role>([
+  Role.ADMIN,
+  Role.SITE_MANAGER,
+  Role.GUEST,
+]);
 
 export class LeadAccessError extends Error {
   constructor(
@@ -58,4 +62,3 @@ export async function assertCanAccessLead(
 
   return lead;
 }
-

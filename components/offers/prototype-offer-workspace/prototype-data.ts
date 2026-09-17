@@ -301,7 +301,11 @@ export function isDuplex(kind: PrototypeBuildKind): boolean {
 
 // ── Workflow steps ─────────────────────────────────────────────────────────
 
-export type PrototypeStepState = "complete" | "incomplete" | "active" | "locked";
+export type PrototypeStepState =
+  | "complete"
+  | "incomplete"
+  | "active"
+  | "locked";
 
 export type PrototypeStep = {
   readonly id: string;

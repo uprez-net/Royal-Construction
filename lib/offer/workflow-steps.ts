@@ -37,7 +37,12 @@ export const OFFER_WORKFLOW_STEPS: readonly OfferWorkflowStep[] = [
     phase: "offer",
     sectionId: "offer-step-pricing",
   },
-  { id: "scope", label: "Scope", phase: "offer", sectionId: "offer-step-scope" },
+  {
+    id: "scope",
+    label: "Scope",
+    phase: "offer",
+    sectionId: "offer-step-scope",
+  },
   {
     id: "offer-document",
     label: "Offer document",
@@ -124,6 +129,7 @@ export function currentOfferStepId(
 // The step a send blocker points at, so the readiness strip can select it.
 export function stepIdForSectionId(sectionId: string): OfferStepId | null {
   return (
-    OFFER_WORKFLOW_STEPS.find((step) => step.sectionId === sectionId)?.id ?? null
+    OFFER_WORKFLOW_STEPS.find((step) => step.sectionId === sectionId)?.id ??
+    null
   );
 }

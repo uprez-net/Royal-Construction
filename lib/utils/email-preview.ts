@@ -1,5 +1,5 @@
 export function getEditablePreviewHtml(html: string): string {
-  if (!html) return '';
+  if (!html) return "";
 
   return `<!DOCTYPE html>
 <html>

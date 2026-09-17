@@ -1,4 +1,8 @@
-import { MetricCardSkeleton, PageSkeleton, Skeleton } from "@/components/ui/skeleton";
+import {
+  MetricCardSkeleton,
+  PageSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
 
 export function LeadsContentSkeleton() {
   return (

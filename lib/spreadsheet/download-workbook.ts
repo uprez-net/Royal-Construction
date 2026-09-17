@@ -27,7 +27,9 @@ export async function downloadWorkbook(
 
   for (const sheet of sheets) {
     // ExcelJS mutates the arrays it is handed, so pass it copies.
-    workbook.addWorksheet(sheet.name).addRows(sheet.rows.map((row) => [...row]));
+    workbook
+      .addWorksheet(sheet.name)
+      .addRows(sheet.rows.map((row) => [...row]));
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

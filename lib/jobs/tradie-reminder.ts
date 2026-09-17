@@ -3,7 +3,10 @@ import { TradieScheduleStatus } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 
-export async function sendTradieReminders(): Promise<{ processed: number; skipped: number }> {
+export async function sendTradieReminders(): Promise<{
+  processed: number;
+  skipped: number;
+}> {
   const targetDate = addDays(startOfDay(new Date()), 7);
   const windowStart = startOfDay(targetDate);
   const windowEnd = endOfDay(targetDate);
@@ -21,7 +24,9 @@ export async function sendTradieReminders(): Promise<{ processed: number; skippe
     },
   });
 
-  const actionable = schedules.filter((schedule) => schedule.reminderSentAt === null);
+  const actionable = schedules.filter(
+    (schedule) => schedule.reminderSentAt === null,
+  );
   const skipped = schedules.length - actionable.length;
 
   await prisma.$transaction(async (tx) => {

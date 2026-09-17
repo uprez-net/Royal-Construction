@@ -91,7 +91,10 @@ test("banked copy no longer promises deals in negotiation", async () => {
 
 test("the live lead detail UI uses the shared likelihood parser", async () => {
   const { readFileSync } = await import("node:fs");
-  const tab = readFileSync("components/leads/detail/lead-overview-tab.tsx", "utf8");
+  const tab = readFileSync(
+    "components/leads/detail/lead-overview-tab.tsx",
+    "utf8",
+  );
   // `Number(x) || 0` turns a typo into a real 0% forecast. It was fixed once in
   // the old detail modal and reappeared when that modal was replaced by this
   // full-page tab, so pin it here rather than relying on review.
@@ -99,8 +102,14 @@ test("the live lead detail UI uses the shared likelihood parser", async () => {
     !/Number\(\s*(form\.)?probabilityOverride\s*\)\s*\|\|\s*0/.test(tab),
     "lead-overview-tab reintroduced the `Number(...) || 0` likelihood bug",
   );
-  assert.ok(tab.includes("parseLikelihood"), "lead-overview-tab should use parseLikelihood");
-  assert.ok(tab.includes("closureReasonCopy"), "lead-overview-tab should use stage-aware closure wording");
+  assert.ok(
+    tab.includes("parseLikelihood"),
+    "lead-overview-tab should use parseLikelihood",
+  );
+  assert.ok(
+    tab.includes("closureReasonCopy"),
+    "lead-overview-tab should use stage-aware closure wording",
+  );
 });
 
 /* ── the reason rule holds on every path ───────────────────────────── */
@@ -116,8 +125,14 @@ test("the offer path cannot put a lead in a closed stage without a reason", asyn
     offers.indexOf("OFFER_TO_LEAD_STATUS_UPDATE_MAP"),
     offers.indexOf("OFFER_STATE_MACHINE"),
   );
-  assert.ok(!/REJECTED:\s*"LOST"/.test(map), "REJECTED must not map straight to LOST");
-  assert.ok(!/:\s*"LOST"/.test(map), "no offer status may map a lead to LOST without a reason");
+  assert.ok(
+    !/REJECTED:\s*"LOST"/.test(map),
+    "REJECTED must not map straight to LOST",
+  );
+  assert.ok(
+    !/:\s*"LOST"/.test(map),
+    "no offer status may map a lead to LOST without a reason",
+  );
 });
 
 test("lead-write MCP tools report failures as errors", async () => {
@@ -130,7 +145,10 @@ test("lead-write MCP tools report failures as errors", async () => {
     const at = mcp.indexOf(`Error ${verb}`);
     assert.ok(at > -1, `no catch found for "${verb}"`);
     const before = mcp.slice(Math.max(0, at - 400), at);
-    assert.ok(before.includes("isError: true"), `"${verb}" catch is missing isError: true`);
+    assert.ok(
+      before.includes("isError: true"),
+      `"${verb}" catch is missing isError: true`,
+    );
   }
 });
 
@@ -141,8 +159,14 @@ test("a lead on a hidden stage still gets an option to render", () => {
   // still set them. Without an item to match, Radix renders the trigger blank
   // — its placeholder only covers "" and undefined.
   for (const hidden of ["Won", "Cancelled"] as const) {
-    assert.ok(!LEAD_STAGE_OPTIONS.includes(hidden), `${hidden} should be hidden`);
-    assert.ok(stageOptionsFor(hidden).includes(hidden), `${hidden} must render`);
+    assert.ok(
+      !LEAD_STAGE_OPTIONS.includes(hidden),
+      `${hidden} should be hidden`,
+    );
+    assert.ok(
+      stageOptionsFor(hidden).includes(hidden),
+      `${hidden} must render`,
+    );
   }
 });
 
@@ -159,12 +183,18 @@ test("both stage pickers offer the same list", async () => {
   // LEAD_STAGE_OPTIONS. Won and Cancelled were settable from one and invisible
   // in the other.
   const { readFileSync } = await import("node:fs");
-  const badge = readFileSync("components/leads/detail/select-stage-badge.tsx", "utf8");
+  const badge = readFileSync(
+    "components/leads/detail/select-stage-badge.tsx",
+    "utf8",
+  );
   assert.ok(
     !/Object\.keys\(STAGE_STYLES\)/.test(badge),
     "badge picker is building its own stage list again",
   );
-  assert.ok(/stageOptionsFor\(/.test(badge), "badge picker should share stageOptionsFor");
+  assert.ok(
+    /stageOptionsFor\(/.test(badge),
+    "badge picker should share stageOptionsFor",
+  );
 });
 
 /* ── isQuotingStage ────────────────────────────────────────────────── */
@@ -177,7 +207,13 @@ test("a won deal keeps its offer link under either label", () => {
 });
 
 test("quoting stages still cover the open ladder, and nothing closed-lost", () => {
-  for (const open of ["In Follow-up", "Meeting Scheduled", "Qualified", "Quoted", "Negotiating"] as const) {
+  for (const open of [
+    "In Follow-up",
+    "Meeting Scheduled",
+    "Qualified",
+    "Quoted",
+    "Negotiating",
+  ] as const) {
     assert.ok(isQuotingStage(open), open);
   }
   for (const lost of ["Lost", "Cancelled", "Disqualified"] as const) {
@@ -205,15 +241,25 @@ test("a KPI cohort is recognised, a chip list is not", () => {
 
 test("the picker offers Discovery and no task stages", () => {
   assert.ok(LEAD_STAGE_OPTIONS.includes("Discovery"));
-  for (const gone of ["In Follow-up", "Meeting Scheduled", "Won", "Cancelled"] as const) {
-    assert.ok(!LEAD_STAGE_OPTIONS.includes(gone), `${gone} should not be selectable`);
+  for (const gone of [
+    "In Follow-up",
+    "Meeting Scheduled",
+    "Won",
+    "Cancelled",
+  ] as const) {
+    assert.ok(
+      !LEAD_STAGE_OPTIONS.includes(gone),
+      `${gone} should not be selectable`,
+    );
   }
 });
 
 test("the closed group is not named after one of its members", () => {
   // Disqualified is a stage inside it, so reusing the word would leave people
   // guessing whether a filter meant the group or the stage.
-  const closed = LEAD_STAGE_GROUPS.find((g) => g.stages.includes("Disqualified"));
+  const closed = LEAD_STAGE_GROUPS.find((g) =>
+    g.stages.includes("Disqualified"),
+  );
   assert.equal(closed?.label, "Closed");
   assert.deepEqual(closed?.stages, ["Disqualified", "Lost"]);
 });
@@ -234,13 +280,21 @@ test("No Response is grouped apart from the closed stages", () => {
 });
 
 test("groups and the flat list never drift", () => {
-  assert.deepEqual(LEAD_STAGE_GROUPS.flatMap((g) => g.stages), LEAD_STAGE_OPTIONS);
+  assert.deepEqual(
+    LEAD_STAGE_GROUPS.flatMap((g) => g.stages),
+    LEAD_STAGE_OPTIONS,
+  );
 });
 
 test("a lead on a retired stage still gets a rendered option", () => {
   // Rows hold these until the data migration has run everywhere, and Radix
   // renders the trigger blank when no item matches the value.
-  for (const retired of ["In Follow-up", "Meeting Scheduled", "Won", "Cancelled"] as const) {
+  for (const retired of [
+    "In Follow-up",
+    "Meeting Scheduled",
+    "Won",
+    "Cancelled",
+  ] as const) {
     assert.ok(stageOptionsFor(retired).includes(retired), retired);
     const groups = stageGroupsFor(retired);
     assert.ok(groups.flatMap((g) => g.stages).includes(retired), retired);
@@ -258,11 +312,22 @@ test("every live open stage can reach the offer", () => {
   // isQuotingStage gates "Check with Offer". It named the two retired stages
   // and never gained Discovery when they were replaced, which hid the button
   // from 33 of the 59 leads on staging: the whole stage where scoping happens.
-  for (const s of ["Discovery", "Qualified", "Quoted", "Negotiating"] as const) {
+  for (const s of [
+    "Discovery",
+    "Qualified",
+    "Quoted",
+    "Negotiating",
+  ] as const) {
     assert.ok(isQuotingStage(s), s);
   }
   // Too early to price, and closed-lost is not a quote.
-  for (const s of ["New", "Contacted", "Lost", "Disqualified", "No Response"] as const) {
+  for (const s of [
+    "New",
+    "Contacted",
+    "Lost",
+    "Disqualified",
+    "No Response",
+  ] as const) {
     assert.ok(!isQuotingStage(s), s);
   }
 });
@@ -272,7 +337,9 @@ test("every stage the picker offers is classified by every predicate", () => {
   // the ladder gained. Each option must be exactly one of open, won or lost.
   for (const stage of LEAD_STAGE_OPTIONS) {
     const buckets =
-      Number(isWonStage(stage)) + Number(isLostStage(stage)) + Number(!isTerminalStage(stage));
+      Number(isWonStage(stage)) +
+      Number(isLostStage(stage)) +
+      Number(!isTerminalStage(stage));
     assert.equal(buckets, 1, `${stage} is in ${buckets} buckets`);
   }
 });
@@ -303,12 +370,17 @@ test("every class the lead-page task row uses is actually defined", async () => 
   // pattern silently skipped it and only ever checked three of the four.
   const used = new Set<string>();
   for (const file of tsxFiles("components")) {
-    for (const m of readFileSync(file, "utf8").matchAll(/\btask-open-[a-z-]+/g)) {
+    for (const m of readFileSync(file, "utf8").matchAll(
+      /\btask-open-[a-z-]+/g,
+    )) {
       used.add(m[0]);
     }
   }
 
-  assert.ok(used.size >= 4, `expected the task row classes, found ${used.size}`);
+  assert.ok(
+    used.size >= 4,
+    `expected the task row classes, found ${used.size}`,
+  );
   for (const cls of used) {
     // Bounded, not `css.includes(".task-open-note")` — a substring check calls
     // the class defined when all the stylesheet has is `.task-open-note-x`,

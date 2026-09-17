@@ -22,26 +22,27 @@ export function ProjectFilters({
 }: ProjectFiltersProps) {
   const dispatch = useAppDispatch();
 
-  const filters: { label: string; value: ProjectFilterValue; count: number }[] = [
-    { label: "All", value: null, count: kpis.totalActive + kpis.completed },
-    // Before "Active", because it is before it: a job is in the pipeline until
-    // somebody starts a milestone on it. Three statuses under one chip — see
-    // PRE_CONSTRUCTION_FILTER, which is what the server matches it against.
-    {
-      label: "Pre-construction",
-      value: PRE_CONSTRUCTION_FILTER,
-      count: kpis.preConstruction,
-    },
-    { label: "Active", value: "ACTIVE", count: kpis.active },
-    { label: "On track", value: "ON_TRACK", count: kpis.onTrack },
-    {
-      label: "Needs attention",
-      value: "NEEDS_ATTENTION",
-      count: kpis.needsAttention,
-    },
-    { label: "Delayed", value: "DELAYED", count: kpis.delayed },
-    { label: "Completed", value: "COMPLETED", count: kpis.completed },
-  ];
+  const filters: { label: string; value: ProjectFilterValue; count: number }[] =
+    [
+      { label: "All", value: null, count: kpis.totalActive + kpis.completed },
+      // Before "Active", because it is before it: a job is in the pipeline until
+      // somebody starts a milestone on it. Three statuses under one chip — see
+      // PRE_CONSTRUCTION_FILTER, which is what the server matches it against.
+      {
+        label: "Pre-construction",
+        value: PRE_CONSTRUCTION_FILTER,
+        count: kpis.preConstruction,
+      },
+      { label: "Active", value: "ACTIVE", count: kpis.active },
+      { label: "On track", value: "ON_TRACK", count: kpis.onTrack },
+      {
+        label: "Needs attention",
+        value: "NEEDS_ATTENTION",
+        count: kpis.needsAttention,
+      },
+      { label: "Delayed", value: "DELAYED", count: kpis.delayed },
+      { label: "Completed", value: "COMPLETED", count: kpis.completed },
+    ];
 
   return (
     <div
@@ -68,7 +69,7 @@ export function ProjectFilters({
                 ? "border-primary bg-primary text-primary-foreground"
                 : isPreConstruction
                   ? "border-[color:var(--stage-3)] bg-[color:var(--stage-2)] text-foreground hover:bg-[color:var(--stage-3)]"
-                : "border-border bg-card text-foreground hover:bg-muted/40",
+                  : "border-border bg-card text-foreground hover:bg-muted/40",
             )}
           >
             {filter.label} ({filter.count})

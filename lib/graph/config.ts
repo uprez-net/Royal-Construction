@@ -1,5 +1,5 @@
-export type GraphMode = 'delegated' | 'app-only';
-export type GraphMailbox = 'business' | 'admin';
+export type GraphMode = "delegated" | "app-only";
+export type GraphMailbox = "business" | "admin";
 
 export interface GraphConfig {
   mailbox: GraphMailbox;
@@ -35,11 +35,11 @@ function requireEnv(name: string): string {
 }
 
 function parseMode(value: string | undefined): GraphMode {
-  if (!value || value === 'delegated' || value === 'app-only') {
-    return (value || 'delegated') as GraphMode;
+  if (!value || value === "delegated" || value === "app-only") {
+    return (value || "delegated") as GraphMode;
   }
 
-  throw new Error('GRAPH_MODE must be delegated or app-only');
+  throw new Error("GRAPH_MODE must be delegated or app-only");
 }
 
 function parseNumber(value: string | undefined, fallback: number): number {
@@ -60,7 +60,7 @@ function subscriptionResource(
   senderUpn: string | undefined,
   mailbox: GraphMailbox,
 ): string | undefined {
-  if (mode === 'delegated' && mailbox === 'business') {
+  if (mode === "delegated" && mailbox === "business") {
     return "/me/mailFolders('Inbox')/messages";
   }
 
@@ -77,30 +77,32 @@ function subscriptionResource(
  * deployment obvious instead of silently sending compliance mail from the
  * lead inbox.
  */
-export function getGraphConfig(mailbox: GraphMailbox = 'business'): GraphConfig {
+export function getGraphConfig(
+  mailbox: GraphMailbox = "business",
+): GraphConfig {
   const mode = parseMode(process.env.GRAPH_MODE);
-  const isAdmin = mailbox === 'admin';
+  const isAdmin = mailbox === "admin";
   const senderUpn = isAdmin
     ? process.env.BUSINESS_ADMIN_EMAIL || process.env.GRAPH_ADMIN_SENDER_UPN
     : process.env.BUSINESS_EMAIL || process.env.GRAPH_SENDER_UPN;
 
   if (isAdmin && !senderUpn?.trim()) {
     throw new Error(
-      'Missing admin Graph mailbox. Set BUSINESS_ADMIN_EMAIL or GRAPH_ADMIN_SENDER_UPN.',
+      "Missing admin Graph mailbox. Set BUSINESS_ADMIN_EMAIL or GRAPH_ADMIN_SENDER_UPN.",
     );
   }
 
   const webhookClientState = isAdmin
-    ? requireEnv('GRAPH_ADMIN_WEBHOOK_CLIENT_STATE')
-    : process.env.GRAPH_WEBHOOK_CLIENT_STATE || 'royal-leadgen-webhook';
+    ? requireEnv("GRAPH_ADMIN_WEBHOOK_CLIENT_STATE")
+    : process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook";
 
   if (
     isAdmin &&
     webhookClientState ===
-      (process.env.GRAPH_WEBHOOK_CLIENT_STATE || 'royal-leadgen-webhook')
+      (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
   ) {
     throw new Error(
-      'GRAPH_ADMIN_WEBHOOK_CLIENT_STATE must differ from the business client state.',
+      "GRAPH_ADMIN_WEBHOOK_CLIENT_STATE must differ from the business client state.",
     );
   }
 
@@ -111,19 +113,20 @@ export function getGraphConfig(mailbox: GraphMailbox = 'business'): GraphConfig 
   return {
     mailbox,
     mode,
-    tenantId: requireEnv('AZURE_TENANT_ID'),
-    clientId: requireEnv('AZURE_CLIENT_ID'),
-    clientSecret: requireEnv('AZURE_CLIENT_SECRET'),
+    tenantId: requireEnv("AZURE_TENANT_ID"),
+    clientId: requireEnv("AZURE_CLIENT_ID"),
+    clientSecret: requireEnv("AZURE_CLIENT_SECRET"),
     senderUpn,
     cc: isAdmin
       ? process.env.GRAPH_ADMIN_MAIL_CC || undefined
       : process.env.MAIL_ID_CC || undefined,
-    senderUserId: process.env.GRAPH_SENDER_USER_ID || '',
-    defaultRecipient: process.env.DEMO_RECIPIENT || 'your-recipient@contoso.com',
-    defaultSubject: process.env.DEMO_SUBJECT || 'Hello from Microsoft Graph',
+    senderUserId: process.env.GRAPH_SENDER_USER_ID || "",
+    defaultRecipient:
+      process.env.DEMO_RECIPIENT || "your-recipient@contoso.com",
+    defaultSubject: process.env.DEMO_SUBJECT || "Hello from Microsoft Graph",
     defaultBody:
       process.env.DEMO_BODY ||
-      'This message was sent using a TypeScript app and the Microsoft Graph API.',
+      "This message was sent using a TypeScript app and the Microsoft Graph API.",
     webhookClientState,
     webhookNotificationUrl: process.env.GRAPH_NOTIFICATION_URL,
     webhookSubscriptionResource:

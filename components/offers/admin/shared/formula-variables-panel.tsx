@@ -42,8 +42,8 @@ export function FormulaVariablesPanel({
           Rate constants
         </h4>
         <span className="text-xs text-muted-foreground">
-          Referenced by{" "}
-          <code className="font-mono">priceMode: formula</code> rows
+          Referenced by <code className="font-mono">priceMode: formula</code>{" "}
+          rows
         </span>
       </div>
       {entries.length === 0 ? (

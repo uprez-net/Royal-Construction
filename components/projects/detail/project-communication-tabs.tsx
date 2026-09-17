@@ -9,7 +9,9 @@ interface ProjectCommunicationTabsProps {
   project: ProjectDetail;
 }
 
-export function ProjectCommunicationTabs({ project }: ProjectCommunicationTabsProps) {
+export function ProjectCommunicationTabs({
+  project,
+}: ProjectCommunicationTabsProps) {
   const [emails, setEmails] = useState<LeadEmails[]>(project.lead.emails);
 
   const appendEmailToLead = (_leadId: number, email: LeadEmails) => {

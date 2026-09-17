@@ -6,10 +6,7 @@ import { toast } from "sonner";
 import { ModalShell } from "@/components/common/modal-shell";
 import { TaskForm } from "@/components/leads/task-form";
 import { Button } from "@/components/ui/button";
-import {
-  formatLeadTaskDue,
-  isTerminalStage,
-} from "@/lib/leads/lead-helpers";
+import { formatLeadTaskDue, isTerminalStage } from "@/lib/leads/lead-helpers";
 import { LEAD_TASK_TYPES } from "@/lib/leads/task-presets";
 import { completeTask, type LeadTaskRow } from "@/lib/leads/task-service";
 import type { Lead } from "@/lib/leads/types";
@@ -101,10 +98,7 @@ export function LeadTasksModal({
         ) : (
           <ul className="max-h-56 divide-y divide-border overflow-y-auto rounded-lg border border-border">
             {tasks.map((task) => (
-              <li
-                key={task.id}
-                className="flex items-center gap-3 px-3 py-2.5"
-              >
+              <li key={task.id} className="flex items-center gap-3 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">
                     {typeLabel(task.type)}{" "}

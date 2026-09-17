@@ -71,7 +71,8 @@ export function CreateVariationModal({
     const isCostValid = Number.isFinite(parsedCost) && parsedCost > 0;
 
     if (!trimmedDescription || !isCostValid) {
-      const message = "Enter a variation description and a cost impact above 0.";
+      const message =
+        "Enter a variation description and a cost impact above 0.";
       setSubmitError(message);
       toast.error(message);
       return;

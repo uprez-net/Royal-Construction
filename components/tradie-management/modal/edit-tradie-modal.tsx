@@ -98,7 +98,8 @@ export default function EditTradieModal({
   const changes = useMemo(() => {
     return Object.fromEntries(
       Object.entries(formData).filter(([key, value]) => {
-        const newValue = typeof value === "string" ? value?.trim() || null : value;
+        const newValue =
+          typeof value === "string" ? value?.trim() || null : value;
         const oldValue = tradie[key as keyof TradieDetails] || null;
 
         return newValue !== oldValue;

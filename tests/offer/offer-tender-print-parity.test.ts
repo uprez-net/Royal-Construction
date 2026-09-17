@@ -150,10 +150,18 @@ test("table construction matches the template", async () => {
     secondRow: measured[2],
   };
   // Gold header row, white bold text.
-  assert.equal(styles.header.background, "rgb(200, 169, 81)", "header fill #C8A951");
+  assert.equal(
+    styles.header.background,
+    "rgb(200, 169, 81)",
+    "header fill #C8A951",
+  );
   assert.equal(styles.header.color, "rgb(255, 255, 255)", "header text white");
   // Zebra restarts in every table and the FIRST data row is white.
-  assert.equal(styles.firstRow.background, "rgb(255, 255, 255)", "row 1 is white");
+  assert.equal(
+    styles.firstRow.background,
+    "rgb(255, 255, 255)",
+    "row 1 is white",
+  );
   if (styles.secondRow) {
     assert.equal(
       styles.secondRow.background,
@@ -164,9 +172,18 @@ test("table construction matches the template", async () => {
   // Asymmetric padding: 4/4/4/6pt (tcMar 80/80/80/120 twips). 1pt = 4/3 px.
   const pt = (value: string) => Number(value.replace("px", "")) * 0.75;
   assert.ok(Math.abs(pt(styles.firstRow.padTop) - 4) < 0.1, "4pt top padding");
-  assert.ok(Math.abs(pt(styles.firstRow.padRight) - 4) < 0.1, "4pt right padding");
-  assert.ok(Math.abs(pt(styles.firstRow.padBottom) - 4) < 0.1, "4pt bottom padding");
-  assert.ok(Math.abs(pt(styles.firstRow.padLeft) - 6) < 0.1, "6pt left padding");
+  assert.ok(
+    Math.abs(pt(styles.firstRow.padRight) - 4) < 0.1,
+    "4pt right padding",
+  );
+  assert.ok(
+    Math.abs(pt(styles.firstRow.padBottom) - 4) < 0.1,
+    "4pt bottom padding",
+  );
+  assert.ok(
+    Math.abs(pt(styles.firstRow.padLeft) - 6) < 0.1,
+    "6pt left padding",
+  );
 });
 
 // ─── Step 5: page-count truth ───────────────────────────────────────────────
@@ -223,4 +240,3 @@ test("no acceptance row is split across a page boundary", async () => {
     `pages overflow their A4 box: ${JSON.stringify(overflowing)}`,
   );
 });
-

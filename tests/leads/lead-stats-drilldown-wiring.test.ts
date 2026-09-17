@@ -10,12 +10,18 @@ import { test } from "node:test";
 // import it; this reads the source instead.
 
 const modal = readFileSync(
-  join(process.cwd(), "components/leads/modal-ui/lead-stats-drilldown-modal.tsx"),
+  join(
+    process.cwd(),
+    "components/leads/modal-ui/lead-stats-drilldown-modal.tsx",
+  ),
   "utf8",
 );
 
 test("a failed load is caught and kept as an error", () => {
-  const chain = modal.slice(modal.indexOf("fetchLeads("), modal.indexOf(".finally("));
+  const chain = modal.slice(
+    modal.indexOf("fetchLeads("),
+    modal.indexOf(".finally("),
+  );
   assert.match(chain, /\.catch\(\(err: unknown\) => \{/);
   assert.match(chain, /if \(!cancelled\) \{[\s\S]*setError\(/);
 });

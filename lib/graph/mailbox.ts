@@ -13,10 +13,10 @@
  * Used wherever BUSINESS_EMAIL is unset. Already the de facto default: the
  * email-trail call site has hardcoded the same literal since the trail existed.
  */
-export const DEFAULT_BUSINESS_EMAIL = 'info@royalconstructions.com.au';
+export const DEFAULT_BUSINESS_EMAIL = "info@royalconstructions.com.au";
 
 function normalize(email: string | null | undefined): string {
-  return (email ?? '').trim().toLowerCase();
+  return (email ?? "").trim().toLowerCase();
 }
 
 /**
@@ -34,8 +34,8 @@ export function ownMailboxes(): string[] {
     process.env.GRAPH_ADMIN_SENDER_UPN,
     // Comma-separated. The CC copy of our own outbound lands back in the
     // inbox looking exactly like an inbound enquiry.
-    ...(process.env.MAIL_ID_CC ?? '').split(','),
-    ...(process.env.GRAPH_ADMIN_MAIL_CC ?? '').split(','),
+    ...(process.env.MAIL_ID_CC ?? "").split(","),
+    ...(process.env.GRAPH_ADMIN_MAIL_CC ?? "").split(","),
     DEFAULT_BUSINESS_EMAIL,
   ];
 
@@ -76,5 +76,5 @@ export function resolveLeadEmail(
 
   const preferred = isOwnMailbox(sender) ? extracted : sender || extracted;
 
-  return isOwnMailbox(preferred) ? '' : preferred;
+  return isOwnMailbox(preferred) ? "" : preferred;
 }

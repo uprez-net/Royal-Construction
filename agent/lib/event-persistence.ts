@@ -7,7 +7,9 @@ import {
   setAgentSessionTitleIfMissing,
 } from "@/lib/data/agent-session-titles";
 
-const EVENT_SESSION_STATUS: Partial<Record<HookEvent["type"], AgentSessionStatus>> = {
+const EVENT_SESSION_STATUS: Partial<
+  Record<HookEvent["type"], AgentSessionStatus>
+> = {
   "session.started": AgentSessionStatus.ACTIVE,
   "session.waiting": AgentSessionStatus.WAITING,
   "session.completed": AgentSessionStatus.COMPLETED,
@@ -51,7 +53,9 @@ export function createAgentEventPersister(
       });
 
       if (session.ownerUserId !== owner.principalId) {
-        throw new Error("Agent session owner mismatch while persisting an Eve event.");
+        throw new Error(
+          "Agent session owner mismatch while persisting an Eve event.",
+        );
       }
 
       const inserted = await tx.agentSessionEvent.createMany({

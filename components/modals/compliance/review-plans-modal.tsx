@@ -165,7 +165,9 @@ export function ReviewPlansModal({
 
             {approved === "no" ? (
               <div className="space-y-2">
-                <Label htmlFor="plan-feedback">What do they want changed?</Label>
+                <Label htmlFor="plan-feedback">
+                  What do they want changed?
+                </Label>
                 <Textarea
                   id="plan-feedback"
                   rows={5}

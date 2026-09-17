@@ -627,16 +627,10 @@ export type ComplianceDeveloperApprovalRecord =
  * Tuesday" is a fact the file holds rather than one inferred from silence.
  */
 export function developerApprovalFor(
-  engagement:
-    | Pick<CertifierEngagementDetail, "outreaches">
-    | null
-    | undefined,
+  engagement: Pick<CertifierEngagementDetail, "outreaches"> | null | undefined,
   documentType: ComplianceDocumentType,
 ): ComplianceDeveloperApprovalRecord | null {
-  const developer = outreachForParty(
-    engagement,
-    CompliancePartyType.DEVELOPER,
-  );
+  const developer = outreachForParty(engagement, CompliancePartyType.DEVELOPER);
   if (!developer) return null;
 
   // `?? []` for the same reason `revisions` and `meetings` are read that way: the
@@ -691,10 +685,7 @@ export function developerApprovalFor(
  * refused set of plans must not let an application through to the portal.
  */
 export function hasDeveloperApproval(
-  engagement:
-    | Pick<CertifierEngagementDetail, "outreaches">
-    | null
-    | undefined,
+  engagement: Pick<CertifierEngagementDetail, "outreaches"> | null | undefined,
   documentType: ComplianceDocumentType,
 ): boolean {
   return (
@@ -727,9 +718,9 @@ export function hasDeveloperApproval(
  */
 export function developerPlansBlockedReason(
   engagement:
-    | Pick<CertifierEngagementDetail, "outreaches" | "documents"> & {
+    | (Pick<CertifierEngagementDetail, "outreaches" | "documents"> & {
         developerApprovalRequired: boolean | null;
-      }
+      })
     | null
     | undefined,
 ): string | null {
@@ -740,7 +731,8 @@ export function developerPlansBlockedReason(
   // older developer approval record is still present on the engagement.
   const plans = engagement.documents.find(
     (document) =>
-      document.documentType === ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
+      document.documentType ===
+      ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN,
   );
   if (plans && isNotRequired(plans.status)) return null;
 

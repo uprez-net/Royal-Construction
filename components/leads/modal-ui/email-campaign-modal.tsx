@@ -225,7 +225,10 @@ export function EmailCampaignModal({
       );
     } catch (error) {
       console.error("Campaign error:", error);
-      showToast("Failed to send the email campaign. Please try again.", "error");
+      showToast(
+        "Failed to send the email campaign. Please try again.",
+        "error",
+      );
     } finally {
       setSending(false);
       onClose();
@@ -479,7 +482,9 @@ export function EmailCampaignModal({
                   // allow-scripts that would let AI-generated markup run script
                   // in our origin — so sanitize the untrusted HTML first; the
                   // only script left to run is our trusted preview toolbar.
-                  srcDoc={getEditablePreviewHtml(DOMPurify.sanitize(hook.generatedHtml))}
+                  srcDoc={getEditablePreviewHtml(
+                    DOMPurify.sanitize(hook.generatedHtml),
+                  )}
                   className="w-full h-full"
                   title="Email Preview"
                   sandbox="allow-same-origin allow-scripts"

@@ -41,7 +41,10 @@ import {
   Coins,
 } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
-import { ALLOWANCE_UNDO_TOAST_ID, EXCLUSION_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
+import {
+  ALLOWANCE_UNDO_TOAST_ID,
+  EXCLUSION_UNDO_TOAST_ID,
+} from "./shared/undo-toast-ids";
 
 const ALLOWANCE_CATEGORIES: AllowanceCategory[] = [
   "package",
@@ -146,7 +149,12 @@ export function OfferScopePage() {
         />
 
         <ScopeSection
-          icon={<Ban className="size-4 text-royal-gold-ink-text" aria-hidden="true" />}
+          icon={
+            <Ban
+              className="size-4 text-royal-gold-ink-text"
+              aria-hidden="true"
+            />
+          }
           title="Exclusions"
           banner={{
             tone: "info",

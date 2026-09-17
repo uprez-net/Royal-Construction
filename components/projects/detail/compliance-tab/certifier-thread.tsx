@@ -251,69 +251,69 @@ export function CertifierThread({
       </div>
 
       {readOnly ? null : (
-      <div className="mt-3 shrink-0 border-t border-border/70 pt-3">
-        <Textarea
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder={`Write a message to the ${counterpartyLabel}…`}
-          rows={3}
-          aria-label={`Message to the ${counterpartyLabel}`}
-        />
-
-        {pending.length > 0 ? (
-          <ul className="mt-2 flex flex-wrap gap-2">
-            {pending.map((attachment) => (
-              <li key={attachment.fileId}>
-                <Badge variant="secondary" className="gap-1">
-                  <Paperclip className="size-3" aria-hidden="true" />
-                  {attachment.name}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <input
-            ref={attachmentInputRef}
-            type="file"
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleAttach(file);
-              event.target.value = "";
-            }}
+        <div className="mt-3 shrink-0 border-t border-border/70 pt-3">
+          <Textarea
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder={`Write a message to the ${counterpartyLabel}…`}
+            rows={3}
+            aria-label={`Message to the ${counterpartyLabel}`}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={isAttaching || isSending}
-            onClick={() => attachmentInputRef.current?.click()}
-          >
-            {isAttaching ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Paperclip className="size-4" aria-hidden="true" />
-            )}
-            Attach
-          </Button>
 
-          <Button
-            type="button"
-            size="sm"
-            disabled={isSending || !body.trim()}
-            onClick={() => void handleSend()}
-          >
-            {isSending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Send className="size-4" aria-hidden="true" />
-            )}
-            Send
-          </Button>
+          {pending.length > 0 ? (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {pending.map((attachment) => (
+                <li key={attachment.fileId}>
+                  <Badge variant="secondary" className="gap-1">
+                    <Paperclip className="size-3" aria-hidden="true" />
+                    {attachment.name}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleAttach(file);
+                event.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isAttaching || isSending}
+              onClick={() => attachmentInputRef.current?.click()}
+            >
+              {isAttaching ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Paperclip className="size-4" aria-hidden="true" />
+              )}
+              Attach
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSending || !body.trim()}
+              onClick={() => void handleSend()}
+            >
+              {isSending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Send className="size-4" aria-hidden="true" />
+              )}
+              Send
+            </Button>
+          </div>
         </div>
-      </div>
       )}
     </div>
   );

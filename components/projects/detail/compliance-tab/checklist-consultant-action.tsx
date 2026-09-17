@@ -119,7 +119,13 @@ export function ChecklistConsultantAction({
 
   if (!isAsked) {
     return (
-      <Button type="button" variant="outline" size="sm" disabled={isBusy} onClick={onConnect}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={isBusy}
+        onClick={onConnect}
+      >
         {isBusy ? (
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
         ) : (

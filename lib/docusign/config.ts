@@ -58,8 +58,10 @@ export function getDocusignConfig(): DocusignConfig {
     builderSignerEmail: builderSignerEmail as string,
     connectWebhookUrl: process.env.DOCUSIGN_CONNECT_WEBHOOK_URL ?? null,
     contractTemplateId: process.env.DOCUSIGN_CONTRACT_TEMPLATE_ID ?? null,
-    contractDefaultTemplateId: process.env.DOCUSIGN_CONTRACT__DEFAULT_TEMPLATE_ID ?? null,
-    contractMultipleOwnersTemplateId: process.env.DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID ?? null,
+    contractDefaultTemplateId:
+      process.env.DOCUSIGN_CONTRACT__DEFAULT_TEMPLATE_ID ?? null,
+    contractMultipleOwnersTemplateId:
+      process.env.DOCUSIGN_CONTRACT__MULTIPLE_TEMPLATE_ID ?? null,
   };
 }
 

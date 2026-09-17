@@ -185,10 +185,7 @@ test("compareSignedAndStartDates returns 'unparseable' when both are null", () =
 test("compareSignedAndStartDates normalizes OCR formats before comparing", () => {
   // Signed date in long form, start date in yyyy-MM-dd — both should normalize
   // to the same canonical day for comparison.
-  const result = compareSignedAndStartDates(
-    "12th June 2026",
-    "2026-06-15",
-  );
+  const result = compareSignedAndStartDates("12th June 2026", "2026-06-15");
   assert.equal(result.state, "ok");
   assert.equal(result.normalizedSignedDate, "2026-06-12");
   assert.equal(result.normalizedStartDate, "2026-06-15");

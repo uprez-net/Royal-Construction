@@ -170,8 +170,8 @@ export function DeveloperApprovalBlock({
       ) : required === false ? (
         <>
           <p className="mt-2 text-sm text-muted-foreground">
-            Recorded as not needed on this lot. Nothing is waiting on anybody for
-            it.
+            Recorded as not needed on this lot. Nothing is waiting on anybody
+            for it.
           </p>
           <Button
             type="button"

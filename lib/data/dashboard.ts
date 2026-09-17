@@ -6,39 +6,39 @@ import type { DashboardKPI } from "@/types/dashboard";
 import prisma from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import {
-    startOfMonth,
-    subMonths,
-    startOfQuarter,
-    subQuarters,
-    isPast,
-    isToday
+  startOfMonth,
+  subMonths,
+  startOfQuarter,
+  subQuarters,
+  isPast,
+  isToday,
 } from "date-fns";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import { calculateTrend } from "@/utils/formatters";
 import { getUserByClerkId } from "@/lib/data/user";
 
 type DashboardKPIQueryResult = {
-    follow_ups_count: bigint;
+  follow_ups_count: bigint;
 
-    current_month_projects: bigint;
+  current_month_projects: bigint;
 
-    current_month_leads: bigint;
-    previous_month_leads: bigint;
+  current_month_leads: bigint;
+  previous_month_leads: bigint;
 
-    current_month_converted_leads: bigint;
-    previous_month_converted_leads: bigint;
+  current_month_converted_leads: bigint;
+  previous_month_converted_leads: bigint;
 
-    active_projects: bigint;
-    active_site_managers: bigint;
+  active_projects: bigint;
+  active_site_managers: bigint;
 
-    current_quarter_revenue: number | null;
-    previous_quarter_revenue: number | null;
+  current_quarter_revenue: number | null;
+  previous_quarter_revenue: number | null;
 
-    current_quarter_estimated_spend: number | null;
-    previous_quarter_estimated_spend: number | null;
+  current_quarter_estimated_spend: number | null;
+  previous_quarter_estimated_spend: number | null;
 
-    current_quarter_actual_spend: number | null;
-    previous_quarter_actual_spend: number | null;
+  current_quarter_actual_spend: number | null;
+  previous_quarter_actual_spend: number | null;
 };
 
 /**
@@ -47,22 +47,22 @@ type DashboardKPIQueryResult = {
  * @throws Error if user is not authenticated or if database queries fail
  */
 export async function getDashboardKPIData(): Promise<DashboardKPI> {
-    try {
-        const { userId } = await auth();
+  try {
+    const { userId } = await auth();
 
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
 
-        const now = new Date();
+    const now = new Date();
 
-        const currentMonthStart = startOfMonth(now);
-        const previousMonthStart = startOfMonth(subMonths(now, 1));
+    const currentMonthStart = startOfMonth(now);
+    const previousMonthStart = startOfMonth(subMonths(now, 1));
 
-        const currentQuarterStart = startOfQuarter(now);
-        const previousQuarterStart = startOfQuarter(subQuarters(now, 1));
+    const currentQuarterStart = startOfQuarter(now);
+    const previousQuarterStart = startOfQuarter(subQuarters(now, 1));
 
-        const [result] = await prisma.$queryRaw<DashboardKPIQueryResult[]>`
+    const [result] = await prisma.$queryRaw<DashboardKPIQueryResult[]>`
             WITH lead_stats AS (
                 SELECT
                     COUNT(*) FILTER (
@@ -167,77 +167,67 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
             CROSS JOIN milestone_stats;
             `;
 
-        const currentRevenue = Number(result.current_quarter_revenue);
-        const previousRevenue = Number(result.previous_quarter_revenue);
+    const currentRevenue = Number(result.current_quarter_revenue);
+    const previousRevenue = Number(result.previous_quarter_revenue);
 
-        const currentEstimatedSpend = Number(
-            result.current_quarter_estimated_spend
-        );
+    const currentEstimatedSpend = Number(
+      result.current_quarter_estimated_spend,
+    );
 
-        const previousEstimatedSpend = Number(
-            result.previous_quarter_estimated_spend
-        );
+    const previousEstimatedSpend = Number(
+      result.previous_quarter_estimated_spend,
+    );
 
-        const currentActualSpend = Number(
-            result.current_quarter_actual_spend
-        );
+    const currentActualSpend = Number(result.current_quarter_actual_spend);
 
-        const previousActualSpend = Number(
-            result.previous_quarter_actual_spend
-        );
+    const previousActualSpend = Number(result.previous_quarter_actual_spend);
 
-        const currentProfit = currentRevenue - currentActualSpend;
-        const previousProfit = previousRevenue - previousActualSpend;
+    const currentProfit = currentRevenue - currentActualSpend;
+    const previousProfit = previousRevenue - previousActualSpend;
 
-        return {
-            followUpsCount: Number(result.follow_ups_count),
+    return {
+      followUpsCount: Number(result.follow_ups_count),
 
-            newProjectsCount: Number(result.current_month_projects),
+      newProjectsCount: Number(result.current_month_projects),
 
-            newLeadsThisMonth: calculateTrend(
-                Number(result.current_month_leads),
-                Number(result.previous_month_leads)
-            ),
+      newLeadsThisMonth: calculateTrend(
+        Number(result.current_month_leads),
+        Number(result.previous_month_leads),
+      ),
 
-            newLeadsConvertedThisMonth: calculateTrend(
-                Number(result.current_month_converted_leads),
-                Number(result.previous_month_converted_leads)
-            ),
+      newLeadsConvertedThisMonth: calculateTrend(
+        Number(result.current_month_converted_leads),
+        Number(result.previous_month_converted_leads),
+      ),
 
-            revenueThisQuarter: calculateTrend(
-                currentRevenue,
-                previousRevenue
-            ),
+      revenueThisQuarter: calculateTrend(currentRevenue, previousRevenue),
 
-            netProfitThisQuarter: calculateTrend(
-                currentProfit,
-                previousProfit
-            ),
+      netProfitThisQuarter: calculateTrend(currentProfit, previousProfit),
 
-            activeProjects: {
-                total: Number(result.active_projects),
-                trendDelta: 0,
-            },
+      activeProjects: {
+        total: Number(result.active_projects),
+        trendDelta: 0,
+      },
 
-            activeSiteManagers: {
-                total: Number(result.active_site_managers),
-                trendDelta: 0,
-            },
+      activeSiteManagers: {
+        total: Number(result.active_site_managers),
+        trendDelta: 0,
+      },
 
-            estimateProjectSpendingThisQuarter: calculateTrend(
-                currentEstimatedSpend,
-                previousEstimatedSpend
-            ),
+      estimateProjectSpendingThisQuarter: calculateTrend(
+        currentEstimatedSpend,
+        previousEstimatedSpend,
+      ),
 
-            actualProjectSpendingThisQuarter: calculateTrend(
-                currentActualSpend,
-                previousActualSpend
-            ),
-        };
-    } catch (error) {
-        console.error("Error fetching dashboard KPI data:", error);
-        throw new Error("Failed to fetch dashboard KPI data");
-    }
+      actualProjectSpendingThisQuarter: calculateTrend(
+        currentActualSpend,
+        previousActualSpend,
+      ),
+    };
+  } catch (error) {
+    console.error("Error fetching dashboard KPI data:", error);
+    throw new Error("Failed to fetch dashboard KPI data");
+  }
 }
 /**
  * Gets follow-up items for the dashboard, showing leads that are either in the follow-up stage or have a follow-up date that is due. Requires user authentication and returns items with status indicators based on due dates.
@@ -245,55 +235,53 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
  * @throws Error if user is not authenticated or if database queries fail
  */
 export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
-    try {
-        const { userId } = await auth();
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
-        const user = await getUserByClerkId(userId);
-        if (!user) {
-            throw new Error("Unauthorized");
-        }
-
-        const now = new Date();
-
-        const followUps = await prisma.lead.findMany({
-            where: {
-                OR: [
-                    {
-                        assignedId: user.id,
-                        followupCompletedAt: null,
-                        followupDate: {
-                            lte: now,
-                        },
-                    }
-                ]
-            },
-            orderBy: {
-                followupDate: "desc",
-            },
-        });
-
-        return followUps.map((lead) => ({
-            id: lead.id,
-            customerName: lead.name,
-            projectName: lead.location,
-            description: lead.notes ?? "No additional details",
-            dueAt: lead.followupDate ?? now,
-            status:
-                lead.followupDate
-                    ?
-                    isToday(new Date(lead.followupDate))
-                        ? "negative"
-                        : isPast(new Date(lead.followupDate))
-                            ? "negative"
-                            : "positive"
-                    : "neutral", // if follow-up is overdue, set to "negative", if due today, set to "negative", if due in the future, set to "positive"
-        }));
-    } catch (error) {
-        console.error("Error fetching follow-up items:", error);
-        throw new Error("Failed to fetch follow-up items");
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
     }
+    const user = await getUserByClerkId(userId);
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    const now = new Date();
+
+    const followUps = await prisma.lead.findMany({
+      where: {
+        OR: [
+          {
+            assignedId: user.id,
+            followupCompletedAt: null,
+            followupDate: {
+              lte: now,
+            },
+          },
+        ],
+      },
+      orderBy: {
+        followupDate: "desc",
+      },
+    });
+
+    return followUps.map((lead) => ({
+      id: lead.id,
+      customerName: lead.name,
+      projectName: lead.location,
+      description: lead.notes ?? "No additional details",
+      dueAt: lead.followupDate ?? now,
+      status: lead.followupDate
+        ? isToday(new Date(lead.followupDate))
+          ? "negative"
+          : isPast(new Date(lead.followupDate))
+            ? "negative"
+            : "positive"
+        : "neutral", // if follow-up is overdue, set to "negative", if due today, set to "negative", if due in the future, set to "positive"
+    }));
+  } catch (error) {
+    console.error("Error fetching follow-up items:", error);
+    throw new Error("Failed to fetch follow-up items");
+  }
 }
 
 /**
@@ -302,19 +290,24 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
  * @throws Error if user is not authenticated or if database queries fail
  */
 export async function getDashboardGraphData() {
-    try {
-        const { userId } = await auth();
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
 
-        const [nonConversionData, leadAndRevenueDataUptoPastYear, conversionBreakdownData, estVsSpendProjectData] = await Promise.all([
-            prisma.$queryRaw<
-                {
-                    name: string | null;
-                    value: bigint;
-                }[]
-            >`
+    const [
+      nonConversionData,
+      leadAndRevenueDataUptoPastYear,
+      conversionBreakdownData,
+      estVsSpendProjectData,
+    ] = await Promise.all([
+      prisma.$queryRaw<
+        {
+          name: string | null;
+          value: bigint;
+        }[]
+      >`
                 SELECT
                   COALESCE("lostReason", 'Unknown') AS name,
                   COUNT(*) AS value
@@ -324,14 +317,14 @@ export async function getDashboardGraphData() {
                 ORDER BY value DESC
               `,
 
-            prisma.$queryRaw<
-                {
-                    month: Date;
-                    leads: bigint;
-                    converted: bigint;
-                    revenue: bigint;
-                }[]
-            >`
+      prisma.$queryRaw<
+        {
+          month: Date;
+          leads: bigint;
+          converted: bigint;
+          revenue: bigint;
+        }[]
+      >`
                 WITH months AS (
                     SELECT generate_series(
                         DATE_TRUNC('month', NOW() - INTERVAL '11 months'),
@@ -366,12 +359,12 @@ export async function getDashboardGraphData() {
                 LEFT JOIN project_revenue pr ON pr.month = m.month
                 ORDER BY m.month;
                   `,
-            prisma.$queryRaw<
-                {
-                    stage: "converted" | "pending" | "lost" | "nurture";
-                    value: bigint;
-                }[]
-            >`
+      prisma.$queryRaw<
+        {
+          stage: "converted" | "pending" | "lost" | "nurture";
+          value: bigint;
+        }[]
+      >`
             SELECT
                 CASE
                 WHEN stage IN ('WON', 'CONVERTED')
@@ -402,13 +395,13 @@ export async function getDashboardGraphData() {
             WHERE "isArchived" = false
             GROUP BY 1
             `,
-            prisma.$queryRaw<
-                {
-                    month: Date;
-                    estimateSpend: number;
-                    actualSpend: number;
-                }[]
-            >`
+      prisma.$queryRaw<
+        {
+          month: Date;
+          estimateSpend: number;
+          actualSpend: number;
+        }[]
+      >`
                 SELECT
                     DATE_TRUNC('month', "targetDate") AS month,
                     COALESCE(SUM("budget"), 0) AS "estimateSpend",
@@ -417,42 +410,50 @@ export async function getDashboardGraphData() {
                 WHERE "targetDate" >= ${startOfMonth(subMonths(new Date(), 11))}
                 GROUP BY 1
                 ORDER BY 1;
-                `
-        ]);
+                `,
+    ]);
 
-        const formattedNonConversionData = nonConversionData.map((item) => ({
-            name: item.name ?? "Unknown",
-            value: Number(item.value),
-        }));
+    const formattedNonConversionData = nonConversionData.map((item) => ({
+      name: item.name ?? "Unknown",
+      value: Number(item.value),
+    }));
 
-        const formattedLeadAndRevenueData = leadAndRevenueDataUptoPastYear.map((item) => ({
-            month: item.month,
-            leads: Number(item.leads),
-            converted: Number(item.converted),
-            revenue: Number(item.revenue),
-        }));
+    const formattedLeadAndRevenueData = leadAndRevenueDataUptoPastYear.map(
+      (item) => ({
+        month: item.month,
+        leads: Number(item.leads),
+        converted: Number(item.converted),
+        revenue: Number(item.revenue),
+      }),
+    );
 
-        const formattedConversionBreakdownData = conversionBreakdownData.map((item) => ({
-            stage: item.stage,
-            value: Number(item.value),
-        }));
+    const formattedConversionBreakdownData = conversionBreakdownData.map(
+      (item) => ({
+        stage: item.stage,
+        value: Number(item.value),
+      }),
+    );
 
-        const formattedEstVsSpendProjectData = estVsSpendProjectData.map((item) => ({
-            month: item.month,
-            estimateSpend: Number(item.estimateSpend),
-            actualSpend: Number(item.actualSpend),
-        }));
+    const formattedEstVsSpendProjectData = estVsSpendProjectData.map(
+      (item) => ({
+        month: item.month,
+        estimateSpend: Number(item.estimateSpend),
+        actualSpend: Number(item.actualSpend),
+      }),
+    );
 
-        return {
-            nonConversionData: formattedNonConversionData,
-            leadAndRevenueData: formattedLeadAndRevenueData,
-            conversionBreakdownData: formattedConversionBreakdownData,
-            estVsSpendProjectData: formattedEstVsSpendProjectData,
-        };
-    } catch (error) {
-        console.error("Error fetching dashboard graph data:", error);
-        throw new Error("Failed to fetch dashboard graph data");
-    }
+    return {
+      nonConversionData: formattedNonConversionData,
+      leadAndRevenueData: formattedLeadAndRevenueData,
+      conversionBreakdownData: formattedConversionBreakdownData,
+      estVsSpendProjectData: formattedEstVsSpendProjectData,
+    };
+  } catch (error) {
+    console.error("Error fetching dashboard graph data:", error);
+    throw new Error("Failed to fetch dashboard graph data");
+  }
 }
 
-export type DashboardGraphData = Awaited<ReturnType<typeof getDashboardGraphData>>;
+export type DashboardGraphData = Awaited<
+  ReturnType<typeof getDashboardGraphData>
+>;

@@ -10,7 +10,12 @@ import {
 test("adds up claims across statuses", () => {
   const totals = summarizeInvoices([
     { status: "PAID", total: "45000", amountPaid: "45000", amountDue: "0" },
-    { status: "AUTHORISED", total: "135000", amountPaid: "20000", amountDue: "115000" },
+    {
+      status: "AUTHORISED",
+      total: "135000",
+      amountPaid: "20000",
+      amountDue: "115000",
+    },
   ]);
 
   assert.equal(totals.invoiced, "180000.00");
@@ -94,7 +99,9 @@ test("sorts roots and children by contract order", () => {
 
 // A parentId pointing outside the list must not make the milestone vanish.
 test("keeps an orphan as a root", () => {
-  const roots = buildMilestoneTree([stageMilestone("orphan", 1, "Slab", "gone")]);
+  const roots = buildMilestoneTree([
+    stageMilestone("orphan", 1, "Slab", "gone"),
+  ]);
 
   assert.deepEqual(
     roots.map((root) => root.id),

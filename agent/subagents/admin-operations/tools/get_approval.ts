@@ -4,8 +4,11 @@ import { getApprovalInputSchema } from "@/agent/lib/admin-contracts";
 import { getAuthorizedApproval } from "@/agent/lib/admin-operations";
 
 export default defineTool({
-  description: "Inspect one approval request and its validated payload before deciding.",
+  description:
+    "Inspect one approval request and its validated payload before deciding.",
   inputSchema: getApprovalInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  async execute(input, ctx) { return await getAuthorizedApproval(ctx, input); },
+  async execute(input, ctx) {
+    return await getAuthorizedApproval(ctx, input);
+  },
 });

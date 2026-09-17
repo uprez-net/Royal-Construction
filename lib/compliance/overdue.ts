@@ -113,7 +113,10 @@ function assessPartyResponse(
   /** Whether everything this party owes is in. */
   isComplete: boolean,
   now: Date,
-): { raise?: OverdueAlert; resolve?: { type: ComplianceAlertType; note: string } } {
+): {
+  raise?: OverdueAlert;
+  resolve?: { type: ComplianceAlertType; note: string };
+} {
   const outreach = outreachForParty(engagement, party);
 
   // Nobody was written to, or the client supplied the documents themselves.
@@ -124,7 +127,10 @@ function assessPartyResponse(
     !outreach.sentAt
   ) {
     return {
-      resolve: { type: alertType, note: "There is nobody outstanding on this." },
+      resolve: {
+        type: alertType,
+        note: "There is nobody outstanding on this.",
+      },
     };
   }
 
@@ -190,7 +196,8 @@ const CONSULTANT_ALERT: Readonly<
 const CONSULTANT_ALERT_SOURCE: Readonly<
   Record<CompliancePartyType, ComplianceAlertSource>
 > = {
-  [CompliancePartyType.BASIX_CONSULTANT]: ComplianceAlertSource.BASIX_CONSULTANT,
+  [CompliancePartyType.BASIX_CONSULTANT]:
+    ComplianceAlertSource.BASIX_CONSULTANT,
   [CompliancePartyType.BUSHFIRE_CONSULTANT]:
     ComplianceAlertSource.BUSHFIRE_CONSULTANT,
   [CompliancePartyType.STRUCTURAL_ENGINEER]:
@@ -273,9 +280,7 @@ export function assessOverdueConditions(
   const raise: OverdueAlert[] = [];
   const resolve: { type: ComplianceAlertType; note: string }[] = [];
 
-  const record = (
-    outcome: ReturnType<typeof assessPartyResponse>,
-  ) => {
+  const record = (outcome: ReturnType<typeof assessPartyResponse>) => {
     if (outcome.raise) raise.push(outcome.raise);
     if (outcome.resolve) resolve.push(outcome.resolve);
   };

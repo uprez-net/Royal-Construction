@@ -77,7 +77,11 @@ export function ProjectHandoffPanel({
         )}
 
         <dl className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
-          <SummaryItem label="Reference" value={`${job.reference}-${job.revision}`} mono />
+          <SummaryItem
+            label="Reference"
+            value={`${job.reference}-${job.revision}`}
+            mono
+          />
           <SummaryItem label="Client" value={job.clientNames} />
           <SummaryItem label="Site" value={job.siteAddress} />
           <SummaryItem
@@ -100,11 +104,7 @@ export function ProjectHandoffPanel({
               end state led nowhere. It stays disabled only while the project's
               id is unknown. */}
           {isCreated && projectId ? (
-            <Button
-              asChild
-              variant="royal"
-              size="sm"
-            >
+            <Button asChild variant="royal" size="sm">
               <Link href={`/projects/${projectId}`}>Open Project</Link>
             </Button>
           ) : isCreated ? (
@@ -132,13 +132,21 @@ export function ProjectHandoffPanel({
         </div>
 
         {projectResult && !projectResult.ok ? (
-          <p className="text-xs font-medium text-destructive">{projectResult.error}</p>
+          <p className="text-xs font-medium text-destructive">
+            {projectResult.error}
+          </p>
         ) : null}
         {projectResult?.ok && projectResult.warnings.length > 0 ? (
           <div className="grid gap-1.5 rounded-lg border border-warning/40 bg-warning-light/40 p-3">
             {projectResult.warnings.map((warning) => (
-              <p key={warning} className="flex items-start gap-2 text-xs text-foreground">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
+              <p
+                key={warning}
+                className="flex items-start gap-2 text-xs text-foreground"
+              >
+                <AlertTriangle
+                  className="mt-0.5 size-3.5 shrink-0 text-warning"
+                  aria-hidden="true"
+                />
                 {warning}
               </p>
             ))}
@@ -163,7 +171,11 @@ function SummaryItem({
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
-      <dd className={mono ? "text-sm font-medium font-mono" : "text-sm font-medium"}>
+      <dd
+        className={
+          mono ? "text-sm font-medium font-mono" : "text-sm font-medium"
+        }
+      >
         {value || "—"}
       </dd>
     </div>

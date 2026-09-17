@@ -71,7 +71,9 @@ async function main() {
     );
   }
   console.log("  verified 0 remaining at this instant.");
-  console.log("  the phase B migration re-runs the same UPDATE transactionally,");
+  console.log(
+    "  the phase B migration re-runs the same UPDATE transactionally,",
+  );
   console.log("  so a late write cannot slip through the gap.");
 }
 

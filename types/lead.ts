@@ -47,14 +47,20 @@ export const stageToPrismaMap: Record<LeadStage, PrismaLeadStage> = {
   Disqualified: "DISQUALIFIED",
 };
 
-const historyTypeMap: Record<"SYSTEM" | "CALL" | "EMAIL" | "REFERRAL", HistoryItem["type"]> = {
+const historyTypeMap: Record<
+  "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL",
+  HistoryItem["type"]
+> = {
   SYSTEM: "system",
   CALL: "call",
   EMAIL: "email",
   REFERRAL: "referral",
 };
 
-export const historyTypeToPrisma: Record<HistoryItem["type"], PrismaHistoryType> = {
+export const historyTypeToPrisma: Record<
+  HistoryItem["type"],
+  PrismaHistoryType
+> = {
   system: "SYSTEM",
   call: "CALL",
   email: "EMAIL",
@@ -86,7 +92,9 @@ export function toTimeOnly(date: Date | null): string | null {
   return sydneyTimeOnly(date);
 }
 
-export function mapHistory(history: PrismaLeadHistory & { author: User | null }): HistoryItem {
+export function mapHistory(
+  history: PrismaLeadHistory & { author: User | null },
+): HistoryItem {
   return {
     date: toDateOnly(history.actionDate) ?? "",
     time: toTimeOnly(history.actionDate) ?? "",
@@ -126,10 +134,12 @@ export function mapLead(
     }>;
     emails: LeadEmails[];
     files: File[];
-  }
+  },
 ): UiLead {
   const assignedUserFromRelation = lead.assignedUser ?? null;
-  const assignedUserFallback = lead.assigned ? { id: "", name: lead.assigned, email: "" } : null;
+  const assignedUserFallback = lead.assigned
+    ? { id: "", name: lead.assigned, email: "" }
+    : null;
 
   return {
     id: lead.id,
@@ -183,7 +193,9 @@ export function mapLead(
     // would have skipped past its null and shown a stale legacy date instead,
     // which is worse than showing nothing.
     followupDate: toDateOnly(
-      lead.tasks && lead.tasks.length > 0 ? lead.tasks[0].dueDate : lead.followupDate,
+      lead.tasks && lead.tasks.length > 0
+        ? lead.tasks[0].dueDate
+        : lead.followupDate,
     ),
     followupTime:
       lead.tasks && lead.tasks.length > 0
@@ -208,7 +220,7 @@ export function mapLead(
       name: file.filename,
       size: file.filesize,
       url: file.url,
-    }))
+    })),
   };
 }
 
