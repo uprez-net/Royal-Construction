@@ -7,6 +7,7 @@ import { useEveAgent } from "eve/react";
 import {
   Bot,
   CircleStop,
+  Archive,
   History,
   MessageSquareText,
   Plus,
@@ -179,7 +180,7 @@ export function AgentWorkspace({
 
   return (
     <section className="grid min-h-[40rem] flex-1 overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm md:h-[calc(100dvh-10.5rem)] md:grid-cols-[18rem_minmax(0,1fr)]">
-      <aside className="flex min-h-0 flex-col border-b border-border/70 bg-muted/25 md:border-r md:border-b-0">
+      <aside className="order-2 flex min-h-0 flex-col border-b border-border/70 bg-muted/25 md:order-2 md:border-b-0 md:border-l">
         <div className="flex items-center justify-between gap-3 p-4">
           <div>
             <p className="font-heading text-base font-semibold text-foreground">Conversations</p>
@@ -203,32 +204,12 @@ export function AgentWorkspace({
               sessions.map((session, index) => {
                 const active = session.eveSessionId === (agent.session?.sessionId ?? selectedSessionId);
                 return (
-                  <Link
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "min-w-64 rounded-lg border px-3 py-3 transition-colors md:min-w-0",
-                      active
-                        ? "border-royal-gold/50 bg-royal-gold-light/55"
-                        : "border-transparent hover:border-border hover:bg-white",
-                    )}
-                    href={`/agent/${session.eveSessionId}`}
-                    key={session.eveSessionId}
-                  >
-                    <div className="flex items-start gap-2">
-                      <MessageSquareText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {session.title || `Operations conversation ${sessions.length - index}`}
-                        </p>
-                        <div className="mt-1 flex items-center justify-between gap-2">
-                          <span className="truncate text-xs text-muted-foreground">
-                            {formatSessionDate(session.lastEventAt ?? session.updatedAt)}
-                          </span>
-                          <span className={cn("size-1.5 shrink-0 rounded-full", statusDot(session.status))} />
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
+                  <div className="group relative" key={session.eveSessionId}>
+                    <Link aria-current={active ? "page" : undefined} className={cn("block min-w-64 rounded-lg border px-3 py-3 pr-9 transition-colors md:min-w-0", active ? "border-royal-gold/50 bg-royal-gold-light/55" : "border-transparent hover:border-border hover:bg-white")} href={`/agent/${session.eveSessionId}`}>
+                      <div className="flex items-start gap-2"><MessageSquareText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-foreground">{session.title || `Operations conversation ${sessions.length - index}`}</p><div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-xs text-muted-foreground">{formatSessionDate(session.lastEventAt ?? session.updatedAt)}</span><span className={cn("size-1.5 shrink-0 rounded-full", statusDot(session.status))} /></div></div></div>
+                    </Link>
+                    <Button aria-label="Archive conversation" className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" onClick={async (event) => { event.preventDefault(); const response = await fetch(`/api/agent/sessions/${session.eveSessionId}/archive`, { method: "POST" }); if (response.ok) setSessions((items) => items.filter((item) => item.eveSessionId !== session.eveSessionId)); }} size="icon-sm" type="button" variant="ghost"><Archive /></Button>
+                  </div>
                 );
               })
             )}
@@ -236,7 +217,7 @@ export function AgentWorkspace({
         </ScrollArea>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-col">
+      <div className="order-1 flex min-h-0 min-w-0 flex-col md:order-1">
         <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink">
