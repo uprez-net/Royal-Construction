@@ -155,4 +155,9 @@ jobs:
       - name: Build Vercel Project for Staging
         run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy to Vercel for Staging
-        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+        run: >-
+          vercel deploy --prebuilt
+          --meta githubDeployment=1
+          --meta githubCommitRef=${{ needs.decide-deployment.outputs.branch }}
+          --meta githubCommitSha=${{ github.event.workflow_run.head_sha }}
+          --token=${{ secrets.VERCEL_TOKEN }}
