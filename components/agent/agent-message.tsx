@@ -202,9 +202,9 @@ function ToolActivity({
       ) : null}
           {result ? (
         <CardContent className="flex flex-col gap-2 border-t border-border/70 pt-3">
-          <p className="font-medium text-foreground">{result.title}</p>
-          <p className="text-sm text-muted-foreground">{result.summary}</p>
+          <ResultCanvas result={result} />
           {result.outreach ? <ComplianceOutreachCard outreach={result.outreach} /> : null}
+          {result.warnings.length > 0 ? <div className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950"><p className="font-medium">Review notes</p><ul className="mt-1 list-disc pl-4">{result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div> : null}
           {result.actions.length > 0 ? (
             <div className="flex flex-wrap gap-2 pt-1">
               {result.actions.map((action) => (
@@ -305,11 +305,16 @@ function InputRequest({
 }
 
 type ResultEnvelope = {
+  kind: string;
   actions: { destructive?: boolean; id: string; label: string; operation: string }[];
   links: { href: string; label: string }[];
   outreach: { body: string; contactEmail: string | null; contactName: string | null; daysOpen: number | null; lastFollowUpAt: string | null; party: string; subject: string; slaStatus: string } | null;
   summary: string;
   title: string;
+  warnings: string[];
+  requiresApproval: boolean;
+  entityRef: { type: string; id: string; display: { label: string; href?: string } } | null;
+  data: Record<string, unknown>;
 };
 
 function resultEnvelope(value: unknown): ResultEnvelope | null {
@@ -337,7 +342,24 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
   const outreach = outreachValue && typeof outreachValue === "object" && !Array.isArray(outreachValue)
     ? (() => { const value = outreachValue as Record<string, unknown>; return typeof value.body === "string" && typeof value.party === "string" && typeof value.subject === "string" ? { body: value.body, contactEmail: typeof value.contactEmail === "string" ? value.contactEmail : null, contactName: typeof value.contactName === "string" ? value.contactName : null, daysOpen: typeof value.daysOpen === "number" ? value.daysOpen : null, lastFollowUpAt: typeof value.lastFollowUpAt === "string" ? value.lastFollowUpAt : null, party: value.party, subject: value.subject, slaStatus: typeof value.slaStatus === "string" ? value.slaStatus : "READY" } : null; })()
     : null;
-  return { actions, links, outreach, summary: candidate.summary, title: candidate.title };
+  const data = candidate.data && typeof candidate.data === "object" && !Array.isArray(candidate.data) ? candidate.data as Record<string, unknown> : {};
+  const entityValue = candidate.entityRef && typeof candidate.entityRef === "object" ? candidate.entityRef as Record<string, unknown> : null;
+  const entityDisplay = entityValue?.display && typeof entityValue.display === "object" ? entityValue.display as Record<string, unknown> : null;
+  const entityRef = entityValue && typeof entityValue.type === "string" && typeof entityValue.id === "string" && entityDisplay && typeof entityDisplay.label === "string" ? { type: entityValue.type, id: entityValue.id, display: { label: entityDisplay.label, href: typeof entityDisplay.href === "string" ? entityDisplay.href : undefined } } : null;
+  const warnings = Array.isArray(candidate.warnings) ? candidate.warnings.filter((warning): warning is string => typeof warning === "string") : [];
+  return { actions, links, outreach, summary: candidate.summary, title: candidate.title, kind: typeof candidate.kind === "string" ? candidate.kind : "entity-summary", warnings, requiresApproval: candidate.requiresApproval === true, entityRef, data };
+}
+
+function ResultCanvas({ result }: { result: ResultEnvelope }) {
+  const entries = Object.entries(result.data).filter(([key, value]) => key !== "outreach" && value !== null && typeof value !== "object");
+  return <div className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-start justify-between gap-2">
+      <div><p className="font-medium text-foreground">{result.title}</p><p className="text-sm text-muted-foreground">{result.summary}</p></div>
+      <Badge variant={result.requiresApproval ? "default" : "outline"}>{result.requiresApproval ? "Approval required" : result.kind.replaceAll("-", " ")}</Badge>
+    </div>
+    {result.entityRef ? <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs"><span className="text-muted-foreground">Referenced</span>{result.entityRef.display.href ? <a className="font-medium text-royal-gold-ink hover:underline" href={result.entityRef.display.href}>{result.entityRef.display.label}</a> : <span className="font-medium">{result.entityRef.display.label}</span>}</div> : null}
+    {entries.length > 0 ? <dl className="grid grid-cols-2 gap-2 rounded-md border border-border/60 bg-background/70 p-2 text-xs sm:grid-cols-3">{entries.slice(0, 9).map(([key, value]) => <div className="min-w-0" key={key}><dt className="truncate text-muted-foreground">{key.replaceAll(/([A-Z])/g, " $1")}</dt><dd className="truncate font-medium text-foreground">{String(value)}</dd></div>)}</dl> : null}
+  </div>;
 }
 
 function ComplianceOutreachCard({ outreach }: { outreach: NonNullable<ResultEnvelope["outreach"]> }) {

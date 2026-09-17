@@ -12,6 +12,7 @@ import {
   Plus,
   Paperclip,
   GitFork,
+  LoaderCircle,
   Send,
   Sparkles,
   X,
@@ -309,10 +310,11 @@ export function AgentWorkspace({
                 onInputResponses={respond}
               />
             ))}
+            {agent.status === "streaming" ? <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />Live response · assembling the next operation step…</div> : null}
             {agent.error ? (
               <Alert variant="destructive">
                 <AlertTitle>The agent could not continue</AlertTitle>
-                <AlertDescription>{agent.error.message}</AlertDescription>
+                <AlertDescription className="flex flex-wrap items-center gap-3"><span>{agent.error.message}</span><Button onClick={() => void agent.resume()} size="sm" type="button" variant="outline">Retry stream</Button></AlertDescription>
               </Alert>
             ) : null}
           </div>

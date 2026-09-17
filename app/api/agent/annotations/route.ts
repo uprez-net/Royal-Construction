@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { isBlobStorageUrl } from "@/lib/blob-url";
 
 type Annotation = { type: "lead" | "offer" | "project" | "file"; id: string; label: string; href: string; group: string };
 
@@ -26,8 +27,8 @@ export async function GET(request: Request) {
     ...leads.map((item) => ({ type: "lead" as const, id: String(item.id), label: item.name, href: `/leads/${item.id}`, group: "Leads" })),
     ...offers.map((item) => ({ type: "offer" as const, id: item.id, label: `${item.baseReference || "Offer"} · Rev ${item.revisionNumber} · ${item.lead.name}`, href: `/offers/${item.id}`, group: "Offers" })),
     ...projects.map((item) => ({ type: "project" as const, id: item.id, label: item.name, href: `/projects/${item.id}`, group: "Projects" })),
-    ...files.map((item) => ({ type: "file" as const, id: item.id, label: item.filename, href: item.url, group: "Files" })),
-    ...offerFiles.map((item) => ({ type: "file" as const, id: item.id, label: item.filename, href: item.url, group: "Offer files" })),
+    ...files.filter((item) => isBlobStorageUrl(item.url)).map((item) => ({ type: "file" as const, id: item.id, label: item.filename, href: item.url, group: "Files" })),
+    ...offerFiles.filter((item) => isBlobStorageUrl(item.url)).map((item) => ({ type: "file" as const, id: item.id, label: item.filename, href: item.url, group: "Offer files" })),
   ];
   return NextResponse.json({ annotations });
 }
