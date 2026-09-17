@@ -75,9 +75,14 @@ test("the store and updateLead use these rules", () => {
   assert.match(slice, /fetchOffers\.pending[\s\S]{0,500}filtersForRequest\(/, "pending does not record the filters");
   assert.match(slice, /shouldAdoptServerOffers\(filters, offers, serverOffers\)/, "syncServerOffers ignores the page");
   const leads = readFileSync("lib/data/leads.ts", "utf8");
+  // The assignee trigger must stay unconditional on being SET — a compare
+  // against the lead read before the transaction could skip an expiry it owed.
+  // It is OR'd with the listed-field trigger (name, contact, location, type),
+  // which this branch adds, so the pattern allows that second condition without
+  // allowing the assignee side to regain a comparison.
   assert.match(
     leads,
-    /if \(input\.assignedId !== undefined\) \{[\s\S]{0,120}revalidateTag\("offers"/,
+    /if \(input\.assignedId !== undefined(?: \|\| \w+)?\) \{[\s\S]{0,200}revalidateTag\("offers"/,
     "updateLead does not expire the offers list on reassignment",
   );
 });

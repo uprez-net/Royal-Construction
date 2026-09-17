@@ -42,10 +42,8 @@ import { ProjectFilters } from "./project-filters";
 import { ProjectToolbar } from "./project-toolbar";
 import { formatStatus, projectStatusConfig } from "./project-status";
 import { fetchJson } from "@/utils/fetch";
-import {
-  getAllProjectsForExport,
-  PaginatedProjectsResult,
-} from "@/lib/data/projects";
+import { getAllProjectsForExport } from "@/lib/actions/projects";
+import type { PaginatedProjectsResult } from "@/lib/data/projects";
 import { compactCurrency } from "@/utils/formatters";
 import type { Role } from "@prisma/client";
 

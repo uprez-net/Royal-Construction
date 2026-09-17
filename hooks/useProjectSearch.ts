@@ -1,6 +1,6 @@
 "use client";
 
-import { PaginatedProjectLookupResult, ProjectLookupItem } from "@/lib/data/projects";
+import type { PaginatedProjectLookupResult, ProjectLookupItem } from "@/lib/data/projects";
 import { fetchJson } from "@/utils/fetch";
 import { useEffect, useState } from "react";
 

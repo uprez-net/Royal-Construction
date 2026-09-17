@@ -6,6 +6,13 @@ import { del } from '@vercel/blob';
 import { getGraphConfig } from '../graph/config';
 import { createGraphContext } from '../graph/client';
 import { EMAIL_FOOTER_HTML, EMAIL_HEADER_HTML } from '@/constants/email-artifacts';
+import { requireInternalUser } from '@/lib/auth/require-internal-user';
+import { isBlobStorageUrl } from '@/lib/blob-url';
+
+// The lead email screens call every export here from the browser, so each is a
+// Server Action anyone can post to: one spends model tokens, one deletes a
+// stored file, one sends mail from Royal's mailbox to any address. Each checks
+// that the caller is staff before doing anything.
 
 const SYSTEM_INSTRUCTION = `
 <role>
@@ -177,6 +184,11 @@ export async function generateEmailTemplate(
   attachments: { label: string; url: string }[],
   links: { label: string; url: string }[]
 ): Promise<GeneratedEmailResult> {
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+
   const model = gateway('google/gemini-2.5-flash');
   const safeLinks = links.filter((link) => isSafePromptUrl(link.url));
   const safeAttachments = attachments.filter((attachment) => isSafePromptUrl(attachment.url));
@@ -436,7 +448,24 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
 //   });
 // }
 
+// Where the composer uploads attachments (hooks/use-email-ad-hock.ts). Anything
+// else in the store (lead documents, offer PDFs, signed contracts) is not this
+// action's to delete.
+const EMAIL_ATTACHMENT_PREFIX = '/email-ad-hock-attachment-upload/';
+
+function isEmailAttachmentBlobUrl(url: string): boolean {
+  return isBlobStorageUrl(url) && new URL(url).pathname.startsWith(EMAIL_ATTACHMENT_PREFIX);
+}
+
 export async function RemoveUrlFromBlob(blobUrl: string) {
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    return { success: false, error: access.error };
+  }
+  if (!isEmailAttachmentBlobUrl(blobUrl)) {
+    return { success: false, error: "Only an uploaded email attachment can be removed here." };
+  }
+
   try {
     await del(blobUrl);
     return { success: true };
@@ -455,6 +484,12 @@ export async function sendCampaignEmail(
   subject: string,
   body: string,
 ): Promise<boolean> {
+  // false is what every caller already reads as "not sent".
+  const access = await requireInternalUser();
+  if (!access.ok) {
+    return false;
+  }
+
   try {
     const config = getGraphConfig();
     const client = await createGraphContext(config);

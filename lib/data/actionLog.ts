@@ -1,4 +1,5 @@
-'use server';
+import "server-only";
+
 import prisma from '@/lib/prisma';
 import { ActivityLogEntry } from '@/types/activityLog';
 import { Prisma } from '@prisma/client';

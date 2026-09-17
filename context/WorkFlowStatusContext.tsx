@@ -1,7 +1,7 @@
 "use client";
 
 import { OfferCreationStatus } from "@/types/offer";
-import { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
+import type { TenderExtractionWorkflowStreamEvent } from "@/lib/workflow/project";
 import {
   COMPLIANCE_CHECKLIST_WORKFLOW,
   type ComplianceChecklistStreamEvent,

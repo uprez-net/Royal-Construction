@@ -119,6 +119,10 @@ export async function archiveLeadAttachments(
         },
       );
 
+      // A system caller, not a user-facing one: this runs as a workflow step of
+      // Graph mail ingestion, with no session to authorize. The lead is the one
+      // that run just wrote and the uploader is the admin resolveUploaderId
+      // picked, so nothing here comes from a browser.
       await saveFile({
         userId: uploadedBy,
         leadId: String(leadId),

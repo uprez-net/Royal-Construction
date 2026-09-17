@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import { Prisma, ProjectStatus } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
