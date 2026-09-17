@@ -1,6 +1,7 @@
 import {
   // Banknote,
   BarChart3,
+  Bot,
   // CalendarDays,
   // CircleDot,
   ClipboardList,
@@ -41,6 +42,11 @@ export const navigationItems: NavItem[] = [
     slug: "offers",
     label: "Offers",
     icon: <ReceiptText className="size-4" />,
+  },
+  {
+    slug: "agent",
+    label: "Operations Agent",
+    icon: <Bot className="size-4" />,
   },
   // {
   //   slug: "catalogue",
