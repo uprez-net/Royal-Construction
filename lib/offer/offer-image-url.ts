@@ -1,5 +1,3 @@
-import { isBlobStorageUrl } from "../blob-url";
-
 // Where an offer image is allowed to live.
 //
 // The customer PDF renderers put an image's URL straight into an <img src>, and

@@ -12,6 +12,7 @@ import {
   failureFromThrownError,
   type CreateProjectResult,
 } from "@/lib/projects/create-project-errors";
+import { createProjectWithLeadSchema } from "@/utils/validators/projects";
 import type { ProjectWithStats } from "@/types/project";
 
 /**
@@ -46,6 +47,18 @@ export async function createProjectWithLeadAction(
       ),
     };
   }
+
+  // The rest of the payload is the browser's too, and the writer persists it
+  // directly: `parties` onto Project.parties, `siteManagerId` as given, and
+  // both dates through `new Date(...)`. Parsed here so a malformed field is a
+  // field error on the wizard rather than a broken project or a transaction
+  // that fails halfway. failureFromThrownError maps each ZodError issue onto
+  // the input that produced it.
+  const parsed = createProjectWithLeadSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, failure: failureFromThrownError(parsed.error) };
+  }
+
   const access = await authorizeLeadAccess(input.leadId);
   if (!access.ok) {
     return {

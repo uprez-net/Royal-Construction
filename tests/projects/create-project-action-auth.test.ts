@@ -34,6 +34,21 @@ test("the wizard's action authorizes the lead before converting it", () => {
   );
 });
 
+test("the whole payload is parsed before the lead is converted", () => {
+  // Only leadId was checked here; the rest went to createProjectWithLead, which
+  // writes `parties` onto Project.parties, trusts siteManagerId and runs
+  // new Date() over both date strings. The schema's own shape is pinned in
+  // create-project-payload.test.ts; this pins that the action still uses it.
+  const body = functionBody(actions, "createProjectWithLeadAction");
+  const parse = body.indexOf("createProjectWithLeadSchema.safeParse(input)");
+  assert.ok(parse >= 0, "createProjectWithLeadAction no longer parses its input");
+  assert.ok(
+    parse < body.indexOf("createProjectWithLead(input)"),
+    "the lead is converted before the payload is validated",
+  );
+  assert.match(body, /failure: failureFromThrownError\(parsed\.error\)/);
+});
+
 test("a refusal is returned as a failure, not thrown", () => {
   // Next replaces a thrown Server Action message with a digest in production,
   // so a thrown refusal would reach the wizard as "something went wrong".

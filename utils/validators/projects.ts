@@ -22,6 +22,67 @@ import {
 
 const customerModeSchema = z.enum(["existing", "new"]);
 
+// ---------------------------------------------------------------------------
+// Offer -> project handoff
+// ---------------------------------------------------------------------------
+
+// yyyy-MM-dd or a full ISO datetime; the writer parses either with new Date().
+const handoffDateSchema = (message: string) =>
+  z.union([z.iso.date(message), z.iso.datetime(message)]);
+
+const sourceDocumentSchema = z.object({
+  fileId: z.string().trim().min(1, "The document is missing its file id"),
+  fileName: z.string().trim().min(1, "The document is missing its file name"),
+  url: z.string().trim().url("The document URL is not a valid URL"),
+  kind: z.enum(["tender", "contract", "hbcfInsurance"]),
+});
+
+/**
+ * The browser-supplied payload behind `createProjectWithLeadAction`.
+ *
+ * `createProjectWithLead` writes `parties` straight onto `Project.parties`,
+ * trusts `siteManagerId`, and runs `new Date(...)` over the two date strings,
+ * so an unvalidated payload either persists a malformed project or fails the
+ * create transaction halfway. Field paths here match the `direct` table in
+ * `fieldPathToFormField`, so each issue lands on the wizard input that caused
+ * it.
+ *
+ * Deliberately permissive where the writer is: `extraction`, `parties` and
+ * `costLines` are structural pass-throughs owned by their own types, so they
+ * are carried unchanged rather than re-described (and narrowed) here.
+ */
+export const createProjectWithLeadSchema = z.object({
+  projectName: z
+    .string()
+    .trim()
+    .min(1, "Project name is required")
+    .max(255, "Project name is too long"),
+  leadId: z.number().int("Select a lead").positive("Select a lead"),
+  lotSize: z.coerce.number().nonnegative("Lot size cannot be negative"),
+  // yyyy-MM-dd, which is what the wizard sends (format(..., "yyyy-MM-dd") in
+  // create-project-modal) and what the sibling insuranceClaim dates below use.
+  // A full ISO datetime is accepted too: the interface documents these as "ISO
+  // string" and the writer only calls new Date(...), which parses both, so a
+  // server-to-server caller is not refused over a format the writer accepts.
+  startDate: handoffDateSchema("Start date is required"),
+  estimatedEndDate: handoffDateSchema("Estimated end date is required"),
+  address: z.string().trim().min(1, "Site location is required"),
+  council: z.string().trim().min(1, "Council is required"),
+  siteManagerId: z.string().trim().min(1, "Assign a site manager"),
+  customerName: z.string().trim().nullish(),
+  customerEmail: z.union([emailSchema, z.literal("")]).nullish(),
+  customerPhone: z.string().trim().nullish(),
+  customerAddress: z.string().trim().nullish(),
+  parties: z.unknown().nullish(),
+  extraction: z.unknown().nullish(),
+  costLines: z.array(z.unknown()).optional(),
+  sourceDocuments: z.object({
+    tender: sourceDocumentSchema,
+    contract: sourceDocumentSchema,
+  }),
+  confirmDateBlockers: z.boolean().optional(),
+});
+
 /**
  * Base project fields shared between create and update
  */

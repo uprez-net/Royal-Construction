@@ -51,16 +51,21 @@ export async function POST(request: Request): Promise<NextResponse> {
 
                 // The project and milestone ids are the browser's too, and the
                 // completed upload writes a File row onto that project.
+                let authorisedProjectId = clientPayload.projectId;
                 if (clientPayload.projectId || clientPayload.milestoneId) {
                     const user = await getUserByClerkIdCached(userId);
                     if (!user) {
                         throw new Error('Unauthorized');
                     }
                     try {
-                        await assertCanAttachToProject(user, {
-                            projectId: clientPayload.projectId,
-                            milestoneId: clientPayload.milestoneId,
-                        });
+                        // assertCanAttachToProject resolves a milestone to its
+                        // own project, so this is the id the File row belongs
+                        // on: a milestone-only upload carries no projectId.
+                        ({ projectId: authorisedProjectId } =
+                            await assertCanAttachToProject(user, {
+                                projectId: clientPayload.projectId,
+                                milestoneId: clientPayload.milestoneId,
+                            }));
                     } catch (error) {
                         if (error instanceof ProjectAccessError) {
                             throw new Error(error.status === 404 ? 'Project not found' : 'Forbidden');
@@ -95,7 +100,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
                     tokenPayload: JSON.stringify({
                         userId,
-                        projectId: clientPayload.projectId,
+                        projectId: authorisedProjectId,
                         milestoneId: clientPayload.milestoneId,
                         leadId: clientPayload.leadId,
                         fileId: clientPayload.fileId,

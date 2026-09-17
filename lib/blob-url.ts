@@ -26,14 +26,26 @@ export function isBlobStorageUrl(url: unknown): boolean {
   );
 }
 
+const BLOB_RW_TOKEN_PREFIX = "vercel_blob_rw_";
+
 // The store a Vercel Blob read-write token writes to, read the way
 // @vercel/blob reads it: vercel_blob_rw_<storeId>_<secret>. Null when the
 // token is missing or malformed.
+//
+// The prefix is checked rather than just counting "_" fields: without it any
+// four-field string parsed as a token, so a misconfigured BLOB_READ_WRITE_TOKEN
+// would silently yield a store id and pin the allowlist to a store we do not
+// own. Fails closed instead, the same way hostFromBlobToken does in
+// lib/offer/offer-image-url.ts.
 export function blobStoreIdFromToken(token: string | null | undefined): string | null {
   if (typeof token !== "string") {
     return null;
   }
-  const [, , , storeId = ""] = token.trim().split("_");
+  const trimmed = token.trim();
+  if (!trimmed.startsWith(BLOB_RW_TOKEN_PREFIX)) {
+    return null;
+  }
+  const storeId = trimmed.slice(BLOB_RW_TOKEN_PREFIX.length).split("_")[0] ?? "";
   return /^[a-z0-9-]+$/i.test(storeId) ? storeId.toLowerCase() : null;
 }
 
