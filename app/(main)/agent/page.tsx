@@ -16,6 +16,7 @@ async function NewAgentWorkspace() {
   const data = await getAgentWorkspaceData();
   return (
     <AgentWorkspace
+      initialAnnotationsByTurn={data.selectedAnnotationsByTurn}
       initialSessions={data.sessions}
       selectedSessionId={data.selectedSessionId}
     />

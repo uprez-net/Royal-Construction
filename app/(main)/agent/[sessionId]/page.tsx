@@ -12,6 +12,7 @@ async function ExistingAgentWorkspace({ sessionId }: { sessionId: string }) {
   return (
     <AgentWorkspace
       initialSessions={data.sessions}
+      initialAnnotationsByTurn={data.selectedAnnotationsByTurn}
       selectedSessionId={data.selectedSessionId}
     />
   );

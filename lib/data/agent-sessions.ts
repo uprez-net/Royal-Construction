@@ -48,6 +48,16 @@ export type AgentSessionListItem = {
 };
 
 export type AgentWorkspaceData = {
+  selectedAnnotationsByTurn: Record<
+    string,
+    Array<{
+      type: string;
+      id: string;
+      label: string;
+      href: string;
+      group: string;
+    }>
+  >;
   selectedSessionId: string | null;
   selectedSessionUnavailable: boolean;
   sessions: AgentSessionListItem[];
@@ -59,6 +69,7 @@ export async function getAgentWorkspaceData(
   const { userId } = await auth();
   if (!userId)
     return {
+      selectedAnnotationsByTurn: {},
       selectedSessionId: null,
       selectedSessionUnavailable: selectedSessionId !== undefined,
       sessions: [],
@@ -70,6 +81,7 @@ export async function getAgentWorkspaceData(
   });
   if (!user)
     return {
+      selectedAnnotationsByTurn: {},
       selectedSessionId: null,
       selectedSessionUnavailable: selectedSessionId !== undefined,
       sessions: [],
@@ -102,13 +114,18 @@ export async function getAgentWorkspaceData(
       summary: true,
       title: true,
       updatedAt: true,
+      selectedContext: true,
     },
   });
 
   const sessions: AgentSessionListItem[] = rows.map((row) => ({
-    ...row,
+    agentName: row.agentName,
     createdAt: row.createdAt.toISOString(),
+    eveSessionId: row.eveSessionId,
     lastEventAt: row.lastEventAt?.toISOString() ?? null,
+    status: row.status,
+    summary: row.summary,
+    title: row.title,
     updatedAt: row.updatedAt.toISOString(),
   }));
   const ownsSelectedSession =
@@ -116,7 +133,26 @@ export async function getAgentWorkspaceData(
     (selectedSessionRegistered &&
       sessions.some((session) => session.eveSessionId === selectedSessionId));
 
+  const selectedContext = rows.find(
+    (row) => row.eveSessionId === selectedSessionId,
+  )?.selectedContext;
+  const contextObject =
+    selectedContext &&
+    typeof selectedContext === "object" &&
+    !Array.isArray(selectedContext)
+      ? selectedContext
+      : null;
+  const annotationsByTurn =
+    contextObject &&
+    typeof contextObject.annotationsByTurn === "object" &&
+    contextObject.annotationsByTurn !== null &&
+    !Array.isArray(contextObject.annotationsByTurn)
+      ? contextObject.annotationsByTurn
+      : {};
+
   return {
+    selectedAnnotationsByTurn:
+      annotationsByTurn as AgentWorkspaceData["selectedAnnotationsByTurn"],
     selectedSessionId:
       selectedSessionId !== undefined && ownsSelectedSession
         ? selectedSessionId
