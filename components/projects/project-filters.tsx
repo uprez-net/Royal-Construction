@@ -69,7 +69,7 @@ export function ProjectFilters({
                 ? "border-primary bg-primary text-primary-foreground"
                 : isPreConstruction
                   ? "border-(--stage-3) bg-(--stage-2) text-foreground hover:bg-(--stage-3)"
-                : "border-border bg-card text-foreground hover:bg-muted/40",
+                  : "border-border bg-card text-foreground hover:bg-muted/40",
             )}
           >
             {filter.label} ({filter.count})
