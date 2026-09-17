@@ -607,11 +607,17 @@ export function ModalManager() {
       return <EditTradieModal open onClose={handleClose} tradie={tradie} />;
     }
     case "previewFile": {
-      const { fileUrl } = modal.payload as { fileUrl: string };
+      const { fileUrl, fileName, fileType } = modal.payload as {
+        fileUrl: string;
+        fileName?: string | null;
+        fileType?: string | null;
+      };
       return (
         <FilePreviewCanvas
           key={fileUrl} // extra safety net — forces a clean remount
           url={fileUrl}
+          fileName={fileName}
+          fileType={fileType}
           onClose={handleClose} // swap in your actual close action
         />
       );

@@ -83,7 +83,10 @@ export type FilePreviewModalAction =
       type: "viewPicture";
       payload: { imageUrls: string[]; selectedIndex: number };
     }
-  | { type: "previewFile"; payload: { fileUrl: string } };
+  | {
+      type: "previewFile";
+      payload: { fileUrl: string; fileName?: string | null; fileType?: string | null };
+    };
 
 /**
  * The modal to open for the file at `selectedIndex`, given everything shown
