@@ -5,8 +5,6 @@ import { getUserByClerkIdCached } from "@/lib/data/user";
 import { saveFile } from "@/lib/data/file";
 import { UPLOAD_CONSTRAINTS } from "@/utils/validators";
 
-export const runtime = "nodejs";
-
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
