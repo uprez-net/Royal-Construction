@@ -107,6 +107,8 @@ test("the timeline formats event notes instead of printing them raw", () => {
 
   assert.doesNotMatch(panel, /\$\{event\.note\}/);
   assert.match(panel, /formatActivityNote\(note\)/);
+});
+
 // The timeline used to decide whether a later reply existed by comparing two
 // FORMATTED labels. This is why that was wrong: the formatter stops at the
 // minute, so replies seconds apart are indistinguishable once formatted, and a

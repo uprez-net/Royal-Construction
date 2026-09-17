@@ -353,11 +353,16 @@ test("the contract send reads the offer and refuses through the shared terms", (
   assert.doesNotMatch(send, /agreedSnapshot \?\?/);
   assert.doesNotMatch(
     send,
-    /describeTenderPriceMismatch\(|CONTRACT_STAGE_SLOTS|resolveContractPaymentSource\(|tenderExclusionLines\(/,
+    /describeTenderPriceMismatch\(|CONTRACT_STAGE_SLOTS|resolveContractPaymentSource\(/,
   );
   assert.match(send, /locked\("paymentSchedule", contractTerms\.paymentScheduleLine\)/);
   assert.match(send, /locked\("depositAmount", contractTerms\.depositAmount\)/);
-  assert.match(send, /const exclusions = contractTerms\.exclusions;/);
+  // The exclusions come from the SIGNED Tender's stored document, not from
+  // contractTerms (which reads the agreed snapshot): the workspace can still be
+  // written after AGREED, so the snapshot can carry a line the customer never
+  // signed. Everything else on the BC4 still comes through contractTerms.
+  assert.match(send, /const exclusions = signedExclusions\.lines;/);
+  assert.match(send, /resolveSignedTenderExclusions\(\{/);
 });
 
 test("the loader reads the send's rows and the sent Contract through the shared helper", () => {

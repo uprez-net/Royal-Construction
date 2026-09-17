@@ -25,9 +25,9 @@ test("the upload label shows a focus ring while its hidden input has focus", () 
   const classes = label.split(/\s+/);
 
   for (const name of [
-    "focus-within:outline-2",
-    "focus-within:outline-offset-2",
-    "focus-within:outline-royal-gold-ink",
+    "has-[:focus-visible]:outline-2",
+    "has-[:focus-visible]:outline-offset-2",
+    "has-[:focus-visible]:outline-royal-gold-ink",
   ]) {
     assert.ok(classes.includes(name), `the upload label is missing ${name}`);
   }
