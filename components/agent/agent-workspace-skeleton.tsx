@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function AgentWorkspaceSkeleton() {
   return (
-    <div className="grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white md:grid-rows-[minmax(0,1fr)] md:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white md:grid-cols-[minmax(0,1fr)_18rem]">
       <div className="order-2 hidden border-l border-border/70 bg-muted/25 p-4 md:flex md:flex-col md:gap-3">
         <Skeleton className="h-7 w-32" />
         <Skeleton className="h-16 w-full" />

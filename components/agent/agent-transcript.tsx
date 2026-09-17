@@ -96,7 +96,7 @@ export function AgentTranscript({
   viewportRef: RefObject<HTMLDivElement | null>;
 }) {
   return (
-    <div className="order-1 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden md:order-2">
+    <div className="order-1 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
       <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <Button

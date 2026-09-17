@@ -466,7 +466,7 @@ export function AgentWorkspace({
 
   return (
     <section
-      className={`grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 md:grid-rows-[minmax(0,1fr)] ${historyOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[0_minmax(0,1fr)]"}`}
+      className={`grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 ${historyOpen ? "md:grid-cols-[minmax(0,1fr)_18rem]" : "md:grid-cols-[minmax(0,1fr)_0]"}`}
     >
       <AgentHistory
         activeSessionId={activeSessionId}

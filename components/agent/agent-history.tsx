@@ -26,7 +26,7 @@ export function AgentHistory({
     <aside
       aria-hidden={!historyOpen}
       className={cn(
-        "order-2 grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border-b border-border/70 bg-muted/25 transition-[max-height,opacity] duration-200 md:order-1 md:border-b-0 md:border-r md:transition-opacity",
+        "order-2 grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border-b border-border/70 bg-muted/25 transition-[max-height,opacity] duration-200 md:border-b-0 md:border-l md:border-r-0 md:transition-opacity",
         historyOpen
           ? "max-h-80 opacity-100 md:max-h-none"
           : "pointer-events-none max-h-0 opacity-0 md:max-h-none",
