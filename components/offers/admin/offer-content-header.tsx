@@ -71,7 +71,10 @@ export function OfferContentHeader({
                 role="tab"
                 id={adminTabId(tab.id)}
                 aria-selected={isCurrent}
-                aria-controls={adminPanelId(tab.id)}
+                // Only the open tab claims a panel. One panel is rendered at
+                // a time, so pointing every tab at its own id would leave five
+                // of six referencing elements that are not in the document.
+                aria-controls={isCurrent ? adminPanelId(tab.id) : undefined}
                 // Roving tabIndex: Tab reaches the strip once and lands on the
                 // open tab; the arrows move between tabs from there.
                 tabIndex={isCurrent ? 0 : -1}

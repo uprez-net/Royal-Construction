@@ -54,12 +54,9 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
         dirtyTabs={dirtyByTab(dirty)}
       />
 
-      {/* The screens title their cards h3. With the hero now the page's h1,
-          this h2 keeps the outline from skipping a level; the tab strip
-          already shows the name, so it is only for screen readers. */}
-      {/* The panel the open tab controls. aria-labelledby points at that tab,
-          so the tab names the panel and the sr-only heading is no longer the
-          only thing tying them together. */}
+      {/* The panel the open tab controls, labelled by that tab. The screens
+          title their cards h3, so the sr-only h2 keeps the outline from
+          skipping a level under the hero's h1. */}
       <section
         role="tabpanel"
         id={adminPanelId(activeTab)}

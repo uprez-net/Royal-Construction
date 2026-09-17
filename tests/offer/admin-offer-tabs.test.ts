@@ -130,17 +130,20 @@ test("the strip has a single tab stop", () => {
   );
 });
 
-test("each tab names the panel it controls", () => {
+test("every tab has a stable id, and only the open one claims a panel", () => {
   const markup = renderStrip("cost-schedule");
   const buttons = buttonsOf(markup);
 
   ADMIN_OFFER_TABS.forEach((tab, index) => {
     assert.match(buttons[index], new RegExp(`id="admin-offer-tab-${tab.id}"`));
-    assert.match(
-      buttons[index],
-      new RegExp(`aria-controls="admin-offer-panel-${tab.id}"`),
-    );
   });
+
+  // One panel is rendered at a time, so an aria-controls on a closed tab would
+  // point at an element that is not in the document. Only the open tab may
+  // claim one — this is the assertion that catches a dangling reference.
+  const claimed = [...markup.matchAll(/aria-controls="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(claimed, ["admin-offer-panel-cost-schedule"]);
+  assert.match(buttons[1], /aria-controls="admin-offer-panel-cost-schedule"/);
 });
 
 test("an unsaved section is announced only on its own tab", () => {
