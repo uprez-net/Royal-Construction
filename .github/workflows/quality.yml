@@ -1,0 +1,312 @@
+name: Quality Checks
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+      - staging
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Supersede an in-flight PR run, but let branch pushes finish because the
+# deployment workflow consumes their completed result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+  CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+  CLERK_WEBHOOK_SIGNING_SECRET: ${{ secrets.CLERK_WEBHOOK_SIGNING_SECRET }}
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: "/sign-in"
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: "/sign-up"
+  BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+  GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+  GEOSCAPE_API_KEY: ${{ secrets.GEOSCAPE_API_KEY }}
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  BUSINESS_EMAIL: "info@royalconstructions.com.au"
+  BUSINESS_ADMIN_EMAIL: "admin@royalconstructions.com.au"
+  GRAPH_SENDER_UPN: "info@royalconstructions.com.au"
+  GRAPH_ADMIN_SENDER_UPN: "admin@royalconstructions.com.au"
+  GRAPH_ADMIN_MAIL_CC: "nabeel.wasif+admin@uprez.net"
+  GRAPH_MODE: "app-only"
+  WEBHOOK_PATH: "/api/graph/notifications"
+  WEBHOOK_PORT: "3000"
+  GRAPH_WEBHOOK_CLIENT_STATE: "royal-leadgen-webhook"
+  GRAPH_ADMIN_WEBHOOK_CLIENT_STATE: "royal-leadgen-admin-webhook"
+  GRAPH_NOTIFICATION_URL: ${{ secrets.GRAPH_NOTIFICATION_URL }}
+  GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES: "60"
+  GRAPH_ADMIN_SUBSCRIPTION_RESOURCE: ${{ secrets.GRAPH_ADMIN_SUBSCRIPTION_RESOURCE }}
+  NEXT_PUBLIC_NOVU_APP_IDENTIFIER: ${{ secrets.NEXT_PUBLIC_NOVU_APP_IDENTIFIER }}
+  NOVU_SECRET_KEY: ${{ secrets.NOVU_SECRET_KEY }}
+  MISTRAL_AI_KEY: ${{ secrets.MISTRAL_AI_KEY }}
+  AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+  SCRAPEDO_TOKEN: ${{ secrets.SCRAPEDO_TOKEN }}
+  # Nothing in CI launches a browser. Production PDF rendering uses
+  # puppeteer-core + @sparticuz/chromium, so avoid downloading Chrome here.
+  PUPPETEER_SKIP_DOWNLOAD: "true"
+  XERO_CLIENT_ID: ${{ secrets.XERO_CLIENT_ID }}
+  XERO_CLIENT_SECRET: ${{ secrets.XERO_CLIENT_SECRET }}
+  XERO_REDIRECT_URI: ${{ secrets.XERO_REDIRECT_URI }}
+  XERO_WEBHOOK_SECRET: ${{ secrets.XERO_WEBHOOK_SECRET }}
+  XERO_SALES_ACCOUNT_CODE: ${{ secrets.XERO_SALES_ACCOUNT_CODE }}
+  XERO_SALES_TAX_TYPE: ${{ secrets.XERO_SALES_TAX_TYPE }}
+
+jobs:
+  decide:
+    name: Decide CI stages
+    runs-on: ubuntu-latest
+    outputs:
+      run_checks: ${{ steps.classify.outputs.run_checks }}
+      deploy: ${{ steps.classify.outputs.deploy }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # A push created by a merged PR is intentionally allowed to deploy
+      # without rerunning PR quality checks. Direct pushes still run them.
+      - name: Detect merged pull request push
+        id: merged-pr
+        if: github.event_name == 'push'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const { data: pullRequests } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+              });
+
+              let merged = false;
+              for (const pullRequest of pullRequests) {
+                if (!['main', 'staging'].includes(pullRequest.base.ref)) continue;
+                const { data: details } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pullRequest.number,
+                });
+                if (details.merged_at) {
+                  merged = true;
+                  break;
+                }
+              }
+
+              core.setOutput('is_merged_pr', String(merged));
+            } catch (error) {
+              core.warning(`Could not identify an associated merged PR: ${error.message}`);
+              core.setOutput('is_merged_pr', 'false');
+            }
+
+      - name: Classify changed files
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          MERGED_PULL_REQUEST: ${{ steps.merged-pr.outputs.is_merged_pr || 'false' }}
+          DECISION_FILE: ${{ runner.temp }}/ci-decision.json
+        run: node scripts/ci/decide.mjs
+
+      - name: Publish CI decision
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ci-decision
+          path: ${{ runner.temp }}/ci-decision.json
+          if-no-files-found: error
+          retention-days: 1
+
+  lint:
+    name: Lint
+    if: needs.decide.outputs.run_checks == 'true'
+    needs: decide
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      NODE_ENV: "test"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Setup project
+        uses: ./.github/actions/setup
+        with:
+          prisma: "false"
+      - name: Cache ESLint results
+        uses: actions/cache@v5
+        with:
+          path: .eslintcache
+          key: ${{ runner.os }}-eslint-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-eslint-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
+      - name: Run lint
+        run: pnpm lint
+
+  typecheck:
+    name: Typecheck
+    if: needs.decide.outputs.run_checks == 'true'
+    needs: decide
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      NODE_ENV: "test"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Setup project
+        uses: ./.github/actions/setup
+      - name: Cache TypeScript build info
+        uses: actions/cache@v5
+        with:
+          path: tsconfig.tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ hashFiles('pnpm-lock.yaml', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-${{ hashFiles('pnpm-lock.yaml', 'tsconfig.json') }}-
+      - name: Run typecheck
+        run: pnpm typecheck
+
+  test:
+    name: Tests
+    if: needs.decide.outputs.run_checks == 'true'
+    needs: decide
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      NODE_ENV: "test"
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Setup project
+        uses: ./.github/actions/setup
+      - name: Run unit tests
+        run: pnpm test:unit
+
+  eve-build:
+    name: Eve build
+    if: needs.decide.outputs.run_checks == 'true'
+    needs: decide
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      NODE_ENV: "test"
+      # Keep the build independent from Neon. A build-time DB access should
+      # fail deterministically; request-time data belongs outside the build.
+      DATABASE_URL: "postgresql://build:noconnect@127.0.0.1:1/noop"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Setup project
+        uses: ./.github/actions/setup
+      - name: Build Eve agent
+        run: pnpm exec eve build
+
+  next-build:
+    name: Next.js build
+    if: needs.decide.outputs.run_checks == 'true'
+    needs: decide
+    runs-on: ubuntu-latest
+    environment: Preview
+    env:
+      NODE_ENV: "test"
+      SKIP_BUILD_TYPECHECK: "1"
+      # Keep the build independent from Neon. A build-time DB access should
+      # fail deterministically; request-time data belongs outside the build.
+      DATABASE_URL: "postgresql://build:noconnect@127.0.0.1:1/noop"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Setup project
+        uses: ./.github/actions/setup
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
+      - name: Build Next.js app
+        run: pnpm exec next build
+      - name: Save Next.js build cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
+
+  prettier:
+    name: Prettier (changed files)
+    if: needs.decide.outputs.run_checks == 'true'
+    needs: decide
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup project
+        uses: ./.github/actions/setup
+        with:
+          prisma: "false"
+      - name: Check changed files
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mapfile -d '' changed_files < <(git diff --name-only -z --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA")
+
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No changed files to check."
+            exit 0
+          fi
+
+          # Prettier's ignore file remains authoritative for documentation,
+          # generated files, and formats intentionally outside the project scope.
+          pnpm exec prettier --check --ignore-unknown "${changed_files[@]}"
+
+  # Keep this as the single required status check in branch protection. The
+  # individual jobs are intentionally allowed to be skipped by the decision
+  # gate, while an actual failure or cancellation still fails this fan-in.
+  quality-checks:
+    name: quality-checks
+    if: always()
+    needs: [decide, lint, typecheck, test, eve-build, next-build, prettier]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify check results
+        if: >-
+          needs.decide.result != 'success' ||
+          needs.lint.result == 'failure' ||
+          needs.lint.result == 'cancelled' ||
+          needs.typecheck.result == 'failure' ||
+          needs.typecheck.result == 'cancelled' ||
+          needs.test.result == 'failure' ||
+          needs.test.result == 'cancelled' ||
+          needs['eve-build'].result == 'failure' ||
+          needs['eve-build'].result == 'cancelled' ||
+          needs['next-build'].result == 'failure' ||
+          needs['next-build'].result == 'cancelled'
+        run: |
+          echo "The CI decision or a quality job did not succeed."
+          exit 1
+      - name: Report skipped quality checks
+        if: needs.decide.outputs.run_checks != 'true'
+        run: |
+          echo "Quality checks skipped: ${{ needs.decide.outputs.reason }}."
+      - name: Report successful quality checks
+        if: needs.decide.outputs.run_checks == 'true'
+        run: echo "Required checks passed; Prettier is advisory."
