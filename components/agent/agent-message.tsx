@@ -44,11 +44,13 @@ export function AgentMessage({
   canRespond,
   isStreaming,
   message,
+  onAction,
   onInputResponses,
 }: {
   canRespond: boolean;
   isStreaming: boolean;
   message: EveMessage;
+  onAction: (action: { id: string; label: string; operation: string }) => Promise<void>;
   onInputResponses: (responses: readonly AgentInputResponse[]) => Promise<void>;
 }) {
   const lastTextIndex = message.parts.reduce(
@@ -64,6 +66,7 @@ export function AgentMessage({
             canRespond={canRespond}
             key={partKey(part, index)}
             onInputResponses={onInputResponses}
+            onAction={onAction}
             part={part}
             showCaret={
               isStreaming &&
@@ -79,11 +82,13 @@ export function AgentMessage({
 
 function AgentMessagePart({
   canRespond,
+  onAction,
   onInputResponses,
   part,
   showCaret,
 }: {
   canRespond: boolean;
+  onAction: (action: { id: string; label: string; operation: string }) => Promise<void>;
   onInputResponses: (responses: readonly AgentInputResponse[]) => Promise<void>;
   part: EveMessagePart;
   showCaret: boolean;
@@ -111,6 +116,7 @@ function AgentMessagePart({
       return (
         <ToolActivity
           canRespond={canRespond}
+          onAction={onAction}
           onInputResponses={onInputResponses}
           part={part}
         />
@@ -147,10 +153,12 @@ function AuthorizationPrompt({ part }: { part: EveAuthorizationPart }) {
 
 function ToolActivity({
   canRespond,
+  onAction,
   onInputResponses,
   part,
 }: {
   canRespond: boolean;
+  onAction: (action: { id: string; label: string; operation: string }) => Promise<void>;
   onInputResponses: (responses: readonly AgentInputResponse[]) => Promise<void>;
   part: EveDynamicToolPart;
 }) {
@@ -191,10 +199,20 @@ function ToolActivity({
           />
         </CardContent>
       ) : null}
-      {result ? (
+          {result ? (
         <CardContent className="flex flex-col gap-2 border-t border-border/70 pt-3">
           <p className="font-medium text-foreground">{result.title}</p>
           <p className="text-sm text-muted-foreground">{result.summary}</p>
+          {result.outreach ? <ComplianceOutreachCard outreach={result.outreach} /> : null}
+          {result.actions.length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {result.actions.map((action) => (
+                <Button disabled={!canRespond} key={action.id} onClick={() => void onAction(action)} size="sm" type="button" variant={action.destructive ? "destructive" : "default"}>
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
           {result.links.length > 0 ? (
             <div className="flex flex-wrap gap-2 pt-1">
               {result.links.map((link) => (
@@ -286,7 +304,9 @@ function InputRequest({
 }
 
 type ResultEnvelope = {
+  actions: { destructive?: boolean; id: string; label: string; operation: string }[];
   links: { href: string; label: string }[];
+  outreach: { body: string; contactEmail: string | null; contactName: string | null; daysOpen: number | null; lastFollowUpAt: string | null; party: string; subject: string; slaStatus: string } | null;
   summary: string;
   title: string;
 };
@@ -309,7 +329,35 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
           ),
       )
     : [];
-  return { links, summary: candidate.summary, title: candidate.title };
+  const actions = Array.isArray(candidate.actions)
+    ? candidate.actions.filter((action): action is ResultEnvelope["actions"][number] => Boolean(action && typeof action === "object" && typeof (action as Record<string, unknown>).id === "string" && typeof (action as Record<string, unknown>).label === "string" && typeof (action as Record<string, unknown>).operation === "string"))
+    : [];
+  const outreachValue = candidate.data && typeof candidate.data === "object" && !Array.isArray(candidate.data) ? (candidate.data as Record<string, unknown>).outreach : null;
+  const outreach = outreachValue && typeof outreachValue === "object" && !Array.isArray(outreachValue)
+    ? (() => { const value = outreachValue as Record<string, unknown>; return typeof value.body === "string" && typeof value.party === "string" && typeof value.subject === "string" ? { body: value.body, contactEmail: typeof value.contactEmail === "string" ? value.contactEmail : null, contactName: typeof value.contactName === "string" ? value.contactName : null, daysOpen: typeof value.daysOpen === "number" ? value.daysOpen : null, lastFollowUpAt: typeof value.lastFollowUpAt === "string" ? value.lastFollowUpAt : null, party: value.party, subject: value.subject, slaStatus: typeof value.slaStatus === "string" ? value.slaStatus : "READY" } : null; })()
+    : null;
+  return { actions, links, outreach, summary: candidate.summary, title: candidate.title };
+}
+
+function ComplianceOutreachCard({ outreach }: { outreach: NonNullable<ResultEnvelope["outreach"]> }) {
+  return (
+    <div className="rounded-lg border border-royal-gold/35 bg-royal-gold-light/30 p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-medium">{outreach.party.replaceAll("_", " ")}</span>
+        <Badge variant="outline">{outreach.slaStatus}{outreach.daysOpen === null ? "" : ` · ${outreach.daysOpen}d open`}</Badge>
+      </div>
+      <dl className="mt-2 grid gap-1 text-xs text-muted-foreground">
+        <div><dt className="inline font-medium text-foreground">To: </dt><dd className="inline">{outreach.contactName ? `${outreach.contactName} · ` : ""}{outreach.contactEmail ?? "No recipient"}</dd></div>
+        <div><dt className="inline font-medium text-foreground">Subject: </dt><dd className="inline break-all">{outreach.subject}</dd></div>
+      </dl>
+      <div className="mt-3 whitespace-pre-wrap rounded-md border border-border/60 bg-white/70 p-2 text-xs text-foreground">{stripHtml(outreach.body)}</div>
+      {outreach.lastFollowUpAt ? <p className="mt-2 text-[11px] text-muted-foreground">Last follow-up: {new Date(outreach.lastFollowUpAt).toLocaleString()}</p> : null}
+    </div>
+  );
+}
+
+function stripHtml(value: string) {
+  return value.replace(/<br\s*\/?>(\s*)/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
 }
 
 function toolLabel(name: string) {

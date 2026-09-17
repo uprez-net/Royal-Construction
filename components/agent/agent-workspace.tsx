@@ -123,6 +123,10 @@ export function AgentWorkspace({
     await agent.respond(responses);
   }
 
+  async function runAction(action: { id: string; label: string; operation: string }) {
+    await sendMessage(`Please execute the approved UI action "${action.label}" (${action.operation}, action id ${action.id}) after I review the prepared details.`);
+  }
+
   return (
     <section className="grid min-h-[40rem] flex-1 overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm md:h-[calc(100dvh-10.5rem)] md:grid-cols-[18rem_minmax(0,1fr)]">
       <aside className="flex min-h-0 flex-col border-b border-border/70 bg-muted/25 md:border-r md:border-b-0">
@@ -250,6 +254,7 @@ export function AgentWorkspace({
                 canRespond={!busy}
                 isStreaming={agent.status === "streaming"}
                 key={message.id}
+                onAction={runAction}
                 message={message}
                 onInputResponses={respond}
               />
