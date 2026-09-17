@@ -180,7 +180,7 @@ export function AgentWorkspace({
 
   return (
     <section className="grid min-h-[40rem] flex-1 overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm md:h-[calc(100dvh-10.5rem)] md:grid-cols-[18rem_minmax(0,1fr)]">
-      <aside className="order-2 flex min-h-0 flex-col border-b border-border/70 bg-muted/25 md:order-2 md:border-b-0 md:border-l">
+      <aside className="order-2 flex min-h-0 flex-col border-b border-border/70 bg-muted/25 md:order-1 md:border-b-0 md:border-r">
         <div className="flex items-center justify-between gap-3 p-4">
           <div>
             <p className="font-heading text-base font-semibold text-foreground">Conversations</p>
@@ -217,7 +217,7 @@ export function AgentWorkspace({
         </ScrollArea>
       </aside>
 
-      <div className="order-1 flex min-h-0 min-w-0 flex-col md:order-1">
+      <div className="order-1 flex min-h-0 min-w-0 flex-col md:order-2">
         <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink">
