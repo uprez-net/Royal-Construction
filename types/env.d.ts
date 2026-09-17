@@ -99,5 +99,7 @@ namespace NodeJS {
     // Upstash Redis
     UPSTASH_REDIS_REST_URL: string;
     UPSTASH_REDIS_REST_TOKEN: string;
+
+    TEST_USER_EMAIL: string;
   }
 }
