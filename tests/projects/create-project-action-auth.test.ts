@@ -77,7 +77,7 @@ test("conversion re-parents only the lead's own files, never a File matched by a
     "createProjectWithLead no longer re-parents the lead's files",
   );
   const where = body.slice(start, body.indexOf("data:", start));
-  assert.match(where, /where: \{\s*leadId: lead\.id\s*\}/);
+  assert.match(where, /where: \{\s*leadId: lead\.id\s*,?\s*\}/);
   assert.doesNotMatch(where, /\burl\b|sourceDocuments/);
 });
 

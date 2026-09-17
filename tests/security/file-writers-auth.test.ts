@@ -79,6 +79,7 @@ test("the upload staff roles are the roles that read every lead", () => {
   const internal = declared[1]
     .split(",")
     .map((role) => role.trim().replace(/^Role\./, ""))
+    .filter(Boolean)
     .sort();
   assert.deepEqual([...PROJECT_STAFF_ROLES].sort(), internal);
 });

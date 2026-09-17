@@ -25,12 +25,14 @@ graph TD
     C -->|Yes| G[Unit tests]
     C -->|Yes| H[Eve build]
     C -->|Yes| I[Next.js build]
+    C -->|Yes| L[Prettier changed files]
     D --> J[quality-checks]
     E --> J
     F --> J
     G --> J
     H --> J
     I --> J
+    L --> J
     J --> K[Completed quality workflow]
 
     style A fill:#e1f5fe
@@ -49,6 +51,7 @@ graph TD
 | `test` | Run the unit test suite | `decide` when checks are enabled | Linux runner; staging database secret |
 | `eve-build` | Compile the Eve agent | `decide` when checks are enabled | Linux runner; Preview environment |
 | `next-build` | Create a production Next.js build without network database access | `decide` when checks are enabled | Linux runner; isolated loopback database URL |
+| `prettier` | Check formatting only for changed, supported files | `decide` when checks are enabled | Linux runner; non-blocking job |
 | `quality-checks` | Fan in all outcomes into the protected-branch status | `decide`, and all check jobs | Linux runner |
 
 ## Requirements Matrix
@@ -64,6 +67,7 @@ graph TD
 | REQ-005 | Skip checks for a revision created by merging a pull request into a deployment branch | High | An associated merged pull request is detected on the branch push and the quality jobs are skipped |
 | REQ-006 | Preserve a deterministic build database guard | High | Next.js build-time database access uses an unreachable loopback URL and cannot use staging or production data |
 | REQ-007 | Publish a machine-readable decision for the deployment workflow | High | Every successful decision produces a short-lived decision artifact |
+| REQ-008 | Report formatting drift without blocking quality or deployment | Medium | The Prettier job checks only changed files, is allowed to fail, and is excluded from failure evaluation by `quality-checks` |
 
 ### Security Requirements
 
@@ -140,6 +144,7 @@ quality-checks: status  # Protected-branch fan-in status.
 |------------|----------|-----------------|
 | Diff classification failure | Run the full quality suite and withhold deployment authorization | Investigate revision metadata or repository state |
 | Lint/type/test/build failure | Fail `quality-checks` | Correct the source or rerun after a transient failure is resolved |
+| Prettier check failure | Report a non-blocking formatting warning | Format the changed files when convenient; quality and deployment remain governed by the required checks |
 | Intentional stage skip | Mark individual checks skipped but allow `quality-checks` to pass | No action required |
 | Decision artifact failure | Fail the quality workflow or prevent downstream deployment | Rerun the workflow after artifact service availability returns |
 
@@ -151,6 +156,7 @@ quality-checks: status  # Protected-branch fan-in status.
 |------|----------|-------------------|
 | Change decision | Revision classification is available | None; unavailable classification is fail-safe |
 | Code quality | Lint, typecheck, unit tests, Eve build, and Next.js build succeed | Documentation-only, whitespace-only, or merged-PR push |
+| Formatting advisory | Prettier reports changed files are formatted | Non-blocking; does not fail `quality-checks` |
 | Protected status | Fan-in has no failure/cancellation and the decision job succeeded | Intentional check skips are accepted |
 
 ## Monitoring & Observability
@@ -222,6 +228,7 @@ quality-checks: status  # Protected-branch fan-in status.
 - **VLD-004**: Documentation-only and whitespace-only decisions skip all quality jobs.
 - **VLD-005**: The decision artifact is present for every successful decision.
 - **VLD-006**: The Next.js build succeeds with the loopback-only database URL.
+- **VLD-007**: The Prettier job checks only files changed by the revision and cannot fail `quality-checks`.
 
 ### Performance Benchmarks
 

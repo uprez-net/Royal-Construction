@@ -87,11 +87,19 @@ function buttonTag(source: string, handler: string): string {
 for (const [file, handler, action] of BUTTONS) {
   test(`${handler} in ${file} disables while any action runs and reports its own`, () => {
     const tag = buttonTag(read(`${W}/${file}`), handler);
+    const normalizedTag = tag.replace(/\s+/g, " ");
 
-    assert.match(tag, /disabled=\{[^}]*lifecycleBusy !== null/, tag);
-    assert.ok(
-      tag.includes(`aria-busy={lifecycleBusy === "${action}" || undefined}`),
-      tag,
+    assert.match(
+      normalizedTag,
+      /disabled=\{[^}]*lifecycleBusy !== null/,
+      normalizedTag,
+    );
+    assert.match(
+      normalizedTag,
+      new RegExp(
+        `aria-busy=\\{\\s*lifecycleBusy === "${action}" \\|\\| undefined\\s*\\}`,
+      ),
+      normalizedTag,
     );
   });
 }

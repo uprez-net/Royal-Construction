@@ -19,7 +19,9 @@ function reminderBody(): string {
     "export async function sendTradieScheduleReminder(",
   );
   assert.ok(start >= 0, "sendTradieScheduleReminder not found");
-  const end = schedules.indexOf("\n}", start);
+  const bodyStart = schedules.indexOf(") {", start);
+  assert.ok(bodyStart > start, "sendTradieScheduleReminder has no body");
+  const end = schedules.indexOf("\n}", bodyStart);
   assert.ok(end > start, "sendTradieScheduleReminder has no end");
   return schedules.slice(start, end);
 }
@@ -44,9 +46,10 @@ test("the reminder checks the caller is staff before it looks anything up or sen
 
 test("the reminder goes to the schedule's tradie, never an address from the browser", () => {
   const body = reminderBody();
+  const normalizedBody = body.replace(/\s+/g, " ");
   assert.match(
-    body,
-    /\{ scheduleId, subject, body \}: \{ scheduleId: string; subject: string; body: string \}/,
+    normalizedBody,
+    /\{\s*scheduleId,\s*subject,\s*body,?\s*\}\s*:\s*\{\s*scheduleId: string;\s*subject: string;\s*body: string;?\s*\}/,
   );
   assert.match(body, /const to = schedule\.tradie\.email\.trim\(\);/);
   assert.doesNotMatch(body, /\bto: string\b/);
