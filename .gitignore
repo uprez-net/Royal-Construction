@@ -55,6 +55,8 @@ backups/
 
 .vercel
 .swc
+.output/
+.eve/
 .vscode/
 .playwright-mcp/
 .omc/
