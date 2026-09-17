@@ -144,7 +144,7 @@ export function AppShell({
           </nav>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           
           {/* ── Mobile Sidebar Sheet ── */}
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
@@ -347,8 +347,10 @@ export function AppShell({
 
           <main
             className={cn(
-              "flex min-h-0 w-full flex-1 flex-col gap-6",
-              "overflow-y-auto",
+              "min-h-0 w-full flex-1 gap-6",
+              pathName.startsWith("/agent")
+                ? "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
+                : "flex flex-col overflow-y-auto",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",

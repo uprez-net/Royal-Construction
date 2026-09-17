@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEveAgent } from "eve/react";
 import {
+  ArrowDown,
   Bot,
   CircleStop,
   Archive,
@@ -40,7 +41,6 @@ import {
   InputGroupAddon,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import type { AgentSessionListItem } from "@/lib/data/agent-sessions";
 import { cn } from "@/lib/utils";
@@ -67,9 +67,11 @@ export function AgentWorkspace({
   const [sessions, setSessions] = useState(initialSessions);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
+  const stickToBottomRef = useRef(true);
 
   const onSessionChange = useCallback(
     (session: { sessionId: string; streamIndex: number } | undefined) => {
@@ -138,7 +140,7 @@ export function AgentWorkspace({
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    if (!viewport || !stickToBottomRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
     });
@@ -163,6 +165,8 @@ export function AgentWorkspace({
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";
     if ((!message.trim() && attachments.length === 0) || busy) return;
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
     setComposer("");
     const uploaded = await Promise.all(attachments.map(async (file) => {
       const form = new FormData();
@@ -183,6 +187,8 @@ export function AgentWorkspace({
   }
 
   async function respond(responses: readonly AgentInputResponse[]) {
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
     await agent.respond(responses);
   }
 
@@ -208,9 +214,25 @@ export function AgentWorkspace({
     window.requestAnimationFrame(() => composerRef.current?.focus());
   }
 
+  function handleMessageScroll(event: React.UIEvent<HTMLDivElement>) {
+    const viewport = event.currentTarget;
+    const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 48;
+    if (stickToBottomRef.current === atBottom) return;
+    stickToBottomRef.current = atBottom;
+    setShowScrollToBottom(!atBottom);
+  }
+
+  function scrollToBottom() {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    stickToBottomRef.current = true;
+    setShowScrollToBottom(false);
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+  }
+
   return (
-    <section className={cn("grid h-full min-h-0 flex-1 overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 md:h-[calc(100dvh-10.5rem)]", historyOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[0_minmax(0,1fr)]")}>
-      <aside aria-hidden={!historyOpen} className={cn("order-2 flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-border/70 bg-muted/25 transition-[max-height,opacity] duration-200 md:order-1 md:border-b-0 md:border-r md:transition-opacity", historyOpen ? "max-h-80 opacity-100 md:max-h-none" : "pointer-events-none max-h-0 opacity-0 md:max-h-none")} id="agent-conversation-history">
+    <section className={cn("grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 md:grid-rows-[minmax(0,1fr)]", historyOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[0_minmax(0,1fr)]")}>
+      <aside aria-hidden={!historyOpen} className={cn("order-2 grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border-b border-border/70 bg-muted/25 transition-[max-height,opacity] duration-200 md:order-1 md:border-b-0 md:border-r md:transition-opacity", historyOpen ? "max-h-80 opacity-100 md:max-h-none" : "pointer-events-none max-h-0 opacity-0 md:max-h-none")} id="agent-conversation-history">
         <div className="flex items-center justify-between gap-3 p-4">
           <div>
             <p className="font-heading text-base font-semibold text-foreground">Conversations</p>
@@ -223,10 +245,10 @@ export function AgentWorkspace({
           </Button>
         </div>
         <Separator />
-        <ScrollArea className="max-h-44 flex-1 md:max-h-none">
-          <nav aria-label="Agent conversations" className="flex gap-2 p-3 md:flex-col">
+        <div className="min-h-0 overflow-y-auto overscroll-contain">
+          <nav aria-label="Agent conversations" className="flex min-h-0 flex-col gap-2 p-3">
             {sessions.length === 0 ? (
-              <div className="flex min-w-64 items-center gap-3 rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground md:min-w-0">
+              <div className="flex items-center gap-3 rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
                 <History aria-hidden="true" className="size-4 shrink-0" />
                 Your conversations will appear here.
               </div>
@@ -239,7 +261,7 @@ export function AgentWorkspace({
                   || "New conversation";
                 return (
                   <div className="group relative" key={session.eveSessionId}>
-                    <Link aria-current={active ? "page" : undefined} className={cn("block min-w-64 rounded-lg border px-3 py-3 pr-9 transition-colors md:min-w-0", active ? "border-royal-gold/50 bg-royal-gold-light/55" : "border-transparent hover:border-border hover:bg-white")} href={`/agent/${session.eveSessionId}`}>
+                    <Link aria-current={active ? "page" : undefined} className={cn("block rounded-lg border px-3 py-3 pr-9 transition-colors", active ? "border-royal-gold/50 bg-royal-gold-light/55" : "border-transparent hover:border-border hover:bg-white")} href={`/agent/${session.eveSessionId}`}>
                       <div className="flex items-start gap-2"><MessageSquareText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-foreground">{title}</p><div className="mt-1 flex items-center justify-between gap-2"><span className="truncate text-xs text-muted-foreground">{formatSessionDate(session.lastEventAt ?? session.updatedAt)}</span><span className={cn("size-1.5 shrink-0 rounded-full", statusDot(session.status))} /></div></div></div>
                     </Link>
                     <Button aria-label="Archive conversation" className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100" onClick={async (event) => { event.preventDefault(); const response = await fetch(`/api/agent/sessions/${session.eveSessionId}/archive`, { method: "POST" }); if (response.ok) setSessions((items) => items.filter((item) => item.eveSessionId !== session.eveSessionId)); }} size="icon-sm" type="button" variant="ghost"><Archive /></Button>
@@ -248,10 +270,10 @@ export function AgentWorkspace({
               })
             )}
           </nav>
-        </ScrollArea>
+        </div>
       </aside>
 
-      <div className="order-1 flex min-h-0 min-w-0 flex-col md:order-2">
+      <div className="order-1 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden md:order-2">
         <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
             <Button aria-controls="agent-conversation-history" aria-expanded={historyOpen} aria-label={historyOpen ? "Collapse conversation history" : "Expand conversation history"} onClick={() => setHistoryOpen((open) => !open)} size="icon-sm" type="button" variant="outline">
@@ -284,10 +306,11 @@ export function AgentWorkspace({
           </div>
         </header>
 
-        <ScrollArea className="min-h-0 flex-1 overflow-hidden" viewportRef={viewportRef}>
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="relative h-[60vh] overflow-hidden">
+          <div className="absolute  inset-0 overflow-y-auto overscroll-contain" onScroll={handleMessageScroll} ref={viewportRef}>
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
             {agent.data.messages.length === 0 && agent.status !== "resuming" ? (
-              <Empty className="min-h-[24rem] border-0">
+              <Empty className="min-h-96 border-0">
                 <EmptyHeader>
                   <EmptyMedia className="size-12 rounded-xl bg-royal-gold-light text-royal-gold-ink" variant="icon">
                     <Sparkles aria-hidden="true" />
@@ -336,10 +359,24 @@ export function AgentWorkspace({
                 <AlertDescription className="flex flex-wrap items-center gap-3"><span>{agent.error.message}</span><Button onClick={() => void agent.resume()} size="sm" type="button" variant="outline">Retry stream</Button></AlertDescription>
               </Alert>
             ) : null}
+            </div>
           </div>
-        </ScrollArea>
+          {showScrollToBottom ? (
+            <Button
+              aria-label="Scroll to the latest message"
+              className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border-border/80 bg-white/95 text-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:bg-royal-gold-light"
+              onClick={scrollToBottom}
+              size="icon-sm"
+              title="Scroll to latest message"
+              type="button"
+              variant="outline"
+            >
+              <ArrowDown aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
 
-        <footer className="shrink-0 border-t border-border/70 bg-white p-3 sm:p-4">
+        <footer className="relative z-10 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4">
           <form
             className="mx-auto max-w-4xl"
             onSubmit={(event) => {
