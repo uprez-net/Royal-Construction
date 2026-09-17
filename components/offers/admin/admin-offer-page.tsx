@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { PageHeroCard } from "@/components/common/page-hero-card";
 import { Badge } from "@/components/ui/badge";
+import { OfferContentHeader } from "./offer-content-header";
 import {
+  ADMIN_OFFER_TABS,
   type AdminOfferTabs,
-  OfferContentHeader,
-} from "./offer-content-header";
+  adminPanelId,
+  adminTabId,
+  dirtyByTab,
+} from "./offer-content-tabs";
 import { JobSetupScreen } from "./job-setup-screen";
 import { OfferCostScheduleScreen } from "./cost-schedule-screen";
 import { OfferScopePage } from "./offer-scope-page";
 import { OfferContentPage } from "./offer-content-page";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { hydrated } from "@/lib/store/slices/adminOfferContentSlice";
 import type { AdminOfferContent } from "@/types/admin-offer-content";
 import { Settings2 } from "lucide-react";
@@ -25,6 +29,7 @@ interface AdminOfferPageProps {
 export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
   const dispatch = useAppDispatch();
   const [activeTab, setActiveTab] = useState<AdminOfferTabs>("job-setup");
+  const dirty = useAppSelector((s) => s.adminOfferContent.dirty);
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -35,43 +40,39 @@ export function AdminOfferPage({ initialContent }: AdminOfferPageProps) {
 
   return (
     <div className="space-y-6">
-      <Card className="overflow-hidden border-royal-gold/20 bg-linear-to-br from-royal-gold-light via-amber-50 to-yellow-50 shadow-sm">
-        <CardContent className="relative p-6">
-          <div className="absolute -right-12 -top-10 size-40 rounded-full bg-royal-gold/10" />
-          <div className="absolute -bottom-14 right-20 size-32 rounded-full bg-royal-gold-dark/10" />
-          <div className="relative flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-royal-gold/15 text-royal-gold-dark">
-                <Settings2 className="size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-extrabold text-slate-900">
-                    Offer Pre-Fill Content
-                  </h2>
-                  <Badge className="bg-royal-gold text-white">Admin</Badge>
-                </div>
-                <p className="text-sm text-slate-600">
-                  Define the reusable boilerplate content pre-filled onto every
-                  new construction offer — build scope, cost schedule, allowances,
-                  exclusions, and document copy.
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <PageHeroCard
+        headingLevel="h1"
+        title="Offer Pre-Fill Content"
+        description="Define the reusable boilerplate content pre-filled onto every new construction offer — build scope, cost schedule, allowances, exclusions, and document copy."
+        icon={<Settings2 />}
+        badge={<Badge className="bg-royal-gold-ink text-white">Admin</Badge>}
+      />
 
-      <OfferContentHeader activeTab={activeTab} onTabChange={setActiveTab} />
+      <OfferContentHeader
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        dirtyTabs={dirtyByTab(dirty)}
+      />
 
-      <div>
+      {/* The panel the open tab controls, labelled by that tab. The screens
+          title their cards h3, so the sr-only h2 keeps the outline from
+          skipping a level under the hero's h1. */}
+      <section
+        role="tabpanel"
+        id={adminPanelId(activeTab)}
+        aria-labelledby={adminTabId(activeTab)}
+        tabIndex={0}
+      >
+        <h2 className="sr-only">
+          {ADMIN_OFFER_TABS.find((tab) => tab.id === activeTab)?.label}
+        </h2>
         {activeTab === "job-setup" && <JobSetupScreen />}
         {activeTab === "cost-schedule" && <OfferCostScheduleScreen />}
         {activeTab === "offer-scope" && <OfferScopePage />}
         {activeTab === "offer-inclusions" && <OfferInclusionsPage />}
         {activeTab === "offer-content" && <OfferContentPage />}
         {activeTab === "HBFC-claim" && <HBFCClaimPage />}
-      </div>
+      </section>
     </div>
   );
 }
