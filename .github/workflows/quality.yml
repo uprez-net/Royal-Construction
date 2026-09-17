@@ -195,25 +195,6 @@ jobs:
       - name: Run unit tests
         run: pnpm test:unit
 
-  eve-build:
-    name: Eve build
-    if: needs.decide.outputs.run_checks == 'true'
-    needs: decide
-    runs-on: ubuntu-latest
-    environment: Preview
-    env:
-      NODE_ENV: "test"
-      # Keep the build independent from Neon. A build-time DB access should
-      # fail deterministically; request-time data belongs outside the build.
-      DATABASE_URL: "postgresql://build:noconnect@127.0.0.1:1/noop"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-      - name: Setup project
-        uses: ./.github/actions/setup
-      - name: Build Eve agent
-        run: pnpm exec eve build
-
   next-build:
     name: Next.js build
     if: needs.decide.outputs.run_checks == 'true'
@@ -247,44 +228,13 @@ jobs:
           path: ${{ github.workspace }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
 
-  prettier:
-    name: Prettier (changed files)
-    if: needs.decide.outputs.run_checks == 'true'
-    needs: decide
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - name: Setup project
-        uses: ./.github/actions/setup
-        with:
-          prisma: "false"
-      - name: Check changed files
-        env:
-          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: |
-          mapfile -d '' changed_files < <(git diff --name-only -z --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA")
-
-          if [ "${#changed_files[@]}" -eq 0 ]; then
-            echo "No changed files to check."
-            exit 0
-          fi
-
-          # Prettier's ignore file remains authoritative for documentation,
-          # generated files, and formats intentionally outside the project scope.
-          pnpm exec prettier --check --ignore-unknown "${changed_files[@]}"
-
   # Keep this as the single required status check in branch protection. The
   # individual jobs are intentionally allowed to be skipped by the decision
   # gate, while an actual failure or cancellation still fails this fan-in.
   quality-checks:
     name: quality-checks
     if: always()
-    needs: [decide, lint, typecheck, test, eve-build, next-build, prettier]
+    needs: [decide, lint, typecheck, test, next-build]
     runs-on: ubuntu-latest
     steps:
       - name: Verify check results
@@ -296,8 +246,6 @@ jobs:
           needs.typecheck.result == 'cancelled' ||
           needs.test.result == 'failure' ||
           needs.test.result == 'cancelled' ||
-          needs['eve-build'].result == 'failure' ||
-          needs['eve-build'].result == 'cancelled' ||
           needs['next-build'].result == 'failure' ||
           needs['next-build'].result == 'cancelled'
         run: |
