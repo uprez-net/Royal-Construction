@@ -54,7 +54,7 @@ export function SequenceMappingPanel() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 pt-4">
+      <CardContent className="grid gap-3">
         <div className="rounded-lg border border-royal-gold/25 bg-royal-gold-light/25 px-3 py-2 text-sm text-muted-foreground">
           Sequence IDs are intentionally hidden. Trade and milestone columns are
           downstream handoff data for Project creation, not customer-facing copy.

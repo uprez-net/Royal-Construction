@@ -7,7 +7,9 @@ import {
   type OfferWorkspaceJob,
   type OfferWorkspaceScopeItem,
   type OfferDocumentDraft,
+  type OfferWorkspaceStatus,
 } from "./workspace-model";
+import { keepFrozenSlices, lockedSnapshotChanges } from "./offer-editability";
 import { INITIAL_AREA_CALCULATOR, type OfferAreaCalculator } from "./workspace-area";
 import {
   withDerivedHbcfPremium,
@@ -23,6 +25,7 @@ import {
   RATE_CARD_TIERS,
 } from "./workspace-rate-card";
 import { STANDARD_INCLUSION_ENTRIES } from "./workspace-proposal-content";
+import { isAllowedOfferImageUrl } from "./offer-image-url";
 
 // The bundle of workspace state we persist (everything except transient status
 // and the ephemeral import result). Mirrors the container's useState set.
@@ -450,6 +453,11 @@ const workspaceStateV1Schema = z.object({
 
 // Coerce persisted image values to the {url, source} shape. Older offers stored
 // a bare URL string per slot; upgrade those to source "upload" on read.
+//
+// A URL outside Royal's Blob storage is dropped here, leaving the slot empty, so
+// no renderer is ever handed one to fetch (see offer-image-url.ts). Dropped
+// rather than refused: this runs inside the strict read parse, and a refusal
+// would make an old row with one bad slot unopenable.
 function coerceImages(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object") {
     return {};
@@ -457,8 +465,15 @@ function coerceImages(value: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (typeof entry === "string") {
-      out[key] = { url: entry, source: "upload" };
-    } else if (entry && typeof entry === "object" && "url" in entry) {
+      if (isAllowedOfferImageUrl(entry)) {
+        out[key] = { url: entry, source: "upload" };
+      }
+    } else if (
+      entry &&
+      typeof entry === "object" &&
+      "url" in entry &&
+      isAllowedOfferImageUrl((entry as { url: unknown }).url)
+    ) {
       out[key] = entry;
     }
   }
@@ -691,6 +706,42 @@ export function parseWorkspaceState(
   return workspaceStateV1Schema.parse(migrateWorkspaceState(json));
 }
 
+// The write-side check for a snapshot a client asked to save. The save used to
+// write whatever arrived, so a malformed snapshot could land a row the read parse
+// then refuses, which makes the offer unopenable. The read parse also forgives a
+// bad image URL by dropping it, so old rows still open; a save is refused
+// instead, so none is ever written.
+export function validatePersistedWorkspace(
+  value: unknown,
+):
+  | { ok: true; state: PersistedOfferWorkspaceState }
+  | { ok: false; error: string } {
+  const images =
+    typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>).images
+      : undefined;
+  if (typeof images === "object" && images !== null) {
+    for (const [slot, entry] of Object.entries(images)) {
+      if (entry === undefined || entry === null) {
+        continue;
+      }
+      const url =
+        typeof entry === "string" ? entry : (entry as { url?: unknown }).url;
+      if (!isAllowedOfferImageUrl(url)) {
+        return {
+          ok: false,
+          error: `Image slot "${slot}" does not point at Royal's Blob storage.`,
+        };
+      }
+    }
+  }
+  const parsed = workspaceStateV1Schema.safeParse(value);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.message };
+  }
+  return { ok: true, state: parsed.data };
+}
+
 // ─── Serialize in-memory snapshot → persisted (cents) ───
 export function serializeWorkspace(
   snapshot: OfferWorkspaceSnapshot,
@@ -835,6 +886,40 @@ export function deserializeWorkspace(
     // be quietly re-read as v1 and repriced under rules it was never quoted on.
     calcVersion: persisted.calcVersion,
   };
+}
+
+// A snapshot as it reads back once hydration has nothing left to fill in. The
+// save lock compares both sides in this form. A tab holds the frozen parts
+// either as the row stored them or as it hydrated them, and the two differ with
+// no edit made: a legacy row gains a reverse-filled HBCF contract value on its
+// first hydrate and a premium re-derived from it on its second, and a workbook
+// premium kept to the cent re-derives a cent off. Hydration is stable after two
+// passes. Throws when the read parse refuses the snapshot.
+export function settledWorkspace(state: unknown): PersistedOfferWorkspaceState {
+  const once = serializeWorkspace(deserializeWorkspace(parseWorkspaceState(state)));
+  return serializeWorkspace(deserializeWorkspace(once));
+}
+
+// What saveOfferWorkspace does with a validated incoming snapshot: refuse it
+// when it changes a slice frozen at the offer's stored status, otherwise write
+// it with those slices kept as stored. `stored` is the parsed stored row, null
+// when the offer has never been saved.
+export function planWorkspaceSave(
+  status: OfferWorkspaceStatus,
+  stored: PersistedOfferWorkspaceState | null,
+  incoming: PersistedOfferWorkspaceState,
+):
+  | { ok: true; state: PersistedOfferWorkspaceState }
+  | { ok: false; changes: readonly string[] } {
+  const changes = lockedSnapshotChanges(
+    status,
+    stored === null ? null : settledWorkspace(stored),
+    settledWorkspace(incoming),
+  );
+  if (changes.length > 0) {
+    return { ok: false, changes };
+  }
+  return { ok: true, state: keepFrozenSlices(status, stored, incoming) };
 }
 
 

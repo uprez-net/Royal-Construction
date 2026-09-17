@@ -44,17 +44,21 @@ import {
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 
+import {
+  formatContractMoney,
+  paymentScheduleLine as buildPaymentScheduleLine,
+  stageAmount,
+  resolveSignedTenderExclusions,
+} from "@/lib/offer/project-handoff-commercials";
+import {
+  describeTenderPriceMismatch,
+  resolveContractPaymentSource,
+} from "@/lib/offer/contract-payment-source";
+import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
+
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
   | { ok: false; error: string };
-
-function moneyWithCents(value: number): string {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-    minimumFractionDigits: 2,
-  }).format(value);
-}
 
 // Send the MBA BC4 building Contract for signature from the DocuSign template
 // (DOCUSIGN_CONTRACT_TEMPLATE_ID; roles + tab labels in
@@ -82,6 +86,7 @@ export async function sendContractForSignature(input: {
       workspaceState: true,
       agreedSnapshot: true,
       lead: { select: { email: true } },
+      tender: { select: { documentData: true } },
     },
   });
   if (!offer) {
@@ -147,6 +152,30 @@ export async function sendContractForSignature(input: {
   const contractValue =
     buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
+
+  // The payment schedule and deposit come from the Tender the customer signed;
+  // the price stays the agreed snapshot's. A Tender that printed a different
+  // price is refused rather than reconciled, before the send is claimed.
+  const payment = resolveContractPaymentSource({
+    tenderDocumentData: offer.tender?.documentData ?? null,
+    agreedPaymentSchedule: snapshot.paymentSchedule,
+  });
+  if (payment.source === "agreed-snapshot") {
+    console.warn(
+      `[offer] contract for offer ${offer.id}: no payment schedule on the Tender row, using the agreed snapshot's`,
+    );
+  } else {
+    console.info(
+      `[offer] contract for offer ${offer.id}: payment schedule from the signed Tender (${payment.source})`,
+    );
+  }
+  const priceMismatch = describeTenderPriceMismatch({
+    tenderContractValueIncGst: payment.tenderContractValueIncGst,
+    agreedContractValueIncGst: contractValue,
+  });
+  if (priceMismatch) {
+    return { ok: false, error: priceMismatch };
+  }
 
   // Owner parties (ADR 0003). The BC4 form has a single OWNER(S) area, so every
   // owner is named on the ownerNames line (companies annotated with ABN/ACN),
@@ -254,14 +283,14 @@ export async function sendContractForSignature(input: {
   // builder while signing) ──
   const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
 
-  const priceLabel = moneyWithCents(contractValue);
+  const priceLabel = formatContractMoney(contractValue);
   // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
   // silently drop validated stages past the 7th, which would send a contract
   // whose payment schedule doesn't sum to the contract value.
-  if (snapshot.paymentSchedule.length > 7) {
+  if (payment.paymentSchedule.length > 7) {
     return {
       ok: false,
-      error: `The contract template supports up to 7 payment stages, but this schedule has ${snapshot.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
+      error: `The contract template supports up to 7 payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
     };
   }
 
@@ -292,16 +321,23 @@ export async function sendContractForSignature(input: {
   }
 
   const parsedParticulars = parseContractParticulars(claim.particulars);
-  const stageRows = snapshot.paymentSchedule.slice(0, 7);
-  const paymentScheduleLine = stageRows
-    .map((row, index) => {
-      const pct = (row.percentOfContract * 100).toFixed(0);
-      return `(${index + 1}) ${row.stageName} ${pct}% ${moneyWithCents(contractValue * row.percentOfContract)}`;
-    })
-    .join("  |  ");
-  const depositRow =
-    stageRows.find((r) => r.stageName.toLowerCase().includes("deposit")) ?? stageRows[0];
-  const exclusions = snapshot.draft.exclusionBullets;
+  const stageRows = payment.paymentSchedule.slice(0, 7);
+  const paymentScheduleLine = buildPaymentScheduleLine(stageRows, contractValue);
+  const depositRow = payment.deposit;
+  // The exclusions the SIGNED Tender printed, Scope exclusions included. Read
+  // from the Tender row, not the snapshot: the workspace can still be saved
+  // after the offer is agreed, which would otherwise put a line on the BC4 that
+  // the customer never signed (or drop one they did).
+  const signedExclusions = resolveSignedTenderExclusions({
+    tenderDocumentData: offer.tender?.documentData ?? null,
+    snapshot,
+  });
+  if (signedExclusions.source === "agreed-snapshot") {
+    console.warn(
+      `[offer] contract for offer ${offer.id}: no readable exclusions on the Tender row, using the agreed snapshot's`,
+    );
+  }
+  const exclusions = signedExclusions.lines;
 
   // Owner address/contact for the single BC4 owner lines. Current Location (from
   // Job setup) supersedes the hand-typed owner-address particular as the source
@@ -369,7 +405,9 @@ export async function sendContractForSignature(input: {
     locked("paymentSchedule", paymentScheduleLine),
     locked(
       "depositAmount",
-      depositRow ? moneyWithCents(contractValue * depositRow.percentOfContract) : "",
+      depositRow
+        ? formatContractMoney(stageAmount(contractValue, depositRow.percentOfContract))
+        : "",
     ),
     locked("excludedDays", "Saturdays, Sundays and NSW Public Holidays"),
     locked("defectsLiabilityWeeks", "12 Weeks"),
@@ -419,6 +457,31 @@ export async function sendContractForSignature(input: {
       ],
     });
   } catch (error) {
+    const reason = describeDocusignError(error);
+    // Logged and recorded before the claim is released. The release puts the
+    // offer back exactly where it was and the refusal reaches only whoever
+    // clicked, so otherwise nothing showed that a send was tried and rejected.
+    console.error(
+      `[offer] contract envelope creation failed for offer ${offer.id}; claim released:`,
+      reason,
+      error,
+    );
+    await prisma.offerStatusEvent
+      .create({
+        data: {
+          offerId: offer.id,
+          fromStatus: offer.offerStatus,
+          toStatus: offer.offerStatus,
+          note: `DocuSign rejected the Contract envelope: ${reason}`,
+          actorId: access.user.id,
+        },
+      })
+      .catch((eventError) =>
+        console.error(
+          "[offer] recording the rejected contract envelope failed:",
+          eventError,
+        ),
+      );
     // Release the claim so the builder can retry.
     await prisma.offer.updateMany({
       where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SENT },
@@ -430,12 +493,35 @@ export async function sendContractForSignature(input: {
   const documentData = {
     templateId: config.contractTemplateId,
     tabs: Object.fromEntries(ownerTextTabs.map((t) => [t.tabLabel, t.value])),
+    // Which copy of the schedule the contract went out on, for a dispute.
+    paymentScheduleSource: payment.source,
   };
 
-  await prisma.$transaction(async (tx) => {
+  const stillClaimed = await prisma.$transaction(async (tx) => {
+    // Claim first, then write. Returning from a transaction callback COMMITS
+    // it (only a throw rolls back), so a recall or Create revision that ran
+    // while DocuSign was creating the envelope used to have the writes below
+    // land anyway: the stored document was replaced and executedPdfUrl cleared
+    // on a document that may already be executed, even though the raced
+    // envelope is voided straight after. The envelope row is still written, so
+    // the raced envelope stays on the audit trail and can be cancelled.
+    const stillSent = await tx.offer.updateMany({
+      where: {
+        id: offer.id,
+        offerStatus: OfferStatus.CONTRACT_SENT,
+        isActive: true,
+      },
+      data: { offerStatus: OfferStatus.CONTRACT_SENT },
+    });
+    const claimed = stillSent.count > 0;
     const contract = await tx.contract.upsert({
       where: { offerId: offer.id },
-      update: { version: offer.revisionNumber, documentData },
+      // A new envelope replaces the document, so the last envelope's executed
+      // PDF no longer describes it. The webhook files this one's on completion.
+      // A raced send owns nothing, so it leaves the stored document alone.
+      update: claimed
+        ? { version: offer.revisionNumber, documentData, executedPdfUrl: null }
+        : {},
       create: { offerId: offer.id, version: offer.revisionNumber, documentData },
     });
     await tx.envelope.create({
@@ -463,15 +549,15 @@ export async function sendContractForSignature(input: {
         },
       },
     });
-    await tx.offer.update({
-      where: { id: offer.id },
-      data: { offerStatus: OfferStatus.CONTRACT_SENT },
-    });
+    if (!claimed) {
+      return false;
+    }
     await tx.offerStatusEvent.create({
       data: {
         offerId: offer.id,
         fromStatus: offer.offerStatus,
         toStatus: OfferStatus.CONTRACT_SENT,
+        actorId: access.user.id,
         // Record EVERY customer recipient the envelope routed to, not just the
         // primary — the contract fans out to each owner/director exactly like the
         // Tender does, and a single-address note misrepresents the audit trail
@@ -479,6 +565,7 @@ export async function sendContractForSignature(input: {
         note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners.map((signer) => signer.email).join(", ")}`,
       },
     });
+    return true;
   })
     .catch((error) => {
       // Same invariant as the Tender: the executed contract envelope is already
@@ -493,6 +580,13 @@ export async function sendContractForSignature(input: {
         `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
       );
     });
+
+  // No *_SENT event and no lead sync: the offer is wherever the recall or
+  // revision left it.
+  if (!stillClaimed) {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    return cancelRacedSend(envelope.envelopeId);
+  }
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   // The status moved to *_SENT above; bring the lead with it. Best effort

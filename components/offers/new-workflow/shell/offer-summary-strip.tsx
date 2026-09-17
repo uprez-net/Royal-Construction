@@ -11,15 +11,20 @@
 // The hero figure is the SELECTED contract value, the number the customer's
 // document actually carries. The old rail showed the computed build-up total, so
 // the moment an estimator used the price override the largest, most persistent
-// number on screen stopped being the number on the offer.
+// number on screen stopped being the number on the offer. The cells beside it
+// are on that same price; see buildOfferSummaryFigures.
 
 import { Check, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatCurrency,
+  formatMoneyDelta,
   formatPercent,
   getMarginStatusLabel,
+  moneyDeltaFractionDigits,
 } from "@/components/offers/new-workflow/offer-workspace-format";
+import { buildOfferSummaryFigures } from "@/lib/offer/summary-strip";
+import { formatArea } from "@/lib/offer/workspace-print-template";
 import type {
   EffectiveMargin,
   MarginStatus,
@@ -35,6 +40,8 @@ function marginToneClass(status: MarginStatus): string {
       return "bg-warning-light text-warning-ink";
     case "below_minimum":
       return "bg-destructive-light text-destructive-ink";
+    case "not_priced":
+      return "bg-muted text-muted-foreground";
   }
 }
 
@@ -43,6 +50,10 @@ type OfferSummaryStripProps = {
   readonly effectiveMargin: EffectiveMargin;
   readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
+  // Until the offer loads every figure here is a seeded default, and a price
+  // stated with confidence beside a "Loading this offer…" pane is worse than no
+  // price: it reads as this offer's money. The whole strip goes neutral.
+  readonly awaitingOffer: boolean;
 };
 
 export function OfferSummaryStrip({
@@ -50,22 +61,37 @@ export function OfferSummaryStrip({
   effectiveMargin,
   pricing,
   totalAreaSqm,
+  awaitingOffer,
 }: OfferSummaryStripProps) {
   const selected = customerPrice.selectedContractValueIncGst;
-  const computed = pricing.contractValueIncGst;
-  // An override means the build-up and the offer disagree. Say so, rather than
-  // showing two large numbers in different places and letting the operator
-  // discover the gap on the document.
-  const overridden = Math.round(selected) !== Math.round(computed);
-  const perSqm = totalAreaSqm > 0 ? selected / totalAreaSqm : 0;
+  const figures = buildOfferSummaryFigures({
+    customerPrice,
+    pricing,
+    totalAreaSqm,
+  });
+  const priced = effectiveMargin.marginStatus !== "not_priced";
 
-  const cells: readonly (readonly [string, string])[] = [
-    ["Building area", totalAreaSqm > 0 ? `${totalAreaSqm} m²` : "—"],
-    ["Direct total", formatCurrency(pricing.directTotal)],
-    ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
-    ["GST", formatCurrency(pricing.gstAmount)],
-    ["Per m²", totalAreaSqm > 0 ? formatCurrency(perSqm) : "—"],
-  ];
+  // Blank while the offer is still loading: every figure below is a seeded
+  // default until then, and a price stated with confidence beside a loading
+  // pane reads as this offer's money.
+  const cells: readonly (readonly [string, string])[] = awaitingOffer
+    ? [
+        ["Building area", "—"],
+        ["Direct total", "—"],
+        ["Cost before fee", "—"],
+        ["GST", "—"],
+        ["Per m² (offer price)", "—"],
+      ]
+    : [
+        ["Building area", totalAreaSqm > 0 ? formatArea(totalAreaSqm) : "—"],
+        ["Direct total", formatCurrency(pricing.directTotal)],
+        ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
+        ["GST", formatCurrency(figures.gstOnOffer)],
+        [
+          "Per m² (offer price)",
+          figures.perSqm === null ? "—" : formatCurrency(figures.perSqm),
+        ],
+      ];
 
   return (
     // The old right rail was an <aside>; this is its replacement and keeps the
@@ -86,10 +112,32 @@ export function OfferSummaryStrip({
       </dl>
 
       <div className="ml-auto flex items-center gap-3">
-        {overridden ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium text-warning-ink">
+        {awaitingOffer ? (
+          // Every figure in this group comes from the same seeded state as the
+          // cells above: the override badge compares two placeholder numbers,
+          // the margin badge grades a placeholder markup, and the contract
+          // value is the largest number on the screen. None of it is this
+          // offer's until it has loaded.
+          <p className="font-heading text-lg font-semibold tabular-nums text-muted-foreground">
+            <span className="sr-only">Contract value including GST: </span>—
+          </p>
+        ) : (
+          <>
+        {/* An override means the build-up and the offer disagree. Say so, rather
+            than showing two large numbers in different places and letting the
+            operator discover the gap on the document. */}
+        {figures.overridden ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium tabular-nums text-warning-ink">
             <TriangleAlert className="size-3" aria-hidden="true" />
-            Overridden from {formatCurrency(computed)}
+            {formatMoneyDelta(figures.overrideDeltaIncGst)} vs{" "}
+            {formatCurrency(customerPrice.computedContractValueIncGst, {
+              // A cents override would otherwise read "+$0.37 vs $950,000"
+              // beside a $950,000 hero, with nothing visibly different.
+              maximumFractionDigits: moneyDeltaFractionDigits(
+                figures.overrideDeltaIncGst,
+              ),
+            })}{" "}
+            build-up
           </span>
         ) : null}
         <span
@@ -98,18 +146,23 @@ export function OfferSummaryStrip({
             marginToneClass(effectiveMargin.marginStatus),
           )}
         >
-          {effectiveMargin.marginStatus === "at_target" ? (
+          {/* Unpriced has no margin, so no verdict icon and no 0% beside it. */}
+          {!priced ? null : effectiveMargin.marginStatus === "at_target" ? (
             <Check className="size-3" aria-hidden="true" />
           ) : (
             <TriangleAlert className="size-3" aria-hidden="true" />
           )}
-          {getMarginStatusLabel(effectiveMargin.marginStatus)} ·{" "}
-          {formatPercent(effectiveMargin.effectiveMarkupPct)}
+          {getMarginStatusLabel(effectiveMargin.marginStatus)}
+          {priced
+            ? ` · ${formatPercent(effectiveMargin.effectiveMarkupPct)}`
+            : null}
         </span>
         <p className="font-heading text-lg font-semibold tabular-nums">
           <span className="sr-only">Contract value including GST: </span>
           {formatCurrency(selected)}
         </p>
+          </>
+        )}
       </div>
     </aside>
   );

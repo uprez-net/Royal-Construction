@@ -149,7 +149,7 @@ export function SendNegotiatePanel({
           title="Send & negotiate"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
+      <CardContent className="grid gap-4">
         <StatusBanner
           isAgreedOrLater={isAgreedOrLater}
           isOfferSent={isOfferSent}
@@ -175,7 +175,6 @@ export function SendNegotiatePanel({
             <RecipientList recipients={recipients} />
             <div className="flex flex-wrap gap-2">
               <Button
-                className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
                 disabled={!canSend || sending || confirming || !hasRecipients}
                 onClick={() => setConfirming(true)}
                 size="sm"
@@ -185,6 +184,7 @@ export function SendNegotiatePanel({
                     : "Resolve the items above before sending."
                 }
                 type="button"
+                variant="royal"
               >
                 <Send className="size-4" aria-hidden="true" />
                 {sending ? "Sending…" : isSent ? "Resend" : "Send offer"}
@@ -252,7 +252,6 @@ export function SendNegotiatePanel({
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
                     disabled={
                       !canSend ||
                       offerSignSending ||
@@ -267,6 +266,7 @@ export function SendNegotiatePanel({
                         : "Resolve the send items above before sending for signature."
                     }
                     type="button"
+                    variant="royal"
                   >
                     <FileSignature className="size-4" aria-hidden="true" />
                     {offerSignSending
@@ -305,9 +305,9 @@ export function SendNegotiatePanel({
                         this outside development. */}
                     {process.env.NODE_ENV === "development" ? (
                       <Button
-                        className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
                         size="sm"
                         type="button"
+                        variant="royal"
                         onClick={onMarkOfferSigned}
                       >
                         <ShieldCheck className="size-4" aria-hidden="true" />
@@ -365,7 +365,6 @@ export function SendNegotiatePanel({
             {revising ? "Creating…" : "Create revision"}
           </Button>
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
             disabled={(!isSent && !isOfferSigned) || !canMarkAgreed}
             size="sm"
             title={
@@ -376,6 +375,7 @@ export function SendNegotiatePanel({
                   : "Complete the owner details listed above before marking the offer agreed."
             }
             type="button"
+            variant="royal"
             onClick={onMarkAgreed}
           >
             <CheckCircle2 className="size-4" aria-hidden="true" />
@@ -514,11 +514,11 @@ function SendConfirm({
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
-          className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
           disabled={sending}
           onClick={onConfirm}
           size="sm"
           type="button"
+          variant="royal"
         >
           <Send className="size-4" aria-hidden="true" />
           {sending ? "Sending…" : "Confirm & send"}

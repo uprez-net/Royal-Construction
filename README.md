@@ -64,6 +64,11 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
    # Cron jobs (production)
    CRON_SECRET="..."
 
+   # Signs the workflow stream links handed to the browser (any long random
+   # string; set it in Vercel Preview and Production). Without it, project and
+   # checklist extraction refuse to start.
+   WORKFLOW_RUN_CAPABILITY_SECRET="..."
+
    # Local dev auto sign-in (optional — skips manual Clerk login)
    DEV_AUTO_SIGN_IN="true"
    DEV_AUTH_EMAIL="you@example.com"

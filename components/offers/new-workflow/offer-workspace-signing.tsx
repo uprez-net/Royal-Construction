@@ -159,11 +159,11 @@ export function EnvelopeSendConfirm({
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
-          className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
           disabled={sending}
           onClick={onConfirm}
           size="sm"
           type="button"
+          variant="royal"
         >
           <Send className="size-4" aria-hidden="true" />
           {sending ? "Sending envelope…" : "Confirm & send"}

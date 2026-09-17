@@ -9,7 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        // An opaque darker teal (6.35:1 with white). The old [a]:hover only fired
+        // on a Button rendered as a link, and a translucent /90 would drop below AA.
+        default:
+          "bg-primary text-primary-foreground hover:bg-[oklch(0.46_0.118_183.6)]",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
@@ -19,6 +22,12 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // Gold CTAs. Text sits on the ink because white on base --royal-gold
+        // is 2.77:1. A translucent gold ring measures 1.46:1 on the page, so the
+        // ring is the ink itself, held off the ink fill by a white offset gap.
+        // The border override stops the base focus border painting teal.
+        royal:
+          "bg-royal-gold-ink text-white hover:bg-royal-gold-ink-hover focus-visible:border-royal-gold-ink focus-visible:ring-royal-gold-ink focus-visible:ring-offset-2",
       },
       size: {
         default:
