@@ -43,6 +43,15 @@ export function AgentAttachments({ attachments, setAttachments }: AgentAttachmen
     }
   }
 
+  function removeAttachment(file: File) {
+    const objectUrl = objectUrls.current.get(file);
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrls.current.delete(file);
+    }
+    setAttachments((items) => items.filter((item) => item !== file));
+  }
+
   const picker = (
     <input accept={ACCEPTED_FILES} className="hidden" multiple onChange={addFiles} ref={inputRef} type="file" />
   );
@@ -71,7 +80,7 @@ export function AgentAttachments({ attachments, setAttachments }: AgentAttachmen
                   {file.type.startsWith("image/") ? <FileImage /> : <FileText />}
                   <span className="truncate">{file.name}</span>
                 </button>
-                <button aria-label={`Remove ${file.name}`} className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground" onClick={() => setAttachments((items) => items.filter((item) => item !== file))} type="button">
+                <button aria-label={`Remove ${file.name}`} className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground" onClick={() => removeAttachment(file)} type="button">
                   <X />
                 </button>
               </div>

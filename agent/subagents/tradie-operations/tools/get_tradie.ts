@@ -7,5 +7,5 @@ export default defineTool({
   description: "Read one authorized tradie with bounded ratings, incidents, and schedule history.",
   inputSchema: getTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  execute(input, ctx) { return getAuthorizedTradie(ctx, input); },
+  async execute(input, ctx) { return await getAuthorizedTradie(ctx, input); },
 });

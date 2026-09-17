@@ -30,7 +30,7 @@ export default defineTool({
       ownerUserId: actor.id,
       targetId: String(input.leadId),
       targetType: "lead",
-      execute: () => createAuthorizedLeadTask(ctx, input),
+      execute: (tx) => createAuthorizedLeadTask(ctx, input, tx),
     });
   },
 });

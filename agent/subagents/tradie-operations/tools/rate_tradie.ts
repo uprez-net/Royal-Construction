@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: rateTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.rating.create", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: () => rateAuthorizedTradie(ctx, input) }); },
+  async execute(input, ctx) { return await runTradieWrite({ action: "tradie.rating.create", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: (tx) => rateAuthorizedTradie(ctx, input, tx) }); },
 });

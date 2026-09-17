@@ -15,7 +15,7 @@ Construction management portal for coordinating projects, tradies, site updates,
 
 **In progress (mock or partial)**
 
-Several module routes (financials, quotations, milestones, catalogue, architect, government, site manager, chatbot) are still driven by the legacy screen registry in `lib/mock-data.tsx` and are being migrated to live data.
+Several module routes (financials, quotations, milestones, catalogue, architect, government, site manager) are still driven by the legacy screen registry in `lib/mock-data.tsx` and are being migrated to live data. The feature-flagged `/agent` workspace is the current operations assistant surface.
 
 ## Tech stack
 

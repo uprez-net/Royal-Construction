@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (file.size > UPLOAD_CONSTRAINTS.maxFileSizeBytes) return NextResponse.json({ error: "File is too large" }, { status: 413 });
   if (!UPLOAD_CONSTRAINTS.allowedMimeTypes.includes(file.type as never)) return NextResponse.json({ error: "File type is not supported" }, { status: 415 });
   const safeName = file.name.replaceAll(/[^a-zA-Z0-9._-]/g, "-").slice(0, 160) || "attachment";
-  const blob = await put(`agent/${user.id}/${crypto.randomUUID()}-${safeName}`, file, { access: "public", addRandomSuffix: false });
-  const saved = await saveFile({ userId: user.id, fileUrl: blob.url, fileName: file.name, fileType: file.type || "application/octet-stream", fileSize: file.size });
-  return NextResponse.json({ file: { id: saved.file.id, url: blob.url, filename: file.name, fileType: file.type, filesize: file.size } });
+  const blob = await put(`agent/${user.id}/${crypto.randomUUID()}-${safeName}`, file, { access: "private", addRandomSuffix: false });
+  const saved = await saveFile({ userId: user.id, fileUrl: blob.url, storagePath: blob.pathname, fileName: file.name, fileType: file.type || "application/octet-stream", fileSize: file.size });
+  return NextResponse.json({ file: { id: saved.file.id, url: `/api/agent/files/${saved.file.id}`, filename: file.name, fileType: file.type, filesize: file.size } });
 }

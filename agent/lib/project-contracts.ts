@@ -98,7 +98,7 @@ export const createMilestoneInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2_000).optional(),
   targetDate: z.iso.date(),
-  budget: z.number().finite().positive(),
+  budget: z.number().finite().positive().refine((value) => Number.isInteger(value * 100), { message: "Budget must have at most two decimal places." }),
   parentId: milestoneIdSchema.optional(),
   projectStage: z.enum(projectStages),
 });
@@ -109,7 +109,7 @@ export const updateMilestoneInputSchema = z.object({
   targetDate: z.iso.date().optional(),
   startDate: z.iso.date().optional(),
   actualDate: z.iso.date().optional(),
-  spend: z.number().finite().nonnegative().optional(),
+  spend: z.number().finite().nonnegative().refine((value) => Number.isInteger(value * 100), { message: "Spend must have at most two decimal places." }).optional(),
 });
 
 export const createVariationInputSchema = z.object({

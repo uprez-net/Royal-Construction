@@ -63,6 +63,7 @@ export function AgentWorkspace({
 }) {
   const router = useRouter();
   const [composer, setComposer] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [annotations, setAnnotations] = useState<AgentAnnotation[]>([]);
   const [annotationResults, setAnnotationResults] = useState<AgentAnnotation[]>(
@@ -200,47 +201,53 @@ export function AgentWorkspace({
     if ((!message.trim() && attachments.length === 0) || busy) return;
     stickToBottomRef.current = true;
     setShowScrollToBottom(false);
-    setComposer("");
-    const uploaded = await Promise.all(
-      attachments.map(async (file) => {
-        const form = new FormData();
-        form.append("file", file);
-        const response = await fetch("/api/agent/upload", {
-          method: "POST",
-          body: form,
-        });
-        if (!response.ok) throw new Error("Attachment upload failed");
-        return (
-          (await response.json()) as {
-            file: { url: string; filename: string; fileType: string };
-          }
-        ).file;
-      }),
-    );
-    const content = [
-      { type: "text" as const, text },
-      ...uploaded.map((file) => ({
-        type: "file" as const,
-        data: new URL(file.url),
-        filename: file.filename,
-        mediaType: file.fileType,
-      })),
-    ];
-    await agent.send(content, {
-      clientContext: {
-        route: window.location.pathname,
-        forkContext,
-        annotations: annotations.map(({ type, id, label }) => ({
-          type,
-          id,
-          label,
+    setSendError(null);
+    try {
+      const uploaded = await Promise.all(
+        attachments.map(async (file) => {
+          const form = new FormData();
+          form.append("file", file);
+          const response = await fetch("/api/agent/upload", {
+            method: "POST",
+            body: form,
+          });
+          if (!response.ok) throw new Error("Attachment upload failed");
+          return (
+            (await response.json()) as {
+              file: { url: string; filename: string; fileType: string };
+            }
+          ).file;
+        }),
+      );
+      const content = [
+        { type: "text" as const, text },
+        ...uploaded.map((file) => ({
+          type: "file" as const,
+          data: new URL(file.url),
+          filename: file.filename,
+          mediaType: file.fileType,
         })),
-      },
-    });
-    setAttachments([]);
-    setForkContext(null);
-    setEditingMessageId(null);
-    sessionStorage.removeItem("rc-agent-fork-context");
+      ];
+      await agent.send(content, {
+        clientContext: {
+          route: window.location.pathname,
+          forkContext,
+          annotations: annotations.map(({ type, id, label }) => ({
+            type,
+            id,
+            label,
+          })),
+        },
+      });
+      setComposer("");
+      setAttachments([]);
+      setAnnotations([]);
+      setForkContext(null);
+      setEditingMessageId(null);
+      sessionStorage.removeItem("rc-agent-fork-context");
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "The message could not be sent.");
+    }
   }
 
   async function respond(responses: readonly AgentInputResponse[]) {
@@ -585,6 +592,12 @@ export function AgentWorkspace({
                       Retry stream
                     </Button>
                   </AlertDescription>
+                </Alert>
+              ) : null}
+              {sendError ? (
+                <Alert variant="destructive">
+                  <AlertTitle>The message could not be sent</AlertTitle>
+                  <AlertDescription>{sendError}</AlertDescription>
                 </Alert>
               ) : null}
             </div>

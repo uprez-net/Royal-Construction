@@ -163,11 +163,11 @@ export interface CreateLeadTaskInput {
  * strictly forward: a lead at Qualified or beyond keeps its stage, and a closed
  * lead is not dragged open by someone booking a call.
  */
-export async function createLeadTask(input: CreateLeadTaskInput): Promise<LeadTaskRow> {
+export async function createLeadTask(input: CreateLeadTaskInput, transaction?: Prisma.TransactionClient): Promise<LeadTaskRow> {
   // One transaction. The task row and the stage move are one decision: if the
   // second write failed on its own, the lead would carry work it never
   // advanced for, and nothing would ever retry it.
-  return prisma.$transaction(async (tx) => {
+  const create = async (tx: Prisma.TransactionClient | typeof prisma) => {
     const lead = await tx.lead.findUnique({
       where: { id: input.leadId },
       select: { stage: true, assignedId: true, isArchived: true },
@@ -220,7 +220,8 @@ export async function createLeadTask(input: CreateLeadTaskInput): Promise<LeadTa
     });
 
     return toRow(created);
-  });
+  };
+  return transaction ? create(transaction) : prisma.$transaction(create);
 }
 
 /**
@@ -230,17 +231,18 @@ export async function createLeadTask(input: CreateLeadTaskInput): Promise<LeadTa
  * Contacted leads on production are there and why no lead that ever finished a
  * follow-up sat above Contacted.
  */
-export async function completeLeadTask(taskId: number): Promise<LeadTaskRow | null> {
-  const updated = await prisma.leadTask.updateMany({
+export async function completeLeadTask(taskId: number, transaction?: Prisma.TransactionClient): Promise<LeadTaskRow | null> {
+  const db = transaction ?? prisma;
+  const updated = await db.leadTask.updateMany({
     where: { id: taskId, completedAt: null },
     data: { completedAt: new Date(), status: "DONE" },
   });
   if (updated.count === 0) {
     // Already closed, or gone. Not an error: two people clicking Done is fine.
-    const existing = await prisma.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
+    const existing = await db.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
     return existing ? toRow(existing) : null;
   }
-  const row = await prisma.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
+  const row = await db.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
   return row ? toRow(row) : null;
 }
 
@@ -258,15 +260,16 @@ export async function completeLeadTask(taskId: number): Promise<LeadTaskRow | nu
  * reopened row marked DONE would make the column actively misleading to anyone
  * reading the table directly.
  */
-export async function reopenLeadTask(taskId: number): Promise<LeadTaskRow | null> {
+export async function reopenLeadTask(taskId: number, transaction?: Prisma.TransactionClient): Promise<LeadTaskRow | null> {
   // Guarded on completedAt for the same reason completeLeadTask is: two people
   // clicking Reopen is not an error, and the second must not clear a fresh
   // completion recorded in between.
-  await prisma.leadTask.updateMany({
+  const db = transaction ?? prisma;
+  await db.leadTask.updateMany({
     where: { id: taskId, completedAt: { not: null } },
     data: { completedAt: null, status: "NEW" },
   });
-  const row = await prisma.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
+  const row = await db.leadTask.findUnique({ where: { id: taskId }, select: ROW_SELECT });
   return row ? toRow(row) : null;
 }
 

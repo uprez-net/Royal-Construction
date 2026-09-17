@@ -77,7 +77,7 @@ test("a document opens in the document viewer, alone", () => {
 
   assert.deepEqual(filePreviewModal(files, 1), {
     type: "previewFile",
-    payload: { fileUrl: `${BLOB}/2-survey.pdf` },
+    payload: { fileUrl: `${BLOB}/2-survey.pdf`, fileName: "survey.pdf", fileType: null },
   });
 });
 

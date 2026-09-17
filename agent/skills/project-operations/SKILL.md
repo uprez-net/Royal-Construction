@@ -1,5 +1,5 @@
 ---
-description: Use for project overview and tabs, project details, milestones, variations, schedules, files, communications, compliance navigation, and activity history.
+description: Use for project overview and tabs, project details, milestones, schedules, files, communications, compliance navigation, and activity history. Variation operations are unavailable until their rules and tools are implemented.
 ---
 
 # Project operations

@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { listOfferRevisionsInputSchema } from "@/agent/lib/offer-contracts";
-import { listAuthorizedOfferRevisions } from "@/agent/lib/offer-operations";
+import { offerOperations } from "@/agent/subagents/offer-operations/dependencies";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 export default defineTool({
@@ -11,7 +11,7 @@ export default defineTool({
   label: {
     start: ({ leadId }) => `List offer revisions for lead ${leadId}`,
   },
-  execute(input, ctx) {
-    return listAuthorizedOfferRevisions(ctx, input);
+  async execute(input, ctx) {
+    return await offerOperations.listAuthorizedOfferRevisions(ctx, input);
   },
 });

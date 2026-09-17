@@ -7,5 +7,5 @@ export default defineTool({
   description: "List authorized tradie bookings, filtered by project, tradie, status, date window, or search text.",
   inputSchema: listTradieSchedulesInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  execute(input, ctx) { return listAuthorizedTradieSchedules(ctx, input); },
+  async execute(input, ctx) { return await listAuthorizedTradieSchedules(ctx, input); },
 });

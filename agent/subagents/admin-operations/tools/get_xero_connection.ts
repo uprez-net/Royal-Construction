@@ -6,5 +6,5 @@ export default defineTool({
   description: "Read safe Xero connection status; tokens and secrets are never returned.",
   inputSchema: { type: "object", properties: {}, additionalProperties: false },
   outputSchema: agentResultEnvelopeSchema,
-  execute(_input, ctx) { return getAuthorizedXero(ctx); },
+  async execute(_input, ctx) { return await getAuthorizedXero(ctx); },
 });

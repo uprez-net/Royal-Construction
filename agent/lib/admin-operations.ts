@@ -63,17 +63,26 @@ export async function getAuthorizedApproval(ctx: SessionContext, input: { approv
   return result("admin-summary", "Approval request", `${approval.actionType.replaceAll("_", " ")} for ${approval.tradie.name} is ${approval.status.toLowerCase()}.`, { approval: { id: approval.id, actionType: approval.actionType, status: approval.status, reason: approval.reason, rejectionReason: approval.rejectionReason, createdAt: approval.createdAt.toISOString(), requestedBy: approval.user.name, tradie: approval.tradie, payload: approval.updationData } }, { entityRef: approvalRef(approval), links: [{ label: "Open approval queue", href: "/admin-approvals" }] });
 }
 
-export async function resolveAuthorizedApproval(ctx: ToolContext, input: { approvalId: string; resolution: "approved" | "rejected"; rejectionReason?: string; incidentResolution?: string }) {
+export async function resolveAuthorizedApproval(ctx: ToolContext, input: { approvalId: string; resolution: "approved" | "rejected"; rejectionReason?: string; incidentResolution?: string }, transaction?: Prisma.TransactionClient) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const approval = await prisma.tradieApproval.findUnique({ where: { id: input.approvalId }, include: { tradie: { select: { id: true, name: true, trade: true } } } });
-  if (!approval || approval.status !== TradieApprovalStatus.PENDING) throw new Error("That approval is no longer pending; refresh the queue before deciding.");
-  const payload = approval.updationData as Record<string, unknown> | null;
   const isApproved = input.resolution === "approved";
   if (!isApproved && !input.rejectionReason) throw new Error("A rejection reason is required.");
-  if (isApproved && approval.actionType === TradieApprovalActionType.INCIDENT_RESOLUTION && !input.incidentResolution) throw new Error("An incident resolution note is required.");
-  let affected: Record<string, unknown> = {};
-  await prisma.$transaction(async (tx) => {
+  const resolve = async (tx: Prisma.TransactionClient) => {
+    const claimed = await tx.tradieApproval.updateMany({
+      where: { id: input.approvalId, status: TradieApprovalStatus.PENDING },
+      data: {
+        status: isApproved ? TradieApprovalStatus.APPROVED : TradieApprovalStatus.REJECTED,
+        rejectionReason: isApproved ? null : input.rejectionReason,
+        pendingDeletionKey: null,
+      },
+    });
+    if (claimed.count !== 1) throw new Error("That approval is no longer pending; refresh the queue before deciding.");
+    const approval = await tx.tradieApproval.findUnique({ where: { id: input.approvalId }, include: { tradie: { select: { id: true, name: true, trade: true } } } });
+    if (!approval) throw new Error("Approval request not found.");
+    if (isApproved && approval.actionType === TradieApprovalActionType.INCIDENT_RESOLUTION && !input.incidentResolution) throw new Error("An incident resolution note is required.");
+    const payload = approval.updationData as Record<string, unknown> | null;
+    let affected: Record<string, unknown> = {};
     if (isApproved) {
       switch (approval.actionType) {
         case TradieApprovalActionType.PRICE_CHANGE: {
@@ -117,9 +126,10 @@ export async function resolveAuthorizedApproval(ctx: ToolContext, input: { appro
       await tx.tradieSchedule.updateMany({ where: { id: payload.scheduleId, tradieId: approval.tradieId }, data: { status: "DECLINED" } });
       affected = { scheduleId: payload.scheduleId, status: "DECLINED" };
     }
-    await tx.tradieApproval.update({ where: { id: approval.id }, data: { status: isApproved ? TradieApprovalStatus.APPROVED : TradieApprovalStatus.REJECTED, rejectionReason: isApproved ? null : input.rejectionReason } });
-  });
-  return result("confirmation", "Approval resolved", `${approval.actionType.replaceAll("_", " ")} for ${approval.tradie.name} was ${input.resolution}.`, { approvalId: approval.id, actionType: approval.actionType, resolution: input.resolution, affected }, { entityRef: approvalRef(approval), links: [{ label: "Open approval queue", href: "/admin-approvals" }] });
+    return { approval, affected };
+  };
+  const resolved = transaction ? await resolve(transaction) : await prisma.$transaction(resolve, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return result("confirmation", "Approval resolved", `${resolved.approval.actionType.replaceAll("_", " ")} for ${resolved.approval.tradie.name} was ${input.resolution}.`, { approvalId: resolved.approval.id, actionType: resolved.approval.actionType, resolution: input.resolution, affected: resolved.affected }, { entityRef: approvalRef(resolved.approval), links: [{ label: "Open approval queue", href: "/admin-approvals" }] });
 }
 
 export async function getAuthorizedAdminContent(ctx: SessionContext) {
@@ -168,12 +178,14 @@ export async function inviteAuthorizedTeamMember(ctx: ToolContext, input: { emai
 export async function updateAuthorizedTeamRole(ctx: ToolContext, input: { userId: string; newRole: Role }) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const target = await prisma.user.findUnique({ where: { clerkId: input.userId }, select: { id: true, clerkId: true, role: true, name: true } });
-  if (!target) throw new Error("Team member not found.");
-  if (target.id === actor.id && input.newRole !== Role.ADMIN) throw new Error("You cannot remove your own admin access through the agent.");
-  if (target.role === Role.ADMIN && input.newRole !== Role.ADMIN && await prisma.user.count({ where: { role: Role.ADMIN } }) <= 1) throw new Error("The last admin cannot be demoted.");
-  await clerkClient.users.updateUser(target.clerkId, { publicMetadata: { role: input.newRole } });
-  const updated = await prisma.user.update({ where: { id: target.id }, data: { role: input.newRole }, select: { id: true, name: true, role: true } });
+  const updated = await prisma.$transaction(async (tx) => {
+    const target = await tx.user.findUnique({ where: { clerkId: input.userId }, select: { id: true, clerkId: true, role: true, name: true } });
+    if (!target) throw new Error("Team member not found.");
+    if (target.id === actor.id && input.newRole !== Role.ADMIN) throw new Error("You cannot remove your own admin access through the agent.");
+    if (target.role === Role.ADMIN && input.newRole !== Role.ADMIN && await tx.user.count({ where: { role: Role.ADMIN } }) <= 1) throw new Error("The last admin cannot be demoted.");
+    await clerkClient.users.updateUser(target.clerkId, { publicMetadata: { role: input.newRole } });
+    return tx.user.update({ where: { id: target.id }, data: { role: input.newRole }, select: { id: true, name: true, role: true } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return result("confirmation", "Team role updated", `${updated.name}'s role is now ${updated.role}.`, { userId: updated.id, role: updated.role });
 }
 
@@ -202,7 +214,7 @@ export async function disconnectAuthorizedXero(ctx: ToolContext, input: { reason
   return result("confirmation", "Xero disconnected", `${active.tenantName ?? "The Xero organisation"} was disconnected.`, { connectionId: active.id, reason: input.reason });
 }
 
-export async function runAdminWrite(params: { action: string; ctx: ToolContext; input: Record<string, unknown>; targetId?: string; targetType: string; execute: () => Promise<AgentResultEnvelope> }) {
+export async function runAdminWrite(params: { action: string; ctx: ToolContext; input: Record<string, unknown>; targetId?: string; targetType: string; execute: (tx?: Prisma.TransactionClient) => Promise<AgentResultEnvelope> }) {
   const actor = await requireCurrentAgentActor(params.ctx);
   return runAuditedAgentOperation({ action: params.action, ctx: params.ctx, inputSummary: JSON.parse(JSON.stringify(params.input)) as Prisma.InputJsonValue, outputSchema: agentResultEnvelopeSchema, ownerUserId: actor.id, targetId: params.targetId, targetType: params.targetType, execute: params.execute });
 }

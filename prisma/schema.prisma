@@ -654,6 +654,7 @@ model TradieApproval {
   reason          String                   @db.Text
   updationData    Json?
   rejectionReason String?                  @db.Text
+  pendingDeletionKey String?                @unique
   requestedBy     String
 
   createdAt DateTime @default(now())
@@ -693,6 +694,7 @@ model File {
   fileType             String
   filesize             Int
   url                  String
+  storagePath          String?
   uploadedBy           String
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -915,7 +917,7 @@ model AgentSessionEvent {
 /// side effects. Raw prompts, credentials, and document bytes do not belong here.
 model AgentActionAudit {
   id              String            @id @default(uuid())
-  ownerUserId     String
+  ownerUserId     String?
   agentSessionId  String?
   eveSessionId    String
   eveTurnId       String?
@@ -936,7 +938,7 @@ model AgentActionAudit {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  owner        User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  owner        User?         @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
   agentSession AgentSession? @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
 
   @@index([ownerUserId, createdAt])

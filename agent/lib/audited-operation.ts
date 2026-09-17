@@ -26,6 +26,8 @@ function keyFor(ctx: ToolContext, action: string) {
   return `agent:${ctx.session.id}:${ctx.callId}:${action}`;
 }
 
+type TransactionClient = Prisma.TransactionClient;
+
 /**
  * Runs a side effect once per durable Eve tool call and records a sanitized
  * application audit. A prior ambiguous/failed attempt is never retried
@@ -34,16 +36,24 @@ function keyFor(ctx: ToolContext, action: string) {
 export async function runAuditedAgentOperation<T>(params: {
   action: string;
   ctx: ToolContext;
-  execute: () => Promise<T>;
+  execute: (tx?: TransactionClient) => Promise<T>;
   inputSummary: Prisma.InputJsonValue;
   outputSchema: ZodType<T>;
   ownerUserId: string;
   targetId?: string;
   targetType?: string;
+  targetIdFromOutput?: (output: T) => string | undefined;
+  authorize?: (tx: TransactionClient) => Promise<void>;
+  /** External side effects cannot run while holding a database transaction. */
+  transactional?: boolean;
 }): Promise<T> {
   const operationKey = keyFor(params.ctx, params.action);
 
-  const prepared = await prisma.$transaction(async (tx) => {
+  type PreparedOperation =
+    | { replay: T }
+    | { replay: null; operationId: string; auditId: string };
+
+  async function prepare(tx: TransactionClient): Promise<PreparedOperation> {
     const session = await tx.agentSession.findUnique({
       where: { eveSessionId: params.ctx.session.id },
       select: { id: true, ownerUserId: true },
@@ -51,6 +61,7 @@ export async function runAuditedAgentOperation<T>(params: {
     if (!session || session.ownerUserId !== params.ownerUserId) {
       throw new Error("The agent session is unavailable.");
     }
+    await params.authorize?.(tx);
 
     const existing = await tx.agentOperation.findUnique({
       where: {
@@ -98,18 +109,15 @@ export async function runAuditedAgentOperation<T>(params: {
     });
 
     return { auditId: audit.id, operationId: operation.id, replay: null };
-  });
+  }
 
-  if (!("operationId" in prepared)) return prepared.replay;
-
-  try {
-    const output = params.outputSchema.parse(await params.execute());
+  async function finalizeSuccess(tx: TransactionClient, prepared: { operationId: string; auditId: string }, output: T) {
     const outputRecord =
       typeof output === "object" && output !== null && !Array.isArray(output)
         ? (output as Record<string, unknown>)
         : null;
-    await prisma.$transaction([
-      prisma.agentOperation.update({
+    await Promise.all([
+      tx.agentOperation.update({
         where: { id: prepared.operationId },
         data: {
           completedAt: new Date(),
@@ -117,21 +125,23 @@ export async function runAuditedAgentOperation<T>(params: {
           status: AgentOperationStatus.SUCCEEDED,
         },
       }),
-      prisma.agentActionAudit.update({
+      tx.agentActionAudit.update({
         where: { id: prepared.auditId },
         data: {
           completedAt: new Date(),
           outputSummary: toInputJson({
             kind: typeof outputRecord?.kind === "string" ? outputRecord.kind : "completed",
           }),
+          ...(params.targetIdFromOutput ? { targetId: params.targetIdFromOutput(output) } : {}),
           status: AgentActionStatus.SUCCEEDED,
         },
       }),
     ]);
-    return output;
-  } catch (error) {
-    await prisma.$transaction([
-      prisma.agentOperation.update({
+  }
+
+  async function finalizeFailure(tx: TransactionClient, prepared: { operationId: string; auditId: string }) {
+    await Promise.all([
+      tx.agentOperation.update({
         where: { id: prepared.operationId },
         data: {
           completedAt: new Date(),
@@ -139,7 +149,7 @@ export async function runAuditedAgentOperation<T>(params: {
           status: AgentOperationStatus.FAILED,
         },
       }),
-      prisma.agentActionAudit.update({
+      tx.agentActionAudit.update({
         where: { id: prepared.auditId },
         data: {
           completedAt: new Date(),
@@ -148,6 +158,31 @@ export async function runAuditedAgentOperation<T>(params: {
         },
       }),
     ]);
+  }
+
+  const prepared = await prisma.$transaction((tx) => prepare(tx));
+  if (!("operationId" in prepared)) return prepared.replay;
+
+  if (params.transactional === false) {
+    try {
+      const output = params.outputSchema.parse(await params.execute());
+      await prisma.$transaction((tx) => finalizeSuccess(tx, prepared, output));
+      return output;
+    } catch (error) {
+      await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
+      throw error;
+    }
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await params.authorize?.(tx);
+      const output = params.outputSchema.parse(await params.execute(tx));
+      await finalizeSuccess(tx, prepared, output);
+      return output;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  } catch (error) {
+    await prisma.$transaction((tx) => finalizeFailure(tx, prepared));
     throw error;
   }
 }

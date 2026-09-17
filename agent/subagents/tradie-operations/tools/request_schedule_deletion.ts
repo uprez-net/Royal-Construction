@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: requestScheduleDeletionInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.deletion.request", ctx, input, targetId: input.scheduleId, targetType: "tradieSchedule", execute: () => requestAuthorizedScheduleDeletion(ctx, input) }); },
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.deletion.request", ctx, input, targetId: input.scheduleId, targetType: "tradieSchedule", execute: (tx) => requestAuthorizedScheduleDeletion(ctx, input, tx) }); },
 });

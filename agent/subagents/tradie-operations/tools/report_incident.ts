@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: reportTradieIncidentInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.incident.report", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: () => reportAuthorizedTradieIncident(ctx, input) }); },
+  async execute(input, ctx) { return await runTradieWrite({ action: "tradie.incident.report", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: (tx) => reportAuthorizedTradieIncident(ctx, input, tx) }); },
 });

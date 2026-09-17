@@ -32,7 +32,7 @@ export const updateTradieInputSchema = z.object({
   tradieId: tradieIdSchema,
   patch: z.object({
     email: z.email().trim().toLowerCase().optional(),
-    additionalEmails: emailList.optional(),
+    additionalEmails: z.array(z.email().trim().toLowerCase()).max(10).optional(),
     phone: z.string().trim().min(1).max(80).optional(),
     location: z.string().trim().max(300).nullable().optional(),
     note: z.string().trim().max(4_000).nullable().optional(),

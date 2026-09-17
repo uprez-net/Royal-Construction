@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { isInternalHref } from "@/utils/safe-links";
+
+const internalHrefSchema = z.string().trim().refine(isInternalHref, {
+  message: "Links must use an internal path.",
+});
 
 export const entityTypeSchema = z.enum([
   "lead",
@@ -22,7 +27,7 @@ export const entityReferenceSchema = z.object({
   display: z.object({
     label: z.string().trim().min(1).max(200),
     secondaryText: z.string().trim().max(300).optional(),
-    href: z.string().trim().startsWith("/").max(500).optional(),
+    href: internalHrefSchema.max(500).optional(),
   }),
 });
 
@@ -83,7 +88,7 @@ export const agentResultEnvelopeSchema = z.object({
     .array(
       z.object({
         label: z.string().trim().min(1).max(100),
-        href: z.string().trim().startsWith("/").max(500),
+        href: internalHrefSchema.max(500),
       }),
     )
     .max(20)

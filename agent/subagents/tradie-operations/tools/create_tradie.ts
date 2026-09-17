@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: createTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.create", ctx, input, targetType: "tradie", execute: () => createAuthorizedTradie(ctx, input) }); },
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.create", ctx, input, targetType: "tradie", execute: (tx) => createAuthorizedTradie(ctx, input, tx) }); },
 });

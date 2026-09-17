@@ -18,6 +18,25 @@ async function waitForOwnedSession(ownerUserId: string, eveSessionId: string) {
   return false;
 }
 
+export async function getAgentSessionTitle(eveSessionId: string) {
+  const session = await prisma.agentSession.findUnique({
+    where: { eveSessionId },
+    select: { title: true },
+  });
+  return session?.title ?? null;
+}
+
+export async function setAgentSessionTitleIfMissing(
+  eveSessionId: string,
+  ownerUserId: string,
+  title: string,
+) {
+  await prisma.agentSession.updateMany({
+    where: { eveSessionId, ownerUserId, title: null },
+    data: { title },
+  });
+}
+
 export type AgentSessionListItem = {
   agentName: string;
   createdAt: string;
@@ -29,15 +48,21 @@ export type AgentSessionListItem = {
   updatedAt: string;
 };
 
-export async function getAgentWorkspaceData(selectedSessionId?: string) {
+export type AgentWorkspaceData = {
+  selectedSessionId: string | null;
+  selectedSessionUnavailable: boolean;
+  sessions: AgentSessionListItem[];
+};
+
+export async function getAgentWorkspaceData(selectedSessionId?: string): Promise<AgentWorkspaceData> {
   const { userId } = await auth();
-  if (!userId) return { selectedSessionId: null, sessions: [] };
+  if (!userId) return { selectedSessionId: null, selectedSessionUnavailable: selectedSessionId !== undefined, sessions: [] };
 
   const user = await prisma.user.findUnique({
     where: { clerkId: userId },
     select: { id: true },
   });
-  if (!user) return { selectedSessionId: null, sessions: [] };
+  if (!user) return { selectedSessionId: null, selectedSessionUnavailable: selectedSessionId !== undefined, sessions: [] };
 
   // A new Eve session is registered by the event hook immediately after the
   // first stream starts. The browser can navigate to its durable URL a few

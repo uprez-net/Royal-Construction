@@ -251,6 +251,7 @@ export async function createAuthorizedLeadTask(
     notes?: string;
     type: LeadTaskType;
   },
+  transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessLead(actor, input.leadId);
@@ -261,7 +262,7 @@ export async function createAuthorizedLeadTask(
     leadId: input.leadId,
     notes: input.notes,
     type: input.type,
-  });
+  }, transaction);
   return taskConfirmation("Task created", task);
 }
 
@@ -284,10 +285,11 @@ export async function completeAuthorizedLeadTask(
   ctx: SessionContext,
   leadId: number,
   taskId: number,
+  transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessLead(actor, leadId);
-  const task = await completeLeadTask(taskId);
+  const task = await completeLeadTask(taskId, transaction);
   if (!task || task.leadId !== leadId) {
     throw new Error("The requested task is unavailable.");
   }
@@ -298,10 +300,11 @@ export async function reopenAuthorizedLeadTask(
   ctx: SessionContext,
   leadId: number,
   taskId: number,
+  transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessLead(actor, leadId);
-  const task = await reopenLeadTask(taskId);
+  const task = await reopenLeadTask(taskId, transaction);
   if (!task || task.leadId !== leadId) {
     throw new Error("The requested task is unavailable.");
   }

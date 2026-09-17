@@ -409,7 +409,7 @@ export const createVariationSchema = z.object({
     .min(1, "Description is required")
     .max(2000, "Description is too long"),
 
-  cost: nonNegativeSchema,
+  cost: nonNegativeSchema.refine((value) => Number.isInteger(value * 100), { message: "Cost must have at most two decimal places." }),
 
   requestedDate: isoDateStringSchema.optional(),
 });

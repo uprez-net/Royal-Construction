@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: requestTradiePriceChangeInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.price-change.request", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: () => requestAuthorizedTradiePriceChange(ctx, input) }); },
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.price-change.request", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: (tx) => requestAuthorizedTradiePriceChange(ctx, input, tx) }); },
 });

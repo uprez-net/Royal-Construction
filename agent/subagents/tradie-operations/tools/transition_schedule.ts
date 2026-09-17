@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: transitionTradieScheduleInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.transition", ctx, input, targetId: input.scheduleId, targetType: "tradieSchedule", execute: () => transitionAuthorizedTradieSchedule(ctx, input) }); },
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.transition", ctx, input, targetId: input.scheduleId, targetType: "tradieSchedule", execute: (tx) => transitionAuthorizedTradieSchedule(ctx, input, tx) }); },
 });

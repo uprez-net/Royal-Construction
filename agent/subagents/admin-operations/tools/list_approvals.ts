@@ -7,5 +7,5 @@ export default defineTool({
   description: "List the authenticated administrator's approval queue with safe summaries.",
   inputSchema: listApprovalsInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  execute(input, ctx) { return listAuthorizedApprovals(ctx, input); },
+  async execute(input, ctx) { return await listAuthorizedApprovals(ctx, input); },
 });

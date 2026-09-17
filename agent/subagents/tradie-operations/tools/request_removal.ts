@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: requestTradieRemovalInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.removal.request", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: () => requestAuthorizedTradieRemoval(ctx, input) }); },
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.removal.request", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: (tx) => requestAuthorizedTradieRemoval(ctx, input, tx) }); },
 });

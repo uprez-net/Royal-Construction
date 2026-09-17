@@ -5,6 +5,10 @@ const ownerMayApprove: ApprovalResponsePolicy = ({ responder, session }) => {
   const owner = session.initiator;
   return owner?.principalType === "user" &&
     responder.principalType === "user" &&
+    typeof owner.principalId === "string" &&
+    owner.principalId.length > 0 &&
+    typeof responder.principalId === "string" &&
+    responder.principalId.length > 0 &&
     responder.principalId === owner.principalId
     ? { status: "allowed" }
     : {

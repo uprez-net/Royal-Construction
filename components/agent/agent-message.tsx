@@ -39,6 +39,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { isInternalHref } from "@/utils/safe-links";
 
 export type AgentInputResponse = {
   optionId?: string;
@@ -384,7 +385,7 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
             link &&
               typeof link === "object" &&
               typeof (link as Record<string, unknown>).href === "string" &&
-              (link as Record<string, unknown>).href?.toString().startsWith("/") &&
+              isInternalHref((link as Record<string, unknown>).href as string) &&
               typeof (link as Record<string, unknown>).label === "string",
           ),
       )
@@ -399,7 +400,8 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
   const data = candidate.data && typeof candidate.data === "object" && !Array.isArray(candidate.data) ? candidate.data as Record<string, unknown> : {};
   const entityValue = candidate.entityRef && typeof candidate.entityRef === "object" ? candidate.entityRef as Record<string, unknown> : null;
   const entityDisplay = entityValue?.display && typeof entityValue.display === "object" ? entityValue.display as Record<string, unknown> : null;
-  const entityRef = entityValue && typeof entityValue.type === "string" && typeof entityValue.id === "string" && entityDisplay && typeof entityDisplay.label === "string" ? { type: entityValue.type, id: entityValue.id, display: { label: entityDisplay.label, href: typeof entityDisplay.href === "string" ? entityDisplay.href : undefined } } : null;
+  const entityHref = typeof entityDisplay?.href === "string" && isInternalHref(entityDisplay.href) ? entityDisplay.href : undefined;
+  const entityRef = entityValue && typeof entityValue.type === "string" && typeof entityValue.id === "string" && entityDisplay && typeof entityDisplay.label === "string" ? { type: entityValue.type, id: entityValue.id, display: { label: entityDisplay.label, href: entityHref } } : null;
   const warnings = Array.isArray(candidate.warnings) ? candidate.warnings.filter((warning): warning is string => typeof warning === "string") : [];
   return { actions, links, outreach, summary: candidate.summary, title: candidate.title, kind: typeof candidate.kind === "string" ? candidate.kind : "entity-summary", warnings, requiresApproval: candidate.requiresApproval === true, entityRef, data };
 }

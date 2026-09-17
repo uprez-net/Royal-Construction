@@ -7,5 +7,5 @@ export default defineTool({
   description: "Inspect one approval request and its validated payload before deciding.",
   inputSchema: getApprovalInputSchema,
   outputSchema: agentResultEnvelopeSchema,
-  execute(input, ctx) { return getAuthorizedApproval(ctx, input); },
+  async execute(input, ctx) { return await getAuthorizedApproval(ctx, input); },
 });

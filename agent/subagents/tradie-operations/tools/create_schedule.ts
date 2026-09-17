@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: createTradieScheduleInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.create", ctx, input, targetId: input.tradieId, targetType: "tradieSchedule", execute: () => createAuthorizedTradieSchedule(ctx, input) }); },
+  async execute(input, ctx) { return await runTradieWrite({ action: "tradie.schedule.create", ctx, input, targetType: "tradieSchedule", targetIdFromOutput: (output) => typeof output.data.schedule === "object" && output.data.schedule !== null && "id" in output.data.schedule && typeof output.data.schedule.id === "string" ? output.data.schedule.id : undefined, execute: (tx) => createAuthorizedTradieSchedule(ctx, input, tx) }); },
 });

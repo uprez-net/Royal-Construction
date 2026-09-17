@@ -11,30 +11,17 @@ import {
   isAgentFeatureEnabled,
 } from "@/agent/lib/session-identity";
 
-const SESSION_REGISTRY_RETRY_DELAYS_MS = [40, 100, 200, 400, 800, 1_200] as const;
-
 const clerkClient = createClerkClient({
   publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   secretKey: process.env.CLERK_SECRET_KEY,
 });
 
-function delay(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 async function findSessionOwner(eveSessionId: string) {
-  for (let attempt = 0; attempt <= SESSION_REGISTRY_RETRY_DELAYS_MS.length; attempt += 1) {
-    const session = await prisma.agentSession.findUnique({
-      where: { eveSessionId },
-      select: { ownerUserId: true },
-    });
-    if (session) return session.ownerUserId;
-
-    const retryDelay = SESSION_REGISTRY_RETRY_DELAYS_MS[attempt];
-    if (retryDelay !== undefined) await delay(retryDelay);
-  }
-
-  return null;
+  const session = await prisma.agentSession.findUnique({
+    where: { eveSessionId },
+    select: { ownerUserId: true },
+  });
+  return session?.ownerUserId ?? null;
 }
 
 export function clerkInternalUserAuth(): AuthFn<Request> {

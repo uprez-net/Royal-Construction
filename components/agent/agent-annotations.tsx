@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { Tags, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,9 @@ type AgentAnnotationsProps = {
 
 export function AgentAnnotations({ annotations, setAnnotations, annotationResults, annotationQuery, selectAnnotation }: AgentAnnotationsProps) {
   const isSearching = annotationQuery.length >= 2 && annotationResults.length > 0;
+  const [dismissedQuery, setDismissedQuery] = useState<string | null>(null);
+  const open = isSearching && dismissedQuery !== annotationQuery;
+
   if (annotations.length === 0 && !isSearching) return null;
 
   return (
@@ -33,7 +36,7 @@ export function AgentAnnotations({ annotations, setAnnotations, annotationResult
           {annotations.map((annotation) => (
             <Badge className="shrink-0" key={`${annotation.type}:${annotation.id}`} variant="secondary">
               {annotation.label}
-              <button aria-label={`Remove ${annotation.label}`} className="ml-1" onClick={() => setAnnotations((items) => items.filter((item) => item.id !== annotation.id))} type="button">
+              <button aria-label={`Remove ${annotation.label}`} className="ml-1" onClick={() => setAnnotations((items) => items.filter((item) => item.id !== annotation.id || item.type !== annotation.type))} type="button">
                 <X className="size-3" />
               </button>
             </Badge>
@@ -41,7 +44,7 @@ export function AgentAnnotations({ annotations, setAnnotations, annotationResult
         </div>
       ) : null}
       {isSearching ? (
-        <Popover open modal>
+        <Popover modal={false} onOpenChange={(nextOpen) => setDismissedQuery(nextOpen ? null : annotationQuery)} open={open}>
           <PopoverTrigger asChild>
             <Button aria-label="Open annotation results" className="pointer-events-auto rounded-full bg-background/95 shadow-sm backdrop-blur" size="icon-sm" type="button" variant="outline">
               <Tags />

@@ -49,6 +49,7 @@ type OfferSummary = {
     name: string;
   };
 };
+type OfferDb = Prisma.TransactionClient | typeof prisma;
 
 const offerSummarySelect = {
   acceptedAt: true,
@@ -182,8 +183,9 @@ async function getOfferDetailsDirect(input: { offerId: string }) {
 async function updateOfferDetailsDirect(
   input: { expectedStateVersion: number; offerId: string; patch: Record<string, unknown> },
   actorId: string,
+  db: OfferDb = prisma,
 ) {
-  const current = await prisma.offer.findUnique({
+  const current = await db.offer.findUnique({
     where: { id: input.offerId },
     select: {
       amount: true,
@@ -215,7 +217,7 @@ async function updateOfferDetailsDirect(
   const snapshot = deserializeWorkspace(plan.state);
   const contractValueIncGst = buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const split = splitContractValueByGst({ contractValueIncGst, gstRate: snapshot.workspacePricingSettings.gstRate });
-  const result = await prisma.offer.updateMany({
+  const result = await db.offer.updateMany({
     where: { id: input.offerId, isActive: true, offerStatus: current.offerStatus, stateVersion: input.expectedStateVersion },
     data: {
       workspaceState: plan.state as unknown as Prisma.InputJsonValue,
@@ -226,8 +228,8 @@ async function updateOfferDetailsDirect(
       stateVersion: { increment: 1 },
     },
   });
-  if (result.count !== 1) return { ok: false as const, reason: "stale" as const, currentStateVersion: (await prisma.offer.findUnique({ where: { id: input.offerId }, select: { stateVersion: true } }))?.stateVersion ?? null };
-  await prisma.offerStatusEvent.create({ data: { offerId: input.offerId, fromStatus: current.offerStatus, toStatus: current.offerStatus, actorId, note: `Offer details updated: ${Object.keys(input.patch).join(", ")}` } });
+  if (result.count !== 1) return { ok: false as const, reason: "stale" as const, currentStateVersion: (await db.offer.findUnique({ where: { id: input.offerId }, select: { stateVersion: true } }))?.stateVersion ?? null };
+  await db.offerStatusEvent.create({ data: { offerId: input.offerId, fromStatus: current.offerStatus, toStatus: current.offerStatus, actorId, note: `Offer details updated: ${Object.keys(input.patch).join(", ")}` } });
   return { ok: true as const, stateVersion: input.expectedStateVersion + 1, changedSections: Object.keys(input.patch), totalIncGst: split.totalIncGst };
 }
 
@@ -370,10 +372,12 @@ function failedAction(title: string, error: string) {
 }
 
 async function transitionOfferStatusDirect(
-  input: { note?: string; offerId: string; toStatus: OfferStatus },
+  input: { expectedStateVersion?: number; note?: string; offerId: string; toStatus: OfferStatus },
   actorId: string,
+  db: OfferDb = prisma,
 ) {
-  const current = await prisma.offer.findUnique({
+  const transition = async (tx: OfferDb) => {
+  const current = await tx.offer.findUnique({
     where: { id: input.offerId },
     select: { offerStatus: true, isActive: true, workspaceState: true, leadId: true },
   });
@@ -393,11 +397,11 @@ async function transitionOfferStatusDirect(
     const issues = collectOwnerIssues(parseWorkspaceState(current.workspaceState).job.owners);
     if (issues.length > 0) throw new Error(`Complete owner details first: ${issues.join(" ")}`);
   }
-  const result = await prisma.$transaction(async (tx) => {
     const written = await tx.offer.updateMany({
-      where: { id: input.offerId, offerStatus: current.offerStatus, isActive: true },
+      where: { id: input.offerId, offerStatus: current.offerStatus, ...(input.expectedStateVersion === undefined ? {} : { stateVersion: input.expectedStateVersion }), isActive: true },
       data: {
         offerStatus: input.toStatus,
+        stateVersion: { increment: 1 },
         ...(input.toStatus === "SENT" ? { sentAt: new Date() } : {}),
         ...(input.toStatus === "AGREED" && current.offerStatus !== "AGREED" && current.workspaceState !== null
           ? { agreedSnapshot: current.workspaceState as Prisma.InputJsonValue, acceptedAt: new Date() }
@@ -412,8 +416,8 @@ async function transitionOfferStatusDirect(
     const patch = lead ? leadStagePatchForOfferStatus(input.toStatus, lead.stage, new Date(), lead.wonAt) : null;
     if (patch) await tx.lead.update({ where: { id: current.leadId }, data: patch });
     return { status: input.toStatus };
-  });
-  return result;
+  };
+  return db === prisma ? prisma.$transaction(transition, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }) : transition(db);
 }
 
 async function createOfferRevisionDirect(input: { offerId: string }, actorId: string) {
@@ -483,7 +487,7 @@ async function draftHighlightsForOffer(input: { scheduled: readonly string[] }) 
 async function runOfferMutation(input: {
   action: string;
   ctx: ToolContext;
-  execute: () => Promise<AgentResultEnvelope>;
+  execute: (tx?: Prisma.TransactionClient) => Promise<AgentResultEnvelope>;
   inputSummary: Prisma.InputJsonValue;
   ownerUserId: string;
   targetId: string;
@@ -497,15 +501,15 @@ async function runOfferMutation(input: {
 
 export async function transitionAuthorizedOfferStatus(
   ctx: ToolContext,
-  input: { note?: string; offerId: string; toStatus: OfferStatus },
+  input: { expectedStateVersion: number; note?: string; offerId: string; toStatus: OfferStatus },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessOffer(actor, input.offerId);
   return runOfferMutation({
     action: "offer.status.transition",
     ctx,
-    execute: async () => {
-      const result = await transitionOfferStatusDirect(input, actor.id);
+    execute: async (tx) => {
+      const result = await transitionOfferStatusDirect(input, actor.id, tx);
       return actionEnvelope({
         data: { status: result.status },
         entityRef: {
@@ -517,7 +521,7 @@ export async function transitionAuthorizedOfferStatus(
         title: "Offer status updated",
       });
     },
-    inputSummary: { offerId: input.offerId, toStatus: input.toStatus, note: input.note ?? null },
+    inputSummary: { expectedStateVersion: input.expectedStateVersion, offerId: input.offerId, toStatus: input.toStatus, note: input.note ?? null },
     ownerUserId: actor.id,
     targetId: input.offerId,
   });
@@ -532,8 +536,8 @@ export async function updateAuthorizedOfferDetails(
   return runOfferMutation({
     action: "offer.details.update",
     ctx,
-    execute: async () => {
-      const result = await updateOfferDetailsDirect(input, actor.id);
+    execute: async (tx) => {
+      const result = await updateOfferDetailsDirect(input, actor.id, tx);
       if (!result.ok) {
         return failedAction(
           "Offer details were not updated",
@@ -635,6 +639,7 @@ export async function logAuthorizedOfferChangeRequest(
   input: { leadId: number; note: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
+  await assertAgentCanAccessLead(actor, input.leadId);
   return runOfferMutation({
     action: "offer.change-request.log",
     ctx,

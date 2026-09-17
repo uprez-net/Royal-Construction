@@ -9,5 +9,5 @@ export default defineTool({
   inputSchema: rescheduleTradieInputSchema,
   outputSchema: agentResultEnvelopeSchema,
   approval: ownerOnlyApproval(),
-  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.reschedule", ctx, input, targetId: input.scheduleId, targetType: "tradieSchedule", execute: () => rescheduleAuthorizedTradie(ctx, input) }); },
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.schedule.reschedule", ctx, input, targetId: input.scheduleId, targetType: "tradieSchedule", execute: (tx) => rescheduleAuthorizedTradie(ctx, input, tx) }); },
 });

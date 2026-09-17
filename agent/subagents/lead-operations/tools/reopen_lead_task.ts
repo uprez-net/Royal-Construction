@@ -27,7 +27,7 @@ export default defineTool({
       ownerUserId: actor.id,
       targetId: String(taskId),
       targetType: "leadTask",
-      execute: () => reopenAuthorizedLeadTask(ctx, leadId, taskId),
+      execute: (tx) => reopenAuthorizedLeadTask(ctx, leadId, taskId, tx),
     });
   },
 });

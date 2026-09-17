@@ -14,6 +14,7 @@ interface SaveFileParams {
     leadId?: string;
     fileId?: string;
     fileUrl: string;
+    storagePath?: string;
     fileName: string;
     fileType: string;
     fileSize: number;
@@ -53,7 +54,7 @@ interface SaveFileParams {
  *
  * @throws Re-throws any database errors encountered while saving the file.
  */
-export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, fileName, fileType, fileSize, leadId }: SaveFileParams) {
+export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl, storagePath, fileName, fileType, fileSize, leadId }: SaveFileParams) {
     try {
         const newFile = await prisma.file.create({
             data: {
@@ -62,6 +63,7 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
                 projectId,
                 milestoneId,
                 url: fileUrl,
+                storagePath,
                 filename: fileName,
                 fileType,
                 filesize: fileSize,

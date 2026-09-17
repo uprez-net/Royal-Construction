@@ -80,6 +80,7 @@ export const transitionOfferStatusInputSchema = z.object({
   offerId: offerIdSchema,
   toStatus: offerStatusSchema,
   note: z.string().trim().max(500).optional(),
+  expectedStateVersion: z.number().int().nonnegative(),
 });
 
 export const recallOfferEnvelopeInputSchema = z.object({

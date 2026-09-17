@@ -116,7 +116,14 @@ export function filePreviewModal(
   }
 
   if (!isPreviewableImage(selected)) {
-    return { type: "previewFile", payload: { fileUrl: selected.url } };
+    return {
+      type: "previewFile",
+      payload: {
+        fileUrl: selected.url,
+        fileName: selected.name ?? null,
+        fileType: selected.fileType ?? null,
+      },
+    };
   }
 
   const siblings = files.filter(
