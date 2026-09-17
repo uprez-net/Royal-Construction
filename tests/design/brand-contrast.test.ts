@@ -167,12 +167,28 @@ function openingTag(
   open: number,
 ): { end: number; selfClosing: boolean } | null {
   let depth = 0;
+  // Quoted attribute values are skipped whole: a title="}" would otherwise
+  // unbalance depth, or a quoted ">" end the tag early, and returning null
+  // makes elementChildren skip the element — a guard that fails OPEN, letting
+  // nested white text through.
+  let quote: string | null = null;
   for (let i = open + 1; i < source.length; i++) {
-    if (source[i] === "{") {
+    const char = source[i];
+    if (quote) {
+      if (char === "\\") {
+        i += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+    } else if (char === "{") {
       depth += 1;
-    } else if (source[i] === "}") {
+    } else if (char === "}") {
       depth -= 1;
-    } else if (source[i] === ">" && depth === 0) {
+    } else if (char === ">" && depth === 0) {
       return { end: i, selfClosing: source[i - 1] === "/" };
     }
   }
@@ -266,7 +282,9 @@ test("no class list pairs a base --royal-gold fill with white text", () => {
 // or a translucent /90 step. The translucent step lightens toward the page, so
 // white text loses contrast exactly where the pointer is.
 const INK_HOVER_STAND_IN =
-  /hover:bg-royal-gold-ink\/\d+|color-mix\(in_oklab,var\(--royal-gold-ink\)/;
+  // The whole modifier token, not just digits: Tailwind takes arbitrary forms
+  // (hover:bg-royal-gold-ink/[90%], /[.9]) and a \d+ match let those through.
+  /hover:bg-royal-gold-ink\/[^\s"'`]+|color-mix\(in_oklab,var\(--royal-gold-ink\)/;
 
 test("ink hovers use the hover token rather than a stand-in", () => {
   const offenders: string[] = [];
