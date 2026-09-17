@@ -51,8 +51,12 @@ logs/
 backups/
 *.dump
 
+/tmp
+
 .vercel
 .swc
+.output/
+.eve/
 .vscode/
 .playwright-mcp/
 .omc/
@@ -66,5 +70,3 @@ package-lock.json
 .claude/
 .mcp.json
 .docs-build/
-
-/tmp
