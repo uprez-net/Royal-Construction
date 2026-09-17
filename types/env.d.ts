@@ -91,5 +91,13 @@ namespace NodeJS {
     // Optional override, e.g. "OUTPUT" for GST on Income. Left unset, Xero
     // applies the sales account's own default tax rate.
     XERO_SALES_TAX_TYPE: string;
+
+    // Eve Operations
+    EVE_OPERATIONS_AGENT_ENABLED: string;
+    EVE_OPERATIONS_SPECIALISTS_ENABLED: string;
+
+    // Upstash Redis
+    UPSTASH_REDIS_REST_URL: string;
+    UPSTASH_REDIS_REST_TOKEN: string;
   }
 }
