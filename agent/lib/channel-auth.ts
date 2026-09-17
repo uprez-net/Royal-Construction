@@ -11,7 +11,7 @@ import {
   isAgentFeatureEnabled,
 } from "@/agent/lib/session-identity";
 
-const SESSION_REGISTRY_RETRY_DELAYS_MS = [40, 100, 200, 400] as const;
+const SESSION_REGISTRY_RETRY_DELAYS_MS = [40, 100, 200, 400, 800, 1_200] as const;
 
 const clerkClient = createClerkClient({
   publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,

@@ -17,15 +17,23 @@ async function ExistingAgentWorkspace({ sessionId }: { sessionId: string }) {
   );
 }
 
-export default async function AgentSessionPage({
+async function AgentSessionRoute({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
+  return <ExistingAgentWorkspace sessionId={sessionId} />;
+}
+
+export default function AgentSessionPage({
+  params,
+}: {
+  params: Promise<{ sessionId: string }>;
+}) {
   return (
     <Suspense fallback={<AgentWorkspaceSkeleton />}>
-      <ExistingAgentWorkspace sessionId={sessionId} />
+      <AgentSessionRoute params={params} />
     </Suspense>
   );
 }

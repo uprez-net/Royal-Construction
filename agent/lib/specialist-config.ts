@@ -3,7 +3,7 @@ import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 const model = "zai/glm-5.3-flash";
 
-export function defineGuriSpecialist(description: string) {
+export function defineRCSpecialist(description: string) {
   return defineDynamic({
     events: {
       "session.started": (_event, ctx) => {

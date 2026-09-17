@@ -7,6 +7,7 @@ import {
 import { defineMemoryProvider } from "eve/memory";
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
+import { Redis } from "@upstash/redis";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 
@@ -89,7 +90,7 @@ function assertMemoryDocumentIsBounded(document: MemoryDocument) {
 }
 
 function cacheKey(ownerUserId: string, scope: string) {
-  return `guri:agent-memory:v${MEMORY_CACHE_VERSION}:${ownerUserId}:${scope}`;
+  return `royal-construction:agent-memory:v${MEMORY_CACHE_VERSION}:${ownerUserId}:${scope}`;
 }
 
 function upstashConfig() {
@@ -98,25 +99,13 @@ function upstashConfig() {
   return url && token ? { url, token } : null;
 }
 
-async function runRedisCommand(command: readonly (string | number)[]) {
-  const config = upstashConfig();
-  if (!config) return null;
+let redisClient: Redis | null | undefined;
 
-  try {
-    const response = await fetch(config.url, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${config.token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(command),
-      signal: AbortSignal.timeout(1_000),
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as { result?: unknown };
-  } catch {
-    return null;
-  }
+function getRedisClient() {
+  if (redisClient !== undefined) return redisClient;
+  const config = upstashConfig();
+  redisClient = config ? new Redis({ url: config.url, token: config.token }) : null;
+  return redisClient;
 }
 
 async function readCachedMemory(
@@ -124,11 +113,13 @@ async function readCachedMemory(
   scope: string,
   databaseVersion: number,
 ) {
-  const response = await runRedisCommand(["GET", cacheKey(ownerUserId, scope)]);
-  if (typeof response?.result !== "string") return null;
+  const redis = getRedisClient();
+  if (!redis) return null;
 
   try {
-    const parsed = cachedMemorySchema.safeParse(JSON.parse(response.result));
+    const cached = await redis.get<string>(cacheKey(ownerUserId, scope));
+    if (typeof cached !== "string") return null;
+    const parsed = cachedMemorySchema.safeParse(JSON.parse(cached));
     if (!parsed.success || parsed.data.databaseVersion !== databaseVersion) {
       return null;
     }
@@ -144,21 +135,31 @@ async function writeCachedMemory(
   databaseVersion: number,
   document: MemoryDocument,
 ) {
-  await runRedisCommand([
-    "SET",
-    cacheKey(ownerUserId, scope),
-    JSON.stringify({
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.set(
+      cacheKey(ownerUserId, scope),
+      JSON.stringify({
       cacheVersion: MEMORY_CACHE_VERSION,
       databaseVersion,
       document,
-    }),
-    "EX",
-    MEMORY_CACHE_TTL_SECONDS,
-  ]);
+      }),
+      { ex: MEMORY_CACHE_TTL_SECONDS },
+    );
+  } catch {
+    // Redis is an acceleration layer; Postgres remains authoritative.
+  }
 }
 
 async function deleteCachedMemory(ownerUserId: string, scope: string) {
-  await runRedisCommand(["DEL", cacheKey(ownerUserId, scope)]);
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.del(cacheKey(ownerUserId, scope));
+  } catch {
+    // A stale cache is safe because every read checks the Postgres version.
+  }
 }
 
 async function readAuthoritativeMemory(ownerUserId: string, scope: string) {

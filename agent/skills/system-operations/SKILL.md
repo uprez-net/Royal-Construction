@@ -1,5 +1,5 @@
 ---
-description: Use for any Guri operation that needs caller identity, entity resolution, authorization, memory, PII, approval, idempotency, or audit rules.
+description: Use for any Royal Construction operation that needs caller identity, entity resolution, authorization, memory, PII, approval, idempotency, or audit rules.
 ---
 
 # System operations

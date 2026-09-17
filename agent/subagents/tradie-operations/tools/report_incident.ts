@@ -1,0 +1,13 @@
+import { defineTool } from "eve/tools";
+import { ownerOnlyApproval } from "@/agent/lib/agent-approval";
+import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { reportTradieIncidentInputSchema } from "@/agent/lib/tradie-contracts";
+import { reportAuthorizedTradieIncident, runTradieWrite } from "@/agent/lib/tradie-operations";
+
+export default defineTool({
+  description: "Record a tradie incident and queue its resolution for review after owner approval.",
+  inputSchema: reportTradieIncidentInputSchema,
+  outputSchema: agentResultEnvelopeSchema,
+  approval: ownerOnlyApproval(),
+  execute(input, ctx) { return runTradieWrite({ action: "tradie.incident.report", ctx, input, targetId: input.tradieId, targetType: "tradie", execute: () => reportAuthorizedTradieIncident(ctx, input) }); },
+});
