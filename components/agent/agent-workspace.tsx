@@ -10,8 +10,11 @@ import {
   History,
   MessageSquareText,
   Plus,
+  Paperclip,
+  GitFork,
   Send,
   Sparkles,
+  X,
 } from "lucide-react";
 import {
   AgentMessage,
@@ -53,6 +56,10 @@ export function AgentWorkspace({
 }) {
   const router = useRouter();
   const [composer, setComposer] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [annotations, setAnnotations] = useState<Array<{ type: string; id: string; label: string; href: string; group: string }>>([]);
+  const [annotationResults, setAnnotationResults] = useState<Array<{ type: string; id: string; label: string; href: string; group: string }>>([]);
+  const [forkContext, setForkContext] = useState<string | null>(() => typeof window === "undefined" ? null : sessionStorage.getItem("rc-agent-fork-context"));
   const [sessions, setSessions] = useState(initialSessions);
   const viewportRef = useRef<HTMLDivElement>(null);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
@@ -103,7 +110,8 @@ export function AgentWorkspace({
   });
 
   const busy = agent.status === "resuming" || agent.status === "submitted" || agent.status === "streaming";
-  const canSend = !busy && composer.trim().length > 0;
+  const canSend = !busy && (composer.trim().length > 0 || attachments.length > 0);
+  const annotationQuery = useMemo(() => composer.match(/(?:^|\s)@([^\s@]*)$/)?.[1] ?? "", [composer]);
   const statusLabel = useMemo(() => agentStatusLabel(agent.status), [agent.status]);
 
   useEffect(() => {
@@ -112,11 +120,40 @@ export function AgentWorkspace({
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
   }, [agent.data.messages, agent.status]);
 
+  useEffect(() => {
+    const query = annotationQuery;
+    if (query.length < 2) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch(`/api/agent/annotations?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then((response) => response.ok ? response.json() : { annotations: [] })
+        .then((payload: { annotations?: typeof annotationResults }) => setAnnotationResults(payload.annotations ?? []))
+        .catch(() => undefined);
+    }, 180);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [annotationQuery]);
+
   async function sendMessage(message: string) {
-    const text = message.trim();
-    if (!text || busy) return;
+    const text = message.trim() || "Please review the attached file(s).";
+    if ((!message.trim() && attachments.length === 0) || busy) return;
     setComposer("");
-    await agent.send(text);
+    const uploaded = await Promise.all(attachments.map(async (file) => {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/agent/upload", { method: "POST", body: form });
+      if (!response.ok) throw new Error("Attachment upload failed");
+      return (await response.json() as { file: { url: string; filename: string; fileType: string } }).file;
+    }));
+    const content = [
+      { type: "text" as const, text },
+      ...uploaded.map((file) => ({ type: "file" as const, data: new URL(file.url), filename: file.filename, mediaType: file.fileType })),
+    ];
+    await agent.send(content, { clientContext: { route: window.location.pathname, forkContext, annotations: annotations.map(({ type, id, label }) => ({ type, id, label })) } });
+    setAttachments([]);
+    setForkContext(null);
+    sessionStorage.removeItem("rc-agent-fork-context");
   }
 
   async function respond(responses: readonly AgentInputResponse[]) {
@@ -125,6 +162,18 @@ export function AgentWorkspace({
 
   async function runAction(action: { id: string; label: string; operation: string }) {
     await sendMessage(`Please execute the approved UI action "${action.label}" (${action.operation}, action id ${action.id}) after I review the prepared details.`);
+  }
+
+  function selectAnnotation(annotation: (typeof annotationResults)[number]) {
+    setAnnotations((current) => current.some((item) => item.id === annotation.id && item.type === annotation.type) ? current : [...current, annotation]);
+    setComposer((current) => current.replace(/(?:^|\s)@[^\s@]*$/, " "));
+    setAnnotationResults([]);
+  }
+
+  function forkConversation() {
+    const transcript = agent.data.messages.flatMap((message) => message.parts.filter((part) => part.type === "text").map((part) => `${message.role}: ${part.text}`)).join("\n").slice(-12_000);
+    sessionStorage.setItem("rc-agent-fork-context", transcript);
+    router.push("/agent");
   }
 
   return (
@@ -212,6 +261,7 @@ export function AgentWorkspace({
                 <span className="hidden sm:inline">Stop</span>
               </Button>
             ) : null}
+            {agent.data.messages.length > 0 ? <Button aria-label="Fork conversation" onClick={forkConversation} size="icon-sm" type="button" variant="outline"><GitFork /></Button> : null}
           </div>
         </header>
 
@@ -276,6 +326,9 @@ export function AgentWorkspace({
               void sendMessage(composer);
             }}
           >
+            {annotations.length > 0 ? <div className="mb-2 flex flex-wrap gap-2">{annotations.map((annotation) => <Badge key={`${annotation.type}:${annotation.id}`} variant="secondary">{annotation.label}<button aria-label={`Remove ${annotation.label}`} className="ml-1" onClick={() => setAnnotations((items) => items.filter((item) => item.id !== annotation.id))} type="button"><X className="size-3" /></button></Badge>)}</div> : null}
+            {annotationQuery.length >= 2 && annotationResults.length > 0 ? <div className="mb-2 max-h-48 overflow-auto rounded-lg border bg-white p-1 shadow-lg">{annotationResults.map((annotation) => <button className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted" key={`${annotation.type}:${annotation.id}`} onClick={() => selectAnnotation(annotation)} type="button"><span>{annotation.label}</span><span className="text-xs text-muted-foreground">{annotation.group}</span></button>)}</div> : null}
+            {attachments.length > 0 ? <div className="mb-2 flex flex-wrap gap-2">{attachments.map((file) => <Badge key={`${file.name}:${file.lastModified}`} variant="outline"><span className="max-w-48 truncate">{file.name}</span><button aria-label={`Remove ${file.name}`} className="ml-1" onClick={() => setAttachments((items) => items.filter((item) => item !== file))} type="button"><X className="size-3" /></button></Badge>)}</div> : null}
             <InputGroup className="rounded-xl bg-muted/20 shadow-xs">
               <InputGroupTextarea
                 aria-label="Message the operations agent"
@@ -292,7 +345,7 @@ export function AgentWorkspace({
                 value={composer}
               />
               <InputGroupAddon align="block-end" className="justify-between">
-                <span className="text-xs text-muted-foreground">Enter to send · Shift+Enter for a new line</span>
+                <span className="flex items-center gap-2 text-xs text-muted-foreground"><label className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 hover:bg-muted"><Paperclip className="size-3.5" />Attach<input accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" className="hidden" multiple onChange={(event) => setAttachments((items) => [...items, ...Array.from(event.target.files ?? [])].slice(0, 5))} type="file" /></label><span className="hidden sm:inline">Enter to send · Shift+Enter for a new line · @ to reference</span></span>
                 <Button aria-label="Send message" disabled={!canSend} size="icon-sm" type="submit">
                   <Send data-icon="inline-start" />
                 </Button>

@@ -108,6 +108,7 @@ function AgentMessagePart({
         <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
           <FileText aria-hidden="true" className="size-4 text-muted-foreground" />
           <span className="truncate text-sm">{part.filename ?? "Attachment"}</span>
+          {part.url ? <a className="ml-auto shrink-0 text-xs text-royal-gold-ink underline-offset-2 hover:underline" href={part.url} rel="noreferrer" target="_blank">Preview</a> : null}
         </div>
       );
     case "authorization":
