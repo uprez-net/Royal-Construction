@@ -8,6 +8,7 @@ import {
   findDepositRow,
   paymentScheduleLine,
   tenderExclusionLines,
+  resolveSignedTenderExclusions,
 } from "../../lib/offer/project-handoff-commercials";
 import { INITIAL_EXCLUSIONS } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
@@ -161,4 +162,38 @@ test("both cases are named when both apply, and nothing missing is no message", 
   assert.match(message ?? "", /Tender is signed/);
   assert.match(message ?? "", /No executed Contract/);
   assert.equal(describeMissingExecutedDocuments([]), null);
+});
+
+// The Contract and the project must carry what the SIGNED Tender printed. The
+// workspace can still be written after the offer is agreed, so rebuilding the
+// lines from the snapshot could put a line on the BC4 the customer never signed.
+test("exclusions come from the signed Tender's stored document", () => {
+  const resolved = resolveSignedTenderExclusions({
+    tenderDocumentData: {
+      draft: { exclusionBullets: ["Landscaping (not in scope)"] },
+      exclusions: [],
+    },
+    snapshot: {
+      job: { hasGrannyHome: false, grannyFlatSqm: 0 },
+      draft: { exclusionBullets: ["Edited after the Tender went out"] },
+      exclusions: [],
+    } as never,
+  });
+  assert.deepEqual(resolved.lines, ["Landscaping (not in scope)"]);
+  assert.equal(resolved.source, "tender-document");
+});
+
+test("a Tender row with nothing readable falls back to the snapshot", () => {
+  for (const documentData of [null, {}, { draft: {} }, "not an object"]) {
+    const resolved = resolveSignedTenderExclusions({
+      tenderDocumentData: documentData,
+      snapshot: {
+        job: { hasGrannyHome: false, grannyFlatSqm: 0 },
+        draft: { exclusionBullets: ["Landscaping (not in scope)"] },
+        exclusions: [],
+      } as never,
+    });
+    assert.deepEqual(resolved.lines, ["Landscaping (not in scope)"], `for ${JSON.stringify(documentData)}`);
+    assert.equal(resolved.source, "agreed-snapshot");
+  }
 });

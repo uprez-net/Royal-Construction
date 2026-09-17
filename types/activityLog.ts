@@ -393,6 +393,17 @@ export const activityLogTemplates: ActivityLogTemplateFactory = {
         projectId: data.projectId,
     }),
 
+    complianceDevelopmentApplicationRequirementSet: (data) => ({
+        id: uuidv4(),
+        type: "complianceDevelopmentApplicationRequirementSet",
+        message: `${data.answeredBy ?? "An admin"} recorded that this compliance file ${
+            data.required ? "needs" : "does not need"
+        } a Development Application`,
+        authorId: "system",
+        timestamp: new Date().toISOString(),
+        projectId: data.projectId,
+    }),
+
     complianceCertificateIssued: (data) => ({
         id: uuidv4(),
         type: "complianceCertificateIssued",

@@ -446,6 +446,9 @@ function YesNoQuestion({
           size="sm"
           type="button"
           variant={value ? "royal" : "outline"}
+          // The variant changes colour only, so without this the selected
+          // answer is announced as an ordinary unselected button.
+          aria-pressed={value}
           onClick={() => onChange(true)}
         >
           Yes
@@ -454,6 +457,7 @@ function YesNoQuestion({
           size="sm"
           type="button"
           variant={value ? "outline" : "royal"}
+          aria-pressed={!value}
           onClick={() => onChange(false)}
         >
           No

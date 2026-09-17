@@ -14,3 +14,43 @@ export function isDefaultOfferFilters(
 ): boolean {
   return status === "all" && q.trim() === "";
 }
+
+export type OfferListFilters = {
+  readonly status: OfferStatusBucket;
+  readonly q: string;
+};
+
+/**
+ * The filters a fetch asks for, applied over the current ones. A field the
+ * fetch leaves out keeps its current value, so a page change can re-fetch
+ * without redeclaring the tab and search. The store records this when the fetch
+ * STARTS: if a server refresh lands while it is still loading, the store must
+ * already describe the view the user asked for, not the one they left.
+ */
+export function filtersForRequest(
+  current: OfferListFilters,
+  requested: { readonly status?: OfferStatusBucket; readonly q?: string },
+): OfferListFilters {
+  return {
+    status: requested.status ?? current.status,
+    q: requested.q ?? current.q,
+  };
+}
+
+/**
+ * Whether the page the server just rendered is the page the user is on. The
+ * server always renders the unfiltered first page, so it is the right view only
+ * for an unfiltered list on that same page and page size. A user on page 3
+ * keeps page 3 across a refresh or a Back navigation.
+ */
+export function shouldAdoptServerOffers(
+  filters: OfferListFilters,
+  current: { readonly page: number; readonly limit: number },
+  server: { readonly page: number; readonly limit: number },
+): boolean {
+  return (
+    isDefaultOfferFilters(filters.status, filters.q) &&
+    current.page === server.page &&
+    current.limit === server.limit
+  );
+}

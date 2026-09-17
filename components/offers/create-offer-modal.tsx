@@ -86,6 +86,9 @@ export function CreateOfferFileModal({
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            // The placeholder is the accessible name only while the field is
+            // empty, so it disappears the moment someone types their search.
+            aria-label="Search leads by name, email, site address or build type"
             placeholder="Search by lead name, email, site address, or build type"
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />

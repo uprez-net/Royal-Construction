@@ -50,6 +50,10 @@ type OfferSummaryStripProps = {
   readonly effectiveMargin: EffectiveMargin;
   readonly pricing: OfferWorkspacePricing;
   readonly totalAreaSqm: number;
+  // Until the offer loads every figure here is a seeded default, and a price
+  // stated with confidence beside a "Loading this offer…" pane is worse than no
+  // price: it reads as this offer's money. The whole strip goes neutral.
+  readonly awaitingOffer: boolean;
 };
 
 export function OfferSummaryStrip({
@@ -57,6 +61,7 @@ export function OfferSummaryStrip({
   effectiveMargin,
   pricing,
   totalAreaSqm,
+  awaitingOffer,
 }: OfferSummaryStripProps) {
   const selected = customerPrice.selectedContractValueIncGst;
   const figures = buildOfferSummaryFigures({
@@ -66,16 +71,27 @@ export function OfferSummaryStrip({
   });
   const priced = effectiveMargin.marginStatus !== "not_priced";
 
-  const cells: readonly (readonly [string, string])[] = [
-    ["Building area", totalAreaSqm > 0 ? formatArea(totalAreaSqm) : "—"],
-    ["Direct total", formatCurrency(pricing.directTotal)],
-    ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
-    ["GST", formatCurrency(figures.gstOnOffer)],
-    [
-      "Per m² (offer price)",
-      figures.perSqm === null ? "—" : formatCurrency(figures.perSqm),
-    ],
-  ];
+  // Blank while the offer is still loading: every figure below is a seeded
+  // default until then, and a price stated with confidence beside a loading
+  // pane reads as this offer's money.
+  const cells: readonly (readonly [string, string])[] = awaitingOffer
+    ? [
+        ["Building area", "—"],
+        ["Direct total", "—"],
+        ["Cost before fee", "—"],
+        ["GST", "—"],
+        ["Per m² (offer price)", "—"],
+      ]
+    : [
+        ["Building area", totalAreaSqm > 0 ? formatArea(totalAreaSqm) : "—"],
+        ["Direct total", formatCurrency(pricing.directTotal)],
+        ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
+        ["GST", formatCurrency(figures.gstOnOffer)],
+        [
+          "Per m² (offer price)",
+          figures.perSqm === null ? "—" : formatCurrency(figures.perSqm),
+        ],
+      ];
 
   return (
     // The old right rail was an <aside>; this is its replacement and keeps the
@@ -96,6 +112,17 @@ export function OfferSummaryStrip({
       </dl>
 
       <div className="ml-auto flex items-center gap-3">
+        {awaitingOffer ? (
+          // Every figure in this group comes from the same seeded state as the
+          // cells above: the override badge compares two placeholder numbers,
+          // the margin badge grades a placeholder markup, and the contract
+          // value is the largest number on the screen. None of it is this
+          // offer's until it has loaded.
+          <p className="font-heading text-lg font-semibold tabular-nums text-muted-foreground">
+            <span className="sr-only">Contract value including GST: </span>—
+          </p>
+        ) : (
+          <>
         {/* An override means the build-up and the offer disagree. Say so, rather
             than showing two large numbers in different places and letting the
             operator discover the gap on the document. */}
@@ -134,6 +161,8 @@ export function OfferSummaryStrip({
           <span className="sr-only">Contract value including GST: </span>
           {formatCurrency(selected)}
         </p>
+          </>
+        )}
       </div>
     </aside>
   );

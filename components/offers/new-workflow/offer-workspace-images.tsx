@@ -199,9 +199,11 @@ export function OfferWorkspaceImages({
                 {slot.label}
               </p>
               <div className="mt-auto flex flex-wrap items-center gap-2">
-                {/* The input is sr-only, so the label carries its keyboard focus ring,
-                    in the admin tab strip's 2px gold ink with an offset. */}
-                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-royal-gold-ink">
+                {/* The input is sr-only, so its own focus ring is invisible and
+                    the label is what a keyboard user sees. has-[:focus-visible]
+                    puts the ring on the label when the hidden input takes focus;
+                    without it, tabbing to Upload showed nothing at all. */}
+                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
                   {url ? "Replace" : "Upload"}
                   <input
                     accept="image/png,image/jpeg,image/webp"

@@ -2,7 +2,7 @@
 
 import { ComplianceDocumentType, CompliancePartyType } from "@prisma/client";
 import { FileText, Loader2, Paperclip, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -18,6 +18,7 @@ import {
   extraAttachmentIds,
   type ExtraAttachment,
 } from "@/components/modals/compliance/extra-attachments-field";
+import { LeadRichTextEditor } from "@/components/rich-text/lead-rich-text-editor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,7 +30,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   complianceDocumentLabel,
   isApprovalParty,
@@ -40,6 +40,12 @@ import {
   partyDeliverables,
 } from "@/constants/complianceDocuments";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
+import {
+  buildPartyOutreachBody,
+  type OutreachClientDetails,
+} from "@/lib/compliance/party-outreach-email";
+import { emailHtmlToLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import type { LeadRichTextDocument } from "@/lib/leads/types";
 import type { VaultAttachmentOption } from "@/types/compliance";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
@@ -114,15 +120,9 @@ type ConnectPartyModalProps = {
    */
   council?: string | null;
   location?: string | null;
-  /**
-   * What is already on the file, for the attach control's "From the file"
-   * picker.
-   *
-   * Resolved by the caller off the engagement rather than here, for the reason
-   * `prefilled` is: this modal knows how to send a request and nothing about
-   * which documents exist. Built with `vaultAttachmentOptions`, which is what
-   * drops the rows nobody should be attaching.
-   */
+  /** The project owner details included in the architect's generated email. */
+  customer: OutreachClientDetails;
+  /** Existing files and uploads available as optional extra attachments. */
   vaultOptions?: readonly VaultAttachmentOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -146,6 +146,7 @@ export function ConnectPartyModal({
   deliverables,
   council,
   location,
+  customer,
   vaultOptions,
   open,
   onOpenChange,
@@ -164,7 +165,8 @@ export function ConnectPartyModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [contact, setContact] = useState<ContactOption | null>(null);
-  const [note, setNote] = useState("");
+  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
+  const [isAttachingExtras, setIsAttachingExtras] = useState(false);
   /**
    * Which estate, for a developer.
    *
@@ -176,18 +178,9 @@ export function ConnectPartyModal({
    * what `resolvedContact` below does with them.
    */
   const [developer, setDeveloper] = useState<DeveloperOption | null>(null);
-  /** Anything the sender attached by hand. See ExtraAttachmentsField. */
-  const [extras, setExtras] = useState<ExtraAttachment[]>([]);
-  /**
-   * Whether one of those is still transferring.
-   *
-   * Named apart from `isAttachingDeed` because they are two uploads on one
-   * dialog and both gate the send. The deed already had this and the extras did
-   * not, so a sender could press Send with a covenant schedule mid-flight and
-   * the outreach went out without it.
-   */
-  const [isAttachingExtras, setIsAttachingExtras] = useState(false);
-  const [deed, setDeed] = useState<PrefilledAttachment | null>(null);
+  const [deed, setDeed] = useState<PrefilledAttachment | null>(
+    () => prefilled[0] ?? null,
+  );
   /**
    * The deed upload, from the first byte to the row being linked.
    *
@@ -249,6 +242,39 @@ export function ConnectPartyModal({
     ),
   );
 
+  const generatedBodyHtml = useMemo(
+    () =>
+      buildPartyOutreachBody({
+        party,
+        contactName: resolvedContact?.name ?? null,
+        subjectAddress,
+        estate: developer?.estate,
+        client: party === CompliancePartyType.ARCHITECT ? customer : null,
+      }),
+    [
+      customer,
+      developer?.estate,
+      party,
+      resolvedContact?.name,
+      subjectAddress,
+    ],
+  );
+  const generatedEmailDocument = useMemo(
+    () => emailHtmlToLeadNotesDocument(generatedBodyHtml),
+    [generatedBodyHtml],
+  );
+  const recipientKey = resolvedContact
+    ? `${resolvedContact.tradieId ?? developer?.key ?? ""}:${resolvedContact.email}:${resolvedContact.name ?? ""}`
+    : "unselected";
+  const [emailDraft, setEmailDraft] = useState<{
+    recipientKey: string;
+    document: LeadRichTextDocument;
+  }>({ recipientKey, document: generatedEmailDocument });
+  const emailBody =
+    emailDraft.recipientKey === recipientKey
+      ? emailDraft.document
+      : generatedEmailDocument;
+
   /**
    * The deed is attached to the file before the outreach is sent, not with it.
    *
@@ -301,7 +327,7 @@ export function ConnectPartyModal({
           contactName: resolvedContact.name || undefined,
           contactEmail: resolvedContact.email.trim().toLowerCase(),
           contactPhone: resolvedContact.phone,
-          note: note.trim() || undefined,
+          body: emailBody.html.trim(),
           checklistDocumentId,
           deliverables,
           extraAttachmentIds: extraAttachmentIds(extras),
@@ -320,6 +346,7 @@ export function ConnectPartyModal({
   const attachments = needsDeed ? (deed ? [deed] : []) : prefilled;
   const canSubmit =
     Boolean(resolvedContact) &&
+    Boolean(emailBody.html.trim()) &&
     !isPending &&
     !isDeedBusy &&
     !isAttachingExtras &&
@@ -327,7 +354,7 @@ export function ConnectPartyModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Connect with {label}</DialogTitle>
@@ -355,10 +382,46 @@ export function ConnectPartyModal({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{label}</Label>
-              {isApproval ? (
+          <div className="grid gap-6 py-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.8fr)]">
+            <section className="min-w-0 space-y-2" aria-labelledby="party-email-body-label">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p id="party-email-body-label" className="text-sm font-semibold text-foreground">
+                    Email body
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Review and edit the message before it is sent.
+                  </p>
+                </div>
+                <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                  Editable draft
+                </span>
+              </div>
+              <LeadRichTextEditor
+                key={recipientKey}
+                value={emailBody}
+                availableUsers={[]}
+                onChange={(document) =>
+                  setEmailDraft({ recipientKey, document })
+                }
+                onSaveNote={() => undefined}
+                canSaveNote={false}
+                isSavingNote={false}
+                hideSaveButton
+                hideMentionInfo
+                disabled={isPending}
+                placeholder="Write the email body…"
+                ariaLabelledBy="party-email-body-label"
+              />
+            </section>
+
+            <aside className="min-w-0 space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Delivery details
+                </p>
+                <Label>{label}</Label>
+                {isApproval ? (
                 // Its own picker rather than the directory's. A developer is
                 // not a trade, is never scheduled and is never paid, and the
                 // list they come from is keyed by the estate a lot sits in.
@@ -377,8 +440,8 @@ export function ConnectPartyModal({
                   onChange={setContact}
                   disabled={isPending}
                 />
-              ) : null}
-            </div>
+                ) : null}
+              </div>
 
             <div className="space-y-2">
               <Label htmlFor="party-subject-address">Site address</Label>
@@ -444,32 +507,30 @@ export function ConnectPartyModal({
               </div>
             ) : null}
 
-            {!needsDeed ? (
-              <div className="space-y-2">
-                <Label>Attached to this request</Label>
-                {attachments.length > 0 ? (
-                  <ul className="space-y-1 rounded-md border border-border/70 bg-muted/40 p-2">
-                    {attachments.map((attachment) => (
-                      <li
-                        key={attachment.url}
-                        className="flex items-center gap-2 px-1 py-0.5 text-sm"
-                      >
-                        <Paperclip
-                          className="size-3.5 shrink-0 text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 truncate">{attachment.name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
-                    <X className="size-3.5 shrink-0" aria-hidden="true" />
-                    Nothing on the file to send yet.
-                  </p>
-                )}
-              </div>
-            ) : null}
+            <div className="space-y-2">
+              <Label>Attachments sent with this request</Label>
+              {attachments.length > 0 ? (
+                <ul className="space-y-1 rounded-md border border-border/70 bg-muted/40 p-2">
+                  {attachments.map((attachment) => (
+                    <li
+                      key={attachment.url}
+                      className="flex items-center gap-2 px-1 py-0.5 text-sm"
+                    >
+                      <Paperclip
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 truncate">{attachment.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
+                  <X className="size-3.5 shrink-0" aria-hidden="true" />
+                  Nothing on the file to send yet.
+                </p>
+              )}
+            </div>
 
             <ExtraAttachmentsField
               onUploadingChange={setIsAttachingExtras}
@@ -485,17 +546,7 @@ export function ConnectPartyModal({
               }
             />
 
-            <div className="space-y-2">
-              <Label htmlFor="party-note">Anything to add</Label>
-              <Textarea
-                id="party-note"
-                rows={3}
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Optional — goes into the email as its own line."
-                disabled={isPending}
-              />
-            </div>
+            </aside>
           </div>
 
           <DialogFooter>

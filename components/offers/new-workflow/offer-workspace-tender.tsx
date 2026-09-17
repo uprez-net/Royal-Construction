@@ -453,7 +453,7 @@ function TenderPreview({
   // bullets as an OVERRIDE that suppressed the Scope items, so the on-screen
   // tender showed a shorter exclusion list than the document it represents.
   const exclusionLines = getVisibleExclusions(draft, exclusions);
-  // The allowances the printed offer discloses, from the builder that prints
+  // The allowances the signed TENDER discloses, from the builder that prints
   // them, so this list and that page agree on which sums show and how each
   // amount reads. Only scopeRows is read.
   const allowanceRows = buildOfferPrintTemplateData({
@@ -466,7 +466,7 @@ function TenderPreview({
     paymentSchedule,
     priceAdjustmentLabel: "",
     standardPriceIncGst: null,
-  }).scopeRows;
+  }).tenderScopeRows;
   const stateLabel =
     state === "signed" ? "Executed" : state === "sent" ? "Out for signature" : "Draft";
 

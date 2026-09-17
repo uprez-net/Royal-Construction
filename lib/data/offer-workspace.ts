@@ -1219,8 +1219,18 @@ async function voidLiveOfferEnvelopes(
   const inDocusign: { id: string; docusignId: string }[] = [];
   for (const env of liveEnvelopes) {
     if (env.docusignId === null) {
-      await writeEnvelopeEnded(env.id, EnvelopeStatus.VOIDED);
-      voidedIds.push(env.id);
+      // A failed write must not reject the whole pull-back: leaving the row out
+      // of voidedIds makes decideRecallPullBack refuse, which is what both
+      // callers document, instead of throwing past their refusal result.
+      try {
+        await writeEnvelopeEnded(env.id, EnvelopeStatus.VOIDED);
+        voidedIds.push(env.id);
+      } catch (error) {
+        console.error(
+          `[offer] envelope ${env.id} never reached DocuSign, but recording it voided failed:`,
+          error,
+        );
+      }
     } else {
       inDocusign.push({ id: env.id, docusignId: env.docusignId });
     }

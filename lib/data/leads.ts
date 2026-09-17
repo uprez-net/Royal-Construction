@@ -1,4 +1,5 @@
 "use server";
+import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import { mapLead, stageToPrismaMap, historyTypeToPrisma, LeadAnalyticsData } from "@/types/lead";
@@ -44,7 +45,6 @@ import { generateEmailChecksum } from "@/utils/generator";
 import { generateEmailSubject } from "@/utils/generate-email-subject";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
-import { revalidateTag } from "next/cache";
 import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { getAllEmailThreads } from "@/utils/email-parser";
@@ -1171,9 +1171,6 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
           }),
         ]
       : [];
-  const assigneeChanged =
-    input.assignedId !== undefined &&
-    (input.assignedId?.trim() || null) !== (existingLead?.assignedId ?? null);
 
   const [updated] = await prisma.$transaction([
     prisma.lead.update({
@@ -1191,15 +1188,25 @@ export async function updateLead(id: number, input: UpdateLeadInput): Promise<Ui
     ...reassignOpenTasks,
   ]);
 
-  // The offers listing is cached under "offers" per access scope, and a user
-  // outside the internal roles sees only the leads assigned to them. Left
+  // The offers list is cached per access scope (lib/data/offer-listing.ts), and
+  // a user outside the internal roles sees only the leads assigned to them. Left
   // alone, a reassigned lead stayed on its old owner's list and off its new
-  // owner's until the cache expired. revalidateTag rather than updateTag,
-  // because updateLead also runs from Route Handlers (the lead PATCH, MCP and
-  // booking routes), where updateTag throws. expire: 0 so nobody gets one
-  // more stale read of a list that decides which offers they can see.
-  if (assigneeChanged) {
-    revalidateTag("offers", { expire: 0 });
+  // owner's until the cache expired.
+  //
+  // Expired whenever an update SETS the assignee, with no comparison against the
+  // lead read before the transaction: a concurrent reassignment can commit in
+  // between, which made that comparison skip an expiry it owed (CodeRabbit, #246).
+  //
+  // revalidateTag rather than updateTag, because updateLead also runs from Route
+  // Handlers (the lead PATCH, MCP and booking routes), where updateTag throws.
+  // expire: 0 so nobody gets one more stale read of a list that decides which
+  // offers they can see. The catch keeps a cache failure from failing the save.
+  if (input.assignedId !== undefined) {
+    try {
+      revalidateTag("offers", { expire: 0 });
+    } catch (error) {
+      console.error(`[Lead ${id}] Failed to expire the offers list cache`, error);
+    }
   }
 
   for (const annotation of annotationInputs) {

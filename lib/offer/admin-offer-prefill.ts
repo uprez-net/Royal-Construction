@@ -127,7 +127,7 @@ function resolveCostLines(
 }
 
 // Admin allowance category → runtime scope item category + amountType.
-function resolveAllowances(
+export function resolveAllowances(
   adminContent: AdminOfferContent,
 ): readonly OfferWorkspaceScopeItem[] {
   return adminContent.offerScope.allowances.map((a, index) => {
@@ -145,7 +145,9 @@ function resolveAllowances(
       amount: a.amount,
       unit: a.category === "per-sqm" ? "sqm" : a.category === "per-lm" ? "lm" : "package",
       variationRule: a.variationRule,
-      includedInOfferDocument: true,
+      // Off the sales proposal until the estimator ticks it; on the signed Tender.
+      includedInOfferDocument: false,
+      includedInTender: true,
     } satisfies OfferWorkspaceScopeItem;
   });
 }
@@ -165,6 +167,7 @@ function resolveExclusions(
     unit: "",
     variationRule: e.variationRule,
     includedInOfferDocument: true,
+    includedInTender: true,
   })) satisfies OfferWorkspaceScopeItem[];
 }
 

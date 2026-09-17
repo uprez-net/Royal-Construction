@@ -53,7 +53,7 @@ ${DOCUMENT_CLASSIFIER_CONTRACT}
   <type name="CONSTRUCTION_CERTIFICATE">An issued Construction Certificate. Granted after a council has given development consent, and it references that consent by its DA number: a certificate number, the certifier's name and registration number, a determination date, the approved construction drawings, and the conditions. NOT a Complying Development Certificate, which grants planning approval in its own right and cites no DA; NOT an application form; NOT a portal notification email.</type>
   <type name="CDC_FORM">The Complying Development Certificate application form to be completed by or for the applicant. A form: applicant and owner details, property details, description of development, declarations, and owner's consent and signature blocks.</type>
   <type name="CHECKLIST">The certifier's list of what must be supplied or inspected. A numbered or bulleted schedule of required items, often with tick boxes or a supplied/outstanding column, and little prose.</type>
-  <type name="HOME_INSURANCE">A Home Building Compensation Fund certificate of insurance (also called home warranty insurance, HBCF cover, or an icare HBCF certificate). Names the insured builder, the property, the certificate or policy number, and the period of cover.</type>
+  <type name="HOME_INSURANCE">A Home Building Compensation Fund certificate of insurance (also called HWI, home warranty insurance, HBCF cover, or an icare HBCF certificate). Names the insured builder, the property, the certificate or policy number, and the period of cover.</type>
 </document_types>
 
 <do_not_confuse_with>

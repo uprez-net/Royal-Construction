@@ -72,8 +72,12 @@ export const offerScopeDataSchema = z.object({
 });
 
 export const hbfcClaimDataSchema = z.object({
-  claimAmount: z.number(),
-  loadingChargePercent: z.number(),
+  // Neither is ever negative: claimAmount is the whole-book HBCF sum assured
+  // and loadingChargePercent a premium loading. The admin inputs refuse a minus
+  // sign, but the action is a server action anyone signed in as an admin can
+  // call directly, and the writer persists whatever parses.
+  claimAmount: z.number().nonnegative(),
+  loadingChargePercent: z.number().nonnegative(),
   totalPremiumToBePaid: z.number(),
 });
 

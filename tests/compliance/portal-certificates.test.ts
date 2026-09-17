@@ -409,6 +409,25 @@ test("an approved design clears the covenant", () => {
   );
 });
 
+test("a design marked not required clears the covenant", () => {
+  const file = engagement({
+    principalCertifierAppointedAt: MONDAY,
+    developerApprovalRequired: true,
+    documents: [
+      document(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN, {
+        status: ComplianceDocumentStatus.NOT_REQUIRED,
+      }),
+    ] as never,
+    outreaches: [
+      developerOutreach([
+        approval(ComplianceDocumentType.FULL_ARCHITECTURAL_DESIGN),
+      ]),
+    ] as never,
+  });
+
+  assert.equal(developerPlansBlockedReason(file), null);
+});
+
 test("a rejected design quotes the developer's own words back", () => {
   // Load-bearing rather than decorative. "The developer said no" is not something
   // an architect can act on, so the objection travels with the refusal.

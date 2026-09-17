@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
   canCreateRevision,
   isOfferBuildStepEditable,
@@ -111,12 +112,14 @@ const REVISION_REFUSED: ReadonlySet<OfferWorkspaceStatus> = new Set([
   "project",
   "superseded",
 ]);
-for (const status of ALL_STATUSES) {
-  assert.equal(
-    canCreateRevision(status),
-    !REVISION_REFUSED.has(status),
-    `canCreateRevision failed at ${status}`,
-  );
-}
+test("create revision is offered on exactly the statuses the server allows", () => {
+  for (const status of ALL_STATUSES) {
+    assert.equal(
+      canCreateRevision(status),
+      !REVISION_REFUSED.has(status),
+      `canCreateRevision failed at ${status}`,
+    );
+  }
+});
 
 console.log("offer-editability: all assertions passed");

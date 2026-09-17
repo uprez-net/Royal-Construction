@@ -33,12 +33,19 @@ const SENDS = [
   },
 ] as const;
 
-// From the envelope's creation to the end of the send function.
+// From the envelope's creation to the end of the send function, with comments
+// stripped: the claim-before-write block explains that "only a throw rolls
+// back" a transaction, and prose about throwing is not a throw.
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
 function afterEnvelope(source: string, envelope: string): string {
   const start = source.indexOf(envelope);
   assert.ok(start >= 0, `no ${envelope}`);
   const end = source.indexOf("\n}\n", start);
-  return source.slice(start, end);
+  assert.ok(end > start, `no end of the function holding ${envelope}`);
+  return stripComments(source.slice(start, end));
 }
 
 for (const send of SENDS) {

@@ -621,13 +621,16 @@ export function OfferWorkspaceScreen({
         saveState={saveState}
         onDownloadPreview={onDownloadOffer}
         onRetrySave={onRetrySave}
+        awaitingOffer={awaitingOffer}
       />
       <div className="flex min-h-0 flex-1">
         <OfferStepRail
           activeStepId={activeStepId}
           collapsed={railCollapsed}
-          digests={digests}
-          stepStates={stepStates}
+          // Seeded digests read as this offer's progress ("3 allowances", a
+          // price) while it is still loading. Blank them until it is here.
+          digests={awaitingOffer ? EMPTY_STEP_DIGESTS : digests}
+          stepStates={awaitingOffer ? PENDING_STEP_STATES : stepStates}
           onSelect={navigateToStep}
           onToggleCollapsed={() => setRailCollapsed((current) => !current)}
         />
@@ -971,6 +974,7 @@ export function OfferWorkspaceScreen({
         effectiveMargin={effectiveMargin}
         pricing={pricing}
         totalAreaSqm={rawTotalAreaSqm(areaBasis)}
+        awaitingOffer={awaitingOffer}
       />
       {/* One confirmation for every recall and revision control, whichever
           step it sits on. */}
@@ -1129,6 +1133,16 @@ function PaneHeading({
 }
 
 // Stands in for the step panes until the offer has loaded, or when it could not.
+// The rail's content while an offer is still loading: no digest text, and every
+// step neutral, so nothing claims progress the offer has not been read for.
+const EMPTY_STEP_DIGESTS = Object.fromEntries(
+  OFFER_WORKFLOW_STEPS.map((step) => [step.id, ""]),
+) as Readonly<Record<OfferStepId, string>>;
+
+const PENDING_STEP_STATES = Object.fromEntries(
+  OFFER_WORKFLOW_STEPS.map((step) => [step.id, "incomplete" as OfferStepState]),
+) as Readonly<Record<OfferStepId, OfferStepState>>;
+
 function OfferPaneLoadState({ failed }: { readonly failed: boolean }) {
   return (
     <section aria-labelledby="offer-pane-title" className="space-y-4">

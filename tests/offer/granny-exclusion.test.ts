@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { readFileSync } from "node:fs";
+
 import {
-  decideContractGrannyExclusionGate,
-  describeGrannyExclusionConflicts,
   findGrannyExclusionConflicts,
   isGrannyOutOfScopeLine,
+  withoutGrannyOutOfScopeLines,
   type GrannyExclusionInput,
 } from "../../lib/offer/granny-exclusion";
-import { collectOfferSendBlockers } from "../../lib/offer/offer-readiness";
 import {
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
@@ -112,55 +112,160 @@ test("matching is narrow: the line must be the granny flat alone, said to be out
   }
 });
 
-test("the refusal names the line and the step, and the Tender send asks for a revision", () => {
-  const conflicts = findGrannyExclusionConflicts(offer());
 
-  const inPlace = describeGrannyExclusionConflicts(conflicts, { revisionNeeded: false });
-  assert.match(inPlace, /"Granny flat \(not in current scope\)"/);
-  assert.match(inPlace, /on the Offer document step/);
-  assert.doesNotMatch(inPlace, /revision/);
 
-  const locked = describeGrannyExclusionConflicts(conflicts, { revisionNeeded: true });
-  assert.match(locked, /Create a revision/);
+
+
+test("the planning term for a granny flat is the same subject", () => {
+  for (const line of [
+    "Secondary dwelling (not in scope)",
+    "Secondary dwelling (not in current scope)",
+    "Secondary dwellings (not in the current scope)",
+    "The secondary dwelling is not in scope",
+  ]) {
+    assert.equal(isGrannyOutOfScopeLine(line), true, `missed ${line}`);
+  }
 });
 
-test("a Contract whose Tender went out before the check carries what the customer signed", () => {
-  const gate = decideContractGrannyExclusionGate({
-    conflicts: findGrannyExclusionConflicts(offer()),
-    tenderSentWithCheck: false,
-  });
-
-  assert.ok(gate.kind === "as-signed", `expected as-signed, got ${gate.kind}`);
-  assert.match(gate.warning, /"Granny flat \(not in current scope\)"/);
+test("a secondary dwelling named inside a wider exclusion is left alone", () => {
+  for (const line of [
+    "Council Development & Secondary Dwelling contribution",
+    "Secondary dwelling landscaping (not in current scope)",
+    "Secondary dwelling site costs",
+  ]) {
+    assert.equal(isGrannyOutOfScopeLine(line), false, `wrongly flagged ${line}`);
+  }
 });
 
-test("the Contract refusal never asks for a revision, which a signed Tender cannot have", () => {
-  const conflicts = findGrannyExclusionConflicts(offer());
-  const gate = decideContractGrannyExclusionGate({
-    conflicts,
-    tenderSentWithCheck: true,
-  });
+// The conflict is no longer the estimator's to fix: a build that includes a
+// granny flat has the contradicting line removed from the workspace as soon as
+// the build says so, and every document filters it again at build time. The
+// readiness blockers and the four server refusals that used to stop the send
+// are gone.
 
-  assert.ok(gate.kind === "refuse", `expected refuse, got ${gate.kind}`);
-  assert.match(gate.error, /"Granny flat \(not in current scope\)"/);
-  assert.doesNotMatch(gate.error, /create a revision/i);
-  assert.equal(
-    decideContractGrannyExclusionGate({ conflicts: [], tenderSentWithCheck: true }).kind,
-    "clear",
+const source = (path: string) =>
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+
+test("the line is dropped only when the build includes a granny flat", () => {
+  const lines = ["Granny flat (not in current scope)", "Landscaping (not in scope)"];
+  assert.deepEqual(
+    [...withoutGrannyOutOfScopeLines(true, lines, (line) => line)],
+    ["Landscaping (not in scope)"],
+  );
+  assert.deepEqual([...withoutGrannyOutOfScopeLines(false, lines, (line) => line)], lines);
+});
+
+test("a list with nothing to drop is handed back unchanged", () => {
+  const lines = ["Landscaping (not in scope)"];
+  assert.equal(withoutGrannyOutOfScopeLines(true, lines, (line) => line), lines);
+});
+
+test("a wider exclusion naming the granny flat survives the removal", () => {
+  const lines = [
+    "Granny flat landscaping (not in current scope)",
+    "Council Development & Secondary Dwelling contribution",
+    "Granny flat (not in current scope)",
+  ];
+  assert.deepEqual(
+    [...withoutGrannyOutOfScopeLines(true, lines, (line) => line)],
+    [
+      "Granny flat landscaping (not in current scope)",
+      "Council Development & Secondary Dwelling contribution",
+    ],
   );
 });
 
-test("the readiness strip blocks the send and jumps to the step that holds the line", () => {
-  const blockers = collectOfferSendBlockers({
-    hasLead: true,
-    needsOverrideReason: false,
-    expiryState: "valid",
-    grannyExclusionConflicts: findGrannyExclusionConflicts(offer()),
-  });
-  const blocker = blockers.find((b) => b.id.startsWith("granny-exclusion"));
+test("every document filters the line", () => {
+  const print = source("lib/offer/workspace-print-template.ts");
+  assert.ok(
+    print.includes("exclusionBullets: withoutGrannyOutOfScopeLines("),
+    "the offer document bullets are not filtered",
+  );
+  assert.ok(
+    print.includes("exclusionRows: withoutGrannyOutOfScopeLines("),
+    "the exclusion rows are not filtered",
+  );
+  assert.ok(
+    source("lib/offer/project-handoff-commercials.ts").includes(
+      "withoutGrannyOutOfScopeLines(",
+    ),
+    "the BC4 and project list is not filtered",
+  );
+});
 
-  assert.ok(blocker, "expected a granny-exclusion blocker");
-  assert.equal(blocker.severity, "block");
-  assert.equal(blocker.stepId, "offer-step-offer-document");
-  assert.match(blocker.label, /Granny flat \(not in current scope\)/);
+test("no send path refuses the offer over the line any more", () => {
+  for (const path of [
+    "lib/data/offer-send.ts",
+    "lib/data/offer-accept-sign.ts",
+    "lib/data/offer-tender-sign.ts",
+    "lib/data/offer-contract-sign.ts",
+    "lib/offer/offer-readiness.ts",
+  ]) {
+    const text = source(path);
+    for (const gone of [
+      "findGrannyExclusionConflicts",
+      "describeGrannyExclusionConflicts",
+      "decideContractGrannyExclusionGate",
+    ]) {
+      assert.ok(!text.includes(gone), `${path} still uses ${gone}`);
+    }
+  }
+});
+
+test("the workspace strips the line when the build gains a granny flat", () => {
+  const workspace = source("components/offers/new-workflow/new-offer-workspace.tsx");
+  assert.ok(
+    workspace.includes("function dropGrannyExclusionsFor("),
+    "no removal helper in the workspace",
+  );
+  assert.ok(
+    workspace.includes("setJob(nextJob);\n    dropGrannyExclusionsFor(nextJob);"),
+    "the job funnel does not strip",
+  );
+  assert.ok(
+    workspace.includes("dropGrannyExclusionsFor({\n        ...job,"),
+    "the area import does not strip",
+  );
+});
+
+// The contradiction can sit in a Scope exclusion's description or variation
+// rule, not just its label: the Tender prints all three beside each other, and
+// the detector always read all three. Filtering on the label alone let a
+// matching detail through to the documents.
+test("a contradiction in the description or the variation rule is removed too", () => {
+  const item = (over: Partial<{ label: string; description: string; variationRule: string }>) => ({
+    label: "Landscaping",
+    description: "",
+    variationRule: "",
+    ...over,
+  });
+  const rows = [
+    item({ description: "Granny flat (not in current scope)" }),
+    item({ variationRule: "Granny flat (not in scope)" }),
+    item({ label: "Granny flat (not in current scope)" }),
+    item({ description: "Granny flat landscaping (not in current scope)" }),
+  ];
+  const kept = withoutGrannyOutOfScopeLines(true, rows, (row) => [
+    row.label,
+    row.description,
+    row.variationRule,
+  ]);
+  assert.deepEqual(
+    [...kept],
+    [item({ description: "Granny flat landscaping (not in current scope)" })],
+  );
+});
+
+test("every filter reads all three exclusion fields", () => {
+  for (const path of [
+    "lib/offer/workspace-print-template.ts",
+    "lib/offer/project-handoff-commercials.ts",
+    "components/offers/new-workflow/new-offer-workspace.tsx",
+  ]) {
+    const text = source(path);
+    assert.ok(
+      /\[\s*(?:row|item)\.label,\s*(?:row|item)\.description,\s*(?:row|item)\.variationRule,?\s*\]/.test(text),
+      `${path} still filters on the label alone`,
+    );
+  }
 });

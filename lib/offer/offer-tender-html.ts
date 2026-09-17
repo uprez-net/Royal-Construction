@@ -15,7 +15,6 @@ import {
 } from "./workspace-area";
 import {
   formatBoundedOwnerList,
-  chunkAllowanceRows,
   chunkByEstimatedHeight,
   collectOfferSigners,
   estimateWrappedLines,
@@ -550,9 +549,9 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
   );
 
   // The prime cost and provisional sums the Important Notes make the price
-  // subject to. Sized by the shared offer-document helper: its budget is well
-  // inside the tender's taller page, so it can only over-count height.
-  const allowancePages = chunkAllowanceRows(data.scopeRows);
+  // subject to: every allowance ticked "Show on Tender". They sit beneath the
+  // exclusions while they fit and continue on counted pages when they don't.
+  const allowanceLayout = layoutTenderAllowances(data);
 
   const totalPages =
     1 + // cover letter
@@ -560,8 +559,8 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
     ownerDetailChunks.length +
     schedulePages.length +
     1 + // contract terms + progress payments
-    1 + // exclusions
-    allowancePages.length +
+    1 + // exclusions, with the allowances that fit beneath them
+    allowanceLayout.continuation.length +
     acceptanceChunks.length;
   let pageNo = 0;
   const foot = (): string => {
@@ -591,9 +590,13 @@ export function buildTenderHtml(input: OfferPrintTemplateInput): string {
       schedulePage(items, index === 0, foot()),
     ),
     contractTermsPage(data, contractTermsSectionNo, depositPercent, foot()),
-    exclusionsPage(data, foot()),
-    ...allowancePages.map((rows, index) =>
-      allowancesPage(rows, index > 0, foot()),
+    exclusionsPage(data, allowanceLayout.inline, foot()),
+    ...allowanceLayout.continuation.map((rows, index) =>
+      allowancesPage(
+        rows,
+        allowanceLayout.inline.length > 0 || index > 0,
+        foot(),
+      ),
     ),
     ...acceptanceChunks.map((rows, index) =>
       acceptancePage(
@@ -1098,6 +1101,134 @@ function contractTermsPage(
   );
 }
 
+// ─── Exclusions sheet and allowances layout ─────────────────────────────────
+// The Exclusions table's columns are 23.748% / 42.608% / 33.644% of 178.26mm.
+// The Item cell is bold, so it holds fewer characters per millimetre.
+const CHARS_PER_LINE_EXCLUSION_ITEM = 20;
+const CHARS_PER_LINE_EXCLUSION_MEANS = 40;
+const CHARS_PER_LINE_EXCLUSION_REQUIRED = 32;
+// A note bullet runs the full content width less its hanging indent.
+const CHARS_PER_LINE_NOTE = 90;
+// A table's header row, in line units.
+const TABLE_HEADER_LINES = 2;
+// An h3.t-sub heading: a 12pt line plus 3pt above and 4pt below.
+const SUB_HEADING_LINES = 2;
+// The one-line intro above the exclusions table, with its spacing.
+const EXCLUSIONS_INTRO_LINES = 2;
+// The allowances intro: two lines at full width, with its spacing.
+const TENDER_ALLOWANCES_INTRO_LINES = 2.5;
+// A row's 4pt top and bottom padding plus its border, about three quarters of a
+// 10pt line. The owner and schedule tables round this up to a whole line; these
+// two tables share one sheet, so they use the measured figure, and the Chromium
+// sheet-count tests hold it to what actually prints.
+const SHARED_SHEET_ROW_CHROME_LINES = 0.75;
+// The Tender's allowance columns: Item 42.608% (a bold label over its
+// description) and "If the actual cost differs" 33.644% of 178.26mm.
+const CHARS_PER_LINE_TENDER_ALLOWANCE_ITEM = 36;
+const CHARS_PER_LINE_TENDER_ALLOWANCE_RULE = 32;
+
+type TenderExclusionRow = ReturnType<
+  typeof buildOfferPrintTemplateData
+>["exclusionRows"][number];
+
+// An exclusion row is as tall as its tallest cell. An empty cell prints a dash.
+function exclusionRowLines(row: TenderExclusionRow): number {
+  return (
+    Math.max(
+      estimateWrappedLines(row.label, CHARS_PER_LINE_EXCLUSION_ITEM),
+      estimateWrappedLines(row.description || "-", CHARS_PER_LINE_EXCLUSION_MEANS),
+      estimateWrappedLines(
+        row.variationRule || "-",
+        CHARS_PER_LINE_EXCLUSION_REQUIRED,
+      ),
+    ) + SHARED_SHEET_ROW_CHROME_LINES
+  );
+}
+
+// Each note is its own paragraph, with a little spacing after it.
+function importantNotesLines(hasAllowances: boolean): number {
+  return importantNotes(hasAllowances).reduce(
+    (sum, note) => sum + estimateWrappedLines(note, CHARS_PER_LINE_NOTE) + 0.25,
+    0,
+  );
+}
+
+// An allowance row is as tall as its taller cell: the label stacked over the
+// description, or the variation rule. An empty rule prints a dash.
+function tenderAllowanceRowLines(row: OfferPrintScopeRow): number {
+  const item =
+    estimateWrappedLines(row.label, CHARS_PER_LINE_TENDER_ALLOWANCE_ITEM) +
+    (row.description.trim().length > 0
+      ? estimateWrappedLines(
+          row.description,
+          CHARS_PER_LINE_TENDER_ALLOWANCE_ITEM,
+        )
+      : 0);
+  return (
+    Math.max(
+      item,
+      estimateWrappedLines(
+        row.variationRule || "-",
+        CHARS_PER_LINE_TENDER_ALLOWANCE_RULE,
+      ),
+    ) + SHARED_SHEET_ROW_CHROME_LINES
+  );
+}
+
+type TenderAllowanceLayout = {
+  // Printed beneath the exclusions and Important Notes, on their sheet.
+  readonly inline: readonly OfferPrintScopeRow[];
+  // Each on a sheet of its own after that.
+  readonly continuation: readonly (readonly OfferPrintScopeRow[])[];
+};
+
+// The allowances follow the exclusions on the same sheet while they fit. The
+// section's heading, intro and table header only go there with at least one
+// row, so a heading is never the last thing on the sheet; whatever does not fit
+// continues on counted pages. Rows are measured at the Tender's own column widths.
+function layoutTenderAllowances(
+  data: ReturnType<typeof buildOfferPrintTemplateData>,
+): TenderAllowanceLayout {
+  const rows = data.tenderScopeRows;
+  if (rows.length === 0) {
+    return { inline: [], continuation: [] };
+  }
+  const exclusionsLines =
+    SUB_HEADING_LINES +
+    EXCLUSIONS_INTRO_LINES +
+    TABLE_HEADER_LINES +
+    data.exclusionRows.reduce((sum, row) => sum + exclusionRowLines(row), 0) +
+    importantNotesLines(true);
+  let remaining =
+    TENDER_LINES_PER_PAGE -
+    exclusionsLines -
+    SUB_HEADING_LINES -
+    TENDER_ALLOWANCES_INTRO_LINES -
+    TABLE_HEADER_LINES;
+  const inline: OfferPrintScopeRow[] = [];
+  for (const row of rows) {
+    const lines = tenderAllowanceRowLines(row);
+    if (lines > remaining) break;
+    inline.push(row);
+    remaining -= lines;
+  }
+  const rest = rows.slice(inline.length);
+  if (rest.length === 0) {
+    return { inline, continuation: [] };
+  }
+  // A sheet of its own carries the heading and table header, plus the intro
+  // when none of the section fitted beneath the exclusions.
+  const budget =
+    TENDER_LINES_PER_PAGE -
+    SUB_HEADING_LINES -
+    TABLE_HEADER_LINES -
+    (inline.length === 0 ? TENDER_ALLOWANCES_INTRO_LINES : 0);
+  return {
+    inline,
+    continuation: chunkByEstimatedHeight(rest, budget, tenderAllowanceRowLines),
+  };
+}
+
 // "Exclusions & Important Notes". Kept as three columns rather than the source's
 // bullets: the description and variation rule are captured on every Scope
 // exclusion and were previously printed NOWHERE — an estimator typed "Can be
@@ -1107,9 +1238,10 @@ function contractTermsPage(
 // label-only; that gap is visible here rather than hidden, which is the point.
 function exclusionsPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
+  inlineAllowances: readonly OfferPrintScopeRow[],
   foot: string,
 ): string {
-  const notes = importantNotes(data.scopeRows.length > 0);
+  const notes = importantNotes(data.tenderScopeRows.length > 0);
   const excludes = data.exclusionRows
     .map(
       (row) =>
@@ -1120,7 +1252,8 @@ function exclusionsPage(
     `<h3 class="t-sub">Exclusions &amp; Important Notes</h3>
     <p>The following are not included in the Tender Price and, if required, are priced as a written variation:</p>
     <table><thead><tr><th class="c-exc-item">Item</th><th class="c-exc-means">What this means</th><th class="c-exc-req">If required</th></tr></thead><tbody>${excludes}</tbody></table>
-    ${notes.map(bullet).join("")}`,
+    ${notes.map(bullet).join("")}
+    ${inlineAllowances.length > 0 ? allowancesSection(inlineAllowances, false) : ""}`,
     foot,
   );
 }
@@ -1141,15 +1274,24 @@ function importantNotes(hasAllowances: boolean): readonly string[] {
   ];
 }
 
-// "Prime Cost & Provisional Sums": every allowance the estimator ticked "Show on
-// Offer document", with its amount and what happens when the real cost differs.
-// The offer documents already disclose these; the Tender, the one that is
-// signed, did not. The item cell stacks the description under the label only
-// when it says something the variation rule does not (scopeRows drops repeats).
+// "Prime Cost & Provisional Sums": every allowance ticked "Show on Tender", with
+// its amount and what happens when the real cost differs, whatever the Offer box
+// says: the Tender is the document that is signed. The section follows the
+// exclusions on their sheet while it fits (layoutTenderAllowances) and runs on
+// "(cont.)" pages after that. The item cell stacks the description under the
+// label only when it says something the variation rule does not (scopeRows drops
+// repeats).
 function allowancesPage(
   rows: readonly OfferPrintScopeRow[],
   continued: boolean,
   foot: string,
+): string {
+  return tenderPage(allowancesSection(rows, continued), foot);
+}
+
+function allowancesSection(
+  rows: readonly OfferPrintScopeRow[],
+  continued: boolean,
 ): string {
   const body = rows
     .map((row) => {
@@ -1160,12 +1302,9 @@ function allowancesPage(
       return `<tr><td class="c-alw-item">${item}</td><td class="c-alw-amt">${esc(row.amountLabel)}</td><td class="c-alw-rule">${esc(row.variationRule) || "&mdash;"}</td></tr>`;
     })
     .join("");
-  return tenderPage(
-    `<h3 class="t-sub">Prime Cost &amp; Provisional Sums${continued ? " (cont.)" : ""}</h3>
+  return `<h3 class="t-sub">Prime Cost &amp; Provisional Sums${continued ? " (cont.)" : ""}</h3>
     ${continued ? "" : `<p>The following amounts are allowances included in the Tender Price, not fixed costs. Where the final selection costs more or less than the allowance, the difference is adjusted by written variation as set out against each item.</p>`}
-    <table><thead><tr><th class="c-alw-item">Item</th><th class="c-alw-amt">Allowance</th><th class="c-alw-rule">If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>`,
-    foot,
-  );
+    <table><thead><tr><th class="c-alw-item">Item</th><th class="c-alw-amt">Allowance</th><th class="c-alw-rule">If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 
 // A manual bullet glyph plus two spaces on a hanging indent — the source's own

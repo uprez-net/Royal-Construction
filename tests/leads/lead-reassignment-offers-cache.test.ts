@@ -3,17 +3,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-// Reassigning a lead never expired the cached offers listing, which is scoped
-// to the leads a user is assigned. The lead stayed on its old owner's offers
-// list, and off its new owner's, until the cache ran out. updateLead lives in a
-// "use server" file that loads Prisma, so no test can import it; this reads the
-// source instead.
-// updateTag would be the wrong fix: updateLead also runs from Route Handlers
-// (the lead PATCH, MCP and booking routes), where updateTag throws.
+// That updateLead expires the "offers" listing, and does so for every update
+// that sets an assignee, is asserted by tests/offer/offer-listing-view.test.ts,
+// which owns those rules. This file keeps the one thing that test does not say:
+// WHICH invalidation call is safe here.
+//
+// updateTag would be the wrong fix. updateLead also runs from Route Handlers —
+// the lead PATCH, MCP and booking routes — and updateTag throws outside a Server
+// Action, so it would turn a cache refresh into a failed save.
 
 const text = readFileSync(join(process.cwd(), "lib/data/leads.ts"), "utf8");
 
-// A top-level function runs from its signature to the first unindented `}`.
 function functionBody(name: string): string {
   const start = text.indexOf(`async function ${name}(`);
   assert.ok(start >= 0, `${name} not found in leads.ts`);
@@ -22,27 +22,17 @@ function functionBody(name: string): string {
   return text.slice(start, end);
 }
 
-test("updateLead expires the offers listing once the new assignee is written", () => {
-  assert.match(text, /import \{[^}]*\brevalidateTag\b[^}]*\} from "next\/cache"/);
-  const body = functionBody("updateLead");
-
-  const invalidation = body.search(/revalidateTag\(\s*"offers"/);
-  assert.ok(invalidation >= 0, "updateLead never invalidates the offers listing");
-  assert.ok(
-    body.indexOf("prisma.$transaction(") < invalidation,
-    "the listing is expired before the reassignment is written",
-  );
-  assert.match(body, /if \(assigneeChanged\) \{\s*revalidateTag\(\s*"offers"/);
-});
-
-test("the invalidation is keyed off a real change of assignee", () => {
-  const body = functionBody("updateLead");
-  assert.match(
-    body,
-    /const assigneeChanged =\s*input\.assignedId !== undefined &&[^;]*existingLead\?\.assignedId/,
-  );
-});
-
 test("updateLead does not use updateTag, which throws outside a Server Action", () => {
   assert.doesNotMatch(functionBody("updateLead"), /\bupdateTag\(/);
+});
+
+test("the expiry cannot fail the save", () => {
+  const body = functionBody("updateLead");
+  const at = body.search(/revalidateTag\(\s*"offers"/);
+  assert.ok(at >= 0, "updateLead never expires the offers listing");
+  assert.match(
+    body.slice(Math.max(0, at - 200), at + 200),
+    /try \{[\s\S]*revalidateTag\(\s*"offers"[\s\S]*catch/,
+    "the expiry is not guarded, so a cache failure would fail the lead save",
+  );
 });

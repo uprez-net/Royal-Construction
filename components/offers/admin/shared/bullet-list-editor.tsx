@@ -10,6 +10,8 @@ interface BulletListEditorProps {
   value: string[];
   onChange: (v: string[]) => void;
   onRestore: (bullet: string, index: number) => void;
+  /** Distinct per list, so one list's Undo toast never replaces another's. */
+  undoToastId: string;
   addLabel?: string;
   placeholder?: string;
 }
@@ -18,6 +20,7 @@ export function BulletListEditor({
   value,
   onChange,
   onRestore,
+  undoToastId,
   addLabel = "Add bullet",
   placeholder = "Bullet text",
 }: BulletListEditorProps) {
@@ -46,6 +49,7 @@ export function BulletListEditor({
     next.splice(index, 1);
     onChange(next);
     toast("Bullet removed", {
+      id: undoToastId,
       action: {
         label: "Undo",
         onClick: () => onRestore(removed, index),
