@@ -1,5 +1,5 @@
 import type { SessionContext } from "eve/context";
-import prisma from "../../lib/prisma";
+import prisma from "@/lib/prisma";
 
 export class AgentAuthorizationError extends Error {
   readonly code = "agent_access_denied";

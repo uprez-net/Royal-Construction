@@ -1,5 +1,5 @@
 import { defineHook } from "eve/hooks";
-import { persistAgentEvent } from "../lib/event-persistence";
+import { persistAgentEvent } from "@/agent/lib/event-persistence";
 
 export default defineHook({
   events: {

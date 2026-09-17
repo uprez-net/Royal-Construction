@@ -1,6 +1,6 @@
 import { AgentSessionStatus, Prisma } from "@prisma/client";
 import type { HookContext, HookEvent } from "eve/hooks";
-import prisma from "../../lib/prisma";
+import prisma from "@/lib/prisma";
 
 const EVENT_SESSION_STATUS: Partial<Record<HookEvent["type"], AgentSessionStatus>> = {
   "session.started": AgentSessionStatus.ACTIVE,

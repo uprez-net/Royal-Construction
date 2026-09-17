@@ -1,5 +1,5 @@
 import { eveChannel } from "eve/channels/eve";
-import { clerkInternalUserAuth } from "../lib/channel-auth";
+import { clerkInternalUserAuth } from "@/agent/lib/channel-auth";
 
 export default eveChannel({
   auth: clerkInternalUserAuth(),

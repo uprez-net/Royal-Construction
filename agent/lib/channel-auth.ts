@@ -5,11 +5,11 @@ import {
   UnauthenticatedError,
   withAuthChallenges,
 } from "eve/channels/auth";
-import prisma from "../../lib/prisma";
+import prisma from "@/lib/prisma";
 import {
   getEveSessionIdFromRequest,
   isAgentFeatureEnabled,
-} from "./session-identity";
+} from "@/agent/lib/session-identity";
 
 const SESSION_REGISTRY_RETRY_DELAYS_MS = [40, 100, 200, 400] as const;
 

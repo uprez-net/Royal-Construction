@@ -1,6 +1,6 @@
 import { defineMemory } from "eve/memory";
 import { byPrincipal } from "eve/memory/scope";
-import { postgresProfileMemory } from "../lib/profile-memory";
+import { postgresProfileMemory } from "@/agent/lib/profile-memory";
 
 export default defineMemory({
   description:

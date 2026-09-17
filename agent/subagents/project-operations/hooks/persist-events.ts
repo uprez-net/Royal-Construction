@@ -1,1 +1,1 @@
-export { default } from "../../../hooks/persist-events";
+export { default } from "@/agent/hooks/persist-events";

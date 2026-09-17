@@ -8,7 +8,7 @@ import { defineMemoryProvider } from "eve/memory";
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
-import prisma from "../../lib/prisma";
+import prisma from "@/lib/prisma";
 
 const MEMORY_CACHE_VERSION = 1;
 const MEMORY_CACHE_TTL_SECONDS = 300;

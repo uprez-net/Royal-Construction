@@ -1,5 +1,5 @@
 import { defineAgent, defineDynamic } from "eve";
-import { agentResultEnvelopeSchema } from "./result-contracts";
+import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
 
 const model = "zai/glm-5.3-flash";
 
