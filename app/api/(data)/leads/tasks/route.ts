@@ -13,6 +13,7 @@ import {
   parseLeadIdsParam,
   successResponse,
 } from "@/utils/validators";
+import { resolveActingUserId } from "@/lib/data/acting-user";
 
 /**
  * Open work by default; `?state=completed` for the history.
@@ -74,6 +75,9 @@ export async function POST(request: NextRequest) {
       dueDate: new Date(dueDate),
       dueTime,
       notes,
+      // Stamped on the activity entry the task writes. lib/data/lead-tasks.ts
+      // cannot resolve this itself without breaking the eve agent bundle.
+      actingUserId: await resolveActingUserId(),
     });
     return successResponse(task, { status: 201 });
   } catch (error) {

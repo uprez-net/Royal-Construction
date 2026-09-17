@@ -4,6 +4,7 @@
 import "server-only";
 import type { DashboardKPI } from "@/types/dashboard";
 import prisma from "@/lib/prisma";
+import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
 import { auth } from "@clerk/nextjs/server";
 import {
   startOfMonth,
@@ -268,7 +269,8 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
       id: lead.id,
       customerName: lead.name,
       projectName: lead.location,
-      description: lead.notes ?? "No additional details",
+      description:
+        resolveLeadNotesTextOr(lead, "No additional details"),
       dueAt: lead.followupDate ?? now,
       status: lead.followupDate
         ? isToday(new Date(lead.followupDate))

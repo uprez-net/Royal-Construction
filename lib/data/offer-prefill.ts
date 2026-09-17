@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { findLeadById } from "@/lib/data/leads";
 import { assertCanAccessLead } from "@/lib/offer/access";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { resolveLeadNotesText } from "@/lib/leads/notes-text";
 import {
   generateOfferPrefillDraft,
   type OfferPrefillDraft,
@@ -100,9 +101,14 @@ export async function generateOfferPrefillFromLead(input: {
     `# Lead\nName: ${lead.name}${lead.secondaryName ? ` & ${lead.secondaryName}` : ""}\nLocation/site: ${lead.location || "(not given)"}\nBuild type interest: ${lead.type || "(not given)"}\nBudget: ${lead.budget || "(not given)"}`,
   );
 
-  if (lead.notes?.trim()) {
+  // Resolved, not read straight off the column. The Notes tab clears
+  // `Lead.notes` on save because a note's home is its history entry, so on any
+  // lead whose notes went through the composer this block was simply absent and
+  // the draft lost the discovery conversation it exists to use.
+  const salesNotes = resolveLeadNotesText(lead);
+  if (salesNotes) {
     sources.push("sales notes");
-    contextParts.push(`# Sales notes\n${lead.notes.trim()}`);
+    contextParts.push(`# Sales notes\n${salesNotes}`);
   }
 
   const emails = (lead.emails ?? []).slice(0, 8);

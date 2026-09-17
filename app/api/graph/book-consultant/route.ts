@@ -128,19 +128,6 @@ async function findConflictingEvent(
 const toDateOnly = sydneyDateOnly;
 const toTimeOnly = sydneyTimeOnly;
 
-function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
-  const noteIndex = existing.findIndex(
-    (entry) => entry.action.trim().toLowerCase() === "note",
-  );
-  if (noteIndex === -1) {
-    return [...existing, nextNote];
-  }
-
-  return existing.map((entry, index) =>
-    index === noteIndex ? nextNote : entry,
-  );
-}
-
 async function upsertBookingNotes({
   id,
   name,
@@ -168,10 +155,13 @@ async function upsertBookingNotes({
 
   const existingLead = await findLeadByEmail(id);
   if (existingLead) {
-    const updatedHistory = upsertNoteHistory(existingLead.history, noteEntry);
-    const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
     await updateLead(existingLead.id, {
-      notes: updatedNotes,
+      // Lead.notes is deliberately left alone. Overwriting it put this booking's
+      // agenda where the sales notes belong, and everything that reads that
+      // column — the offer pre-fill's "# Sales notes" block above all — then
+      // described the booking instead. The agenda's home is the history entry
+      // below, which is where the Notes tab puts a note too.
+      //
       // Not 'Meeting Scheduled'. That stage was retired: it described a booked
       // task rather than progress, and completing it wrote CONTACTED. The lead
       // is in Discovery, and the booking is a task.
@@ -180,7 +170,9 @@ async function upsertBookingNotes({
       meetingDate: meetingAt.toISOString(),
       meetingTime: toTimeOnly(meetingAt),
       meetingMode: "Online",
-      history: updatedHistory,
+      // Only the new entry. Handing back the merged list re-inserted every row
+      // the lead already had, once per booking.
+      history: [noteEntry],
     });
     // The Graph event already exists by this point, so a failed task must not
     // fail the booking: the customer has the invitation either way. Log loudly
@@ -440,7 +432,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         email,
         notes: trimmedNotes,
         noteDetail,
-        meetingAt: start,
+        // slotStart, not `start`. `start` is the Sydney wall clock carried as
+        // UTC, which is exactly what the Graph payload needs and exactly wrong
+        // for a stored instant: a 3:00 PM booking was saved as 15:00Z and read
+        // back as 1:00 AM the next day, so the client's invitation and the
+        // builder's own task list disagreed by ten hours. slotStart is the same
+        // moment the conflict check already uses.
+        meetingAt: slotStart,
       });
     } catch (leadError) {
       console.error("Failed to save booking notes to lead", leadError);

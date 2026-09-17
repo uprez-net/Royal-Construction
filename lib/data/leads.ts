@@ -1,7 +1,11 @@
 import "server-only";
 
 import prisma from "@/lib/prisma";
-import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
+import {
+  sydneyDateOnly,
+  sydneyTimeOnly,
+  sydneyWallClockToInstant,
+} from "@/lib/dates/sydney";
 import {
   mapLead,
   stageToPrismaMap,
@@ -69,7 +73,10 @@ import {
   buildFollowupRescheduledHistoryEntry,
   buildMeetingDidNotTakePlaceHistoryEntry,
   buildMeetingReviewedHistoryEntry,
+  buildStageChangedHistoryEntry,
 } from "@/lib/leads/lead-helpers";
+import { dropAlreadyRecorded } from "@/lib/leads/lead-history";
+import { resolveActingUserId } from "@/lib/data/acting-user";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -260,18 +267,6 @@ async function sendLeadMentionEmails(input: {
  */
 function normalizeSearch(search?: string) {
   return search?.trim() ?? "";
-}
-
-async function resolveActingUserId(): Promise<string | null> {
-  try {
-    const { userId } = await auth();
-    if (!userId) return null;
-
-    const user = await getUserByClerkIdCached(userId);
-    return user?.id ?? null;
-  } catch {
-    return null;
-  }
 }
 
 export interface PaginatedLeadsResult {
@@ -1050,7 +1045,15 @@ export async function updateLead(
   // Read once, up front. Both the stage resolution below and the follow-up /
   // meeting branches need the current row, and this used to be two separate
   // findUnique calls that could disagree.
-  const existingLead = await prisma.lead.findUnique({ where: { id } });
+  //
+  // History comes with it so the write below can tell a new entry from one the
+  // caller has merely echoed back — see dropAlreadyRecorded.
+  const existingLead = await prisma.lead.findUnique({
+    where: { id },
+    include: {
+      history: { select: { action: true, detail: true, actionDate: true } },
+    },
+  });
 
   if (input.name !== undefined) updateData.name = String(input.name);
   if (input.phone !== undefined) updateData.phone = input.phone ?? "";
@@ -1183,6 +1186,18 @@ export async function updateLead(
     );
   }
 
+  // Pipeline movement is the most reportable thing a lead does and it was the
+  // one operator action that left no trace: notes, emails, annotations and
+  // follow-up outcomes all wrote history, a stage change wrote only the column
+  // and a close date. Nothing could answer "when did this reach Quoted, and who
+  // moved it" — including when a stale form silently moved it back.
+  const stageHistory =
+    resolvedStage !== undefined &&
+    existingLead &&
+    resolvedStage !== existingLead.stage
+      ? [buildStageChangedHistoryEntry(existingLead.stage, resolvedStage)]
+      : [];
+
   // Reason enforcement. This mirrors the modal's check, which was the ONLY
   // enforcement: the Zod schemas mark lostReason optional and nullable, so a
   // direct PATCH, the MCP tool or any server-side caller could strand a lead in
@@ -1230,6 +1245,7 @@ export async function updateLead(
   if (
     (input.history?.length ?? 0) > 0 ||
     annotationInputs.length > 0 ||
+    stageHistory.length > 0 ||
     input.followupResponseOutcome ||
     input.meetingReviewOutcome
   ) {
@@ -1285,22 +1301,40 @@ export async function updateLead(
       };
     });
 
-    updateData.history = {
-      create: [
+    // Every entry here is a row to CREATE. Callers that hand back the lead's
+    // whole history — the email modal and the booking route both did — would
+    // otherwise insert a second copy of every row they were given, and the copy
+    // came back ten hours late because the round trip through the client
+    // re-encoded an instant as a Sydney wall clock. One booking took a lead from
+    // four activity entries to nine, and it compounded on the next one.
+    //
+    // Callers now pass only what is new, and this drops anything already on the
+    // lead so a caller that has not been updated cannot duplicate it either.
+    const created = dropAlreadyRecorded(
+      [
         ...(input.history ?? []),
         ...responseHistory,
         ...meetingHistory,
         ...annotationHistory,
+        ...stageHistory,
       ].map((h) => ({
         action: h.action,
         detail: h.detail || "",
         type: h.type
           ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL")
           : "SYSTEM",
-        actionDate: new Date(`${h.date}T${h.time || "00:00"}`),
+        // Sydney, not the server's zone. The pair was produced by
+        // sydneyDateOnly/sydneyTimeOnly, and reading it back as UTC put every
+        // entry ten hours in the future.
+        actionDate: sydneyWallClockToInstant(h.date, h.time),
         ...(actingUserId ? { authorId: actingUserId } : {}),
       })),
-    };
+      existingLead?.history ?? [],
+    );
+
+    if (created.length > 0) {
+      updateData.history = { create: created };
+    }
   }
   // console.log('checking the Input Data', input);
   // console.log('222Updating lead with data:', updateData);

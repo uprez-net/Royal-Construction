@@ -67,6 +67,20 @@ export function sydneyEndOfDay(day: string): Date {
 }
 
 /**
+ * The instant a Sydney wall clock describes.
+ *
+ * The inverse of `sydneyDateOnly` + `sydneyTimeOnly`, and the pair a history
+ * entry travels as. `new Date(`${day}T${time}`)` is the third variation this
+ * module's header warns about: it reads the pair in the server's zone, which is
+ * UTC on Vercel, so every entry landed ten hours late and a round trip through
+ * the client pushed it ten hours later again.
+ */
+export function sydneyWallClockToInstant(day: string, time?: string): Date {
+  const normalisedTime = /^\d{2}:\d{2}$/.test(time ?? "") ? time : "00:00";
+  return fromZonedTime(`${day}T${normalisedTime}:00`, SYDNEY_TZ);
+}
+
+/**
  * `days` from `from`, landing on Sydney midnight.
  *
  * Normalised so a task created at 4pm is not overdue the next morning against

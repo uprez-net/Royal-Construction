@@ -11,6 +11,7 @@ import {
   leadTaskParamSchema,
   successResponse,
 } from "@/utils/validators";
+import { resolveActingUserId } from "@/lib/data/acting-user";
 
 /**
  * Closing or reopening a task. Neither ever touches the lead's stage.
@@ -55,7 +56,11 @@ export async function PATCH(
     const task =
       action === "reopen"
         ? await reopenLeadTask(taskId)
-        : await completeLeadTask(taskId);
+        : await completeLeadTask(
+            taskId,
+            undefined,
+            await resolveActingUserId(),
+          );
     if (!task) {
       return errorResponse("Task not found", {
         status: 404,
