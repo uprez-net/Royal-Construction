@@ -123,7 +123,7 @@ export function describeTenderPriceMismatch(input: {
   if (Math.round(tender * 100) === Math.round(agreed * 100)) {
     return null;
   }
-  return `The signed Tender's contract price is ${formatContractMoney(tender)}, but the agreed offer's price is ${formatContractMoney(agreed)}. The Contract was not sent. Check which is right, then create a revision so the Tender and the Contract carry the same price.`;
+  return `The signed Tender's contract price is ${formatContractMoney(tender)}, but the agreed offer's price is ${formatContractMoney(agreed)}. The Contract can't be sent. Check which is right, then create a revision so the Tender and the Contract carry the same price.`;
 }
 
 // A Contract sent before this change records no paymentScheduleSource, and its

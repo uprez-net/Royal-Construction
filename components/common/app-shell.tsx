@@ -199,7 +199,8 @@ export function AppShell({
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
                       <Button
-                        className="flex-1 rounded-lg bg-royal-gold-ink text-white hover:bg-[color-mix(in_oklab,var(--royal-gold-ink),black_12%)]"
+                        variant="royal"
+                        className="flex-1 rounded-lg"
                         asChild
                       >
                         <Link href="/sign-up">Sign up</Link>
@@ -296,7 +297,8 @@ export function AppShell({
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
                       <Button
-                        className="rounded-lg bg-royal-gold-ink text-white hover:bg-[color-mix(in_oklab,var(--royal-gold-ink),black_12%)]"
+                        variant="royal"
+                        className="rounded-lg"
                         asChild
                       >
                         <Link href="/sign-up">Sign up</Link>

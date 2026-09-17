@@ -6,6 +6,7 @@ import { getUserByClerkIdCached } from '@/lib/data/user';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, ClientPayload, clientPayloadSchema, TokenPayload, tokenPayloadSchema, UPLOAD_CONSTRAINTS } from '@/utils/validators';
 import { errorResponse, unauthorizedResponse } from '@/utils/validators';
 import { LeadAccessError, assertCanAccessLead } from '@/lib/offer/access';
+import { ProjectAccessError, assertCanAttachToProject } from '@/lib/data/project-access';
 
 export async function POST(request: Request): Promise<NextResponse> {
     try {
@@ -48,6 +49,31 @@ export async function POST(request: Request): Promise<NextResponse> {
                     }
                 }
 
+                // The project and milestone ids are the browser's too, and the
+                // completed upload writes a File row onto that project.
+                let authorisedProjectId = clientPayload.projectId;
+                if (clientPayload.projectId || clientPayload.milestoneId) {
+                    const user = await getUserByClerkIdCached(userId);
+                    if (!user) {
+                        throw new Error('Unauthorized');
+                    }
+                    try {
+                        // assertCanAttachToProject resolves a milestone to its
+                        // own project, so this is the id the File row belongs
+                        // on: a milestone-only upload carries no projectId.
+                        ({ projectId: authorisedProjectId } =
+                            await assertCanAttachToProject(user, {
+                                projectId: clientPayload.projectId,
+                                milestoneId: clientPayload.milestoneId,
+                            }));
+                    } catch (error) {
+                        if (error instanceof ProjectAccessError) {
+                            throw new Error(error.status === 404 ? 'Project not found' : 'Forbidden');
+                        }
+                        throw error;
+                    }
+                }
+
                 let allowedContentTypes: string[] = UPLOAD_CONSTRAINTS.allowedMimeTypes as unknown as string[];
                 let addRandomSuffix = true;
                 let allowOverwrite = false;
@@ -74,7 +100,7 @@ export async function POST(request: Request): Promise<NextResponse> {
                     maximumSizeInBytes: UPLOAD_CONSTRAINTS.maxFileSizeBytes,
                     tokenPayload: JSON.stringify({
                         userId,
-                        projectId: clientPayload.projectId,
+                        projectId: authorisedProjectId,
                         milestoneId: clientPayload.milestoneId,
                         leadId: clientPayload.leadId,
                         fileId: clientPayload.fileId,
@@ -134,6 +160,11 @@ export async function POST(request: Request): Promise<NextResponse> {
                 return errorResponse(message, {
                     status: 404,
                     code: 'UPLOAD_LEAD_NOT_FOUND',
+                });
+            case 'Project not found':
+                return errorResponse(message, {
+                    status: 404,
+                    code: 'UPLOAD_PROJECT_NOT_FOUND',
                 });
             case 'Invalid file metadata in payload':
             case 'Failed to save file metadata':

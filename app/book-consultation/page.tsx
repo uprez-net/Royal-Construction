@@ -356,7 +356,7 @@ function BookingContent() {
               </p>
               <Button
                 onClick={() => window.location.reload()}
-                className="bg-royal-gold text-card hover:bg-royal-gold-dark"
+                className="bg-royal-gold-ink text-card hover:bg-royal-gold-ink-hover"
               >
                 Try again
               </Button>
@@ -514,7 +514,7 @@ function BookingContent() {
                                 busy
                                   ? "cursor-not-allowed border-border bg-muted opacity-50"
                                   : isSelected
-                                    ? "border-royal-gold bg-royal-gold cursor-pointer"
+                                    ? "border-royal-gold-ink bg-royal-gold-ink cursor-pointer"
                                     : "border-border bg-card cursor-pointer hover:border-royal-gold",
                               )}
                             >
@@ -606,7 +606,7 @@ function BookingContent() {
                   <Button
                     onClick={handleBook}
                     disabled={submitting}
-                    className="w-full gap-2 bg-royal-gold py-6 font-condensed text-[15px] font-medium uppercase tracking-wide text-card hover:bg-royal-gold-dark"
+                    className="w-full gap-2 bg-royal-gold-ink py-6 font-condensed text-[15px] font-medium uppercase tracking-wide text-card hover:bg-royal-gold-ink-hover"
                   >
                     {submitting ? (
                       <>

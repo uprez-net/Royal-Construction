@@ -5,6 +5,7 @@ import { ModalShell } from "@/components/common/modal-shell";
 import { fetchLeads } from "@/lib/leads/leads-service";
 import { Lead, LeadStage } from "@/lib/leads/types";
 import { formatFollowup } from "@/lib/leads/lead-helpers";
+import { FetchError } from "@/utils/fetch";
 
 interface LeadStatsDrilldownModalProps {
   title: string;
@@ -27,17 +28,29 @@ export function LeadStatsDrilldownModal({
 }: LeadStatsDrilldownModalProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     const timeout = setTimeout(() => {
       setLoading(true);
+      setError(null);
 
       fetchLeads({ page: 1, limit: 25, status: stage, upcomingFollowUps, pendingFollowUps, pendingMeetings, upcomingMeetings })
         .then((result) => {
           if (!cancelled) {
             setLeads(result.items);
+          }
+        })
+        .catch((err: unknown) => {
+          // A failed load used to be an unhandled rejection that left the
+          // modal saying "No leads found." as if the stage were empty. Same
+          // wording rule as the lead picker: FetchError carries the API's
+          // message, anything else is the browser's network text.
+          if (!cancelled) {
+            setLeads([]);
+            setError(err instanceof FetchError ? err.message : "Failed to fetch leads");
           }
         })
         .finally(() => {
@@ -62,6 +75,16 @@ export function LeadStatsDrilldownModal({
     >
       {loading ? (
         <div className="text-sm text-muted-foreground">Loading leads...</div>
+      ) : error ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive-light px-4 py-3 text-sm"
+        >
+          <p className="font-medium text-destructive-ink">{error}</p>
+          <p className="mt-1 text-muted-foreground">
+            Close this and open it again to retry.
+          </p>
+        </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
           <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] gap-3 border-b border-border bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">

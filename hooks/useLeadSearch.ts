@@ -3,7 +3,7 @@
 import { FetchError, fetchJson } from "@/utils/fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Lead as UiLead } from "@/lib/leads/types";
-import { PaginatedLeadsResult } from "@/lib/data/leads";
+import type { PaginatedLeadsResult } from "@/lib/data/leads";
 import { mergeLeadPage, pageAfterQueryChange } from "@/lib/leads/lead-search-paging";
 
 const DEFAULT_LIMIT = 10;

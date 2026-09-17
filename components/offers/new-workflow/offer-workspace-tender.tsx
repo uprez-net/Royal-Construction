@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   getPaymentScheduleTotalPct,
@@ -60,6 +61,9 @@ type TenderPanelProps = {
   readonly tenderSendError?: string | null;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function TenderPanel({
@@ -78,6 +82,7 @@ export function TenderPanel({
   tenderSendError = null,
   onRecallTender,
   onMarkTenderSigned,
+  lifecycleBusy,
 }: TenderPanelProps) {
   const isAgreed = status === "agreed";
   const isDraft = status === "tender_draft";
@@ -159,6 +164,7 @@ export function TenderPanel({
             onMarkTenderSigned={onMarkTenderSigned}
             onRecallTender={onRecallTender}
             onSendTender={onSendTender}
+            lifecycleBusy={lifecycleBusy}
           />
         </CardContent>
       </Card>
@@ -240,6 +246,7 @@ function TenderActions({
   onSendTender,
   onRecallTender,
   onMarkTenderSigned,
+  lifecycleBusy,
 }: {
   readonly isAgreed: boolean;
   readonly isDeclined: boolean;
@@ -265,6 +272,7 @@ function TenderActions({
   readonly onSendTender: () => void;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
+  readonly lifecycleBusy: LifecycleAction | null;
 }) {
   const [confirming, setConfirming] = useState(false);
 
@@ -326,6 +334,8 @@ function TenderActions({
       <div className="flex flex-wrap gap-2">
         {isAgreed ? (
           <Button
+            aria-busy={lifecycleBusy === "tender_draft" || undefined}
+            disabled={lifecycleBusy !== null}
             size="sm"
             type="button"
             variant="royal"
@@ -359,6 +369,8 @@ function TenderActions({
                 PDF (issue #90); the server action also rejects it there. */}
             {process.env.NODE_ENV === "development" ? (
               <Button
+                aria-busy={lifecycleBusy === "tender_signed" || undefined}
+                disabled={lifecycleBusy !== null}
                 size="sm"
                 type="button"
                 variant="royal"
@@ -369,6 +381,8 @@ function TenderActions({
               </Button>
             ) : null}
             <Button
+              aria-busy={lifecycleBusy === "recall-tender" || undefined}
+              disabled={lifecycleBusy !== null}
               size="sm"
               type="button"
               variant="outline"

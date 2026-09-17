@@ -1,7 +1,8 @@
 "use client";
 import { HistoryItem, Lead, LeadNoteAnnotationInput, LeadsStats, LeadStage } from './types';
 import { FetchError, fetchJson } from '@/utils/fetch';
-import { findLeadById, getAllLeads, getAnalyticsData, getFollowupStats, getLeadsStats, PaginatedLeadsResult } from '../data/leads';
+import { findLeadById, getAllLeads, getAnalyticsData, getFollowupStats, getLeadsStats } from '../actions/leads';
+import type { PaginatedLeadsResult } from '../data/leads';
 import { sendCampaignEmail } from '../data/email-ad-hock';
 
 export interface LeadHistoryInput extends Pick<HistoryItem, 'action' | 'detail' | 'type'> {

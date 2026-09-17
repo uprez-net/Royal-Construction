@@ -16,7 +16,7 @@ import type {
   TradieUrgentReminderItem,
 } from "@/types/project";
 import { fetchJson } from "@/utils/fetch";
-import { ProjectLookupItem } from "@/lib/data/projects";
+import type { ProjectLookupItem } from "@/lib/data/projects";
 import { CreateTradieScheduleInput } from "@/utils/validators/tradies";
 
 type UpdateScheduleStatusRequest = {

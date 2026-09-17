@@ -33,6 +33,11 @@ interface SaveFileParams {
  * - Revalidate the lead chat session cache when applicable.
  * - Create an activity log entry for project or milestone uploads.
  *
+ * Authorizes nobody. `userId` must be a User.id the caller derived itself (the
+ * session's user, or a system actor), and the caller must already have checked
+ * the lead, project or milestone the row names. /api/upload and the MCP
+ * upload_file tool check them; archiveLeadAttachments is a system caller.
+ *
  * @param params - File metadata and association information.
  * @param params.userId - ID of the user uploading the file.
  * @param params.projectId - Optional project the file belongs to.
@@ -99,6 +104,9 @@ export async function saveFile({ userId, projectId, milestoneId, fileId, fileUrl
  *
  * This helper is primarily used for lead conversations and document
  * management, returning every uploaded file linked to the specified lead.
+ *
+ * Authorizes nobody, and nothing calls it today: a caller must check the lead
+ * with assertCanAccessLead first.
  *
  * @param leadId - Lead identifier.
  * @returns An object containing the matching files, total file count and

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { activeOfferPhase } from "@/lib/offer/workflow";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import type { OfferSendBlocker } from "@/lib/offer/offer-readiness";
 import {
   findSignerStatus,
@@ -70,6 +71,9 @@ type SendNegotiatePanelProps = {
   readonly offerSignError?: string | null;
   readonly onRecallOffer: () => void;
   readonly onMarkOfferSigned: () => void;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
   // Select the step that resolves a blocker. Replaces a scrollIntoView that the
   // step rail made dead: only the active step is mounted now, so the blocker's
   // target element does not exist until you are already looking at it.
@@ -103,6 +107,7 @@ export function SendNegotiatePanel({
   offerSignError,
   onRecallOffer,
   onMarkOfferSigned,
+  lifecycleBusy,
 }: SendNegotiatePanelProps) {
   const [confirming, setConfirming] = useState(false);
   const [signConfirming, setSignConfirming] = useState(false);
@@ -191,7 +196,8 @@ export function SendNegotiatePanel({
               </Button>
               {isPending ? (
                 <Button
-                  disabled={!canMarkSent}
+                  aria-busy={lifecycleBusy === "sent" || undefined}
+                  disabled={!canMarkSent || lifecycleBusy !== null}
                   size="sm"
                   title={
                     canMarkSent
@@ -305,6 +311,8 @@ export function SendNegotiatePanel({
                         this outside development. */}
                     {process.env.NODE_ENV === "development" ? (
                       <Button
+                        aria-busy={lifecycleBusy === "offer_signed" || undefined}
+                        disabled={lifecycleBusy !== null}
                         size="sm"
                         type="button"
                         variant="royal"
@@ -315,6 +323,8 @@ export function SendNegotiatePanel({
                       </Button>
                     ) : null}
                     <Button
+                      aria-busy={lifecycleBusy === "recall-offer" || undefined}
+                      disabled={lifecycleBusy !== null}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -350,7 +360,8 @@ export function SendNegotiatePanel({
 
         <div className="flex flex-wrap gap-2">
           <Button
-            disabled={!canRevise || revising}
+            aria-busy={lifecycleBusy === "revision" || undefined}
+            disabled={!canRevise || revising || lifecycleBusy !== null}
             size="sm"
             title={
               canRevise
@@ -365,7 +376,12 @@ export function SendNegotiatePanel({
             {revising ? "Creating…" : "Create revision"}
           </Button>
           <Button
-            disabled={(!isSent && !isOfferSigned) || !canMarkAgreed}
+            aria-busy={lifecycleBusy === "agreed" || undefined}
+            disabled={
+              (!isSent && !isOfferSigned) ||
+              !canMarkAgreed ||
+              lifecycleBusy !== null
+            }
             size="sm"
             title={
               !isSent && !isOfferSigned
@@ -382,7 +398,8 @@ export function SendNegotiatePanel({
             Mark agreed
           </Button>
           <Button
-            disabled={!isSent}
+            aria-busy={lifecycleBusy === "rejected" || undefined}
+            disabled={!isSent || lifecycleBusy !== null}
             size="sm"
             type="button"
             variant="outline"

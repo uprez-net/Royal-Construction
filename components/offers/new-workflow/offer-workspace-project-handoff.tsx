@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type {
@@ -27,6 +28,9 @@ type ProjectHandoffPanelProps = {
   // The project this offer was handed off to, from the handoff itself or, after
   // a reload, from the loader. Null until one exists.
   readonly projectId?: string | null;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function ProjectHandoffPanel({
@@ -39,6 +43,7 @@ export function ProjectHandoffPanel({
   projectCreating = false,
   projectResult = null,
   projectId = null,
+  lifecycleBusy,
 }: ProjectHandoffPanelProps) {
   const isCreated = status === "project";
   const costLineCount = lines.filter((line) => line.includedInContract).length;
@@ -97,7 +102,7 @@ export function ProjectHandoffPanel({
           {isCreated && projectId ? (
             <Button
               asChild
-              className="bg-royal-gold-ink text-white hover:bg-royal-gold-ink/90"
+              variant="royal"
               size="sm"
             >
               <Link href={`/projects/${projectId}`}>Open Project</Link>
@@ -108,8 +113,9 @@ export function ProjectHandoffPanel({
             </Button>
           ) : (
             <Button
-              className="bg-royal-gold-ink text-white hover:bg-royal-gold-ink/90"
-              disabled={projectCreating}
+              variant="royal"
+              aria-busy={projectCreating || undefined}
+              disabled={projectCreating || lifecycleBusy !== null}
               size="sm"
               type="button"
               onClick={onCreateProject}
