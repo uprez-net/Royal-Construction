@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
+import type {
+  ContractPreviewTerms,
+  ContractTerms,
+  SentContractTerms,
+} from "@/lib/offer/contract-terms";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
+import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
 import {
   collectOfferSigners,
   formatOwnerNamesLine,
@@ -52,7 +58,8 @@ type ContractPanelProps = {
   readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
+  // What the BC4 carries (see contractPreviewTerms). Null until it is loaded.
+  readonly contractTerms: ContractPreviewTerms | null;
   readonly contractParticulars: ContractParticulars;
   readonly onContractParticularsChange: (
     patch: Partial<ContractParticulars>,
@@ -63,6 +70,9 @@ type ContractPanelProps = {
   readonly contractSendError?: string | null;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function ContractPanel({
@@ -71,7 +81,7 @@ export function ContractPanel({
   signerStatuses,
   customerPrice,
   draft,
-  paymentSchedule,
+  contractTerms,
   contractParticulars,
   onContractParticularsChange,
   onGenerateContract,
@@ -80,6 +90,7 @@ export function ContractPanel({
   contractSendError = null,
   onRecallContract,
   onMarkContractSigned,
+  lifecycleBusy,
 }: ContractPanelProps) {
   // The Contract phase begins once the Tender is signed.
   const isTenderSigned = status === "tender_signed";
@@ -115,7 +126,7 @@ export function ContractPanel({
             customerPrice={customerPrice}
             draft={draft}
             job={job}
-            paymentSchedule={paymentSchedule}
+            contractTerms={contractTerms}
             state={isSigned ? "signed" : isSent ? "sent" : "draft"}
           />
         ) : null}
@@ -149,6 +160,7 @@ export function ContractPanel({
           onMarkContractSigned={onMarkContractSigned}
           onRecallContract={onRecallContract}
           onSendContract={onSendContract}
+          lifecycleBusy={lifecycleBusy}
         />
       </CardContent>
     </Card>
@@ -353,6 +365,7 @@ function ContractActions({
   onSendContract,
   onRecallContract,
   onMarkContractSigned,
+  lifecycleBusy,
 }: {
   readonly isTenderSigned: boolean;
   readonly isDeclined: boolean;
@@ -375,6 +388,7 @@ function ContractActions({
   readonly onSendContract: () => void;
   readonly onRecallContract: () => void;
   readonly onMarkContractSigned: () => void;
+  readonly lifecycleBusy: LifecycleAction | null;
 }) {
   const [confirming, setConfirming] = useState(false);
 
@@ -435,6 +449,8 @@ function ContractActions({
       <div className="flex flex-wrap gap-2">
         {isTenderSigned ? (
           <Button
+            aria-busy={lifecycleBusy === "contract_draft" || undefined}
+            disabled={lifecycleBusy !== null}
             size="sm"
             type="button"
             variant="royal"
@@ -466,6 +482,8 @@ function ContractActions({
                 PDF (issue #90); the server action also rejects it there. */}
             {process.env.NODE_ENV === "development" ? (
               <Button
+                aria-busy={lifecycleBusy === "contract_signed" || undefined}
+                disabled={lifecycleBusy !== null}
                 size="sm"
                 type="button"
                 variant="royal"
@@ -476,6 +494,8 @@ function ContractActions({
               </Button>
             ) : null}
             <Button
+              aria-busy={lifecycleBusy === "recall-contract" || undefined}
+              disabled={lifecycleBusy !== null}
               size="sm"
               type="button"
               variant="outline"
@@ -526,17 +546,144 @@ function ContractActions({
   );
 }
 
+// The terms the send will fill the BC4 with.
+function ContractScheduleToSend({
+  terms,
+  showRefusal,
+}: {
+  readonly terms: ContractTerms;
+  readonly showRefusal: boolean;
+}) {
+  return (
+    <div className="grid gap-2">
+      {showRefusal && terms.refusal ? (
+        <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-light px-3 py-2 text-xs text-foreground">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>{terms.refusal}</span>
+        </p>
+      ) : null}
+      <div className="overflow-hidden rounded-lg border border-border/70">
+        <table className="w-full text-[13px]">
+          {/* The rows carry no visible header, so a screen reader had nothing
+              to tie each value to. */}
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">Percent of contract</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Trigger</th>
+            </tr>
+          </thead>
+          <tbody>
+            {terms.paymentSchedule.map((row, index) => (
+              <tr
+                key={`${index}-${row.id}`}
+                className="border-b border-border/60 last:border-b-0"
+              >
+                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                  {formatPercent(row.percentOfContract)}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono">
+                  {formatContractMoney(row.amount)}
+                </td>
+                <td className="px-3 py-1.5 text-muted-foreground">
+                  {row.trigger}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Deposit:{" "}
+        <span className="font-medium text-foreground">
+          {terms.deposit
+            ? `${terms.deposit.stageName}, ${formatPercent(terms.deposit.percentOfContract)} — ${terms.depositAmount}`
+            : "None"}
+        </span>
+      </p>
+      {terms.source === "agreed-snapshot" ? (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          The signed Tender has no stored payment schedule, so the Contract
+          takes these terms from the agreed offer.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// The tab values a sent BC4 carried, as printed.
+function SentContractSchedule({
+  terms,
+}: {
+  readonly terms: SentContractTerms;
+}) {
+  return (
+    <div className="grid gap-2">
+      <div className="overflow-hidden rounded-lg border border-border/70">
+        <table className="w-full text-[13px]">
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">Percent of contract</th>
+              <th scope="col">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {terms.paymentSchedule.map((row, index) => (
+              <tr
+                key={`${index}-${row.stageName}`}
+                className="border-b border-border/60 last:border-b-0"
+              >
+                <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
+                <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
+                  {row.percent}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono">
+                  {row.amount}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Deposit:{" "}
+        <span className="font-medium text-foreground">
+          {terms.depositAmount || "None"}
+        </span>
+      </p>
+      {terms.scheduleSource === null ? (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          This Contract was sent before contracts took their terms from the
+          signed Tender. These are the terms it carried, which can differ from
+          the Tender&apos;s.
+        </p>
+      ) : terms.scheduleSource === "agreed-snapshot" ? (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          The signed Tender had no stored payment schedule, so this Contract
+          took its terms from the agreed offer.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ContractPreview({
   job,
   customerPrice,
   draft,
-  paymentSchedule,
+  contractTerms,
   state,
 }: {
   readonly job: OfferWorkspaceJob;
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
+  readonly contractTerms: ContractPreviewTerms | null;
   readonly state: "draft" | "sent" | "signed";
 }) {
   const contractSum = customerPrice.selectedContractValueIncGst;
@@ -585,34 +732,44 @@ function ContractPreview({
         </p>
       </div>
 
+      {/* The schedule, deposit and exclusions the BC4 carries, not this tab's
+          schedule: the send takes them from the signed Tender, and a sent
+          Contract shows the values it went out with. */}
       <div>
         <p className={cn("mb-2", GROUP_HEADING_CLASS)}>
           Progress payments
         </p>
-        <div className="overflow-hidden rounded-lg border border-border/70">
-          <table className="w-full text-[13px]">
-            <tbody>
-              {paymentSchedule.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-border/60 last:border-b-0"
-                >
-                  <td className="px-3 py-1.5 font-medium">{row.stageName}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-muted-foreground">
-                    {formatPercent(row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono">
-                    {formatCurrency(contractSum * row.percentOfContract)}
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    {row.trigger}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {contractTerms === null ? (
+          <p className="text-sm text-muted-foreground/80">
+            The payment schedule the Contract takes from the signed Tender
+            can&apos;t be shown. Sending checks it before the Contract goes out.
+          </p>
+        ) : contractTerms.source === "sent-contract" ? (
+          <SentContractSchedule terms={contractTerms} />
+        ) : (
+          <ContractScheduleToSend
+            terms={contractTerms}
+            showRefusal={state === "draft"}
+          />
+        )}
       </div>
+
+      {contractTerms ? (
+        <div>
+          <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Exclusions</p>
+          {contractTerms.exclusions.length > 0 ? (
+            <ul className="grid list-disc gap-1 pl-5 text-[13px]">
+              {contractTerms.exclusions.map((line, index) => (
+                <li key={`${index}-${line}`}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground/80">
+              No exclusions are listed on the Contract.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       <p className="text-xs text-muted-foreground">
         {draft.termsSummary} Scope, inclusions and exclusions are as set out in

@@ -48,6 +48,7 @@ function render(
       draft,
       exclusions: INITIAL_EXCLUSIONS,
       job: INITIAL_OFFER_JOB,
+      lifecycleBusy: null,
       onGenerateTender: () => {},
       onMarkTenderSigned: () => {},
       onPaymentScheduleChange: () => {},

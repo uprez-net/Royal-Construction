@@ -31,6 +31,8 @@ import {
 } from "@/lib/offer/workspace-area";
 import { buildOfferImageContext } from "@/lib/offer/offer-image-context";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
+import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import {
   deriveTenderGateStatus,
   type TenderGateState,
@@ -135,8 +137,8 @@ type OfferWorkspaceScreenProps = {
   readonly hydrated: boolean;
   // The mount load failed: there is nothing to show and nothing to save.
   readonly loadFailed: boolean;
-  // A status change or revision is running.
-  readonly transitioning: boolean;
+  // The status change, recall or revision running, or null.
+  readonly lifecycleBusy: LifecycleAction | null;
   readonly areaCalculator: OfferAreaCalculator;
   readonly rateConstants: AreaRateConstants;
   readonly customerPrice: OfferCustomerPrice;
@@ -230,6 +232,9 @@ type OfferWorkspaceScreenProps = {
   readonly transitionError: string | null;
   // Per-recipient DocuSign status for the signing trackers (#121/#123).
   readonly signerStatuses: readonly OfferSignerStatus[];
+  // The terms the BC4 carries: resolved on the server from the signed Tender,
+  // or read back from the Contract once it is sent.
+  readonly contractTerms: ContractPreviewTerms | null;
   // Offer-document acceptance signing (ADR 0004) — customer-only DocuSign send.
   readonly onSendOfferForSignature: () => void;
   readonly offerSignSending?: boolean;
@@ -273,7 +278,7 @@ export function OfferWorkspaceScreen({
   calcVersion,
   hydrated,
   loadFailed,
-  transitioning,
+  lifecycleBusy,
   rateConstants,
   customerPrice,
   directTotal,
@@ -347,6 +352,7 @@ export function OfferWorkspaceScreen({
   sentInfo,
   transitionError,
   signerStatuses,
+  contractTerms,
   onSendOfferForSignature,
   offerSignSending,
   offerSignError,
@@ -376,6 +382,7 @@ export function OfferWorkspaceScreen({
   onSelectedPriceInputChange,
   onStandardPriceInputChange,
 }: OfferWorkspaceScreenProps) {
+  const transitioning = lifecycleBusy !== null;
   // Visual finish/façade descriptors per image slot, derived from the offer's
   // included selections — woven into the AI image prompts.
   const imageFinishContexts = useMemo(
@@ -681,6 +688,7 @@ export function OfferWorkspaceScreen({
             <OfferLockBanner
               canRevise={canRevise}
               revising={revising}
+              lifecycleBusy={lifecycleBusy}
               executed={revisionExecuted}
               documentsEditable={documentsStillEditable}
               notice={
@@ -859,6 +867,7 @@ export function OfferWorkspaceScreen({
               offerSignError={offerSignError}
               onRecallOffer={onRecallOffer}
               onMarkOfferSigned={onMarkOfferSigned}
+              lifecycleBusy={lifecycleBusy}
             />
             <OfferWorkspaceActivity leadId={leadId} status={status} />
           </StepPane>
@@ -877,6 +886,7 @@ export function OfferWorkspaceScreen({
               onCreateRevision={onCreateRevision}
               canRevise={canRevise}
               revising={revising}
+              lifecycleBusy={lifecycleBusy}
             />
           </StepPane>
 
@@ -906,6 +916,7 @@ export function OfferWorkspaceScreen({
               onSendTender={onSendTender}
               tenderSending={tenderSending}
               tenderSendError={tenderSendError}
+              lifecycleBusy={lifecycleBusy}
             />
           </StepPane>
 
@@ -920,7 +931,7 @@ export function OfferWorkspaceScreen({
               customerPrice={customerPrice}
               draft={draft}
               job={job}
-              paymentSchedule={paymentSchedule}
+              contractTerms={contractTerms}
               status={status}
               contractParticulars={contractParticulars}
               onContractParticularsChange={onContractParticularsChange}
@@ -930,6 +941,7 @@ export function OfferWorkspaceScreen({
               onSendContract={onSendContract}
               contractSending={contractSending}
               contractSendError={contractSendError}
+              lifecycleBusy={lifecycleBusy}
             />
           </StepPane>
 
@@ -949,6 +961,7 @@ export function OfferWorkspaceScreen({
               projectCreating={projectCreating}
               projectResult={projectResult}
               projectId={projectId}
+              lifecycleBusy={lifecycleBusy}
             />
           </StepPane>
           </>

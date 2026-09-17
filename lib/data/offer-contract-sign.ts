@@ -11,11 +11,6 @@ import {
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
-import {
-  deserializeWorkspace,
-  parseWorkspaceState,
-} from "@/lib/offer/workspace-persistence";
-import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 // import { generatePDF } from "@/lib/utils/generatePDF";
 // import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
@@ -44,16 +39,11 @@ import {
   type ContractParticulars,
 } from "@/lib/offer/contract-particulars";
 
+import { formatContractMoney } from "@/lib/offer/project-handoff-commercials";
 import {
-  formatContractMoney,
-  paymentScheduleLine as buildPaymentScheduleLine,
-  stageAmount,
-  resolveSignedTenderExclusions,
-} from "@/lib/offer/project-handoff-commercials";
-import {
-  describeTenderPriceMismatch,
-  resolveContractPaymentSource,
-} from "@/lib/offer/contract-payment-source";
+  contractTermsInput,
+  resolveContractTerms,
+} from "@/lib/offer/contract-terms";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type ContractSendResult =
@@ -101,8 +91,10 @@ export async function sendContractForSignature(input: {
       error: `The Contract can only be sent once the Tender is signed (current status: ${offer.offerStatus}).`,
     };
   }
-  const state = offer.agreedSnapshot ?? offer.workspaceState;
-  if (!state) {
+  // Through the helper the Contract step's loader uses, so the preview and the
+  // BC4 resolve from the same copy of the offer.
+  const termsInput = contractTermsInput(offer);
+  if (!termsInput) {
     return { ok: false, error: "No agreed offer snapshot found." };
   }
 
@@ -120,7 +112,7 @@ export async function sendContractForSignature(input: {
     };
   }
 
-  const snapshot = deserializeWorkspace(parseWorkspaceState(state));
+  const snapshot = termsInput.agreedSnapshot;
   const job = snapshot.job;
   // Server-side owner gate (PR #124): re-validate owner completeness, especially
   // UNIQUE signer emails — a shared address makes the Contract completion webhook
@@ -145,21 +137,15 @@ export async function sendContractForSignature(input: {
         "No valid client email found on the offer or lead — set the client email in Job setup before sending the Contract.",
     };
   }
-  // Resolve the price through the same path the Tender used — a blank override
-  // round-trips to "0", so Number(...) would lock a $0.00 contract (the signed
-  // Tender showed the computed value). buildProposalInput runs
-  // resolveOptionalPriceInput + the computed-value fallback.
-  const contractValue =
-    buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
   const reference = `${offer.baseReference}-R${offer.revisionNumber}`;
 
   // The payment schedule and deposit come from the Tender the customer signed;
-  // the price stays the agreed snapshot's. A Tender that printed a different
-  // price is refused rather than reconciled, before the send is claimed.
-  const payment = resolveContractPaymentSource({
-    tenderDocumentData: offer.tender?.documentData ?? null,
-    agreedPaymentSchedule: snapshot.paymentSchedule,
-  });
+  // the price stays the agreed snapshot's. Terms the BC4 cannot carry, a Tender
+  // that printed another price or more stages than the template has, are
+  // refused before the send is claimed. The Contract step previews the same
+  // terms and the same refusal, so it shows what the BC4 carries.
+  const { payment, terms: contractTerms } = resolveContractTerms(termsInput);
+  const contractValue = contractTerms.contractValueIncGst;
   if (payment.source === "agreed-snapshot") {
     console.warn(
       `[offer] contract for offer ${offer.id}: no payment schedule on the Tender row, using the agreed snapshot's`,
@@ -169,12 +155,8 @@ export async function sendContractForSignature(input: {
       `[offer] contract for offer ${offer.id}: payment schedule from the signed Tender (${payment.source})`,
     );
   }
-  const priceMismatch = describeTenderPriceMismatch({
-    tenderContractValueIncGst: payment.tenderContractValueIncGst,
-    agreedContractValueIncGst: contractValue,
-  });
-  if (priceMismatch) {
-    return { ok: false, error: priceMismatch };
+  if (contractTerms.refusal) {
+    return { ok: false, error: contractTerms.refusal };
   }
 
   // Owner parties (ADR 0003). The BC4 form has a single OWNER(S) area, so every
@@ -284,15 +266,6 @@ export async function sendContractForSignature(input: {
   const locked = (tabLabel: string, value: string): ContractTabValue => ({ tabLabel, value, locked: true });
 
   const priceLabel = formatContractMoney(contractValue);
-  // The BC4 template exposes exactly 7 payment-stage slots. Refuse rather than
-  // silently drop validated stages past the 7th, which would send a contract
-  // whose payment schedule doesn't sum to the contract value.
-  if (payment.paymentSchedule.length > 7) {
-    return {
-      ok: false,
-      error: `The contract template supports up to 7 payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`,
-    };
-  }
 
   const claim = await prisma.$transaction(async (tx) => {
     const updated = await tx.offer.updateMany({
@@ -321,23 +294,15 @@ export async function sendContractForSignature(input: {
   }
 
   const parsedParticulars = parseContractParticulars(claim.particulars);
-  const stageRows = payment.paymentSchedule.slice(0, 7);
-  const paymentScheduleLine = buildPaymentScheduleLine(stageRows, contractValue);
-  const depositRow = payment.deposit;
-  // The exclusions the SIGNED Tender printed, Scope exclusions included. Read
-  // from the Tender row, not the snapshot: the workspace can still be saved
-  // after the offer is agreed, which would otherwise put a line on the BC4 that
-  // the customer never signed (or drop one they did).
-  const signedExclusions = resolveSignedTenderExclusions({
-    tenderDocumentData: offer.tender?.documentData ?? null,
-    snapshot,
-  });
-  if (signedExclusions.source === "agreed-snapshot") {
+  // contractTerms carries everything the BC4 needs, exclusions included: the
+  // shared resolver reads them from the signed Tender's stored document, so the
+  // Contract step's preview and this send cannot show different lines.
+  if (contractTerms.exclusionsSource === "agreed-snapshot") {
     console.warn(
       `[offer] contract for offer ${offer.id}: no readable exclusions on the Tender row, using the agreed snapshot's`,
     );
   }
-  const exclusions = signedExclusions.lines;
+  const exclusions = contractTerms.exclusions;
 
   // Owner address/contact for the single BC4 owner lines. Current Location (from
   // Job setup) supersedes the hand-typed owner-address particular as the source
@@ -402,13 +367,8 @@ export async function sendContractForSignature(input: {
     locked("ownerEmail", primaryOwnerEmail),
     locked("siteAddress", job.siteAddress),
     locked("variationPercent", "10%"),
-    locked("paymentSchedule", paymentScheduleLine),
-    locked(
-      "depositAmount",
-      depositRow
-        ? formatContractMoney(stageAmount(contractValue, depositRow.percentOfContract))
-        : "",
-    ),
+    locked("paymentSchedule", contractTerms.paymentScheduleLine),
+    locked("depositAmount", contractTerms.depositAmount),
     locked("excludedDays", "Saturdays, Sundays and NSW Public Holidays"),
     locked("defectsLiabilityWeeks", "12 Weeks"),
     locked("workDescription", [job.buildType, ...job.buildScope].filter(Boolean).join(". ")),
@@ -576,10 +536,18 @@ export async function sendContractForSignature(input: {
         `[offer] contract envelope ${envelope.envelopeId} sent but persisting it failed:`,
         error,
       );
-      throw new Error(
-        `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
-      );
+      return { unrecorded: (error as Error).message } as const;
     });
+
+  // Returned rather than raised: Next replaces a Server Action's thrown
+  // message with a generic one in production, and the estimator needs the
+  // envelope id and the instruction not to resend.
+  if (typeof stillClaimed === "object") {
+    return {
+      ok: false,
+      error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
+    };
+  }
 
   // No *_SENT event and no lead sync: the offer is wherever the recall or
   // revision left it.

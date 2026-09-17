@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import { GitBranch, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 
 // Explains why the Offer-build steps are (partly or fully) frozen and offers the
 // one sanctioned way to change a frozen part: cut a new revision. Rendered in
@@ -17,6 +18,7 @@ export function OfferLockBanner({
   onCreateRevision,
   canRevise,
   revising,
+  lifecycleBusy,
   executed = false,
   documentsEditable = false,
   notice = null,
@@ -24,6 +26,9 @@ export function OfferLockBanner({
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  // The lifecycle action running, or null. Create revision disables while any
+  // runs, as it does on the Send & negotiate panel.
+  readonly lifecycleBusy: LifecycleAction | null;
   // An executed contract can't be revised — its terms are binding; a change is
   // a contract variation, not a new revision.
   readonly executed?: boolean;
@@ -56,8 +61,9 @@ export function OfferLockBanner({
         </p>
         {executed ? null : (
           <Button
+            aria-busy={lifecycleBusy === "revision" || undefined}
             className="shrink-0"
-            disabled={!canRevise || revising}
+            disabled={!canRevise || revising || lifecycleBusy !== null}
             onClick={onCreateRevision}
             size="sm"
             type="button"
