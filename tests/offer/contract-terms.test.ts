@@ -19,7 +19,7 @@ import {
   formatContractMoney,
   paymentScheduleLine,
   stageAmount,
-  tenderExclusionLines,
+  resolveSignedTenderExclusions,
 } from "../../lib/offer/project-handoff-commercials";
 import {
   INITIAL_PAYMENT_SCHEDULE,
@@ -112,6 +112,10 @@ function sendPathValues(tenderDocumentData: unknown, snapshot: OfferWorkspaceSna
     tenderDocumentData,
     agreedPaymentSchedule: snapshot.paymentSchedule,
   });
+  const signedExclusions = resolveSignedTenderExclusions({
+    tenderDocumentData,
+    snapshot,
+  });
   return {
     source: payment.source,
     contractValueIncGst: contractValue,
@@ -122,7 +126,8 @@ function sendPathValues(tenderDocumentData: unknown, snapshot: OfferWorkspaceSna
     depositAmount: payment.deposit
       ? formatContractMoney(stageAmount(contractValue, payment.deposit.percentOfContract))
       : "",
-    exclusions: tenderExclusionLines(snapshot),
+    exclusions: signedExclusions.lines,
+    exclusionsSource: signedExclusions.source,
     refusal:
       describeTenderPriceMismatch({
         tenderContractValueIncGst: payment.tenderContractValueIncGst,
@@ -151,6 +156,7 @@ for (const [name, tenderRow] of Object.entries(ALL_TENDERS)) {
         paymentScheduleLine: terms.paymentScheduleLine,
         depositAmount: terms.depositAmount,
         exclusions: terms.exclusions,
+        exclusionsSource: terms.exclusionsSource,
         refusal: terms.refusal,
       },
       sendPathValues(tenderRow(), snapshot),
@@ -206,6 +212,7 @@ test("the terms are small plain data that survive a Server Action round trip", (
     "deposit",
     "depositAmount",
     "exclusions",
+    "exclusionsSource",
     "paymentSchedule",
     "paymentScheduleLine",
     "refusal",
@@ -357,12 +364,17 @@ test("the contract send reads the offer and refuses through the shared terms", (
   );
   assert.match(send, /locked\("paymentSchedule", contractTerms\.paymentScheduleLine\)/);
   assert.match(send, /locked\("depositAmount", contractTerms\.depositAmount\)/);
-  // The exclusions come from the SIGNED Tender's stored document, not from
-  // contractTerms (which reads the agreed snapshot): the workspace can still be
-  // written after AGREED, so the snapshot can carry a line the customer never
-  // signed. Everything else on the BC4 still comes through contractTerms.
-  assert.match(send, /const exclusions = signedExclusions\.lines;/);
-  assert.match(send, /resolveSignedTenderExclusions\(\{/);
+  // The exclusions reach the BC4 through contractTerms like everything else.
+  // The shared resolver reads them from the SIGNED Tender's stored document —
+  // the workspace can still be written after AGREED, so the snapshot can carry
+  // a line the customer never signed — and resolving them in one place is what
+  // keeps the Contract step's preview and this send from disagreeing.
+  assert.match(send, /const exclusions = contractTerms\.exclusions;/);
+  assert.doesNotMatch(send, /resolveSignedTenderExclusions\(\{/);
+  assert.match(
+    read("lib/offer/contract-terms.ts"),
+    /resolveSignedTenderExclusions\(\{/,
+  );
 });
 
 test("the loader reads the send's rows and the sent Contract through the shared helper", () => {

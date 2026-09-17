@@ -13,7 +13,8 @@ import {
   formatContractMoney,
   paymentScheduleLine,
   stageAmount,
-  tenderExclusionLines,
+  resolveSignedTenderExclusions,
+  type SignedTenderExclusions,
 } from "./project-handoff-commercials";
 import type { OfferPaymentScheduleRow } from "./workspace-payment-schedule";
 import {
@@ -52,6 +53,10 @@ export type ContractTerms = {
   readonly deposit: ContractTermsStage | null;
   readonly depositAmount: string;
   readonly exclusions: readonly string[];
+  // Where those exclusions came from. "agreed-snapshot" means the Tender row
+  // had nothing readable on it and the offer's own snapshot stood in, which the
+  // send logs for an operator.
+  readonly exclusionsSource: SignedTenderExclusions["source"];
   // The refusal the send returns for these terms, or null. The preview shows it
   // so the estimator learns before Send that no Contract can go out on them.
   readonly refusal: string | null;
@@ -101,6 +106,11 @@ export function resolveContractTerms(input: ContractTermsInput): {
     tenderDocumentData: input.tenderDocumentData,
     agreedPaymentSchedule: snapshot.paymentSchedule,
   });
+  // One resolution, so the preview and the BC4 cannot disagree.
+  const signedExclusions = resolveSignedTenderExclusions({
+    tenderDocumentData: input.tenderDocumentData,
+    snapshot,
+  });
   const stage = (row: OfferPaymentScheduleRow): ContractTermsStage => ({
     id: row.id,
     stageName: row.stageName,
@@ -125,9 +135,14 @@ export function resolveContractTerms(input: ContractTermsInput): {
             stageAmount(contractValueIncGst, payment.deposit.percentOfContract),
           )
         : "",
-      // The exclusions the Tender printed, Scope exclusions included: the
-      // bullets alone left out every ticked Scope exclusion the customer signed.
-      exclusions: tenderExclusionLines(snapshot),
+      // The exclusions the SIGNED Tender printed, Scope exclusions included
+      // (the bullets alone left out every ticked Scope exclusion the customer
+      // signed). Read from the Tender row rather than the snapshot: the
+      // workspace can still be saved after the offer is agreed, so the snapshot
+      // can carry a line the customer never signed. Resolved here so the
+      // Contract preview and the BC4 that is sent cannot disagree.
+      exclusions: signedExclusions.lines,
+      exclusionsSource: signedExclusions.source,
       // A Tender that printed a different price is refused rather than
       // reconciled.
       refusal:

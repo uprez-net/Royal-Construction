@@ -44,7 +44,6 @@ import {
   contractTermsInput,
   resolveContractTerms,
 } from "@/lib/offer/contract-terms";
-import { resolveSignedTenderExclusions } from "@/lib/offer/project-handoff-commercials";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type ContractSendResult =
@@ -295,20 +294,15 @@ export async function sendContractForSignature(input: {
   }
 
   const parsedParticulars = parseContractParticulars(claim.particulars);
-  // contractTerms carries the payment source, schedule line, deposit and price
-  // refusal; its exclusions come from the agreed snapshot. The workspace can
-  // still be written after AGREED, so the exclusions specifically are read from
-  // the signed Tender's stored document instead, falling back with a warning.
-  const signedExclusions = resolveSignedTenderExclusions({
-    tenderDocumentData: offer.tender?.documentData ?? null,
-    snapshot,
-  });
-  if (signedExclusions.source === "agreed-snapshot") {
+  // contractTerms carries everything the BC4 needs, exclusions included: the
+  // shared resolver reads them from the signed Tender's stored document, so the
+  // Contract step's preview and this send cannot show different lines.
+  if (contractTerms.exclusionsSource === "agreed-snapshot") {
     console.warn(
       `[offer] contract for offer ${offer.id}: no readable exclusions on the Tender row, using the agreed snapshot's`,
     );
   }
-  const exclusions = signedExclusions.lines;
+  const exclusions = contractTerms.exclusions;
 
   // Owner address/contact for the single BC4 owner lines. Current Location (from
   // Job setup) supersedes the hand-typed owner-address particular as the source
@@ -551,7 +545,7 @@ export async function sendContractForSignature(input: {
   if (typeof stillClaimed === "object") {
     return {
       ok: false,
-      error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${stillClaimed.unrecorded}. Do not resend — reconcile this envelope before continuing.`,
+      error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }
 

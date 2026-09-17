@@ -1921,6 +1921,11 @@ export function NewOfferWorkspace({
         }
         const result = await sendContractForSignature({ offerId });
         if (result.ok) {
+          // The send returns no replacement terms, and the loader effect exits
+          // on contractTerms !== null, so without this the preview keeps the
+          // pre-send Tender terms until a reload. Cleared so the effect reloads
+          // the terms the Contract actually went out with.
+          setContractTerms(null);
           setStatus("contract_sent");
         } else {
           setContractSendError(result.error);

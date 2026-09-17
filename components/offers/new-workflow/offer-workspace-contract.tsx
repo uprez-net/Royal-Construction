@@ -564,6 +564,16 @@ function ContractScheduleToSend({
       ) : null}
       <div className="overflow-hidden rounded-lg border border-border/70">
         <table className="w-full text-[13px]">
+          {/* The rows carry no visible header, so a screen reader had nothing
+              to tie each value to. */}
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">Percent of contract</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Trigger</th>
+            </tr>
+          </thead>
           <tbody>
             {terms.paymentSchedule.map((row, index) => (
               <tr
@@ -614,6 +624,13 @@ function SentContractSchedule({
     <div className="grid gap-2">
       <div className="overflow-hidden rounded-lg border border-border/70">
         <table className="w-full text-[13px]">
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">Percent of contract</th>
+              <th scope="col">Amount</th>
+            </tr>
+          </thead>
           <tbody>
             {terms.paymentSchedule.map((row, index) => (
               <tr

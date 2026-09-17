@@ -352,7 +352,7 @@ export async function sendTenderForSignature(input: {
   if (typeof stillClaimed === "object") {
     return {
       ok: false,
-      error: `The Tender was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${stillClaimed.unrecorded}. Do not resend — reconcile this envelope before continuing.`,
+      error: `The Tender was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }
 
