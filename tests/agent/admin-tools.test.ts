@@ -34,6 +34,29 @@ test("admin approval contracts require safe resolution details", () => {
   );
 });
 
+test("the agent cannot write an allowance with a blank variation rule", () => {
+  // The page action uses offerScopeWriteSchema. The /agent tool writes the
+  // same JSON through updateAdminContentInputSchema; a blank rule here would
+  // copy onto every new offer the same way #266 did from the editor.
+  const result = updateAdminContentInputSchema.safeParse({
+    section: "offerScope",
+    expectedVersion: 1,
+    data: {
+      allowances: [
+        {
+          id: "alw-1",
+          name: "Ground floor ceiling upgrade",
+          category: "package",
+          amount: 4500,
+          variationRule: "",
+        },
+      ],
+      exclusions: [],
+    },
+  });
+  assert.equal(result.success, false);
+});
+
 test("admin content and team contracts are bounded", () => {
   assert.equal(
     updateAdminContentInputSchema.safeParse({
@@ -65,4 +88,14 @@ test("admin operations enforce admin authorization and audited writes", async ()
   assert.match(source, /revokeToken/);
   assert.doesNotMatch(source, /(?:accessToken|refreshToken)\s*[:=]/);
   assert.doesNotMatch(source, /app\/\(mcp\)/);
+});
+
+test("the agent offer-scope write uses the write schema", async () => {
+  const source = await readFile("agent/lib/admin-operations.ts", "utf8");
+  const fn = source.slice(
+    source.indexOf("export async function updateAuthorizedAdminContent"),
+    source.indexOf("export async function listAuthorizedTeam"),
+  );
+  assert.match(fn, /offerScopeWriteSchema\.safeParse/);
+  assert.equal(fn.includes("offerScopeDataSchema"), false);
 });

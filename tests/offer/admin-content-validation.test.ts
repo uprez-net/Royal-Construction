@@ -1,7 +1,30 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { hbfcClaimDataSchema } from "../../lib/validations/admin-offer-content";
+import {
+  hbfcClaimDataSchema,
+  offerScopeDataSchema,
+  offerScopeWriteSchema,
+} from "../../lib/validations/admin-offer-content";
+
+const read = (path: string) =>
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+
+function allowanceScope(variationRule: string) {
+  return {
+    allowances: [
+      {
+        id: "alw-1",
+        name: "Ground floor ceiling upgrade",
+        category: "package" as const,
+        amount: 4500,
+        variationRule,
+      },
+    ],
+    exclusions: [],
+  };
+}
 
 // saveHBFCClaimAction was the only one of the five admin saves with no schema
 // check. claimAmount is read as the whole-book HBCF sum assured, so an emptied
@@ -56,4 +79,42 @@ test("the HBCF schema accepts zero", () => {
     totalPremiumToBePaid: 0,
   });
   assert.equal(result.success, true);
+});
+
+// The live admin row on prod and staging stored a blank variation rule on
+// "Ground floor ceiling upgrade" (#266). The read schema must still accept
+// that shape: coerceOfferScope uses it, and a failed parse would drop the
+// invalid row instead of showing the blank. The write schema is what stops
+// a blank rule being saved again.
+
+test("the read schema still accepts an allowance with a blank variation rule", () => {
+  const result = offerScopeDataSchema.safeParse(allowanceScope(""));
+  assert.equal(result.success, true);
+});
+
+test("the write schema rejects an allowance with a blank variation rule", () => {
+  for (const rule of ["", "   "]) {
+    const result = offerScopeWriteSchema.safeParse(allowanceScope(rule));
+    assert.equal(result.success, false, `accepted ${JSON.stringify(rule)}`);
+  }
+});
+
+test("the write schema accepts an allowance with a real variation rule", () => {
+  const result = offerScopeWriteSchema.safeParse(
+    allowanceScope(
+      "Work above this allowance is priced as a written variation.",
+    ),
+  );
+  assert.equal(result.success, true);
+});
+
+test("saving offer scope uses the write schema", () => {
+  const source = read("lib/actions/admin-offer-content.ts");
+  const fn = source.slice(
+    source.indexOf("export async function saveOfferScopeAction"),
+    source.indexOf("export async function saveOfferContentAction"),
+  );
+  assert.match(fn, /offerScopeWriteSchema/);
+  assert.match(fn, /updateOfferScope\(parsed\.data\)/);
+  assert.equal(fn.includes("offerScopeDataSchema"), false);
 });

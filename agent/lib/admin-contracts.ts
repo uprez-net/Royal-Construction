@@ -10,7 +10,7 @@ import {
   costScheduleDataSchema,
   hbfcClaimDataSchema,
   offerContentDataSchema,
-  offerScopeDataSchema,
+  offerScopeWriteSchema,
 } from "@/lib/validations/admin-offer-content";
 
 export const listApprovalsInputSchema = z.object({
@@ -56,7 +56,7 @@ export const updateAdminContentInputSchema = z.discriminatedUnion("section", [
   z.object({
     section: z.literal("offerScope"),
     expectedVersion: z.number().int().positive(),
-    data: offerScopeDataSchema,
+    data: offerScopeWriteSchema,
   }),
   z.object({
     section: z.literal("offerContent"),

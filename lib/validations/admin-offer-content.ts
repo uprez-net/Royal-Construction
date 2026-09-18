@@ -56,6 +56,19 @@ export const offerAllowanceSchema = z.object({
   variationRule: z.string(),
 });
 
+// Write path only. The read schema above still accepts a blank rule so that
+// coerceOfferScope can load the live admin row (prod and staging stored one
+// on "Ground floor ceiling upgrade"). A failed parse keeps valid rows and
+// drops invalid ones, so tightening the read schema would hide that
+// allowance instead of showing the blank. A save must not re-commit it onto
+// every new offer and signed Tender.
+export const offerAllowanceWriteSchema = offerAllowanceSchema.extend({
+  variationRule: z
+    .string()
+    .trim()
+    .min(1, "Every allowance needs a variation rule."),
+});
+
 export const exclusionKindSchema = z.enum(["excluded", "owner_supplied"]);
 
 export const offerExclusionSchema = z.object({
@@ -69,6 +82,10 @@ export const offerExclusionSchema = z.object({
 export const offerScopeDataSchema = z.object({
   allowances: z.array(offerAllowanceSchema),
   exclusions: z.array(offerExclusionSchema),
+});
+
+export const offerScopeWriteSchema = offerScopeDataSchema.extend({
+  allowances: z.array(offerAllowanceWriteSchema),
 });
 
 export const hbfcClaimDataSchema = z.object({

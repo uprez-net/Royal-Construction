@@ -13,7 +13,7 @@ import {
 import {
   buildScopeSchema,
   costScheduleDataSchema,
-  offerScopeDataSchema,
+  offerScopeWriteSchema,
   offerContentDataSchema,
   hbfcClaimDataSchema,
 } from "@/lib/validations/admin-offer-content";
@@ -100,7 +100,7 @@ export async function saveOfferScopeAction(
     return denied;
   }
 
-  const parsed = offerScopeDataSchema.safeParse(data);
+  const parsed = offerScopeWriteSchema.safeParse(data);
   if (!parsed.success) {
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }

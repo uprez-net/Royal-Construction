@@ -28,7 +28,7 @@ import {
   costScheduleDataSchema,
   hbfcClaimDataSchema,
   offerContentDataSchema,
-  offerScopeDataSchema,
+  offerScopeWriteSchema,
 } from "@/lib/validations/admin-offer-content";
 
 const clerkClient = createClerkClient({
@@ -383,7 +383,7 @@ export async function updateAuthorizedAdminContent(
       : input.section === "costSchedule"
         ? costScheduleDataSchema.safeParse(input.data)
         : input.section === "offerScope"
-          ? offerScopeDataSchema.safeParse(input.data)
+          ? offerScopeWriteSchema.safeParse(input.data)
           : input.section === "offerContent"
             ? offerContentDataSchema.safeParse(input.data)
             : hbfcClaimDataSchema.safeParse(input.data);
