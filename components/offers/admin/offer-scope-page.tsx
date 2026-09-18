@@ -84,6 +84,9 @@ export function OfferScopePage() {
   const dirty = useAppSelector((s) => s.adminOfferContent.dirty.offerScope);
   const saving = useAppSelector((s) => s.adminOfferContent.saving.offerScope);
   const error = useAppSelector((s) => s.adminOfferContent.error.offerScope);
+  const missingVariationRule = allowances.some(
+    (allowance) => allowance.variationRule.trim().length === 0,
+  );
 
   const removeAllowance = (id: string) => {
     const index = allowances.findIndex((a) => a.id === id);
@@ -175,15 +178,18 @@ export function OfferScopePage() {
           )}
         />
       </CardContent>
-      {error && (
+      {(missingVariationRule || error) && (
         <p role="alert" className="px-6 text-sm text-destructive">
-          {error}
+          {missingVariationRule
+            ? "Every allowance needs a variation rule."
+            : error}
         </p>
       )}
       <CardFooter className="justify-end">
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
+          disabled={missingVariationRule}
           onSave={() => dispatch(saveOfferScope()).unwrap()}
           successMessage="Allowances and exclusions saved."
         />
@@ -356,6 +362,8 @@ function AllowanceRow({
               onChange({ ...allowance, variationRule: e.target.value })
             }
             aria-label="Variation rule"
+            aria-required
+            required
           />
         </label>
       </div>
