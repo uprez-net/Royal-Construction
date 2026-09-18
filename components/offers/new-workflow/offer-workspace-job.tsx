@@ -30,7 +30,10 @@ import {
   rawTotalAreaSqm,
 } from "@/lib/offer/workspace-area";
 import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
-import { formatArea } from "@/lib/offer/workspace-print-template";
+import {
+  formatArea,
+  formatSquares,
+} from "@/lib/offer/workspace-print-template";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import {
   ClipboardList,
@@ -295,8 +298,11 @@ export function JobSetupPanel({
               />
               <div className="rounded-lg border border-royal-gold/30 bg-royal-gold-light/70 p-3">
                 <p className={FIELD_LABEL_CLASS}>Total building area</p>
-                <p className="font-mono text-lg font-semibold">
+                <p className="font-mono text-lg font-semibold tabular-nums">
                   {formatArea(totalArea)}
+                </p>
+                <p className="font-mono text-sm font-medium tabular-nums text-muted-foreground">
+                  {formatSquares(totalArea)} sq
                 </p>
               </div>
             </div>
