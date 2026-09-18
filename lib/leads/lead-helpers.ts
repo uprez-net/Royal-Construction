@@ -306,13 +306,55 @@ export function dialablePhone(phone: string) {
 
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
+/**
+ * Placeholders that are a date or a time, and so can legitimately have no
+ * value. Everything else in `values` carries its own sensible fallback.
+ */
+const DATE_PLACEHOLDERS = ["followup", "time"] as const;
+
+/**
+ * Remove a placeholder that resolved to nothing, along with the word holding
+ * it to the sentence.
+ *
+ * Substituting a filler string was the old approach and it read as a mistake
+ * to the client: `{followup}` became the literal "next step", so the Meeting
+ * subject went out as "Site visit for Jane - Kellyville on next step". Leaving
+ * it empty instead is no better on its own — that ships "... Kellyville on "
+ * with a dangling preposition.
+ *
+ * So the connector goes with it. Only the separators the shipped templates
+ * actually use are recognised; anything else is left alone rather than guessed
+ * at, which at worst leaves the sentence exactly as it reads today.
+ */
+export function dropEmptyPlaceholders(
+  text: string,
+  emptyKeys: readonly string[],
+): string {
+  return emptyKeys
+    .reduce(
+      (out, key) =>
+        out.replace(
+          new RegExp(
+            `[ \\t]*(?:[-,:;]|\\b(?:on|at|by|for)\\b)?[ \\t]*\\{${key}\\}`,
+            "gi",
+          ),
+          "",
+        ),
+      text,
+    )
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]*[-,:;]$/, "")
+    .trim();
+}
+
 export function hydrateVariable(text: string, lead: Lead): string {
   const typeStr = Array.isArray(lead.type)
     ? (lead.type[0] ?? "New Home Build")
     : lead.type;
-  const followup = lead.followupDate
-    ? formatFollowup(lead.followupDate, lead.followupTime)
-    : "next step";
+  // Empty, not "next step". A lead with no upcoming follow-up is the normal
+  // state once the work is done — see resolveFollowup — so this is a case to
+  // render honestly, not to paper over.
+  const followup = formatFollowup(lead.followupDate, lead.followupTime);
   const source =
     lead.sourceDetail || lead.source || "Royal Constructions enquiry";
   const location = lead.location || "NSW";
@@ -332,7 +374,9 @@ export function hydrateVariable(text: string, lead: Lead): string {
     assignee: lead.assignedUser?.name || "Royal Constructions team",
     duration: "6-8 months",
     date: formatShortDate(new Date()),
-    time: lead.followupTime || "10:00 AM",
+    // Not "10:00 AM". Inventing a time is how the Meeting email came to tell
+    // clients a site visit was booked for a time nobody had agreed.
+    time: lead.followupTime ?? "",
     milestone: "Foundation Complete",
     nextMilestone: "Frame Stage",
     originalAmount: "$480,000",
@@ -340,7 +384,12 @@ export function hydrateVariable(text: string, lead: Lead): string {
     revisedAmount: "$484,500",
   };
 
-  return text.replace(
+  // Strip the date placeholders that have no value BEFORE substituting, so the
+  // connector holding them to the sentence goes too. Substituting first would
+  // leave "on " with nothing after it.
+  const emptied = DATE_PLACEHOLDERS.filter((key) => values[key] === "");
+
+  return dropEmptyPlaceholders(text, emptied).replace(
     PLACEHOLDER_PATTERN,
     (_, key) => values[key] ?? `{${key}}`,
   );

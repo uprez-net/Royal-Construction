@@ -124,10 +124,18 @@ export async function renderEmailHtml(
       break;
     case "Meeting":
       component = (
+        // No invented appointment. These were `followupDate ?? today` and
+        // `lead?.followupTime || "10:00 AM"`, under a banner reading "Site
+        // Visit Confirmed" — so a lead with no booked visit was told one was
+        // happening today at 10am, and a lead whose follow-up had been
+        // completed was told it happened months ago (#307).
+        //
+        // SiteVisitEmail already defaults both to "TBD". Passing undefined
+        // lets that through instead of overwriting it with a guess.
         <SiteVisitEmail
           name={name}
-          date={followupDate ?? today}
-          time={lead?.followupTime || "10:00 AM"}
+          date={followupDate ?? undefined}
+          time={lead?.followupTime ?? undefined}
           location={location}
           leadContext={leadContext}
         />
