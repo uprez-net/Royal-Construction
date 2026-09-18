@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { resolveLeadNotesText, resolveLeadNotesTextOr } from "../../lib/leads/notes-text";
+import {
+  resolveLeadNotesText,
+  resolveLeadNotesTextOr,
+} from "../../lib/leads/notes-text";
 import { createLeadNotesDocument } from "../../lib/rich-text/lead-notes";
 
 // `Lead.notes` stopped being the answer without its readers being told. The
@@ -28,7 +31,9 @@ test("a blank column falls through to the document", () => {
   assert.equal(
     resolveLeadNotesText({
       notes: "   ",
-      notesDoc: createLeadNotesDocument({ plainText: "Wants slab before March." }),
+      notesDoc: createLeadNotesDocument({
+        plainText: "Wants slab before March.",
+      }),
     }),
     "Wants slab before March.",
   );
@@ -42,7 +47,10 @@ test("an empty document falls through to the note history", () => {
       notesDoc: createLeadNotesDocument({ plainText: "" }),
       history: [
         { action: "Lead created", detail: "Lead manually created" },
-        { action: "Lead note saved", detail: "Discovery call: 2-bed granny flat." },
+        {
+          action: "Lead note saved",
+          detail: "Discovery call: 2-bed granny flat.",
+        },
       ],
     }),
     "Discovery call: 2-bed granny flat.",
@@ -67,7 +75,9 @@ test("the booking agenda is readable as a note", () => {
   assert.equal(
     resolveLeadNotesText({
       notes: null,
-      history: [{ action: "NOTE", detail: "550sqm block. Hebel facade preferred." }],
+      history: [
+        { action: "NOTE", detail: "550sqm block. Hebel facade preferred." },
+      ],
     }),
     "550sqm block. Hebel facade preferred.",
   );
@@ -96,12 +106,21 @@ test("a lead with nothing resolves to empty, and the fallback covers it", () => 
 });
 
 test("a caller that loaded no history still gets the column", () => {
-  assert.equal(resolveLeadNotesText({ notes: "From the column" }), "From the column");
+  assert.equal(
+    resolveLeadNotesText({ notes: "From the column" }),
+    "From the column",
+  );
 });
 
 test("a malformed notesDoc does not throw", () => {
-  assert.equal(resolveLeadNotesText({ notes: null, notesDoc: { nope: true } }), "");
-  assert.equal(resolveLeadNotesText({ notes: null, notesDoc: "not a document" }), "");
+  assert.equal(
+    resolveLeadNotesText({ notes: null, notesDoc: { nope: true } }),
+    "",
+  );
+  assert.equal(
+    resolveLeadNotesText({ notes: null, notesDoc: "not a document" }),
+    "",
+  );
 });
 
 // ── The readers ──
@@ -116,7 +135,10 @@ test("every Lead.notes reader goes through the resolver", () => {
   ];
 
   for (const [file, call] of readers) {
-    assert.ok(read(file).includes(call), `${file} is reading Lead.notes directly`);
+    assert.ok(
+      read(file).includes(call),
+      `${file} is reading Lead.notes directly`,
+    );
   }
 });
 

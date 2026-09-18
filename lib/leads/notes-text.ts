@@ -45,7 +45,9 @@ export function resolveLeadNotesText(
   const direct = source.notes?.trim();
   if (direct) return direct;
 
-  const documentText = coerceLeadNotesDocument(source.notesDoc).plainText.trim();
+  const documentText = coerceLeadNotesDocument(
+    source.notesDoc,
+  ).plainText.trim();
   if (documentText) return documentText;
 
   const { maxHistoryEntries = 5 } = options;

@@ -269,8 +269,7 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
       id: lead.id,
       customerName: lead.name,
       projectName: lead.location,
-      description:
-        resolveLeadNotesTextOr(lead, "No additional details"),
+      description: resolveLeadNotesTextOr(lead, "No additional details"),
       dueAt: lead.followupDate ?? now,
       status: lead.followupDate
         ? isToday(new Date(lead.followupDate))

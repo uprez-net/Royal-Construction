@@ -19,8 +19,18 @@ import type { HistoryItem } from "@/lib/leads/types";
  *
  * Booking work, closing it out and the stage move a booking triggers all used
  * to leave the lead's activity feed untouched: `LeadTask.completedAt` recorded
- * the fact and nothing surfaced it. Failing to log must never fail the write
- * that was actually asked for, so this swallows its own errors.
+ * the fact and nothing surfaced it.
+ *
+ * This deliberately does NOT swallow its errors, and the first version did.
+ * Both callers run it inside an interactive transaction, and a caught error
+ * there is not contained: Postgres aborts the transaction on the failing
+ * statement, so the commit rolls everything back while `$transaction` itself
+ * resolves. Measured against the staging database — a caught foreign-key
+ * violation left ZERO rows committed and threw nothing — which means
+ * `createLeadTask` returned a fully-formed LeadTaskRow for a task that did not
+ * exist, and the composer popped "Task added." over nothing. Letting it throw
+ * is the only honest option: the audit entry and the write it describes now
+ * succeed or fail together.
  *
  * `actingUserId` is passed in rather than resolved here, and that is load
  * bearing: this module is bundled into the eve agent as `complete_lead_task`,
@@ -37,20 +47,16 @@ async function recordTaskHistory(
   actingUserId: string | null,
 ): Promise<void> {
   if (entries.length === 0) return;
-  try {
-    await tx.leadHistory.createMany({
-      data: entries.map((entry) => ({
-        leadId,
-        action: entry.action,
-        detail: entry.detail,
-        type: "SYSTEM" as const,
-        actionDate: sydneyWallClockToInstant(entry.date, entry.time),
-        ...(actingUserId ? { authorId: actingUserId } : {}),
-      })),
-    });
-  } catch (error) {
-    console.error(`[Lead ${leadId}] Failed to record task history`, error);
-  }
+  await tx.leadHistory.createMany({
+    data: entries.map((entry) => ({
+      leadId,
+      action: entry.action,
+      detail: entry.detail,
+      type: "SYSTEM" as const,
+      actionDate: sydneyWallClockToInstant(entry.date, entry.time),
+      ...(actingUserId ? { authorId: actingUserId } : {}),
+    })),
+  });
 }
 
 /** "Meeting · Fri, 25 Sept 14:00 · <note>" — what the feed shows for a task. */
@@ -344,43 +350,50 @@ export async function completeLeadTask(
   transaction?: Prisma.TransactionClient,
   actingUserId?: string | null,
 ): Promise<LeadTaskRow | null> {
-  const db = transaction ?? prisma;
-  const updated = await db.leadTask.updateMany({
-    where: { id: taskId, completedAt: null },
-    data: { completedAt: new Date(), status: "DONE" },
-  });
-  if (updated.count === 0) {
-    // Already closed, or gone. Not an error: two people clicking Done is fine.
-    const existing = await db.leadTask.findUnique({
+  // One transaction, for the same reason createLeadTask uses one: the
+  // completion and the audit entry that records it are a single decision.
+  // Split across two round trips, a failed history write left a task closed
+  // with nothing in the feed saying so — which is the gap #293 exists to close,
+  // reintroduced one level down.
+  const close = async (db: Prisma.TransactionClient | typeof prisma) => {
+    const updated = await db.leadTask.updateMany({
+      where: { id: taskId, completedAt: null },
+      data: { completedAt: new Date(), status: "DONE" },
+    });
+    if (updated.count === 0) {
+      // Already closed, or gone. Not an error: two people clicking Done is fine.
+      const existing = await db.leadTask.findUnique({
+        where: { id: taskId },
+        select: ROW_SELECT,
+      });
+      return existing ? toRow(existing) : null;
+    }
+    const row = await db.leadTask.findUnique({
       where: { id: taskId },
       select: ROW_SELECT,
     });
-    return existing ? toRow(existing) : null;
-  }
-  const row = await db.leadTask.findUnique({
-    where: { id: taskId },
-    select: ROW_SELECT,
-  });
-  // Guarded by updated.count above, so the second person to click Done does not
-  // write a second "Task completed" line.
-  if (row) {
-    await recordTaskHistory(
-      db,
-      row.leadId,
-      [
-        buildTaskCompletedHistoryEntry(
-          describeTask({
-            type: row.type,
-            dueDate: row.dueDate,
-            dueTime: row.dueTime,
-            notes: row.notes,
-          }),
-        ),
-      ],
-      actingUserId ?? null,
-    );
-  }
-  return row ? toRow(row) : null;
+    // Guarded by updated.count above, so the second person to click Done does not
+    // write a second "Task completed" line.
+    if (row) {
+      await recordTaskHistory(
+        db,
+        row.leadId,
+        [
+          buildTaskCompletedHistoryEntry(
+            describeTask({
+              type: row.type,
+              dueDate: row.dueDate,
+              dueTime: row.dueTime,
+              notes: row.notes,
+            }),
+          ),
+        ],
+        actingUserId ?? null,
+      );
+    }
+    return row ? toRow(row) : null;
+  };
+  return transaction ? close(transaction) : prisma.$transaction(close);
 }
 
 /**

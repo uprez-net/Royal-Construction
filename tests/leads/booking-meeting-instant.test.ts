@@ -120,6 +120,8 @@ test("the route persists the instant, not the wall clock", () => {
   assert.ok(source.includes("const slotStart = fromZonedTime("));
   // And the Graph payload still gets the wall clock it needs.
   assert.ok(
-    source.includes('start: { dateTime: graphStartStr, timeZone: "Australia/Sydney" }'),
+    source.includes(
+      'start: { dateTime: graphStartStr, timeZone: "Australia/Sydney" }',
+    ),
   );
 });

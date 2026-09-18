@@ -29,14 +29,26 @@ const entry = (
 
 test("an entry already on the lead is not inserted again", () => {
   const existing = [
-    entry("Lead created", "Lead manually created", new Date("2026-09-17T22:32:00Z")),
-    entry("Email sent", "Subject: Following up", new Date("2026-09-17T08:35:00Z")),
+    entry(
+      "Lead created",
+      "Lead manually created",
+      new Date("2026-09-17T22:32:00Z"),
+    ),
+    entry(
+      "Email sent",
+      "Subject: Following up",
+      new Date("2026-09-17T08:35:00Z"),
+    ),
   ];
 
   const kept = dropAlreadyRecorded(
     [
       ...existing,
-      entry("NOTE", "Appointment: 22 September", new Date("2026-09-18T08:56:00Z")),
+      entry(
+        "NOTE",
+        "Appointment: 22 September",
+        new Date("2026-09-18T08:56:00Z"),
+      ),
     ],
     existing,
   );
@@ -49,15 +61,27 @@ test("an entry already on the lead is not inserted again", () => {
 
 test("the whole history echoed back inserts nothing", () => {
   const existing = [
-    entry("Lead created", "Lead manually created", new Date("2026-09-17T22:32:00Z")),
-    entry("Lead note saved", "Knockdown rebuild", new Date("2026-09-17T08:46:00Z")),
+    entry(
+      "Lead created",
+      "Lead manually created",
+      new Date("2026-09-17T22:32:00Z"),
+    ),
+    entry(
+      "Lead note saved",
+      "Knockdown rebuild",
+      new Date("2026-09-17T08:46:00Z"),
+    ),
   ];
 
   assert.deepEqual(dropAlreadyRecorded(existing, existing), []);
 });
 
 test("duplicates inside one call collapse to a single row", () => {
-  const same = entry("Email sent", "Subject: Quote", new Date("2026-09-18T01:00:00Z"));
+  const same = entry(
+    "Email sent",
+    "Subject: Quote",
+    new Date("2026-09-18T01:00:00Z"),
+  );
 
   assert.equal(dropAlreadyRecorded([same, { ...same }], []).length, 1);
 });
@@ -82,8 +106,16 @@ test("an echo that lost its seconds is still recognised", () => {
 });
 
 test("the next minute is a new entry", () => {
-  const stored = entry("Email sent", "Subject: Quote", new Date("2026-09-18T01:00:40Z"));
-  const next = entry("Email sent", "Subject: Quote", new Date("2026-09-18T01:01:00Z"));
+  const stored = entry(
+    "Email sent",
+    "Subject: Quote",
+    new Date("2026-09-18T01:00:40Z"),
+  );
+  const next = entry(
+    "Email sent",
+    "Subject: Quote",
+    new Date("2026-09-18T01:01:00Z"),
+  );
 
   assert.deepEqual(dropAlreadyRecorded([next], [stored]), [next]);
 });
@@ -92,7 +124,11 @@ test("the same action at a different time is a new entry", () => {
   const existing = [
     entry("Email sent", "Subject: Quote", new Date("2026-09-18T01:00:00Z")),
   ];
-  const later = entry("Email sent", "Subject: Quote", new Date("2026-09-18T02:00:00Z"));
+  const later = entry(
+    "Email sent",
+    "Subject: Quote",
+    new Date("2026-09-18T02:00:00Z"),
+  );
 
   assert.deepEqual(dropAlreadyRecorded([later], existing), [later]);
 });
@@ -144,6 +180,26 @@ test("a missing or malformed time falls back to midnight, not NaN", () => {
   );
   assert.ok(
     !Number.isNaN(sydneyWallClockToInstant("2026-09-18", "nonsense").getTime()),
+  );
+});
+
+test("a well-shaped but impossible time does not produce an Invalid Date", () => {
+  // Lead.followupTime is free text. "24:99" matches HH:mm and used to reach
+  // date-fns-tz, which returned an Invalid Date that Prisma rejected — failing
+  // the whole lead save over a malformed reminder time.
+  for (const bad of ["24:00", "24:99", "99:99", "23:60"]) {
+    const resolved = sydneyWallClockToInstant("2026-09-18", bad);
+    assert.ok(
+      !Number.isNaN(resolved.getTime()),
+      `${bad} produced an Invalid Date`,
+    );
+    assert.equal(resolved.toISOString(), "2026-09-17T14:00:00.000Z");
+  }
+
+  // The last valid minute of the day still passes through untouched.
+  assert.equal(
+    sydneyWallClockToInstant("2026-09-18", "23:59").toISOString(),
+    "2026-09-18T13:59:00.000Z",
   );
 });
 

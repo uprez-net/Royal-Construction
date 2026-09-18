@@ -17,7 +17,13 @@ export async function resolveActingUserId(): Promise<string | null> {
 
     const user = await getUserByClerkIdCached(userId);
     return user?.id ?? null;
-  } catch {
+  } catch (error) {
+    // Still null — attribution is not worth failing a save the operator asked
+    // for — but never silent. `auth()` already returns no userId for an
+    // unauthenticated request, so reaching here means Clerk or the user lookup
+    // actually failed, and a signed-in mutation is about to write history with
+    // no author. Without this line that looked identical to a cron.
+    console.error("[acting-user] Could not resolve the acting user", error);
     return null;
   }
 }

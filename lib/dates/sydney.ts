@@ -105,8 +105,27 @@ export function sydneyEndOfDay(day: string): Date {
  * the client pushed it ten hours later again.
  */
 export function sydneyWallClockToInstant(day: string, time?: string): Date {
-  const normalisedTime = /^\d{2}:\d{2}$/.test(time ?? "") ? time : "00:00";
-  return fromZonedTime(`${day}T${normalisedTime}:00`, SYDNEY_TZ);
+  return fromZonedTime(`${day}T${normaliseWallClockTime(time)}:00`, SYDNEY_TZ);
+}
+
+/**
+ * `HH:mm` within a real clock, or midnight.
+ *
+ * Shape alone is not enough. `Lead.followupTime` is free text, so "24:99" and
+ * "99:99" both match /^\d{2}:\d{2}$/ and both make date-fns-tz return an
+ * Invalid Date — which Prisma then rejects, failing the entire lead mutation
+ * over a malformed reminder time. Midnight is the same answer a missing time
+ * gets, and it keeps the save.
+ */
+function normaliseWallClockTime(time?: string): string {
+  const match = /^(\d{2}):(\d{2})$/.exec(time ?? "");
+  if (!match) return "00:00";
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return "00:00";
+
+  return `${match[1]}:${match[2]}`;
 }
 
 /**

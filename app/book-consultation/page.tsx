@@ -222,7 +222,9 @@ function BookingContent() {
   // "4:00 pm (AEST)" and the calendar invitation that arrived said 4pm AEDT.
   // Midday when no slot is picked yet: the abbreviation is the same all day.
   const selectedZoneLabel = selectedDate
-    ? sydneyTimeZoneAbbreviation(slotInstant(selectedDate, selectedTime || "12:00"))
+    ? sydneyTimeZoneAbbreviation(
+        slotInstant(selectedDate, selectedTime || "12:00"),
+      )
     : "AEST";
 
   const isSlotBusy = (date: Date, time: string) => {
