@@ -18,6 +18,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { rebaseTrackedFields } from "@/lib/leads/lead-form-sync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,6 +131,17 @@ const SECTION_FIELDS: Record<
   ],
   lostReason: ["lostReason"],
 };
+
+/**
+ * Every field the sections read for dirtiness or write on save.
+ *
+ * All primitives, deliberately: `type`, `notesDoc` and `annotationsToCreate`
+ * are on LeadDetailFormData but belong to no section, so identity comparison is
+ * a sound test of "did the operator touch this" for everything listed here.
+ */
+const TRACKED_FIELDS: readonly (keyof LeadDetailFormData)[] = Array.from(
+  new Set(Object.values(SECTION_FIELDS).flat()),
+);
 
 /* ── Payload + validation ─────────────────────────────────────────────── */
 
@@ -255,6 +267,33 @@ export function LeadOverviewTab({
 
   const baseline = useMemo(() => leadToFormData(lead), [lead]);
   const [form, setForm] = useState<LeadDetailFormData>(baseline);
+
+  // The lead changes underneath this form, and the form has to follow it.
+  //
+  // The header badge writes the stage through its own updateLead call and the
+  // page hands the new lead back down, so `baseline` moves — but `form` was
+  // seeded once at mount and never did. The Source and stage section went on
+  // showing the stage the page had loaded with, flagged itself `Unsaved`, and
+  // offered a Save primed to write that stale stage back over the new one. On
+  // staging that was a QUOTED lead with a Save that would have written
+  // DISCOVERY: a silent two-stage regression for someone doing nothing worse
+  // than tidying an `Unsaved` chip they did not create.
+  //
+  // Only untouched fields are adopted. A field the operator has actually edited
+  // stays theirs, so a stage change elsewhere cannot discard half-typed work in
+  // another section — the same rule handleSectionSave already follows when it
+  // re-seeds just the fields a save wrote.
+  //
+  // Adjusted during render rather than in an effect. This is React's documented
+  // pattern for state derived from props: the component re-renders before
+  // committing, so the stale value is never painted.
+  const [syncedBaseline, setSyncedBaseline] = useState(baseline);
+  if (!Object.is(syncedBaseline, baseline)) {
+    setSyncedBaseline(baseline);
+    setForm((prev) =>
+      rebaseTrackedFields(prev, syncedBaseline, baseline, TRACKED_FIELDS),
+    );
+  }
   const [savingSection, setSavingSection] = useState<LeadSectionKey | null>(
     null,
   );
