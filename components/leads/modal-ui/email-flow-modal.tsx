@@ -14,6 +14,7 @@ import {
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { CustomTemplateCreation } from "./custom-template-creation";
 import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 
 interface EmailFlowModalProps {
   lead: Lead;
@@ -132,14 +133,19 @@ export function EmailFlowModal({
       if (sendCampaign) {
         const now = new Date();
         const historyEntry = {
-          date: now.toISOString().slice(0, 10),
-          time: now.toTimeString().slice(0, 5),
+          // Both halves from the same Sydney reading. A UTC date beside a
+          // browser-local time disagreed with itself by a whole day for anyone
+          // sending after 10am.
+          date: sydneyDateOnly(now),
+          time: sydneyTimeOnly(now),
           action: "Email sent",
           detail: `Subject: ${emailSubject}`,
           type: "email" as const,
         };
+        // Only what just happened. Passing `[...lead.history, entry]` inserted
+        // a second copy of every row the lead already had.
         const updated = await updateLead(lead.id, {
-          history: [...(lead.history ?? []), historyEntry],
+          history: [historyEntry],
         });
         if (updated) onLeadUpdate(updated);
         showToast(`Email sent to ${lead.name} Successfully`, "success");

@@ -11,6 +11,7 @@ import ProjectUpdateEmail from "@/lib/graph/Email/project-update-email";
 import MaterialCatalogueEmail from "@/lib/graph/Email/material-catalogue-email";
 import PortfolioEmail from "@/lib/graph/Email/portfolio-email";
 import { LeadEmailContext } from "@/lib/graph/Email/email-lead-context";
+import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
 
 interface LeadPreview {
   id: number;
@@ -48,9 +49,10 @@ export async function renderEmailHtml(
     ? (lead.type[0] ?? "New Home Build")
     : (lead?.type ?? "New Home Build");
   const location = lead?.location ?? "NSW";
-  const notes = lead?.notes?.trim()
-    ? lead.notes
-    : "Discussed initial design preferences and project scope.";
+  const notes = resolveLeadNotesTextOr(
+    lead,
+    "Discussed initial design preferences and project scope.",
+  );
   const project = `${type} at ${location}`;
   const amount =
     lead?.budget && lead.budget !== "Not Discussed" ? lead.budget : "TBD";

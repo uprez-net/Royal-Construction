@@ -51,6 +51,35 @@ export function sydneyToday(now: Date = new Date()): string {
 }
 
 /**
+ * "AEST" or "AEDT", whichever Sydney is actually on at that instant.
+ *
+ * The label was hardcoded to AEST everywhere a consultation time is shown —
+ * the slot picker, the booking summary and the confirmation email — so for the
+ * half of the year Sydney spends on daylight saving, roughly October to April,
+ * the client booked "4:00 pm (AEST)" and the calendar invitation beside it read
+ * 4pm AEDT. The time was always right; only the abbreviation disagreed.
+ *
+ * `en-AU` is what produces the abbreviation — `en-US` and `en-GB` both return
+ * "GMT+11". A runtime with trimmed ICU data returns the offset form instead, so
+ * the offset is the fallback rather than printing "GMT+11" to a client.
+ */
+export function sydneyTimeZoneAbbreviation(date: Date): "AEST" | "AEDT" {
+  const named = new Intl.DateTimeFormat("en-AU", {
+    timeZone: SYDNEY_TZ,
+    timeZoneName: "short",
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+
+  if (named === "AEST" || named === "AEDT") return named;
+
+  // Sydney is UTC+11 on daylight saving and UTC+10 the rest of the year.
+  const local = toZonedTime(date, SYDNEY_TZ);
+  const offsetHours = (local.getTime() - date.getTime()) / 3_600_000;
+  return Math.round(offsetHours) === 11 ? "AEDT" : "AEST";
+}
+
+/**
  * The instant a Sydney calendar day begins.
  *
  * Not `new Date(`${day}T00:00:00.000Z`)`. That parses the Sydney date as UTC
@@ -64,6 +93,39 @@ export function sydneyStartOfDay(day: string): Date {
 /** The last instant of a Sydney calendar day. */
 export function sydneyEndOfDay(day: string): Date {
   return fromZonedTime(`${day}T23:59:59.999`, SYDNEY_TZ);
+}
+
+/**
+ * The instant a Sydney wall clock describes.
+ *
+ * The inverse of `sydneyDateOnly` + `sydneyTimeOnly`, and the pair a history
+ * entry travels as. `new Date(`${day}T${time}`)` is the third variation this
+ * module's header warns about: it reads the pair in the server's zone, which is
+ * UTC on Vercel, so every entry landed ten hours late and a round trip through
+ * the client pushed it ten hours later again.
+ */
+export function sydneyWallClockToInstant(day: string, time?: string): Date {
+  return fromZonedTime(`${day}T${normaliseWallClockTime(time)}:00`, SYDNEY_TZ);
+}
+
+/**
+ * `HH:mm` within a real clock, or midnight.
+ *
+ * Shape alone is not enough. `Lead.followupTime` is free text, so "24:99" and
+ * "99:99" both match /^\d{2}:\d{2}$/ and both make date-fns-tz return an
+ * Invalid Date — which Prisma then rejects, failing the entire lead mutation
+ * over a malformed reminder time. Midnight is the same answer a missing time
+ * gets, and it keeps the save.
+ */
+function normaliseWallClockTime(time?: string): string {
+  const match = /^(\d{2}):(\d{2})$/.exec(time ?? "");
+  if (!match) return "00:00";
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return "00:00";
+
+  return `${match[1]}:${match[2]}`;
 }
 
 /**

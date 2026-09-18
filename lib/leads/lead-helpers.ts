@@ -9,8 +9,11 @@ import {
   LeadRichTextDocument,
 } from "@/lib/leads/types";
 // import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
+import type { LeadStage as DBLeadStage } from "@prisma/client";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import { stageDef } from "@/lib/leads/pipeline-stages";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
+import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
 
 /* ── Constants ────────────────────────────────────────── */
 
@@ -320,7 +323,7 @@ export function hydrateVariable(text: string, lead: Lead): string {
     type: typeStr,
     phone: lead.phone,
     project: `${typeStr} at ${location}`,
-    notes: lead.notes || "Previous discussion details",
+    notes: resolveLeadNotesTextOr(lead, "Previous discussion details"),
     amount: lead.budget !== "Not Discussed" ? lead.budget : "TBD",
     budget: lead.budget || "Not Discussed",
     source,
@@ -478,6 +481,52 @@ export function buildFollowupHistoryEntry(
     type: "system",
     date,
     time,
+  };
+}
+
+/**
+ * The entry a stage transition writes. Records where the lead came from, which
+ * the stage column alone cannot say once it has been overwritten.
+ */
+export function buildStageChangedHistoryEntry(
+  from: DBLeadStage,
+  to: DBLeadStage,
+  at: Date = new Date(),
+): HistoryItem {
+  return {
+    action: "Stage changed",
+    detail: `${stageDef(from).label} → ${stageDef(to).label}`,
+    type: "system",
+    date: sydneyDateOnly(at),
+    time: sydneyTimeOnly(at),
+  };
+}
+
+/** The entry a task writes when it is booked. */
+export function buildTaskAddedHistoryEntry(
+  summary: string,
+  at: Date = new Date(),
+): HistoryItem {
+  return {
+    action: "Task added",
+    detail: summary,
+    type: "system",
+    date: sydneyDateOnly(at),
+    time: sydneyTimeOnly(at),
+  };
+}
+
+/** The entry a task writes when it is closed out. */
+export function buildTaskCompletedHistoryEntry(
+  summary: string,
+  at: Date = new Date(),
+): HistoryItem {
+  return {
+    action: "Task completed",
+    detail: summary,
+    type: "system",
+    date: sydneyDateOnly(at),
+    time: sydneyTimeOnly(at),
   };
 }
 

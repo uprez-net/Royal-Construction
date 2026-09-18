@@ -6,6 +6,86 @@ import { stageMap } from "@/types/lead";
 import type { LeadTaskRow } from "@/lib/leads/task-types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
+import {
+  buildStageChangedHistoryEntry,
+  buildTaskAddedHistoryEntry,
+  buildTaskCompletedHistoryEntry,
+} from "@/lib/leads/lead-helpers";
+import { sydneyDateOnly, sydneyWallClockToInstant } from "@/lib/dates/sydney";
+import type { HistoryItem } from "@/lib/leads/types";
+
+/**
+ * Write a history entry for something a task did to its lead.
+ *
+ * Booking work, closing it out and the stage move a booking triggers all used
+ * to leave the lead's activity feed untouched: `LeadTask.completedAt` recorded
+ * the fact and nothing surfaced it.
+ *
+ * This deliberately does NOT swallow its errors, and the first version did.
+ * Both callers run it inside an interactive transaction, and a caught error
+ * there is not contained: Postgres aborts the transaction on the failing
+ * statement, so the commit rolls everything back while `$transaction` itself
+ * resolves. Measured against the staging database — a caught foreign-key
+ * violation left ZERO rows committed and threw nothing — which means
+ * `createLeadTask` returned a fully-formed LeadTaskRow for a task that did not
+ * exist, and the composer popped "Task added." over nothing. Letting it throw
+ * is the only honest option: the audit entry and the write it describes now
+ * succeed or fail together.
+ *
+ * `actingUserId` is passed in rather than resolved here, and that is load
+ * bearing: this module is bundled into the eve agent as `complete_lead_task`,
+ * and that bundle cannot load @clerk/nextjs — Node's ESM loader will not infer
+ * the extension on one of its internal relative imports. Importing the Clerk
+ * lookup here, statically OR dynamically, stops the agent server from starting
+ * at all. Routes that have a signed-in user pass one; the booking route and the
+ * agent pass null and the entry is recorded unattributed.
+ */
+async function recordTaskHistory(
+  tx: Prisma.TransactionClient | typeof prisma,
+  leadId: number,
+  entries: HistoryItem[],
+  actingUserId: string | null,
+): Promise<void> {
+  if (entries.length === 0) return;
+  await tx.leadHistory.createMany({
+    data: entries.map((entry) => ({
+      leadId,
+      action: entry.action,
+      detail: entry.detail,
+      type: "SYSTEM" as const,
+      actionDate: sydneyWallClockToInstant(entry.date, entry.time),
+      ...(actingUserId ? { authorId: actingUserId } : {}),
+    })),
+  });
+}
+
+/** "Meeting · Fri, 25 Sept 14:00 · <note>" — what the feed shows for a task. */
+function describeTask(input: {
+  type: LeadTaskType;
+  dueDate?: Date | null;
+  dueTime?: string | null;
+  notes?: string | null;
+}): string {
+  const label = TASK_TYPE_LABELS[input.type] ?? String(input.type);
+  const parts: string[] = [label];
+  if (input.dueDate) {
+    parts.push(
+      input.dueTime
+        ? `due ${sydneyDateOnly(input.dueDate)} ${input.dueTime}`
+        : `due ${sydneyDateOnly(input.dueDate)}`,
+    );
+  }
+  const note = input.notes?.trim();
+  if (note) parts.push(note);
+  return parts.join(" · ");
+}
+
+const TASK_TYPE_LABELS: Record<string, string> = {
+  CALL: "Call",
+  EMAIL: "Email or text",
+  MEETING: "Meeting",
+  WAITING: "Waiting on them",
+};
 
 const ROW_SELECT = {
   id: true,
@@ -154,6 +234,8 @@ export interface CreateLeadTaskInput {
   dueTime?: string | null;
   notes?: string | null;
   assignedId?: string | null;
+  /** Who booked it, when a signed-in user did. See recordTaskHistory. */
+  actingUserId?: string | null;
 }
 
 /**
@@ -228,6 +310,29 @@ export async function createLeadTask(
       select: ROW_SELECT,
     });
 
+    // In the same transaction as the writes it describes. The stage line is
+    // written here rather than in updateLead because this is the path that
+    // moved it — a lead advanced by booking work had nothing in its feed
+    // explaining why it was suddenly in Discovery.
+    await recordTaskHistory(
+      tx,
+      input.leadId,
+      [
+        buildTaskAddedHistoryEntry(
+          describeTask({
+            type: input.type,
+            dueDate: input.dueDate,
+            dueTime: input.dueTime,
+            notes: input.notes,
+          }),
+        ),
+        ...(nextStage !== undefined && nextStage !== lead.stage
+          ? [buildStageChangedHistoryEntry(lead.stage, nextStage)]
+          : []),
+      ],
+      input.actingUserId ?? null,
+    );
+
     return toRow(created);
   };
   return transaction ? create(transaction) : prisma.$transaction(create);
@@ -243,25 +348,52 @@ export async function createLeadTask(
 export async function completeLeadTask(
   taskId: number,
   transaction?: Prisma.TransactionClient,
+  actingUserId?: string | null,
 ): Promise<LeadTaskRow | null> {
-  const db = transaction ?? prisma;
-  const updated = await db.leadTask.updateMany({
-    where: { id: taskId, completedAt: null },
-    data: { completedAt: new Date(), status: "DONE" },
-  });
-  if (updated.count === 0) {
-    // Already closed, or gone. Not an error: two people clicking Done is fine.
-    const existing = await db.leadTask.findUnique({
+  // One transaction, for the same reason createLeadTask uses one: the
+  // completion and the audit entry that records it are a single decision.
+  // Split across two round trips, a failed history write left a task closed
+  // with nothing in the feed saying so — which is the gap #293 exists to close,
+  // reintroduced one level down.
+  const close = async (db: Prisma.TransactionClient | typeof prisma) => {
+    const updated = await db.leadTask.updateMany({
+      where: { id: taskId, completedAt: null },
+      data: { completedAt: new Date(), status: "DONE" },
+    });
+    if (updated.count === 0) {
+      // Already closed, or gone. Not an error: two people clicking Done is fine.
+      const existing = await db.leadTask.findUnique({
+        where: { id: taskId },
+        select: ROW_SELECT,
+      });
+      return existing ? toRow(existing) : null;
+    }
+    const row = await db.leadTask.findUnique({
       where: { id: taskId },
       select: ROW_SELECT,
     });
-    return existing ? toRow(existing) : null;
-  }
-  const row = await db.leadTask.findUnique({
-    where: { id: taskId },
-    select: ROW_SELECT,
-  });
-  return row ? toRow(row) : null;
+    // Guarded by updated.count above, so the second person to click Done does not
+    // write a second "Task completed" line.
+    if (row) {
+      await recordTaskHistory(
+        db,
+        row.leadId,
+        [
+          buildTaskCompletedHistoryEntry(
+            describeTask({
+              type: row.type,
+              dueDate: row.dueDate,
+              dueTime: row.dueTime,
+              notes: row.notes,
+            }),
+          ),
+        ],
+        actingUserId ?? null,
+      );
+    }
+    return row ? toRow(row) : null;
+  };
+  return transaction ? close(transaction) : prisma.$transaction(close);
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   extractMentionedUserIds,
 } from "@/lib/rich-text/lead-notes";
 import { updateLead } from "@/lib/leads/leads-service";
+import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
 import type {
   HistoryItem,
   Lead,
@@ -37,8 +38,14 @@ function buildSavedNoteHistoryEntry(noteText: string): HistoryItem {
     action: "Lead note saved",
     detail: noteText || "Lead note updated",
     type: "system",
-    date: now.toISOString().slice(0, 10),
-    time: now.toTimeString().slice(0, 5),
+    // Both halves from the same Sydney reading. A UTC calendar date beside a
+    // browser-local time disagreed with itself by a whole day, and now that
+    // updateLead reads the pair as a Sydney wall clock, every note saved before
+    // 10am was stamped 24 hours early. This history row is the note's only
+    // permanent home — the composer clears `notes` and `notesDoc` on save — so
+    // the wrong date is the only date it would ever have.
+    date: sydneyDateOnly(now),
+    time: sydneyTimeOnly(now),
   };
 }
 
