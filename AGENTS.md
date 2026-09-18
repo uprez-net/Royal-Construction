@@ -27,6 +27,33 @@ Use the agent through the feature-flagged `/agent` workspace and its
 authenticated API routes. Do not use the deprecated chatbot/MCP route for
 operations.
 
+### Agent code cannot import Next.js-only packages
+
+`eve build` bundles authored code — everything under `agent/` plus the
+application modules it imports by value — and leaves installed packages
+external for Node's own ESM loader. `@clerk/nextjs`, `next/headers`,
+`next/cache`, `next/server` and `next/navigation` publish extensionless
+relative imports that only a bundler resolves, `@clerk/mcp-tools` exports no
+entrypoint Node can resolve, and `server-only` throws on import outside a React
+bundler. A value import of any of them from `agent/`
+fails the build. `build: { externalDependencies: [...] }` does not rescue it;
+that setting makes a package more external, never bundled. `import type` edges
+are erased before the bundler sees them and are safe.
+
+Clerk authentication is preserved at the channel boundary instead, not inside
+tools. `agent/channels/eve.ts` authenticates every request through
+`agent/lib/channel-auth.ts`, which uses `@clerk/backend` (Node-clean), maps the
+Clerk user to the application `User`, rejects a session the caller does not
+own, and returns the principal. Tools read that principal back from
+`ctx.session.auth.current`, normally via `requireCurrentAgentActor` in
+`agent/lib/actor.ts`, and `runAuditedAgentOperation` re-checks session
+ownership inside the transaction it audits. No tool needs Clerk itself.
+
+`tests/agent/authored-package-boundary.test.ts` fails in about a second when
+authored agent code reaches a package Node cannot load, and prints the import
+chain that caused it. CI's "Eve build" job catches the same class, more slowly
+and without naming the chain.
+
 Session titles are generated after the event is persisted through the injected
 AI Gateway model (`meta/llama-3.1-8b-instruct`). The generator normalises the
 incoming text, wraps it in `<user_message>` as source material, and requests a
