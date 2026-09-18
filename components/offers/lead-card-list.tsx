@@ -221,9 +221,7 @@ export function LeadCardList({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-foreground">{lead.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {lead.location}
-                </p>
+                <p className="text-sm text-muted-foreground">{lead.location}</p>
                 <LeadStatusBadge lead={lead} />
               </div>
               {/* The check marks the selection without relying on the ring's
