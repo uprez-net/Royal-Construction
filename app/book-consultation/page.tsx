@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar } from "@/components/ui/calendar";
+import { sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 import {
   Card,
   CardContent,
@@ -208,13 +209,21 @@ function BookingContent() {
   // getters handleBook uses to build the booking string), then re-anchored to
   // Sydney as an instant. That keeps the date key and overlap check aligned with
   // the server regardless of the visitor's browser timezone, matching the
-  // "(AEST)" label that's already shown next to every slot.
+  // Sydney label that's already shown next to every slot.
   const slotInstant = (date: Date, time: string) => {
     const y = date.getFullYear();
     const m = (date.getMonth() + 1).toString().padStart(2, "0");
     const d = date.getDate().toString().padStart(2, "0");
     return fromZonedTime(`${y}-${m}-${d}T${time}:00`, BOOKING_TIMEZONE);
   };
+
+  // AEST or AEDT, for the date actually being booked. Both labels on this page
+  // read "AEST" whatever the date, so from October to April the client chose
+  // "4:00 pm (AEST)" and the calendar invitation that arrived said 4pm AEDT.
+  // Midday when no slot is picked yet: the abbreviation is the same all day.
+  const selectedZoneLabel = selectedDate
+    ? sydneyTimeZoneAbbreviation(slotInstant(selectedDate, selectedTime || "12:00"))
+    : "AEST";
 
   const isSlotBusy = (date: Date, time: string) => {
     const slotStart = slotInstant(date, time);
@@ -497,7 +506,7 @@ function BookingContent() {
                           selectedDate.getDay() === 6
                             ? "Weekend Hours: 9:00 AM - 2:00 PM"
                             : "Weekday Hours: 2:00 PM - 6:00 PM"}{" "}
-                          (AEST)
+                          ({selectedZoneLabel})
                         </p>
                       </div>
                       <div className="grid grid-cols-2 gap-2.5">
@@ -589,7 +598,7 @@ function BookingContent() {
                         Time
                       </div>
                       <div className="text-sm font-medium text-foreground">
-                        {formatTimeDisplay(selectedTime)} (AEST)
+                        {formatTimeDisplay(selectedTime)} ({selectedZoneLabel})
                       </div>
                     </div>
                   </div>

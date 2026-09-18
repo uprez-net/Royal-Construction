@@ -4,7 +4,11 @@ import { fromZonedTime } from "date-fns-tz";
 import { getGraphConfig } from "@/lib/graph/config";
 import { createLead, findLeadByEmail, updateLead } from "@/lib/data/leads";
 import { createLeadTask } from "@/lib/data/lead-tasks";
-import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
+import {
+  sydneyDateOnly,
+  sydneyTimeOnly,
+  sydneyTimeZoneAbbreviation,
+} from "@/lib/dates/sydney";
 import type { HistoryItem } from "@/lib/leads/types";
 import BookConsultantScheduleMeeting from "@/lib/graph/Email/book-consultant-ScheduleMeeting";
 import { render } from "@react-email/components";
@@ -348,7 +352,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     };
 
     const displayDate = formatDisplayDate(start);
-    const displayTime = `${formatDisplayTime(start)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
+    // Derived from slotStart, the real instant, so the label agrees with the
+    // calendar invitation sitting beside it in the same email. Hardcoded
+    // "AEST", it disagreed with every booking made on daylight saving.
+    const displayTime = `${formatDisplayTime(start)} - ${formatDisplayTime(endDateTimeObj)} (${sydneyTimeZoneAbbreviation(slotStart)})`;
 
     const emailHtml = await render(
       BookConsultantScheduleMeeting({

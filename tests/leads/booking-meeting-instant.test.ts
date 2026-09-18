@@ -5,7 +5,10 @@ import { test } from "node:test";
 
 import { fromZonedTime } from "date-fns-tz";
 
-import { sydneyTimeOnly } from "../../lib/dates/sydney";
+import {
+  sydneyTimeOnly,
+  sydneyTimeZoneAbbreviation,
+} from "../../lib/dates/sydney";
 
 // A consultation booked for Tuesday 22 September at 3:00 PM AEST reached the
 // client correctly — the email and the .ics both said 3pm — while the lead's
@@ -50,6 +53,55 @@ test("a morning slot hides the fault, which is why it reads as an afternoon bug"
   const morning = fromZonedTime("2026-09-22T09:00:00", BOOKING_TIMEZONE);
   assert.equal(morning.toISOString(), "2026-09-21T23:00:00.000Z");
   assert.equal(sydneyTimeOnly(morning), "09:00");
+});
+
+// ── The timezone label shown to the client ──
+
+test("the label follows daylight saving, both sides of both switches", () => {
+  const cases: [string, "AEST" | "AEDT"][] = [
+    // 2026 switches: AEDT begins Sun 4 Oct 2am, ends Sun 5 Apr 3am.
+    ["2026-09-22T05:00:00Z", "AEST"], // 22 Sep, 3pm — before the October switch
+    ["2026-10-02T05:00:00Z", "AEST"], // 3 Oct, 3pm — the day before
+    ["2026-10-06T05:00:00Z", "AEDT"], // 6 Oct, 4pm — the booking that exposed it
+    ["2026-12-25T02:00:00Z", "AEDT"], // midsummer
+    ["2026-04-04T04:00:00Z", "AEDT"], // 4 Apr, 3pm — the day before it ends
+    ["2026-04-06T05:00:00Z", "AEST"], // 6 Apr, 3pm — after
+    ["2026-07-01T05:00:00Z", "AEST"], // midwinter
+  ];
+
+  for (const [iso, expected] of cases) {
+    assert.equal(
+      sydneyTimeZoneAbbreviation(new Date(iso)),
+      expected,
+      `${iso} should read ${expected}`,
+    );
+  }
+});
+
+test("the label and the stored instant describe the same moment", () => {
+  // What the client is shown and what the calendar carries cannot disagree.
+  const slotStart = fromZonedTime("2026-10-06T16:00:00", BOOKING_TIMEZONE);
+
+  assert.equal(slotStart.toISOString(), "2026-10-06T05:00:00.000Z");
+  assert.equal(sydneyTimeOnly(slotStart), "16:00");
+  assert.equal(sydneyTimeZoneAbbreviation(slotStart), "AEDT");
+});
+
+test("neither the email nor the booking page hardcodes the label", () => {
+  const route = read(ROUTE);
+  assert.ok(
+    route.includes("(${sydneyTimeZoneAbbreviation(slotStart)})"),
+    "the confirmation email is hardcoding AEST again",
+  );
+  assert.ok(!route.includes("(AEST)`"));
+
+  const page = read("app/book-consultation/page.tsx");
+  // Both the hours banner and the chosen-time summary.
+  assert.equal(page.split("{selectedZoneLabel}").length - 1, 2);
+  assert.ok(
+    !/\(AEST\)\s*$/m.test(page.replace(/^\s*\/\/.*$/gm, "")),
+    "a hardcoded AEST label is still rendered on the booking page",
+  );
 });
 
 test("the route persists the instant, not the wall clock", () => {

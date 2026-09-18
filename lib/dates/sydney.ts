@@ -51,6 +51,35 @@ export function sydneyToday(now: Date = new Date()): string {
 }
 
 /**
+ * "AEST" or "AEDT", whichever Sydney is actually on at that instant.
+ *
+ * The label was hardcoded to AEST everywhere a consultation time is shown —
+ * the slot picker, the booking summary and the confirmation email — so for the
+ * half of the year Sydney spends on daylight saving, roughly October to April,
+ * the client booked "4:00 pm (AEST)" and the calendar invitation beside it read
+ * 4pm AEDT. The time was always right; only the abbreviation disagreed.
+ *
+ * `en-AU` is what produces the abbreviation — `en-US` and `en-GB` both return
+ * "GMT+11". A runtime with trimmed ICU data returns the offset form instead, so
+ * the offset is the fallback rather than printing "GMT+11" to a client.
+ */
+export function sydneyTimeZoneAbbreviation(date: Date): "AEST" | "AEDT" {
+  const named = new Intl.DateTimeFormat("en-AU", {
+    timeZone: SYDNEY_TZ,
+    timeZoneName: "short",
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+
+  if (named === "AEST" || named === "AEDT") return named;
+
+  // Sydney is UTC+11 on daylight saving and UTC+10 the rest of the year.
+  const local = toZonedTime(date, SYDNEY_TZ);
+  const offsetHours = (local.getTime() - date.getTime()) / 3_600_000;
+  return Math.round(offsetHours) === 11 ? "AEDT" : "AEST";
+}
+
+/**
  * The instant a Sydney calendar day begins.
  *
  * Not `new Date(`${day}T00:00:00.000Z`)`. That parses the Sydney date as UTC
