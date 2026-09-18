@@ -20,12 +20,18 @@ import {
   EMPTY_ADMIN_OFFER_CONTENT,
 } from "@/types/admin-offer-content";
 import {
-  costScheduleDataSchema,
-  offerScopeDataSchema,
-  offerContentDataSchema,
-  hbfcClaimDataSchema,
-} from "@/lib/validations/admin-offer-content";
-import { INITIAL_OFFER_DRAFT } from "../offer/workspace-model";
+  coerceCostSchedule,
+  coerceHBFCClaim,
+  coerceOfferContent,
+  coerceOfferScope,
+} from "./admin-offer-content-coerce";
+
+export {
+  coerceCostSchedule,
+  coerceHBFCClaim,
+  coerceOfferContent,
+  coerceOfferScope,
+};
 
 /**
  * Read the application-wide singleton AdminOfferContent row, creating it with
@@ -75,37 +81,6 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
     hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
     version: row.version,
   };
-}
-
-export function coerceCostSchedule(value: unknown): CostScheduleData {
-  const parsed = costScheduleDataSchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  return { rows: [], rateConstants: {} };
-}
-
-export function coerceOfferScope(value: unknown): OfferScopeData {
-  const parsed = offerScopeDataSchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  return { allowances: [], exclusions: [] };
-}
-
-export function coerceOfferContent(value: unknown): OfferContentData {
-  const parsed = offerContentDataSchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  return {
-    headline: INITIAL_OFFER_DRAFT.headline,
-    introText: INITIAL_OFFER_DRAFT.introText,
-    inclusions: [...INITIAL_OFFER_DRAFT.inclusionHighlights],
-    exclusions: [...INITIAL_OFFER_DRAFT.exclusionBullets],
-    inclusionSchedule: [...INITIAL_OFFER_DRAFT.inclusionSchedule],
-    termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
-  };
-}
-
-export function coerceHBFCClaim(value: unknown): HBFCClaimData {
-  const parsed = hbfcClaimDataSchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  return { claimAmount: 0, loadingChargePercent: 0, totalPremiumToBePaid: 0 };
 }
 
 /**
