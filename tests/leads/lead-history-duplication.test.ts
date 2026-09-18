@@ -266,3 +266,104 @@ test("tasks write to the activity feed", () => {
   // The stage move a booking triggers is logged by the path that made it.
   assert.ok(source.includes("buildStageChangedHistoryEntry("));
 });
+
+// ── What the guard must NOT touch ──
+
+test("the guard filters caller history only, never generated entries", () => {
+  const source = read("lib/data/leads.ts");
+
+  // dropAlreadyRecorded wraps input.history and nothing else. Applied to the
+  // whole list it collapsed two mentions in the same minute into one, and lost
+  // a stage move that was undone and redone inside a minute — leaving the feed
+  // asserting the opposite of where the lead sat.
+  assert.ok(
+    source.includes(
+      "...dropAlreadyRecorded(\n        (input.history ?? []).map(toRow),",
+    ),
+    "the echo guard is being applied to server-generated entries again",
+  );
+  for (const generated of [
+    "...responseHistory.map(toRow)",
+    "...meetingHistory.map(toRow)",
+    "...annotationHistory.map(toRow)",
+    "...stageHistory.map(toRow)",
+  ]) {
+    assert.ok(
+      source.includes(generated),
+      `${generated} is not written unfiltered`,
+    );
+  }
+});
+
+test("two mentions in the same minute both survive", () => {
+  // Every mention carries the same action and the same hardcoded comment, so
+  // the minute is all that distinguishes them - which is exactly why they must
+  // not go through the guard. This pins the collapse the guard would cause.
+  const at = new Date("2026-09-18T05:30:12.000Z");
+  const mention = () =>
+    entry("Lead note mention added", "Mentioned in lead note", at);
+
+  assert.equal(
+    dropAlreadyRecorded([mention(), mention()], []).length,
+    1,
+    "the guard is expected to collapse these - which is why mentions bypass it",
+  );
+});
+
+test("a stage move undone and redone in one minute is two distinct entries", () => {
+  const at = new Date("2026-09-18T05:30:00.000Z");
+  const forward = buildStageChangedHistoryEntry("QUOTED", "NEGOTIATING", at);
+  const back = buildStageChangedHistoryEntry("NEGOTIATING", "QUOTED", at);
+
+  // Different details, so these two never collide...
+  assert.notEqual(forward.detail, back.detail);
+  // ...but the repeat of the first one does, which is the case that must not be
+  // filtered. The lead ends on NEGOTIATING; the feed must not end on "-> Quoted".
+  const repeat = buildStageChangedHistoryEntry("QUOTED", "NEGOTIATING", at);
+  assert.equal(repeat.detail, forward.detail);
+});
+
+// ── The source must stay text ──
+
+test("lead-history.ts contains no raw NUL byte", () => {
+  // A literal NUL makes git treat the file as binary: "Binary files differ" in
+  // the PR, skipped by grep and rg, and unreviewed - while compiling and
+  // passing every test, because NUL is a legal string character. The separator
+  // must be written as an escape.
+  const source = readFileSync(
+    join(process.cwd(), "lib/leads/lead-history.ts"),
+    "utf8",
+  );
+  assert.ok(!source.includes("\u0000"), "a raw NUL byte is back in the source");
+  assert.ok(
+    source.includes("const SEPARATOR ="),
+    "the separator constant is gone",
+  );
+});
+
+test("every history-entry builder reads one clock", () => {
+  // A UTC calendar date beside a browser-local time disagrees with itself by a
+  // whole day, and updateLead now reads the pair as a Sydney wall clock.
+  for (const file of [
+    "components/leads/modal-ui/email-flow-modal.tsx",
+    "components/leads/detail/lead-notes-tab.tsx",
+  ]) {
+    const source = read(file);
+    assert.ok(
+      !source.includes("now.toISOString().slice(0, 10)"),
+      `${file} still builds a history date from the UTC calendar`,
+    );
+    assert.ok(
+      !source.includes("now.toTimeString().slice(0, 5)"),
+      `${file} still builds a history time from the browser clock`,
+    );
+    assert.ok(
+      source.includes("sydneyDateOnly(now)"),
+      `${file} lost sydneyDateOnly`,
+    );
+    assert.ok(
+      source.includes("sydneyTimeOnly(now)"),
+      `${file} lost sydneyTimeOnly`,
+    );
+  }
+});

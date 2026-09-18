@@ -18,6 +18,7 @@ import { getCachedProjectById } from "./projects";
 import { after } from "next/server";
 import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
+import { LEAD_NOTES_HISTORY_INCLUDE } from "@/lib/leads/notes-text";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { Prisma } from "@prisma/client";
@@ -372,6 +373,11 @@ export async function createProjectWithLead({
       where: { id: leadId },
       include: {
         project: true,
+        // Sales notes reach the inference prompt through here when the Notes
+        // composer has cleared the lead's own columns, which it does on every
+        // save. Without them the prompt says "No notes available." and the
+        // project is inferred from the contact details alone.
+        history: LEAD_NOTES_HISTORY_INCLUDE,
       },
     });
 

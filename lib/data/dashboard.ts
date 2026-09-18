@@ -4,7 +4,10 @@
 import "server-only";
 import type { DashboardKPI } from "@/types/dashboard";
 import prisma from "@/lib/prisma";
-import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
+import {
+  LEAD_NOTES_HISTORY_INCLUDE,
+  resolveLeadNotesTextOr,
+} from "@/lib/leads/notes-text";
 import { auth } from "@clerk/nextjs/server";
 import {
   startOfMonth,
@@ -260,6 +263,11 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
           },
         ],
       },
+      // The note fallback is only as good as what the query loaded. The Notes
+      // composer clears `notes` AND `notesDoc` and stores the text as history,
+      // so without these rows every composed note reads "No additional
+      // details" here — the resolver cannot invent what was never selected.
+      include: { history: LEAD_NOTES_HISTORY_INCLUDE },
       orderBy: {
         followupDate: "desc",
       },

@@ -16,8 +16,34 @@ import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
  * load it still gets the column and the document.
  */
 
-/** Actions whose detail is a note someone wrote, not a system event. */
-const NOTE_ACTIONS = new Set(["lead note saved", "note"]);
+/**
+ * Actions whose detail is a note someone wrote, not a system event.
+ *
+ * Exported as an array because a caller has to be able to ASK for these rows:
+ * the fallback is worthless to a query that never loaded any history, and a
+ * query cannot filter on a Set. Keep the two in step — `LEAD_NOTE_ACTIONS` is
+ * what producers select with, `NOTE_ACTIONS` is what the resolver matches on.
+ */
+export const LEAD_NOTE_ACTIONS = ["Lead note saved", "NOTE"] as const;
+
+const NOTE_ACTIONS = new Set(
+  LEAD_NOTE_ACTIONS.map((action) => action.toLowerCase()),
+);
+
+/**
+ * The Prisma `include` a caller needs for the history fallback to work.
+ *
+ * Only note rows, oldest first, which is the order `resolveLeadNotesText`
+ * expects. Filtered rather than capped: a lead carries a handful of notes, and
+ * a `take` would have to be paired with a reversal to mean "the most recent".
+ */
+export const LEAD_NOTES_HISTORY_INCLUDE = {
+  // Spread, not the tuple itself: Prisma's `in` wants a mutable string[], and a
+  // readonly tuple from `as const` is rejected.
+  where: { action: { in: [...LEAD_NOTE_ACTIONS] } },
+  orderBy: { actionDate: "asc" as const },
+  select: { action: true, detail: true },
+};
 
 export interface LeadNotesSource {
   notes?: string | null;

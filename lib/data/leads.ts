@@ -1301,36 +1301,52 @@ export async function updateLead(
       };
     });
 
-    // Every entry here is a row to CREATE. Callers that hand back the lead's
-    // whole history — the email modal and the booking route both did — would
-    // otherwise insert a second copy of every row they were given, and the copy
-    // came back ten hours late because the round trip through the client
-    // re-encoded an instant as a Sydney wall clock. One booking took a lead from
-    // four activity entries to nine, and it compounded on the next one.
+    const toRow = (h: {
+      action: string;
+      detail?: string;
+      type?: string;
+      date: string;
+      time?: string;
+    }) => ({
+      action: h.action,
+      detail: h.detail || "",
+      type: h.type
+        ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL")
+        : "SYSTEM",
+      // Sydney, not the server's zone. The pair was produced by
+      // sydneyDateOnly/sydneyTimeOnly, and reading it back as UTC put every
+      // entry ten hours in the future.
+      actionDate: sydneyWallClockToInstant(h.date, h.time),
+      ...(actingUserId ? { authorId: actingUserId } : {}),
+    });
+
+    // The echo guard applies to CALLER-SUPPLIED history only.
     //
-    // Callers now pass only what is new, and this drops anything already on the
-    // lead so a caller that has not been updated cannot duplicate it either.
-    const created = dropAlreadyRecorded(
-      [
-        ...(input.history ?? []),
-        ...responseHistory,
-        ...meetingHistory,
-        ...annotationHistory,
-        ...stageHistory,
-      ].map((h) => ({
-        action: h.action,
-        detail: h.detail || "",
-        type: h.type
-          ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL")
-          : "SYSTEM",
-        // Sydney, not the server's zone. The pair was produced by
-        // sydneyDateOnly/sydneyTimeOnly, and reading it back as UTC put every
-        // entry ten hours in the future.
-        actionDate: sydneyWallClockToInstant(h.date, h.time),
-        ...(actingUserId ? { authorId: actingUserId } : {}),
-      })),
-      existingLead?.history ?? [],
-    );
+    // That is the only input that can contain rows the lead already has: the
+    // email modal and the booking route both handed the whole list back, so
+    // every row was inserted a second time — one booking took a lead from four
+    // activity entries to nine, and it compounded on the next. Those callers now
+    // send only what is new; this keeps a caller that has not been updated from
+    // duplicating it again.
+    //
+    // The entries built below it are generated fresh by this function and can
+    // never be an echo, so they are NOT filtered — and must not be. Their
+    // identity is action + detail + minute, and several of them are constant by
+    // construction: every mention reads "Lead note mention added" /
+    // "Mentioned in lead note", and a stage move repeated inside one minute
+    // (Quoted → Negotiating, undone, redone) produces the same pair twice.
+    // Filtering them dropped the later, real entry and left the feed asserting
+    // the opposite of where the lead actually sits.
+    const created = [
+      ...dropAlreadyRecorded(
+        (input.history ?? []).map(toRow),
+        existingLead?.history ?? [],
+      ),
+      ...responseHistory.map(toRow),
+      ...meetingHistory.map(toRow),
+      ...annotationHistory.map(toRow),
+      ...stageHistory.map(toRow),
+    ];
 
     if (created.length > 0) {
       updateData.history = { create: created };
