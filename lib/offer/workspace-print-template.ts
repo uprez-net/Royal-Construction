@@ -314,7 +314,14 @@ function getAreaLabel(totalAreaSqm: number): string {
   return `${formatArea(totalAreaSqm)} (${formatSquares(totalAreaSqm)} squares)`;
 }
 
-function formatSquares(value: number): string {
+// Compact dual-unit total for the summary strip. Same conversion as the
+// printed cover; "sq" instead of "squares" so it fits the money line.
+export function formatBuildingArea(totalAreaSqm: number): string {
+  return `${formatArea(totalAreaSqm)} (${formatSquares(totalAreaSqm)} sq)`;
+}
+
+// 1 square = 100 sq ft = 9.290304 m². Estimators round that to 9.29.
+export function formatSquares(value: number): string {
   return new Intl.NumberFormat("en-AU", {
     maximumFractionDigits: 2,
   }).format(value / SQUARE_METRES_PER_SQUARE);

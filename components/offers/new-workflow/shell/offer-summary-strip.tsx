@@ -24,7 +24,7 @@ import {
   moneyDeltaFractionDigits,
 } from "@/components/offers/new-workflow/offer-workspace-format";
 import { buildOfferSummaryFigures } from "@/lib/offer/summary-strip";
-import { formatArea } from "@/lib/offer/workspace-print-template";
+import { formatBuildingArea } from "@/lib/offer/workspace-print-template";
 import type {
   EffectiveMargin,
   MarginStatus,
@@ -83,7 +83,10 @@ export function OfferSummaryStrip({
         ["Per m² (offer price)", "—"],
       ]
     : [
-        ["Building area", totalAreaSqm > 0 ? formatArea(totalAreaSqm) : "—"],
+        [
+          "Building area",
+          totalAreaSqm > 0 ? formatBuildingArea(totalAreaSqm) : "—",
+        ],
         ["Direct total", formatCurrency(pricing.directTotal)],
         ["Cost before fee", formatCurrency(pricing.costBeforeFee)],
         ["GST", formatCurrency(figures.gstOnOffer)],
