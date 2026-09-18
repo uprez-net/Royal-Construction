@@ -117,3 +117,10 @@ test("the lead cards' keyboard focus ring is not cancelled by outline-none", () 
   assert.match(cards, /focus-visible:outline-2/);
   assert.doesNotMatch(cards, /"[^"\n]*\boutline-none\b[^"\n]*"/);
 });
+
+test("lead cards keep their content height in the two-column grid", () => {
+  // Card's overflow-hidden makes CSS Grid shrink items to padding-only bars,
+  // which hid names and contact details in the picker.
+  assert.match(cards, /const tileClassName =/);
+  assert.doesNotMatch(cards, /from "@\/components\/ui\/card"/);
+});
