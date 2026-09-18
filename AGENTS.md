@@ -33,8 +33,9 @@ operations.
 application modules it imports by value — and leaves installed packages
 external for Node's own ESM loader. `@clerk/nextjs`, `next/headers`,
 `next/cache`, `next/server` and `next/navigation` publish extensionless
-relative imports that only a bundler resolves, and `server-only` throws on
-import outside a React bundler. A value import of any of them from `agent/`
+relative imports that only a bundler resolves, `@clerk/mcp-tools` exports no
+entrypoint Node can resolve, and `server-only` throws on import outside a React
+bundler. A value import of any of them from `agent/`
 fails the build. `build: { externalDependencies: [...] }` does not rescue it;
 that setting makes a package more external, never bundled. `import type` edges
 are erased before the bundler sees them and are safe.

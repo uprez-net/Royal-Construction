@@ -281,6 +281,23 @@ process.stdout.write(JSON.stringify(failures));
 
 type Failure = { specifier: string; detail: string };
 
+/**
+ * Node's ESM resolution, replayed statically over the packages agent/ reaches.
+ *
+ * Deliberately shallow: it checks each package Node would load, and the
+ * relative-import graph inside it. It does NOT follow bare imports on into the
+ * packages those name, so a break two packages down escapes it.
+ *
+ * Following bare specifiers too was tried. It found nothing this does not, and
+ * it is markedly slower — as is the obvious alternative of `await import()`-ing
+ * every reachable package, which at least has the merit of being exactly what
+ * Node does. Neither earns its keep here: this check exists to fail fast and
+ * name the import chain, and the eve build in CI already loads everything for
+ * real. That one is verified: with a Clerk value import in an agent tool it
+ * exits 1, without it 0.
+ *
+ * So treat a pass here as "the fast check found nothing", not as proof.
+ */
 function probeNodeEsmLoadability(specifiers: string[]): Failure[] {
   if (specifiers.length === 0) return [];
   const stdout = execFileSync(
@@ -333,6 +350,12 @@ function nextOnlyReason(specifier: string): string | null {
   }
   if (specifier === "server-only" || specifier === "client-only") {
     return "a React bundler marker that throws when Node imports it directly";
+  }
+  if (
+    specifier === "@clerk/mcp-tools" ||
+    specifier.startsWith("@clerk/mcp-tools/")
+  ) {
+    return "has no exported entrypoint; Node answers ERR_PACKAGE_PATH_NOT_EXPORTED";
   }
   return null;
 }
