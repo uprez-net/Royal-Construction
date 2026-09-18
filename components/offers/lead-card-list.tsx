@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "../ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Check, List, Pencil, Send, Sparkles } from "lucide-react";
@@ -29,24 +28,71 @@ const listClassName =
 
 const emptyHint = "Only leads that don't have a project yet appear here.";
 
+// Plain tiles, not Card: Card's overflow-hidden zeroes the automatic min-height
+// of CSS Grid items, which collapsed every row to a padding bar and hid names.
+const tileClassName =
+  "rounded-lg border border-border/70 bg-card p-4 text-sm text-card-foreground";
+
+function LeadStatusBadge({ lead }: { lead: Lead }) {
+  if (lead.stage === "Quoted") {
+    return (
+      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
+        <Send className="mr-1.5 h-4 w-4" />
+        Quoted - Awaiting Feedback
+      </span>
+    );
+  }
+  if (lead.creatingOffer) {
+    return (
+      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
+        <Pencil className="mr-1.5 h-4 w-4" />
+        Update Offer
+      </span>
+    );
+  }
+  if (lead.runStatus === "RUNNING") {
+    return (
+      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
+        Generating Offer
+      </span>
+    );
+  }
+  if (lead.runStatus === "COMPLETED") {
+    return (
+      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+        <Sparkles className="mr-1.5 h-4 w-4" />
+        Offer Generated
+      </span>
+    );
+  }
+  if (lead.runStatus === "FAILED") {
+    return (
+      <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
+        Offer Generation Failed
+      </span>
+    );
+  }
+  return null;
+}
+
 function LeadCardSkeleton() {
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-1/2" />
-          </div>
-          <Skeleton className="size-4 rounded-full" />
-        </div>
-        <div className="mt-3 space-y-2">
+    <div className={tileClassName}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-3 w-1/2" />
-          <Skeleton className="h-3 w-1/3" />
-          <Skeleton className="h-3 w-2/3" />
         </div>
-      </CardContent>
-    </Card>
+        <Skeleton className="size-4 rounded-full" />
+      </div>
+      <div className="mt-3 space-y-2">
+        <Skeleton className="h-3 w-1/2" />
+        <Skeleton className="h-3 w-1/3" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
+    </div>
   );
 }
 
@@ -145,10 +191,10 @@ export function LeadCardList({
       {liveRegion}
       <div ref={scrollContainerRef} className={cn(listClassName, className)}>
         {items.map((lead) => (
-          <Card
+          <div
             key={lead.id}
             // A toggle button, so the picker works from the keyboard and a
-            // screen reader hears which lead is chosen. The card holds no
+            // screen reader hears which lead is chosen. The tile holds no
             // controls of its own, so nothing interactive ends up nested.
             role="button"
             tabIndex={0}
@@ -157,7 +203,8 @@ export function LeadCardList({
             // which focus-visible:outline-2 then reads, so the focus ring never
             // drew. A mouse click doesn't match :focus-visible anyway.
             className={cn(
-              "relative cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+              tileClassName,
+              "cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
               lead.id === selectedLeadId &&
                 "border-royal-gold-ink ring-2 ring-royal-gold-ink",
               lead.stage === "Quoted" && "opacity-75",
@@ -171,65 +218,29 @@ export function LeadCardList({
               if (!event.repeat) toggleLead(lead);
             }}
           >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                {(lead.creatingOffer ||
-                  lead.stage === "Quoted" ||
-                  lead.runId ||
-                  lead.runStatus) && (
-                  <div className="absolute top-7.5 right-10">
-                    {lead.stage === "Quoted" ? (
-                      <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800">
-                        <Send className="mr-1.5 h-4 w-4" />
-                        Quoted - Awaiting Feedback
-                      </span>
-                    ) : lead.creatingOffer ? (
-                      <span className="inline-flex items-center justify-center rounded-full bg-royal-gold-light px-2.5 py-0.5 text-xs font-medium text-royal-gold-ink">
-                        <Pencil className="mr-1.5 h-4 w-4" />
-                        Update Offer
-                      </span>
-                    ) : lead.runStatus === "RUNNING" ? (
-                      <span className="inline-flex items-center justify-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
-                        Generating Offer
-                      </span>
-                    ) : lead.runStatus === "COMPLETED" ? (
-                      <span className="inline-flex items-center justify-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                        <Sparkles className="mr-1.5 h-4 w-4" />
-                        Offer Generated
-                      </span>
-                    ) : lead.runStatus === "FAILED" ? (
-                      <span className="inline-flex items-center justify-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                        <Sparkles className="mr-1.5 h-4 w-4 animate-pulse motion-reduce:animate-none" />
-                        Offer Generation Failed
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-                <div>
-                  <p className="font-medium text-slate-950">{lead.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {lead.location}
-                  </p>
-                </div>
-                {/* The check marks the selection without relying on the ring's
-                    colour alone. */}
-                {lead.id === selectedLeadId ? (
-                  <Check
-                    aria-hidden
-                    className="size-4 text-royal-gold-ink-text"
-                  />
-                ) : (
-                  <List aria-hidden className="size-4 text-muted-foreground" />
-                )}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">{lead.name}</p>
+                <p className="text-sm text-muted-foreground">{lead.location}</p>
+                <LeadStatusBadge lead={lead} />
               </div>
-              <div className="mt-3 space-y-1 text-sm text-slate-700">
-                <p>{lead.type}</p>
-                <p>{lead.phone}</p>
-                <p>{lead.email}</p>
-              </div>
-            </CardContent>
-          </Card>
+              {/* The check marks the selection without relying on the ring's
+                  colour alone. */}
+              {lead.id === selectedLeadId ? (
+                <Check
+                  aria-hidden
+                  className="size-4 text-royal-gold-ink-text"
+                />
+              ) : (
+                <List aria-hidden className="size-4 text-muted-foreground" />
+              )}
+            </div>
+            <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+              <p>{lead.type}</p>
+              <p>{lead.phone}</p>
+              <p>{lead.email}</p>
+            </div>
+          </div>
         ))}
 
         {/* After the cards, so a failed next page shows where the user has
