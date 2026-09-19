@@ -149,6 +149,8 @@ const lead = (over: Partial<Lead> = {}): Lead =>
     notes: "",
     followupDate: null,
     followupTime: null,
+    meetingDate: null,
+    meetingTime: null,
     ...over,
   }) as unknown as Lead;
 
@@ -175,14 +177,49 @@ test("the Meeting subject does not end on a dangling preposition", () => {
   assert.ok(!rendered.includes("next step"));
 });
 
-test("a real follow-up still renders in the subject", () => {
+test("a real booked consultation renders in the Meeting subject", () => {
   const meetingSubject = EMAIL_TEMPLATES.find((t) => t.id === 7)?.subject;
   assert.equal(
     hydrateVariable(
       meetingSubject!,
-      lead({ followupDate: "2026-09-25", followupTime: "09:50" }),
+      lead({ meetingDate: "2026-09-25", meetingTime: "09:50" }),
     ),
     "Site visit for Jane Nguyen - Kellyville on 25 Sep 2026 09:50",
+  );
+});
+
+test("the Meeting subject quotes the consultation, never the follow-up", () => {
+  // These are two different appointments. The subject used to read {followup}
+  // while the body underneath confirmed the site visit, so one email could
+  // name two different dates.
+  const meetingSubject = EMAIL_TEMPLATES.find((t) => t.id === 7)?.subject;
+  assert.ok(
+    meetingSubject!.includes("{meeting}") &&
+      !meetingSubject!.includes("{followup}"),
+    "the Meeting subject is back on the follow-up date",
+  );
+
+  const rendered = hydrateVariable(
+    meetingSubject!,
+    lead({
+      followupDate: "2026-12-01",
+      followupTime: "08:00",
+      meetingDate: "2026-09-25",
+      meetingTime: "09:50",
+    }),
+  );
+  assert.ok(rendered.includes("25 Sep 2026"), "the consultation is missing");
+  assert.ok(!rendered.includes("1 Dec 2026"), "the follow-up leaked in");
+});
+
+test("a lead with a follow-up but no consultation gets no date in the Meeting subject", () => {
+  const meetingSubject = EMAIL_TEMPLATES.find((t) => t.id === 7)?.subject;
+  assert.equal(
+    hydrateVariable(
+      meetingSubject!,
+      lead({ followupDate: "2026-12-01", followupTime: "08:00" }),
+    ),
+    "Site visit for Jane Nguyen - Kellyville",
   );
 });
 
@@ -192,7 +229,7 @@ test("an unparsable stored date is dropped, not printed", () => {
   const meetingSubject = EMAIL_TEMPLATES.find((t) => t.id === 7)?.subject;
   const rendered = hydrateVariable(
     meetingSubject!,
-    lead({ followupDate: "not a date" }),
+    lead({ meetingDate: "not a date" }),
   );
   assert.equal(rendered, "Site visit for Jane Nguyen - Kellyville");
 });
@@ -238,7 +275,32 @@ test("the Meeting template no longer invents a date and time", () => {
     !source.includes('"10:00 AM"'),
     "the site-visit email invents a time again",
   );
-  assert.ok(source.includes("date={followupDate ?? undefined}"));
+  assert.ok(
+    source.includes("date={meetingDate ?? undefined}"),
+    "the site-visit email is not using the booked consultation date",
+  );
+  assert.ok(
+    source.includes("time={lead?.meetingTime ?? undefined}"),
+    "the site-visit email is not using the booked consultation time",
+  );
+  // The follow-up pair is a different appointment and must not reach it.
+  // Scoped to the element itself: `followupDate` is legitimately declared and
+  // used elsewhere in this module, including in the snapshot card.
+  const element = /<SiteVisitEmail[\s\S]*?\/>/.exec(source)?.[0];
+  assert.ok(element, "the site-visit element moved or was renamed");
+  assert.ok(
+    !/followup/i.test(element),
+    `the follow-up date is still reaching the site-visit email: ${element}`,
+  );
+});
+
+test("LeadPreview carries the meeting pair, or the email cannot see it", () => {
+  const source = read("lib/leads/render-email-html.tsx");
+  assert.ok(
+    /meetingDate\?: string \| null;/.test(source) &&
+      /meetingTime\?: string \| null;/.test(source),
+    "renderEmailHtml cannot receive the booked consultation",
+  );
 });
 
 test("SiteVisitEmail still has its own empty state to fall back on", () => {

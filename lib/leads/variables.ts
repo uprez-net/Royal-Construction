@@ -33,7 +33,11 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
   },
   {
     id: 7,
-    subject: "Site visit for {name} - {location} on {followup}",
+    // {meeting}, not {followup}: the body of this email is the booked
+    // consultation, and the two are different appointments. The subject used
+    // to quote the next follow-up call while the body confirmed the site
+    // visit.
+    subject: "Site visit for {name} - {location} on {meeting}",
     category: "Meeting",
   },
   {

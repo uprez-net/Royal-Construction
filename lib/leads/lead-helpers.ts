@@ -310,7 +310,7 @@ const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
  * Placeholders that are a date or a time, and so can legitimately have no
  * value. Everything else in `values` carries its own sensible fallback.
  */
-const DATE_PLACEHOLDERS = ["followup", "time"] as const;
+const DATE_PLACEHOLDERS = ["followup", "meeting", "time"] as const;
 
 /**
  * Remove a placeholder that resolved to nothing, along with the word holding
@@ -347,6 +347,23 @@ export function dropEmptyPlaceholders(
     .trim();
 }
 
+/**
+ * Replace `{placeholder}` tokens in a subject or body with this lead's values.
+ *
+ * Every value carries a sensible fallback except the dates, which can
+ * legitimately be absent — a lead with no upcoming follow-up is the normal
+ * state once the work is done, and a lead with no booked consultation is the
+ * normal state before one. Those are removed along with the word holding them
+ * to the sentence rather than filled with a stand-in; see
+ * `dropEmptyPlaceholders`.
+ *
+ * An unknown key is left as-is (`{foo}` stays `{foo}`) so a typo in a template
+ * is visible rather than silently blank.
+ *
+ * @param text - The template text, typically a subject line or rendered body.
+ * @param lead - The lead whose values fill the placeholders.
+ * @returns The text with placeholders resolved.
+ */
 export function hydrateVariable(text: string, lead: Lead): string {
   const typeStr = Array.isArray(lead.type)
     ? (lead.type[0] ?? "New Home Build")
@@ -355,6 +372,10 @@ export function hydrateVariable(text: string, lead: Lead): string {
   // state once the work is done — see resolveFollowup — so this is a case to
   // render honestly, not to paper over.
   const followup = formatFollowup(lead.followupDate, lead.followupTime);
+  // The booked consultation, which is a different appointment from the
+  // follow-up. The Meeting subject quoted {followup} while its body confirmed
+  // the site visit, so the two halves of one email disagreed.
+  const meeting = formatFollowup(lead.meetingDate ?? null, lead.meetingTime);
   const source =
     lead.sourceDetail || lead.source || "Royal Constructions enquiry";
   const location = lead.location || "NSW";
@@ -371,6 +392,7 @@ export function hydrateVariable(text: string, lead: Lead): string {
     source,
     stage: lead.stage,
     followup,
+    meeting,
     assignee: lead.assignedUser?.name || "Royal Constructions team",
     duration: "6-8 months",
     date: formatShortDate(new Date()),
