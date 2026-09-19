@@ -8,6 +8,45 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Who actually uses this
+
+Royal Constructions is a residential construction business with **two to three
+employees**. They share **one or two login IDs** and everyone is an `ADMIN`.
+Site managers become real only once the Projects section ships; until then the
+`SITE_MANAGER` role exists in the schema but nobody holds it.
+
+This is calibration, not permission to cut corners. It changes which problems
+are worth solving now:
+
+**Worth less than it looks**
+
+- **Races between two different users.** Two of three people rarely touch the
+  same record in the same second. Weigh a concurrency bug by whether ONE person
+  can trigger it — a double-click, a retry after a timeout, two tabs — not by
+  whether it is theoretically reachable. Say which kind it is.
+- **Role scoping between internal staff.** Everyone is an ADMIN on a shared
+  login, so "user A should not see user B's leads" describes nobody today.
+  Correct scoping is still worth writing when it is nearly free, and
+  `leadListScope` already exists — use it rather than inventing a second rule.
+  But do not build machinery for a hierarchy that does not exist yet.
+- **Internal-only cosmetics.** Nobody outside the office sees them.
+
+**Worth more than it looks**
+
+- **Anything a client sees.** An email, a PDF, a DocuSign envelope, a quoted
+  price, a date. A wrong number in front of a customer is the expensive kind of
+  mistake here, and there is no support team to absorb it.
+- **Anything reachable without logging in.** The public booking route and the
+  inbound lead webhook are on the open internet; the shared-admin argument
+  gives them no cover at all.
+- **Silent failure.** Reporting success while committing nothing is worse than
+  an error, because with three people and no on-call there is nobody watching
+  logs — the first sign is a client asking why they never heard back.
+- **Anything that loses data or money.**
+
+When an issue's severity depends on which of these it is, say so explicitly
+instead of assigning a generic priority.
+
 ## Royal Construction Eve operations agent
 
 The authenticated orchestrator in `agent/agent.ts` routes requests to the
