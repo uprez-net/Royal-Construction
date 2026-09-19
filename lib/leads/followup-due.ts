@@ -56,12 +56,36 @@ export const LIVE_LEAD = {
  * renders a countdown badge that has nothing to count from. The Follow-ups tab
  * surfaces them in a bucket of their own.
  */
-export function dueFollowUpTaskWhere(
-  now: Date = new Date(),
-): Prisma.LeadTaskWhereInput {
+export function dueFollowUpTaskWhere({
+  now = new Date(),
+  assignedId = null,
+}: DueFollowUpTaskOptions = {}): Prisma.LeadTaskWhereInput {
   return {
     completedAt: null,
     dueDate: { not: null, lte: sydneyEndOfDay(sydneyToday(now)) },
-    lead: LIVE_LEAD,
+    lead: assignedId === null ? LIVE_LEAD : { ...LIVE_LEAD, assignedId },
   };
+}
+
+export interface DueFollowUpTaskOptions {
+  /** The instant to measure "today" from. Defaults to now. */
+  now?: Date;
+  /**
+   * Restrict to leads assigned to this application user, or `null` for every
+   * live lead.
+   *
+   * This is `leadListScope(user).assignedId` — the same rule `canAccessLead`
+   * applies one lead at a time, pushed into the query. Internal roles get
+   * `null` and read the whole business, which is what the dashboard is for and
+   * what every other KPI beside it already does. Anyone else is held to their
+   * own leads, and that is not optional: `proxy.ts` only turns away
+   * unauthenticated and GUEST users, so a CUSTOMER can reach the dashboard,
+   * and this list carries lead names, locations, task notes and lead notes.
+   *
+   * Taken as a plain id rather than importing `leadListScope` so this module
+   * keeps no edge to `lib/offer/access.ts`, which pulls in the Prisma client —
+   * `lib/data/lead-tasks.ts` imports this file and is bundled into the eve
+   * agent. The caller resolves the scope; this only applies it.
+   */
+  assignedId?: string | null;
 }

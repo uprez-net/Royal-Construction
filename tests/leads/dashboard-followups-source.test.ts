@@ -41,7 +41,7 @@ const code = (path: string) =>
 const MIDDAY_SYDNEY = new Date("2026-09-15T02:00:00.000Z");
 
 const dueDateFilter = (now: Date) => {
-  const { dueDate } = dueFollowUpTaskWhere(now);
+  const { dueDate } = dueFollowUpTaskWhere({ now });
   assert.ok(
     dueDate && typeof dueDate === "object" && "lte" in dueDate,
     "the predicate no longer bounds dueDate",
@@ -91,7 +91,7 @@ test("the cutoff follows daylight saving", () => {
 // ── What is counted ──
 
 test("only work that is still open counts", () => {
-  assert.equal(dueFollowUpTaskWhere(MIDDAY_SYDNEY).completedAt, null);
+  assert.equal(dueFollowUpTaskWhere({ now: MIDDAY_SYDNEY }).completedAt, null);
 });
 
 test("undated tasks are excluded, not treated as due", () => {
@@ -119,8 +119,76 @@ test("archived leads bring no follow-ups with them", () => {
   assert.equal(LIVE_LEAD.isArchived, false);
 });
 
-test("the predicate filters on the lead, so it can be reused verbatim", () => {
-  assert.deepEqual(dueFollowUpTaskWhere(MIDDAY_SYDNEY).lead, LIVE_LEAD);
+test("an unscoped caller reads every live lead", () => {
+  // leadListScope gives internal roles `{ assignedId: null }`, and the
+  // dashboard is a business overview — every other KPI beside this one counts
+  // the whole business.
+  assert.deepEqual(
+    dueFollowUpTaskWhere({ now: MIDDAY_SYDNEY }).lead,
+    LIVE_LEAD,
+  );
+});
+
+// ── The access boundary ──
+
+test("a scoped caller only sees leads assigned to them", () => {
+  // Not optional. proxy.ts turns away unauthenticated and GUEST users only, so
+  // a CUSTOMER reaches the dashboard, and these rows carry lead names,
+  // locations, task notes and lead notes. Dropping the filter outright would
+  // have widened row-level access.
+  const where = dueFollowUpTaskWhere({
+    now: MIDDAY_SYDNEY,
+    assignedId: "196994eb-5059-4fe8-ac4e-7c6d9934bbcf",
+  });
+
+  assert.deepEqual(where.lead, {
+    ...LIVE_LEAD,
+    assignedId: "196994eb-5059-4fe8-ac4e-7c6d9934bbcf",
+  });
+});
+
+test("scoping narrows the lead filter without dropping any of it", () => {
+  // A scoped query must still exclude closed and archived leads. Replacing the
+  // clause rather than extending it would quietly re-admit them.
+  const scoped = dueFollowUpTaskWhere({ assignedId: "someone" });
+  const lead = scoped.lead as Record<string, unknown>;
+
+  assert.deepEqual(lead.stage, LIVE_LEAD.stage);
+  assert.equal(lead.isArchived, false);
+  assert.equal(lead.assignedId, "someone");
+});
+
+test("the dashboard resolves the Clerk id before scoping, and refuses if it cannot", () => {
+  const source = code("lib/data/dashboard.ts");
+
+  assert.ok(
+    source.includes("getUserByClerkId(clerkId)"),
+    "the scope is being derived from something other than the application user",
+  );
+  assert.ok(
+    source.includes("leadListScope(user)"),
+    "the dashboard has its own access rule instead of the shared one",
+  );
+  // The unsafe failure mode is falling through to an unscoped read.
+  assert.ok(
+    /if \(!user\) \{\s*throw new Error\("Unauthorized"\);/.test(source),
+    "a Clerk user with no application row must not read every lead",
+  );
+});
+
+test("both the KPI and the list apply the scope", () => {
+  const source = code("lib/data/dashboard.ts");
+  const scoped = (
+    source.match(
+      /dueFollowUpTaskWhere\(\{[^}]*assignedId: scope\.assignedId/g,
+    ) ?? []
+  ).length;
+
+  assert.equal(
+    scoped,
+    2,
+    "the header count and the card must be scoped identically, or the number counts rows the card will not show",
+  );
 });
 
 // ── The dashboard uses it ──
@@ -148,13 +216,13 @@ test("the KPI and the card count the same thing", () => {
   // Both must go through the shared predicate. A second, hand-written copy of
   // the filter is exactly how the header and the card came to disagree.
   assert.ok(
-    /prisma\.leadTask\.count\(\{\s*where: dueFollowUpTaskWhere\(now\)/.test(
+    /prisma\.leadTask\.count\(\{\s*where: dueFollowUpTaskWhere\(\{/.test(
       source,
     ),
     "the KPI is not counting through the shared predicate",
   );
   assert.ok(
-    source.includes("where: dueFollowUpTaskWhere()"),
+    source.includes("where: dueFollowUpTaskWhere({ assignedId:"),
     "the list is not filtering through the shared predicate",
   );
 });

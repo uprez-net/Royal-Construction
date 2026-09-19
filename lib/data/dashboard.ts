@@ -14,6 +14,8 @@ import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import { calculateTrend } from "@/utils/formatters";
 import { dueFollowUpTaskWhere } from "@/lib/leads/followup-due";
 import { sydneyDateOnly, sydneyWallClockToInstant } from "@/lib/dates/sydney";
+import { getUserByClerkId } from "@/lib/data/user";
+import { leadListScope, type LeadListScope } from "@/lib/offer/access";
 
 type DashboardKPIQueryResult = {
   current_month_projects: bigint;
@@ -38,6 +40,31 @@ type DashboardKPIQueryResult = {
 };
 
 /**
+ * Which leads this caller is allowed to read, as a filter.
+ *
+ * Resolves the Clerk id to the application `User` first, because the two are
+ * different identifier spaces — comparing one to the other is what made the
+ * follow-up KPI read zero for everyone (#308). `leadListScope` then answers
+ * with `{ assignedId: null }` for internal roles, meaning no restriction, or
+ * the user's own uuid for anyone else.
+ *
+ * Throws rather than falling back to an unscoped read: a signed-in Clerk user
+ * with no application row is a broken state, and the safe reading of it is "no
+ * access", never "all leads".
+ *
+ * @param clerkId - The Clerk user id from `auth()`.
+ * @returns The lead-access scope to apply to every query in this request.
+ * @throws Error if the Clerk user has no corresponding application user.
+ */
+async function resolveLeadScope(clerkId: string): Promise<LeadListScope> {
+  const user = await getUserByClerkId(clerkId);
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+  return leadListScope(user);
+}
+
+/**
  * Gets key performance indicator data for the dashboard, including trends compared to previous periods. Requires user authentication and aggregates data across leads, projects, and milestones to provide insights on follow-ups, new leads, conversions, revenue, and spending.
  * @returns DashboardKPI object containing various metrics and their trends
  * @throws Error if user is not authenticated or if database queries fail
@@ -49,6 +76,8 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
     if (!userId) {
       throw new Error("Unauthorized");
     }
+
+    const scope = await resolveLeadScope(userId);
 
     const now = new Date();
 
@@ -66,9 +95,12 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
     //
     // Counting through the same predicate the list below uses is the fix for
     // the class, not only the instance: the header number and the card cannot
-    // now disagree, because there is one query behind both.
+    // now disagree, because there is one query behind both — including the
+    // access scope, so the number never counts rows the card may not show.
     const [followUpsCount, [result]] = await Promise.all([
-      prisma.leadTask.count({ where: dueFollowUpTaskWhere(now) }),
+      prisma.leadTask.count({
+        where: dueFollowUpTaskWhere({ now, assignedId: scope.assignedId }),
+      }),
       prisma.$queryRaw<DashboardKPIQueryResult[]>`
             WITH lead_stats AS (
                 SELECT
@@ -239,12 +271,19 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
  * of them overdue since April to June, fourteen of which had their follow-up
  * task completed; the one genuinely open task belonged to a lead marked Lost.
  *
- * The assignee filter is gone with it. It was never doing the job it looks
- * like it was doing: 47 of 66 leads carry no `assignedId` at all, including
- * every one of those fifteen, so scoping to the signed-in user hid the work
- * rather than focusing it. Nothing else on this dashboard is per-user — new
- * leads, new projects and revenue are all business-wide — and neither is the
- * Follow-ups tab this card sends you to.
+ * The blanket assignee filter is gone with it. It was never doing the job it
+ * looked like it was doing: 47 of 66 leads carry no `assignedId` at all,
+ * including every one of those fifteen, so scoping every caller to their own
+ * leads hid the work rather than focusing it. Nothing else on this dashboard
+ * is per-user — new leads, new projects and revenue are all business-wide —
+ * and neither is the Follow-ups tab this card sends you to.
+ *
+ * What replaces it is the access boundary rather than nothing. `leadListScope`
+ * gives internal roles the whole business and holds everyone else to their own
+ * leads, which is the same rule `canAccessLead` applies one lead at a time.
+ * Dropping the filter outright would have widened row-level access: `proxy.ts`
+ * only turns away unauthenticated and GUEST users, so a CUSTOMER can reach
+ * this page, and these rows carry lead names, locations and notes.
  */
 export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
   try {
@@ -253,8 +292,10 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
       throw new Error("Unauthorized");
     }
 
+    const scope = await resolveLeadScope(userId);
+
     const tasks = await prisma.leadTask.findMany({
-      where: dueFollowUpTaskWhere(),
+      where: dueFollowUpTaskWhere({ assignedId: scope.assignedId }),
       select: {
         id: true,
         dueDate: true,
