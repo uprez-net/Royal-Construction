@@ -58,8 +58,8 @@ export const LIVE_LEAD = {
  */
 export function dueFollowUpTaskWhere({
   now = new Date(),
-  assignedId = null,
-}: DueFollowUpTaskOptions = {}): Prisma.LeadTaskWhereInput {
+  assignedId,
+}: DueFollowUpTaskOptions): Prisma.LeadTaskWhereInput {
   return {
     completedAt: null,
     dueDate: { not: null, lte: sydneyEndOfDay(sydneyToday(now)) },
@@ -74,6 +74,11 @@ export interface DueFollowUpTaskOptions {
    * Restrict to leads assigned to this application user, or `null` for every
    * live lead.
    *
+   * Required, with no default, and that is the safety property: forgetting the
+   * scope is a compile error rather than a silent unscoped read. `null` has to
+   * be written out, so "every live lead" is always a decision somebody made on
+   * purpose and a reviewer can see.
+   *
    * This is `leadListScope(user).assignedId` — the same rule `canAccessLead`
    * applies one lead at a time, pushed into the query. Internal roles get
    * `null` and read the whole business, which is what the dashboard is for and
@@ -87,5 +92,5 @@ export interface DueFollowUpTaskOptions {
    * `lib/data/lead-tasks.ts` imports this file and is bundled into the eve
    * agent. The caller resolves the scope; this only applies it.
    */
-  assignedId?: string | null;
+  assignedId: string | null;
 }

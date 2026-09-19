@@ -41,7 +41,7 @@ const code = (path: string) =>
 const MIDDAY_SYDNEY = new Date("2026-09-15T02:00:00.000Z");
 
 const dueDateFilter = (now: Date) => {
-  const { dueDate } = dueFollowUpTaskWhere({ now });
+  const { dueDate } = dueFollowUpTaskWhere({ now, assignedId: null });
   assert.ok(
     dueDate && typeof dueDate === "object" && "lte" in dueDate,
     "the predicate no longer bounds dueDate",
@@ -91,7 +91,10 @@ test("the cutoff follows daylight saving", () => {
 // ── What is counted ──
 
 test("only work that is still open counts", () => {
-  assert.equal(dueFollowUpTaskWhere({ now: MIDDAY_SYDNEY }).completedAt, null);
+  assert.equal(
+    dueFollowUpTaskWhere({ now: MIDDAY_SYDNEY, assignedId: null }).completedAt,
+    null,
+  );
 });
 
 test("undated tasks are excluded, not treated as due", () => {
@@ -124,7 +127,7 @@ test("an unscoped caller reads every live lead", () => {
   // dashboard is a business overview — every other KPI beside this one counts
   // the whole business.
   assert.deepEqual(
-    dueFollowUpTaskWhere({ now: MIDDAY_SYDNEY }).lead,
+    dueFollowUpTaskWhere({ now: MIDDAY_SYDNEY, assignedId: null }).lead,
     LIVE_LEAD,
   );
 });
@@ -176,19 +179,58 @@ test("the dashboard resolves the Clerk id before scoping, and refuses if it cann
   );
 });
 
-test("both the KPI and the list apply the scope", () => {
-  const source = code("lib/data/dashboard.ts");
-  const scoped = (
-    source.match(
-      /dueFollowUpTaskWhere\(\{[^}]*assignedId: scope\.assignedId/g,
-    ) ?? []
-  ).length;
+test("forgetting the scope is a compile error, not a silent unscoped read", () => {
+  // The real guarantee. `assignedId` is required with no default, so a new
+  // caller cannot omit it and quietly read every lead — and `null` has to be
+  // written out, which makes "the whole business" a visible decision rather
+  // than the absence of one.
+  const source = code("lib/leads/followup-due.ts");
 
-  assert.equal(
-    scoped,
-    2,
-    "the header count and the card must be scoped identically, or the number counts rows the card will not show",
+  assert.ok(
+    /assignedId: string \| null;/.test(source),
+    "assignedId is optional again, so a caller can omit it and read every lead",
   );
+  assert.ok(
+    !/assignedId = null/.test(source),
+    "a default value would reinstate the silent unscoped read",
+  );
+});
+
+test("each dashboard function scopes its own query", () => {
+  // Counting occurrences across the file is not enough: both could sit in one
+  // function while the other runs unscoped. Split the source at the function
+  // boundary and check each side separately.
+  const source = code("lib/data/dashboard.ts");
+  const split = source.indexOf("export async function getDashboardFollowUps");
+  assert.ok(split > 0, "getDashboardFollowUps moved or was renamed");
+
+  const kpi = source.slice(0, split);
+  const list = source.slice(split);
+
+  assert.ok(
+    /prisma\.leadTask\.count\([\s\S]*?assignedId: scope\.assignedId/.test(kpi),
+    "the header count is not scoped to the caller",
+  );
+  assert.ok(
+    /prisma\.leadTask\.findMany\([\s\S]*?assignedId: scope\.assignedId/.test(
+      list,
+    ),
+    "the follow-up card is not scoped to the caller",
+  );
+  // Neither may reach for the unscoped form.
+  for (const [name, body] of [
+    ["KPI", kpi],
+    ["list", list],
+  ] as const) {
+    assert.ok(
+      !/dueFollowUpTaskWhere\(\{\s*(now\s*)?\}\)/.test(body),
+      `the ${name} calls the predicate without a scope`,
+    );
+    assert.ok(
+      !/assignedId: null/.test(body),
+      `the ${name} hard-codes an unscoped read instead of using leadListScope`,
+    );
+  }
 });
 
 // ── The dashboard uses it ──
