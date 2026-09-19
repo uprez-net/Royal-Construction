@@ -104,9 +104,10 @@ export function buildOfferPrintTemplateData({
   const selectedPrice = customerPrice.selectedContractValueIncGst;
   const savingAmount =
     standardPriceIncGst !== null ? standardPriceIncGst - selectedPrice : null;
+  const totalAreaSqm = getTotalAreaSqm(job);
 
   return {
-    areaLabel: getAreaLabel(getTotalAreaSqm(job)),
+    areaLabel: totalAreaSqm > 0 ? getAreaLabel(totalAreaSqm) : "",
     // The offer document is edited in the Offer phase, so its short client-
     // facing exclusion list must come only from that editable draft. Scope
     // exclusions remain available to the Tender via `exclusionRows` below,

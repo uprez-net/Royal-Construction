@@ -27,6 +27,8 @@ import {
   createContractEnvelope,
   type ContractTabValue,
 } from "@/lib/docusign/contract-envelope";
+import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
+import { randomUUID } from "node:crypto";
 import {
   CONTRACT_PARTICULAR_FIELDS,
   CONTRACT_PARTICULAR_MAX_LENGTH,
@@ -415,11 +417,15 @@ export async function sendContractForSignature(input: {
     locked("ownerPrintName", primaryOwner),
   ];
 
+  const sendAttemptId = `${offer.id}.${randomUUID()}`;
+  const attemptStarted = new Date();
   let envelope;
+  let docusignContext: Awaited<ReturnType<typeof createDocusignContext>> | null =
+    null;
   try {
-    const context = await createDocusignContext(config);
+    docusignContext = await createDocusignContext(config);
     envelope = await createContractEnvelope({
-      context,
+      context: docusignContext,
       config,
       templateId:
         ownerSigners.length === 1
@@ -440,42 +446,95 @@ export async function sendContractForSignature(input: {
         { tabLabel: "hbcfIncluded", selected: true },
         { tabLabel: "exclusionsYes", selected: exclusions.length > 0 },
       ],
+      sendAttemptId,
     });
   } catch (error) {
-    const reason = describeDocusignError(error);
-    // Logged and recorded before the claim is released. The release puts the
-    // offer back exactly where it was and the refusal reaches only whoever
-    // clicked, so otherwise nothing showed that a send was tried and rejected.
-    console.error(
-      `[offer] contract envelope creation failed for offer ${offer.id}; claim released:`,
-      reason,
+    const recovery = await resolveEnvelopeCreateError({
       error,
-    );
-    await prisma.offerStatusEvent
-      .create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: offer.offerStatus,
-          note: `DocuSign rejected the Contract envelope: ${reason}`,
-          actorId: access.user.id,
-        },
-      })
-      .catch((eventError) =>
-        console.error(
-          "[offer] recording the rejected contract envelope failed:",
-          eventError,
-        ),
-      );
-    // Release the claim so the builder can retry.
-    await prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SENT },
-      data: { offerStatus: offer.offerStatus },
+      context: docusignContext,
+      sendAttemptId,
+      attemptStarted,
     });
-    return {
-      ok: false,
-      error: `DocuSign envelope failed: ${describeDocusignError(error)}`,
-    };
+    if (recovery.kind === "reconciled") {
+      envelope = {
+        envelopeId: recovery.envelopeId,
+        recipients: [
+          {
+            role: "BUILDER",
+            name: config.builderSignerName,
+            email: config.builderSignerEmail,
+            routingOrder: 2,
+            recipientId: "",
+            capacity: null,
+            entityName: null,
+            entityAbn: null,
+          },
+          ...ownerSigners.map((signer) => ({
+            role: "CUSTOMER" as const,
+            name: signer.name,
+            email: signer.email,
+            routingOrder: 1,
+            recipientId: "",
+            capacity: signer.capacity ?? null,
+            entityName: signer.entityName ?? null,
+            entityAbn: signer.entityAbn ?? null,
+          })),
+        ],
+      };
+    } else if (recovery.kind === "outcome-unknown") {
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: offer.offerStatus,
+            toStatus: OfferStatus.CONTRACT_SENT,
+            note: `DocuSign did not respond in time — checking whether the Contract envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the unknown contract envelope outcome failed:",
+            eventError,
+          ),
+        );
+      return {
+        ok: false,
+        error:
+          "DocuSign did not confirm whether the Contract was sent. Do not resend — wait for reconciliation or check DocuSign before trying again.",
+      };
+    } else {
+      const reason = recovery.reason;
+      console.error(
+        `[offer] contract envelope creation failed for offer ${offer.id}; claim released:`,
+        reason,
+        error,
+      );
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: offer.offerStatus,
+            toStatus: offer.offerStatus,
+            note: `DocuSign rejected the Contract envelope: ${reason}`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the rejected contract envelope failed:",
+            eventError,
+          ),
+        );
+      await prisma.offer.updateMany({
+        where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SENT },
+        data: { offerStatus: offer.offerStatus },
+      });
+      return {
+        ok: false,
+        error: `DocuSign envelope failed: ${reason}`,
+      };
+    }
   }
 
   const documentData = {
@@ -711,17 +770,4 @@ export async function saveContractParticulars(input: {
   }
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   return { ok: true };
-}
-
-function describeDocusignError(error: unknown): string {
-  const response = (error as { response?: { body?: unknown } }).response;
-  if (response?.body) {
-    const body = response.body as { errorCode?: string; message?: string };
-    if (body.message) {
-      return body.errorCode
-        ? `${body.errorCode}: ${body.message}`
-        : body.message;
-    }
-  }
-  return (error as Error).message ?? "Unknown error";
 }

@@ -84,6 +84,7 @@ function BookingContent() {
   const initialName = searchParams.get("name") || "";
   const initialEmail = searchParams.get("email") || "";
   const initialId = searchParams.get("id") || "";
+  const bookingToken = searchParams.get("bookingToken") || "";
 
   const [clientName, setClientName] = useState(initialName);
   const [clientEmail, setClientEmail] = useState(initialEmail);
@@ -184,7 +185,8 @@ function BookingContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: Number(initialId || undefined),
+          ...(initialId ? { id: Number(initialId) } : {}),
+          ...(bookingToken ? { bookingToken } : {}),
           name: trimmedName,
           email: trimmedEmail,
           startDateTime,

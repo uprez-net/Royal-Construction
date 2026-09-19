@@ -1,6 +1,7 @@
 import docusign from "docusign-esign";
 import type { DocusignConfig } from "./config";
 import type { DocusignContext } from "./client";
+import { attachSendAttemptCustomField } from "./envelope-send-attempt";
 
 // No DocuSign templates: the Tender PDF is generated at runtime and the
 // signature tabs AutoPlace onto the anchor strings the HTML already embeds
@@ -45,6 +46,31 @@ function anchorTab(tag: string): docusign.SignHere {
   } as docusign.SignHere;
 }
 
+export function buildTenderEnvelopeRecipientRecords(
+  builder: EnvelopeSignerInput,
+  owners: readonly EnvelopeSignerInput[],
+): readonly EnvelopeRecipientRecord[] {
+  return [
+    {
+      role: "BUILDER",
+      name: builder.name,
+      email: builder.email,
+      routingOrder: 2,
+      recipientId: "1",
+    },
+    ...owners.map<EnvelopeRecipientRecord>((owner, index) => ({
+      role: "CUSTOMER",
+      name: owner.name,
+      email: owner.email,
+      routingOrder: 1,
+      recipientId: String(index + 2),
+      capacity: owner.capacity ?? null,
+      entityName: owner.entityName ?? null,
+      entityAbn: owner.entityAbn ?? null,
+    })),
+  ];
+}
+
 export async function createTenderEnvelope(args: {
   readonly context: DocusignContext;
   readonly config: DocusignConfig;
@@ -53,6 +79,7 @@ export async function createTenderEnvelope(args: {
   readonly emailSubject: string;
   readonly builder: EnvelopeSignerInput;
   readonly owners: readonly EnvelopeSignerInput[];
+  readonly sendAttemptId?: string;
 }): Promise<CreateEnvelopeResult> {
   const { context, config, pdfBase64, documentName, emailSubject } = args;
 
@@ -98,6 +125,10 @@ export async function createTenderEnvelope(args: {
     status: "sent",
   };
 
+  if (args.sendAttemptId) {
+    attachSendAttemptCustomField(envelopeDefinition, args.sendAttemptId);
+  }
+
   // Envelope-level Connect: status events land on our webhook without any
   // account-level Connect configuration. includeHMAC is what makes DocuSign
   // send x-docusign-signature-1; without it the webhook route rejects every
@@ -136,25 +167,7 @@ export async function createTenderEnvelope(args: {
 
   return {
     envelopeId: result.envelopeId,
-    recipients: [
-      {
-        role: "BUILDER",
-        name: args.builder.name,
-        email: args.builder.email,
-        routingOrder: 2,
-        recipientId: "1",
-      },
-      ...args.owners.map<EnvelopeRecipientRecord>((owner, index) => ({
-        role: "CUSTOMER",
-        name: owner.name,
-        email: owner.email,
-        routingOrder: 1,
-        recipientId: String(index + 2),
-        capacity: owner.capacity ?? null,
-        entityName: owner.entityName ?? null,
-        entityAbn: owner.entityAbn ?? null,
-      })),
-    ],
+    recipients: buildTenderEnvelopeRecipientRecords(args.builder, args.owners),
   };
 }
 

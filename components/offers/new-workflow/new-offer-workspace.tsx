@@ -496,6 +496,7 @@ export function NewOfferWorkspace({
     () =>
       collectOfferSendBlockers({
         hasLead: leadId !== undefined,
+        hasKnownFloorArea: totalAreaSqm > 0,
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
@@ -504,6 +505,7 @@ export function NewOfferWorkspace({
     [
       adminContentStale,
       leadId,
+      totalAreaSqm,
       customerPrice.needsOverrideReason,
       offerExpiry,
       ownerIssues,

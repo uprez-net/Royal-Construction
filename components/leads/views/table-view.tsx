@@ -19,7 +19,8 @@ import {
   isKpiCohortMetric,
   sortLeadOpenTasks,
 } from "@/lib/leads/lead-helpers";
-import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
+import { leadActions } from "@/lib/leads/lead-actions";
+import { bookConsultationUrlForLead } from "@/lib/actions/leads";
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
 import {
@@ -162,7 +163,10 @@ export default function TableView({
   };
 
   const redirectToScheduleMeeting = (lead: Lead) => {
-    window.location.assign(bookConsultationHref(lead, user?.fullName));
+    void bookConsultationUrlForLead(lead, user?.fullName).then(
+      (href) => window.location.assign(href),
+      () => showToast("Could not open the booking link.", "error"),
+    );
   };
 
   /** The lead detail modal was replaced by a full page at /leads/[id]. */

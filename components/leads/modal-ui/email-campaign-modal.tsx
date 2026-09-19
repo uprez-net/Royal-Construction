@@ -20,6 +20,7 @@ import {
 } from "@/lib/leads/lead-helpers";
 import { Button } from "@/components/ui/button";
 import { ReactEmailIframe } from "../render-email";
+import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { CustomTemplateCreation } from "./custom-template-creation";
 import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
@@ -130,6 +131,27 @@ export function EmailCampaignModal({
     const now = new Date();
 
     try {
+      const isCustomTemplate = selectedTemplate.category === "custom";
+      let customHtmlTemplate: string | null = null;
+      if (isCustomTemplate) {
+        if (hook.generatedHtml) {
+          customHtmlTemplate = hook.generatedHtml;
+        } else {
+          const iframeDoc = emailIframeRef.current?.contentDocument;
+          if (iframeDoc) {
+            iframeDoc
+              .querySelectorAll(".rc-hover-toolbar")
+              .forEach((t) => t.remove());
+            let cleanHtml = iframeDoc.body.innerHTML;
+            cleanHtml = cleanHtml.replace(/\s*contenteditable="[^"]*"/gi, "");
+            cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, "");
+            cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, "");
+            cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi, "");
+            customHtmlTemplate = cleanHtml;
+          }
+        }
+      }
+
       const updated: Lead[] = [];
       const batchSize = 20;
       for (let index = 0; index < allLeads.length; index += batchSize) {
@@ -140,41 +162,16 @@ export function EmailCampaignModal({
             let finalHtmlBody = "";
             try {
               const subject = hydrateVariable(subjectTemplate, lead);
-              const iframeDoc = emailIframeRef.current?.contentDocument;
-              if (iframeDoc) {
-                // Clean up DOM artifacts from interactive preview
-                iframeDoc
-                  .querySelectorAll(".rc-hover-toolbar")
-                  .forEach((t) => t.remove());
-                iframeDoc.querySelectorAll("a, button").forEach((el) => {
-                  (el as HTMLElement).style.outline = "";
-                  (el as HTMLElement).style.outlineOffset = "";
-                });
-                iframeDoc.body.contentEditable = "false";
-
-                let cleanHtml = iframeDoc.body.innerHTML;
-                cleanHtml = cleanHtml.replace(
-                  /\s*contenteditable="[^"]*"/gi,
-                  "",
+              if (isCustomTemplate && customHtmlTemplate) {
+                finalHtmlBody = hydrateVariable(
+                  DOMPurify.sanitize(customHtmlTemplate),
+                  lead,
                 );
-                cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, "");
-                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, "");
-                cleanHtml = cleanHtml.replace(
-                  /<script[\s\S]*?<\/script>/gi,
-                  "",
+              } else if (selectedTemplate.category) {
+                finalHtmlBody = await renderEmailHtml(
+                  selectedTemplate.category,
+                  lead,
                 );
-                cleanHtml = cleanHtml.replace(
-                  /outline:\s*2px dashed #c6923a;?\s*/gi,
-                  "",
-                );
-                cleanHtml = cleanHtml.replace(
-                  /outline-offset:\s*2px;?\s*/gi,
-                  "",
-                );
-                cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, "");
-                // Capture the updated HTML
-                finalHtmlBody = cleanHtml;
-                finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
               }
 
               if (!finalHtmlBody) {

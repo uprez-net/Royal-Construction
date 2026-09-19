@@ -12,6 +12,7 @@ import MaterialCatalogueEmail from "@/lib/graph/Email/material-catalogue-email";
 import PortfolioEmail from "@/lib/graph/Email/portfolio-email";
 import { LeadEmailContext } from "@/lib/graph/Email/email-lead-context";
 import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
+import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
 interface LeadPreview {
   id: number;
@@ -85,6 +86,10 @@ export async function renderEmailHtml(
       email: lead.email,
       id: String(lead.id),
     });
+    const token = signBookConsultationToken(lead.id);
+    if (token) {
+      params.set("bookingToken", token);
+    }
     bookingUrl += `?${params.toString()}`;
   }
 

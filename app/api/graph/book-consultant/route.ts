@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ClientSecretCredential } from "@azure/identity";
 import { fromZonedTime } from "date-fns-tz";
 import { getGraphConfig } from "@/lib/graph/config";
-import { createLead, findLeadByEmail, updateLead } from "@/lib/data/leads";
+import { createLead, findLeadById, updateLead } from "@/lib/data/leads";
+import { authorizeLeadAccess } from "@/lib/data/offer-access";
+import { verifyBookConsultationToken } from "@/lib/leads/book-consultation-token";
 import { createLeadTask } from "@/lib/data/lead-tasks";
 import {
   sydneyDateOnly,
@@ -132,8 +134,36 @@ async function findConflictingEvent(
 const toDateOnly = sydneyDateOnly;
 const toTimeOnly = sydneyTimeOnly;
 
+async function resolveAuthorizedLeadId(
+  body: Record<string, unknown>,
+): Promise<number | null> {
+  const rawId = body.id;
+  const leadId =
+    typeof rawId === "number"
+      ? rawId
+      : typeof rawId === "string" && rawId.trim().length > 0
+        ? Number(rawId)
+        : NaN;
+  if (!Number.isSafeInteger(leadId) || leadId <= 0) {
+    return null;
+  }
+
+  const token =
+    typeof body.bookingToken === "string" ? body.bookingToken.trim() : "";
+  if (token && verifyBookConsultationToken(token, leadId)) {
+    return leadId;
+  }
+
+  const access = await authorizeLeadAccess(leadId);
+  if (access.ok) {
+    return leadId;
+  }
+
+  return null;
+}
+
 async function upsertBookingNotes({
-  id,
+  existingLeadId,
   name,
   email,
   notes,
@@ -141,7 +171,7 @@ async function upsertBookingNotes({
   /** When the consultation actually is. */
   meetingAt,
 }: {
-  id: number;
+  existingLeadId: number | null;
   name: string;
   email: string;
   notes: string;
@@ -157,8 +187,11 @@ async function upsertBookingNotes({
     type: "system",
   };
 
-  const existingLead = await findLeadByEmail(id);
-  if (existingLead) {
+  if (existingLeadId !== null) {
+    const existingLead = await findLeadById(existingLeadId);
+    if (!existingLead) {
+      throw new Error(`Lead ${existingLeadId} was not found.`);
+    }
     await updateLead(existingLead.id, {
       // Lead.notes is deliberately left alone. Overwriting it put this booking's
       // agenda where the sales notes belong, and everything that reads that
@@ -248,7 +281,7 @@ async function upsertBookingNotes({
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = await req.json();
-    const { id, name = "Client", email, startDateTime, notes } = body;
+    const { name = "Client", email, startDateTime, notes } = body;
 
     if (!name || !email || !startDateTime) {
       return NextResponse.json(
@@ -432,9 +465,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
         : `Appointment: ${appointmentLabel}`;
 
+    const existingLeadId = await resolveAuthorizedLeadId(
+      body as Record<string, unknown>,
+    );
+
     try {
       await upsertBookingNotes({
-        id: Number(id),
+        existingLeadId,
         name,
         email,
         notes: trimmedNotes,

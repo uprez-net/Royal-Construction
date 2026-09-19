@@ -717,6 +717,7 @@ test("AI-drafted rows are reported so they can be surfaced before send", () => {
 // A model judgement about contract text must never stop a live deal going out.
 test("an unresolved mismatch warns before send, never blocks", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",
@@ -732,6 +733,7 @@ test("an unresolved mismatch warns before send, never blocks", () => {
 
 test("one mismatch reads in the singular", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",
@@ -746,6 +748,7 @@ test("one mismatch reads in the singular", () => {
 
 test("no findings, no blocker", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",
