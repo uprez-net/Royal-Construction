@@ -6,10 +6,8 @@ import { buildWelcomeParagraphs } from "../../lib/offer/workspace-proposal-conte
 import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
 import { INITIAL_OFFER_JOB } from "../../lib/offer/workspace-model";
-import {
-  INITIAL_AREA_CALCULATOR,
-  LEGACY_CALC_VERSION,
-} from "../../lib/offer/workspace-persistence";
+import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { LEGACY_CALC_VERSION } from "../../lib/offer/workspace-persistence";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -54,7 +52,9 @@ test("send readiness blocks when no floor area is entered", () => {
     needsOverrideReason: false,
     expiryState: "valid",
   });
-  assert.ok(blockers.some((b) => b.id === "floor-area" && b.severity === "block"));
+  assert.ok(
+    blockers.some((b) => b.id === "floor-area" && b.severity === "block"),
+  );
 });
 
 test("a zero-area proposal does not tell the client their home is 0 m²", () => {

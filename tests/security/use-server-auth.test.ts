@@ -126,8 +126,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/user.ts#getUserByClerkIdCached": USERS,
   "lib/data/user.ts#resolveUserIdsToClerkIds": USERS,
   "lib/data/user.ts#updateUser": USERS,
-  "lib/leads/render-email-html.tsx#renderEmailHtml":
-    "renders a fixed email template from values the caller already holds; reads no stored data",
   "lib/notification/novu.ts#triggerNotification":
     "sends in-app notifications; only server code calls it, so it wants server-only (follow-up)",
   "utils/generate-email-subject.ts#generateEmailSubject":
