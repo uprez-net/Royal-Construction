@@ -89,10 +89,10 @@ test("a zero-area tender does not contract the client to 0 m²", () => {
 
 test("a real area still prints on the tender", () => {
   // The guard must not have silently removed the row for everyone.
-  const snapshot = zeroAreaSnapshot();
-  snapshot.job = {
-    ...snapshot.job,
-    groundFloorSqm: 180,
+  const base = zeroAreaSnapshot();
+  const snapshot = {
+    ...base,
+    job: { ...base.job, groundFloorSqm: 180 },
   };
   const html = buildTenderHtml(buildProposalInput(snapshot));
   assert.ok(html.includes("Total build area"), "the row disappeared entirely");
