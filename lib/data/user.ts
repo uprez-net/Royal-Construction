@@ -1,3 +1,5 @@
+import "server-only";
+
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
@@ -27,9 +29,8 @@ import {
 // page, a route handler, proxy.ts or another server module. Dropping the
 // directive closes the endpoint surface and changes nothing else.
 //
-// `import "server-only"` is still NOT added, and that is why the follow-up
-// stayed open: proxy.ts imports getUserByClerkId, and the middleware runtime
-// cannot load server-only.
+// The middleware lookup lives in the Node-safe domain module now, so this
+// adapter can be marked server-only without pulling the marker into proxy.ts.
 //
 // The reads and writes themselves live in lib/domain/identity/users.ts, where
 // Eve, a cron and a script can reach them too. Only the cached read below

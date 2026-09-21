@@ -2,12 +2,21 @@ import { TradieScheduleStatus } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import {
+  DomainAuthorizationError,
   DomainNotFoundError,
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
-import type { DomainPrincipal } from "../principal";
+import {
+  attributionUserId,
+  type DomainPrincipal,
+} from "../principal";
 import { authorizeProject } from "../access/projects";
+import {
+  normalizeQuoteBasis,
+  parseQuotedAmount,
+  scheduleTotalCost,
+} from "../../../utils/calculations";
 
 // Booking a tradie onto a project.
 //
@@ -186,4 +195,293 @@ export async function createTradieSchedule(
   });
 
   return created;
+}
+
+const ALLOWED_TRANSITIONS: Record<
+  TradieScheduleStatus,
+  readonly TradieScheduleStatus[]
+> = {
+  [TradieScheduleStatus.PENDING]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.NO_RESPONSE,
+    TradieScheduleStatus.PENDING_RESPONSE,
+  ],
+  [TradieScheduleStatus.AWAITING_QUOTE]: [
+    TradieScheduleStatus.PENDING_RESPONSE,
+    TradieScheduleStatus.NO_RESPONSE,
+  ],
+  [TradieScheduleStatus.PENDING_RESPONSE]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.QUOTE_RECEIVED]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
+    TradieScheduleStatus.CONFIRMED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.CONFIRMED]: [
+    TradieScheduleStatus.COMPLETED,
+    TradieScheduleStatus.DECLINED,
+    TradieScheduleStatus.CONFIRMED,
+  ],
+  [TradieScheduleStatus.PENDING_FINAL_CONFIRMATION]: [
+    TradieScheduleStatus.CONFIRMED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.NO_RESPONSE]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.DECLINED]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.PENDING_RESPONSE,
+    TradieScheduleStatus.NO_RESPONSE,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.COMPLETED]: [],
+};
+
+type ScheduleQuoteInput = {
+  readonly quote?: string | null;
+  readonly quoteUnit?: "FIXED" | "HOURLY" | "DAILY";
+};
+
+type ScheduleMutationResult = {
+  readonly scheduleId: string;
+  readonly tradieId: string;
+  readonly tradieName: string;
+  readonly projectId: string;
+  readonly projectName: string;
+  readonly status: TradieScheduleStatus;
+  readonly previousStatus?: TradieScheduleStatus;
+  readonly scheduledDate: Date;
+  readonly durationDays: number;
+  readonly quotedPrice: string | null;
+};
+
+/** Move one booking through the persisted state machine and quote rule. */
+export async function transitionTradieSchedule(
+  principal: DomainPrincipal,
+  input: { scheduleId: string; toStatus: TradieScheduleStatus } & ScheduleQuoteInput,
+  db: DomainDb,
+): Promise<ScheduleMutationResult> {
+  const existing = await findSchedule(input.scheduleId, db);
+  await authorizeProject(principal, existing.projectId, db);
+
+  if (!ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)) {
+    throw new DomainTransitionError(
+      `Invalid schedule transition from ${existing.status} to ${input.toStatus}.`,
+      existing.status,
+      input.toStatus,
+    );
+  }
+
+  const normalized = readQuote(input.quote, input.quoteUnit);
+  const updatedCount = await db.tradieSchedule.updateMany({
+    data: {
+      status: input.toStatus,
+      ...(normalized
+        ? {
+            quotedPrice: scheduleTotalCost(
+              normalized.amount,
+              existing.durationDays,
+              normalized.unit,
+            ).toFixed(2),
+            requiresQuote: true,
+          }
+        : {}),
+    },
+    where: { id: existing.id, status: existing.status },
+  });
+  if (updatedCount.count !== 1) {
+    throw new DomainTransitionError(
+      "The schedule changed before this transition was applied.",
+    );
+  }
+
+  if (normalized) {
+    await db.tradie.update({
+      data: {
+        lastQuotedPrice: normalized.amount,
+        lastQuotedPriceUnit: normalized.unit,
+      },
+      where: { id: existing.tradieId },
+    });
+  }
+
+  return {
+    durationDays: existing.durationDays,
+    previousStatus: existing.status,
+    projectId: existing.projectId,
+    projectName: existing.project.name,
+    quotedPrice: normalized
+      ? scheduleTotalCost(
+          normalized.amount,
+          existing.durationDays,
+          normalized.unit,
+        ).toFixed(2)
+      : existing.quotedPrice,
+    scheduleId: existing.id,
+    scheduledDate: existing.scheduledDate,
+    status: input.toStatus,
+    tradieId: existing.tradieId,
+    tradieName: existing.tradie.name,
+  };
+}
+
+/** Reschedule one booking with an optimistic old-date/duration check. */
+export async function rescheduleTradieSchedule(
+  principal: DomainPrincipal,
+  input: {
+    scheduleId: string;
+    scheduledDate: Date;
+    durationDays?: number;
+    milestoneId?: string | null;
+  },
+  db: DomainDb,
+): Promise<ScheduleMutationResult> {
+  const existing = await findSchedule(input.scheduleId, db);
+  await authorizeProject(principal, existing.projectId, db);
+  const durationDays = input.durationDays ?? existing.durationDays;
+  if (!Number.isInteger(durationDays) || durationDays < 1) {
+    throw new DomainValidationError(
+      "A schedule must last at least one day.",
+      "durationDays",
+    );
+  }
+  if (Number.isNaN(input.scheduledDate.getTime())) {
+    throw new DomainValidationError("The scheduled date is invalid.", "scheduledDate");
+  }
+  if (input.milestoneId) {
+    await assertMilestoneOnProject(existing.projectId, input.milestoneId, db);
+  }
+  await assertNoScheduleConflict(
+    {
+      durationDays,
+      ignoreScheduleId: existing.id,
+      scheduledDate: input.scheduledDate,
+      tradieId: existing.tradieId,
+    },
+    db,
+  );
+
+  const updatedCount = await db.tradieSchedule.updateMany({
+    data: {
+      durationDays,
+      ...(input.milestoneId !== undefined
+        ? { milestoneId: input.milestoneId }
+        : {}),
+      scheduledDate: input.scheduledDate,
+    },
+    where: {
+      durationDays: existing.durationDays,
+      id: existing.id,
+      scheduledDate: existing.scheduledDate,
+    },
+  });
+  if (updatedCount.count !== 1) {
+    throw new DomainTransitionError(
+      "The schedule changed before it could be rescheduled.",
+    );
+  }
+
+  return {
+    durationDays,
+    projectId: existing.projectId,
+    projectName: existing.project.name,
+    quotedPrice: existing.quotedPrice,
+    scheduleId: existing.id,
+    scheduledDate: input.scheduledDate,
+    status: existing.status,
+    tradieId: existing.tradieId,
+    tradieName: existing.tradie.name,
+  };
+}
+
+/** Queue deletion; the booking remains until an admin resolves the request. */
+export async function requestTradieScheduleDeletion(
+  principal: DomainPrincipal,
+  input: { scheduleId: string; reason: string },
+  db: DomainDb,
+): Promise<{ approvalId: string; scheduleId: string; status: TradieScheduleStatus }> {
+  const schedule = await findSchedule(input.scheduleId, db);
+  await authorizeProject(principal, schedule.projectId, db);
+  const requesterId = attributionUserId(principal);
+  if (!requesterId) {
+    throw new DomainAuthorizationError(
+      "Requesting schedule deletion needs a signed-in user.",
+    );
+  }
+  if (!input.reason.trim()) {
+    throw new DomainValidationError("A deletion reason is required.", "reason");
+  }
+
+  const existing = await db.tradieApproval.findFirst({
+    select: { id: true },
+    where: { pendingDeletionKey: schedule.id },
+  });
+  if (existing) {
+    throw new DomainTransitionError(
+      "A deletion request for this schedule is already pending.",
+    );
+  }
+
+  const approval = await db.tradieApproval.create({
+    data: {
+      actionType: "SCHEDULE_DELETION",
+      pendingDeletionKey: schedule.id,
+      reason: input.reason.trim(),
+      requestedBy: requesterId,
+      tradieId: schedule.tradieId,
+      updationData: {
+        currentStatus: schedule.status,
+        durationDays: schedule.durationDays,
+        projectId: schedule.projectId,
+        projectName: schedule.project.name,
+        scheduleId: schedule.id,
+        scheduledDate: schedule.scheduledDate.toISOString(),
+      },
+    },
+    select: { id: true },
+  });
+  return { approvalId: approval.id, scheduleId: schedule.id, status: schedule.status };
+}
+
+async function findSchedule(scheduleId: string, db: DomainDb) {
+  const schedule = await db.tradieSchedule.findUnique({
+    select: {
+      durationDays: true,
+      id: true,
+      milestoneId: true,
+      project: { select: { id: true, name: true, siteManagerId: true } },
+      projectId: true,
+      quotedPrice: true,
+      scheduledDate: true,
+      status: true,
+      tradie: { select: { id: true, name: true } },
+      tradieId: true,
+      milestone: { select: { id: true, name: true } },
+    },
+    where: { id: scheduleId },
+  });
+  if (!schedule) throw new DomainNotFoundError("Schedule not found");
+  return schedule;
+}
+
+function readQuote(
+  quote: string | null | undefined,
+  quoteUnit: ScheduleQuoteInput["quoteUnit"],
+) {
+  if (!quote) return null;
+  const amount = parseQuotedAmount(quote);
+  if (amount === null) {
+    throw new DomainValidationError(
+      "The quote must contain exactly one non-negative money amount.",
+      "quote",
+    );
+  }
+  return normalizeQuoteBasis(amount, quoteUnit ?? "FIXED");
 }

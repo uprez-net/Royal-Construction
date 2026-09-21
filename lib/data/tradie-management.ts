@@ -2,8 +2,6 @@
 import type {
   CreateTradieInput,
   DeleteInput,
-  IncidentReportJsonPayload,
-  PriceUpdateJsonPayload,
   RatingInput,
   ReportIncidentInput,
   TradieDetails,
@@ -15,12 +13,7 @@ import type {
 import prisma from "../prisma";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "./user";
-import {
-  TradieApprovalActionType,
-  TradieIncident,
-  Prisma,
-  Tradie,
-} from "@prisma/client";
+import { TradieIncident, Prisma, Tradie } from "@prisma/client";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { CACHE_PROFILES } from "@/types/cache";
 import { after } from "next/server";
@@ -31,6 +24,42 @@ import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
 import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { getAllAdminUsersIds } from "./user";
+import {
+  createTradie as createTradieDomain,
+  rateTradie as rateTradieDomain,
+  requestTradiePriceChange,
+  requestTradieRemoval,
+  toggleTradieFavourite as toggleTradieFavouriteDomain,
+  updateTradie as updateTradieDomain,
+} from "@/lib/domain/tradies/directory";
+import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
+import { userPrincipal } from "@/lib/domain/principal";
+
+/**
+ * The signed-in user behind a tradie Server Action.
+ *
+ * This module is "use server", so every export below is a POST endpoint that
+ * any signed-in caller can invoke with arguments of their choosing — and the
+ * Redux slice calls several of them straight from the browser, so the
+ * directive cannot simply be dropped the way it was for lib/data/user.ts.
+ *
+ * None of these checked their caller at all until issue #301 phase 6: a
+ * CUSTOMER account could POST createTradie, updateTradie, deleteTradie,
+ * rateTradie or updateTradiePrice. The rules live in
+ * lib/domain/tradies/directory.ts, shared with Eve's tools, and this resolves
+ * the caller to hand them.
+ */
+async function requireTradieActor() {
+  const { userId } = await auth();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+  const user = await getUserByClerkIdCached(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  return user;
+}
 
 /**
  * Creates a new tradie record and returns a mapped tradie row.
@@ -43,9 +72,12 @@ export async function createTradie(
   input: CreateTradieInput,
 ): Promise<TradieRow> {
   try {
-    const res = await prisma.tradie.create({
-      data: input,
-    });
+    const actor = await requireTradieActor();
+    const res = await createTradieDomain(
+      userPrincipal(actor),
+      input as never,
+      prisma,
+    );
 
     after(() => {
       revalidateTag("tradie-management", CACHE_PROFILES.MEDIUM);
@@ -180,37 +212,23 @@ export async function getTradieByIdCached(
  */
 export async function updateTradiePrice(input: UpdatePriceInput) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      throw new Error("User not authenticated");
-    }
-    const user = await getUserByClerkIdCached(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const tradie = await prisma.tradie.findUnique({
-      where: { id: input.tradieId },
-    });
-
-    if (!tradie) {
-      throw new Error("Tradie not found");
-    }
-
-    const approval = await prisma.tradieApproval.create({
-      data: {
-        tradieId: input.tradieId,
-        actionType: TradieApprovalActionType.PRICE_CHANGE,
+    const actor = await requireTradieActor();
+    const requested = await requestTradiePriceChange(
+      userPrincipal(actor),
+      {
+        amount: input.newHourlyRate,
         reason: input.reason,
-        requestedBy: user.id,
-        updationData: {
-          newHourlyRate: input.newHourlyRate,
-          newPriceUnit: input.newPriceUnit,
-        } satisfies PriceUpdateJsonPayload,
+        tradieId: input.tradieId,
+        unit: input.newPriceUnit,
       },
-      select: {
-        id: true,
-      },
-    });
+      prisma,
+    );
+    const approval = { id: requested.approvalId };
+    const tradie = {
+      lastQuotedPrice: requested.previousPrice,
+      name: requested.tradieName,
+      trade: requested.tradieTrade,
+    };
 
     after(async () => {
       revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
@@ -246,32 +264,19 @@ export async function updateTradiePrice(input: UpdatePriceInput) {
  */
 export async function deleteTradie(input: DeleteInput) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      throw new Error("User not authenticated");
-    }
-    const user = await getUserByClerkIdCached(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const tradie = await prisma.tradie.findUnique({
-      where: { id: input.tradieId },
-    });
-
-    if (!tradie) {
-      throw new Error("Tradie not found");
-    }
-    const approval = await prisma.tradieApproval.create({
-      data: {
-        tradieId: input.tradieId,
-        actionType: TradieApprovalActionType.TRADIE_REMOVAL,
-        reason: input.reason,
-        requestedBy: user.id,
-      },
-      select: {
-        id: true,
-      },
-    });
+    const user = await requireTradieActor();
+    const requested = await requestTradieRemoval(
+      userPrincipal(user),
+      { reason: input.reason, tradieId: input.tradieId },
+      prisma,
+    );
+    const approval = { id: requested.approvalId };
+    const tradie = {
+      email: requested.tradieEmail,
+      name: requested.tradieName,
+      phone: requested.tradiePhone,
+      trade: requested.tradieTrade,
+    };
 
     after(async () => {
       revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
@@ -307,44 +312,18 @@ export async function deleteTradie(input: DeleteInput) {
  */
 export async function rateTradie(input: RatingInput) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      throw new Error("User not authenticated");
-    }
-    const user = await getUserByClerkIdCached(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const tradie = await prisma.tradie.findUnique({
-      where: { id: input.tradieId },
-    });
-
-    if (!tradie) {
-      throw new Error("Tradie not found");
-    }
-
-    await prisma.tradieRating.create({
-      data: {
-        tradieId: input.tradieId,
-        userId: user.id,
-        rating: input.rating,
+    const user = await requireTradieActor();
+    const rated = await rateTradieDomain(
+      userPrincipal(user),
+      {
         comment: input.comment,
+        rating: input.rating,
+        tradieId: input.tradieId,
       },
-    });
-
-    const avgRating = await prisma.tradieRating.aggregate({
-      where: { tradieId: input.tradieId },
-      _avg: {
-        rating: true,
-      },
-    });
-
-    await prisma.tradie.update({
-      where: { id: input.tradieId },
-      data: {
-        rating: avgRating._avg.rating ?? 0,
-      },
-    });
+      prisma,
+    );
+    const tradie = { id: rated.tradieId, name: rated.tradieName };
+    const avgRating = { _avg: { rating: rated.average } };
 
     after(() => {
       revalidateTag(`tradie-${input.tradieId}`, CACHE_PROFILES.MEDIUM);
@@ -382,77 +361,26 @@ export async function reportTradieIncident(
   input: ReportIncidentInput,
 ): Promise<TradieIncident> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      throw new Error("User not authenticated");
-    }
-    const user = await getUserByClerkIdCached(userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const tradie = await prisma.tradie.findUnique({
-      where: { id: input.tradieId },
-    });
-
-    if (!tradie) {
-      throw new Error("Tradie not found");
-    }
-
-    const fileIds = [...new Set(input.fileIds ?? [])];
-    const { incident, approval } = await prisma.$transaction(async (tx) => {
-      const incident = await tx.tradieIncident.create({
-        data: {
-          tradieId: input.tradieId,
-          type: input.incidentType,
-          severity: input.incidentSeverity,
-          description: input.incidentDescription,
-        },
-      });
-
-      // The file ids come from the browser. `connect` took any id, which
-      // moved another record's file onto this incident, and File.incidentId
-      // cascades, so deleting the incident deleted that file. Attach only
-      // what the report modal uploads: the reporter's own files, not yet
-      // on a project, milestone, lead, compliance document or incident.
-      if (fileIds.length > 0) {
-        const attached = await tx.file.updateMany({
-          where: {
-            id: { in: fileIds },
-            uploadedBy: user.id,
-            projectId: null,
-            milestoneId: null,
-            leadId: null,
-            complianceDocumentId: null,
-            incidentId: null,
-          },
-          data: { incidentId: incident.id },
-        });
-        // Fail the report as a missing id did under `connect`, rather
-        // than file it without evidence the reporter attached.
-        if (attached.count !== fileIds.length) {
-          throw new Error(
-            "Incident files are missing or belong to another record",
-          );
-        }
-      }
-
-      const approval = await tx.tradieApproval.create({
-        data: {
-          tradieId: input.tradieId,
-          actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
-          reason: input.incidentDescription,
-          requestedBy: user.id,
-          updationData: {
-            incidentId: incident.id,
-            incidentType: input.incidentType,
-            incidentSeverity: input.incidentSeverity,
-            incidentDescription: input.incidentDescription,
-          } satisfies IncidentReportJsonPayload,
-        },
-      });
-
-      return { incident, approval };
-    });
+    const user = await requireTradieActor();
+    // The incident, its evidence and the approval request are one decision,
+    // and the file rules are the ones this path already hardened: only the
+    // reporter's own, unattached files, or the whole report fails. Eve's copy
+    // matched on uploadedBy alone and could move a project's file onto an
+    // incident, which cascades. lib/domain/tradies/incidents.ts now owns it.
+    const reported = await reportTradieIncidentDomain(
+      userPrincipal(user),
+      {
+        description: input.incidentDescription,
+        fileIds: input.fileIds,
+        incidentType: input.incidentType,
+        severity: input.incidentSeverity,
+        tradieId: input.tradieId,
+      },
+      prisma,
+    );
+    const incident = reported.incident;
+    const approval = { id: reported.approvalId };
+    const tradie = { name: reported.tradieName, trade: reported.tradieTrade };
 
     after(async () => {
       revalidateTag(`tradie-${input.tradieId}`, CACHE_PROFILES.MEDIUM);
@@ -873,10 +801,13 @@ export async function toggleTradieFavourite(
   isFavourite: boolean,
 ) {
   try {
-    const updatedTradie = await prisma.tradie.update({
-      where: { id: tradieId },
-      data: { isFavourite },
-    });
+    const actor = await requireTradieActor();
+    const updatedTradie = await toggleTradieFavouriteDomain(
+      userPrincipal(actor),
+      tradieId,
+      isFavourite,
+      prisma,
+    );
 
     after(() => {
       revalidateTag(`tradie-${tradieId}`, CACHE_PROFILES.MEDIUM);
@@ -978,9 +909,12 @@ export async function updateTradie(
   >,
 ): Promise<TradieDetails> {
   try {
-    const updatedTradie = await prisma.tradie.update({
+    const actor = await requireTradieActor();
+    // The write and its ADMIN guard are the domain's; the rich shape below is
+    // this screen's, so it is re-read rather than pushed into the rule.
+    await updateTradieDomain(userPrincipal(actor), tradieId, data, prisma);
+    const updatedTradie = await prisma.tradie.findUniqueOrThrow({
       where: { id: tradieId },
-      data,
       include: {
         ratings: {
           include: {

@@ -33,6 +33,17 @@ const CALLER_CHECKS = new Set([
   "requireInternalUser",
   "requireComplianceAccess",
   "requireComplianceAdmin",
+  // lib/domain commands that refuse the caller themselves (issue #301). Each
+  // one calls requireAdminPrincipal or assertCanReadTradieDirectory before it
+  // touches anything, so an export that reaches one has checked a role — the
+  // auth() above it only resolves who is asking.
+  "createTradieDomain",
+  "updateTradieDomain",
+  "toggleTradieFavouriteDomain",
+  "requestTradiePriceChange",
+  "requestTradieRemoval",
+  "rateTradieDomain",
+  "reportTradieIncidentDomain",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export
@@ -58,12 +69,6 @@ const SIGNED_IN_ONLY: Record<string, string> = {
     "generates a stock image into Blob storage from a fixed prompt; reads no offer, spends image credits (follow-up: staff only)",
   "lib/data/offer-image-import.ts#importDropboxImage":
     "copies an https Dropbox image into Blob storage; reads no offer (follow-up: staff only)",
-  "lib/data/tradie-management.ts#deleteTradie": TRADIE_REQUEST,
-  "lib/data/tradie-management.ts#rateTradie":
-    "writes a tradie rating directly; tradie domain (follow-up: staff only)",
-  "lib/data/tradie-management.ts#reportTradieIncident":
-    "files an incident for ADMIN review and attaches only the reporter's own unattached uploads; tradie domain (follow-up: staff only)",
-  "lib/data/tradie-management.ts#updateTradiePrice": TRADIE_REQUEST,
 };
 
 // Exports that check nobody, each with why it is left for now. None reads or
@@ -104,7 +109,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradie-approvals.ts#fetchTradieApprovalById": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchTradieApprovals": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchTradieApprovalsCached": TRADIE_APPROVALS,
-  "lib/data/tradie-management.ts#createTradie": TRADIES,
   "lib/data/tradie-management.ts#exportTradies": TRADIES,
   "lib/data/tradie-management.ts#fetchFilteredTradies": TRADIES,
   "lib/data/tradie-management.ts#fetchTradieKPIData": TRADIES,
@@ -113,8 +117,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradie-management.ts#getTradieByIdCached": TRADIES,
   "lib/data/tradie-management.ts#getTradieGroupedByCategory": TRADIES,
   "lib/data/tradie-management.ts#getTradieGroupedByCategoryCached": TRADIES,
-  "lib/data/tradie-management.ts#toggleTradieFavourite": TRADIES,
-  "lib/data/tradie-management.ts#updateTradie": TRADIES,
   "lib/data/tradies.ts#getCachedTradieCoordinationDashboard": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getCachedTradieScheduleKPIs": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getCachedTradieSchedules": TRADIE_SCHEDULES,

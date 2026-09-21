@@ -10,6 +10,7 @@ import type { ToolContext } from "eve/tools";
 import prisma from "@/lib/prisma";
 import { changeTeamMemberRole } from "@/lib/domain/identity/team";
 import { userPrincipal } from "@/lib/domain/principal";
+import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
@@ -196,152 +197,33 @@ export async function resolveAuthorizedApproval(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const isApproved = input.resolution === "approved";
-  if (!isApproved && !input.rejectionReason)
-    throw new Error("A rejection reason is required.");
-  const resolve = async (tx: Prisma.TransactionClient) => {
-    const claimed = await tx.tradieApproval.updateMany({
-      where: { id: input.approvalId, status: TradieApprovalStatus.PENDING },
-      data: {
-        status: isApproved
-          ? TradieApprovalStatus.APPROVED
-          : TradieApprovalStatus.REJECTED,
-        rejectionReason: isApproved ? null : input.rejectionReason,
-        pendingDeletionKey: null,
-      },
-    });
-    if (claimed.count !== 1)
-      throw new Error(
-        "That approval is no longer pending; refresh the queue before deciding.",
-      );
-    const approval = await tx.tradieApproval.findUnique({
-      where: { id: input.approvalId },
-      include: { tradie: { select: { id: true, name: true, trade: true } } },
-    });
-    if (!approval) throw new Error("Approval request not found.");
-    if (
-      isApproved &&
-      approval.actionType === TradieApprovalActionType.INCIDENT_RESOLUTION &&
-      !input.incidentResolution
-    )
-      throw new Error("An incident resolution note is required.");
-    const payload = approval.updationData as Record<string, unknown> | null;
-    let affected: Record<string, unknown> = {};
-    if (isApproved) {
-      switch (approval.actionType) {
-        case TradieApprovalActionType.PRICE_CHANGE: {
-          const amount =
-            typeof payload?.newHourlyRate === "number"
-              ? payload.newHourlyRate
-              : null;
-          if (amount === null)
-            throw new Error(
-              "This price approval has no valid requested amount.",
-            );
-          await tx.tradie.update({
-            where: { id: approval.tradieId },
-            data: {
-              lastQuotedPrice: amount,
-              ...(payload?.newPriceUnit === "HOURLY" ||
-              payload?.newPriceUnit === "FIXED"
-                ? { lastQuotedPriceUnit: payload.newPriceUnit }
-                : {}),
-            },
-          });
-          affected = { amount, unit: payload?.newPriceUnit ?? null };
-          break;
-        }
-        case TradieApprovalActionType.TRADIE_REMOVAL:
-          await tx.tradie.delete({ where: { id: approval.tradieId } });
-          affected = { deletedTradieId: approval.tradieId };
-          break;
-        case TradieApprovalActionType.INCIDENT_RESOLUTION: {
-          const incidentId =
-            typeof payload?.incidentId === "string" ? payload.incidentId : null;
-          if (!incidentId)
-            throw new Error(
-              "This incident approval has no incident reference.",
-            );
-          const incident = await tx.tradieIncident.findFirst({
-            where: { id: incidentId, tradieId: approval.tradieId },
-          });
-          if (!incident)
-            throw new Error("The incident could not be found for this tradie.");
-          const updatedIncident = await tx.tradieIncident.update({
-            where: { id: incident.id },
-            data: { status: "RESOLVED", resolution: input.incidentResolution },
-          });
-          affected = {
-            incidentId: updatedIncident.id,
-            status: updatedIncident.status,
-          };
-          break;
-        }
-        case TradieApprovalActionType.SCHEDULE_APPROVAL: {
-          const scheduleId =
-            typeof payload?.scheduleId === "string" ? payload.scheduleId : null;
-          if (!scheduleId)
-            throw new Error(
-              "This schedule approval has no schedule reference.",
-            );
-          const schedule = await tx.tradieSchedule.findFirst({
-            where: { id: scheduleId, tradieId: approval.tradieId },
-          });
-          if (!schedule)
-            throw new Error("The schedule could not be found for this tradie.");
-          const updatedSchedule = await tx.tradieSchedule.update({
-            where: { id: schedule.id },
-            data: { status: "CONFIRMED" },
-          });
-          affected = {
-            scheduleId: updatedSchedule.id,
-            status: updatedSchedule.status,
-          };
-          break;
-        }
-        case TradieApprovalActionType.SCHEDULE_DELETION: {
-          const scheduleId =
-            typeof payload?.scheduleId === "string" ? payload.scheduleId : null;
-          if (!scheduleId)
-            throw new Error(
-              "This deletion approval has no schedule reference.",
-            );
-          const deleted = await tx.tradieSchedule.deleteMany({
-            where: { id: scheduleId, tradieId: approval.tradieId },
-          });
-          affected = { scheduleId, deleted: deleted.count > 0 };
-          break;
-        }
-      }
-    } else if (
-      approval.actionType === TradieApprovalActionType.SCHEDULE_APPROVAL &&
-      typeof payload?.scheduleId === "string"
-    ) {
-      await tx.tradieSchedule.updateMany({
-        where: { id: payload.scheduleId, tradieId: approval.tradieId },
-        data: { status: "DECLINED" },
-      });
-      affected = { scheduleId: payload.scheduleId, status: "DECLINED" };
-    }
-    return { approval, affected };
-  };
-  const resolved = transaction
-    ? await resolve(transaction)
-    : await prisma.$transaction(resolve, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      });
+  const incidentResolution =
+    input.incidentResolution?.trim() || undefined;
+  const resolved = await resolveTradieApproval(
+    userPrincipal(actor),
+    {
+      approvalId: input.approvalId,
+      incidentResolution,
+      rejectionReason: input.rejectionReason,
+      resolution: input.resolution,
+    },
+    transaction ?? prisma,
+  );
   return result(
     "confirmation",
     "Approval resolved",
-    `${resolved.approval.actionType.replaceAll("_", " ")} for ${resolved.approval.tradie.name} was ${input.resolution}.`,
+    `${resolved.actionType.replaceAll("_", " ")} for ${resolved.tradieName} was ${input.resolution}.`,
     {
-      approvalId: resolved.approval.id,
-      actionType: resolved.approval.actionType,
+      approvalId: resolved.approvalId,
+      actionType: resolved.actionType,
       resolution: input.resolution,
       affected: resolved.affected,
     },
     {
-      entityRef: approvalRef(resolved.approval),
+      entityRef: approvalRef({
+        actionType: resolved.actionType,
+        id: resolved.approvalId,
+      }),
       links: [{ label: "Open approval queue", href: "/admin-approvals" }],
     },
   );

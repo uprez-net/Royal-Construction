@@ -35,6 +35,35 @@ import {
   assertNoScheduleConflict,
   createTradieSchedule as createTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
+import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
+import {
+  createTradie as createTradieDomain,
+  rateTradie as rateTradieDomain,
+  requestTradiePriceChange,
+  requestTradieRemoval,
+  updateTradie as updateTradieDomain,
+} from "@/lib/domain/tradies/directory";
+
+/**
+ * Run a domain command and translate its refusals into Eve's own.
+ *
+ * A refusal is flattened to AgentAuthorizationError so a forbidden tradie is
+ * indistinguishable from a missing one; anything else keeps its message.
+ */
+async function runTradieDomain<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    if (
+      error.code === "domain_unauthorized" ||
+      error.code === "domain_not_found"
+    ) {
+      throw new AgentAuthorizationError();
+    }
+    throw new Error(error.message);
+  }
+}
 import { isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 
@@ -321,22 +350,12 @@ export async function createAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  requireAdmin(actor);
   const db = transaction ?? prisma;
-  const tradie = await db.tradie.create({
-    data: {
-      name: input.name,
-      trade: input.trade,
-      abn: input.abn,
-      phone: input.phone,
-      email: input.email,
-      additionalEmails: input.additionalEmails ?? [],
-      location: input.location ?? null,
-      note: input.note ?? null,
-      lastQuotedPrice: input.lastQuotedPrice ?? null,
-      lastQuotedPriceUnit: input.lastQuotedPriceUnit,
-    },
-  });
+  // lib/domain/tradies/directory.ts owns the rule and its ADMIN guard; the
+  // app's createTradie had no guard at all.
+  const tradie = await runTradieDomain(() =>
+    createTradieDomain(userPrincipal(actor), input, db),
+  );
   return envelope(
     "confirmation",
     "Tradie created",
@@ -357,9 +376,9 @@ export async function updateAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  requireAdmin(actor);
   const db = transaction ?? prisma;
-  await getVisibleTradie(actor, input.tradieId, db);
+  // The allowlist stays here: it is this tool's contract with the model, not
+  // a business rule. The ADMIN guard and the write are the domain's.
   const allowed = [
     "email",
     "additionalEmails",
@@ -372,11 +391,10 @@ export async function updateAuthorizedTradie(
     Object.entries(input.patch).filter(([key]) =>
       (allowed as readonly string[]).includes(key),
     ),
-  ) as Prisma.TradieUpdateInput;
-  const updated = await db.tradie.update({
-    where: { id: input.tradieId },
-    data: patch,
-  });
+  );
+  const updated = await runTradieDomain(() =>
+    updateTradieDomain(userPrincipal(actor), input.tradieId, patch, db),
+  );
   return envelope(
     "confirmation",
     "Tradie updated",
@@ -402,18 +420,16 @@ export async function requestAuthorizedTradiePriceChange(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  requireAdmin(actor);
   const db = transaction ?? prisma;
-  const tradie = await getVisibleTradie(actor, input.tradieId, db);
-  const approval = await db.tradieApproval.create({
-    data: {
-      tradieId: tradie.id,
-      actionType: TradieApprovalActionType.PRICE_CHANGE,
-      reason: input.reason,
-      requestedBy: actor.id,
-      updationData: { newHourlyRate: input.amount, newPriceUnit: input.unit },
-    },
-  });
+  const requested = await runTradieDomain(() =>
+    requestTradiePriceChange(userPrincipal(actor), input, db),
+  );
+  const tradie = {
+    id: requested.tradieId,
+    name: requested.tradieName,
+    trade: requested.tradieTrade,
+  };
+  const approval = { id: requested.approvalId };
   return envelope(
     "confirmation",
     "Price change approval requested",
@@ -434,17 +450,16 @@ export async function requestAuthorizedTradieRemoval(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  requireAdmin(actor);
   const db = transaction ?? prisma;
-  const tradie = await getVisibleTradie(actor, input.tradieId, db);
-  const approval = await db.tradieApproval.create({
-    data: {
-      tradieId: tradie.id,
-      actionType: TradieApprovalActionType.TRADIE_REMOVAL,
-      reason: input.reason,
-      requestedBy: actor.id,
-    },
-  });
+  const requested = await runTradieDomain(() =>
+    requestTradieRemoval(userPrincipal(actor), input, db),
+  );
+  const tradie = {
+    id: requested.tradieId,
+    name: requested.tradieName,
+    trade: requested.tradieTrade,
+  };
+  const approval = { id: requested.approvalId };
   return envelope(
     "confirmation",
     "Tradie removal approval requested",
@@ -466,56 +481,34 @@ export async function reportAuthorizedTradieIncident(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  if (actor.role !== Role.ADMIN && actor.role !== Role.SITE_MANAGER)
-    throw new AgentAuthorizationError();
   const db = transaction ?? prisma;
-  const tradie = await getVisibleTradie(actor, input.tradieId, db);
-  const files = input.fileIds.length
-    ? await db.file.findMany({
-        where: { id: { in: input.fileIds }, uploadedBy: actor.id },
-        select: { id: true },
-      })
-    : [];
-  if (files.length !== input.fileIds.length)
-    throw new Error(
-      "One or more incident files are unavailable to this caller.",
-    );
-  const create = async (tx: Prisma.TransactionClient | typeof prisma) => {
-    const incident = await tx.tradieIncident.create({
-      data: {
-        tradieId: tradie.id,
-        type: input.incidentType,
-        severity: input.severity,
+  // lib/domain/tradies/incidents.ts owns this, shared with the app's report
+  // modal. This copy matched attachable files on `uploadedBy` alone, so it
+  // could move a file already on a project or a lead onto the incident — and
+  // File.incidentId cascades, so deleting the incident would delete it.
+  const created = await runTradieDomain(() =>
+    reportTradieIncidentDomain(
+      userPrincipal(actor),
+      {
         description: input.description,
-        files: files.length
-          ? { connect: files.map((file) => ({ id: file.id })) }
-          : undefined,
+        fileIds: input.fileIds,
+        incidentType: input.incidentType,
+        severity: input.severity,
+        tradieId: input.tradieId,
       },
-    });
-    const approval = await tx.tradieApproval.create({
-      data: {
-        tradieId: tradie.id,
-        actionType: TradieApprovalActionType.INCIDENT_RESOLUTION,
-        reason: input.description,
-        requestedBy: actor.id,
-        updationData: {
-          incidentId: incident.id,
-          incidentType: input.incidentType,
-          incidentSeverity: input.severity,
-          incidentDescription: input.description,
-        },
-      },
-    });
-    return { incident, approval };
+      db,
+    ),
+  );
+  const tradie = {
+    id: input.tradieId,
+    name: created.tradieName,
+    trade: created.tradieTrade,
   };
-  const created = transaction
-    ? await create(transaction)
-    : await prisma.$transaction(create);
   return envelope(
     "confirmation",
     "Incident reported",
     `A ${input.severity.toLowerCase()} incident for ${tradie.name} was recorded and queued for resolution review.`,
-    { incident: created.incident, approvalId: created.approval.id },
+    { incident: created.incident, approvalId: created.approvalId },
     { entityRef: tradieRef(tradie) },
   );
 }
@@ -526,31 +519,21 @@ export async function rateAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  if (actor.role !== Role.ADMIN && actor.role !== Role.SITE_MANAGER)
-    throw new AgentAuthorizationError();
   const db = transaction ?? prisma;
-  const tradie = await getVisibleTradie(actor, input.tradieId, db);
-  await db.tradieRating.create({
-    data: {
-      tradieId: tradie.id,
-      userId: actor.id,
-      rating: input.rating,
-      comment: input.comment ?? null,
-    },
-  });
-  const average = await db.tradieRating.aggregate({
-    where: { tradieId: tradie.id },
-    _avg: { rating: true },
-  });
-  await db.tradie.update({
-    where: { id: tradie.id },
-    data: { rating: average._avg.rating ?? 0 },
-  });
+  const rated = await runTradieDomain(() =>
+    rateTradieDomain(userPrincipal(actor), input, db),
+  );
+  const tradie = {
+    id: rated.tradieId,
+    name: rated.tradieName,
+    trade: rated.tradieTrade,
+  };
+  const average = rated.average ?? 0;
   return envelope(
     "confirmation",
     "Tradie rating recorded",
-    `${tradie.name}'s average rating is now ${(average._avg.rating ?? 0).toString()}.`,
-    { tradieId: tradie.id, newRating: (average._avg.rating ?? 0).toString() },
+    `${tradie.name}'s average rating is now ${average.toString()}.`,
+    { tradieId: tradie.id, newRating: average.toString() },
     { entityRef: tradieRef(tradie) },
   );
 }
@@ -982,7 +965,7 @@ export async function authorizeTradieWrite(
       throw new AgentAuthorizationError();
     if (fileIds.length > 0) {
       const files = await transaction.file.findMany({
-        where: { id: { in: fileIds }, uploadedBy: actor.id },
+        where: { id: { in: fileIds }, uploadedBy: String(actor.id) },
         select: { id: true },
       });
       if (files.length !== fileIds.length) throw new AgentAuthorizationError();
