@@ -220,11 +220,13 @@ test("an estimated start date becomes the capacity planning floor", () => {
   });
 
   assert.equal(result.planningStartDate, "2027-01-15");
-  assert.equal(result.usedAmount, 300_000);
-  assert.equal(result.directAvailable, 500_000);
+  assert.equal(result.usedAmount, 700_000);
+  assert.equal(result.directAvailable, 100_000);
+  assert.equal(result.availableAtPlanningStart, 500_000);
   assert.equal(result.sufficient, true);
   assert.equal(result.canStartFrom, "2027-01-15");
   assert.equal(result.projectedWindow?.start, "2027-01-15");
+  assert.equal(result.projectedWindow?.end, "2028-07-15");
 });
 
 test("the decisive claim is the expiry that tips capacity over the top of the range", () => {

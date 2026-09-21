@@ -114,9 +114,11 @@ export interface HbcfAssessment {
   usedAmount: number;
   /** Capacity free right now, before any claim expires. Never negative. */
   directAvailable: number;
+  /** Capacity free on the lead's planning date. Used for start assessment. */
+  availableAtPlanningStart: number;
   /** Null when the lead has neither a recorded value nor a readable bracket. */
   needRange: HbcfNeedRange | null;
-  /** True when `directAvailable` already covers the top of the need range. */
+  /** True when capacity on the planning date covers the top of the need range. */
   sufficient: boolean;
   /** Null when capacity is already sufficient, or never becomes sufficient. */
   decisiveClaim: HbcfFreeingClaim | null;
@@ -430,17 +432,22 @@ export function hbcfAssessment({
     requestedStart.getTime() > todayStart.getTime()
       ? requestedStart
       : todayStart;
-  const hasPlanningDate = estimatedStartDate != null;
-  const usedAmount = hasPlanningDate
-    ? hbcfUsedAt(claims, planningStart)
-    : claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
+  const usedAmount = claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
   const directAvailable = Math.max(0, totalSumAssured - usedAmount);
+  const availableAtPlanningStart = Math.max(
+    0,
+    totalSumAssured -
+      (estimatedStartDate == null
+        ? usedAmount
+        : hbcfUsedAt(claims, planningStart)),
+  );
   const projectionMonths = hbcfProjectionMonths(claims);
 
   const base = {
     totalSumAssured,
     usedAmount,
     directAvailable,
+    availableAtPlanningStart,
     needRange,
     planningStartDate: toIso(planningStart),
   };
@@ -455,7 +462,7 @@ export function hbcfAssessment({
     };
   }
 
-  if (directAvailable >= needRange.high) {
+  if (availableAtPlanningStart >= needRange.high) {
     const start = toIso(planningStart);
     return {
       ...base,
@@ -464,7 +471,7 @@ export function hbcfAssessment({
       canStartFrom: start,
       projectedWindow: {
         start,
-        end: toIso(addMonths(today, projectionMonths)),
+        end: toIso(addMonths(planningStart, projectionMonths)),
       },
     };
   }
