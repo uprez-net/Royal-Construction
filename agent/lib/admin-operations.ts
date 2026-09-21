@@ -24,9 +24,9 @@ import { getXeroConnectionStatus } from "@/lib/data/xero-connection";
 import { getXeroContext } from "@/lib/xero/client";
 import { disconnectXero } from "@/lib/domain/integrations/xero";
 import {
-  getAdminOfferContentNonCache,
+  getAdminOfferContent,
   updateAdminOfferContentSection,
-} from "@/lib/data/admin-offer-content-writes";
+} from "@/lib/domain/admin/offer-content";
 import {
   buildScopeSchema,
   costScheduleDataSchema,
@@ -233,7 +233,7 @@ export async function resolveAuthorizedApproval(
 export async function getAuthorizedAdminContent(ctx: SessionContext) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const content = await getAdminOfferContentNonCache();
+  const content = await getAdminOfferContent(userPrincipal(actor), prisma);
   return result(
     "admin-summary",
     "Offer defaults",
@@ -257,7 +257,7 @@ export async function updateAuthorizedAdminContent(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const current = await getAdminOfferContentNonCache();
+  const current = await getAdminOfferContent(userPrincipal(actor), prisma);
   if (current.version !== input.expectedVersion)
     throw new Error(
       `Admin offer content changed since review (expected ${input.expectedVersion}, current ${current.version}).`,
@@ -286,10 +286,14 @@ export async function updateAuthorizedAdminContent(
           : input.section === "offerContent"
             ? { offerContent: parsed.data as Prisma.InputJsonValue }
             : { hbcfClaim: parsed.data as Prisma.InputJsonValue };
-  const version = await updateAdminOfferContentSection({
-    data: updateData,
-    expectedVersion: input.expectedVersion,
-  });
+  const version = await updateAdminOfferContentSection(
+    userPrincipal(actor),
+    {
+      data: updateData,
+      expectedVersion: input.expectedVersion,
+    },
+    prisma,
+  );
   return result(
     "confirmation",
     "Offer defaults updated",

@@ -202,6 +202,32 @@ export async function createTradieSchedule(
   return created;
 }
 
+/**
+ * Create a batch atomically. The App bulk endpoint used to bypass the single
+ * booking command entirely, so it skipped milestone ownership and overlap
+ * checks. Running the same command once per row inside one transaction keeps
+ * those checks identical and makes a partial bulk booking impossible.
+ */
+export async function createTradieSchedules(
+  principal: DomainPrincipal,
+  inputs: readonly CreateScheduleInput[],
+  db: DomainDb,
+): Promise<CreatedSchedule[]> {
+  if (inputs.length === 0) {
+    throw new DomainValidationError(
+      "No schedules were provided for bulk creation.",
+    );
+  }
+  const run = async (transactionDb: DomainDb) => {
+    const created: CreatedSchedule[] = [];
+    for (const input of inputs) {
+      created.push(await createTradieSchedule(principal, input, transactionDb));
+    }
+    return created;
+  };
+  return "$transaction" in db ? db.$transaction(run) : run(db);
+}
+
 const ALLOWED_TRANSITIONS: Record<
   TradieScheduleStatus,
   readonly TradieScheduleStatus[]
@@ -265,18 +291,35 @@ type ScheduleMutationResult = {
   readonly scheduledDate: Date;
   readonly durationDays: number;
   readonly quotedPrice: string | null;
+  readonly approvalId?: string;
 };
 
 /** Move one booking through the persisted state machine and quote rule. */
 export async function transitionTradieSchedule(
   principal: DomainPrincipal,
-  input: { scheduleId: string; toStatus: TradieScheduleStatus } & ScheduleQuoteInput,
+  input: {
+    scheduleId: string;
+    toStatus: TradieScheduleStatus;
+    /** App approval side effects may run after the state transition. */
+    statusAlreadyApplied?: boolean;
+  } & ScheduleQuoteInput,
   db: DomainDb,
 ): Promise<ScheduleMutationResult> {
   const existing = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, existing.projectId, db);
 
-  if (!ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)) {
+  if (
+    input.statusAlreadyApplied &&
+    existing.status !== input.toStatus
+  ) {
+    throw new DomainTransitionError(
+      "This schedule changed before its approval side effects completed.",
+    );
+  }
+  if (
+    !input.statusAlreadyApplied &&
+    !ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)
+  ) {
     throw new DomainTransitionError(
       `Invalid schedule transition from ${existing.status} to ${input.toStatus}.`,
       existing.status,
@@ -284,27 +327,53 @@ export async function transitionTradieSchedule(
     );
   }
 
-  const normalized = readQuote(input.quote, input.quoteUnit);
-  const updatedCount = await db.tradieSchedule.updateMany({
-    data: {
-      status: input.toStatus,
-      ...(normalized
-        ? {
-            quotedPrice: scheduleTotalCost(
-              normalized.amount,
-              existing.durationDays,
-              normalized.unit,
-            ).toFixed(2),
-            requiresQuote: true,
-          }
-        : {}),
-    },
-    where: { id: existing.id, status: existing.status },
-  });
-  if (updatedCount.count !== 1) {
-    throw new DomainTransitionError(
-      "The schedule changed before this transition was applied.",
-    );
+  const normalized = input.statusAlreadyApplied
+    ? null
+    : readQuote(input.quote, input.quoteUnit);
+  if (!input.statusAlreadyApplied) {
+    const updatedCount = await db.tradieSchedule.updateMany({
+      data: {
+        status: input.toStatus,
+        ...(input.toStatus === TradieScheduleStatus.CONFIRMED &&
+        existing.status !== TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+          ? { reminderSentAt: null }
+          : {}),
+        ...(normalized
+          ? {
+              quotedPrice: scheduleTotalCost(
+                normalized.amount,
+                existing.durationDays,
+                normalized.unit,
+              ).toFixed(2),
+              requiresQuote: true,
+            }
+          : {}),
+      },
+      where: { id: existing.id, status: existing.status },
+    });
+    if (updatedCount.count !== 1) {
+      throw new DomainTransitionError(
+        "The schedule changed before this transition was applied.",
+      );
+    }
+
+    if (
+      input.toStatus === TradieScheduleStatus.DECLINED &&
+      existing.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+    ) {
+      await db.tradieApproval.updateMany({
+        where: {
+          actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+          status: TradieApprovalStatus.PENDING,
+          tradieId: existing.tradieId,
+          updationData: { path: ["scheduleId"], equals: existing.id },
+        },
+        data: {
+          rejectionReason: "Tradie declined the job.",
+          status: TradieApprovalStatus.REJECTED,
+        },
+      });
+    }
   }
 
   if (normalized) {
@@ -317,9 +386,58 @@ export async function transitionTradieSchedule(
     });
   }
 
+  let approvalId: string | undefined;
+  if (
+    !input.statusAlreadyApplied &&
+    input.toStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+  ) {
+    const requesterId = attributionUserId(principal);
+    if (!requesterId) {
+      throw new DomainAuthorizationError(
+        "Schedule approval requires a signed-in user.",
+      );
+    }
+    const totalCost = scheduleTotalCost(
+      parseFloat(existing.tradie.lastQuotedPrice?.toString() ?? "0"),
+      existing.durationDays,
+      existing.tradie.lastQuotedPriceUnit,
+    );
+    const cost = currency.format(
+      existing.quotedPrice
+        ? parseFloat(existing.quotedPrice)
+        : normalized
+          ? scheduleTotalCost(
+              normalized.amount,
+              existing.durationDays,
+              normalized.unit,
+            )
+          : totalCost,
+    );
+    const approval = await db.tradieApproval.create({
+      data: {
+        actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+        reason: `${existing.tradie.name} has confirmed their availability for the scheduled task on ${existing.scheduledDate.toISOString().slice(0, 10)}. Please review and approve the booking.`,
+        requestedBy: requesterId,
+        tradieId: existing.tradieId,
+        updationData: {
+          cost,
+          durationDays: existing.durationDays,
+          milestoneId: existing.milestoneId ?? undefined,
+          milestoneName: existing.milestone?.name ?? "General Task",
+          projectId: existing.projectId,
+          projectName: existing.project.name,
+          scheduleId: existing.id,
+          scheduledDate: existing.scheduledDate.toISOString(),
+        },
+      },
+      select: { id: true },
+    });
+    approvalId = approval.id;
+  }
+
   return {
     durationDays: existing.durationDays,
-    previousStatus: existing.status,
+    previousStatus: input.statusAlreadyApplied ? undefined : existing.status,
     projectId: existing.projectId,
     projectName: existing.project.name,
     quotedPrice: normalized
@@ -334,6 +452,7 @@ export async function transitionTradieSchedule(
     status: input.toStatus,
     tradieId: existing.tradieId,
     tradieName: existing.tradie.name,
+    ...(approvalId ? { approvalId } : {}),
   };
 }
 

@@ -7,14 +7,11 @@ import {
   Project,
   User,
   Milestone,
-  TradieApprovalActionType,
-  TradieApprovalStatus,
 } from "@prisma/client";
 import type {
   CreateTradieScheduleInput,
   UpdateTradieScheduleInput,
 } from "@/utils/validators";
-import { TradiePriceUnit } from "@prisma/client";
 import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { triggerNotification } from "../notification/novu";
@@ -28,7 +25,9 @@ import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { authorizeProject } from "@/lib/domain/access/projects";
 import {
   createTradieSchedule as createTradieScheduleDomain,
+  createTradieSchedules as createTradieSchedulesDomain,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
+  transitionTradieSchedule as transitionTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
@@ -36,16 +35,10 @@ import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
 import {
   DeleteScheduleInput,
-  ScheduleApprovalJsonPayload,
-  TRADIE_SCHEDULE_STATE_MACHINE,
 } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
-import {
-  normalizeQuoteBasis,
-  parseQuotedAmount,
-  scheduleTotalCost,
-} from "@/utils/calculations";
+import { scheduleTotalCost } from "@/utils/calculations";
 import { get } from "@vercel/blob";
 
 interface TradieScheduleWithRelations extends TradieSchedule {
@@ -260,24 +253,32 @@ export async function bulkCreateTradieSchedules(
       throw new Error("No inputs provided for bulk creation.");
     }
     const projectId = inputs[0].projectId;
-    await userHasAccessToSchedule(projectId);
-    const schedules = await prisma.tradieSchedule.createManyAndReturn({
-      data: inputs.map((input) => ({
-        tradieId: input.tradieId,
-        projectId: input.projectId,
-        milestoneId: input.milestoneId ?? null,
-        scheduledDate: new Date(input.scheduledDate),
+    const actingUser = await userHasAccessToSchedule(projectId);
+    const created = await createTradieSchedulesDomain(
+      userPrincipal(actingUser),
+      inputs.map((input) => ({
         durationDays: input.durationDays ?? 1,
-        status: input.requiresQuote
-          ? TradieScheduleStatus.AWAITING_QUOTE
-          : TradieScheduleStatus.PENDING,
+        milestoneId: input.milestoneId ?? null,
+        projectId: input.projectId,
         requiresQuote: input.requiresQuote ?? false,
+        scheduledDate: new Date(input.scheduledDate),
+        tradieId: input.tradieId,
       })),
+      prisma,
+    );
+    const stored = await prisma.tradieSchedule.findMany({
+      where: { id: { in: created.map((schedule) => schedule.id) } },
       include: {
         tradie: true,
         project: { include: { siteManager: true } },
         milestone: true,
       },
+    });
+    const storedById = new Map(stored.map((schedule) => [schedule.id, schedule]));
+    const schedules = created.map((schedule) => {
+      const storedSchedule = storedById.get(schedule.id);
+      if (!storedSchedule) throw new Error("Schedule not found after creation.");
+      return storedSchedule;
     });
 
     after(async () => {
@@ -419,149 +420,31 @@ export async function updateTradieSchedule(
     if (!existingSchedule) {
       throw new Error("Schedule not found");
     }
-    const userId = (await userHasAccessToSchedule(existingSchedule.projectId))
-      .id;
-    if (
-      !options.statusAlreadyApplied &&
-      !TRADIE_SCHEDULE_STATE_MACHINE[existingSchedule.status].includes(
-        updates.status,
-      )
-    ) {
-      throw new Error(
-        `Invalid status transition from ${existingSchedule.status} to ${updates.status}`,
-      );
-    }
-    // The quote was accepted as input and then dropped — `data` only ever
-    // carried the status. So a tradie could email "$5,000 for the job", the
-    // extractor would pull it out, the status would flip to QUOTE_RECEIVED,
-    // and every downstream number still fell back to `quotedPrice ?? totalCost`
-    // with quotedPrice null. Admins approved against an hourly estimate rather
-    // than the price the tradie actually quoted.
-    const quotedAmount = parseQuotedAmount(updates.quote);
-    // The amount alone does not say what it buys. A tradie replying "$950 a
-    // day" and one replying "$950 for the job" send the same number, and
-    // storing either as the job price makes one of them wrong by the length of
-    // the job. Normalise the basis first, then cost it.
-    const quoted =
-      quotedAmount !== null
-        ? normalizeQuoteBasis(quotedAmount, updates.quoteUnit ?? "FIXED")
-        : null;
-
-    const declinesPendingApproval =
-      updates.status === TradieScheduleStatus.DECLINED &&
-      existingSchedule.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL;
-
-    const schedule = await prisma.$transaction(async (tx) => {
-      if (options.statusAlreadyApplied) {
-        const alreadyUpdatedSchedule = await tx.tradieSchedule.findUnique({
-          where: { id: scheduleId },
-          include: {
-            tradie: true,
-            project: { include: { siteManager: true } },
-            milestone: true,
-          },
-        });
-        if (!alreadyUpdatedSchedule) {
-          throw new Error("Schedule not found after status update.");
-        }
-        if (alreadyUpdatedSchedule.status !== updates.status) {
-          throw new Error(
-            "This schedule changed before its approval side effects completed.",
-          );
-        }
-        return alreadyUpdatedSchedule;
-      }
-
-      const changed = await tx.tradieSchedule.updateMany({
-        where: { id: scheduleId, status: existingSchedule.status },
-        data: {
-          status: updates.status,
-          ...(updates.status === TradieScheduleStatus.CONFIRMED &&
-          existingSchedule.status !==
-            TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
-            ? { reminderSentAt: null }
-            : {}),
-          // `quotedPrice` is the whole job, which is what every downstream
-          // display and approval treats it as - so a rate has to be costed
-          // across the booked duration before it lands here.
-          ...(quoted !== null
-            ? {
-                quotedPrice: scheduleTotalCost(
-                  quoted.amount,
-                  existingSchedule.durationDays,
-                  quoted.unit,
-                ).toFixed(2),
-                requiresQuote: true,
-              }
-            : {}),
-        },
-      });
-      if (changed.count !== 1) {
-        throw new Error(
-          "This schedule changed before the status update completed. Refresh and try again.",
-        );
-      }
-
-      const updatedSchedule = await tx.tradieSchedule.findUnique({
-        where: { id: scheduleId },
-        include: {
-          tradie: true,
-          project: { include: { siteManager: true } },
-          milestone: true,
-        },
-      });
-      if (!updatedSchedule) {
-        throw new Error("Schedule not found after status update.");
-      }
-
-      if (declinesPendingApproval) {
-        await tx.tradieApproval.updateMany({
-          where: {
-            tradieId: updatedSchedule.tradieId,
-            actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
-            status: TradieApprovalStatus.PENDING,
-            updationData: { path: ["scheduleId"], equals: scheduleId },
-          },
-          data: {
-            status: TradieApprovalStatus.REJECTED,
-            rejectionReason: "Tradie declined the job.",
-          },
-        });
-      }
-
-      return updatedSchedule;
+    const actingUser = await userHasAccessToSchedule(existingSchedule.projectId);
+    const changed = await transitionTradieScheduleDomain(
+      userPrincipal(actingUser),
+      {
+        quote: updates.quote,
+        quoteUnit: updates.quoteUnit,
+        scheduleId,
+        statusAlreadyApplied: options.statusAlreadyApplied,
+        toStatus: updates.status,
+      },
+      prisma,
+    );
+    const schedule = await prisma.tradieSchedule.findUnique({
+      where: { id: scheduleId },
+      include: {
+        tradie: true,
+        project: { include: { siteManager: true } },
+        milestone: true,
+      },
     });
-
-    // Recording the quote against the tradie is what makes `lastQuotedPrice`
-    // mean what it says. It carries the RATE the tradie named, not the job
-    // total - the total belongs to this one schedule and its duration, while
-    // the rate is what they will charge on the next one. FIXED used to be
-    // hardcoded here, which restated every hourly and daily quote as a lump
-    // sum the moment it arrived by email.
-    if (quoted !== null) {
-      await prisma.tradie
-        .update({
-          where: { id: schedule.tradieId },
-          data: {
-            lastQuotedPrice: quoted.amount.toFixed(2),
-            lastQuotedPriceUnit:
-              quoted.unit === "HOURLY"
-                ? TradiePriceUnit.HOURLY
-                : TradiePriceUnit.FIXED,
-          },
-        })
-        .catch((error) =>
-          // Best effort: the schedule already carries the quote, and losing the
-          // tradie-level copy must not fail the status change that recorded it.
-          console.error(
-            `[tradie ${schedule.tradieId}] failed to record last quoted price`,
-            error,
-          ),
-        );
-    }
-
-    const requiresReplacement =
+    if (!schedule) throw new Error("Schedule not found after status update.");
+    const declinesPendingApproval =
+      changed.previousStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL &&
       updates.status === TradieScheduleStatus.DECLINED;
+    const requiresReplacement = updates.status === TradieScheduleStatus.DECLINED;
     after(async () => {
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
@@ -581,39 +464,12 @@ export async function updateTradieSchedule(
       );
 
       if (updates.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL) {
-        const approval = await prisma.tradieApproval.create({
-          data: {
-            tradieId: schedule.tradieId,
-            actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
-            requestedBy: userId,
-            reason: `${schedule.tradie.name} has confirmed their availability for the scheduled task on ${dateFormat.format(schedule.scheduledDate)}. Please review and approve the booking.`,
-            updationData: {
-              scheduleId: schedule.id,
-              projectId: schedule.projectId,
-              projectName: schedule.project.name,
-              milestoneId: schedule.milestoneId ?? undefined,
-              milestoneName: schedule.milestone
-                ? schedule.milestone.name
-                : "General Task",
-              scheduledDate: dateFormat.format(schedule.scheduledDate),
-              durationDays: schedule.durationDays,
-              cost: currency.format(
-                schedule.quotedPrice
-                  ? parseFloat(schedule.quotedPrice)
-                  : totalCost,
-              ),
-            } satisfies ScheduleApprovalJsonPayload,
-          },
-          select: {
-            id: true,
-          },
-        });
         revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
         revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
         const notificationPayload = createNotification(
           "tradieScheduleApproval",
           {
-            approvalId: approval.id,
+            approvalId: changed.approvalId ?? "",
             scheduleId: schedule.id,
             projectId: schedule.projectId,
             projectName: schedule.project.name,
