@@ -30,7 +30,11 @@ import {
   buildTenderEnvelopeRecipientRecords,
   createTenderEnvelope,
 } from "@/lib/docusign/tender-envelope";
-import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
+import {
+  beginEnvelopeSendAttempt,
+  resolveEnvelopeCreateError,
+  resolveEnvelopeSendAttempt,
+} from "@/lib/docusign/envelope-send-attempt";
 import { randomUUID } from "node:crypto";
 import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
 import {
@@ -219,6 +223,29 @@ export async function sendTenderForSignature(input: {
 
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
+  // Before the send, not after it goes wrong. See beginEnvelopeSendAttempt:
+  // written in the catch instead, a failed write left nothing blocking a
+  // recall, so a resend could put a second live document in front of the
+  // customer — the exact thing this record exists to prevent.
+  const sendAttemptRecordId = await beginEnvelopeSendAttempt({
+    offerId: offer.id,
+    docType: EnvelopeDocType.TENDER,
+    sendAttemptId,
+    attemptStarted,
+  });
+  if (sendAttemptRecordId === null) {
+    // Give the claim back, exactly as the rejection path does — nothing
+    // was sent, so the offer must not sit at *_SENT.
+    await prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
+      data: { offerStatus: offer.offerStatus },
+    });
+    return {
+      ok: false,
+      error:
+        "Could not record the send attempt, so the Tender was not sent. Try again.",
+    };
+  }
   let envelope;
   let docusignContext: Awaited<
     ReturnType<typeof createDocusignContext>
@@ -246,6 +273,9 @@ export async function sendTenderForSignature(input: {
       attemptStarted,
     });
     if (recovery.kind === "reconciled") {
+      // Settled: the envelope exists, and the success path below writes
+      // the Envelope row that blocks a recall from here on.
+      await resolveEnvelopeSendAttempt(sendAttemptRecordId);
       console.warn(
         `[offer] tender envelope for offer ${offer.id} reconciled after transport failure: ${recovery.envelopeId}`,
       );
@@ -284,25 +314,8 @@ export async function sendTenderForSignature(input: {
             eventError,
           ),
         );
-      // The durable half of the reconcile attempt. `Tender` is only created on
-      // confirmed success (below), so there is no row an Envelope could hang
-      // off yet — this is the only record of the attempt until reconciliation
-      // resolves it. See UnconfirmedEnvelopeSend's doc comment and #321.
-      await prisma.unconfirmedEnvelopeSend
-        .create({
-          data: {
-            offerId: offer.id,
-            docType: EnvelopeDocType.TENDER,
-            sendAttemptId,
-            attemptStartedAt: attemptStarted,
-          },
-        })
-        .catch((recordError) =>
-          console.error(
-            "[offer] recording the unconfirmed tender send failed — a recall will not see it:",
-            recordError,
-          ),
-        );
+      // The record written before the send stays unresolved, which is what
+      // makes a recall or revision refuse until this is reconciled.
       return {
         ok: false,
         error:
@@ -331,6 +344,9 @@ export async function sendTenderForSignature(input: {
             eventError,
           ),
         );
+      // Definitively refused, so nothing is out for signature and the
+      // attempt must stop blocking recall.
+      await resolveEnvelopeSendAttempt(sendAttemptRecordId);
       await prisma.offer.updateMany({
         where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
         data: { offerStatus: offer.offerStatus },
@@ -384,6 +400,10 @@ export async function sendTenderForSignature(input: {
           documentData,
         },
       });
+      // In the same transaction as the Envelope row that replaces it: the
+      // attempt must not stop blocking a recall unless the row that takes
+      // over that job actually commits.
+      await resolveEnvelopeSendAttempt(sendAttemptRecordId, tx);
       await tx.envelope.create({
         data: {
           docType: EnvelopeDocType.TENDER,

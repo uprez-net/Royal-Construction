@@ -20,59 +20,99 @@ const code = (path: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
 
-// ── Every send path records the row ──
+// ── Every send path records the attempt BEFORE it sends ──
 
-test("all three send paths record an UnconfirmedEnvelopeSend on outcome-unknown", () => {
-  const paths: [string, string][] = [
-    ["lib/data/offer-tender-sign.ts", "TENDER"],
-    ["lib/data/offer-contract-sign.ts", "CONTRACT"],
-    ["lib/data/offer-accept-sign.ts", "OFFER"],
-  ];
+const SEND_PATHS: [string, string, string][] = [
+  ["lib/data/offer-tender-sign.ts", "TENDER", "createTenderEnvelope"],
+  ["lib/data/offer-contract-sign.ts", "CONTRACT", "createContractEnvelope"],
+  ["lib/data/offer-accept-sign.ts", "OFFER", "createOfferAcceptanceEnvelope"],
+];
 
-  for (const [file, docType] of paths) {
+test("all three send paths record the attempt before calling DocuSign", () => {
+  // Order is the whole safety property. Recorded afterwards — in the catch,
+  // once the outcome is already unknown — a failed write left nothing blocking
+  // a recall, so a resend could put a second live document in front of the
+  // customer. Writing first also covers what no catch block can: the process
+  // dying mid-send.
+  for (const [file, docType, createFn] of SEND_PATHS) {
     const source = code(file);
-    assert.match(
-      source,
-      /recovery\.kind === "outcome-unknown"/,
-      `${file} lost its outcome-unknown branch`,
-    );
-    // Scoped to the outcome-unknown branch: it is the last branch in each
-    // file's if/else if/else chain, so everything from the match to the next
-    // top-level `} else {` (or end of file) belongs to it.
-    const branchStart = source.indexOf('recovery.kind === "outcome-unknown"');
-    const branchEnd = source.indexOf("\n    } else {", branchStart);
-    assert.ok(
-      branchEnd > branchStart,
-      `${file}: could not delimit the outcome-unknown branch — without this the slice runs to end of file and the assertions below could pass on unrelated code`,
-    );
-    const branch = source.slice(branchStart, branchEnd);
+    const begin = source.indexOf("beginEnvelopeSendAttempt({");
+    const send = source.indexOf(`${createFn}(`);
 
-    assert.match(
-      branch,
-      /prisma\.unconfirmedEnvelopeSend\s*\.create\(/,
-      `${file} does not record an UnconfirmedEnvelopeSend row when the outcome is unknown`,
+    assert.ok(begin > 0, `${file} does not record the send attempt at all`);
+    assert.ok(send > 0, `${file}: ${createFn} moved or was renamed`);
+    assert.ok(
+      begin < send,
+      `${file} records the attempt after calling DocuSign — the protection can fail open`,
     );
     assert.match(
-      branch,
+      source.slice(begin, send),
       new RegExp(`docType:\\s*EnvelopeDocType\\.${docType}\\b`),
       `${file} records the wrong docType, or none`,
     );
+  }
+});
+
+test("a send is refused outright when the attempt cannot be recorded", () => {
+  // Fail closed. Refusing a send is recoverable; sending with nothing to block
+  // a later recall is not.
+  for (const [file] of SEND_PATHS) {
+    const source = code(file);
     assert.match(
-      branch,
-      /sendAttemptId,/,
-      `${file} does not key the row by the send attempt`,
+      source,
+      /if \(sendAttemptRecordId === null\) \{[\s\S]{0,500}ok: false/,
+      `${file} sends anyway when the attempt could not be recorded`,
+    );
+    // And it must hand the claim back, or the offer sits at *_SENT forever
+    // having never sent anything.
+    assert.match(
+      source,
+      /if \(sendAttemptRecordId === null\) \{[\s\S]{0,400}prisma\.offer\.updateMany\(/,
+      `${file} leaves the offer claimed after refusing to send`,
+    );
+  }
+});
+
+test("every definitive outcome resolves the attempt, and only the unknown one does not", () => {
+  for (const [file] of SEND_PATHS) {
+    const source = code(file);
+
+    // reconciled: the envelope exists after all.
+    const reconciled = source.indexOf('recovery.kind === "reconciled"');
+    const unknown = source.indexOf('recovery.kind === "outcome-unknown"');
+    assert.ok(
+      reconciled > 0 && unknown > reconciled,
+      `${file}: branch order changed`,
     );
     assert.match(
-      branch,
-      /attemptStartedAt:\s*attemptStarted,/,
-      `${file} does not record when the attempt started`,
+      source.slice(reconciled, unknown),
+      /resolveEnvelopeSendAttempt\(sendAttemptRecordId\)/,
+      `${file} does not settle the attempt after reconciling the envelope`,
     );
-    // A DB write here must not crash the response to the operator — the
-    // offerStatusEvent write right above it already follows this pattern.
+
+    // outcome-unknown: must NOT resolve — staying unresolved is what blocks.
+    const unknownEnd = source.indexOf("\n    } else {", unknown);
+    assert.ok(
+      unknownEnd > unknown,
+      `${file}: could not delimit the unknown branch`,
+    );
+    assert.ok(
+      !/resolveEnvelopeSendAttempt\(/.test(source.slice(unknown, unknownEnd)),
+      `${file} settles the attempt when the outcome is unknown — nothing would block a recall`,
+    );
+
+    // rejected: DocuSign refused, nothing is out there.
     assert.match(
-      branch,
-      /prisma\.unconfirmedEnvelopeSend\s*\.create\([\s\S]*?\.catch\(/,
-      `${file}'s write is not guarded — a DB hiccup here would crash the outcome-unknown response`,
+      source.slice(unknownEnd),
+      /resolveEnvelopeSendAttempt\(sendAttemptRecordId\)/,
+      `${file} leaves a rejected send blocking a recall forever`,
+    );
+
+    // success: resolved in the same transaction as the Envelope row.
+    assert.match(
+      source,
+      /resolveEnvelopeSendAttempt\(sendAttemptRecordId,\s*tx\);\s*await tx\.envelope\.create\(/,
+      `${file} does not settle the attempt in the same transaction that writes the Envelope row`,
     );
   }
 });
@@ -139,6 +179,19 @@ test("the dead Envelope-null-and-sentAt check is gone, not left beside the real 
 
 const CRON = "app/api/cron/reconcile-unconfirmed-envelope-sends/route.ts";
 
+/**
+ * The found-envelope branch of the cron, delimited rather than taken as a
+ * fixed number of characters from a nearby line. Anchoring on a counter meant
+ * that moving the counter silently moved the window off the code under test.
+ */
+const foundBranchOf = (source: string): string => {
+  const start = source.indexOf("const recorded = await prisma.$transaction(");
+  const end = source.indexOf("} catch (recordError)", start);
+  assert.ok(start > 0, "the found-envelope transaction moved or was renamed");
+  assert.ok(end > start, "could not delimit the found-envelope branch");
+  return source.slice(start, end);
+};
+
 test("the reconcile cron checks the CRON_SECRET in production", () => {
   const source = code(CRON);
   assert.match(source, /CRON_SECRET/);
@@ -149,9 +202,7 @@ test("the reconcile cron never sets resolvedAt for a row it found", () => {
   // This is the whole safety property: a found orphan must keep blocking
   // recall until a human deals with it. Only the not-found branch may resolve.
   const source = code(CRON);
-  const foundBranchStart = source.indexOf("found += 1;");
-  assert.ok(foundBranchStart > 0, "the found branch moved or was renamed");
-  const foundBranch = source.slice(foundBranchStart, foundBranchStart + 1200);
+  const foundBranch = foundBranchOf(source);
 
   // It may only ever write `resolvedAt: null` — clearing it. Stamping a date
   // there would mark a live orphan resolved and stop blocking recall.
@@ -174,8 +225,7 @@ test("a found envelope overrides a concurrent run that found nothing", () => {
   // and a live orphan left unblocked. So the found write is guarded only on
   // foundDocusignId (which keeps it idempotent) and clears resolvedAt.
   const source = code(CRON);
-  const foundBranchStart = source.indexOf("found += 1;");
-  const foundBranch = source.slice(foundBranchStart, foundBranchStart + 1400);
+  const foundBranch = foundBranchOf(source);
 
   assert.match(
     foundBranch,

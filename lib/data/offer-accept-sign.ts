@@ -33,7 +33,11 @@ import {
   buildOfferAcceptanceRecipientRecords,
   createOfferAcceptanceEnvelope,
 } from "@/lib/docusign/offer-envelope";
-import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
+import {
+  beginEnvelopeSendAttempt,
+  resolveEnvelopeCreateError,
+  resolveEnvelopeSendAttempt,
+} from "@/lib/docusign/envelope-send-attempt";
 import { randomUUID } from "node:crypto";
 import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
@@ -249,6 +253,29 @@ export async function sendOfferForSignature(input: {
 
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
+  // Before the send, not after it goes wrong. See beginEnvelopeSendAttempt:
+  // written in the catch instead, a failed write left nothing blocking a
+  // recall, so a resend could put a second live document in front of the
+  // customer — the exact thing this record exists to prevent.
+  const sendAttemptRecordId = await beginEnvelopeSendAttempt({
+    offerId: offer.id,
+    docType: EnvelopeDocType.OFFER,
+    sendAttemptId,
+    attemptStarted,
+  });
+  if (sendAttemptRecordId === null) {
+    // Give the claim back, exactly as the rejection path does — nothing
+    // was sent, so the offer must not sit at *_SENT.
+    await prisma.offer.updateMany({
+      where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
+      data: { offerStatus: offer.offerStatus },
+    });
+    return {
+      ok: false,
+      error:
+        "Could not record the send attempt, so the acceptance envelope was not sent. Try again.",
+    };
+  }
   let envelope;
   let docusignContext: Awaited<
     ReturnType<typeof createDocusignContext>
@@ -272,6 +299,9 @@ export async function sendOfferForSignature(input: {
       attemptStarted,
     });
     if (recovery.kind === "reconciled") {
+      // Settled: the envelope exists, and the success path below writes
+      // the Envelope row that blocks a recall from here on.
+      await resolveEnvelopeSendAttempt(sendAttemptRecordId);
       envelope = {
         envelopeId: recovery.envelopeId,
         recipients: buildOfferAcceptanceRecipientRecords(owners),
@@ -295,25 +325,8 @@ export async function sendOfferForSignature(input: {
             eventError,
           ),
         );
-      // The durable half of the reconcile attempt — see UnconfirmedEnvelopeSend
-      // and #321. Acceptance is the one path where Envelope COULD attach
-      // directly to the offer already, but this table is used uniformly across
-      // all three send paths so collectVoidOutcome only has one place to look.
-      await prisma.unconfirmedEnvelopeSend
-        .create({
-          data: {
-            offerId: offer.id,
-            docType: EnvelopeDocType.OFFER,
-            sendAttemptId,
-            attemptStartedAt: attemptStarted,
-          },
-        })
-        .catch((recordError) =>
-          console.error(
-            "[offer] recording the unconfirmed acceptance send failed — a recall will not see it:",
-            recordError,
-          ),
-        );
+      // The record written before the send stays unresolved, which is what
+      // makes a recall or revision refuse until this is reconciled.
       return {
         ok: false,
         error:
@@ -342,6 +355,9 @@ export async function sendOfferForSignature(input: {
             eventError,
           ),
         );
+      // Definitively refused, so nothing is out for signature and the
+      // attempt must stop blocking recall.
+      await resolveEnvelopeSendAttempt(sendAttemptRecordId);
       await prisma.offer.updateMany({
         where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
         data: { offerStatus: offer.offerStatus },
@@ -355,6 +371,10 @@ export async function sendOfferForSignature(input: {
 
   const stillClaimed = await prisma
     .$transaction(async (tx) => {
+      // In the same transaction as the Envelope row that replaces it: the
+      // attempt must not stop blocking a recall unless the row that takes
+      // over that job actually commits.
+      await resolveEnvelopeSendAttempt(sendAttemptRecordId, tx);
       await tx.envelope.create({
         data: {
           docType: EnvelopeDocType.OFFER,

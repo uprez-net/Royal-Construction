@@ -163,8 +163,6 @@ export async function GET(request: Request) {
         continue;
       }
 
-      found += 1;
-
       // One transaction, because the mark and the alert are the same fact. Done
       // as two writes, a failed note would leave the row marked found — and the
       // query above skips found rows, so the next run would never retry the
@@ -176,7 +174,7 @@ export async function GET(request: Request) {
       // recall and revision until a person deals with it, which is the point.
       // The guard makes the write idempotent against a concurrent run.
       try {
-        await prisma.$transaction(async (tx) => {
+        const recorded = await prisma.$transaction(async (tx) => {
           const { count } = await tx.unconfirmedEnvelopeSend.updateMany({
             // Deliberately NOT guarded on `resolvedAt: null`, and it clears
             // resolvedAt below. Finding a real envelope always wins over a
@@ -193,7 +191,7 @@ export async function GET(request: Request) {
           });
           if (count === 0) {
             // Another run recorded the same envelope, and wrote the note with it.
-            return;
+            return false;
           }
           await tx.offerStatusEvent.create({
             data: {
@@ -203,7 +201,14 @@ export async function GET(request: Request) {
               note: `DocuSign has a ${row.docType.toLowerCase()} envelope (${envelopeId}) this app has no other record of — a send timed out but reached DocuSign anyway. Open DocuSign, decide whether to void it or complete recording it, then resolve the pending send by hand.`,
             },
           });
+          return true;
         });
+        if (recorded) {
+          // Counted only once the transaction commits. Incremented before it,
+          // a failed transaction still reported the row as found while leaving
+          // it unmarked for the next run to retry.
+          found += 1;
+        }
       } catch (recordError) {
         console.error(
           `[cron] failed to record the found envelope for unconfirmed send ${row.id} — left unmarked so the next run retries:`,
