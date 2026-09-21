@@ -45,6 +45,12 @@ function formatLeadDate(date: string | null | undefined) {
 export async function renderEmailHtml(
   category: string,
   lead: LeadPreview | null,
+  /**
+   * A booking token the caller already minted, for server-side senders that
+   * have no Clerk session. See where it is used below for why passing one in
+   * is safe. Omit it from the browser: the action will authorise and mint.
+   */
+  bookingToken?: string | null,
 ) {
   const name = lead?.name ?? "Homeowner";
   const type = Array.isArray(lead?.type)
@@ -87,23 +93,30 @@ export async function renderEmailHtml(
       email: lead.email,
       id: String(lead.id),
     });
-    // Authorise BEFORE minting, because this function is a Server Action: every
-    // export of a "use server" module is a POST endpoint that runs with
-    // whatever arguments the sender chooses, and `LeadPreview` is a bare
-    // interface erased at runtime, so `lead` is unvalidated caller input.
+    // A token supplied by the caller is used as given; otherwise this mints
+    // one, and only for a lead the caller is allowed to open.
     //
-    // Without this check the booking token — a 60-day credential that the
-    // public booking route accepts as proof of ownership — could be minted for
-    // any lead id by anyone able to reach the action, which would undo the very
-    // guard it was added for. tests/security/use-server-auth.test.ts exempted
-    // this export on the grounds that it "renders a fixed email template from
-    // values the caller already holds; reads no stored data". Minting a
-    // credential made that untrue, so the exemption is gone too.
+    // The authorisation matters because this is a Server Action: every export
+    // of a "use server" module is a POST endpoint that runs with whatever
+    // arguments the sender chooses, and `LeadPreview` is a bare interface
+    // erased at runtime, so `lead` is unvalidated caller input. Minting
+    // unconditionally turned this into an oracle for a 60-day credential the
+    // public booking route accepts as proof of ownership — the exact guard it
+    // was added to support. tests/security/use-server-auth.test.ts had exempted
+    // this export as one that "reads no stored data"; minting made that untrue,
+    // so the exemption is gone.
     //
-    // Failure is not fatal: the link simply goes out without a token, exactly
-    // as it did before booking tokens existed.
-    const access = await authorizeLeadAccess(lead.id);
-    const token = access.ok ? signBookConsultationToken(lead.id) : null;
+    // Accepting a token as an argument is NOT a hole: a caller can only pass a
+    // token it already holds, and holding one is what the check would grant.
+    // It exists for the senders that legitimately have no session — the
+    // inbound-lead webhook and createLead's welcome email both run with no
+    // Clerk user, so authorising there would silently strip the token and the
+    // client would meet a 403 on the booking link in their own welcome email.
+    const token =
+      bookingToken ??
+      ((await authorizeLeadAccess(lead.id)).ok
+        ? signBookConsultationToken(lead.id)
+        : null);
     if (token) {
       params.set("bookingToken", token);
     }

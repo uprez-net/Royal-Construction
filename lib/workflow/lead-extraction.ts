@@ -1,4 +1,5 @@
 import { FatalError } from "workflow";
+import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
 import { createGraphContext } from "@/lib/graph/client";
 import { getGraphConfig } from "@/lib/graph/config";
@@ -198,15 +199,23 @@ async function sendWelcomeEmail(leadId: number): Promise<boolean> {
     const config = getGraphConfig();
     const client = await createGraphContext(config);
 
-    const htmlBody = await renderEmailHtml("Welcome", {
-      id: lead.id,
-      name: lead.name,
-      email: lead.email,
-      type: lead.type,
-      location: lead.location,
-      notes: lead.notes ?? undefined,
-      budget: lead.budget ?? undefined,
-    });
+    // Minted here rather than inside renderEmailHtml: that function is a Server
+    // Action and authorises the caller before it will mint, and this path has
+    // no Clerk session. Without this the welcome email's booking link would go
+    // out untokenised and the client would be refused on their own link.
+    const htmlBody = await renderEmailHtml(
+      "Welcome",
+      {
+        id: lead.id,
+        name: lead.name,
+        email: lead.email,
+        type: lead.type,
+        location: lead.location,
+        notes: lead.notes ?? undefined,
+        budget: lead.budget ?? undefined,
+      },
+      signBookConsultationToken(lead.id),
+    );
 
     if (!htmlBody) {
       console.warn("  ⚠️ Failed to render welcome email HTML. No email sent.");

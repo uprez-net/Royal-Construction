@@ -115,3 +115,36 @@ test("an unprovable lead id is refused, not downgraded to anonymous", () => {
     "a named-but-unproven lead no longer gets a 403",
   );
 });
+
+// ── The senders that have no Clerk session ──
+
+test("automated welcome emails mint their own token", () => {
+  // renderEmailHtml is a Server Action and authorises before it will mint, but
+  // createLead and the inbound-lead workflow both run with no signed-in user:
+  // the public booking route and the lead webhook call them. Left to authorise,
+  // the token would be silently stripped and the client would be refused on the
+  // booking link in their own welcome email — a 403, now that an unprovable
+  // lead id is rejected rather than downgraded.
+  for (const file of ["lib/data/leads.ts", "lib/workflow/lead-extraction.ts"]) {
+    const source = readFileSync(join(process.cwd(), file), "utf8");
+    assert.match(
+      source,
+      /renderEmailHtml\(\s*"Welcome",[\s\S]{0,400}?signBookConsultationToken\(/,
+      `${file} sends a welcome email with no booking token`,
+    );
+  }
+});
+
+test("a caller-supplied token is used as given, and is not a way to mint one", () => {
+  const source = readFileSync(
+    join(process.cwd(), "lib/leads/render-email-html.tsx"),
+    "utf8",
+  );
+  // Supplied token wins; otherwise authorise, then mint. A caller can only pass
+  // a token it already holds, so accepting one grants nothing it lacked.
+  assert.match(
+    source,
+    /bookingToken \?\?[\s\S]{0,200}authorizeLeadAccess\(lead\.id\)\)\.ok[\s\S]{0,120}signBookConsultationToken\(lead\.id\)/,
+    "the mint path no longer authorises first",
+  );
+});
