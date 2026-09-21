@@ -84,20 +84,20 @@ function businessModelAccesses(
 
   const visit = (node: ts.Node): void => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isPropertyAccessExpression(node.expression.expression)
+      ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && ts.isPropertyAccessExpression(node.expression.expression)
     ) {
       const operation = node.expression.name.text;
       const model = node.expression.expression.name.text;
       if (
-        PRISMA_OPERATIONS.has(operation) &&
-        !AGENT_INFRASTRUCTURE_MODELS.has(model)
+        PRISMA_OPERATIONS.has(operation)
+        && !AGENT_INFRASTRUCTURE_MODELS.has(model)
       ) {
         found.push({
           line:
-            source.getLineAndCharacterOfPosition(node.getStart(source)).line +
-            1,
+            source.getLineAndCharacterOfPosition(node.getStart(source)).line
+            + 1,
           model,
           operation,
         });
@@ -117,7 +117,7 @@ const BUDGET: Record<string, number> = {
   "agent/lib/admin-operations.ts": 4,
   "agent/lib/lead-operations.ts": 0,
   "agent/lib/offer-operations.ts": 0,
-  "agent/lib/project-operations.ts": 25,
+  "agent/lib/project-operations.ts": 13,
   "agent/lib/tradie-operations.ts": 8,
 };
 
