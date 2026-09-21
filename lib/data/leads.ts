@@ -24,6 +24,7 @@ import {
 import { resolveLeadStage } from "@/lib/leads/resolve-stage";
 import { LeadValidationError } from "@/lib/leads/lead-validation-error";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
+import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
 import {
   coerceMoney,
   computeForecast,
@@ -303,15 +304,11 @@ export async function getAllLeads(): Promise<UiLead[]> {
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
         files: true,
-        // Just the next open task, for the table's Follow-up cell. Ordered the
-        // same way the Tasks tab orders its list so the two agree on which one
-        // is "next": soonest due date first, undated last.
-        tasks: {
-          where: { completedAt: null },
-          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
-          take: 1,
-          select: { dueDate: true, dueTime: true },
-        },
+        // The one task that decides the Follow-up cell. Not filtered to open
+        // work: mapLead has to tell "the follow-up is done" apart from "this
+        // lead never had one", and `where: { completedAt: null }` collapsed
+        // both to an empty array. See NEXT_FOLLOWUP_TASK.
+        tasks: NEXT_FOLLOWUP_TASK,
       },
     });
     return leads.map((lead) => mapLead(lead));
@@ -537,15 +534,11 @@ export async function getLeads(
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
         files: true,
-        // Just the next open task, for the table's Follow-up cell. Ordered the
-        // same way the Tasks tab orders its list so the two agree on which one
-        // is "next": soonest due date first, undated last.
-        tasks: {
-          where: { completedAt: null },
-          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { id: "asc" }],
-          take: 1,
-          select: { dueDate: true, dueTime: true },
-        },
+        // The one task that decides the Follow-up cell. Not filtered to open
+        // work: mapLead has to tell "the follow-up is done" apart from "this
+        // lead never had one", and `where: { completedAt: null }` collapsed
+        // both to an empty array. See NEXT_FOLLOWUP_TASK.
+        tasks: NEXT_FOLLOWUP_TASK,
       },
       orderBy: { createdAt: "desc" },
       skip: (safePage - 1) * safeLimit,
@@ -598,6 +591,10 @@ export async function findLeadById(id: number): Promise<UiLead | null> {
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
       files: true,
+      // mapLead cannot resolve a follow-up date without it, and omitting it
+      // used to be silent: `tasks` was optional, so this query returned the
+      // retired column even for a lead with a live open task.
+      tasks: NEXT_FOLLOWUP_TASK,
     },
   });
   if (!lead) return null;
@@ -626,6 +623,10 @@ export async function findLeadByEmail(id: number): Promise<UiLead | null> {
       noteAnnotations: { orderBy: { createdAt: "desc" } },
       emails: { orderBy: { createdAt: "desc" } },
       files: true,
+      // mapLead cannot resolve a follow-up date without it, and omitting it
+      // used to be silent: `tasks` was optional, so this query returned the
+      // retired column even for a lead with a live open task.
+      tasks: NEXT_FOLLOWUP_TASK,
     },
   });
   if (!lead) return null;
@@ -861,6 +862,10 @@ export async function createLead(
     noteAnnotations: { orderBy: { createdAt: "desc" } },
     emails: { orderBy: { createdAt: "desc" } },
     files: true,
+    // Reused by BOTH create paths, and the dedupe branch returns an EXISTING
+    // lead that may already carry open work — without this it was mapped to
+    // its retired column.
+    tasks: NEXT_FOLLOWUP_TASK,
   } satisfies Prisma.LeadInclude;
 
   const leadCreateResult = await prisma.$transaction(async (tx) => {
@@ -1383,6 +1388,10 @@ export async function updateLead(
         noteAnnotations: { orderBy: { createdAt: "desc" } },
         emails: { orderBy: { createdAt: "desc" } },
         files: true,
+        // This result is the PATCH response body, and the detail page re-seeds
+        // its edit form from it. Without the include every save handed the UI
+        // back the retired column.
+        tasks: NEXT_FOLLOWUP_TASK,
       },
     }),
     ...reassignOpenTasks,

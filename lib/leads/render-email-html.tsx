@@ -26,6 +26,16 @@ interface LeadPreview {
   stage?: string;
   followupDate?: string | null;
   followupTime?: string | null;
+  /**
+   * The booked consultation, which is NOT the follow-up.
+   *
+   * `mapLead` keeps the two pairs apart and the booking route writes only this
+   * one, but the site-visit email read the follow-up pair — so a lead with a
+   * real consultation booked was sent a confirmation quoting the date of their
+   * next follow-up call instead.
+   */
+  meetingDate?: string | null;
+  meetingTime?: string | null;
   assignedUser?: { name?: string | null } | null;
 }
 
@@ -62,6 +72,7 @@ export async function renderEmailHtml(
     year: "numeric",
   });
   const followupDate = formatLeadDate(lead?.followupDate);
+  const meetingDate = formatLeadDate(lead?.meetingDate);
   const followup = followupDate
     ? followupDate + (lead?.followupTime ? ` at ${lead.followupTime}` : "")
     : undefined;
@@ -124,10 +135,22 @@ export async function renderEmailHtml(
       break;
     case "Meeting":
       component = (
+        // The MEETING pair, not the follow-up pair. This read
+        // `followupDate`/`followupTime`, which are a different appointment:
+        // `mapLead` keeps them apart and the booking route writes only the
+        // meeting, so a client with a consultation booked was sent a "Site
+        // Visit Confirmed" email quoting their next follow-up call.
+        //
+        // And no invented appointment. These were `followupDate ?? today` and
+        // `lead?.followupTime || "10:00 AM"`, under that same banner — so a
+        // lead with nothing booked was told a visit was happening today at
+        // 10am, and one whose follow-up had been completed was told it
+        // happened months ago (#307). SiteVisitEmail already defaults both to
+        // "TBD"; passing undefined lets that through instead of guessing.
         <SiteVisitEmail
           name={name}
-          date={followupDate ?? today}
-          time={lead?.followupTime || "10:00 AM"}
+          date={meetingDate ?? undefined}
+          time={lead?.meetingTime ?? undefined}
           location={location}
           leadContext={leadContext}
         />
