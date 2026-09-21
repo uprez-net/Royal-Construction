@@ -354,7 +354,8 @@ export async function inviteAuthorizedTeamMember(
   requireAdmin(actor);
   const invitation = await inviteTeamMember(
     userPrincipal(actor),
-    input,
+    { ...input, idempotencyKey: ctx.callId },
+    prisma,
     (request) => clerkClient.invitations.createInvitation(request),
   );
   return result(
@@ -445,7 +446,9 @@ export async function revokeAuthorizedTeamInvitation(
   const revoked = await revokeTeamInvitation(
     userPrincipal(actor),
     input.invitationId,
+    prisma,
     (invitationId) => clerkClient.invitations.revokeInvitation(invitationId),
+    ctx.callId,
   );
   return result(
     "confirmation",

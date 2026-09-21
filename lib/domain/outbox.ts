@@ -1,0 +1,220 @@
+import {
+  OutboxEventKind,
+  OutboxEventStatus,
+  type Prisma,
+} from "@prisma/client";
+
+import type { DomainDb } from "./db";
+import { DomainNotFoundError, DomainTransitionError } from "./errors";
+
+export type OutboxIntent = {
+  readonly key: string;
+  readonly kind: OutboxEventKind;
+  readonly payload: Prisma.InputJsonValue;
+  readonly availableAt?: Date;
+};
+
+export type ClaimedOutboxEvent = {
+  readonly id: string;
+  readonly key: string;
+  readonly kind: OutboxEventKind;
+  readonly payload: Prisma.JsonValue;
+  readonly attempts: number;
+  readonly lockedAt: Date;
+};
+
+export type OutboxEffectResult = {
+  readonly id: string;
+  readonly key: string;
+  readonly status: OutboxEventStatus;
+  readonly result: Prisma.JsonValue | null;
+};
+
+/**
+ * Persist one provider-neutral effect intent. Existing keys are returned as
+ * they are, which makes retries and duplicate post-commit hooks harmless.
+ */
+export async function enqueueOutboxEvent(
+  db: DomainDb,
+  intent: OutboxIntent,
+): Promise<OutboxEffectResult> {
+  if (!intent.key.trim() || !intent.kind.trim()) {
+    throw new DomainTransitionError("An outbox key and kind are required.");
+  }
+  return db.outboxEvent.upsert({
+    create: {
+      availableAt: intent.availableAt ?? new Date(),
+      key: intent.key,
+      kind: intent.kind,
+      payload: intent.payload,
+    },
+    update: {},
+    where: { key: intent.key },
+    select: { id: true, key: true, result: true, status: true },
+  });
+}
+
+/** Claim one known key, without taking ownership of unrelated work. */
+export async function claimOutboxEvent(
+  db: DomainDb,
+  key: string,
+): Promise<ClaimedOutboxEvent | null> {
+  const candidate = await db.outboxEvent.findUnique({ where: { key } });
+  if (!candidate || candidate.status !== OutboxEventStatus.PENDING) return null;
+  const lockedAt = new Date();
+  const updated = await db.outboxEvent.updateMany({
+    data: {
+      attempts: { increment: 1 },
+      lockedAt,
+      status: OutboxEventStatus.RUNNING,
+    },
+    where: { id: candidate.id, status: OutboxEventStatus.PENDING },
+  });
+  if (updated.count !== 1) return null;
+  return {
+    attempts: candidate.attempts + 1,
+    id: candidate.id,
+    key: candidate.key,
+    kind: candidate.kind,
+    lockedAt,
+    payload: candidate.payload,
+  };
+}
+
+/**
+ * Execute a provider call only after its durable intent is claimed. A
+ * succeeded result is replayed; RUNNING or FAILED means the previous attempt
+ * needs reconciliation and is never blindly repeated.
+ */
+export async function runOutboxEffect<T extends Prisma.InputJsonValue>(
+  db: DomainDb,
+  intent: OutboxIntent,
+  execute: () => Promise<T>,
+): Promise<T> {
+  const existing = await enqueueOutboxEvent(db, intent);
+  if (existing.status === OutboxEventStatus.SUCCEEDED && existing.result !== null) {
+    return existing.result as T;
+  }
+  if (existing.status !== OutboxEventStatus.PENDING) {
+    throw new DomainTransitionError(
+      "This external effect was already attempted and needs reconciliation before retrying.",
+    );
+  }
+  const claimed = await claimOutboxEvent(db, intent.key);
+  if (!claimed) {
+    throw new DomainTransitionError(
+      "This external effect is already being processed; inspect its outcome before retrying.",
+    );
+  }
+  try {
+    const result = await execute();
+    await completeOutboxEvent(db, claimed.id, result);
+    return result;
+  } catch (error) {
+    await failOutboxEvent(db, claimed.id, {
+      message: "The external effect failed or its outcome was ambiguous.",
+      retryable: false,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Claim pending work with a conditional update. Two workers may observe the
+ * same candidate, but only one can move it from PENDING to RUNNING.
+ */
+export async function claimOutboxEvents(
+  db: DomainDb,
+  options: {
+    readonly kind?: OutboxEventKind;
+    readonly limit?: number;
+    readonly now?: Date;
+  } = {},
+): Promise<ClaimedOutboxEvent[]> {
+  const now = options.now ?? new Date();
+  const candidates = await db.outboxEvent.findMany({
+    orderBy: [{ availableAt: "asc" }, { createdAt: "asc" }],
+    take: Math.max(1, Math.min(options.limit ?? 10, 100)),
+    where: {
+      availableAt: { lte: now },
+      ...(options.kind ? { kind: options.kind } : {}),
+      status: OutboxEventStatus.PENDING,
+    },
+  });
+  const claimed: ClaimedOutboxEvent[] = [];
+  for (const candidate of candidates) {
+    const lockedAt = new Date();
+    const result = await db.outboxEvent.updateMany({
+      data: {
+        attempts: { increment: 1 },
+        lockedAt,
+        status: OutboxEventStatus.RUNNING,
+      },
+      where: { id: candidate.id, status: OutboxEventStatus.PENDING },
+    });
+    if (result.count !== 1) continue;
+    claimed.push({
+      attempts: candidate.attempts + 1,
+      id: candidate.id,
+      key: candidate.key,
+      kind: candidate.kind,
+      lockedAt,
+      payload: candidate.payload,
+    });
+  }
+  return claimed;
+}
+
+/** Mark a claimed effect successful and retain a small provider result. */
+export async function completeOutboxEvent(
+  db: DomainDb,
+  eventId: string,
+  result?: Prisma.InputJsonValue,
+): Promise<void> {
+  const updated = await db.outboxEvent.updateMany({
+    data: {
+      completedAt: new Date(),
+      lastError: null,
+      lockedAt: null,
+      result,
+      status: OutboxEventStatus.SUCCEEDED,
+    },
+    where: { id: eventId, status: OutboxEventStatus.RUNNING },
+  });
+  if (updated.count !== 1) {
+    throw new DomainTransitionError(
+      "This outbox effect is no longer owned by the worker.",
+    );
+  }
+}
+
+/**
+ * Requeue failures known to have happened before provider acceptance. An
+ * ambiguous provider timeout is terminal until a human reconciles it; blindly
+ * retrying a customer email or invoice can create the expensive duplicate.
+ */
+export async function failOutboxEvent(
+  db: DomainDb,
+  eventId: string,
+  input: {
+    readonly message: string;
+    readonly retryable: boolean;
+    readonly retryAt?: Date;
+  },
+): Promise<void> {
+  const updated = await db.outboxEvent.updateMany({
+    data: {
+      availableAt: input.retryAt ?? new Date(),
+      completedAt: input.retryable ? null : new Date(),
+      lastError: input.message,
+      lockedAt: null,
+      status: input.retryable
+        ? OutboxEventStatus.PENDING
+        : OutboxEventStatus.FAILED,
+    },
+    where: { id: eventId, status: OutboxEventStatus.RUNNING },
+  });
+  if (updated.count !== 1) {
+    throw new DomainNotFoundError("Outbox effect not found or already settled.");
+  }
+}

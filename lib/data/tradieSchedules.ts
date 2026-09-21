@@ -1,4 +1,6 @@
 "use server";
+
+import { createHash } from "node:crypto";
 import prisma from "@/lib/prisma";
 import {
   TradieSchedule,
@@ -26,10 +28,10 @@ import { authorizeProject } from "@/lib/domain/access/projects";
 import {
   createTradieSchedule as createTradieScheduleDomain,
   createTradieSchedules as createTradieSchedulesDomain,
-  getTradieScheduleReminderRecipient,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
   transitionTradieSchedule as transitionTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
+import { sendTradieScheduleReminder as sendTradieScheduleReminderDomain } from "@/lib/domain/tradies/reminders";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
@@ -830,17 +832,15 @@ export async function sendTradieScheduleReminder({
   }
 
   try {
-    const recipient = await getTradieScheduleReminderRecipient(
+    const idempotencyKey = createHash("sha256")
+      .update(`${scheduleId}\0${subject}\0${body}`)
+      .digest("hex");
+    await sendTradieScheduleReminderDomain(
       userPrincipal(access.user),
-      scheduleId,
+      { body, idempotencyKey, scheduleId, subject },
       prisma,
+      (input) => sendEmail(input),
     );
-
-    await sendEmail({
-      to: recipient.to,
-      subject,
-      body,
-    });
 
     return { success: true, message: "Reminder sent successfully." };
   } catch (error) {

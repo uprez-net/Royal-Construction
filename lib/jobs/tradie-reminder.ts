@@ -1,10 +1,37 @@
 import { addDays, endOfDay, startOfDay } from "date-fns";
-import { TradieScheduleStatus } from "@prisma/client";
+import {
+  OutboxEventKind,
+  TradieScheduleStatus,
+  type Prisma,
+} from "@prisma/client";
 
 import prisma from "@/lib/prisma";
 import { sendEmail } from "@/lib/azureClient";
 import { generateTradieFinalConfirmationEmail } from "@/utils/generate-email";
 import type { TradieScheduleListItem } from "@/types/project";
+import {
+  claimOutboxEvents,
+  completeOutboxEvent,
+  enqueueOutboxEvent,
+  failOutboxEvent,
+} from "@/lib/domain/outbox";
+import {
+  findTradieReminderWindow,
+  markTradieReminderSent,
+} from "@/lib/domain/tradies/reminders";
+
+function scheduleIdFromPayload(payload: Prisma.JsonValue): string | null {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload) ||
+    typeof payload.scheduleId !== "string" ||
+    !payload.scheduleId.trim()
+  ) {
+    return null;
+  }
+  return payload.scheduleId;
+}
 
 export async function sendTradieReminders(): Promise<{
   processed: number;
@@ -14,32 +41,69 @@ export async function sendTradieReminders(): Promise<{
   const targetDate = addDays(startOfDay(new Date()), 7);
   const windowStart = startOfDay(targetDate);
   const windowEnd = endOfDay(targetDate);
+  const window = await findTradieReminderWindow(windowStart, windowEnd, prisma);
 
-  const schedules = await prisma.tradieSchedule.findMany({
-    where: {
-      scheduledDate: {
-        gte: windowStart,
-        lte: windowEnd,
-      },
-    },
-    include: {
-      tradie: true,
-      project: { include: { siteManager: true } },
-      milestone: true,
-    },
+  for (const schedule of window.actionable) {
+    await enqueueOutboxEvent(prisma, {
+      key: `tradie-reminder:${schedule.id}`,
+      kind: OutboxEventKind.TRADIE_SCHEDULE_REMINDER,
+      payload: { scheduleId: schedule.id },
+    });
+  }
+
+  const events = await claimOutboxEvents(prisma, {
+    kind: OutboxEventKind.TRADIE_SCHEDULE_REMINDER,
+    limit: 100,
   });
-
-  const actionable = schedules.filter(
-    (schedule) =>
-      schedule.reminderSentAt === null &&
-      schedule.status !== TradieScheduleStatus.DECLINED &&
-      schedule.status !== TradieScheduleStatus.COMPLETED,
-  );
-  const skipped = schedules.length - actionable.length;
   let failed = 0;
+  let processed = 0;
 
-  for (const schedule of actionable) {
+  for (const event of events) {
     try {
+      const scheduleId = scheduleIdFromPayload(event.payload);
+      if (!scheduleId) {
+        await failOutboxEvent(prisma, event.id, {
+          message: "The reminder payload did not contain a schedule id.",
+          retryable: false,
+        });
+        failed += 1;
+        continue;
+      }
+
+      const schedule = await prisma.tradieSchedule.findUnique({
+        where: { id: scheduleId },
+        include: {
+          tradie: true,
+          project: { include: { siteManager: true } },
+          milestone: true,
+        },
+      });
+      if (!schedule) {
+        await failOutboxEvent(prisma, event.id, {
+          message: "The scheduled booking no longer exists.",
+          retryable: false,
+        });
+        failed += 1;
+        continue;
+      }
+      if (schedule.reminderSentAt) {
+        await completeOutboxEvent(prisma, event.id, {
+          reason: "schedule_already_marked",
+        });
+        processed += 1;
+        continue;
+      }
+      if (
+        schedule.status === TradieScheduleStatus.DECLINED ||
+        schedule.status === TradieScheduleStatus.COMPLETED
+      ) {
+        await completeOutboxEvent(prisma, event.id, {
+          reason: "schedule_no_longer_actionable",
+        });
+        processed += 1;
+        continue;
+      }
+
       if (schedule.status === TradieScheduleStatus.CONFIRMED) {
         const email = generateTradieFinalConfirmationEmail({
           id: schedule.id,
@@ -83,26 +147,28 @@ export async function sendTradieReminders(): Promise<{
         });
       }
 
-      await prisma.tradieSchedule.update({
-        where: { id: schedule.id },
-        data: {
-          reminderSentAt: new Date(),
-          status:
-            schedule.status === TradieScheduleStatus.CONFIRMED
-              ? TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
-              : schedule.status === TradieScheduleStatus.PENDING
-                ? TradieScheduleStatus.PENDING_RESPONSE
-                : schedule.status,
-        },
+      await markTradieReminderSent(schedule.id, prisma);
+      await completeOutboxEvent(prisma, event.id, {
+        scheduleId: schedule.id,
       });
+      processed += 1;
       console.log(
         `[REMINDER] Tradie ${schedule.tradie.name} reminded for ${schedule.project.name} on ${schedule.scheduledDate.toISOString()}`,
       );
     } catch (error) {
       failed += 1;
-      console.error(`[REMINDER] Failed for schedule ${schedule.id}:`, error);
+      await failOutboxEvent(prisma, event.id, {
+        message:
+          "The reminder provider or final schedule write failed; reconcile before retrying.",
+        retryable: false,
+      });
+      console.error(`[REMINDER] Failed for outbox event ${event.id}:`, error);
     }
   }
 
-  return { processed: actionable.length - failed, skipped, failed };
+  return {
+    failed,
+    processed,
+    skipped: window.schedules.length - window.actionable.length,
+  };
 }

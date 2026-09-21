@@ -1,12 +1,17 @@
-import { Prisma, Role } from "@prisma/client";
+import { OutboxEventKind, Prisma, Role } from "@prisma/client";
 
-import type { TransactionalDomainDb } from "../db";
+import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
   DomainNotFoundError,
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
-import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
+import {
+  describePrincipal,
+  requireAdminPrincipal,
+  type DomainPrincipal,
+} from "../principal";
+import { runOutboxEffect } from "../outbox";
 
 // Changing a team member's role.
 //
@@ -27,6 +32,8 @@ export type RoleChangeResult = {
 export type TeamInvitationInput = {
   readonly email: string;
   readonly role: Role;
+  /** Stable request id from the App Idempotency-Key header or Eve call id. */
+  readonly idempotencyKey?: string;
 };
 
 export type TeamInvitation = {
@@ -49,6 +56,7 @@ export type TeamInvitationRevokePort = (
 export async function inviteTeamMember(
   principal: DomainPrincipal,
   input: TeamInvitationInput,
+  db: DomainDb,
   invite: TeamInvitationPort,
 ): Promise<TeamInvitation> {
   requireAdminPrincipal(principal);
@@ -59,19 +67,41 @@ export async function inviteTeamMember(
       "email",
     );
   }
-  const invitation = await invite({
-    emailAddress: email,
-    expiresInDays: 7,
-    publicMetadata: { role: input.role },
-  });
-  return { email, id: invitation.id, role: input.role };
+  const operationKey = input.idempotencyKey?.trim() || `${email}:${input.role}`;
+  const result = await runOutboxEffect(
+    db,
+    {
+      key: `team-invite:${operationKey}`,
+      kind: OutboxEventKind.TEAM_INVITATION_CREATE,
+      payload: {
+        email,
+        requestedBy: describePrincipal(principal),
+        role: input.role,
+      },
+    },
+    async () => {
+      const invitation = await invite({
+        emailAddress: email,
+        expiresInDays: 7,
+        publicMetadata: { role: input.role },
+      });
+      return { email, id: invitation.id, role: input.role };
+    },
+  );
+  return {
+    email: result.email,
+    id: result.id,
+    role: result.role,
+  };
 }
 
 /** Revoke only a named invitation through the injected Clerk capability. */
 export async function revokeTeamInvitation(
   principal: DomainPrincipal,
   invitationId: string,
+  db: DomainDb,
   revoke: TeamInvitationRevokePort,
+  idempotencyKey?: string,
 ): Promise<{ invitationId: string }> {
   requireAdminPrincipal(principal);
   const normalizedId = invitationId.trim();
@@ -81,8 +111,22 @@ export async function revokeTeamInvitation(
       "invitationId",
     );
   }
-  await revoke(normalizedId);
-  return { invitationId: normalizedId };
+  const result = await runOutboxEffect(
+    db,
+    {
+      key: `team-invite-revoke:${idempotencyKey?.trim() || normalizedId}`,
+      kind: OutboxEventKind.TEAM_INVITATION_REVOKE,
+      payload: {
+        invitationId: normalizedId,
+        requestedBy: describePrincipal(principal),
+      },
+    },
+    async () => {
+      await revoke(normalizedId);
+      return { invitationId: normalizedId };
+    },
+  );
+  return { invitationId: result.invitationId };
 }
 
 /**

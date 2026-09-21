@@ -2,8 +2,12 @@ import { clerkClient } from "@/lib/auth";
 import { Role } from "@prisma/client";
 import { requireAdminUser } from "@/lib/auth/require-admin";
 import prisma from "@/lib/prisma";
-import { findUserById } from "@/lib/domain/identity/users";
 import {
+  findUserByClerkId,
+  findUserById,
+} from "@/lib/domain/identity/users";
+import {
+  changeTeamMemberRole,
   inviteTeamMember,
   revokeTeamInvitation,
 } from "@/lib/domain/identity/team";
@@ -89,7 +93,12 @@ export async function POST(request: NextRequest) {
 
     const invitation = await inviteTeamMember(
       principal,
-      { email, role },
+      {
+        email,
+        idempotencyKey: request.headers.get("Idempotency-Key") ?? undefined,
+        role,
+      },
+      prisma,
       (input) => clerkClient.invitations.createInvitation(input),
     );
 
@@ -121,15 +130,57 @@ export async function PATCH(request: NextRequest) {
       return body.response;
     }
     const { userId, newRole } = body.data;
+    const target = await findUserByClerkId(userId, prisma);
+    if (!target) {
+      return errorResponse("Team member not found", {
+        status: 404,
+        code: "NOT_FOUND",
+      });
+    }
+    if (target.role === newRole) {
+      const updatedUser = await clerkClient.users.getUser(userId);
+      return successResponse({
+        message: "User role is already up to date",
+        success: true,
+        user: updatedUser,
+      });
+    }
 
     const updatedUser = await clerkClient.users.updateUser(userId, {
       publicMetadata: { role: newRole },
     });
-    return successResponse({
-      message: "User role updated successfully",
-      success: true,
-      user: updatedUser,
-    });
+    try {
+      await changeTeamMemberRole(
+        principal,
+        {
+          expectedRole: target.role,
+          newRole,
+          userId: target.id,
+        },
+        prisma,
+      );
+      return successResponse({
+        message: "User role updated successfully",
+        success: true,
+        user: updatedUser,
+      });
+    } catch (error) {
+      try {
+        await clerkClient.users.updateUser(userId, {
+          publicMetadata: { role: target.role },
+        });
+      } catch (compensationError) {
+        console.error(
+          "Could not compensate Clerk after the local role transition failed",
+          compensationError,
+        );
+        return errorResponse(
+          "Role update needs manual reconciliation between Clerk and the local team record",
+          { status: 500, code: "RECONCILIATION_REQUIRED" },
+        );
+      }
+      throw error;
+    }
   } catch (error) {
     console.error("/api/users PATCH error", error);
     return errorResponse("Failed to update user", {
@@ -160,7 +211,9 @@ export async function DELETE(request: NextRequest) {
     const revoked = await revokeTeamInvitation(
       principal,
       invitationId,
+      prisma,
       (id) => clerkClient.invitations.revokeInvitation(id),
+      request.headers.get("Idempotency-Key") ?? undefined,
     );
 
     return successResponse({

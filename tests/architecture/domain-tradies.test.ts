@@ -5,6 +5,7 @@ import { test } from "node:test";
 
 import {
   IncidentSeverity,
+  OutboxEventStatus,
   TradieApprovalActionType,
   TradiePriceUnit,
   TradieScheduleStatus,
@@ -442,9 +443,31 @@ test("a demotion with other admins left through goes through", async () => {
 
 test("team invitations normalize the address before calling Clerk", async () => {
   let requested: unknown;
+  const recorder = recordingDb({
+    "outboxEvent.upsert": {
+      id: "effect_1",
+      key: "team-invite:ad-hoc-1",
+      result: null,
+      status: OutboxEventStatus.PENDING,
+    },
+    "outboxEvent.findUnique": {
+      attempts: 0,
+      id: "effect_1",
+      key: "team-invite:ad-hoc-1",
+      kind: "TEAM_INVITATION_CREATE",
+      payload: {},
+      status: OutboxEventStatus.PENDING,
+    },
+    "outboxEvent.updateMany": { count: 1 },
+  });
   const invitation = await inviteTeamMember(
     adminPrincipal(),
-    { email: "  New.Person@Example.com ", role: "SITE_MANAGER" },
+    {
+      email: "  New.Person@Example.com ",
+      idempotencyKey: "ad-hoc-1",
+      role: "SITE_MANAGER",
+    },
+    recorder.db,
     async (input) => {
       requested = input;
       return { id: "inv_1" };
@@ -465,9 +488,27 @@ test("team invitations normalize the address before calling Clerk", async () => 
 
 test("invitation revoke is administrator-only and trims the target id", async () => {
   let revoked: string | null = null;
+  const recorder = recordingDb({
+    "outboxEvent.upsert": {
+      id: "effect_2",
+      key: "team-invite-revoke:inv_1",
+      result: null,
+      status: OutboxEventStatus.PENDING,
+    },
+    "outboxEvent.findUnique": {
+      attempts: 0,
+      id: "effect_2",
+      key: "team-invite-revoke:inv_1",
+      kind: "TEAM_INVITATION_REVOKE",
+      payload: {},
+      status: OutboxEventStatus.PENDING,
+    },
+    "outboxEvent.updateMany": { count: 1 },
+  });
   const result = await revokeTeamInvitation(
     adminPrincipal(),
     "  inv_1 ",
+    recorder.db,
     async (invitationId) => {
       revoked = invitationId;
     },
@@ -476,7 +517,13 @@ test("invitation revoke is administrator-only and trims the target id", async ()
   assert.equal(revoked, "inv_1");
 
   await assert.rejects(
-    () => revokeTeamInvitation(customerPrincipal(), "inv_1", async () => {}),
+    () =>
+      revokeTeamInvitation(
+        customerPrincipal(),
+        "inv_1",
+        recorder.db,
+        async () => {},
+      ),
     DomainAuthorizationError,
   );
 });
