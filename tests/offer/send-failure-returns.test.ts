@@ -11,23 +11,24 @@ import { test } from "node:test";
 // is pinned.
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const sharedPersistence = read("lib/domain/offers/envelope-send.ts");
 
 const SENDS = [
   {
     file: "lib/data/offer-accept-sign.ts",
-    envelope: "envelope = await createOfferAcceptanceEnvelope(",
+    envelope: "envelope = await acceptanceEnvelopePort.send(",
     action: "sendOfferForSignature({ offerId })",
     showsError: "setOfferSignError(result.error)",
   },
   {
     file: "lib/data/offer-tender-sign.ts",
-    envelope: "envelope = await createTenderEnvelope(",
+    envelope: "envelope = await tenderEnvelopePort.send(",
     action: "sendTenderForSignature({ offerId })",
     showsError: "setTenderSendError(result.error)",
   },
   {
     file: "lib/data/offer-contract-sign.ts",
-    envelope: "envelope = await createContractEnvelope(",
+    envelope: "envelope = await contractEnvelopePort.send(",
     action: "sendContractForSignature({ offerId })",
     showsError: "setContractSendError(result.error)",
   },
@@ -56,8 +57,8 @@ for (const send of SENDS) {
 
     assert.doesNotMatch(body, /\bthrow\s/);
     assert.match(body, /error: `[^`]*Do not resend/);
-    // The operator log line stays.
-    assert.match(body, /sent but persisting it failed:/);
+    // The operator log line moved with the persistence rule, and stays shared.
+    assert.match(sharedPersistence, /sent but persisting it failed:/);
   });
 
   test(`the workspace shows ${send.action.split("(")[0]}'s refusal`, () => {

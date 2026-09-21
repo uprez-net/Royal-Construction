@@ -15,65 +15,55 @@ import { agentDb } from "@/agent/lib/db";
 import { applyOfferWorkspacePatch } from "@/lib/domain/offers/workspace-save";
 import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
 import { saveContractParticulars as saveContractParticularsDomain } from "@/lib/domain/offers/contract-particulars";
+import {
+  loadOfferActivity,
+  logOfferChangeRequest,
+  recordOfferActivityEvent,
+} from "@/lib/domain/offers/activity";
+import {
+  getOfferSigningStatus,
+  getOfferSummary,
+  getOfferWorkspaceDetails,
+  listOfferRevisionSummaries,
+  searchOffers,
+  type OfferSummary,
+} from "@/lib/domain/offers/queries";
+import { createOfferRevision } from "@/lib/domain/offers/revisions";
+import { recallOfferEnvelope } from "@/lib/domain/offers/recall";
+import { authorizeOffer } from "@/lib/domain/access/offers";
+import type { EnvelopeControlPort } from "@/lib/domain/ports/envelope-control";
 import { syncLeadStageForOffer } from "@/lib/domain/leads/stage-sync";
 import { userPrincipal } from "@/lib/domain/principal";
-import { assertCanAccessLead, leadListScope } from "@/lib/offer/access";
 import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
 import {
   checkOfferConsistency,
   draftInclusionHighlights,
 } from "@/lib/offer/inclusion-consistency-ai";
+import {
+  checkOfferLists,
+  draftOfferHighlights,
+} from "@/lib/domain/offers/inclusions";
 // The state machine, the owner gate, the workspace validation, the GST split
 // and the lead-stage projection used to be imported here and re-implemented
 // around them. They now live behind lib/domain/offers/*, which the app calls
 // too, so this file names none of them.
-import { RECALL_EDGES } from "@/lib/offer/offer-workflow-transitions";
-import { parseWorkspaceState } from "@/lib/offer/workspace-persistence";
 import { OfferStatusLabels } from "@/types/offer";
 
-type OfferSummary = {
-  acceptedAt: Date | null;
-  amount: { toString(): string };
-  baseReference: string;
-  contractValueIncGst: { toString(): string } | null;
-  createdAt: Date;
-  gstAmount: { toString(): string };
-  id: string;
-  isActive: boolean;
-  leadId: number;
-  offerStatus: OfferStatus;
-  revisionNumber: number;
-  sentAt: Date | null;
-  stateVersion: number;
-  totalAmount: { toString(): string };
-  updatedAt: Date;
-  workspaceState: unknown;
-  lead: {
-    location: string;
-    name: string;
-  };
-};
 type OfferDb = Prisma.TransactionClient | typeof agentDb;
 
-const offerSummarySelect = {
-  acceptedAt: true,
-  amount: true,
-  baseReference: true,
-  contractValueIncGst: true,
-  createdAt: true,
-  gstAmount: true,
-  id: true,
-  isActive: true,
-  leadId: true,
-  offerStatus: true,
-  revisionNumber: true,
-  sentAt: true,
-  stateVersion: true,
-  totalAmount: true,
-  updatedAt: true,
-  workspaceState: true,
-  lead: { select: { location: true, name: true } },
-} as const;
+const unavailableEnvelopeControl: EnvelopeControlPort = {
+  getStatus: async () => {
+    throw new Error("DocuSign envelope control is unavailable in Eve.");
+  },
+  void: async () => {
+    throw new Error("DocuSign envelope control is unavailable in Eve.");
+  },
+};
+
+const inclusionAi = {
+  checkConsistency: checkOfferConsistency,
+  draftHighlights: draftInclusionHighlights,
+};
 
 function offerReference(
   offer: Pick<
@@ -131,42 +121,17 @@ function safeOffer(offer: OfferSummary) {
   };
 }
 
-async function assertAgentCanAccessLead(
-  actor: Pick<User, "id" | "role">,
-  leadId: number,
-) {
-  try {
-    await assertCanAccessLead(actor, leadId);
-  } catch {
-    // Do not reveal whether a forbidden lead or offer exists.
-    throw new AgentAuthorizationError();
-  }
-}
-
 async function assertAgentCanAccessOffer(
   actor: Pick<User, "id" | "role">,
   offerId: string,
 ) {
-  const offer = await agentDb.offer.findUnique({
-    where: { id: offerId },
-    select: { leadId: true },
-  });
-  if (!offer) throw new Error("The requested offer revision is unavailable.");
-  await assertAgentCanAccessLead(actor, offer.leadId);
-}
-
-async function getOfferDetailsDirect(input: { offerId: string }) {
-  const offer = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: offerSummarySelect,
-  });
-  if (!offer) throw new Error("The requested offer revision is unavailable.");
-  if (offer.workspaceState === null)
-    throw new Error("This offer has no saved workspace details yet.");
-  return {
-    offer: safeOffer(offer),
-    workspace: parseWorkspaceState(offer.workspaceState),
-  };
+  try {
+    await authorizeOffer(userPrincipal(actor), offerId, agentDb, {
+      allowInactive: true,
+    });
+  } catch {
+    throw new AgentAuthorizationError();
+  }
 }
 
 /**
@@ -218,15 +183,16 @@ async function updateOfferDetailsDirect(
   // from === to: a detail edit does not move the status. The value comes back
   // from the save rather than a second read, so the timeline records the
   // status the write actually landed against.
-  await db.offerStatusEvent.create({
-    data: {
-      actorId: actor.id,
+  await recordOfferActivityEvent(
+    userPrincipal(actor),
+    {
       fromStatus: result.offerStatus,
       note: `Offer details updated: ${Object.keys(input.patch).join(", ")}`,
       offerId: input.offerId,
       toStatus: result.offerStatus,
     },
-  });
+    db,
+  );
 
   return {
     ok: true as const,
@@ -241,23 +207,12 @@ export async function searchAuthorizedOffers(
   input: { limit: number; query: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const scope = leadListScope(actor);
   const query = input.query.trim();
-  const offers = await agentDb.offer.findMany({
-    where: {
-      lead: {
-        ...(scope.assignedId === null ? {} : { assignedId: scope.assignedId }),
-      },
-      OR: [
-        { id: query },
-        { baseReference: { contains: query, mode: "insensitive" } },
-        { lead: { name: { contains: query, mode: "insensitive" } } },
-      ],
-    },
-    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
-    take: input.limit,
-    select: offerSummarySelect,
-  });
+  const offers = await searchOffers(
+    userPrincipal(actor),
+    { ...input, query },
+    agentDb,
+  );
 
   return agentResultEnvelopeSchema.parse({
     version: 1,
@@ -280,12 +235,11 @@ export async function getAuthorizedOffer(
   input: { offerId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const offer = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: offerSummarySelect,
-  });
-  if (!offer) throw new Error("The requested offer revision is unavailable.");
-  await assertAgentCanAccessLead(actor, offer.leadId);
+  const offer = await getOfferSummary(
+    userPrincipal(actor),
+    input.offerId,
+    agentDb,
+  );
 
   const entityRef = offerReference(offer);
   return agentResultEnvelopeSchema.parse({
@@ -307,13 +261,11 @@ export async function listAuthorizedOfferRevisions(
   input: { leadId: number; limit: number },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, input.leadId);
-  const offers = await agentDb.offer.findMany({
-    where: { leadId: input.leadId },
-    orderBy: [{ revisionNumber: "desc" }, { createdAt: "desc" }],
-    take: input.limit,
-    select: offerSummarySelect,
-  });
+  const offers = await listOfferRevisionSummaries(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
 
   return agentResultEnvelopeSchema.parse({
     version: 1,
@@ -342,11 +294,14 @@ export async function getAuthorizedOfferDetails(
   input: { offerId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessOffer(actor, input.offerId);
-  const result = await getOfferDetailsDirect(input);
+  const result = await getOfferWorkspaceDetails(
+    userPrincipal(actor),
+    input.offerId,
+    agentDb,
+  );
   return actionEnvelope({
-    data: result,
-    entityRef: result.offer.entityRef,
+    data: { offer: safeOffer(result.offer), workspace: result.workspace },
+    entityRef: offerReference(result.offer),
     kind: "entity-summary",
     summary:
       "Offer workspace details are available for review and targeted updates.",
@@ -418,148 +373,6 @@ async function transitionOfferStatusDirect(
   return { status: result.to };
 }
 
-async function createOfferRevisionDirect(
-  input: { offerId: string },
-  actorId: string,
-) {
-  const current = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      id: true,
-      leadId: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      isActive: true,
-      amount: true,
-      gstAmount: true,
-      totalAmount: true,
-      contractValueIncGst: true,
-      workspaceState: true,
-    },
-  });
-  if (!current || !current.isActive)
-    return { ok: false as const, reason: "locked" as const };
-  if (
-    [
-      "TENDER_SIGNED",
-      "CONTRACT_DRAFT",
-      "CONTRACT_SENT",
-      "CONTRACT_DECLINED",
-      "CONTRACT_SIGNED",
-      "PROJECT",
-    ].includes(current.offerStatus)
-  )
-    return { ok: false as const, reason: "locked" as const };
-  const liveEnvelopes = await agentDb.envelope.count({
-    where: {
-      status: { in: ["CREATED", "SENT", "DELIVERED"] },
-      OR: [
-        { offerId: input.offerId },
-        { tender: { offerId: input.offerId } },
-        { contract: { offerId: input.offerId } },
-      ],
-    },
-  });
-  if (liveEnvelopes > 0)
-    return {
-      ok: false as const,
-      reason: "refused" as const,
-      error:
-        "Recall all live signing envelopes before creating a new revision.",
-    };
-  const next = await agentDb.$transaction(async (tx) => {
-    await tx.offer.update({
-      where: { id: current.id },
-      data: {
-        isActive: false,
-        offerStatus: "SUPERSEDED",
-        supersededById: null,
-      },
-    });
-    const created = await tx.offer.create({
-      data: {
-        leadId: current.leadId,
-        baseReference: current.baseReference,
-        revisionNumber: current.revisionNumber + 1,
-        isActive: true,
-        createdById: actorId,
-        offerStatus: "PENDING",
-        amount: current.amount,
-        gstAmount: current.gstAmount,
-        totalAmount: current.totalAmount,
-        contractValueIncGst: current.contractValueIncGst,
-        workspaceState:
-          current.workspaceState === null
-            ? undefined
-            : (current.workspaceState as Prisma.InputJsonValue),
-      },
-    });
-    await tx.offer.update({
-      where: { id: current.id },
-      data: { supersededById: created.id },
-    });
-    return created;
-  });
-  return {
-    ok: true as const,
-    offerId: next.id,
-    leadId: next.leadId,
-    voidedEnvelopes: 0,
-    voidWarnings: [] as string[],
-  };
-}
-
-async function recallOfferEnvelopeDirect(
-  input: {
-    offerId: string;
-    scope: "offer" | "tender" | "contract";
-    toStatus: OfferStatus;
-    note?: string;
-  },
-  actor: User,
-) {
-  const offer = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: { offerStatus: true, isActive: true, leadId: true },
-  });
-  if (!offer || !offer.isActive)
-    return { ok: false as const, error: "This offer revision is unavailable." };
-  const edge = RECALL_EDGES[offer.offerStatus];
-  if (!edge || edge.scope !== input.scope || edge.to !== input.toStatus)
-    return {
-      ok: false as const,
-      error:
-        "The requested recall does not match the offer's current signing state.",
-    };
-  const live = await agentDb.envelope.count({
-    where: {
-      status: { in: ["CREATED", "SENT", "DELIVERED"] },
-      OR:
-        input.scope === "offer"
-          ? [{ offerId: input.offerId }]
-          : input.scope === "tender"
-            ? [{ tender: { offerId: input.offerId } }]
-            : [{ contract: { offerId: input.offerId } }],
-    },
-  });
-  if (live > 0)
-    return {
-      ok: false as const,
-      error:
-        "A live DocuSign envelope must be voided in DocuSign before this agent can complete the recall.",
-    };
-  await transitionOfferStatusDirect(
-    { note: input.note, offerId: input.offerId, toStatus: input.toStatus },
-    actor,
-  );
-  return {
-    ok: true as const,
-    status: input.toStatus,
-    voidWarnings: [] as string[],
-  };
-}
-
 /**
  * Save the contract particulars.
  *
@@ -586,155 +399,6 @@ async function saveContractParticulars(
     },
     agentDb,
   );
-}
-
-async function loadOfferActivity(input: { leadId: number }): Promise<
-  | {
-      ok: true;
-      sends: {
-        recipientEmail: string;
-        offerFileVersion: number;
-        sentAt: string;
-        openedAt: string | null;
-        repliedAt: string | null;
-        lastReplyAt: string | null;
-      }[];
-      events: {
-        fromStatus: OfferStatus | null;
-        toStatus: OfferStatus;
-        note: string | null;
-        at: string;
-      }[];
-    }
-  | { ok: false; error: string }
-> {
-  const offer = await agentDb.offer.findFirst({
-    where: { leadId: input.leadId, isActive: true },
-    orderBy: { createdAt: "desc" },
-    select: { id: true },
-  });
-  if (!offer) return { ok: true as const, sends: [], events: [] };
-  const [sends, events] = await Promise.all([
-    agentDb.offerDocumentSend.findMany({
-      where: { offerId: offer.id },
-      orderBy: { sentAt: "desc" },
-      select: {
-        recipientEmail: true,
-        offerFileVersion: true,
-        sentAt: true,
-        openedAt: true,
-        repliedAt: true,
-        lastReplyAt: true,
-      },
-    }),
-    agentDb.offerStatusEvent.findMany({
-      where: { offerId: offer.id },
-      orderBy: { at: "desc" },
-      select: { fromStatus: true, toStatus: true, note: true, at: true },
-    }),
-  ]);
-  return {
-    ok: true as const,
-    sends: sends.map((send) => ({
-      ...send,
-      sentAt: send.sentAt.toISOString(),
-      openedAt: send.openedAt?.toISOString() ?? null,
-      repliedAt: send.repliedAt?.toISOString() ?? null,
-      lastReplyAt: send.lastReplyAt?.toISOString() ?? null,
-    })),
-    events: events.map((event) => ({ ...event, at: event.at.toISOString() })),
-  };
-}
-async function logOfferChangeRequest(input: { leadId: number; note: string }) {
-  const offer = await agentDb.offer.findFirst({
-    where: { leadId: input.leadId, isActive: true },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, offerStatus: true },
-  });
-  if (!offer)
-    return {
-      ok: false as const,
-      error: "No active offer to log a change request against.",
-    };
-  await agentDb.offerStatusEvent.create({
-    data: {
-      offerId: offer.id,
-      fromStatus: offer.offerStatus,
-      toStatus: offer.offerStatus,
-      note: `Change request: ${input.note}`,
-    },
-  });
-  return { ok: true as const };
-}
-async function pollOfferSigningStatus(input: { offerId: string }) {
-  const offer = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: { offerStatus: true, stateVersion: true },
-  });
-  if (!offer) return { ok: false as const, error: "Offer not found." };
-  const envelopes = await agentDb.envelope.findMany({
-    where: {
-      OR: [
-        { offerId: input.offerId },
-        { tender: { offerId: input.offerId } },
-        { contract: { offerId: input.offerId } },
-      ],
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      docType: true,
-      signatures: {
-        orderBy: { routingOrder: "asc" },
-        select: {
-          recipientRole: true,
-          name: true,
-          email: true,
-          status: true,
-          signedAt: true,
-          routingOrder: true,
-        },
-      },
-    },
-  });
-  const seen = new Set<string>();
-  const signerStatuses = envelopes.flatMap((envelope) => {
-    if (seen.has(envelope.docType)) return [];
-    seen.add(envelope.docType);
-    return envelope.signatures.map((signature) => ({
-      docType:
-        envelope.docType === "TENDER" ||
-        envelope.docType === "CONTRACT" ||
-        envelope.docType === "OFFER"
-          ? envelope.docType
-          : "OFFER",
-      role: signature.recipientRole === "BUILDER" ? "BUILDER" : "CUSTOMER",
-      name: signature.name,
-      email: signature.email,
-      status: signature.status,
-      signedAt: signature.signedAt?.toISOString() ?? null,
-      routingOrder: signature.routingOrder,
-    }));
-  });
-  return {
-    ok: true as const,
-    status: offer.offerStatus,
-    stateVersion: offer.stateVersion,
-    signerStatuses,
-    declineReason: null,
-  };
-}
-async function checkOfferLists(input: {
-  estimated: readonly string[];
-  scheduled: readonly string[];
-  excluded: readonly string[];
-  offered: readonly string[];
-}) {
-  return checkOfferConsistency(input);
-}
-async function draftHighlightsForOffer(input: {
-  scheduled: readonly string[];
-}) {
-  return draftInclusionHighlights(input.scheduled);
 }
 
 async function runOfferMutation(input: {
@@ -868,7 +532,12 @@ export async function recallAuthorizedOfferEnvelope(
     action: "offer.envelope.recall",
     ctx,
     execute: async () => {
-      const result = await recallOfferEnvelopeDirect(input, actor);
+      const result = await recallOfferEnvelope(
+        userPrincipal(actor),
+        input,
+        agentDb,
+        unavailableEnvelopeControl,
+      );
       return result.ok
         ? actionEnvelope({
             data: {
@@ -901,7 +570,12 @@ export async function createAuthorizedOfferRevision(
     action: "offer.revision.create",
     ctx,
     execute: async () => {
-      const result = await createOfferRevisionDirect(input, actor.id);
+      const result = await createOfferRevision(
+        userPrincipal(actor),
+        input,
+        agentDb,
+        unavailableEnvelopeControl,
+      );
       return result.ok
         ? actionEnvelope({
             data: {
@@ -963,12 +637,15 @@ export async function logAuthorizedOfferChangeRequest(
   input: { leadId: number; note: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, input.leadId);
   return runOfferMutation({
     action: "offer.change-request.log",
     ctx,
     execute: async () => {
-      const result = await logOfferChangeRequest(input);
+      const result = await logOfferChangeRequest(
+        userPrincipal(actor),
+        input,
+        agentDb,
+      );
       return result.ok
         ? actionEnvelope({
             data: { leadId: input.leadId },
@@ -989,25 +666,21 @@ export async function getAuthorizedOfferSigningStatus(
   input: { offerId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const offer = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: { leadId: true },
+  const result = await getOfferSigningStatus(
+    userPrincipal(actor),
+    input.offerId,
+    agentDb,
+  );
+  return actionEnvelope({
+    data: {
+      declineReason: result.declineReason,
+      signerStatuses: result.signerStatuses,
+      stateVersion: result.stateVersion,
+      status: result.status,
+    },
+    summary: `${OfferStatusLabels[result.status]} signing status for this offer.`,
+    title: "Offer signing status",
   });
-  if (!offer) throw new Error("The requested offer revision is unavailable.");
-  await assertAgentCanAccessLead(actor, offer.leadId);
-  const result = await pollOfferSigningStatus(input);
-  return result.ok
-    ? actionEnvelope({
-        data: {
-          declineReason: result.declineReason,
-          signerStatuses: result.signerStatuses,
-          stateVersion: result.stateVersion,
-          status: result.status,
-        },
-        summary: `${OfferStatusLabels[result.status]} signing status for this offer.`,
-        title: "Offer signing status",
-      })
-    : failedAction("Signing status unavailable", result.error);
 }
 
 export async function getAuthorizedOfferActivity(
@@ -1015,24 +688,25 @@ export async function getAuthorizedOfferActivity(
   input: { leadId: number },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, input.leadId);
-  const result = await loadOfferActivity(input);
-  return result.ok
-    ? actionEnvelope({
-        data: { events: result.events, sends: result.sends },
-        entityRef: {
-          type: "lead",
-          id: String(input.leadId),
-          display: {
-            label: `Lead ${input.leadId}`,
-            href: `/offers/${input.leadId}`,
-          },
-        },
-        kind: "timeline",
-        summary: `${result.events.length} lifecycle events and ${result.sends.length} sends recorded.`,
-        title: "Offer activity",
-      })
-    : failedAction("Offer activity unavailable", result.error);
+  const result = await loadOfferActivity(
+    userPrincipal(actor),
+    input.leadId,
+    agentDb,
+  );
+  return actionEnvelope({
+    data: { events: result.events, sends: result.sends },
+    entityRef: {
+      type: "lead",
+      id: String(input.leadId),
+      display: {
+        label: `Lead ${input.leadId}`,
+        href: `/offers/${input.leadId}`,
+      },
+    },
+    kind: "timeline",
+    summary: `${result.events.length} lifecycle events and ${result.sends.length} sends recorded.`,
+    title: "Offer activity",
+  });
 }
 
 export async function checkAuthorizedOfferLists(
@@ -1046,8 +720,12 @@ export async function checkAuthorizedOfferLists(
   },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, input.leadId);
-  const result = await checkOfferLists(input);
+  const result = await checkOfferLists(
+    userPrincipal(actor),
+    input,
+    agentDb,
+    inclusionAi,
+  );
   return result.ok
     ? actionEnvelope({
         data: { findings: result.findings },
@@ -1062,8 +740,12 @@ export async function draftAuthorizedOfferHighlights(
   input: { leadId: number; scheduled: readonly string[] },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, input.leadId);
-  const result = await draftHighlightsForOffer(input);
+  const result = await draftOfferHighlights(
+    userPrincipal(actor),
+    input,
+    agentDb,
+    inclusionAi,
+  );
   return result.ok
     ? actionEnvelope({
         data: { highlights: result.highlights },

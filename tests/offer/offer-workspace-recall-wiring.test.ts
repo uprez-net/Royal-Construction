@@ -16,18 +16,18 @@ import { test } from "node:test";
 // A refusal must also be returned rather than thrown, because Next replaces a
 // thrown Server Action message with a generic one in production.
 
-const text = readFileSync(
-  join(process.cwd(), "lib/data/offer-workspace.ts"),
-  "utf8",
-);
+const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const recallSource = read("lib/domain/offers/recall.ts");
+const revisionSource = read("lib/domain/offers/revisions.ts");
+const controlSource = read("lib/domain/offers/envelope-control.ts");
 
 // A top-level function runs from its signature to the first unindented `}`.
-function functionBody(name: string): string {
-  const start = text.indexOf(`async function ${name}(`);
-  assert.ok(start >= 0, `${name} not found in offer-workspace.ts`);
-  const end = text.indexOf("\n}\n", start);
+function functionBody(source: string, name: string): string {
+  const start = source.indexOf(`async function ${name}(`);
+  assert.ok(start >= 0, `${name} not found`);
+  const end = source.indexOf("\n}\n", start);
   assert.ok(end > start, `${name} has no end`);
-  return text.slice(start, end);
+  return source.slice(start, end);
 }
 
 function indexIn(body: string, needle: string): number {
@@ -39,13 +39,19 @@ function indexIn(body: string, needle: string): number {
 const LIVE_FILTER = /status:\s*\{\s*in:\s*LIVE_ENVELOPE_STATUSES\s*\}/;
 
 test("the void and the revision's live check include opened envelopes", () => {
-  assert.doesNotMatch(text, /status:\s*EnvelopeStatus\.SENT\b/);
-  assert.match(functionBody("voidLiveOfferEnvelopes"), LIVE_FILTER);
-  assert.match(functionBody("createOfferRevision"), LIVE_FILTER);
+  assert.doesNotMatch(controlSource, /status:\s*EnvelopeStatus\.SENT\b/);
+  assert.match(
+    functionBody(controlSource, "voidLiveOfferEnvelopes"),
+    LIVE_FILTER,
+  );
+  assert.match(
+    functionBody(revisionSource, "createOfferRevision"),
+    LIVE_FILTER,
+  );
 });
 
 test("a recall checks the client's scope before voiding, and voids only its own scope", () => {
-  const body = functionBody("recallOfferEnvelope");
+  const body = functionBody(recallSource, "recallOfferEnvelope");
   assert.ok(
     indexIn(body, "resolveRecall(") < indexIn(body, "voidLiveOfferEnvelopes("),
     "the recall voids before it has checked the scope",
@@ -59,30 +65,42 @@ test("a recall checks the client's scope before voiding, and voids only its own 
 });
 
 test("recall and revision stop before any change unless every void is confirmed", () => {
-  const refusal =
-    /if \(!decideRecallPullBack\(voids\)\.proceed\) \{\s*return \{\s*ok: false,/;
-  const recall = functionBody("recallOfferEnvelope");
-  assert.match(recall, refusal);
+  const recall = functionBody(recallSource, "recallOfferEnvelope");
+  const recallDecision = indexIn(
+    recall,
+    "if (!decideRecallPullBack(voids).proceed)",
+  );
+  const recallCommit = indexIn(recall, "commitOfferStatusTransition(");
+  assert.match(recall.slice(recallDecision, recallCommit), /ok:\s*false/);
   assert.ok(
-    indexIn(recall, "decideRecallPullBack(voids)") <
-      indexIn(recall, "commitOfferTransition("),
+    recallDecision < recallCommit,
     "the recall moves the status before checking the voids",
   );
 
-  const revision = functionBody("createOfferRevision");
-  assert.match(revision, refusal);
+  const revision = functionBody(revisionSource, "createOfferRevision");
+  const revisionDecision = indexIn(
+    revision,
+    "if (!decideRecallPullBack(voids).proceed)",
+  );
+  const revisionTransaction = indexIn(revision, "db.$transaction(");
+  assert.match(
+    revision.slice(revisionDecision, revisionTransaction),
+    /ok:\s*false/,
+  );
   assert.ok(
-    indexIn(revision, "decideRecallPullBack(voids)") <
-      indexIn(revision, "prisma.$transaction("),
+    revisionDecision < revisionTransaction,
     "the revision forks before checking the voids",
   );
 
-  assert.doesNotMatch(text, /voidWarnings\.push/);
+  assert.doesNotMatch(recallSource + revisionSource, /voidWarnings\.push/);
 });
 
 test("recall and revision return their refusals instead of throwing them", () => {
-  for (const name of ["recallOfferEnvelope", "createOfferRevision"]) {
-    const body = functionBody(name);
+  for (const [source, name] of [
+    [recallSource, "recallOfferEnvelope"],
+    [revisionSource, "createOfferRevision"],
+  ] as const) {
+    const body = functionBody(source, name);
     assert.doesNotMatch(
       body,
       /throw new Error\(\s*(?:describeUnconfirmedVoid|recall\.error|"No revision was created)/,
@@ -92,9 +110,9 @@ test("recall and revision return their refusals instead of throwing them", () =>
 });
 
 test("a refused void is read back from DocuSign before it is reported", () => {
-  const body = functionBody("settleLiveEnvelope");
+  const body = functionBody(controlSource, "settleLiveEnvelope");
   assert.ok(
-    indexIn(body, "voidEnvelope(") < indexIn(body, "getEnvelopeStatus("),
+    indexIn(body, "port.void(") < indexIn(body, "port.getStatus("),
     "the status is read back before the void is attempted",
   );
   assert.match(body, /readRefusedVoid\(/);

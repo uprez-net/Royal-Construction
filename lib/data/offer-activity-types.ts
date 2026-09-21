@@ -1,4 +1,5 @@
 import type { OfferStatus } from "@prisma/client";
+export { CHANGE_REQUEST_PREFIX } from "@/lib/offer/offer-activity-marker";
 
 // Shared types + constant for the offer negotiation activity (ADR 0004). Kept
 // OUT of offer-activity.ts because a "use server" module may only export async
@@ -7,8 +8,6 @@ import type { OfferStatus } from "@prisma/client";
 // The "Change request:" prefix marks an OfferStatusEvent that is a logged customer
 // change request (a note, not a transition — fromStatus == toStatus) rather than a
 // lifecycle change. Shared so the writer and any reader agree on the marker.
-export const CHANGE_REQUEST_PREFIX = "Change request:";
-
 export type OfferActivitySend = {
   readonly recipientEmail: string;
   readonly offerFileVersion: number;

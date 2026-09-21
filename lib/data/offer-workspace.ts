@@ -1,6 +1,6 @@
 "use server";
 
-import { EnvelopeStatus, OfferStatus, Prisma } from "@prisma/client";
+import { OfferStatus, Prisma } from "@prisma/client";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag, updateTag } from "next/cache";
 import prisma from "@/lib/prisma";
@@ -11,16 +11,8 @@ import {
   type OfferAccess,
 } from "@/lib/data/offer-access";
 import { getDocusignConfig } from "@/lib/docusign/config";
-import {
-  createDocusignContext,
-  type DocusignContext,
-} from "@/lib/docusign/client";
+import { createDocusignContext } from "@/lib/docusign/client";
 import { getEnvelopeStatus, voidEnvelope } from "@/lib/docusign/void-envelope";
-import {
-  LIVE_ENVELOPE_STATUSES,
-  readRefusedVoid,
-  type RefusedVoidReading,
-} from "@/lib/docusign/envelope-status";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
@@ -32,10 +24,6 @@ import {
   buildAdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
 import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
-import {
-  resolveOfferContractValue,
-  resolveOfferPriceSplit,
-} from "@/lib/offer/offer-contract-value";
 import { saveOfferWorkspace as saveOfferWorkspaceDomain } from "@/lib/domain/offers/workspace-save";
 import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
 import { userPrincipal } from "@/lib/domain/principal";
@@ -50,21 +38,17 @@ import {
   type ContractPreviewTerms,
 } from "@/lib/offer/contract-terms";
 import { hasContractTerms } from "@/lib/offer/contract-terms-status";
-import type {
-  OfferSignerStatus,
-  OfferSignerStatusValue,
-} from "@/lib/offer/signing-status";
+import type { OfferSignerStatus } from "@/lib/offer/signing-status";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 import { classifyOfferTransition } from "@/lib/offer/offer-workflow-transitions";
+import { createOfferRevision as createOfferRevisionDomain } from "@/lib/domain/offers/revisions";
+import { recallOfferEnvelope as recallOfferEnvelopeDomain } from "@/lib/domain/offers/recall";
+import { getOfferSigningStatus } from "@/lib/domain/offers/queries";
 import {
-  decideRecallPullBack,
-  describeUnconfirmedVoid,
-  envelopeScopeFilter,
-  resolveRecall,
-  type EnvelopeVoidOutcome,
-  type OfferEnvelopeScope,
-  type UnsettledEnvelope,
-} from "@/lib/offer/offer-recall";
+  listOfferRevisionHistory,
+  loadOfferRevisionSnapshot as loadOfferRevisionSnapshotDomain,
+} from "@/lib/domain/offers/queries";
+import type { EnvelopeControlPort } from "@/lib/domain/ports/envelope-control";
 
 // The active offer for a lead, ready to hydrate the workspace. `snapshot` is
 // null when the offer has no saved working-state yet (client uses defaults).
@@ -131,101 +115,19 @@ function toLoaded(offer: OfferRow): LoadedOfferWorkspace {
   };
 }
 
-// A declined offer carries the reason on its most recent decline status event;
-// attach it so the workspace can tell the operator why it was declined and
-// prompt a new revision. A no-op for any non-declined status.
-async function attachDeclineReason(
+// Signing state and decline reasons are one domain query, shared with the live
+// poll. Keeping the workspace hydration on that query prevents the initial
+// render and the next poll from interpreting the same envelope differently.
+async function attachSigningStatus(
   loaded: LoadedOfferWorkspace,
+  principal: ReturnType<typeof userPrincipal>,
 ): Promise<LoadedOfferWorkspace> {
+  const status = await getOfferSigningStatus(principal, loaded.offerId, prisma);
   return {
     ...loaded,
-    declineReason: await loadDeclineReason(loaded.offerId, loaded.status),
+    declineReason: status.declineReason,
+    signerStatuses: status.signerStatuses,
   };
-}
-
-// Per-recipient DocuSign status for an offer's Tender + Contract envelopes, so
-// the signing tracker can show who has actually signed (#121/#123). A document
-// can have SEVERAL envelopes over its life — recalling and re-sending creates a
-// new one — so only the NEWEST envelope per doc type is reported; older ones are
-// superseded and their statuses would be misleading. Shared by the workspace
-// loader and the signing-status poll so they can never diverge.
-async function loadOfferSignerStatuses(
-  offerId: string,
-): Promise<OfferSignerStatus[]> {
-  const envelopes = await prisma.envelope.findMany({
-    where: {
-      // Tender/Contract envelopes hang off their record; an OFFER acceptance
-      // envelope hangs directly off the Offer (ADR 0004).
-      OR: [{ tender: { offerId } }, { contract: { offerId } }, { offerId }],
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      docType: true,
-      signatures: {
-        select: {
-          recipientRole: true,
-          name: true,
-          email: true,
-          status: true,
-          signedAt: true,
-          routingOrder: true,
-        },
-        orderBy: { routingOrder: "asc" },
-      },
-    },
-  });
-
-  // findMany is ordered newest-first, so the first envelope seen for a doc type
-  // is the live one.
-  const newestPerDocType = new Map<string, (typeof envelopes)[number]>();
-  for (const envelope of envelopes) {
-    if (!newestPerDocType.has(envelope.docType)) {
-      newestPerDocType.set(envelope.docType, envelope);
-    }
-  }
-
-  const signerStatuses: OfferSignerStatus[] = [];
-  for (const envelope of newestPerDocType.values()) {
-    for (const signature of envelope.signatures) {
-      signerStatuses.push({
-        docType:
-          envelope.docType === "TENDER"
-            ? "TENDER"
-            : envelope.docType === "CONTRACT"
-              ? "CONTRACT"
-              : "OFFER",
-        role: signature.recipientRole === "BUILDER" ? "BUILDER" : "CUSTOMER",
-        name: signature.name,
-        email: signature.email,
-        status: signature.status as OfferSignerStatusValue,
-        // ISO string, not a Date — this crosses the server → client boundary.
-        signedAt: signature.signedAt ? signature.signedAt.toISOString() : null,
-        routingOrder: signature.routingOrder,
-      });
-    }
-  }
-  return signerStatuses;
-}
-
-// The most recent decline-event note for a declined offer status, or null.
-// Shared by the loader's decorator and the poll so both surface the same reason.
-async function loadDeclineReason(
-  offerId: string,
-  status: OfferStatus,
-): Promise<string | null> {
-  if (
-    status !== OfferStatus.OFFER_DECLINED &&
-    status !== OfferStatus.TENDER_DECLINED &&
-    status !== OfferStatus.CONTRACT_DECLINED
-  ) {
-    return null;
-  }
-  const event = await prisma.offerStatusEvent.findFirst({
-    where: { offerId, toStatus: status },
-    orderBy: { at: "desc" },
-    select: { note: true },
-  });
-  return event?.note ?? null;
 }
 
 // Admin content versioning (see AdminOfferContent.version). Each offer stamps
@@ -298,15 +200,6 @@ async function reapplyAdminContentIfStale(
     snapshot: refreshed,
     stateVersion: loaded.stateVersion + 1,
     adminContentRefreshed: true,
-  };
-}
-
-async function attachSignerStatus(
-  loaded: LoadedOfferWorkspace,
-): Promise<LoadedOfferWorkspace> {
-  return {
-    ...loaded,
-    signerStatuses: await loadOfferSignerStatuses(loaded.offerId),
   };
 }
 
@@ -436,12 +329,11 @@ export async function loadActiveOfferWorkspace(
       revalidateTag(`offer-lead-${leadId}`, CACHE_PROFILES.SHORT);
       return attachContractTerms(
         await attachProjectId(
-          await attachSignerStatus(
+          await attachSigningStatus(
             await attachContractParticulars(
-              await attachDeclineReason(
-                await reapplyAdminContentIfStale(toLoaded(healed)),
-              ),
+              await reapplyAdminContentIfStale(toLoaded(healed)),
             ),
+            userPrincipal(access.user),
           ),
           leadId,
         ),
@@ -449,12 +341,11 @@ export async function loadActiveOfferWorkspace(
     }
     return attachContractTerms(
       await attachProjectId(
-        await attachSignerStatus(
+        await attachSigningStatus(
           await attachContractParticulars(
-            await attachDeclineReason(
-              await reapplyAdminContentIfStale(toLoaded(existing)),
-            ),
+            await reapplyAdminContentIfStale(toLoaded(existing)),
           ),
+          userPrincipal(access.user),
         ),
         leadId,
       ),
@@ -527,26 +418,21 @@ export async function pollOfferSigningStatus(input: {
   if (!access.ok) {
     return { ok: false, error: access.error };
   }
-  const offer = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: { offerStatus: true, stateVersion: true },
-  });
-  if (!offer) {
-    return { ok: false, error: "Offer not found." };
-  }
-  const [signerStatuses, declineReason, contractTerms] = await Promise.all([
-    loadOfferSignerStatuses(input.offerId),
-    loadDeclineReason(input.offerId, offer.offerStatus),
+  const status = await getOfferSigningStatus(
+    userPrincipal(access.user),
+    input.offerId,
+    prisma,
+  );
+  const contractTerms =
     input.needsContractTerms === true
-      ? loadContractTerms(input.offerId, offer.offerStatus)
-      : null,
-  ]);
+      ? await loadContractTerms(input.offerId, status.status)
+      : null;
   return {
     ok: true,
-    status: offer.offerStatus,
-    stateVersion: offer.stateVersion,
-    signerStatuses,
-    declineReason,
+    status: status.status,
+    stateVersion: status.stateVersion,
+    signerStatuses: status.signerStatuses,
+    declineReason: status.declineReason,
     contractTerms,
   };
 }
@@ -748,60 +634,7 @@ export async function listOfferRevisions(
   if (!access.ok) {
     throw new Error(access.error);
   }
-  const offers = await prisma.offer.findMany({
-    where: { leadId },
-    orderBy: { revisionNumber: "desc" },
-    select: {
-      id: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      contractValueIncGst: true,
-      isActive: true,
-      createdAt: true,
-      tender: { select: { executedPdfUrl: true } },
-      contract: { select: { executedPdfUrl: true } },
-    },
-  });
-
-  // Revisions saved before the contract-value fix stored the blank price
-  // override ($0) instead of the quoted price, and only their own snapshot can
-  // recover it. Fetch those snapshots in one targeted follow-up rather than
-  // selecting every revision's workspaceState above — the blobs are large, and
-  // once the data is healthy this query matches nothing and costs nothing.
-  const unpricedIds = offers
-    .filter((offer) => Number(offer.contractValueIncGst ?? 0) <= 0)
-    .map((offer) => offer.id);
-  const stateById = new Map<string, Prisma.JsonValue | null>(
-    unpricedIds.length === 0
-      ? []
-      : (
-          await prisma.offer.findMany({
-            where: { id: { in: unpricedIds } },
-            select: { id: true, workspaceState: true },
-          })
-        ).map((row) => [row.id, row.workspaceState]),
-  );
-
-  return offers.map((offer) => ({
-    offerId: offer.id,
-    reference:
-      offer.baseReference.trim().length > 0
-        ? `${offer.baseReference}-R${offer.revisionNumber}`
-        : `R${offer.revisionNumber}`,
-    revisionNumber: offer.revisionNumber,
-    status: offer.offerStatus,
-    contractValueIncGst: resolveOfferContractValue(
-      offer.contractValueIncGst === null
-        ? null
-        : Number(offer.contractValueIncGst),
-      stateById.get(offer.id) ?? null,
-    ),
-    isActive: offer.isActive,
-    createdAt: offer.createdAt.toISOString(),
-    tenderPdfUrl: offer.tender?.executedPdfUrl ?? null,
-    contractPdfUrl: offer.contract?.executedPdfUrl ?? null,
-  }));
+  return listOfferRevisionHistory(userPrincipal(access.user), leadId, prisma);
 }
 
 // A single revision's saved content, for read-only viewing. Distinct from
@@ -837,54 +670,11 @@ export async function loadOfferRevisionSnapshot(
     throw new Error(access.error);
   }
 
-  const offer = await prisma.offer.findUniqueOrThrow({
-    where: { id: offerId },
-    select: {
-      id: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      isActive: true,
-      createdAt: true,
-      workspaceState: true,
-      documentSends: {
-        select: { sentAt: true },
-        orderBy: { sentAt: "desc" },
-        take: 1,
-      },
-    },
-  });
-
-  if (offer.workspaceState === null) {
-    return { ok: false, reason: "empty" };
-  }
-
-  let snapshot: OfferWorkspaceSnapshot;
-  try {
-    snapshot = deserializeWorkspace(parseWorkspaceState(offer.workspaceState));
-  } catch {
-    // parseWorkspaceState is a strict zod parse. Surface unreadable history as
-    // an empty state rather than taking the whole page down with it.
-    return { ok: false, reason: "unreadable" };
-  }
-
-  return {
-    ok: true,
-    offerId: offer.id,
-    // Built from the DB columns, never from snapshot.job — a forked revision
-    // inherits the parent's workspaceState verbatim, so the reference embedded
-    // in the snapshot still names the revision it was copied from.
-    reference:
-      offer.baseReference.trim().length > 0
-        ? `${offer.baseReference}-R${offer.revisionNumber}`
-        : `R${offer.revisionNumber}`,
-    revisionNumber: offer.revisionNumber,
-    status: offer.offerStatus,
-    isActive: offer.isActive,
-    createdAt: offer.createdAt.toISOString(),
-    lastSentAt: offer.documentSends[0]?.sentAt.toISOString() ?? null,
-    snapshot,
-  };
+  return loadOfferRevisionSnapshotDomain(
+    userPrincipal(access.user),
+    offerId,
+    prisma,
+  );
 }
 
 export type CreateOfferRevisionResult =
@@ -906,185 +696,18 @@ export type CreateOfferRevisionResult =
   // thrown message in production and `error` is what the estimator acts on.
   | { ok: false; reason: "refused"; error: string };
 
-/**
- * Void every envelope in `scope` that is still out for signature, so a customer
- * can no longer sign a document the builder has pulled back.
- *
- * Reports what DocuSign confirmed; callers refuse to move on unless every live
- * envelope is confirmed dead (decideRecallPullBack). An envelope is marked
- * VOIDED only after DocuSign accepts the void, so one that fails stays live
- * here, matching DocuSign. Each status is committed in its own write straight
- * away rather than inside a caller's transaction: voiding is irreversible, so if
- * that transaction rolls back, or a later envelope in the same scope fails, the
- * DB must not show a dead envelope as live. The live-status guard avoids
- * clobbering a terminal status a webhook has already set. "Live" includes
- * DELIVERED: an envelope the customer has opened is still signable.
- *
- * DocuSign refuses to void an envelope that has already ended, so a refusal is
- * followed by reading the envelope's status back from DocuSign. One already
- * voided or declined (its Connect event lost) is recorded as such and counts as
- * dead; refusing it would strand the offer, since nobody could void it again.
- * One DocuSign shows as signed, or still out, is reported unsettled.
- *
- * A row with no docusignId has no DocuSign counterpart (every send writes the id
- * from DocuSign's response in the same write that creates the row), so there is
- * nothing to void and nothing the webhook could ever update. It is marked VOIDED
- * and counted as voided; refusing it would block the offer for good.
- *
- * Deliberately NOT exported: this file is "use server", so an export here would
- * be a callable endpoint that voids envelopes with no authorization of its own.
- * Callers below authorize first.
- */
-async function voidLiveOfferEnvelopes(
-  offerId: string,
-  reason: string,
-  scope: OfferEnvelopeScope,
-): Promise<EnvelopeVoidOutcome> {
-  const liveEnvelopes = await prisma.envelope.findMany({
-    where: {
-      status: { in: LIVE_ENVELOPE_STATUSES },
-      OR: envelopeScopeFilter(offerId, scope),
-    },
-    select: { id: true, docusignId: true, sentAt: true },
-  });
-  const liveIds = liveEnvelopes.map((env) => env.id);
-  const voidedIds: string[] = [];
-  const endedIds: string[] = [];
-  const unsettled: UnsettledEnvelope[] = [];
-
-  const inDocusign: { id: string; docusignId: string }[] = [];
-  for (const env of liveEnvelopes) {
-    if (env.docusignId === null && env.sentAt !== null) {
-      // A send we started and never got an answer to. `docusignId` is null
-      // because the create call timed out, not because it definitively failed,
-      // so DocuSign may well have issued and emailed an envelope we cannot see.
-      //
-      // Treating this like the branch below — recording it voided and letting
-      // the pull-back proceed — is what allowed two live Tenders: the offer
-      // returned to draft, the estimator resent, and the orphan stayed
-      // signable. There is nothing to void, so the only honest answer is to
-      // refuse and send a human to DocuSign.
-      unsettled.push({
-        id: env.id,
-        docusignId: null,
-        reason: "unconfirmed-send",
-      });
-    } else if (env.docusignId === null) {
-      // A failed write must not reject the whole pull-back: leaving the row out
-      // of voidedIds makes decideRecallPullBack refuse, which is what both
-      // callers document, instead of throwing past their refusal result.
-      try {
-        await writeEnvelopeEnded(env.id, EnvelopeStatus.VOIDED);
-        voidedIds.push(env.id);
-      } catch (error) {
-        console.error(
-          `[offer] envelope ${env.id} never reached DocuSign, but recording it voided failed:`,
-          error,
-        );
-      }
-    } else {
-      inDocusign.push({ id: env.id, docusignId: env.docusignId });
-    }
-  }
-  if (inDocusign.length === 0) {
-    return { liveIds, voidedIds, endedIds, unsettled };
-  }
-
-  let context: DocusignContext;
-  try {
-    context = await createDocusignContext(getDocusignConfig());
-  } catch (error) {
-    console.error("[offer] could not reach DocuSign to void envelopes:", error);
-    for (const env of inDocusign) {
-      unsettled.push({ ...env, reason: "still-out" });
-    }
-    return { liveIds, voidedIds, endedIds, unsettled };
-  }
-
-  for (const env of inDocusign) {
-    const settled = await settleLiveEnvelope(context, env, reason);
-    if (settled.kind === "voided") {
-      voidedIds.push(env.id);
-    } else if (settled.kind === "ended") {
-      endedIds.push(env.id);
-    } else {
-      unsettled.push({ ...env, reason: settled.reason });
-    }
-  }
-  return { liveIds, voidedIds, endedIds, unsettled };
-}
-
-// Void one envelope in DocuSign and record the result. Not exported: this file
-// is "use server", and the caller has already authorized.
-async function settleLiveEnvelope(
-  context: DocusignContext,
-  env: { id: string; docusignId: string },
-  reason: string,
-): Promise<
-  | { kind: "voided" }
-  | { kind: "ended" }
-  | { kind: "unsettled"; reason: UnsettledEnvelope["reason"] }
-> {
-  try {
-    await voidEnvelope(context, env.docusignId, reason);
-  } catch (voidError) {
-    let reading: RefusedVoidReading = { kind: "still-out" };
-    try {
-      reading = readRefusedVoid(
-        await getEnvelopeStatus(context, env.docusignId),
-      );
-    } catch (readError) {
-      console.error(
-        `[offer] could not read envelope ${env.docusignId} back from DocuSign:`,
-        readError,
-      );
-    }
-    if (reading.kind !== "ended") {
-      console.error(
-        `[offer] DocuSign did not void envelope ${env.docusignId}:`,
-        voidError,
-      );
-      return { kind: "unsettled", reason: reading.kind };
-    }
-    return (await recordEnvelopeEnded(env, reading.status))
-      ? { kind: "ended" }
-      : { kind: "unsettled", reason: "unrecorded" };
-  }
-
-  // DocuSign has voided it, so a failed write is not an unconfirmed void. On a
-  // retry DocuSign refuses the void, the read-back finds it voided, and it is
-  // recorded then.
-  return (await recordEnvelopeEnded(env, EnvelopeStatus.VOIDED))
-    ? { kind: "voided" }
-    : { kind: "unsettled", reason: "unrecorded" };
-}
-
-async function recordEnvelopeEnded(
-  env: { id: string; docusignId: string },
-  status: EnvelopeStatus,
-): Promise<boolean> {
-  try {
-    await writeEnvelopeEnded(env.id, status);
-    return true;
-  } catch (error) {
-    console.error(
-      `[offer] DocuSign has envelope ${env.docusignId} ${status}, but recording it failed:`,
-      error,
-    );
-    return false;
-  }
-}
-
-// Only over a live status, so a terminal status the webhook already wrote is
-// never overwritten.
-function writeEnvelopeEnded(id: string, status: EnvelopeStatus) {
-  return prisma.envelope.updateMany({
-    where: { id, status: { in: LIVE_ENVELOPE_STATUSES } },
-    data: {
-      status,
-      ...(status === EnvelopeStatus.VOIDED ? { voidedAt: new Date() } : {}),
-    },
-  });
+function createEnvelopeControlPort(): EnvelopeControlPort {
+  let context: ReturnType<typeof createDocusignContext> | null = null;
+  const getContext = () => {
+    context ??= createDocusignContext(getDocusignConfig());
+    return context;
+  };
+  return {
+    getStatus: async (envelopeId) =>
+      getEnvelopeStatus(await getContext(), envelopeId),
+    void: async (envelopeId, reason) =>
+      voidEnvelope(await getContext(), envelopeId, reason),
+  };
 }
 
 /**
@@ -1119,71 +742,12 @@ export async function recallOfferEnvelope(input: {
   if (!access.ok) {
     throw new Error(access.error);
   }
-
-  // Decide everything before voiding: an unchecked scope once reached the void
-  // query as `OR: undefined` and matched every live envelope in the database.
-  const offer = await prisma.offer.findUniqueOrThrow({
-    where: { id: input.offerId },
-    select: { offerStatus: true, isActive: true },
-  });
-  const recall = resolveRecall(
-    input.scope,
-    input.toStatus,
-    offer.offerStatus,
-    offer.isActive,
+  return recallOfferEnvelopeDomain(
+    userPrincipal(access.user),
+    input,
+    prisma,
+    createEnvelopeControlPort(),
   );
-  if (!recall.ok) {
-    return { ok: false, error: recall.error };
-  }
-
-  // Void FIRST, and move the status only once DocuSign has confirmed every void.
-  // An unconfirmed void may leave the document signable; showing it as a draft
-  // would invite edits to a document the customer can still sign, so the offer
-  // stays where it is and the estimator is told why. If the transition fails
-  // after a confirmed void, the envelope is already dead — the safe direction.
-  const voids = await voidLiveOfferEnvelopes(
-    input.offerId,
-    "Recalled by the builder.",
-    recall.scope,
-  );
-  if (!decideRecallPullBack(voids).proceed) {
-    return {
-      ok: false,
-      error: describeUnconfirmedVoid({
-        unsettled: voids.unsettled,
-        voidedCount: voids.voidedIds.length,
-        action: "recall",
-      }),
-    };
-  }
-
-  // No owner gate: the offer passed it when it was sent, and it cannot be
-  // edited while out for signature, so a gate here could strand a voided
-  // envelope behind a status that never steps back. sentAt keeps the date the
-  // offer first went out.
-  const committed = await commitOfferTransition(access, {
-    offerId: input.offerId,
-    from: recall.from,
-    to: recall.to,
-    skipOwnerGate: true,
-    // The envelope has just been voided; classifyOfferTransition would refuse
-    // this step back and tell the operator to use Recall, which is what this
-    // IS. See CommitTransitionInput.skipTransitionCheck.
-    skipTransitionCheck: true,
-    stampSentAt: false,
-    actorId: access.user.id,
-    note: input.note,
-  });
-  if (!committed) {
-    return {
-      ok: false,
-      error: `${voids.voidedIds.length > 0 ? "The DocuSign envelope was voided and stays voided, but the" : "The"} offer's status changed before the recall could move it back. Refresh to see where it is now.`,
-    };
-  }
-
-  // Kept for the client's existing check; a recall with anything to warn about
-  // is now refused instead.
-  return { ok: true, status: recall.to, voidWarnings: [] };
 }
 
 // Fork a new active revision from the current one, superseding it. The current
@@ -1198,157 +762,22 @@ export async function createOfferRevision(input: {
   if (!access.ok) {
     throw new Error(access.error);
   }
-
-  const current = await prisma.offer.findUniqueOrThrow({
-    where: { id: input.offerId },
-    select: { offerStatus: true },
-  });
-
-  // An executed Contract (or a handed-off Project) is binding — revisions stop
-  // here; further changes are contract variations, handled separately.
-  if (
-    current.offerStatus === OfferStatus.TENDER_SIGNED ||
-    current.offerStatus === OfferStatus.CONTRACT_DRAFT ||
-    current.offerStatus === OfferStatus.CONTRACT_SENT ||
-    current.offerStatus === OfferStatus.CONTRACT_DECLINED ||
-    current.offerStatus === OfferStatus.CONTRACT_SIGNED ||
-    current.offerStatus === OfferStatus.PROJECT
-  ) {
-    return { ok: false, reason: "locked" };
-  }
-
-  // Pull back any envelope still out for signature so the customer can't sign a
-  // superseded Tender, Contract or acceptance.
-  const voids = await voidLiveOfferEnvelopes(
-    input.offerId,
-    "Superseded by a new revision of this offer.",
-    "all",
+  const created = await createOfferRevisionDomain(
+    userPrincipal(access.user),
+    input,
+    prisma,
+    createEnvelopeControlPort(),
   );
-  if (!decideRecallPullBack(voids).proceed) {
-    return {
-      ok: false,
-      reason: "refused",
-      error: describeUnconfirmedVoid({
-        unsettled: voids.unsettled,
-        voidedCount: voids.voidedIds.length,
-        action: "revision",
-      }),
-    };
-  }
-
-  const created = await prisma.$transaction(async (tx) => {
-    const lockedOffer = await tx.$queryRaw<{ id: string }[]>(
-      Prisma.sql`SELECT "id" FROM "Offer" WHERE "id" = ${input.offerId} FOR UPDATE`,
-    );
-    if (lockedOffer.length === 0) {
-      return null;
-    }
-    const currentRow = await tx.offer.findUniqueOrThrow({
-      where: { id: input.offerId },
-    });
-    if (
-      currentRow.offerStatus === OfferStatus.TENDER_SIGNED ||
-      currentRow.offerStatus === OfferStatus.CONTRACT_DRAFT ||
-      currentRow.offerStatus === OfferStatus.CONTRACT_SENT ||
-      currentRow.offerStatus === OfferStatus.CONTRACT_DECLINED ||
-      currentRow.offerStatus === OfferStatus.CONTRACT_SIGNED ||
-      currentRow.offerStatus === OfferStatus.PROJECT
-    ) {
-      return null;
-    }
-
-    if (voids.voidedIds.length > 0) {
-      // Re-assert only what DocuSign confirmed, and only on rows still live — if
-      // a webhook marked one terminal between our read and here, don't clobber it.
-      await tx.envelope.updateMany({
-        where: {
-          // Prisma's `in` wants a mutable array; the helper returns readonly.
-          id: { in: [...voids.voidedIds] },
-          status: { in: LIVE_ENVELOPE_STATUSES },
-        },
-        data: { status: EnvelopeStatus.VOIDED, voidedAt: new Date() },
-      });
-    }
-
-    // A live envelope outside the confirmed voids was sent after they ran.
-    // Forking now would supersede an offer the customer can still sign.
-    const sentMeanwhile = await tx.envelope.count({
-      where: {
-        status: { in: LIVE_ENVELOPE_STATUSES },
-        OR: envelopeScopeFilter(input.offerId, "all"),
-        id: { notIn: [...voids.voidedIds, ...voids.endedIds] },
-      },
-    });
-    if (sentMeanwhile > 0) {
-      return "sent-meanwhile" as const;
-    }
-
-    await tx.offer.update({
-      where: { id: currentRow.id },
-      data: { isActive: false, offerStatus: OfferStatus.SUPERSEDED },
-    });
-
-    const forkedPriceSplit = resolveOfferPriceSplit(
-      currentRow.contractValueIncGst === null
-        ? null
-        : Number(currentRow.contractValueIncGst),
-      currentRow.workspaceState,
-    );
-
-    const next = await tx.offer.create({
-      data: {
-        leadId: currentRow.leadId,
-        baseReference: currentRow.baseReference,
-        revisionNumber: currentRow.revisionNumber + 1,
-        isActive: true,
-        createdById: access.user.id,
-        offerStatus: OfferStatus.PENDING,
-        // Derive rather than copy: the parent's columns may predate the fix
-        // that wrote the resolved price, and inheriting them would carry that
-        // $0 into every future revision even after the parent's own row is
-        // repaired. The fork starts as an unedited copy of the parent's
-        // snapshot, so it is priced identically until someone edits it — and a
-        // revision sent without an edit must not quote $0.
-        amount: forkedPriceSplit?.amountExGst ?? currentRow.amount,
-        gstAmount: forkedPriceSplit?.gstAmount ?? currentRow.gstAmount,
-        totalAmount: forkedPriceSplit?.totalIncGst ?? currentRow.totalAmount,
-        contractValueIncGst:
-          forkedPriceSplit?.totalIncGst ?? currentRow.contractValueIncGst,
-        workspaceState:
-          currentRow.workspaceState === null
-            ? Prisma.JsonNull
-            : (currentRow.workspaceState as Prisma.InputJsonValue),
-      },
-    });
-
-    await tx.offer.update({
-      where: { id: currentRow.id },
-      data: { supersededById: next.id },
-    });
-
-    return next;
-  });
-  if (created === "sent-meanwhile") {
-    // A live envelope outside the confirmed voids appeared after they ran.
-    return {
-      ok: false,
-      reason: "refused",
-      error:
-        "No revision was created: a document on this offer was sent for signature while the revision was being prepared. Refresh and try again.",
-    };
-  }
-  if (!created) {
-    return { ok: false, reason: "locked" };
-  }
+  if (!created.ok) return created;
 
   revalidateTag(`offer-lead-${created.leadId}`, CACHE_PROFILES.SHORT);
   // The Offers list shows the live revision and its price.
   updateTag("offers");
   return {
     ok: true,
-    offerId: created.id,
+    offerId: created.offerId,
     leadId: created.leadId,
-    voidedEnvelopes: voids.voidedIds.length,
-    voidWarnings: [],
+    voidedEnvelopes: created.voidedEnvelopes,
+    voidWarnings: created.voidWarnings,
   };
 }

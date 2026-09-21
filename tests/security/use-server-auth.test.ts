@@ -51,6 +51,14 @@ const CALLER_CHECKS = new Set([
   // refusal and the absence of the effect are the same thing.
   "authorizeLeadFileDeletion",
   "deleteLeadFile",
+  // These offer commands authorize the lead/offer or require an internal
+  // principal before reading or mutating anything. The Server Actions resolve
+  // that principal; the shared command owns the record/role decision.
+  "checkOfferListsDomain",
+  "draftOfferHighlights",
+  "generateOfferPrefill",
+  "prepareProjectHandoff",
+  "commitOfferStatusTransition",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export
@@ -69,12 +77,7 @@ const LOCAL_CHECKS: Record<string, string> = {
 };
 
 // Exports whose only check is sign-in, each with why that is enough for now.
-const SIGNED_IN_ONLY: Record<string, string> = {
-  "lib/data/offer-image-ai.ts#generateOfferInspirationImage":
-    "generates a stock image into Blob storage from a fixed prompt; reads no offer, spends image credits (follow-up: staff only)",
-  "lib/data/offer-image-import.ts#importDropboxImage":
-    "copies an https Dropbox image into Blob storage; reads no offer (follow-up: staff only)",
-};
+const SIGNED_IN_ONLY: Record<string, string> = {};
 
 // Exports that check nobody, each with why it is left for now. None reads or
 // writes offers, leads, files or envelopes, but some return project data: the

@@ -27,7 +27,7 @@ const command = readFileSync(
   "utf8",
 );
 const listing = readFileSync(
-  join(process.cwd(), "lib/data/offer-listing.ts"),
+  join(process.cwd(), "lib/domain/offers/listing.ts"),
   "utf8",
 );
 
@@ -88,13 +88,13 @@ test("and off a real change to a lead column the listing shows", () => {
 });
 
 test("the fields checked are exactly the lead columns the listing selects", () => {
-  const query = listing.indexOf("prisma.lead.findMany({");
+  const query = listing.indexOf("db.lead.findMany({");
   assert.ok(query >= 0, "the listing's lead query was not found");
   const select = listing.slice(
     listing.indexOf("select: {", query),
-    listing.indexOf("offers: {", query),
+    listing.indexOf("skip:", query),
   );
-  const selected = [...select.matchAll(/(\w+): true/g)]
+  const selected = [...select.matchAll(/^        (\w+): true,$/gm)]
     .map((match) => match[1])
     .filter((field) => field !== "id");
   assert.deepEqual([...selected].sort(), [...OFFER_LISTING_LEAD_FIELDS].sort());

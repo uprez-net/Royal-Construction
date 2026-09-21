@@ -6,12 +6,7 @@ import {
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
-import {
-  EnvelopeDocType,
-  EnvelopeStatus,
-  OfferStatus,
-  SignerRole,
-} from "@prisma/client";
+import { EnvelopeDocType, OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
@@ -47,10 +42,25 @@ import {
   resolveContractTerms,
 } from "@/lib/offer/contract-terms";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
+import {
+  claimEnvelopeSend,
+  persistSentEnvelope,
+  readContractOfferForSend,
+  readContractParticularsForSend,
+  recordEnvelopeSendEvent,
+  releaseEnvelopeSendClaim,
+  writeContractEnvelopeDocument,
+} from "@/lib/domain/offers/envelope-send";
+import type { EnvelopeSendPort } from "@/lib/domain/ports/envelope-send";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
   | { ok: false; error: string };
+
+const contractEnvelopePort: EnvelopeSendPort<
+  Parameters<typeof createContractEnvelope>[0],
+  Awaited<ReturnType<typeof createContractEnvelope>>
+> = { send: createContractEnvelope };
 
 // Send the MBA BC4 building Contract for signature from the DocuSign template
 // (DOCUSIGN_CONTRACT_TEMPLATE_ID; roles + tab labels in
@@ -68,22 +78,7 @@ export async function sendContractForSignature(input: {
     return { ok: false, error: access.error };
   }
 
-  const offer = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      id: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      workspaceState: true,
-      agreedSnapshot: true,
-      lead: { select: { email: true } },
-      tender: { select: { documentData: true } },
-    },
-  });
-  if (!offer) {
-    return { ok: false, error: "Offer not found." };
-  }
+  const offer = await readContractOfferForSend(prisma, input.offerId);
   if (
     offer.offerStatus !== OfferStatus.TENDER_SIGNED &&
     offer.offerStatus !== OfferStatus.CONTRACT_DRAFT
@@ -288,36 +283,30 @@ export async function sendContractForSignature(input: {
 
   const priceLabel = formatContractMoney(contractValue);
 
-  const claim = await prisma.$transaction(async (tx) => {
-    const updated = await tx.offer.updateMany({
-      where: {
-        id: offer.id,
-        offerStatus: {
-          in: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
-        },
-      },
-      data: { offerStatus: OfferStatus.CONTRACT_SENT },
-    });
-    if (updated.count === 0) {
-      return { claimed: false as const, particulars: null };
-    }
-    const contract = await tx.contract.findUnique({
-      where: { offerId: offer.id },
-      select: { particulars: true },
-    });
-    return {
-      claimed: true as const,
-      particulars: contract?.particulars ?? null,
-    };
+  const claim = await claimEnvelopeSend(prisma, {
+    fromStatuses: [OfferStatus.TENDER_SIGNED, OfferStatus.CONTRACT_DRAFT],
+    offerId: offer.id,
+    previousStatus: offer.offerStatus,
+    toStatus: OfferStatus.CONTRACT_SENT,
   });
-  if (!claim.claimed) {
+  if (claim.kind === "refused") {
     return {
       ok: false,
-      error: "The Contract is already being sent or has been sent.",
+      error:
+        claim.currentStatus === null
+          ? "This offer no longer exists."
+          : `The Contract cannot be sent from ${claim.currentStatus}; reload the live offer revision.`,
     };
   }
 
-  const parsedParticulars = parseContractParticulars(claim.particulars);
+  // The claim has moved the offer out of CONTRACT_DRAFT, so the shared
+  // particulars command can no longer change this row while the envelope is
+  // assembled. Reading it after the atomic claim is therefore a frozen read.
+  const contract = await readContractParticularsForSend(prisma, offer.id);
+
+  const parsedParticulars = parseContractParticulars(
+    contract?.particulars ?? null,
+  );
   // contractTerms carries everything the BC4 needs, exclusions included: the
   // shared resolver reads them from the signed Tender's stored document, so the
   // Contract step's preview and this send cannot show different lines.
@@ -436,7 +425,7 @@ export async function sendContractForSignature(input: {
   > | null = null;
   try {
     docusignContext = await createDocusignContext(config);
-    envelope = await createContractEnvelope({
+    envelope = await contractEnvelopePort.send({
       context: docusignContext,
       config,
       templateId:
@@ -494,22 +483,12 @@ export async function sendContractForSignature(input: {
         ],
       };
     } else if (recovery.kind === "outcome-unknown") {
-      await prisma.offerStatusEvent
-        .create({
-          data: {
-            offerId: offer.id,
-            fromStatus: offer.offerStatus,
-            toStatus: OfferStatus.CONTRACT_SENT,
-            note: `DocuSign did not respond in time — checking whether the Contract envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
-            actorId: access.user.id,
-          },
-        })
-        .catch((eventError) =>
-          console.error(
-            "[offer] recording the unknown contract envelope outcome failed:",
-            eventError,
-          ),
-        );
+      await recordEnvelopeSendEvent(userPrincipal(access.user), prisma, {
+        fromStatus: offer.offerStatus,
+        note: `DocuSign did not respond in time — checking whether the Contract envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
+        offerId: offer.id,
+        toStatus: OfferStatus.CONTRACT_SENT,
+      });
       return {
         ok: false,
         error:
@@ -522,25 +501,16 @@ export async function sendContractForSignature(input: {
         reason,
         error,
       );
-      await prisma.offerStatusEvent
-        .create({
-          data: {
-            offerId: offer.id,
-            fromStatus: offer.offerStatus,
-            toStatus: offer.offerStatus,
-            note: `DocuSign rejected the Contract envelope: ${reason}`,
-            actorId: access.user.id,
-          },
-        })
-        .catch((eventError) =>
-          console.error(
-            "[offer] recording the rejected contract envelope failed:",
-            eventError,
-          ),
-        );
-      await prisma.offer.updateMany({
-        where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SENT },
-        data: { offerStatus: offer.offerStatus },
+      await recordEnvelopeSendEvent(userPrincipal(access.user), prisma, {
+        fromStatus: offer.offerStatus,
+        note: `DocuSign rejected the Contract envelope: ${reason}`,
+        offerId: offer.id,
+        toStatus: offer.offerStatus,
+      });
+      await releaseEnvelopeSendClaim(prisma, {
+        claimedStatus: OfferStatus.CONTRACT_SENT,
+        offerId: offer.id,
+        previousStatus: offer.offerStatus,
       });
       return {
         ok: false,
@@ -556,103 +526,34 @@ export async function sendContractForSignature(input: {
     paymentScheduleSource: payment.source,
   };
 
-  const stillClaimed = await prisma
-    .$transaction(async (tx) => {
-      // Claim first, then write. Returning from a transaction callback COMMITS
-      // it (only a throw rolls back), so a recall or Create revision that ran
-      // while DocuSign was creating the envelope used to have the writes below
-      // land anyway: the stored document was replaced and executedPdfUrl cleared
-      // on a document that may already be executed, even though the raced
-      // envelope is voided straight after. The envelope row is still written, so
-      // the raced envelope stays on the audit trail and can be cancelled.
-      const stillSent = await tx.offer.updateMany({
-        where: {
-          id: offer.id,
-          offerStatus: OfferStatus.CONTRACT_SENT,
-          isActive: true,
-        },
-        data: { offerStatus: OfferStatus.CONTRACT_SENT },
-      });
-      const claimed = stillSent.count > 0;
-      const contract = await tx.contract.upsert({
-        where: { offerId: offer.id },
-        // A new envelope replaces the document, so the last envelope's executed
-        // PDF no longer describes it. The webhook files this one's on completion.
-        // A raced send owns nothing, so it leaves the stored document alone.
-        update: claimed
-          ? {
-              version: offer.revisionNumber,
-              documentData,
-              executedPdfUrl: null,
-            }
-          : {},
-        create: {
+  const persisted = await persistSentEnvelope(
+    userPrincipal(access.user),
+    prisma,
+    {
+      claimedStatus: OfferStatus.CONTRACT_SENT,
+      docType: EnvelopeDocType.CONTRACT,
+      documentVersion: offer.revisionNumber,
+      envelopeId: envelope.envelopeId,
+      note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners
+        .map((signer) => signer.email)
+        .join(", ")}`,
+      offerId: offer.id,
+      previousStatus: offer.offerStatus,
+      recipients: envelope.recipients,
+      writeDocument: (tx, { claimed }) =>
+        writeContractEnvelopeDocument(tx, {
+          claimed,
+          documentData,
           offerId: offer.id,
           version: offer.revisionNumber,
-          documentData,
-        },
-      });
-      await tx.envelope.create({
-        data: {
-          docType: EnvelopeDocType.CONTRACT,
-          contractId: contract.id,
-          docusignId: envelope.envelopeId,
-          status: EnvelopeStatus.SENT,
-          documentVersion: offer.revisionNumber,
-          sentAt: new Date(),
-          signatures: {
-            create: envelope.recipients.map((recipient) => ({
-              recipientRole:
-                recipient.role === "BUILDER"
-                  ? SignerRole.BUILDER
-                  : SignerRole.CUSTOMER,
-              name: recipient.name,
-              email: recipient.email,
-              routingOrder: recipient.routingOrder,
-              // Empty id means "unknown" (composite readback failure) — persist
-              // null so the webhook matches by email, not a wrong id (codex #3).
-              docusignRecipientId: recipient.recipientId || null,
-              capacity: recipient.capacity ?? null,
-              entityName: recipient.entityName ?? null,
-              entityAbn: recipient.entityAbn ?? null,
-            })),
-          },
-        },
-      });
-      if (!claimed) {
-        return false;
-      }
-      await tx.offerStatusEvent.create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: OfferStatus.CONTRACT_SENT,
-          actorId: access.user.id,
-          // Record EVERY customer recipient the envelope routed to, not just the
-          // primary — the contract fans out to each owner/director exactly like the
-          // Tender does, and a single-address note misrepresents the audit trail
-          // (PR #124 sweep; the identical defect was fixed on the Tender note).
-          note: `DocuSign contract envelope ${envelope.envelopeId} sent to ${ownerSigners.map((signer) => signer.email).join(", ")}`,
-        },
-      });
-      return true;
-    })
-    .catch((error) => {
-      // Same invariant as the Tender: the executed contract envelope is already
-      // with the customer and cannot be un-sent, so never release the claim — a
-      // retry would double-send a BC4 contract. Surface the envelope id so the
-      // send can be reconciled (PR #124 sweep; this write was unguarded).
-      console.error(
-        `[offer] contract envelope ${envelope.envelopeId} sent but persisting it failed:`,
-        error,
-      );
-      return { unrecorded: (error as Error).message } as const;
-    });
+        }),
+    },
+  );
 
   // Returned rather than raised: Next replaces a Server Action's thrown
   // message with a generic one in production, and the estimator needs the
   // envelope id and the instruction not to resend.
-  if (typeof stillClaimed === "object") {
+  if (persisted.kind === "unrecorded") {
     return {
       ok: false,
       error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
@@ -661,7 +562,7 @@ export async function sendContractForSignature(input: {
 
   // No *_SENT event and no lead sync: the offer is wherever the recall or
   // revision left it.
-  if (!stillClaimed) {
+  if (persisted.kind === "raced") {
     revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
     return cancelRacedSend(envelope.envelopeId);
   }

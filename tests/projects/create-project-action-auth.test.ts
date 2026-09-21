@@ -10,7 +10,8 @@ import { test } from "node:test";
 // checks the lead first. Both files load Prisma or Clerk, so no test can import
 // them; this reads the source instead.
 
-const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const read = (path: string) =>
+  readFileSync(join(process.cwd(), path), "utf8").replace(/\r\n/g, "\n");
 
 const actions = read("lib/actions/projects.ts");
 const writes = read("lib/data/projectsWrite.ts");

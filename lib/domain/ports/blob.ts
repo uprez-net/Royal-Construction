@@ -33,6 +33,11 @@ export type BlobPutPort = (input: {
   readonly allowOverwrite?: boolean;
 }) => Promise<{ url: string }>;
 
+/** Read an object by its deterministic path, returning null on a miss. */
+export type BlobHeadPort = (
+  pathname: string,
+) => Promise<{ readonly url: string } | null>;
+
 /**
  * A no-op delete, for a caller that has authorized an effect it is not yet
  * ready to perform. Named rather than an inline `async () => {}` so it reads
