@@ -66,6 +66,51 @@ export function projectManageScope(principal: DomainPrincipal): {
   );
 }
 
+/**
+ * Read scope: who may SEE a project, which is wider than who may manage one.
+ *
+ * Staff see every project — that is what the projects list is. A customer
+ * portal account sees only the projects that belong to its own customer
+ * record. Nobody signed out sees any.
+ *
+ * **This is a deliberate behaviour change, flagged rather than assumed.**
+ * `lib/data/projects.ts` applied no scope at all: `getProjects`,
+ * `getProjectsForLookup`, `getProjectById` and the KPI roll-up answered the
+ * same thing for every signed-in caller, and `app/api/(data)/projects/route.ts`
+ * has no guard of its own beyond the middleware's "is anybody signed in".
+ * With two or three staff who are all ADMIN that changes nothing internally.
+ * It matters for a CUSTOMER account, which could list every other customer's
+ * job, budget and site address — the expensive kind of wrong here, because a
+ * client sees it.
+ *
+ * The narrow shape is a `where` fragment callers spread, so one filter covers
+ * the list, the lookup and the single read (a project outside scope then reads
+ * as absent rather than forbidden, which is the right answer for a caller who
+ * should not learn it exists).
+ */
+export function projectReadScope(principal: DomainPrincipal): {
+  customerId?: string;
+} {
+  if (principal.kind === "system") return {};
+  if (isUserPrincipal(principal)) {
+    if (isInternalRole(principal.role)) return {};
+    if (principal.role === Role.CUSTOMER) {
+      // A CUSTOMER with no customerId matches no project rather than all of
+      // them: `{ customerId: undefined }` would drop the filter entirely.
+      return { customerId: principal.customerId ?? NO_SUCH_CUSTOMER };
+    }
+  }
+  throw new DomainAuthorizationError(
+    "Viewing projects requires a signed-in user.",
+  );
+}
+
+/**
+ * A customer id no record carries, so a CUSTOMER principal whose account has
+ * no customer link matches nothing instead of everything.
+ */
+const NO_SUCH_CUSTOMER = "__no_customer__";
+
 export type AuthorizedProject = {
   readonly id: string;
   readonly name: string;
@@ -115,6 +160,87 @@ export async function authorizeMilestone(
   };
 }
 
+export type EditableProject = {
+  readonly id: string;
+  readonly name: string;
+  readonly location: string;
+  readonly siteManagerId: string | null;
+  readonly customerId: string;
+  readonly leadAssignedId: string | null;
+};
+
+/**
+ * Edit scope: who may change a project's own fields — its name, location,
+ * dates, budget and requirements payload.
+ *
+ * Wider than manage scope by one clause, and narrower by another. Both are
+ * deliberate, and both come from `app/api/(data)/projects/[projectId]/route.ts`,
+ * which spelled this rule out inline as `canEditProject`:
+ *
+ *   - **Kept:** the assignee of the lead this project came from. The
+ *     salesperson who converted the lead keeps their edit rights on the
+ *     project. Free to keep, and removing it would be a behaviour change
+ *     nobody asked for. (Moot today — everyone is an ADMIN on a shared login —
+ *     and real once Projects brings site managers.)
+ *   - **Removed, deliberately:** the owning CUSTOMER. The inline rule let a
+ *     customer-portal account PATCH the project it belongs to, and that route
+ *     accepts `totalBudget`, `startDate` and the whole `requirements` payload
+ *     — the contract sum, the claim stages and the signed date. A client
+ *     editing the commercial terms of their own build is the expensive kind of
+ *     wrong here, and no screen offers it: the Overview tab that PATCHes this
+ *     is staff-only. A customer keeps their read through `projectReadScope`.
+ */
+export function canEditProject(
+  principal: DomainPrincipal,
+  project: Pick<EditableProject, "siteManagerId" | "leadAssignedId">,
+): boolean {
+  if (principal.kind === "system") return true;
+  if (!isUserPrincipal(principal)) return false;
+  if (principal.role === Role.ADMIN) return true;
+  if (!isInternalRole(principal.role)) return false;
+  return (
+    project.siteManagerId === principal.userId
+    || project.leadAssignedId === principal.userId
+  );
+}
+
+/** Assert this caller may edit this project's own fields, and return it. */
+export async function authorizeProjectEdit(
+  principal: DomainPrincipal,
+  projectId: string,
+  db: DomainDb,
+): Promise<EditableProject> {
+  const project = await db.project.findUnique({
+    select: {
+      id: true,
+      customerId: true,
+      Lead: { select: { assignedId: true } },
+      location: true,
+      name: true,
+      siteManagerId: true,
+    },
+    where: { id: projectId },
+  });
+
+  if (!project) throw new DomainNotFoundError("Project not found");
+
+  const editable: EditableProject = {
+    customerId: project.customerId,
+    id: project.id,
+    leadAssignedId: project.Lead?.assignedId ?? null,
+    location: project.location,
+    name: project.name,
+    siteManagerId: project.siteManagerId,
+  };
+
+  if (!canEditProject(principal, editable)) {
+    throw new DomainAuthorizationError(
+      "You do not have access to update this project.",
+    );
+  }
+  return editable;
+}
+
 export type FileUploader = {
   readonly role: string;
   readonly customerId?: string | null;
@@ -137,9 +263,9 @@ export function canAttachFileToProject(
 ): boolean {
   if (isInternalRole(user.role as Role)) return true;
   return (
-    user.role === Role.CUSTOMER &&
-    Boolean(user.customerId) &&
-    user.customerId === project.customerId
+    user.role === Role.CUSTOMER
+    && Boolean(user.customerId)
+    && user.customerId === project.customerId
   );
 }
 

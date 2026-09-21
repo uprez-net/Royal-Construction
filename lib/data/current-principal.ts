@@ -38,7 +38,7 @@ const UNIDENTIFIED = anonymousPrincipal("unresolved Clerk session");
  * on this: it has to resolve its own principal and prove the claim, the way
  * `app/api/graph/book-consultant/route.ts` does with its booking token.
  */
-export async function currentLeadPrincipal(): Promise<DomainPrincipal> {
+export async function currentPrincipal(): Promise<DomainPrincipal> {
   let clerkId: string | null | undefined;
   try {
     ({ userId: clerkId } = await auth());
@@ -58,3 +58,12 @@ export async function currentLeadPrincipal(): Promise<DomainPrincipal> {
     return UNIDENTIFIED;
   }
 }
+
+/**
+ * The same resolution, under the name the lead adapters already import.
+ *
+ * Kept as an alias rather than renamed at every call site: nothing about it
+ * was ever lead-specific, and the project adapters added in phase 4 read
+ * better calling it `currentPrincipal`.
+ */
+export const currentLeadPrincipal = currentPrincipal;

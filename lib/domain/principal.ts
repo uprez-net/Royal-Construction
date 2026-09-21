@@ -28,6 +28,17 @@ export type UserPrincipal = {
   readonly kind: "user";
   readonly userId: string;
   readonly role: Role;
+  /**
+   * The customer record a portal account belongs to, when there is one.
+   *
+   * Optional because staff have none and most callers never needed it. A rule
+   * that scopes a CUSTOMER to their own records — `projectReadScope` — must
+   * treat a missing value as "matches nothing" rather than "matches
+   * everything": a portal account whose customer link was never set is
+   * exactly the case where a permissive default leaks another client's
+   * project.
+   */
+  readonly customerId?: string | null;
 };
 
 /**
@@ -57,8 +68,15 @@ export type AnonymousPrincipal = {
   readonly source: string;
 };
 
-export function userPrincipal(user: Pick<User, "id" | "role">): UserPrincipal {
-  return { kind: "user", role: user.role, userId: user.id };
+export function userPrincipal(
+  user: Pick<User, "id" | "role"> & { customerId?: string | null },
+): UserPrincipal {
+  return {
+    customerId: user.customerId ?? null,
+    kind: "user",
+    role: user.role,
+    userId: user.id,
+  };
 }
 
 export function systemPrincipal(reason: string): SystemPrincipal {
