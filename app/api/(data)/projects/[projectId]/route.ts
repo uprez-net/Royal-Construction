@@ -7,7 +7,7 @@ import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validator
 import {
   collectProjectDateBlockers,
   partitionBlockers,
-} from "@/lib/data/projectReadiness";
+} from "@/lib/domain/projects/readiness";
 import { normalizeDateString } from "@/utils/date";
 import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
@@ -127,11 +127,11 @@ export async function PATCH(
     }
 
     const canEditProject =
-      user.role === Role.ADMIN ||
-      existingProject.siteManagerId === user.id ||
-      existingProject.Lead.assignedId === user.id ||
-      (user.role === Role.CUSTOMER &&
-        user.customerId === existingProject.customerId);
+      user.role === Role.ADMIN
+      || existingProject.siteManagerId === user.id
+      || existingProject.Lead.assignedId === user.id
+      || (user.role === Role.CUSTOMER
+        && user.customerId === existingProject.customerId);
 
     if (!canEditProject) {
       return forbiddenResponse(

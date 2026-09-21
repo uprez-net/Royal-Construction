@@ -85,12 +85,12 @@ export function collectProjectDateBlockers({
   }
 
   const pcaMissing =
-    !pcaInspector ||
-    (typeof pcaInspector === "string" && pcaInspector.trim() === "");
+    !pcaInspector
+    || (typeof pcaInspector === "string" && pcaInspector.trim() === "");
   const hbcfInsuranceMissing =
-    !hbcfInsuranceNumber ||
-    (typeof hbcfInsuranceNumber === "string" &&
-      hbcfInsuranceNumber.trim() === "");
+    !hbcfInsuranceNumber
+    || (typeof hbcfInsuranceNumber === "string"
+      && hbcfInsuranceNumber.trim() === "");
   if (pcaMissing && status === "ACTIVE") {
     blockers.push({
       id: "pca_missing",

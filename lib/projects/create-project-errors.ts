@@ -17,7 +17,7 @@ import {
 import {
   ProjectDateBlockerError,
   type ProjectDateBlocker,
-} from "@/lib/data/projectReadiness";
+} from "@/lib/domain/projects/readiness";
 import { normalizeDateString } from "@/utils/date";
 import { ZodError } from "zod";
 import type { ProjectDetail } from "@/types/project";
@@ -313,11 +313,11 @@ export function validateCreateProjectForm({
   }
 
   if (
-    typeof deposit === "number" &&
-    deposit > 0 &&
-    typeof contractSum === "number" &&
-    contractSum > 0 &&
-    deposit > contractSum
+    typeof deposit === "number"
+    && deposit > 0
+    && typeof contractSum === "number"
+    && contractSum > 0
+    && deposit > contractSum
   ) {
     errors.push({
       field: "commercialsAndClaimsDepositValue",
@@ -364,9 +364,9 @@ export function isCreateProjectFailure(
   value: unknown,
 ): value is CreateProjectFailure {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { kind?: unknown }).kind === "create-project-failure"
+    typeof value === "object"
+    && value !== null
+    && (value as { kind?: unknown }).kind === "create-project-failure"
   );
 }
 
@@ -392,8 +392,8 @@ export function toCreateProjectFailure(error: unknown): CreateProjectFailure {
     error instanceof Error ? error.message : "Unable to create project.";
 
   const isNetwork =
-    error instanceof Error &&
-    /fetch failed|network|Failed to fetch|ECONNRESET|timeout/i.test(
+    error instanceof Error
+    && /fetch failed|network|Failed to fetch|ECONNRESET|timeout/i.test(
       error.message,
     );
 

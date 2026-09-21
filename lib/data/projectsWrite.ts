@@ -29,7 +29,7 @@ import type {
 import {
   buildProjectRequirementsPayload,
   resolveProjectBudget,
-} from "@/lib/data/projectFlow";
+} from "@/lib/domain/projects/flow";
 import type { ProjectExtractionData } from "@/types/project-extraction";
 import { paymentStagesFromLabels } from "@/lib/projects/payment-stages";
 import { OfferWorkspaceCostLine } from "../offer/workspace-model";
@@ -37,7 +37,7 @@ import {
   collectProjectDateBlockers,
   partitionBlockers,
   ProjectDateBlockerError,
-} from "./projectReadiness";
+} from "@/lib/domain/projects/readiness";
 import { normalizeDateString } from "@/utils/date";
 
 /**
@@ -183,8 +183,8 @@ function isFlatExtraction(
   extraction: ProjectRequirementsPayload | ProjectExtractionData,
 ): extraction is ProjectExtractionData {
   return (
-    "legalAdministrationSiteAddress" in extraction ||
-    "commercialsAndClaimsTotalContractSum" in extraction
+    "legalAdministrationSiteAddress" in extraction
+    || "commercialsAndClaimsTotalContractSum" in extraction
   );
 }
 
@@ -532,8 +532,8 @@ export async function createProjectWithLead({
         requirementsWithSignedDate.legalAdministration?.signedDate ?? null,
       startDate,
       hbcfInsuranceNumber:
-        requirementsWithSignedDate.legalAdministration?.hbcfInsuranceNumber ??
-        null,
+        requirementsWithSignedDate.legalAdministration?.hbcfInsuranceNumber
+        ?? null,
       pcaInspector:
         requirementsWithSignedDate.legalAdministration?.pcaInspector ?? null,
       status: "ACTIVE",
