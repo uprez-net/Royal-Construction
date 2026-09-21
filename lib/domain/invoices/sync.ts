@@ -1,7 +1,8 @@
-import { InvoiceStatus, Prisma } from "@prisma/client";
+import { InvoiceStatus, OutboxEventKind, Prisma } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainTransitionError } from "../errors";
+import { runOutboxEffectWithOutcome } from "../outbox";
 
 export type InvoiceSyncFields = {
   readonly invoiceNumber: string | null;
@@ -81,16 +82,66 @@ export async function syncInvoiceFromExternal(
   await db.invoice.update({ where: { id: existing.id }, data: fields });
 
   if (!existing.pdfUrl && incoming.archivePdf) {
-    const pdfUrl = await incoming.archivePdf();
-    if (pdfUrl) {
-      await db.invoice.update({
-        data: { pdfUrl },
-        where: { id: existing.id },
-      });
-    }
+    await archiveInvoicePdf(existing.id, xeroInvoiceId, db, incoming.archivePdf);
   }
 
   return { invoiceId: existing.id, kind: "updated" };
+}
+
+/**
+ * Park the rendered invoice in our own storage, behind a repeatable intent.
+ *
+ * Marked repeatable, unlike the issuance: the archive writes to a path derived
+ * from the Xero invoice id and overwrites in place, so running it twice lands
+ * the same object. Refusing to retry would be the wrong trade here — Xero
+ * still holds the document and the claim does not depend on our copy, so a
+ * transient storage failure must not become a permanent "needs reconciliation"
+ * that nobody clears.
+ *
+ * Failure stays non-fatal for the same reason it always was: the invoice sync
+ * that just committed is the thing that matters, and losing our copy of the
+ * PDF must not lose it.
+ */
+export async function archiveInvoicePdf(
+  invoiceId: string,
+  xeroInvoiceId: string,
+  db: DomainDb,
+  archive: () => Promise<string | null>,
+): Promise<void> {
+  try {
+    const { result } = await runOutboxEffectWithOutcome(
+      db,
+      {
+        key: `invoice-pdf:${xeroInvoiceId}`,
+        kind: OutboxEventKind.INVOICE_PDF_ARCHIVE,
+        payload: { invoiceId, xeroInvoiceId },
+      },
+      async () => {
+        const pdfUrl = await archive();
+        if (pdfUrl) {
+          await db.invoice.update({
+            data: { pdfUrl },
+            where: { id: invoiceId },
+          });
+        }
+        return { pdfUrl };
+      },
+      { repeatable: true },
+    );
+    // A replayed intent carries the url the first attempt stored. The row may
+    // still be missing it if that attempt died between the two writes.
+    if (result.pdfUrl) {
+      await db.invoice.updateMany({
+        data: { pdfUrl: result.pdfUrl },
+        where: { id: invoiceId, pdfUrl: null },
+      });
+    }
+  } catch (error) {
+    console.error(
+      `[invoice] Could not archive the PDF for ${xeroInvoiceId}:`,
+      error,
+    );
+  }
 }
 
 function invoiceStatusRank(status: InvoiceStatus): number {

@@ -45,7 +45,7 @@ test("campaign email is staff-only and sends to the normalized recipient", async
       sent = input;
     },
   );
-  assert.equal(result, true);
+  assert.deepEqual(result, { alreadySent: false, sent: true });
   assert.deepEqual(sent, {
     body: "Hello",
     subject: "Update",

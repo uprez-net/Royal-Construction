@@ -1,7 +1,8 @@
-import type { Invoice, ProjectStage } from "@prisma/client";
+import { OutboxEventKind, type Invoice, type ProjectStage } from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";
+import { runOutboxEffectWithOutcome } from "../outbox";
 import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import { resolveStageClaims } from "@/lib/projects/stage-claim";
 import type { InvoiceSyncFields } from "./sync";
@@ -48,6 +49,15 @@ export type CreateExternalStageInvoice = (input: {
  * persist the local mirror. Xero contact/invoice construction and Blob/PDF
  * archiving stay outside this command; the business decision and idempotent
  * local write live here once for milestone hooks and future Eve callers.
+ *
+ * The issuance runs behind a durable intent keyed on the project and stage —
+ * one claim per stage is the business rule, so that is the idempotency key.
+ * The intent is written before Xero is called, which is the difference that
+ * matters: previously an accepted invoice whose response was lost left no
+ * local trace at all, and the only thing that recovered it was Xero honouring
+ * the same idempotency key on a later milestone completion. Now the attempt
+ * itself is a row somebody can find. Deliberately NOT repeatable: a duplicate
+ * progress claim is money in front of a customer.
  */
 export async function createStageInvoice(
   input: CreateStageInvoiceInput,
@@ -75,16 +85,55 @@ export async function createStageInvoice(
   const dueDate = new Date(input.issuedDate);
   dueDate.setDate(dueDate.getDate() + 14);
 
-  const external = await createExternalInvoice({
-    claim,
-    dueDate,
-    gstIncluded: Boolean(requirements?.commercialsAndClaims?.gstIncluded),
-    issuedDate: input.issuedDate,
-    project,
-    projectStage: input.projectStage,
-    stageLabel: input.stageLabel,
-  });
+  // The provider call and the local mirror land inside the one intent, so a
+  // claim that reached Xero is never recorded as un-issued.
+  const { result } = await runOutboxEffectWithOutcome(
+    db,
+    {
+      key: `invoice-stage:${input.projectId}:${input.projectStage}`,
+      kind: OutboxEventKind.INVOICE_STAGE_ISSUE,
+      payload: {
+        claim,
+        projectId: input.projectId,
+        projectStage: input.projectStage,
+        stageLabel: input.stageLabel,
+      },
+    },
+    async () => {
+      const external = await createExternalInvoice({
+        claim,
+        dueDate,
+        gstIncluded: Boolean(requirements?.commercialsAndClaims?.gstIncluded),
+        issuedDate: input.issuedDate,
+        project,
+        projectStage: input.projectStage,
+        stageLabel: input.stageLabel,
+      });
+      const invoice = await persistStageInvoice(input, external, db);
+      // Only ids go in the intent's result. A replay re-reads the invoice row
+      // rather than reconstructing Decimals and Dates out of stored JSON,
+      // which is the kind of round trip that quietly changes a total.
+      return {
+        invoiceId: invoice?.id ?? null,
+        xeroInvoiceId: external.xeroInvoiceId,
+      };
+    },
+  );
 
+  if (!result.invoiceId) return null;
+  return db.invoice.findUnique({ where: { id: result.invoiceId } });
+}
+
+/**
+ * Write the local mirror, treating the uniqueness constraint as the second
+ * idempotency guard after Xero's own key: a retry returns the recorded claim
+ * rather than failing on a row that already says what we wanted it to say.
+ */
+async function persistStageInvoice(
+  input: CreateStageInvoiceInput,
+  external: { xeroInvoiceId: string; fields: InvoiceSyncFields },
+  db: DomainDb,
+): Promise<Invoice | null> {
   try {
     return await db.invoice.create({
       data: {
@@ -95,13 +144,7 @@ export async function createStageInvoice(
       },
     });
   } catch (error) {
-    // The database uniqueness constraint is the second idempotency guard after
-    // Xero's idempotency key. A retry returns the already-recorded claim.
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "P2002"
-    ) {
+    if (error instanceof Error && "code" in error && error.code === "P2002") {
       return db.invoice.findUnique({
         where: {
           projectId_projectStage: {

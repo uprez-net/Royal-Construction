@@ -23,6 +23,28 @@ const fields = {
   xeroUpdatedAt: new Date("2026-01-11"),
 };
 
+
+/** An outbox intent that is fresh, claimable and not yet succeeded. */
+function pendingIntent(key: string, kind: string) {
+  return {
+    "outboxEvent.upsert": {
+      id: "effect_1",
+      key,
+      result: null,
+      status: "PENDING",
+    },
+    "outboxEvent.findUnique": {
+      attempts: 0,
+      id: "effect_1",
+      key,
+      kind,
+      payload: {},
+      status: "PENDING",
+    },
+    "outboxEvent.updateMany": { count: 1 },
+  };
+}
+
 test("invoice sync ignores an external invoice that is not ours", async () => {
   let fetched = false;
   const result = await syncInvoiceFromExternal(
@@ -66,6 +88,7 @@ test("invoice sync writes the mirror and archives a missing PDF through a port",
       xeroUpdatedAt: new Date("2026-01-01"),
     },
     "invoice.update": {},
+    ...pendingIntent("invoice-pdf:xero_1", "INVOICE_PDF_ARCHIVE"),
   });
   const result = await syncInvoiceFromExternal(
     "xero_1",
@@ -76,10 +99,22 @@ test("invoice sync writes the mirror and archives a missing PDF through a port",
     }),
   );
   assert.deepEqual(result, { invoiceId: "invoice_1", kind: "updated" });
-  assert.equal(recorder.writes().length, 2);
-  assert.deepEqual(
-    (recorder.writes()[1].args as { data: unknown }).data,
-    { pdfUrl: "https://blob.test/invoice.pdf" },
+  const pdfWrite = recorder
+    .writes()
+    .find(
+      (call) =>
+        call.operation === "invoice.update" &&
+        (call.args as { data: Record<string, unknown> }).data.pdfUrl !==
+          undefined,
+    );
+  assert.deepEqual((pdfWrite?.args as { data: unknown }).data, {
+    pdfUrl: "https://blob.test/invoice.pdf",
+  });
+  // The archive now runs behind a durable, repeatable intent.
+  assert.ok(
+    recorder
+      .operations()
+      .some((operation) => operation === "outboxEvent.upsert"),
   );
 });
 
@@ -99,7 +134,9 @@ test("stage invoice creation resolves the agreed claim before issuing externally
       requirements: null,
       totalBudget: 100_000,
     },
-    "invoice.create": {},
+    "invoice.create": { id: "invoice_1" },
+    "invoice.findUnique": { id: "invoice_1" },
+    ...pendingIntent("invoice-stage:project_1:Deposit", "INVOICE_STAGE_ISSUE"),
   });
   let issuedClaim = 0;
   const result = await createStageInvoice(
@@ -118,5 +155,15 @@ test("stage invoice creation resolves the agreed claim before issuing externally
 
   assert.ok(result);
   assert.equal(issuedClaim, 5_000);
-  assert.deepEqual(recorder.operations(), ["project.findUnique", "invoice.create"]);
+  // The claim is resolved, then the intent is recorded, and only then is Xero
+  // asked for money.
+  assert.deepEqual(recorder.operations(), [
+    "project.findUnique",
+    "outboxEvent.upsert",
+    "outboxEvent.findUnique",
+    "outboxEvent.updateMany",
+    "invoice.create",
+    "outboxEvent.updateMany",
+    "invoice.findUnique",
+  ]);
 });

@@ -64,11 +64,38 @@ lib/domain/
   db.ts          DomainDb
   errors.ts      the error taxonomy adapters map from
   principal.ts   who is asking
+  outbox.ts      durable intent for an external effect
+  ports/         external capabilities the domain is handed
   <context>/     one folder per bounded context (leads, offers, projects, …)
 ```
 
 Each bounded-context folder gets `commands.ts` / `queries.ts` / `policy.ts` as
-it grows, plus `ports.ts` where it needs an external capability.
+it grows. A capability several contexts need lives in `ports/`; one only a
+single command needs can stay a parameter type on that command.
+
+## External effects
+
+A command that reaches outside the database takes the capability as a
+parameter and, where a duplicate would cost something, records a durable
+intent first through [`outbox.ts`](./outbox.ts).
+
+- **Take the capability, do not import the provider.** The rule and the effect
+  belong in the same call. When a command only returned "yes, this URL is in
+  scope" and an adapter did the deleting, nothing proved the adapter acted on
+  the answer, and no test of the rule could show the delete had not happened.
+- **`runOutboxEffectWithOutcome` reports a replay.** A caller that answers
+  "sent" for a replayed intent is telling the office an email went out when
+  none did. Decide what to say about it.
+- **Pick the idempotency key for how long the effect stays the same.** A key
+  with no time in it deduplicates for ever, which is how a re-invitation and a
+  second reminder became permanent no-ops behind a success response.
+- **`repeatable` is opt-in.** Default is that an ambiguous failure is terminal
+  until a human looks, because a duplicate customer email or invoice is the
+  expensive outcome. Set it only where a second run lands the same state, like
+  overwriting a PDF at a path derived from its invoice id.
+- **`OutboxEventKind` may not grow entries nothing produces.** A kind with no
+  producer reads as "this effect is durable" when it is not;
+  `tests/architecture/domain-outbox-coverage.test.ts` fails on one.
 
 ## Migration state
 

@@ -9,6 +9,7 @@ import {
 import { authorizeFileAttachment } from "./access/projects";
 import { authorizeLead } from "./access/leads";
 import { isInternalPrincipal, isUserPrincipal, type DomainPrincipal } from "./principal";
+import type { BlobDeletePort } from "./ports/blob";
 
 export type SaveFileInput = {
   readonly userId: string;
@@ -24,9 +25,12 @@ export type SaveFileInput = {
 };
 
 /**
- * Check the database scope and lead-specific Blob path before deletion.
- * Actual Blob deletion is an injected adapter capability; a domain command
- * must not import the Vercel SDK just to decide whether a URL is in scope.
+ * Decide whether one Blob URL is this lead's to delete.
+ *
+ * Kept separate from the command below because the rule is worth asserting on
+ * its own, and because a caller that only needs the answer — a check before
+ * offering a delete button — should not have to hand over the capability to
+ * perform it.
  */
 export async function authorizeLeadFileDeletion(
   principal: DomainPrincipal,
@@ -50,6 +54,25 @@ export async function authorizeLeadFileDeletion(
     throw new DomainAuthorizationError("Blob does not belong to this lead.");
   }
   return { blobUrl: input.blobUrl, leadId };
+}
+
+/**
+ * Authorize and perform the deletion as one command.
+ *
+ * The adapter used to receive an authorized URL and call `del` on it itself,
+ * which is the same rule and the same effect written in two files. Nothing but
+ * the adapter's own care joined them: a caller that ignored the answer deleted
+ * an unauthorized object, and no test of the rule could see it.
+ */
+export async function deleteLeadFile(
+  principal: DomainPrincipal,
+  input: { blobUrl: string; leadId: string | number },
+  db: DomainDb,
+  deleteBlob: BlobDeletePort,
+): Promise<{ blobUrl: string; leadId: number }> {
+  const authorized = await authorizeLeadFileDeletion(principal, input, db);
+  await deleteBlob(authorized.blobUrl);
+  return authorized;
 }
 
 /**

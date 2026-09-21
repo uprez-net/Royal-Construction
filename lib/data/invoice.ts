@@ -24,7 +24,10 @@ import { getXeroConfig } from "@/lib/xero/config";
 import { resolveXeroContactId } from "@/lib/xero/contact";
 import { toInvoiceStatus } from "@/lib/xero/invoice-status";
 import { parseXeroDate } from "@/lib/xero/xero-date";
-import { syncInvoiceFromExternal } from "@/lib/domain/invoices/sync";
+import {
+  archiveInvoicePdf as archiveInvoicePdfDurably,
+  syncInvoiceFromExternal,
+} from "@/lib/domain/invoices/sync";
 import { createStageInvoice as createStageInvoiceDomain } from "@/lib/domain/invoices/stage-creation";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
@@ -325,20 +328,22 @@ export async function syncInvoiceFromXero(
   }
 }
 
-/** Download the rendered invoice from Xero and park it in our own blob store. */
+/**
+ * Download the rendered invoice from Xero and park it in our own blob store.
+ *
+ * Both the creation path and the webhook sync archive through the one domain
+ * command, so a PDF that was already archived by whichever arrived first is
+ * not fetched and stored a second time.
+ */
 async function archiveInvoicePdf(
   context: XeroContext,
   invoiceId: string,
   xeroInvoiceId: string,
   projectId: string,
 ): Promise<void> {
-  const url = await archiveInvoicePdfToBlob(context, xeroInvoiceId, projectId);
-  if (url) {
-    await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { pdfUrl: url },
-    });
-  }
+  await archiveInvoicePdfDurably(invoiceId, xeroInvoiceId, prisma, () =>
+    archiveInvoicePdfToBlob(context, xeroInvoiceId, projectId),
+  );
 }
 
 /** Xero/Blob adapter used by both initial creation and webhook sync. */

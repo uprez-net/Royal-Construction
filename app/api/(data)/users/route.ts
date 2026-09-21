@@ -9,6 +9,7 @@ import {
 import {
   changeTeamMemberRole,
   inviteTeamMember,
+  recordRoleReconciliation,
   revokeTeamInvitation,
 } from "@/lib/domain/identity/team";
 import { userPrincipal } from "@/lib/domain/principal";
@@ -193,9 +194,33 @@ export async function PATCH(request: NextRequest) {
           "Could not compensate Clerk after the local role transition failed",
           compensationError,
         );
+        // Clerk now says one role and the database says another, and nothing
+        // here can decide which is right. Leave a durable row rather than only
+        // a log line and a 500 — with nobody watching logs, the next sign of
+        // this is somebody reaching a screen they should not.
+        const recorded = await recordRoleReconciliation(prisma, {
+          clerkRole: newRole,
+          clerkUserId: userId,
+          localRole: target.role,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "The local role transition failed.",
+          userId: target.id,
+        }).catch((recordError) => {
+          console.error(
+            "Could not record the role reconciliation",
+            recordError,
+          );
+          return null;
+        });
         return errorResponse(
           "Role update needs manual reconciliation between Clerk and the local team record",
-          { status: 500, code: "RECONCILIATION_REQUIRED" },
+          {
+            status: 500,
+            code: "RECONCILIATION_REQUIRED",
+            ...(recorded ? { details: recorded.key } : {}),
+          },
         );
       }
       throw error;

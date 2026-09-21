@@ -44,11 +44,13 @@ const CALLER_CHECKS = new Set([
   "requestTradieRemoval",
   "rateTradieDomain",
   "reportTradieIncidentDomain",
-  // authorizeLeadFileDeletion calls authorizeLead before it returns a URL
-  // to delete, so the caller has been checked against the record — the
-  // lead — and not merely proved to be signed in. It also refuses a Blob
-  // path outside that lead's namespace.
+  // Both call authorizeLead before anything reaches blob storage, so the
+  // caller has been checked against the record — the lead — and not merely
+  // proved to be signed in. They also refuse a Blob path outside that lead's
+  // namespace. deleteLeadFile additionally owns the delete itself, so the
+  // refusal and the absence of the effect are the same thing.
   "authorizeLeadFileDeletion",
+  "deleteLeadFile",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export

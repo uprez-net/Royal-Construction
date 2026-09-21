@@ -89,6 +89,14 @@ export async function claimOutboxEvent(
  * `replayed` is part of the answer, not an implementation detail: a caller
  * that reports "sent" for a replay is telling the office an email went out
  * when none did. Every caller has to decide what to say about that.
+ *
+ * `repeatable` says the effect may be run again after an ambiguous failure
+ * without costing anything — archiving a PDF to a fixed path overwrites the
+ * same object, so a second attempt is the same end state. Leave it off for
+ * anything a customer or a tradie sees, or anything that moves money: there a
+ * duplicate is the expensive outcome and a human should look first. The
+ * default is off, because "can this safely happen twice?" is a question the
+ * caller has to answer deliberately.
  */
 export async function runOutboxEffectWithOutcome<
   T extends Prisma.InputJsonValue,
@@ -96,6 +104,7 @@ export async function runOutboxEffectWithOutcome<
   db: DomainDb,
   intent: OutboxIntent,
   execute: () => Promise<T>,
+  options: { readonly repeatable?: boolean } = {},
 ): Promise<{ result: T; replayed: boolean }> {
   const existing = await enqueueOutboxEvent(db, intent);
   if (existing.status === OutboxEventStatus.SUCCEEDED && existing.result !== null) {
@@ -105,10 +114,21 @@ export async function runOutboxEffectWithOutcome<
   // already have accepted the request, but "needs reconciliation" with nothing
   // to look up is a dead end for an office of three with no on-call: the key is
   // what identifies the OutboxEvent row somebody has to check.
-  if (existing.status !== OutboxEventStatus.PENDING) {
+  if (
+    existing.status !== OutboxEventStatus.PENDING &&
+    !(options.repeatable && existing.status === OutboxEventStatus.FAILED)
+  ) {
     throw new DomainTransitionError(
       `This external effect was already attempted and needs reconciliation before retrying (outbox key ${intent.key}).`,
     );
+  }
+  if (options.repeatable && existing.status === OutboxEventStatus.FAILED) {
+    // Reopen it so the claim below can take it. Safe only because the caller
+    // has said a second run costs nothing.
+    await db.outboxEvent.updateMany({
+      data: { availableAt: new Date(), status: OutboxEventStatus.PENDING },
+      where: { id: existing.id, status: OutboxEventStatus.FAILED },
+    });
   }
   const claimed = await claimOutboxEvent(db, intent.key);
   if (!claimed) {
@@ -122,8 +142,10 @@ export async function runOutboxEffectWithOutcome<
     return { replayed: false, result };
   } catch (error) {
     await failOutboxEvent(db, claimed.id, {
-      message: "The external effect failed or its outcome was ambiguous.",
-      retryable: false,
+      message: options.repeatable
+        ? "The external effect failed; it is safe to repeat and will be retried."
+        : "The external effect failed or its outcome was ambiguous.",
+      retryable: options.repeatable === true,
     });
     throw error;
   }
@@ -134,8 +156,14 @@ export async function runOutboxEffect<T extends Prisma.InputJsonValue>(
   db: DomainDb,
   intent: OutboxIntent,
   execute: () => Promise<T>,
+  options: { readonly repeatable?: boolean } = {},
 ): Promise<T> {
-  const { result } = await runOutboxEffectWithOutcome(db, intent, execute);
+  const { result } = await runOutboxEffectWithOutcome(
+    db,
+    intent,
+    execute,
+    options,
+  );
   return result;
 }
 

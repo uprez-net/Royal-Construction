@@ -1,4 +1,9 @@
-import { OutboxEventKind, Prisma, Role } from "@prisma/client";
+import {
+  OutboxEventKind,
+  OutboxEventStatus,
+  Prisma,
+  Role,
+} from "@prisma/client";
 
 import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
@@ -11,7 +16,11 @@ import {
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
-import { runOutboxEffect, runOutboxEffectWithOutcome } from "../outbox";
+import {
+  enqueueOutboxEvent,
+  runOutboxEffect,
+  runOutboxEffectWithOutcome,
+} from "../outbox";
 
 // Changing a team member's role.
 //
@@ -142,6 +151,101 @@ export async function revokeTeamInvitation(
     },
   );
   return { invitationId: result.invitationId };
+}
+
+/**
+ * Record that Clerk and the local team record disagree about someone's role.
+ *
+ * A role change touches two systems. The route writes Clerk first, then the
+ * local row, and compensates Clerk if the local write is refused. When that
+ * compensation ALSO fails, the two are left disagreeing — Clerk says one role,
+ * the database says another — and the caller gets a 500 saying so. That
+ * sentence used to be the only trace: nobody here watches logs, so the next
+ * sign of it would be someone who cannot reach a screen they should, or worse,
+ * someone who can reach one they should not.
+ *
+ * This leaves a durable row instead. It is deliberately not an effect anything
+ * retries: which side is right is a judgement about who is meant to have that
+ * role, and a machine guessing at it is how the wrong person ends up an ADMIN.
+ */
+export async function recordRoleReconciliation(
+  db: DomainDb,
+  input: {
+    readonly userId: string;
+    readonly clerkUserId: string;
+    readonly localRole: Role;
+    readonly clerkRole: Role;
+    readonly reason: string;
+    readonly detectedAt?: Date;
+  },
+): Promise<{ key: string }> {
+  const detectedAt = input.detectedAt ?? new Date();
+  const key = `team-role-reconciliation:${input.clerkUserId}:${detectedAt.toISOString()}`;
+  await enqueueOutboxEvent(db, {
+    key,
+    kind: OutboxEventKind.TEAM_ROLE_RECONCILIATION,
+    payload: {
+      clerkRole: input.clerkRole,
+      clerkUserId: input.clerkUserId,
+      detectedAt: detectedAt.toISOString(),
+      localRole: input.localRole,
+      reason: input.reason,
+      userId: input.userId,
+    },
+  });
+  return { key };
+}
+
+/** The unresolved divergences, newest first, for an admin to work through. */
+export async function listRoleReconciliations(
+  principal: DomainPrincipal,
+  db: DomainDb,
+  limit = 50,
+): Promise<
+  Array<{
+    key: string;
+    payload: Prisma.JsonValue;
+    createdAt: Date;
+    status: OutboxEventStatus;
+  }>
+> {
+  requireAdminPrincipal(principal);
+  return db.outboxEvent.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, key: true, payload: true, status: true },
+    take: Math.max(1, Math.min(limit, 200)),
+    where: {
+      kind: OutboxEventKind.TEAM_ROLE_RECONCILIATION,
+      status: { in: [OutboxEventStatus.PENDING, OutboxEventStatus.FAILED] },
+    },
+  });
+}
+
+/** Close one divergence once a human has put the two systems back in step. */
+export async function resolveRoleReconciliation(
+  principal: DomainPrincipal,
+  key: string,
+  db: DomainDb,
+  note: string,
+): Promise<void> {
+  requireAdminPrincipal(principal);
+  const resolved = await db.outboxEvent.updateMany({
+    data: {
+      completedAt: new Date(),
+      result: { note, resolvedBy: describePrincipal(principal) },
+      status: OutboxEventStatus.SUCCEEDED,
+    },
+    where: {
+      key,
+      kind: OutboxEventKind.TEAM_ROLE_RECONCILIATION,
+      status: { in: [OutboxEventStatus.PENDING, OutboxEventStatus.FAILED] },
+    },
+  });
+  if (resolved.count !== 1) {
+    throw new DomainNotFoundError(
+      "That reconciliation is not open; it may already have been resolved.",
+    );
+  }
 }
 
 /**

@@ -2,14 +2,16 @@
 
 import { generateText } from "ai";
 import { gateway } from "@/lib/model";
-import { del } from "@vercel/blob";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import {
-  authorizeEmailAttachmentDeletion,
+  deleteEmailAttachment,
   sendCampaignEmail as sendCampaignEmailDomain,
 } from "@/lib/domain/email/operations";
+import { isDomainError } from "@/lib/domain/errors";
+import { vercelBlobDelete } from "@/lib/blob-port";
+import prisma from "@/lib/prisma";
 import {
   generateEmailTemplate as generateEmailTemplateDocument,
   type GeneratedEmailResult,
@@ -379,22 +381,17 @@ export async function RemoveUrlFromBlob(blobUrl: string) {
   if (!access.ok) {
     return { success: false, error: access.error };
   }
-  let authorized: { blobUrl: string };
   try {
-    authorized = authorizeEmailAttachmentDeletion(
+    await deleteEmailAttachment(
       userPrincipal(access.user),
       blobUrl,
+      vercelBlobDelete,
     );
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Invalid attachment.",
-    };
-  }
-  try {
-    await del(authorized.blobUrl);
     return { success: true };
   } catch (error) {
+    if (isDomainError(error)) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to delete blob at URL:", blobUrl, error);
     return { success: false, error: "Failed to delete blob." };
   }
@@ -408,6 +405,12 @@ export async function sendCampaignEmail(
   to: string,
   subject: string,
   body: string,
+  /**
+   * Identifies one press of Send. Passing it makes the send idempotent per
+   * recipient for that campaign run, so a double-click or a retried batch does
+   * not email the whole list twice from Royal's mailbox.
+   */
+  runId?: string,
 ): Promise<boolean> {
   // false is what every caller already reads as "not sent".
   const access = await requireInternalUser();
@@ -418,13 +421,15 @@ export async function sendCampaignEmail(
   try {
     const config = getGraphConfig();
     const client = await createGraphContext(config);
-    return sendCampaignEmailDomain(
+    const result = await sendCampaignEmailDomain(
       userPrincipal(access.user),
-      { body, subject, to },
+      { body, runId, subject, to },
       async (input) => {
         await client.sendMail({ ...input, cc: config.cc });
       },
+      prisma,
     );
+    return result.sent;
   } catch (error) {
     console.error(`[Campaign] Failed to send email to ${to}:`, error);
     return false;
