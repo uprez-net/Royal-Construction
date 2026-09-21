@@ -26,7 +26,10 @@ import { auth } from "@clerk/nextjs/server";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { authorizeProject } from "@/lib/domain/access/projects";
-import { createTradieSchedule as createTradieScheduleDomain } from "@/lib/domain/tradies/schedules";
+import {
+  createTradieSchedule as createTradieScheduleDomain,
+  requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
+} from "@/lib/domain/tradies/schedules";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
@@ -34,7 +37,6 @@ import { sendEmail } from "../azureClient";
 import {
   DeleteScheduleInput,
   ScheduleApprovalJsonPayload,
-  ScheduleDeletionJsonPayload,
   TRADIE_SCHEDULE_STATE_MACHINE,
 } from "@/types/tradie";
 import { createActivityLogEntry } from "@/types/activityLog";
@@ -854,27 +856,12 @@ export async function requestTradieScheduleDeletion(
     if (!schedule) {
       throw new Error("Schedule not found");
     }
-    const userId = (await userHasAccessToSchedule(schedule.projectId)).id;
-
-    // Without this an impatient click sends the same booking to the admin
-    // queue twice, and the second approval then fails on a row the first one
-    // already deleted.
-    const pendingRequest = await prisma.tradieApproval.findFirst({
-      where: {
-        tradieId: schedule.tradieId,
-        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
-        status: TradieApprovalStatus.PENDING,
-        updationData: { path: ["scheduleId"], equals: schedule.id },
-      },
-      select: { id: true },
-    });
-    if (pendingRequest) {
-      return {
-        success: false,
-        message:
-          "A deletion request for this schedule is already awaiting admin approval.",
-      };
-    }
+    const actingUser = await userHasAccessToSchedule(schedule.projectId);
+    const requested = await requestTradieScheduleDeletionDomain(
+      userPrincipal(actingUser),
+      input,
+      prisma,
+    );
 
     const totalCost = scheduleTotalCost(
       parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
@@ -889,42 +876,17 @@ export async function requestTradieScheduleDeletion(
       ? schedule.milestone.name
       : "General Task";
 
-    const approval = await prisma.tradieApproval.create({
-      data: {
-        tradieId: schedule.tradieId,
-        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
-        requestedBy: userId,
-        reason: input.reason,
-        // The booking is described here rather than looked up later on
-        // purpose: once the approval is granted the schedule row is gone, and
-        // the resolved request still has to read as a record of what was
-        // removed.
-        updationData: {
-          scheduleId: schedule.id,
-          projectId: schedule.projectId,
-          projectName: schedule.project.name,
-          milestoneId: schedule.milestoneId ?? undefined,
-          milestoneName,
-          scheduledDate,
-          durationDays: schedule.durationDays,
-          cost,
-          currentStatus: schedule.status,
-        } satisfies ScheduleDeletionJsonPayload,
-      },
-      select: { id: true },
-    });
-
     after(async () => {
       revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
       revalidateTag(`approval-kpi`, CACHE_PROFILES.MEDIUM);
       const requester = await prisma.user.findUnique({
-        where: { id: userId },
+        where: { id: actingUser.id },
         select: { name: true },
       });
       const notificationPayload = createNotification(
         "tradieScheduleDeletionRequest",
         {
-          approvalId: approval.id,
+          approvalId: requested.approvalId,
           scheduleId: schedule.id,
           projectId: schedule.projectId,
           projectName: schedule.project.name,
@@ -969,7 +931,7 @@ export async function requestTradieScheduleDeletion(
     return {
       success: true,
       message: "Deletion request submitted for admin approval.",
-      approvalId: approval.id,
+      approvalId: requested.approvalId,
     };
   } catch (error) {
     console.error("Error requesting tradie schedule deletion:", error);

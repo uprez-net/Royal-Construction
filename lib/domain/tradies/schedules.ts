@@ -1,4 +1,8 @@
-import { TradieScheduleStatus } from "@prisma/client";
+import {
+  TradieApprovalActionType,
+  TradieApprovalStatus,
+  TradieScheduleStatus,
+} from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import {
@@ -17,6 +21,7 @@ import {
   parseQuotedAmount,
   scheduleTotalCost,
 } from "../../../utils/calculations";
+import { currency } from "../../../utils/formatters";
 
 // Booking a tradie onto a project.
 //
@@ -406,7 +411,16 @@ export async function requestTradieScheduleDeletion(
   principal: DomainPrincipal,
   input: { scheduleId: string; reason: string },
   db: DomainDb,
-): Promise<{ approvalId: string; scheduleId: string; status: TradieScheduleStatus }> {
+): Promise<{
+  approvalId: string;
+  scheduleId: string;
+  status: TradieScheduleStatus;
+  tradieId: string;
+  tradieName: string;
+  tradieTrade: string;
+  projectId: string;
+  projectName: string;
+}> {
   const schedule = await findSchedule(input.scheduleId, db);
   await authorizeProject(principal, schedule.projectId, db);
   const requesterId = attributionUserId(principal);
@@ -421,7 +435,11 @@ export async function requestTradieScheduleDeletion(
 
   const existing = await db.tradieApproval.findFirst({
     select: { id: true },
-    where: { pendingDeletionKey: schedule.id },
+    where: {
+      actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+      pendingDeletionKey: schedule.id,
+      status: TradieApprovalStatus.PENDING,
+    },
   });
   if (existing) {
     throw new DomainTransitionError(
@@ -429,6 +447,14 @@ export async function requestTradieScheduleDeletion(
     );
   }
 
+  const totalCost = scheduleTotalCost(
+    parseFloat(schedule.tradie.lastQuotedPrice?.toString() ?? "0"),
+    schedule.durationDays,
+    schedule.tradie.lastQuotedPriceUnit,
+  );
+  const cost = currency.format(
+    schedule.quotedPrice ? parseFloat(schedule.quotedPrice) : totalCost,
+  );
   const approval = await db.tradieApproval.create({
     data: {
       actionType: "SCHEDULE_DELETION",
@@ -438,7 +464,10 @@ export async function requestTradieScheduleDeletion(
       tradieId: schedule.tradieId,
       updationData: {
         currentStatus: schedule.status,
+        cost,
         durationDays: schedule.durationDays,
+        milestoneId: schedule.milestoneId ?? undefined,
+        milestoneName: schedule.milestone?.name ?? "General Task",
         projectId: schedule.projectId,
         projectName: schedule.project.name,
         scheduleId: schedule.id,
@@ -447,7 +476,16 @@ export async function requestTradieScheduleDeletion(
     },
     select: { id: true },
   });
-  return { approvalId: approval.id, scheduleId: schedule.id, status: schedule.status };
+  return {
+    approvalId: approval.id,
+    projectId: schedule.projectId,
+    projectName: schedule.project.name,
+    scheduleId: schedule.id,
+    status: schedule.status,
+    tradieId: schedule.tradieId,
+    tradieName: schedule.tradie.name,
+    tradieTrade: schedule.tradie.trade,
+  };
 }
 
 async function findSchedule(scheduleId: string, db: DomainDb) {
@@ -461,7 +499,15 @@ async function findSchedule(scheduleId: string, db: DomainDb) {
       quotedPrice: true,
       scheduledDate: true,
       status: true,
-      tradie: { select: { id: true, name: true } },
+      tradie: {
+        select: {
+          id: true,
+          lastQuotedPrice: true,
+          lastQuotedPriceUnit: true,
+          name: true,
+          trade: true,
+        },
+      },
       tradieId: true,
       milestone: { select: { id: true, name: true } },
     },

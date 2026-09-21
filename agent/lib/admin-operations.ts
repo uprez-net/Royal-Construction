@@ -22,6 +22,7 @@ import {
 } from "@/agent/lib/result-contracts";
 import { getXeroConnectionStatus } from "@/lib/data/xero-connection";
 import { getXeroContext } from "@/lib/xero/client";
+import { disconnectXero } from "@/lib/domain/integrations/xero";
 import {
   getAdminOfferContentNonCache,
   updateAdminOfferContentSection,
@@ -473,27 +474,27 @@ export async function disconnectAuthorizedXero(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const active = await prisma.xeroConnection.findFirst({
-    where: { isActive: true },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, tenantName: true },
-  });
-  if (!active) throw new Error("No active Xero connection exists.");
   const context = await getXeroContext();
-  try {
-    await context.xero.revokeToken();
-  } catch {
-    /* local deactivation remains the safe fail-closed state */
-  }
-  await prisma.xeroConnection.update({
-    where: { id: active.id },
-    data: { isActive: false },
-  });
+  const disconnected = await disconnectXero(
+    userPrincipal(actor),
+    prisma,
+    async () => context.xero.revokeToken(),
+  );
+  if (!disconnected.disconnected)
+    throw new Error("No active Xero connection exists.");
   return result(
     "confirmation",
     "Xero disconnected",
-    `${active.tenantName ?? "The Xero organisation"} was disconnected.`,
-    { connectionId: active.id, reason: input.reason },
+    `${disconnected.tenantName ?? "The Xero organisation"} was disconnected.${
+      disconnected.revocationFailed
+        ? " Xero token revocation was already unavailable; the local connection was deactivated."
+        : ""
+    }`,
+    {
+      connectionId: disconnected.connectionId,
+      reason: input.reason,
+      revocationFailed: disconnected.revocationFailed,
+    },
   );
 }
 

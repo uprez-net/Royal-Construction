@@ -114,11 +114,11 @@ function businessModelAccesses(
 // when a command moves to lib/domain; never raise one. Zero means the file is
 // migrated and must stay migrated.
 const BUDGET: Record<string, number> = {
-  "agent/lib/admin-operations.ts": 6,
+  "agent/lib/admin-operations.ts": 4,
   "agent/lib/lead-operations.ts": 0,
   "agent/lib/offer-operations.ts": 21,
   "agent/lib/project-operations.ts": 25,
-  "agent/lib/tradie-operations.ts": 15,
+  "agent/lib/tradie-operations.ts": 8,
 };
 
 function specialistFiles(): string[] {

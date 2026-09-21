@@ -2,7 +2,6 @@ import {
   IncidentSeverity,
   Prisma,
   Role,
-  TradieApprovalActionType,
   TradieIncidentStatus,
   TradiePriceUnit,
   TradieScheduleStatus,
@@ -21,19 +20,15 @@ import {
 } from "@/agent/lib/result-contracts";
 import prisma from "@/lib/prisma";
 import {
-  normalizeQuoteBasis,
-  parseQuotedAmount,
-  scheduleTotalCost,
-} from "@/utils/calculations";
-import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
-import {
   assertCanReadTradieDirectory,
   tradieScheduleListScope,
 } from "@/lib/domain/access/tradies";
 import { projectManageScope } from "@/lib/domain/access/projects";
 import {
-  assertNoScheduleConflict,
   createTradieSchedule as createTradieScheduleDomain,
+  requestTradieScheduleDeletion,
+  rescheduleTradieSchedule,
+  transitionTradieSchedule,
 } from "@/lib/domain/tradies/schedules";
 import { reportTradieIncident as reportTradieIncidentDomain } from "@/lib/domain/tradies/incidents";
 import {
@@ -638,24 +633,6 @@ export async function listAuthorizedTradieSchedules(
 
 // lib/domain/tradies/schedules.ts owns the overlap rule; the app had none at
 // all until this phase.
-async function ensureNoScheduleConflict(
-  tradieId: string,
-  scheduledDate: Date,
-  durationDays: number,
-  ignoreId?: string,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
-) {
-  try {
-    await assertNoScheduleConflict(
-      { durationDays, ignoreScheduleId: ignoreId, scheduledDate, tradieId },
-      db,
-    );
-  } catch (error) {
-    if (!isDomainError(error)) throw error;
-    throw new Error(error.message);
-  }
-}
-
 export async function createAuthorizedTradieSchedule(
   ctx: ToolContext,
   input: {
@@ -741,66 +718,32 @@ export async function transitionAuthorizedTradieSchedule(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
-  const existing = await getVisibleSchedule(actor, input.scheduleId, db);
-  if (!TRADIE_SCHEDULE_STATE_MACHINE[existing.status].includes(input.toStatus))
-    throw new Error(
-      `Invalid schedule transition from ${existing.status} to ${input.toStatus}.`,
-    );
-  const quoteAmount = input.quote ? parseQuotedAmount(input.quote) : null;
-  if (input.quote && quoteAmount === null)
-    throw new Error(
-      "The quote must contain exactly one non-negative money amount.",
-    );
-  const normalized =
-    quoteAmount === null
-      ? null
-      : normalizeQuoteBasis(quoteAmount, input.quoteUnit ?? "FIXED");
-  const data: Prisma.TradieScheduleUpdateInput = { status: input.toStatus };
-  if (normalized) {
-    data.quotedPrice = scheduleTotalCost(
-      normalized.amount,
-      existing.durationDays,
-      normalized.unit,
-    ).toFixed(2);
-    data.requiresQuote = true;
-  }
-  const updatedCount = await db.tradieSchedule.updateMany({
-    where: { id: existing.id, status: existing.status },
-    data,
-  });
-  if (updatedCount.count !== 1)
-    throw new Error("The schedule changed before this transition was applied.");
-  const updated = await db.tradieSchedule.findUniqueOrThrow({
-    where: { id: existing.id },
-    include: {
-      tradie: { select: { id: true, name: true, trade: true } },
-      project: { select: { id: true, name: true } },
-    },
-  });
-  if (normalized)
-    await db.tradie.update({
-      where: { id: existing.tradieId },
-      data: {
-        lastQuotedPrice: normalized.amount,
-        lastQuotedPriceUnit:
-          normalized.unit === "HOURLY"
-            ? TradiePriceUnit.HOURLY
-            : TradiePriceUnit.FIXED,
-      },
-    });
+  const changed = await runTradieDomain(() =>
+    transitionTradieSchedule(
+      userPrincipal(actor),
+      input,
+      transaction ?? prisma,
+    ),
+  );
   return envelope(
     "confirmation",
     "Schedule status updated",
-    `${updated.tradie.name}'s booking for ${updated.project.name} is now ${updated.status}.`,
+    `${changed.tradieName}'s booking for ${changed.projectName} is now ${changed.status}.`,
     {
-      scheduleId: updated.id,
-      previousStatus: existing.status,
-      status: updated.status,
-      quotedPrice: updated.quotedPrice?.toString() ?? null,
+      scheduleId: changed.scheduleId,
+      previousStatus: changed.previousStatus,
+      status: changed.status,
+      quotedPrice: changed.quotedPrice,
     },
     {
-      entityRef: scheduleRef(updated),
+      entityRef: {
+        type: "tradieSchedule",
+        id: changed.scheduleId,
+        display: {
+          label: `${changed.tradieName} · ${changed.projectName}`,
+          href: "/tradie",
+        },
+      },
       links: [{ label: "Open tradie coordination", href: "/tradie" }],
     },
   );
@@ -817,59 +760,31 @@ export async function rescheduleAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
-  const existing = await getVisibleSchedule(actor, input.scheduleId, db);
-  const durationDays = input.durationDays ?? existing.durationDays;
-  const scheduledDate = new Date(input.scheduledDate);
-  if (input.milestoneId) {
-    const milestone = await db.milestone.findFirst({
-      where: { id: input.milestoneId, projectId: existing.project.id },
-      select: { id: true },
-    });
-    if (!milestone)
-      throw new Error("Milestone does not belong to this project.");
-  }
-  await ensureNoScheduleConflict(
-    existing.tradieId,
-    scheduledDate,
-    durationDays,
-    existing.id,
-    db,
+  const changed = await runTradieDomain(() =>
+    rescheduleTradieSchedule(
+      userPrincipal(actor),
+      { ...input, scheduledDate: new Date(input.scheduledDate) },
+      transaction ?? prisma,
+    ),
   );
-  const updatedCount = await db.tradieSchedule.updateMany({
-    where: {
-      id: existing.id,
-      scheduledDate: existing.scheduledDate,
-      durationDays: existing.durationDays,
-    },
-    data: {
-      scheduledDate,
-      durationDays,
-      ...(input.milestoneId !== undefined
-        ? { milestoneId: input.milestoneId }
-        : {}),
-    },
-  });
-  if (updatedCount.count !== 1)
-    throw new Error("The schedule changed before it could be rescheduled.");
-  const updated = await db.tradieSchedule.findUniqueOrThrow({
-    where: { id: existing.id },
-    include: {
-      tradie: { select: { id: true, name: true, trade: true } },
-      project: { select: { id: true, name: true } },
-    },
-  });
   return envelope(
     "confirmation",
     "Tradie booking rescheduled",
-    `${updated.tradie.name}'s booking for ${updated.project.name} now starts ${scheduledDate.toISOString().slice(0, 10)}.`,
+    `${changed.tradieName}'s booking for ${changed.projectName} now starts ${changed.scheduledDate.toISOString().slice(0, 10)}.`,
     {
-      scheduleId: updated.id,
-      scheduledDate: updated.scheduledDate.toISOString(),
-      durationDays: updated.durationDays,
+      scheduleId: changed.scheduleId,
+      scheduledDate: changed.scheduledDate.toISOString(),
+      durationDays: changed.durationDays,
     },
     {
-      entityRef: scheduleRef(updated),
+      entityRef: {
+        type: "tradieSchedule",
+        id: changed.scheduleId,
+        display: {
+          label: `${changed.tradieName} · ${changed.projectName}`,
+          href: "/tradie",
+        },
+      },
       links: [{ label: "Open tradie coordination", href: "/tradie" }],
     },
   );
@@ -881,47 +796,32 @@ export async function requestAuthorizedScheduleDeletion(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
-  const schedule = await getVisibleSchedule(actor, input.scheduleId, db);
-  let approval;
-  try {
-    approval = await db.tradieApproval.create({
-      data: {
-        tradieId: schedule.tradieId,
-        actionType: TradieApprovalActionType.SCHEDULE_DELETION,
-        pendingDeletionKey: schedule.id,
-        reason: input.reason,
-        requestedBy: actor.id,
-        updationData: {
-          scheduleId: schedule.id,
-          projectId: schedule.project.id,
-          projectName: schedule.project.name,
-          scheduledDate: schedule.scheduledDate.toISOString(),
-          durationDays: schedule.durationDays,
-          currentStatus: schedule.status,
-        },
-      },
-    });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    )
-      throw new Error(
-        "A deletion request for this schedule is already pending.",
-      );
-    throw error;
-  }
+  const requested = await runTradieDomain(() =>
+    requestTradieScheduleDeletion(
+      userPrincipal(actor),
+      input,
+      transaction ?? prisma,
+    ),
+  );
   return envelope(
     "confirmation",
     "Schedule deletion approval requested",
-    `The booking for ${schedule.tradie.name} on ${schedule.project.name} remains in place until an admin reviews the request.`,
+    `The booking for ${requested.tradieName} on ${requested.projectName} remains in place until an admin reviews the request.`,
     {
-      approvalId: approval.id,
-      scheduleId: schedule.id,
-      currentStatus: schedule.status,
+      approvalId: requested.approvalId,
+      scheduleId: requested.scheduleId,
+      currentStatus: requested.status,
     },
-    { entityRef: scheduleRef(schedule) },
+    {
+      entityRef: {
+        type: "tradieSchedule",
+        id: requested.scheduleId,
+        display: {
+          label: `${requested.tradieName} · ${requested.projectName}`,
+          href: "/tradie",
+        },
+      },
+    },
   );
 }
 

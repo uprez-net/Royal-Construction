@@ -6,6 +6,8 @@ import { CACHE_PROFILES } from "@/types/cache";
 import { revalidateTag } from "next/cache";
 import { after } from "next/server";
 import { logAction } from "./actionLog";
+import { saveFile as saveFileDomain } from "@/lib/domain/files";
+import { userPrincipal } from "@/lib/domain/principal";
 
 interface SaveFileParams {
   userId: string;
@@ -67,20 +69,24 @@ export async function saveFile({
   leadId,
 }: SaveFileParams) {
   try {
-    const newFile = await prisma.file.create({
-      data: {
-        id: fileId,
-        uploadedBy: userId,
-        projectId,
-        milestoneId,
-        url: fileUrl,
-        storagePath,
-        filename: fileName,
+    const uploader = await prisma.user.findUnique({ where: { id: userId } });
+    if (!uploader) throw new Error("Uploading user not found");
+    const newFile = await saveFileDomain(
+      userPrincipal(uploader),
+      {
+        fileId,
+        fileName,
+        fileSize,
         fileType,
-        filesize: fileSize,
-        leadId: leadId ? parseInt(leadId) : null,
+        fileUrl,
+        leadId,
+        milestoneId,
+        projectId,
+        storagePath,
+        userId,
       },
-    });
+      prisma,
+    );
 
     after(async () => {
       if (projectId || milestoneId) {
