@@ -31,10 +31,10 @@ export function TradieAttentionCard({
   return (
     <Card
       role="alert"
-      className="overflow-hidden border-warning/40 bg-linear-to-br from-warning-light/80 via-card to-card shadow-sm"
+      className="flex max-h-[30vh] flex-col overflow-hidden border-warning/40 bg-linear-to-br from-warning-light/80 via-card to-card shadow-sm"
     >
-      <CardContent className="p-0">
-        <div className="flex items-start gap-3 p-4">
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <div className="flex shrink-0 items-start gap-3 p-4">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning-ink">
             <AlertTriangle className="size-5" aria-hidden="true" />
           </div>
@@ -87,7 +87,7 @@ export function TradieAttentionCard({
         {isExpanded && (
           <div
             id="tradie-attention-items"
-            className="space-y-2 border-t border-warning/20 px-4 pb-4 pt-3"
+            className="no-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain border-t border-warning/20 px-4 pb-4 pt-3"
           >
             {items.map(({ schedule, title, detail, tone }) => (
               <div

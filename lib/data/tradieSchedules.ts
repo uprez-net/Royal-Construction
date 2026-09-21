@@ -422,34 +422,57 @@ export async function updateTradieSchedule(
         ? normalizeQuoteBasis(quotedAmount, updates.quoteUnit ?? "FIXED")
         : null;
 
-    const schedule = await prisma.tradieSchedule.update({
-      where: { id: scheduleId },
-      data: {
-        status: updates.status,
-        ...(updates.status === TradieScheduleStatus.CONFIRMED &&
-        existingSchedule.status !==
-          TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
-          ? { reminderSentAt: null }
-          : {}),
-        // `quotedPrice` is the whole job, which is what every downstream
-        // display and approval treats it as - so a rate has to be costed
-        // across the booked duration before it lands here.
-        ...(quoted !== null
-          ? {
-              quotedPrice: scheduleTotalCost(
-                quoted.amount,
-                existingSchedule.durationDays,
-                quoted.unit,
-              ).toFixed(2),
-              requiresQuote: true,
-            }
-          : {}),
-      },
-      include: {
-        tradie: true,
-        project: { include: { siteManager: true } },
-        milestone: true,
-      },
+    const declinesPendingApproval =
+      updates.status === TradieScheduleStatus.DECLINED &&
+      existingSchedule.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL;
+
+    const schedule = await prisma.$transaction(async (tx) => {
+      const updatedSchedule = await tx.tradieSchedule.update({
+        where: { id: scheduleId },
+        data: {
+          status: updates.status,
+          ...(updates.status === TradieScheduleStatus.CONFIRMED &&
+          existingSchedule.status !==
+            TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+            ? { reminderSentAt: null }
+            : {}),
+          // `quotedPrice` is the whole job, which is what every downstream
+          // display and approval treats it as - so a rate has to be costed
+          // across the booked duration before it lands here.
+          ...(quoted !== null
+            ? {
+                quotedPrice: scheduleTotalCost(
+                  quoted.amount,
+                  existingSchedule.durationDays,
+                  quoted.unit,
+                ).toFixed(2),
+                requiresQuote: true,
+              }
+            : {}),
+        },
+        include: {
+          tradie: true,
+          project: { include: { siteManager: true } },
+          milestone: true,
+        },
+      });
+
+      if (declinesPendingApproval) {
+        await tx.tradieApproval.updateMany({
+          where: {
+            tradieId: updatedSchedule.tradieId,
+            actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
+            status: TradieApprovalStatus.PENDING,
+            updationData: { path: ["scheduleId"], equals: scheduleId },
+          },
+          data: {
+            status: TradieApprovalStatus.REJECTED,
+            rejectionReason: "Tradie declined the job.",
+          },
+        });
+      }
+
+      return updatedSchedule;
     });
 
     // Recording the quote against the tradie is what makes `lastQuotedPrice`
@@ -486,6 +509,10 @@ export async function updateTradieSchedule(
       revalidateTag("tradies-schedules", CACHE_PROFILES.SHORT);
       revalidateTag("projects", CACHE_PROFILES.MEDIUM);
       revalidateTag(`project-${schedule.projectId}`, CACHE_PROFILES.MEDIUM);
+      if (declinesPendingApproval) {
+        revalidateTag("approval-query", CACHE_PROFILES.MEDIUM);
+        revalidateTag("approval-kpi", CACHE_PROFILES.MEDIUM);
+      }
       // Numeric, deliberately. calculateScheduleTotalCost returns a FORMATTED
       // string, so `parseFloat(totalCost.toString())` below was parsing "$4,800"
       // and yielding NaN — every approval and activity entry without an explicit

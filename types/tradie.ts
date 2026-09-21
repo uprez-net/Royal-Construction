@@ -225,6 +225,9 @@ export const TRADIE_SCHEDULE_STATE_MACHINE: Record<
     TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
     TradieScheduleStatus.PENDING_RESPONSE,
     TradieScheduleStatus.NO_RESPONSE,
+    // Admin rejection updates the row first, then runs the shared status
+    // side-effect path with DECLINED again.
+    TradieScheduleStatus.DECLINED,
   ],
   [TradieScheduleStatus.COMPLETED]: [],
   [TradieScheduleStatus.AWAITING_QUOTE]: [
