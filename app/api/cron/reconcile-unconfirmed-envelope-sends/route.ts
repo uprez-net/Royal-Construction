@@ -38,6 +38,11 @@ import { findEnvelopeIdBySendAttempt } from "@/lib/docusign/envelope-send-attemp
 // rather than searched — searching too early just wastes API calls.
 const MIN_ATTEMPT_AGE_MS = 5 * 60 * 1000;
 
+// Each row costs at least one DocuSign list call, and more for every envelope
+// that call returns. Bounded so a backlog cannot run out the function's
+// duration; the remainder waits for the next run, oldest first.
+const RECONCILE_BATCH_LIMIT = 25;
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -66,6 +71,14 @@ export async function GET(request: Request) {
   const pending = await prisma.unconfirmedEnvelopeSend.findMany({
     where: {
       resolvedAt: null,
+      // Never re-search a row we already found an envelope for. Those stay
+      // unresolved on purpose, waiting on a person — but asking DocuSign about
+      // them again is not just wasted calls, it is unsafe: if a later search
+      // came back empty (the envelope voided and fell outside the
+      // listStatusChanges window, a paginated response, a transient blank)
+      // the not-found branch below would mark the row resolved and unblock a
+      // recall on an offer that really does have a live orphan envelope.
+      foundDocusignId: null,
       attemptStartedAt: { lte: new Date(Date.now() - MIN_ATTEMPT_AGE_MS) },
     },
     select: {
@@ -74,9 +87,14 @@ export async function GET(request: Request) {
       docType: true,
       sendAttemptId: true,
       attemptStartedAt: true,
-      foundDocusignId: true,
       offer: { select: { offerStatus: true } },
     },
+    // Oldest first, and bounded: each row costs a listStatusChanges call plus
+    // a listCustomFields call per envelope it returns, so an unbounded backlog
+    // could run out the function's duration and leave the tail unprocessed.
+    // Whatever this run does not reach is picked up by the next one.
+    orderBy: { attemptStartedAt: "asc" },
+    take: RECONCILE_BATCH_LIMIT,
   });
 
   if (pending.length === 0) {
@@ -116,13 +134,20 @@ export async function GET(request: Request) {
     }
 
     if (envelopeId === null) {
+      // updateMany with the full guard rather than update by id: the row was
+      // read at the top of this run, and a concurrent run (or a person) may
+      // have recorded a found envelope on it since. Resolving it then would
+      // unblock a recall on an offer with a live orphan. A count of 0 means
+      // exactly that happened, and the row is correctly left alone.
       await prisma.unconfirmedEnvelopeSend
-        .update({
-          where: { id: row.id },
+        .updateMany({
+          where: { id: row.id, resolvedAt: null, foundDocusignId: null },
           data: { resolvedAt: new Date() },
         })
-        .then(() => {
-          resolvedNotFound += 1;
+        .then(({ count }) => {
+          if (count > 0) {
+            resolvedNotFound += 1;
+          }
         })
         .catch((updateError) =>
           console.error(
@@ -134,40 +159,42 @@ export async function GET(request: Request) {
     }
 
     found += 1;
-    if (row.foundDocusignId === envelopeId) {
-      // Already recorded on a previous run — do not alert twice.
-      continue;
+
+    // One transaction, because the mark and the alert are the same fact. Done
+    // as two writes, a failed note would leave the row marked found — and the
+    // query above skips found rows, so the next run would never retry the
+    // alert. The row would sit there blocking a recall with nothing anywhere
+    // telling a person why. Failing the whole thing instead leaves the row
+    // untouched and the next run tries again.
+    //
+    // resolvedAt is deliberately NOT set: a found envelope keeps blocking
+    // recall and revision until a person deals with it, which is the point.
+    // The guard makes the write idempotent against a concurrent run.
+    try {
+      await prisma.$transaction(async (tx) => {
+        const { count } = await tx.unconfirmedEnvelopeSend.updateMany({
+          where: { id: row.id, resolvedAt: null, foundDocusignId: null },
+          data: { foundDocusignId: envelopeId },
+        });
+        if (count === 0) {
+          // Another run got there first; it wrote the note too.
+          return;
+        }
+        await tx.offerStatusEvent.create({
+          data: {
+            offerId: row.offerId,
+            fromStatus: row.offer.offerStatus,
+            toStatus: row.offer.offerStatus,
+            note: `DocuSign has a ${row.docType.toLowerCase()} envelope (${envelopeId}) this app has no other record of — a send timed out but reached DocuSign anyway. Open DocuSign, decide whether to void it or complete recording it, then resolve the pending send by hand.`,
+          },
+        });
+      });
+    } catch (recordError) {
+      console.error(
+        `[cron] failed to record the found envelope for unconfirmed send ${row.id} — left unmarked so the next run retries:`,
+        recordError,
+      );
     }
-
-    await prisma.unconfirmedEnvelopeSend
-      .update({
-        where: { id: row.id },
-        // resolvedAt is deliberately NOT set: this keeps blocking recall and
-        // revision until a person resolves it, which is the point.
-        data: { foundDocusignId: envelopeId },
-      })
-      .catch((updateError) =>
-        console.error(
-          `[cron] failed to record the found envelope for unconfirmed send ${row.id}:`,
-          updateError,
-        ),
-      );
-
-    await prisma.offerStatusEvent
-      .create({
-        data: {
-          offerId: row.offerId,
-          fromStatus: row.offer.offerStatus,
-          toStatus: row.offer.offerStatus,
-          note: `DocuSign has a ${row.docType.toLowerCase()} envelope (${envelopeId}) this app has no other record of — a send timed out but reached DocuSign anyway. Open DocuSign, decide whether to void it or complete recording it, then resolve the pending send by hand.`,
-        },
-      })
-      .catch((eventError) =>
-        console.error(
-          `[cron] failed to record the found-envelope activity note for offer ${row.offerId}:`,
-          eventError,
-        ),
-      );
   }
 
   return successResponse({

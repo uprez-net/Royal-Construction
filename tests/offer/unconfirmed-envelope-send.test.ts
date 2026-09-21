@@ -41,10 +41,11 @@ test("all three send paths record an UnconfirmedEnvelopeSend on outcome-unknown"
     // top-level `} else {` (or end of file) belongs to it.
     const branchStart = source.indexOf('recovery.kind === "outcome-unknown"');
     const branchEnd = source.indexOf("\n    } else {", branchStart);
-    const branch = source.slice(
-      branchStart,
-      branchEnd === -1 ? undefined : branchEnd,
+    assert.ok(
+      branchEnd > branchStart,
+      `${file}: could not delimit the outcome-unknown branch — without this the slice runs to end of file and the assertions below could pass on unrelated code`,
     );
+    const branch = source.slice(branchStart, branchEnd);
 
     assert.match(
       branch,
@@ -160,6 +161,64 @@ test("the reconcile cron never sets resolvedAt for a row it found", () => {
     foundBranch,
     /foundDocusignId:\s*envelopeId/,
     "a found envelope is not recorded for a human to see",
+  );
+});
+
+test("the reconcile cron never re-searches a row it already found an envelope for", () => {
+  // Not just wasted DocuSign calls. A later search returning empty — the
+  // envelope voided and fell outside the listStatusChanges window, a
+  // paginated response, a transient blank — would drop the row into the
+  // not-found branch and resolve it, unblocking a recall on an offer that
+  // really does have a live orphan envelope.
+  const source = code(CRON);
+  const queryStart = source.indexOf("unconfirmedEnvelopeSend.findMany(");
+  assert.ok(queryStart > 0, "the pending query moved or was renamed");
+  const query = source.slice(queryStart, source.indexOf("});", queryStart));
+
+  assert.match(
+    query,
+    /foundDocusignId:\s*null/,
+    "rows with a found envelope are still being re-searched",
+  );
+});
+
+test("the reconcile cron bounds its batch and takes the oldest first", () => {
+  const source = code(CRON);
+  assert.match(
+    source,
+    /take:\s*RECONCILE_BATCH_LIMIT/,
+    "the batch is unbounded",
+  );
+  assert.match(
+    source,
+    /orderBy:\s*\{\s*attemptStartedAt:\s*"asc"\s*\}/,
+    "the batch is not oldest-first, so a backlog can starve newer rows",
+  );
+});
+
+test("marking a row found and alerting a human are one transaction", () => {
+  // Two separate writes would let the mark succeed and the note fail — and
+  // since the query skips found rows, the alert would never be retried. The
+  // row would block a recall with nothing anywhere saying why.
+  const source = code(CRON);
+  assert.match(
+    source,
+    /prisma\.\$transaction\(async \(tx\) => \{[\s\S]*?tx\.unconfirmedEnvelopeSend\.updateMany\([\s\S]*?tx\.offerStatusEvent\.create\(/,
+    "the found-envelope mark and its activity note are not atomic",
+  );
+});
+
+test("both write paths guard on the row still being unresolved and unfound", () => {
+  // Read-then-write across a whole cron run: a concurrent run, or a person,
+  // may have changed the row in between.
+  const source = code(CRON);
+  const guards = source.match(
+    /where:\s*\{\s*id:\s*row\.id,\s*resolvedAt:\s*null,\s*foundDocusignId:\s*null\s*\}/g,
+  );
+  assert.equal(
+    guards?.length,
+    2,
+    "expected the guard on both the not-found resolve and the found mark",
   );
 });
 
