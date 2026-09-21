@@ -3,7 +3,10 @@ import type { BlobDeletePort } from "../ports/blob";
 import { certifierEmailAttachments } from "@/types/compliance";
 
 /** A file row reduced to what discarding it needs. */
-export type StoredComplianceFile = { readonly id: string; readonly url: string };
+export type StoredComplianceFile = {
+  readonly id: string;
+  readonly url: string;
+};
 
 export type ReclamationOutcome = {
   /** Objects actually handed to storage for removal. */

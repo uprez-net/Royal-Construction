@@ -80,7 +80,9 @@ export async function updateAdminOfferContentSection(
   });
   if (updated.count !== 1) {
     if (input.expectedVersion === undefined) {
-      throw new DomainTransitionError("Admin offer content could not be saved.");
+      throw new DomainTransitionError(
+        "Admin offer content could not be saved.",
+      );
     }
     throw new DomainTransitionError(
       "Admin offer content changed during the update; reload and review again.",

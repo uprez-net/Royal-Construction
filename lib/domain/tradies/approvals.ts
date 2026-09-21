@@ -46,10 +46,7 @@ export async function resolveTradieApproval(
 ): Promise<ResolvedTradieApproval> {
   requireAdminPrincipal(principal);
 
-  if (
-    input.resolution === "rejected" &&
-    !input.rejectionReason?.trim()
-  ) {
+  if (input.resolution === "rejected" && !input.rejectionReason?.trim()) {
     throw new DomainValidationError("A rejection reason is required.");
   }
 
@@ -60,7 +57,7 @@ export async function resolveTradieApproval(
         rejectionReason:
           input.resolution === "approved"
             ? null
-            : input.rejectionReason?.trim() ?? null,
+            : (input.rejectionReason?.trim() ?? null),
         status:
           input.resolution === "approved"
             ? TradieApprovalStatus.APPROVED
@@ -88,7 +85,10 @@ export async function resolveTradieApproval(
       where: { id: input.approvalId },
     });
     if (!approval) throw new DomainNotFoundError("Approval request not found.");
-    if (input.actionType !== undefined && approval.actionType !== input.actionType) {
+    if (
+      input.actionType !== undefined
+      && approval.actionType !== input.actionType
+    ) {
       throw new DomainValidationError(
         "Approval action type does not match the request.",
         "actionType",
@@ -103,7 +103,11 @@ export async function resolveTradieApproval(
       switch (approval.actionType) {
         case TradieApprovalActionType.PRICE_CHANGE: {
           const amount = payload?.newHourlyRate;
-          if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
+          if (
+            typeof amount !== "number"
+            || !Number.isFinite(amount)
+            || amount < 0
+          ) {
             throw new DomainValidationError(
               "This price change request has no valid recorded amount.",
             );

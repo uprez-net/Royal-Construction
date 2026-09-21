@@ -287,9 +287,9 @@ export async function changeTeamMemberRole(
       }
 
       if (
-        current.role === Role.ADMIN &&
-        input.newRole !== Role.ADMIN &&
-        (await tx.user.count({ where: { role: Role.ADMIN } })) <= 1
+        current.role === Role.ADMIN
+        && input.newRole !== Role.ADMIN
+        && (await tx.user.count({ where: { role: Role.ADMIN } })) <= 1
       ) {
         throw new DomainTransitionError(
           "The last admin cannot be demoted.",

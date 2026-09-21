@@ -1,4 +1,8 @@
-import { OutboxEventKind, type Invoice, type ProjectStage } from "@prisma/client";
+import {
+  OutboxEventKind,
+  type Invoice,
+  type ProjectStage,
+} from "@prisma/client";
 
 import type { DomainDb } from "../db";
 import { DomainNotFoundError } from "../errors";

@@ -83,9 +83,9 @@ export async function createOfferRevision(
 
     const row = await tx.offer.findUnique({ where: { id: input.offerId } });
     if (
-      !row ||
-      !row.isActive ||
-      REVISION_LOCKED_STATUSES.has(row.offerStatus)
+      !row
+      || !row.isActive
+      || REVISION_LOCKED_STATUSES.has(row.offerStatus)
     ) {
       return null;
     }

@@ -72,8 +72,8 @@ export async function saveContractParticulars(
   if (
     CONTRACT_PARTICULAR_FIELDS.some(
       (field) => normalized[field.key].length > CONTRACT_PARTICULAR_MAX_LENGTH,
-    ) ||
-    totalLength > CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH
+    )
+    || totalLength > CONTRACT_PARTICULAR_TOTAL_MAX_LENGTH
   ) {
     return {
       error: "Contract particulars exceed the permitted field or total length.",
@@ -124,10 +124,10 @@ export async function saveContractParticulars(
       where: { id: input.offerId },
     });
     if (
-      !current ||
-      !current.isActive ||
-      current.offerStatus !== OfferStatus.CONTRACT_DRAFT ||
-      current.contract
+      !current
+      || !current.isActive
+      || current.offerStatus !== OfferStatus.CONTRACT_DRAFT
+      || current.contract
     ) {
       return { error: NOT_A_DRAFT, ok: false as const };
     }

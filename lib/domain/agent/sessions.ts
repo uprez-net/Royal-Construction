@@ -76,23 +76,25 @@ export async function getAgentWorkspaceData(
     updatedAt: row.updatedAt.toISOString(),
   }));
   const ownsSelectedSession =
-    selectedSessionId === undefined ||
-    (selectedSessionRegistered &&
-      sessions.some((session) => session.eveSessionId === selectedSessionId));
+    selectedSessionId === undefined
+    || (selectedSessionRegistered
+      && sessions.some(
+        (session) => session.eveSessionId === selectedSessionId,
+      ));
   const selectedContext = rows.find(
     (row) => row.eveSessionId === selectedSessionId,
   )?.selectedContext;
   const contextObject =
-    selectedContext &&
-    typeof selectedContext === "object" &&
-    !Array.isArray(selectedContext)
+    selectedContext
+    && typeof selectedContext === "object"
+    && !Array.isArray(selectedContext)
       ? selectedContext
       : null;
   const annotationsByTurn =
-    contextObject &&
-    typeof contextObject.annotationsByTurn === "object" &&
-    contextObject.annotationsByTurn !== null &&
-    !Array.isArray(contextObject.annotationsByTurn)
+    contextObject
+    && typeof contextObject.annotationsByTurn === "object"
+    && contextObject.annotationsByTurn !== null
+    && !Array.isArray(contextObject.annotationsByTurn)
       ? contextObject.annotationsByTurn
       : {};
 

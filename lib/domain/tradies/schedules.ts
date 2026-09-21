@@ -337,16 +337,16 @@ export async function transitionTradieSchedule(
   await authorizeProject(principal, existing.projectId, db);
 
   if (
-    input.statusAlreadyApplied &&
-    existing.status !== (input.appliedStatus ?? input.toStatus)
+    input.statusAlreadyApplied
+    && existing.status !== (input.appliedStatus ?? input.toStatus)
   ) {
     throw new DomainTransitionError(
       "This schedule changed before its approval side effects completed.",
     );
   }
   if (
-    !input.statusAlreadyApplied &&
-    !ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)
+    !input.statusAlreadyApplied
+    && !ALLOWED_TRANSITIONS[existing.status].includes(input.toStatus)
   ) {
     throw new DomainTransitionError(
       `Invalid schedule transition from ${existing.status} to ${input.toStatus}.`,
@@ -362,8 +362,8 @@ export async function transitionTradieSchedule(
     const updatedCount = await db.tradieSchedule.updateMany({
       data: {
         status: input.toStatus,
-        ...(input.toStatus === TradieScheduleStatus.CONFIRMED &&
-        existing.status !== TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+        ...(input.toStatus === TradieScheduleStatus.CONFIRMED
+        && existing.status !== TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
           ? { reminderSentAt: null }
           : {}),
         ...(normalized
@@ -386,8 +386,8 @@ export async function transitionTradieSchedule(
     }
 
     if (
-      input.toStatus === TradieScheduleStatus.DECLINED &&
-      existing.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+      input.toStatus === TradieScheduleStatus.DECLINED
+      && existing.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
     ) {
       await db.tradieApproval.updateMany({
         where: {
@@ -416,8 +416,8 @@ export async function transitionTradieSchedule(
 
   let approvalId: string | undefined;
   if (
-    !input.statusAlreadyApplied &&
-    input.toStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+    !input.statusAlreadyApplied
+    && input.toStatus === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
   ) {
     const requesterId = attributionUserId(principal);
     if (!requesterId) {

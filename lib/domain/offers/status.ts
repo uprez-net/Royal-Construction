@@ -104,9 +104,9 @@ export function assertTransitionAllowed(
   // it, and the project created from it is empty (issue #90). It is a
   // local-development aid only.
   if (
-    MANUAL_SIGNED_JUMPS.has(to) &&
-    options.allowManualSignedJump !== true &&
-    process.env.NODE_ENV !== "development"
+    MANUAL_SIGNED_JUMPS.has(to)
+    && options.allowManualSignedJump !== true
+    && process.env.NODE_ENV !== "development"
   ) {
     throw new DomainTransitionError(
       "Manual 'mark signed' is disabled outside local development — complete signing via DocuSign.",
@@ -173,8 +173,8 @@ export async function commitOfferStatusTransition(
   }
 
   if (
-    input.expectedFromStatus !== undefined &&
-    offer.offerStatus !== input.expectedFromStatus
+    input.expectedFromStatus !== undefined
+    && offer.offerStatus !== input.expectedFromStatus
   ) {
     return null;
   }
@@ -188,8 +188,8 @@ export async function commitOfferStatusTransition(
   // Current Location or signer email — or a shared signer email — must not be
   // lockable and advanced into the legal documents.
   if (
-    input.skipOwnerGate !== true &&
-    requiresOwnerGate(offer.offerStatus, input.toStatus)
+    input.skipOwnerGate !== true
+    && requiresOwnerGate(offer.offerStatus, input.toStatus)
   ) {
     const verb =
       input.toStatus === OfferStatus.SENT
@@ -216,9 +216,9 @@ export async function commitOfferStatusTransition(
   // re-transition is permitted, and must not re-snapshot a since-mutated
   // workspace over the one the customer actually agreed to.
   const freezeAgreed =
-    input.toStatus === OfferStatus.AGREED &&
-    offer.offerStatus !== OfferStatus.AGREED &&
-    offer.workspaceState !== null;
+    input.toStatus === OfferStatus.AGREED
+    && offer.offerStatus !== OfferStatus.AGREED
+    && offer.workspaceState !== null;
 
   const written = await tx.offer.updateMany({
     data: {

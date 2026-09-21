@@ -396,8 +396,8 @@ export async function updateLead(
   // for a call being answered. followupCompletedAt carries the fact now, and
   // the date is kept so the tab can still show what was scheduled.
   if (
-    input.followupResponseOutcome === "yes" ||
-    input.followupResponseOutcome === "notRequired"
+    input.followupResponseOutcome === "yes"
+    || input.followupResponseOutcome === "notRequired"
   ) {
     updateData.followupCompletedAt = new Date();
     updateData.followupReminderSentAt = new Date();
@@ -417,9 +417,9 @@ export async function updateLead(
   // derived from the RESOLVED stage, never the requested one, so the stage
   // column and wonAt/lostAt can never describe two different transitions.
   const taskScheduled =
-    input.followupResponseOutcome === "reschedule" ||
-    (input.followupDate !== undefined && input.followupDate !== null) ||
-    (input.meetingDate !== undefined && input.meetingDate !== null);
+    input.followupResponseOutcome === "reschedule"
+    || (input.followupDate !== undefined && input.followupDate !== null)
+    || (input.meetingDate !== undefined && input.meetingDate !== null);
 
   const resolvedStage = resolveLeadStage({
     currentStage: existingLead.stage,
@@ -483,11 +483,11 @@ export async function updateLead(
   }
 
   if (
-    (input.history?.length ?? 0) > 0 ||
-    annotationInputs.length > 0 ||
-    stageHistory.length > 0 ||
-    input.followupResponseOutcome ||
-    input.meetingReviewOutcome
+    (input.history?.length ?? 0) > 0
+    || annotationInputs.length > 0
+    || stageHistory.length > 0
+    || input.followupResponseOutcome
+    || input.meetingReviewOutcome
   ) {
     const responseHistory =
       input.followupResponseOutcome === "yes"
@@ -501,9 +501,9 @@ export async function updateLead(
                   // operator picked rather than reading a day earlier all
                   // afternoon.
                   sydneyDateOnly(
-                    (updateData.followupDate as Date | null | undefined) ??
-                      existingLead.followupDate ??
-                      new Date(),
+                    (updateData.followupDate as Date | null | undefined)
+                      ?? existingLead.followupDate
+                      ?? new Date(),
                   ),
                   String(
                     updateData.followupTime ?? existingLead.followupTime ?? "",
@@ -519,10 +519,10 @@ export async function updateLead(
           ? [
               buildMeetingReviewedHistoryEntry({
                 meetingMode: String(
-                  updateData.meetingMode ??
-                    existingLead.meetingMode ??
-                    input.meetingMode ??
-                    "Unknown",
+                  updateData.meetingMode
+                    ?? existingLead.meetingMode
+                    ?? input.meetingMode
+                    ?? "Unknown",
                 ),
                 discussionNotes: String(input.discussionNotes ?? ""),
                 buildScope: String(input.buildScope ?? ""),
@@ -615,8 +615,8 @@ export async function updateLead(
     // that leaves `assignedId` out is not a reassignment, however the stored
     // value compares against `undefined`.
     assignmentChanged:
-      input.assignedId !== undefined &&
-      nextAssignedId !== existingLead.assignedId,
+      input.assignedId !== undefined
+      && nextAssignedId !== existingLead.assignedId,
     lead,
     listedFieldsChanged,
     previousAssignedId: existingLead.assignedId,

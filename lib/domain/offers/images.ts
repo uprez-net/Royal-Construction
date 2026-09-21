@@ -55,9 +55,9 @@ function allowedDropboxUrl(rawUrl: string): boolean {
     const url = new URL(rawUrl);
     const host = url.hostname.toLowerCase();
     return (
-      url.protocol === "https:" &&
-      (ALLOWED_IMAGE_HOSTS.has(host) ||
-        host.endsWith(".dropboxusercontent.com"))
+      url.protocol === "https:"
+      && (ALLOWED_IMAGE_HOSTS.has(host)
+        || host.endsWith(".dropboxusercontent.com"))
     );
   } catch {
     return false;

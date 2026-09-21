@@ -19,8 +19,8 @@ import { canManageProject, projectManageScope } from "./projects";
 export function canReadTradieDirectory(principal: DomainPrincipal): boolean {
   if (principal.kind === "system") return true;
   return (
-    isUserPrincipal(principal) &&
-    (principal.role === Role.ADMIN || principal.role === Role.SITE_MANAGER)
+    isUserPrincipal(principal)
+    && (principal.role === Role.ADMIN || principal.role === Role.SITE_MANAGER)
   );
 }
 

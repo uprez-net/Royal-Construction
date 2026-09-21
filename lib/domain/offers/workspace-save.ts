@@ -238,10 +238,10 @@ export async function saveOfferWorkspace(
   const gstAmount = new Prisma.Decimal(priceSplit.gstAmount);
   const totalAmount = new Prisma.Decimal(priceSplit.totalIncGst);
   const moneyChanged =
-    !sameMoney(storedRow.amount, amount) ||
-    !sameMoney(storedRow.gstAmount, gstAmount) ||
-    !sameMoney(storedRow.totalAmount, totalAmount) ||
-    !sameMoney(storedRow.contractValueIncGst, contractValue);
+    !sameMoney(storedRow.amount, amount)
+    || !sameMoney(storedRow.gstAmount, gstAmount)
+    || !sameMoney(storedRow.totalAmount, totalAmount)
+    || !sameMoney(storedRow.contractValueIncGst, contractValue);
 
   // isActive is part of the predicate, not just the check above: forking a
   // revision deactivates this row without touching its stateVersion, so a save
@@ -439,11 +439,11 @@ function mergeWorkspacePatch(
   const merged = { ...current };
   for (const [key, value] of Object.entries(patch)) {
     if (
-      key === "draft" &&
-      typeof value === "object" &&
-      value !== null &&
-      typeof current.draft === "object" &&
-      current.draft !== null
+      key === "draft"
+      && typeof value === "object"
+      && value !== null
+      && typeof current.draft === "object"
+      && current.draft !== null
     ) {
       merged.draft = {
         ...(current.draft as Record<string, unknown>),

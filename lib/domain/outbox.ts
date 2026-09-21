@@ -107,7 +107,10 @@ export async function runOutboxEffectWithOutcome<
   options: { readonly repeatable?: boolean } = {},
 ): Promise<{ result: T; replayed: boolean }> {
   const existing = await enqueueOutboxEvent(db, intent);
-  if (existing.status === OutboxEventStatus.SUCCEEDED && existing.result !== null) {
+  if (
+    existing.status === OutboxEventStatus.SUCCEEDED
+    && existing.result !== null
+  ) {
     return { replayed: true, result: existing.result as T };
   }
   // Name the key. Refusing to retry is the right call when a provider may
@@ -115,8 +118,8 @@ export async function runOutboxEffectWithOutcome<
   // to look up is a dead end for an office of three with no on-call: the key is
   // what identifies the OutboxEvent row somebody has to check.
   if (
-    existing.status !== OutboxEventStatus.PENDING &&
-    !(options.repeatable && existing.status === OutboxEventStatus.FAILED)
+    existing.status !== OutboxEventStatus.PENDING
+    && !(options.repeatable && existing.status === OutboxEventStatus.FAILED)
   ) {
     throw new DomainTransitionError(
       `This external effect was already attempted and needs reconciliation before retrying (outbox key ${intent.key}).`,
@@ -263,6 +266,8 @@ export async function failOutboxEvent(
     where: { id: eventId, status: OutboxEventStatus.RUNNING },
   });
   if (updated.count !== 1) {
-    throw new DomainNotFoundError("Outbox effect not found or already settled.");
+    throw new DomainNotFoundError(
+      "Outbox effect not found or already settled.",
+    );
   }
 }

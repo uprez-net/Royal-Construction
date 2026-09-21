@@ -69,9 +69,9 @@ export async function syncInvoiceFromExternal(
   const { fields } = incoming;
 
   if (
-    existing.xeroUpdatedAt &&
-    fields.xeroUpdatedAt &&
-    fields.xeroUpdatedAt <= existing.xeroUpdatedAt
+    existing.xeroUpdatedAt
+    && fields.xeroUpdatedAt
+    && fields.xeroUpdatedAt <= existing.xeroUpdatedAt
   ) {
     return { kind: "stale" };
   }
@@ -82,7 +82,12 @@ export async function syncInvoiceFromExternal(
   await db.invoice.update({ where: { id: existing.id }, data: fields });
 
   if (!existing.pdfUrl && incoming.archivePdf) {
-    await archiveInvoicePdf(existing.id, xeroInvoiceId, db, incoming.archivePdf);
+    await archiveInvoicePdf(
+      existing.id,
+      xeroInvoiceId,
+      db,
+      incoming.archivePdf,
+    );
   }
 
   return { invoiceId: existing.id, kind: "updated" };

@@ -93,8 +93,8 @@ export async function findTradieReminderWindow(
   });
   const actionable = schedules.filter(
     (schedule) =>
-      schedule.reminderSentAt === null &&
-      !NON_ACTIONABLE_STATUSES.has(schedule.status),
+      schedule.reminderSentAt === null
+      && !NON_ACTIONABLE_STATUSES.has(schedule.status),
   );
   return { actionable, schedules };
 }

@@ -8,7 +8,11 @@ import {
 } from "./errors";
 import { authorizeFileAttachment } from "./access/projects";
 import { authorizeLead } from "./access/leads";
-import { isInternalPrincipal, isUserPrincipal, type DomainPrincipal } from "./principal";
+import {
+  isInternalPrincipal,
+  isUserPrincipal,
+  type DomainPrincipal,
+} from "./principal";
 import type { BlobDeletePort } from "./ports/blob";
 
 export type SaveFileInput = {
@@ -93,7 +97,9 @@ export async function saveFile(
     );
   }
   if (!isInternalPrincipal(principal) && !isUserPrincipal(principal)) {
-    throw new DomainAuthorizationError("File uploads require a signed-in user.");
+    throw new DomainAuthorizationError(
+      "File uploads require a signed-in user.",
+    );
   }
   if (input.fileSize < 0 || !Number.isFinite(input.fileSize)) {
     throw new DomainValidationError("File size is invalid.", "fileSize");

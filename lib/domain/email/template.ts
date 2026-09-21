@@ -6,7 +6,10 @@ import {
 import { DomainAuthorizationError, DomainValidationError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
 
-export type EmailTemplateLink = { readonly label: string; readonly url: string };
+export type EmailTemplateLink = {
+  readonly label: string;
+  readonly url: string;
+};
 
 export type EmailTemplateInput = {
   readonly description: string;

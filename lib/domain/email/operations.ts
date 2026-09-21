@@ -34,7 +34,10 @@ export function authorizeEmailAttachmentDeletion(
   } catch {
     throw new DomainValidationError("The Blob URL is invalid.", "blobUrl");
   }
-  if (!isBlobStorageUrl(blobUrl) || !pathname.startsWith(EMAIL_ATTACHMENT_PREFIX)) {
+  if (
+    !isBlobStorageUrl(blobUrl)
+    || !pathname.startsWith(EMAIL_ATTACHMENT_PREFIX)
+  ) {
     throw new DomainAuthorizationError(
       "Only an uploaded email attachment can be removed here.",
     );
@@ -95,7 +98,10 @@ export async function sendCampaignEmail(
   }
   const to = input.to.trim();
   if (!to || !/^\S+@\S+\.\S+$/.test(to)) {
-    throw new DomainValidationError("A valid recipient email is required.", "to");
+    throw new DomainValidationError(
+      "A valid recipient email is required.",
+      "to",
+    );
   }
 
   const runId = input.runId?.trim();

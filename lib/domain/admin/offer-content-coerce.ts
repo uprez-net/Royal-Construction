@@ -49,9 +49,8 @@ function derivedHbcfPremium(
   loadingChargePercent: number,
 ): number {
   return (
-    Math.round(
-      (claimAmount + (claimAmount * loadingChargePercent) / 100) * 100,
-    ) / 100
+    Math.round((claimAmount + (claimAmount * loadingChargePercent) / 100) * 100)
+    / 100
   );
 }
 
