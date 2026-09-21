@@ -153,14 +153,39 @@ test("the reconcile cron never sets resolvedAt for a row it found", () => {
   assert.ok(foundBranchStart > 0, "the found branch moved or was renamed");
   const foundBranch = source.slice(foundBranchStart, foundBranchStart + 1200);
 
+  // It may only ever write `resolvedAt: null` — clearing it. Stamping a date
+  // there would mark a live orphan resolved and stop blocking recall.
   assert.ok(
-    !/data:\s*\{[^}]*\bresolvedAt\b/.test(foundBranch),
-    "the found branch sets resolvedAt — a real live envelope would stop blocking recall",
+    !/resolvedAt:\s*new Date\(\)/.test(foundBranch),
+    "the found branch resolves the row — a real live envelope would stop blocking recall",
   );
   assert.match(
     foundBranch,
     /foundDocusignId:\s*envelopeId/,
     "a found envelope is not recorded for a human to see",
+  );
+});
+
+test("a found envelope overrides a concurrent run that found nothing", () => {
+  // Two overlapping runs can read the same row and get different answers from
+  // DocuSign — different listStatusChanges windows, pagination, a transient
+  // blank. If the empty answer resolved the row first and the found path still
+  // required resolvedAt to be null, the answer that matters would be dropped
+  // and a live orphan left unblocked. So the found write is guarded only on
+  // foundDocusignId (which keeps it idempotent) and clears resolvedAt.
+  const source = code(CRON);
+  const foundBranchStart = source.indexOf("found += 1;");
+  const foundBranch = source.slice(foundBranchStart, foundBranchStart + 1400);
+
+  assert.match(
+    foundBranch,
+    /where:\s*\{\s*id:\s*row\.id,\s*foundDocusignId:\s*null\s*\}/,
+    "the found write is guarded on resolvedAt, so a concurrent not-found resolve would silently win",
+  );
+  assert.match(
+    foundBranch,
+    /data:\s*\{[^}]*resolvedAt:\s*null/,
+    "the found write does not re-open a row a concurrent run just resolved",
   );
 });
 
@@ -208,17 +233,38 @@ test("marking a row found and alerting a human are one transaction", () => {
   );
 });
 
-test("both write paths guard on the row still being unresolved and unfound", () => {
+test("the not-found resolve cannot clobber a row a concurrent run found", () => {
   // Read-then-write across a whole cron run: a concurrent run, or a person,
-  // may have changed the row in between.
+  // may have changed the row in between. The not-found path is the dangerous
+  // direction, so it carries the full guard — resolving a row that has since
+  // been found would unblock a recall on a live orphan.
   const source = code(CRON);
-  const guards = source.match(
-    /where:\s*\{\s*id:\s*row\.id,\s*resolvedAt:\s*null,\s*foundDocusignId:\s*null\s*\}/g,
+  assert.match(
+    source,
+    /where:\s*\{\s*id:\s*row\.id,\s*resolvedAt:\s*null,\s*foundDocusignId:\s*null\s*\}/,
+    "the not-found resolve is not guarded against a concurrent find",
   );
-  assert.equal(
-    guards?.length,
-    2,
-    "expected the guard on both the not-found resolve and the found mark",
+  assert.match(
+    source,
+    /updateMany\(/,
+    "a guarded conditional write needs updateMany, not update by id",
+  );
+});
+
+test("a failure anywhere in the run returns a named error, not a bare 500", () => {
+  // The pending-row read used to sit outside any try/catch, so a DB failure
+  // escaped as an unhandled rejection — a bare 500 with nothing naming the
+  // cron, on the one job whose purpose is being noticed when something is off.
+  const source = code(CRON);
+  assert.match(
+    source,
+    /try \{[\s\S]*prisma\.unconfirmedEnvelopeSend\.findMany\(/,
+    "the pending-row read is outside the error boundary",
+  );
+  assert.match(
+    source,
+    /catch \(error\) \{[\s\S]{0,300}errorResponse\(\s*"Failed to reconcile unconfirmed envelope sends"/,
+    "a failed run does not report itself with a cron-specific message",
   );
 });
 
