@@ -529,33 +529,33 @@ function PrintSnapshotPage({
         </div>
       </PrintSection>
       {areaCells.length > 0 ? (
-      <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
-        {areaCells.map((cell) => (
-          <div
-            key={cell.label}
-            className={
-              cell.emphasis
-                ? "bg-sidebar px-2 py-4 text-white"
-                : "border-r border-border px-2 py-4 last:border-r-0"
-            }
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-              {cell.label}
-            </p>
-            {/* With void and granny flat both showing, seven cells leave ~77px
+        <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
+          {areaCells.map((cell) => (
+            <div
+              key={cell.label}
+              className={
+                cell.emphasis
+                  ? "bg-sidebar px-2 py-4 text-white"
+                  : "border-r border-border px-2 py-4 last:border-r-0"
+              }
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+                {cell.label}
+              </p>
+              {/* With void and granny flat both showing, seven cells leave ~77px
                 for a value and "187.35 m²" is ~76px of monospace: it broke at
                 the space and printed the unit on a line of its own. */}
-            <p className="mt-2 whitespace-nowrap font-mono font-semibold">
-              {cell.value}
-            </p>
-          </div>
-        ))}
-      </div>
+              <p className="mt-2 whitespace-nowrap font-mono font-semibold">
+                {cell.value}
+              </p>
+            </div>
+          ))}
+        </div>
       ) : null}
       {data.areaLabel ? (
-      <p className="mt-6 text-xs text-muted-foreground">
-        Total build area {data.areaLabel}.
-      </p>
+        <p className="mt-6 text-xs text-muted-foreground">
+          Total build area {data.areaLabel}.
+        </p>
       ) : null}
       <PrintDwellingSpec
         title="Major House Specifications"

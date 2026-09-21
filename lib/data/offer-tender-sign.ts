@@ -220,8 +220,9 @@ export async function sendTenderForSignature(input: {
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
   let envelope;
-  let docusignContext: Awaited<ReturnType<typeof createDocusignContext>> | null =
-    null;
+  let docusignContext: Awaited<
+    ReturnType<typeof createDocusignContext>
+  > | null = null;
   try {
     docusignContext = await createDocusignContext(config);
     envelope = await createTenderEnvelope({
