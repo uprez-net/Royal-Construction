@@ -244,7 +244,10 @@ test("a stage change records where the lead came from", () => {
 });
 
 test("updateLead writes the stage entry and drops duplicates", () => {
-  const source = read("lib/data/leads.ts");
+  // The rule moved to lib/domain/leads/commands.ts (issue #301) so the routes,
+  // the MCP tool and the booking path all get it. lib/data/leads.ts is the
+  // Next adapter over it now.
+  const source = read("lib/domain/leads/commands.ts");
 
   assert.ok(source.includes("buildStageChangedHistoryEntry("));
   assert.ok(source.includes("dropAlreadyRecorded("));
@@ -270,7 +273,7 @@ test("tasks write to the activity feed", () => {
 // ── What the guard must NOT touch ──
 
 test("the guard filters caller history only, never generated entries", () => {
-  const source = read("lib/data/leads.ts");
+  const source = read("lib/domain/leads/commands.ts");
 
   // dropAlreadyRecorded wraps input.history and nothing else. Applied to the
   // whole list it collapsed two mentions in the same minute into one, and lost

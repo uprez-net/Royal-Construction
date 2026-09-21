@@ -1,4 +1,4 @@
-import type { DomainDb } from "../../lib/domain/db";
+import type { DomainDb, TransactionalDomainDb } from "../../lib/domain/db";
 import type { DomainPrincipal } from "../../lib/domain/principal";
 import { Role } from "@prisma/client";
 
@@ -27,6 +27,16 @@ type Script = Record<string, unknown | ((args: unknown) => unknown)>;
 
 export type RecordingDb = {
   readonly db: DomainDb;
+  /**
+   * The same recorder, for a command that insists on owning its transaction.
+   *
+   * `TransactionalDomainDb` is the real `PrismaClient`, which this fake cannot
+   * structurally be — it implements `$transaction` and the model methods and
+   * nothing else. The cast is the whole point of the harness: `$transaction`
+   * runs the callback against the same recorder, so a command that opens its
+   * own transaction is still recorded flat, in order.
+   */
+  readonly transactionalDb: TransactionalDomainDb;
   /** Every model operation performed, in order. */
   readonly calls: readonly Call[];
   /** Just the mutations, for comparing two adapters' effects. */
@@ -122,6 +132,16 @@ export function recordingDb(script: Script = {}): RecordingDb {
               ? argument(db as DomainDb)
               : Promise.all(argument);
         }
+        // Raw SQL is recorded, not executed. The only domain use is the
+        // advisory lock behind the lead dedupe, where what matters to a test
+        // is that the lock was taken before the read — the row count it
+        // returns is not read by anything.
+        if (property === "$executeRaw" || property === "$executeRawUnsafe") {
+          return (...args: unknown[]) => {
+            calls.push({ args, operation: `$.${property.slice(1)}` });
+            return Promise.resolve(1);
+          };
+        }
         if (typeof property !== "string" || property.startsWith("$")) {
           return undefined;
         }
@@ -134,6 +154,7 @@ export function recordingDb(script: Script = {}): RecordingDb {
   return {
     calls,
     db,
+    transactionalDb: db as unknown as TransactionalDomainDb,
     operations: () => calls.map((call) => call.operation),
     writes: () =>
       calls.filter((call) =>

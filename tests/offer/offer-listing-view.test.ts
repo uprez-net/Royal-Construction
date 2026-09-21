@@ -103,10 +103,11 @@ test("the store and updateLead use these rules", () => {
   // against the lead read before the transaction could skip an expiry it owed.
   // It is OR'd with the listed-field trigger (name, contact, location, type),
   // which this branch adds, so the pattern allows that second condition without
-  // allowing the assignee side to regain a comparison.
+  // allowing the assignee side to regain a comparison. The listed-field flag is
+  // now a property on the domain command's result, hence the dotted name.
   assert.match(
     leads,
-    /if \(input\.assignedId !== undefined(?: \|\| \w+)?\) \{[\s\S]{0,200}revalidateTag\("offers"/,
+    /if \(input\.assignedId !== undefined(?: \|\| [\w.]+)?\) \{[\s\S]{0,200}revalidateTag\("offers"/,
     "updateLead does not expire the offers list on reassignment",
   );
 });
