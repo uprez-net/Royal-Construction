@@ -14,6 +14,7 @@ import {
 import { agentDb } from "@/agent/lib/db";
 import { applyOfferWorkspacePatch } from "@/lib/domain/offers/workspace-save";
 import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
+import { saveContractParticulars as saveContractParticularsDomain } from "@/lib/domain/offers/contract-particulars";
 import { syncLeadStageForOffer } from "@/lib/domain/leads/stage-sync";
 import { userPrincipal } from "@/lib/domain/principal";
 import { assertCanAccessLead, leadListScope } from "@/lib/offer/access";
@@ -28,7 +29,6 @@ import {
 // too, so this file names none of them.
 import { RECALL_EDGES } from "@/lib/offer/offer-workflow-transitions";
 import { parseWorkspaceState } from "@/lib/offer/workspace-persistence";
-import { serializeContractParticulars } from "@/lib/offer/contract-particulars";
 import { OfferStatusLabels } from "@/types/offer";
 
 type OfferSummary = {
@@ -560,41 +560,34 @@ async function recallOfferEnvelopeDirect(
   };
 }
 
-async function saveContractParticulars(input: {
-  offerId: string;
-  particulars: Record<string, string>;
-  manualOverrides: readonly string[];
-}) {
-  const offer = await agentDb.offer.findUnique({
-    where: { id: input.offerId },
-    select: { offerStatus: true, isActive: true },
-  });
-  if (!offer || !offer.isActive || offer.offerStatus !== "CONTRACT_DRAFT")
-    return {
-      ok: false as const,
-      error:
-        "Contract particulars can only be edited while the contract is a draft.",
-    };
-  const value = serializeContractParticulars(
-    input.particulars as never,
-    input.manualOverrides as never,
-  ) as Prisma.InputJsonValue;
-  const existing = await agentDb.contract.findUnique({
-    where: { offerId: input.offerId },
-    select: { version: true },
-  });
-  await agentDb.contract.upsert({
-    where: { offerId: input.offerId },
-    update: { particulars: value },
-    create: {
+/**
+ * Save the contract particulars.
+ *
+ * lib/domain/offers/contract-particulars.ts owns the rule. This used to read
+ * "is it a draft?" and then upsert, so a send flipping the offer to
+ * CONTRACT_SENT could land in between and the write would go through anyway —
+ * particulars changed after the customer already had the envelope. It also
+ * skipped the field and total length limits the app applies.
+ */
+async function saveContractParticulars(
+  input: {
+    offerId: string;
+    particulars: Record<string, string>;
+    manualOverrides: readonly string[];
+  },
+  actor: User,
+) {
+  return saveContractParticularsDomain(
+    userPrincipal(actor),
+    {
+      manualOverrides: input.manualOverrides as never,
       offerId: input.offerId,
-      version: existing?.version ?? 1,
-      documentData: {},
-      particulars: value,
+      particulars: input.particulars as never,
     },
-  });
-  return { ok: true as const };
+    agentDb,
+  );
 }
+
 async function loadOfferActivity(input: { leadId: number }): Promise<
   | {
       ok: true;
@@ -947,7 +940,7 @@ export async function saveAuthorizedContractParticulars(
     action: "offer.contract.particulars.save",
     ctx,
     execute: async () => {
-      const result = await saveContractParticulars(input as never);
+      const result = await saveContractParticulars(input as never, actor);
       return result.ok
         ? actionEnvelope({
             data: { offerId: input.offerId },
