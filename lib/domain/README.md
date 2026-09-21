@@ -30,7 +30,11 @@ A domain module:
 - **Returns typed domain records.** Not React view models, not Eve result
   envelopes. Adapters shape those.
 - **Throws** [`DomainError`](./errors.ts) subclasses. Never returns a success
-  result after a failed write.
+  result after a failed write. The adapter passes the refusal on —
+  `domainErrorResponse` in a route, `domainActionFailure` in a Server Action
+  (`lib/http/domain-response.ts`). A refusal the operator cannot read is a
+  refusal that did not happen, and with nobody watching logs their next move is
+  to press the button again.
 - **Takes external capabilities as ports.** Email, Graph, DocuSign, Xero, Novu,
   Blob, PDF generation arrive as injected adapters. A command makes the database
   state and the side-effect intent durable together, or uses an explicit
@@ -62,6 +66,7 @@ every channel: a cron, a webhook and a test runner are all plain Node too.
 ```
 lib/domain/
   README.md      this contract
+  GUIDE.md       how to add to the layer: what to call, and in what order
   db.ts          DomainDb
   errors.ts      the error taxonomy adapters map from
   principal.ts   who is asking
@@ -69,6 +74,11 @@ lib/domain/
   ports/         external capabilities the domain is handed
   <context>/     one folder per bounded context (leads, offers, projects, …)
 ```
+
+**Making a change? Read [`GUIDE.md`](./GUIDE.md) first.** It lists what already
+exists so you call it rather than writing a second one, and gives the order to
+move a rule in — find every copy, diff them, write the stricter one, repoint
+both adapters, lower the Eve budget, map the refusal, test, record the move.
 
 Each bounded-context folder gets `commands.ts` / `queries.ts` / `policy.ts` as
 it grows. A capability several contexts need lives in `ports/`; one only a
