@@ -8,7 +8,11 @@ import { createClerkClient } from "@clerk/backend";
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
 import prisma from "@/lib/prisma";
-import { changeTeamMemberRole } from "@/lib/domain/identity/team";
+import {
+  changeTeamMemberRole,
+  inviteTeamMember,
+  revokeTeamInvitation,
+} from "@/lib/domain/identity/team";
 import { userPrincipal } from "@/lib/domain/principal";
 import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
 import {
@@ -348,11 +352,11 @@ export async function inviteAuthorizedTeamMember(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const invitation = await clerkClient.invitations.createInvitation({
-    emailAddress: input.email,
-    expiresInDays: 7,
-    publicMetadata: { role: input.role },
-  });
+  const invitation = await inviteTeamMember(
+    userPrincipal(actor),
+    input,
+    (request) => clerkClient.invitations.createInvitation(request),
+  );
   return result(
     "confirmation",
     "Invitation sent",
@@ -438,12 +442,16 @@ export async function revokeAuthorizedTeamInvitation(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  await clerkClient.invitations.revokeInvitation(input.invitationId);
+  const revoked = await revokeTeamInvitation(
+    userPrincipal(actor),
+    input.invitationId,
+    (invitationId) => clerkClient.invitations.revokeInvitation(invitationId),
+  );
   return result(
     "confirmation",
     "Invitation revoked",
     "The pending team invitation was revoked.",
-    { invitationId: input.invitationId },
+    { invitationId: revoked.invitationId },
   );
 }
 

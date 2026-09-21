@@ -1,7 +1,11 @@
 import { Prisma, Role } from "@prisma/client";
 
 import type { TransactionalDomainDb } from "../db";
-import { DomainNotFoundError, DomainTransitionError } from "../errors";
+import {
+  DomainNotFoundError,
+  DomainTransitionError,
+  DomainValidationError,
+} from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 
 // Changing a team member's role.
@@ -19,6 +23,67 @@ export type RoleChangeResult = {
   readonly name: string;
   readonly role: Role;
 };
+
+export type TeamInvitationInput = {
+  readonly email: string;
+  readonly role: Role;
+};
+
+export type TeamInvitation = {
+  readonly id: string;
+  readonly email: string;
+  readonly role: Role;
+};
+
+export type TeamInvitationPort = (input: {
+  emailAddress: string;
+  expiresInDays: number;
+  publicMetadata: { role: Role };
+}) => Promise<{ id: string }>;
+
+export type TeamInvitationRevokePort = (
+  invitationId: string,
+) => Promise<unknown>;
+
+/** Invite through an injected Clerk capability after one shared admin check. */
+export async function inviteTeamMember(
+  principal: DomainPrincipal,
+  input: TeamInvitationInput,
+  invite: TeamInvitationPort,
+): Promise<TeamInvitation> {
+  requireAdminPrincipal(principal);
+  const email = input.email.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    throw new DomainValidationError(
+      "A valid invitation email is required.",
+      "email",
+    );
+  }
+  const invitation = await invite({
+    emailAddress: email,
+    expiresInDays: 7,
+    publicMetadata: { role: input.role },
+  });
+  return { email, id: invitation.id, role: input.role };
+}
+
+/** Revoke only a named invitation through the injected Clerk capability. */
+export async function revokeTeamInvitation(
+  principal: DomainPrincipal,
+  invitationId: string,
+  revoke: TeamInvitationRevokePort,
+): Promise<{ invitationId: string }> {
+  requireAdminPrincipal(principal);
+  const normalizedId = invitationId.trim();
+  if (!normalizedId) {
+    throw new DomainValidationError(
+      "An invitation id is required.",
+      "invitationId",
+    );
+  }
+  await revoke(normalizedId);
+  return { invitationId: normalizedId };
+}
 
 /**
  * Change a member's role, refusing to demote the last ADMIN.

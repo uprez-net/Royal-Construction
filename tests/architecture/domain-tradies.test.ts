@@ -25,7 +25,11 @@ import {
   rescheduleTradieSchedule,
   transitionTradieSchedule,
 } from "../../lib/domain/tradies/schedules";
-import { changeTeamMemberRole } from "../../lib/domain/identity/team";
+import {
+  changeTeamMemberRole,
+  inviteTeamMember,
+  revokeTeamInvitation,
+} from "../../lib/domain/identity/team";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
@@ -434,6 +438,47 @@ test("a demotion with other admins left through goes through", async () => {
     id: "u_1",
     role: "ADMIN",
   });
+});
+
+test("team invitations normalize the address before calling Clerk", async () => {
+  let requested: unknown;
+  const invitation = await inviteTeamMember(
+    adminPrincipal(),
+    { email: "  New.Person@Example.com ", role: "SITE_MANAGER" },
+    async (input) => {
+      requested = input;
+      return { id: "inv_1" };
+    },
+  );
+
+  assert.deepEqual(invitation, {
+    email: "new.person@example.com",
+    id: "inv_1",
+    role: "SITE_MANAGER",
+  });
+  assert.deepEqual(requested, {
+    emailAddress: "new.person@example.com",
+    expiresInDays: 7,
+    publicMetadata: { role: "SITE_MANAGER" },
+  });
+});
+
+test("invitation revoke is administrator-only and trims the target id", async () => {
+  let revoked: string | null = null;
+  const result = await revokeTeamInvitation(
+    adminPrincipal(),
+    "  inv_1 ",
+    async (invitationId) => {
+      revoked = invitationId;
+    },
+  );
+  assert.deepEqual(result, { invitationId: "inv_1" });
+  assert.equal(revoked, "inv_1");
+
+  await assert.rejects(
+    () => revokeTeamInvitation(customerPrincipal(), "inv_1", async () => {}),
+    DomainAuthorizationError,
+  );
 });
 
 /* ---------------------------------------------- the old copies are gone -- */

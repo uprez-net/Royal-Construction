@@ -1,4 +1,13 @@
 import { clerkClient } from "@/lib/auth";
+import { Role } from "@prisma/client";
+import { requireAdminUser } from "@/lib/auth/require-admin";
+import prisma from "@/lib/prisma";
+import { findUserById } from "@/lib/domain/identity/users";
+import {
+  inviteTeamMember,
+  revokeTeamInvitation,
+} from "@/lib/domain/identity/team";
+import { userPrincipal } from "@/lib/domain/principal";
 import {
   createUserInvitationSchema,
   errorResponse,
@@ -11,8 +20,22 @@ import {
 } from "@/utils/validators";
 import { NextRequest } from "next/server";
 
+async function currentAdmin() {
+  const access = await requireAdminUser();
+  if (!access.ok) return null;
+  const user = await findUserById(access.userId, prisma);
+  return user && user.role === Role.ADMIN ? userPrincipal(user) : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const url = new URL(request.url);
     const params = parseSearchParamsWithResponse(url, userSearchQuerySchema);
     if (!params.success) {
@@ -48,6 +71,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const body = await parseBodyWithResponse(
       request,
       createUserInvitationSchema,
@@ -57,11 +87,11 @@ export async function POST(request: NextRequest) {
     }
     const { email, role } = body.data;
 
-    const invitation = await clerkClient.invitations.createInvitation({
-      emailAddress: email,
-      expiresInDays: 7,
-      publicMetadata: { role },
-    });
+    const invitation = await inviteTeamMember(
+      principal,
+      { email, role },
+      (input) => clerkClient.invitations.createInvitation(input),
+    );
 
     return successResponse({
       message: "Invitation sent successfully",
@@ -79,6 +109,13 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const body = await parseBodyWithResponse(request, updateUserRoleSchema);
     if (!body.success) {
       return body.response;
@@ -104,6 +141,13 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const body = await parseBodyWithResponse(
       request,
       revokeUserInvitationSchema,
@@ -113,11 +157,16 @@ export async function DELETE(request: NextRequest) {
     }
     const { invitationId } = body.data;
 
-    await clerkClient.invitations.revokeInvitation(invitationId);
+    const revoked = await revokeTeamInvitation(
+      principal,
+      invitationId,
+      (id) => clerkClient.invitations.revokeInvitation(id),
+    );
 
     return successResponse({
       message: "Invitation revoked successfully",
       success: true,
+      invitationId: revoked.invitationId,
     });
   } catch (error) {
     console.error("/api/users DELETE error", error);
