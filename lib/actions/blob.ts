@@ -3,7 +3,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { del } from "@vercel/blob";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { assertCanAccessLead } from "@/lib/offer/access";
+import prisma from "@/lib/prisma";
+import {
+  authorizeLeadFileDeletion,
+} from "@/lib/domain/files";
+import { userPrincipal } from "@/lib/domain/principal";
 
 export async function deleteLeadBlob(blobUrl: string, leadId: string) {
   const { userId } = await auth();
@@ -21,12 +25,10 @@ export async function deleteLeadBlob(blobUrl: string, leadId: string) {
     throw new Error("Invalid lead ID");
   }
 
-  await assertCanAccessLead(user, parsedLeadId);
-
-  const pathname = decodeURIComponent(new URL(blobUrl).pathname);
-  if (!pathname.includes(`/leads/${leadId}/`)) {
-    throw new Error("Blob does not belong to this lead");
-  }
-
-  await del(blobUrl);
+  const authorized = await authorizeLeadFileDeletion(
+    userPrincipal(user),
+    { blobUrl, leadId: parsedLeadId },
+    prisma,
+  );
+  await del(authorized.blobUrl);
 }

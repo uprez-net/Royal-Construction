@@ -26,6 +26,7 @@ import { authorizeProject } from "@/lib/domain/access/projects";
 import {
   createTradieSchedule as createTradieScheduleDomain,
   createTradieSchedules as createTradieSchedulesDomain,
+  getTradieScheduleReminderRecipient,
   requestTradieScheduleDeletion as requestTradieScheduleDeletionDomain,
   transitionTradieSchedule as transitionTradieScheduleDomain,
 } from "@/lib/domain/tradies/schedules";
@@ -829,26 +830,23 @@ export async function sendTradieScheduleReminder({
   }
 
   try {
-    const schedule = await prisma.tradieSchedule.findUnique({
-      where: { id: scheduleId },
-      select: { tradie: { select: { email: true } } },
-    });
-    if (!schedule) {
-      return { success: false, message: "Schedule not found." };
-    }
-    const to = schedule.tradie.email.trim();
-    if (!to) {
-      return { success: false, message: "This tradie has no email address." };
-    }
+    const recipient = await getTradieScheduleReminderRecipient(
+      userPrincipal(access.user),
+      scheduleId,
+      prisma,
+    );
 
     await sendEmail({
-      to,
+      to: recipient.to,
       subject,
       body,
     });
 
     return { success: true, message: "Reminder sent successfully." };
   } catch (error) {
+    if (isDomainError(error)) {
+      return { success: false, message: error.message };
+    }
     console.error("Error sending tradie schedule reminder:", error);
     throw new Error("Failed to send tradie schedule reminder.");
   }

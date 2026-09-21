@@ -13,6 +13,7 @@ import {
 } from "../errors";
 import {
   attributionUserId,
+  isInternalPrincipal,
   type DomainPrincipal,
 } from "../principal";
 import { authorizeProject } from "../access/projects";
@@ -141,6 +142,32 @@ export type CreatedSchedule = {
   readonly status: TradieScheduleStatus;
   readonly requiresQuote: boolean;
 };
+
+/** Resolve the only recipient a staff reminder may ever target. */
+export async function getTradieScheduleReminderRecipient(
+  principal: DomainPrincipal,
+  scheduleId: string,
+  db: DomainDb,
+): Promise<{ to: string }> {
+  if (!isInternalPrincipal(principal)) {
+    throw new DomainAuthorizationError(
+      "Sending schedule reminders requires internal staff access.",
+    );
+  }
+  const schedule = await db.tradieSchedule.findUnique({
+    select: { tradie: { select: { email: true } } },
+    where: { id: scheduleId },
+  });
+  if (!schedule) throw new DomainNotFoundError("Schedule not found");
+  const to = schedule.tradie.email.trim();
+  if (!to) {
+    throw new DomainValidationError(
+      "This tradie has no email address.",
+      "scheduleId",
+    );
+  }
+  return { to };
+}
 
 /**
  * Book a tradie, with every check both callers should always have had.

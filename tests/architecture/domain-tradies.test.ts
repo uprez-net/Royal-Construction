@@ -21,6 +21,7 @@ import {
 import { reportTradieIncident } from "../../lib/domain/tradies/incidents";
 import { resolveTradieApproval } from "../../lib/domain/tradies/approvals";
 import {
+  getTradieScheduleReminderRecipient,
   rescheduleTradieSchedule,
   transitionTradieSchedule,
 } from "../../lib/domain/tradies/schedules";
@@ -656,6 +657,29 @@ test("rescheduling checks the project milestone and uses old values as a stale g
     id: "schedule_1",
     scheduledDate: new Date("2026-10-01T00:00:00.000Z"),
   });
+});
+
+test("schedule reminders resolve only the stored tradie recipient", async () => {
+  const recorder = recordingDb({
+    "tradieSchedule.findUnique": {
+      tradie: { email: "  sam@example.com " },
+    },
+  });
+  const recipient = await getTradieScheduleReminderRecipient(
+    adminPrincipal(),
+    "schedule_1",
+    recorder.db,
+  );
+  assert.deepEqual(recipient, { to: "sam@example.com" });
+  await assert.rejects(
+    () =>
+      getTradieScheduleReminderRecipient(
+        customerPrincipal(),
+        "schedule_1",
+        recordingDb().db,
+      ),
+    DomainAuthorizationError,
+  );
 });
 
 test("Eve's tradie tools call the same rules", () => {

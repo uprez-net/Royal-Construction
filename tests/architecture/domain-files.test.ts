@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { Role } from "@prisma/client";
 import { test } from "node:test";
 
-import { saveFile } from "../../lib/domain/files";
+import {
+  authorizeLeadFileDeletion,
+  saveFile,
+} from "../../lib/domain/files";
 import { DomainAuthorizationError, DomainNotFoundError } from "../../lib/domain/errors";
 import { recordingDb } from "./domain-harness";
 
@@ -66,5 +69,29 @@ test("a missing uploader is a hard failure, never a successful File write", asyn
   await assert.rejects(
     () => saveFile(admin, input, recordingDb({ "user.findUnique": null }).db),
     DomainNotFoundError,
+  );
+});
+
+test("lead Blob deletion checks both lead access and the lead-scoped path", async () => {
+  const recorder = recordingDb({
+    "lead.findUnique": { assignedId: null, id: 12 },
+  });
+  const authorized = await authorizeLeadFileDeletion(
+    admin,
+    { blobUrl: "https://blob.test/leads/12/plan.pdf", leadId: 12 },
+    recorder.db,
+  );
+  assert.deepEqual(authorized, {
+    blobUrl: "https://blob.test/leads/12/plan.pdf",
+    leadId: 12,
+  });
+  await assert.rejects(
+    () =>
+      authorizeLeadFileDeletion(
+        admin,
+        { blobUrl: "https://blob.test/leads/99/plan.pdf", leadId: 12 },
+        recordingDb({ "lead.findUnique": { assignedId: null, id: 12 } }).db,
+      ),
+    DomainAuthorizationError,
   );
 });

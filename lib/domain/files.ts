@@ -24,6 +24,35 @@ export type SaveFileInput = {
 };
 
 /**
+ * Check the database scope and lead-specific Blob path before deletion.
+ * Actual Blob deletion is an injected adapter capability; a domain command
+ * must not import the Vercel SDK just to decide whether a URL is in scope.
+ */
+export async function authorizeLeadFileDeletion(
+  principal: DomainPrincipal,
+  input: { blobUrl: string; leadId: string | number },
+  db: DomainDb,
+): Promise<{ blobUrl: string; leadId: number }> {
+  const leadId =
+    typeof input.leadId === "number" ? input.leadId : Number(input.leadId);
+  if (!Number.isInteger(leadId)) {
+    throw new DomainValidationError("Invalid lead ID.", "leadId");
+  }
+  await authorizeLead(principal, leadId, db);
+
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(new URL(input.blobUrl).pathname);
+  } catch {
+    throw new DomainValidationError("The Blob URL is invalid.", "blobUrl");
+  }
+  if (!pathname.includes(`/leads/${leadId}/`)) {
+    throw new DomainAuthorizationError("Blob does not belong to this lead.");
+  }
+  return { blobUrl: input.blobUrl, leadId };
+}
+
+/**
  * Persist one uploaded file after re-checking the target against the caller.
  *
  * Blob token generation and cleanup stay in the route adapters. This command
