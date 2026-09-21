@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 
+import prisma from "@/lib/prisma";
 import {
+  authorizeLeadTask,
   completeLeadTask,
   deleteLeadTask,
   reopenLeadTask,
-} from "@/lib/data/lead-tasks";
+} from "@/lib/domain/leads/tasks";
+import { isDomainError } from "@/lib/domain/errors";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
+import { userPrincipal } from "@/lib/domain/principal";
 import {
   badRequestResponse,
   errorResponse,
@@ -53,14 +58,28 @@ export async function PATCH(
     }
 
     const taskId = Number(parsed.data.taskId);
+
+    // A taskId straight from the client is not authorization. This route used
+    // to act on whatever id it was sent; the check is now the one Eve's tools
+    // already made, in lib/domain/leads/tasks.ts.
+    const guard = await requireInternalUser();
+    if (!guard.ok) {
+      return errorResponse(guard.error, { status: 403, code: "FORBIDDEN" });
+    }
+    try {
+      await authorizeLeadTask(userPrincipal(guard.user), taskId, prisma);
+    } catch (error) {
+      if (!isDomainError(error)) throw error;
+      return errorResponse("Task not found", {
+        status: 404,
+        code: "LEAD_TASK_NOT_FOUND",
+      });
+    }
+
     const task =
       action === "reopen"
-        ? await reopenLeadTask(taskId)
-        : await completeLeadTask(
-            taskId,
-            undefined,
-            await resolveActingUserId(),
-          );
+        ? await reopenLeadTask(taskId, prisma)
+        : await completeLeadTask(taskId, prisma, await resolveActingUserId());
     if (!task) {
       return errorResponse("Task not found", {
         status: 404,
@@ -94,7 +113,20 @@ export async function DELETE(
 
     // Deleting an already-deleted task is not a failure the operator can act
     // on, so this answers success either way.
-    await deleteLeadTask(Number(parsed.data.taskId));
+    const taskId = Number(parsed.data.taskId);
+    const guard = await requireInternalUser();
+    if (!guard.ok) {
+      return errorResponse(guard.error, { status: 403, code: "FORBIDDEN" });
+    }
+    try {
+      await authorizeLeadTask(userPrincipal(guard.user), taskId, prisma);
+    } catch (error) {
+      if (!isDomainError(error)) throw error;
+      // Deleting is idempotent by design — a second delete reports success —
+      // so an unreadable task answers the same way a gone one does.
+      return successResponse({ deleted: true });
+    }
+    await deleteLeadTask(taskId, prisma);
     return successResponse({ deleted: true });
   } catch (error) {
     console.error("/api/leads/tasks/[taskId] DELETE error", error);

@@ -1,7 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import type { LeadStage, LeadTaskType } from "@prisma/client";
 
-import prisma from "@/lib/prisma";
+import type { DomainDb, TransactionalDomainDb } from "../db";
+import { DomainNotFoundError, DomainTransitionError } from "../errors";
+import type { DomainPrincipal } from "../principal";
+import { authorizeLead } from "../access/leads";
 import { stageMap } from "@/types/lead";
 import type { LeadTaskRow } from "@/lib/leads/task-types";
 import { closeDatePatch } from "@/lib/leads/pipeline-stages";
@@ -42,7 +45,7 @@ import type { HistoryItem } from "@/lib/leads/types";
  * agent pass null and the entry is recorded unattributed.
  */
 async function recordTaskHistory(
-  tx: Prisma.TransactionClient | typeof prisma,
+  tx: DomainDb,
   leadId: number,
   entries: HistoryItem[],
   actingUserId: string | null,
@@ -145,12 +148,14 @@ const CLOSED_STAGES = CLOSED_LEAD_STAGES;
  * A rule the caller can satisfy, not a server fault.
  *
  * Carried as its own type so the route can answer 409 with the reason instead
- * of a blanket 500 that tells the operator nothing.
+ * of a blanket 500 that tells the operator nothing. A DomainTransitionError
+ * because that is exactly what it is — the caller is allowed, the lead is
+ * simply not in a state where booking work means anything — and because every
+ * adapter already knows to map that to 409.
  */
-export class LeadTaskRejectedError extends Error {
+export class LeadTaskRejectedError extends DomainTransitionError {
   constructor(message: string) {
     super(message);
-    this.name = "LeadTaskRejectedError";
   }
 }
 
@@ -177,12 +182,12 @@ export interface ListOpenTasksOptions {
  * by the leads the caller named. Re-capping it would reintroduce the same
  * silent truncation one level down, on a list a dialog is about to act on.
  */
-export async function listOpenTasks({
-  leadIds,
-  limit = 200,
-}: ListOpenTasksOptions = {}): Promise<LeadTaskRow[]> {
+export async function listOpenTasks(
+  db: DomainDb,
+  { leadIds, limit = 200 }: ListOpenTasksOptions = {},
+): Promise<LeadTaskRow[]> {
   const scoped = leadIds !== undefined;
-  const rows = await prisma.leadTask.findMany({
+  const rows = await db.leadTask.findMany({
     where: {
       completedAt: null,
       lead: LIVE_LEAD,
@@ -207,8 +212,11 @@ export async function listOpenTasks({
  * Same LIVE_LEAD guard as the open list, so a won or lost lead does not drag
  * its history back into a working view.
  */
-export async function listCompletedTasks(limit = 100): Promise<LeadTaskRow[]> {
-  const rows = await prisma.leadTask.findMany({
+export async function listCompletedTasks(
+  db: DomainDb,
+  limit = 100,
+): Promise<LeadTaskRow[]> {
+  const rows = await db.leadTask.findMany({
     where: { completedAt: { not: null }, lead: LIVE_LEAD },
     select: ROW_SELECT,
     orderBy: [{ completedAt: "desc" }, { id: "desc" }],
@@ -237,12 +245,17 @@ export interface CreateLeadTaskInput {
  */
 export async function createLeadTask(
   input: CreateLeadTaskInput,
-  transaction?: Prisma.TransactionClient,
+  db: TransactionalDomainDb | Prisma.TransactionClient,
 ): Promise<LeadTaskRow> {
   // One transaction. The task row and the stage move are one decision: if the
   // second write failed on its own, the lead would carry work it never
   // advanced for, and nothing would ever retry it.
-  const create = async (tx: Prisma.TransactionClient | typeof prisma) => {
+  //
+  // A caller already inside a transaction passes its client and this composes
+  // into it; a caller that is not passes the full client and this opens one.
+  // The narrowing is on `$transaction` itself rather than a flag, so the two
+  // cases cannot be got the wrong way round.
+  const create = async (tx: DomainDb) => {
     const lead = await tx.lead.findUnique({
       where: { id: input.leadId },
       select: { stage: true, assignedId: true, isArchived: true },
@@ -325,7 +338,7 @@ export async function createLeadTask(
 
     return toRow(created);
   };
-  return transaction ? create(transaction) : prisma.$transaction(create);
+  return "$transaction" in db ? db.$transaction(create) : create(db);
 }
 
 /**
@@ -337,7 +350,7 @@ export async function createLeadTask(
  */
 export async function completeLeadTask(
   taskId: number,
-  transaction?: Prisma.TransactionClient,
+  db: TransactionalDomainDb | Prisma.TransactionClient,
   actingUserId?: string | null,
 ): Promise<LeadTaskRow | null> {
   // One transaction, for the same reason createLeadTask uses one: the
@@ -345,20 +358,20 @@ export async function completeLeadTask(
   // Split across two round trips, a failed history write left a task closed
   // with nothing in the feed saying so — which is the gap #293 exists to close,
   // reintroduced one level down.
-  const close = async (db: Prisma.TransactionClient | typeof prisma) => {
-    const updated = await db.leadTask.updateMany({
+  const close = async (tx: DomainDb) => {
+    const updated = await tx.leadTask.updateMany({
       where: { id: taskId, completedAt: null },
       data: { completedAt: new Date(), status: "DONE" },
     });
     if (updated.count === 0) {
       // Already closed, or gone. Not an error: two people clicking Done is fine.
-      const existing = await db.leadTask.findUnique({
+      const existing = await tx.leadTask.findUnique({
         where: { id: taskId },
         select: ROW_SELECT,
       });
       return existing ? toRow(existing) : null;
     }
-    const row = await db.leadTask.findUnique({
+    const row = await tx.leadTask.findUnique({
       where: { id: taskId },
       select: ROW_SELECT,
     });
@@ -366,7 +379,7 @@ export async function completeLeadTask(
     // write a second "Task completed" line.
     if (row) {
       await recordTaskHistory(
-        db,
+        tx,
         row.leadId,
         [
           buildTaskCompletedHistoryEntry(
@@ -383,7 +396,7 @@ export async function completeLeadTask(
     }
     return row ? toRow(row) : null;
   };
-  return transaction ? close(transaction) : prisma.$transaction(close);
+  return "$transaction" in db ? db.$transaction(close) : close(db);
 }
 
 /**
@@ -402,12 +415,11 @@ export async function completeLeadTask(
  */
 export async function reopenLeadTask(
   taskId: number,
-  transaction?: Prisma.TransactionClient,
+  db: DomainDb,
 ): Promise<LeadTaskRow | null> {
   // Guarded on completedAt for the same reason completeLeadTask is: two people
   // clicking Reopen is not an error, and the second must not clear a fresh
   // completion recorded in between.
-  const db = transaction ?? prisma;
   await db.leadTask.updateMany({
     where: { id: taskId, completedAt: { not: null } },
     data: { completedAt: null, status: "NEW" },
@@ -432,9 +444,59 @@ export async function reopenLeadTask(
  * request — reports success rather than a 404 the operator can do nothing
  * about; the row is gone either way, which is what was asked for.
  */
-export async function deleteLeadTask(taskId: number): Promise<boolean> {
-  const { count } = await prisma.leadTask.deleteMany({ where: { id: taskId } });
+export async function deleteLeadTask(
+  taskId: number,
+  db: DomainDb,
+): Promise<boolean> {
+  const { count } = await db.leadTask.deleteMany({ where: { id: taskId } });
   return count > 0;
 }
 
 export type { LeadTaskRow };
+
+/**
+ * Assert this caller may act on this task, and return the lead behind it.
+ *
+ * A taskId is not authorization: the task routes take one straight from the
+ * client. The App routes had no check at all here — PATCH and DELETE acted on
+ * any task id a signed-in caller sent — while Eve checked that the task
+ * belonged to the lead it was told about. One rule now, and it is the
+ * stricter of the two.
+ *
+ * Today this refuses almost nobody: everyone at Royal Constructions is an
+ * ADMIN on a shared login, and `leadListScope` gives every internal role every
+ * lead. It matters for the CUSTOMER role, which reads only its own leads, and
+ * it is what stops the gap widening when Projects brings real site managers.
+ */
+export async function authorizeLeadTask(
+  principal: DomainPrincipal,
+  taskId: number,
+  db: DomainDb,
+): Promise<{ taskId: number; leadId: number }> {
+  const task = await db.leadTask.findUnique({
+    select: { leadId: true },
+    where: { id: taskId },
+  });
+  if (!task) throw new DomainNotFoundError("Task not found");
+  await authorizeLead(principal, task.leadId, db);
+  return { leadId: task.leadId, taskId };
+}
+
+/**
+ * The same check, for a caller that already knows which lead it means.
+ *
+ * Eve's tools name both, so the task is confirmed to belong to the named lead
+ * rather than merely to some lead the caller may read.
+ */
+export async function authorizeLeadTaskOnLead(
+  principal: DomainPrincipal,
+  leadId: number,
+  taskId: number,
+  db: DomainDb,
+): Promise<{ taskId: number; leadId: number }> {
+  const task = await authorizeLeadTask(principal, taskId, db);
+  if (task.leadId !== leadId) {
+    throw new DomainNotFoundError("Task not found");
+  }
+  return task;
+}

@@ -259,7 +259,7 @@ test("updateLead writes the stage entry and drops duplicates", () => {
 });
 
 test("tasks write to the activity feed", () => {
-  const source = read("lib/data/lead-tasks.ts");
+  const source = read("lib/domain/leads/tasks.ts");
 
   assert.ok(source.includes("buildTaskAddedHistoryEntry("));
   assert.ok(source.includes("buildTaskCompletedHistoryEntry("));

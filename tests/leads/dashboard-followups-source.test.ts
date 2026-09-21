@@ -282,7 +282,7 @@ test("no Clerk id is compared against a User.id column", () => {
 });
 
 test("the closed-stage list has one definition", () => {
-  const source = code("lib/data/lead-tasks.ts");
+  const source = code("lib/domain/leads/tasks.ts");
 
   assert.ok(
     source.includes("CLOSED_LEAD_STAGES"),

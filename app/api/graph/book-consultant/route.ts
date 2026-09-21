@@ -5,7 +5,8 @@ import { getGraphConfig } from "@/lib/graph/config";
 import { createLead, findLeadById, updateLead } from "@/lib/data/leads";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
 import { verifyBookConsultationToken } from "@/lib/leads/book-consultation-token";
-import { createLeadTask } from "@/lib/data/lead-tasks";
+import prisma from "@/lib/prisma";
+import { createLeadTask } from "@/lib/domain/leads/tasks";
 import {
   sydneyDateOnly,
   sydneyTimeOnly,
@@ -237,13 +238,16 @@ async function upsertBookingNotes({
     // fail the booking: the customer has the invitation either way. Log loudly
     // and let the lead keep the meetingDate that was just written.
     try {
-      await createLeadTask({
-        leadId: existingLead.id,
-        type: "MEETING",
-        dueDate: meetingAt,
-        dueTime: toTimeOnly(meetingAt),
-        notes: "Consultation booked from the website",
-      });
+      await createLeadTask(
+        {
+          leadId: existingLead.id,
+          type: "MEETING",
+          dueDate: meetingAt,
+          dueTime: toTimeOnly(meetingAt),
+          notes: "Consultation booked from the website",
+        },
+        prisma,
+      );
     } catch (taskError) {
       console.error(
         "Booking saved but the meeting task was not created",
@@ -287,13 +291,16 @@ async function upsertBookingNotes({
   // rather than a lead when the email already exists, hence the id check.
   if (created && typeof created === "object" && "id" in created) {
     try {
-      await createLeadTask({
-        leadId: Number(created.id),
-        type: "MEETING",
-        dueDate: meetingAt,
-        dueTime: toTimeOnly(meetingAt),
-        notes: "Consultation booked from the website",
-      });
+      await createLeadTask(
+        {
+          leadId: Number(created.id),
+          type: "MEETING",
+          dueDate: meetingAt,
+          dueTime: toTimeOnly(meetingAt),
+          notes: "Consultation booked from the website",
+        },
+        prisma,
+      );
     } catch (taskError) {
       console.error("Lead created but the meeting task was not", taskError);
     }
