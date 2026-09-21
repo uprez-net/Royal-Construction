@@ -99,8 +99,6 @@ export const projectExtractionSections: FieldSection[] = [
     title: "Commercials and Claims",
     fields: [
       "commercialsAndClaimsTotalContractSum",
-      "commercialsAndClaimsTenderTotalPrice",
-      "commercialsAndClaimsContractPrice",
       "commercialsAndClaimsGstIncluded",
       "commercialsAndClaimsGstAmount",
       "commercialsAndClaimsDepositValue",
@@ -207,12 +205,6 @@ export const projectExtractionSchema = z
     ),
     commercialsAndClaimsTotalContractSum: nullableNumberField.describe(
       "Contract Page ii Price: the total contract sum. The master figure for all payment tracking.",
-    ),
-    commercialsAndClaimsTenderTotalPrice: nullableNumberField.describe(
-      "Tender pricing summary total price, recorded as-is for reconciliation against the Contract price (should match; a mismatch is a red-alert discrepancy).",
-    ),
-    commercialsAndClaimsContractPrice: nullableNumberField.describe(
-      "Contract Page ii Price: the signed contract price, the legal master value in any Tender-vs-Contract conflict.",
     ),
     commercialsAndClaimsGstIncluded: z
       .preprocess(

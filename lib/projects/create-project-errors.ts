@@ -125,8 +125,6 @@ const FIELD_LABELS: Partial<Record<ProjectFormFieldKey, string>> = {
   legalAdministrationPcaInspector: "PCA inspector",
   legalAdministrationSiteAddress: "Site address",
   commercialsAndClaimsTotalContractSum: "Total contract sum",
-  commercialsAndClaimsContractPrice: "Contract price",
-  commercialsAndClaimsTenderTotalPrice: "Tender total price",
   commercialsAndClaimsDepositValue: "Deposit value",
 };
 
@@ -299,16 +297,10 @@ export function validateCreateProjectForm({
   }
 
   const contractSum = extraction.commercialsAndClaimsTotalContractSum;
-  const contractPrice = extraction.commercialsAndClaimsContractPrice;
   const deposit = extraction.commercialsAndClaimsDepositValue;
 
   for (const [field, value] of [
     ["commercialsAndClaimsTotalContractSum", contractSum],
-    ["commercialsAndClaimsContractPrice", contractPrice],
-    [
-      "commercialsAndClaimsTenderTotalPrice",
-      extraction.commercialsAndClaimsTenderTotalPrice,
-    ],
     ["commercialsAndClaimsDepositValue", deposit],
     ["commercialsAndClaimsGstAmount", extraction.commercialsAndClaimsGstAmount],
   ] as const) {
@@ -320,18 +312,17 @@ export function validateCreateProjectForm({
     }
   }
 
-  const budgetBasis = contractPrice ?? contractSum;
   if (
     typeof deposit === "number" &&
     deposit > 0 &&
-    typeof budgetBasis === "number" &&
-    budgetBasis > 0 &&
-    deposit > budgetBasis
+    typeof contractSum === "number" &&
+    contractSum > 0 &&
+    deposit > contractSum
   ) {
     errors.push({
       field: "commercialsAndClaimsDepositValue",
       message:
-        "The deposit is larger than the contract price. Check both figures against the contract.",
+        "The deposit is larger than the total contract sum. Check both figures against the contract.",
     });
   }
 

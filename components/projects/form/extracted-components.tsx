@@ -96,8 +96,6 @@ const PAYMENT_STAGES_FIELD = "commercialsAndClaimsPaymentStages";
 
 const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsTotalContractSum",
-  "commercialsAndClaimsTenderTotalPrice",
-  "commercialsAndClaimsContractPrice",
   "commercialsAndClaimsGstAmount",
   "commercialsAndClaimsDepositValue",
   "commercialsAndClaimsClaimStageSlabDollarValue",

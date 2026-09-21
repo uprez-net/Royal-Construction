@@ -92,7 +92,15 @@ export function AreaCalculatorPanel({
     );
   }
 
-  const calc = calculateOfferArea(basis, area, rateConstants, calcVersion);
+  const totalBathrooms =
+    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const calc = calculateOfferArea(
+    basis,
+    area,
+    rateConstants,
+    calcVersion,
+    totalBathrooms,
+  );
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -300,31 +308,26 @@ export function AreaCalculatorPanel({
 
           <HelperSection title="Tiles">
             <div className="flex flex-col gap-2 mb-auto">
-              <NumberField
-                label="Tiles required for Ground floor"
-                value={area.tilesGroundFloor}
-                onChange={(value) => onAreaChange({ tilesGroundFloor: value })}
+              <CalculatedSqmField
+                label="Ground floor tiles required (sqm)"
+                value={calc.groundFloorTilesSqm}
+                helperText="Ground floor + alfresco + balcony + granny flat + porch"
               />
-              <NumberField
-                label="Tiles required for all bathroom"
-                value={area.tilesBathroom}
-                onChange={(value) => onAreaChange({ tilesBathroom: value })}
-              />
-              <NumberField
-                label="Tiles required for steps"
-                value={area.tilesSteps}
-                onChange={(value) => onAreaChange({ tilesSteps: value })}
+              <CalculatedSqmField
+                label="Bathroom tiles required (sqm)"
+                value={calc.bathroomTilesSqm}
+                helperText={`${totalBathrooms} bathroom${totalBathrooms === 1 ? "" : "s"} × 35 sqm`}
               />
             </div>
             <ResultRows
               rows={[
                 [
-                  "Additional Tiles for Waste (10%)",
-                  String(Math.round(calc.tilesWasted)),
+                  "Additional tiles for waste (10%)",
+                  `${calc.tilesWasted.toFixed(2)} sqm`,
                 ],
                 [
-                  "Total tiles required",
-                  String(Math.round(calc.totalTilesRequired)),
+                  "Total tiles required (sqm)",
+                  `${calc.totalTilesRequired.toFixed(2)} sqm`,
                 ],
               ]}
             />
@@ -386,6 +389,37 @@ function NumberField({
           }
         }}
       />
+    </label>
+  );
+}
+
+function CalculatedSqmField({
+  helperText,
+  label,
+  value,
+}: {
+  readonly helperText: string;
+  readonly label: string;
+  readonly value: number;
+}) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative mt-1">
+        <Input
+          aria-readonly="true"
+          className="bg-muted/50 pr-14 font-mono tabular-nums text-muted-foreground"
+          readOnly
+          type="text"
+          value={value.toFixed(2)}
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          sqm
+        </span>
+      </div>
+      <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+        {helperText}
+      </span>
     </label>
   );
 }

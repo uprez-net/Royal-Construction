@@ -650,8 +650,6 @@ function buildExtractionPayload(
     },
     commercialsAndClaims: {
       totalContractSum: contractValue,
-      tenderTotalPrice: contractValue,
-      contractPrice: contractValue,
       gstIncluded: true,
       gstAmount,
       depositValue,

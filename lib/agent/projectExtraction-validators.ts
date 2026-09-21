@@ -78,8 +78,6 @@ const projectExtractionDraftSchema = z.object({
   }),
   commercialsAndClaims: z.object({
     totalContractSum: nullableNumberSchema,
-    tenderTotalPrice: nullableNumberSchema,
-    contractPrice: nullableNumberSchema,
     gstIncluded: z.boolean().nullable(),
     gstAmount: nullableNumberSchema,
     depositValue: nullableNumberSchema,

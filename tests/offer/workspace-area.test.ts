@@ -179,21 +179,39 @@ assert.deepEqual(
 // ─── calculateTiles ───
 
 assert.deepEqual(
-  calculateTiles({
-    tilesGroundFloor: 1000,
-    tilesBathroom: 200,
-    tilesSteps: 50,
-  }),
+  calculateTiles(
+    {
+      groundFloorSqm: 110,
+      alfrescoSqm: 8,
+      balconySqm: 6,
+      grannyFlatSqm: 12,
+      porchSqm: 3,
+    },
+    2,
+  ),
   {
-    tilesWasted: 125,
-    totalTilesRequired: 1375,
+    groundFloorTilesSqm: 139,
+    bathroomTilesSqm: 70,
+    tilesWasted: 20.9,
+    totalTilesRequired: 229.9,
   },
 );
 
 // Zero/empty tile inputs
 assert.deepEqual(
-  calculateTiles({ tilesGroundFloor: 0, tilesBathroom: 0, tilesSteps: 0 }),
+  calculateTiles(
+    {
+      groundFloorSqm: 0,
+      alfrescoSqm: 0,
+      balconySqm: 0,
+      grannyFlatSqm: 0,
+      porchSqm: 0,
+    },
+    0,
+  ),
   {
+    groundFloorTilesSqm: 0,
+    bathroomTilesSqm: 0,
     tilesWasted: 0,
     totalTilesRequired: 0,
   },
@@ -212,12 +230,15 @@ const area: OfferAreaCalculator = {
   bricksFirstFloor: 5000,
   bricksPillar: 500,
   tieCost: 200,
-  tilesGroundFloor: 1000,
-  tilesBathroom: 200,
-  tilesSteps: 50,
 };
 
-const calc = calculateOfferArea(basis, area, defaultRates, LEGACY_CALC_VERSION);
+const calc = calculateOfferArea(
+  basis,
+  area,
+  defaultRates,
+  LEGACY_CALC_VERSION,
+  2,
+);
 assert.equal(calc.totalSlabCost, 30600); // 28200 slab + 900 drop edge beam + 1500 trucks
 assert.equal(calc.totalDropEdgeBeamCost, 900);
 assert.equal(calc.totalTruckPrice, 1500);
@@ -228,8 +249,10 @@ assert.equal(calc.totalFirstFloorFrameCost, 13365);
 assert.equal(calc.totalFrameCost, 62752.5);
 assert.equal(calc.totalBricksRequired, 15500);
 assert.equal(calc.totalBrickMaterialCost, 4075);
-assert.equal(calc.tilesWasted, 125);
-assert.equal(calc.totalTilesRequired, 1375);
+assert.equal(calc.groundFloorTilesSqm, 121);
+assert.equal(calc.bathroomTilesSqm, 70);
+assert.equal(calc.tilesWasted, 19.1);
+assert.equal(calc.totalTilesRequired, 210.1);
 
 // ─── All-zero calculator with defaults ───
 
@@ -238,6 +261,7 @@ const zeroCalc = calculateOfferArea(
   INITIAL_AREA_CALCULATOR,
   defaultRates,
   LEGACY_CALC_VERSION,
+  0,
 );
 assert.equal(zeroCalc.totalSlabCost, 28200);
 assert.equal(zeroCalc.totalDropEdgeBeamCost, 0);
@@ -249,8 +273,10 @@ assert.equal(zeroCalc.totalFirstFloorFrameCost, 13365);
 assert.equal(zeroCalc.totalFrameCost, 32752.5);
 assert.equal(zeroCalc.totalBricksRequired, 0);
 assert.equal(zeroCalc.totalBrickMaterialCost, 0);
-assert.equal(zeroCalc.tilesWasted, 0);
-assert.equal(zeroCalc.totalTilesRequired, 0);
+assert.equal(zeroCalc.groundFloorTilesSqm, 121);
+assert.equal(zeroCalc.bathroomTilesSqm, 0);
+assert.equal(zeroCalc.tilesWasted, 12.1);
+assert.equal(zeroCalc.totalTilesRequired, 133.1);
 
 // ─── getAreaBasisTotalSqm ───
 

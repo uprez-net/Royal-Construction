@@ -42,10 +42,6 @@ export type OfferAreaCalculator = {
   readonly bricksFirstFloor: number;
   readonly bricksPillar: number;
   readonly tieCost: number;
-  // ── Tile inputs ──
-  readonly tilesGroundFloor: number;
-  readonly tilesBathroom: number;
-  readonly tilesSteps: number;
 };
 
 // Calculated results per section. Every value is derived from the calculator
@@ -69,7 +65,9 @@ export type OfferAreaCalculation = {
   readonly cementRequiredForBricks: number;
   readonly totalCementCost: number;
   readonly totalBrickMaterialCost: number;
-  // ── Tiles ──
+  // ── Tiles (sqm) ──
+  readonly groundFloorTilesSqm: number;
+  readonly bathroomTilesSqm: number;
   readonly tilesWasted: number;
   readonly totalTilesRequired: number;
 };
@@ -116,9 +114,6 @@ export const INITIAL_AREA_CALCULATOR: OfferAreaCalculator = {
   bricksFirstFloor: 0,
   bricksPillar: 0,
   tieCost: 0,
-  tilesGroundFloor: 0,
-  tilesBathroom: 0,
-  tilesSteps: 0,
 };
 
 // Job setup owns the floor areas; the helper reads them through this adapter.
@@ -348,20 +343,38 @@ export function calculateBricks(
 }
 
 export function calculateTiles(
-  area: Pick<
-    OfferAreaCalculator,
-    "tilesGroundFloor" | "tilesBathroom" | "tilesSteps"
+  basis: Pick<
+    OfferAreaBasis,
+    | "groundFloorSqm"
+    | "alfrescoSqm"
+    | "balconySqm"
+    | "grannyFlatSqm"
+    | "porchSqm"
   >,
+  bathrooms: number,
 ): {
+  readonly groundFloorTilesSqm: number;
+  readonly bathroomTilesSqm: number;
   readonly tilesWasted: number;
   readonly totalTilesRequired: number;
 } {
-  const baseTiles = roundCurrency(
-    area.tilesGroundFloor + area.tilesBathroom + area.tilesSteps,
+  const groundFloorTilesSqm = roundCurrency(
+    basis.groundFloorSqm +
+      basis.alfrescoSqm +
+      basis.balconySqm +
+      basis.grannyFlatSqm +
+      basis.porchSqm,
   );
+  const bathroomTilesSqm = roundCurrency(bathrooms * 35);
+  const baseTiles = roundCurrency(groundFloorTilesSqm + bathroomTilesSqm);
   const tilesWasted = roundCurrency(baseTiles * 0.1);
   const totalTilesRequired = roundCurrency(baseTiles + tilesWasted);
-  return { tilesWasted, totalTilesRequired };
+  return {
+    groundFloorTilesSqm,
+    bathroomTilesSqm,
+    tilesWasted,
+    totalTilesRequired,
+  };
 }
 
 export function calculateOfferArea(
@@ -371,11 +384,12 @@ export function calculateOfferArea(
   // Callers must screen this with isSupportedCalcVersion first; an unrecognised
   // version throws rather than defaulting to rules the offer was not quoted on.
   calcVersion: number,
+  bathrooms: number,
 ): OfferAreaCalculation {
   const slab = calculateSlab(basis, area, rates);
   const frame = calculateFrame(basis, area, rates, calcVersion);
   const bricks = calculateBricks(area, rates);
-  const tiles = calculateTiles(area);
+  const tiles = calculateTiles(basis, bathrooms);
 
   return {
     ...slab,

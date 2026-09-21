@@ -210,9 +210,9 @@ export function CustomerTab({ project, isAdmin }: CustomerTabProps) {
               Commercial snapshot
             </h3>
             <dl className="mt-3 space-y-2 text-sm">
-              <DetailRow label="Contract price">
+              <DetailRow label="Total contract sum">
                 <span className="font-mono tabular-nums">
-                  {formatMoneyField(commercials?.contractPrice)}
+                  {formatMoneyField(commercials?.totalContractSum)}
                 </span>
               </DetailRow>
               <DetailRow label="Deposit">

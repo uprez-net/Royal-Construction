@@ -184,7 +184,7 @@ function isFlatExtraction(
 ): extraction is ProjectExtractionData {
   return (
     "legalAdministrationSiteAddress" in extraction ||
-    "commercialsAndClaimsContractPrice" in extraction
+    "commercialsAndClaimsTotalContractSum" in extraction
   );
 }
 
@@ -221,8 +221,6 @@ function normalizeExtraction(
       },
       commercialsAndClaims: {
         totalContractSum: extraction.commercialsAndClaimsTotalContractSum,
-        tenderTotalPrice: extraction.commercialsAndClaimsTenderTotalPrice,
-        contractPrice: extraction.commercialsAndClaimsContractPrice,
         gstIncluded: extraction.commercialsAndClaimsGstIncluded,
         gstAmount: extraction.commercialsAndClaimsGstAmount,
         depositValue: extraction.commercialsAndClaimsDepositValue,
@@ -412,10 +410,7 @@ export async function createProjectWithLead({
       : null;
     const projectBudget = extraction
       ? isFlatExtraction(extraction)
-        ? (extraction.commercialsAndClaimsContractPrice ??
-          extraction.commercialsAndClaimsTotalContractSum ??
-          extraction.commercialsAndClaimsTenderTotalPrice ??
-          0)
+        ? (extraction.commercialsAndClaimsTotalContractSum ?? 0)
         : resolveProjectBudget(extraction)
       : (inferredSpecs?.projectBudget ?? 0);
     const projectRequirements = normalizedExtraction
@@ -440,8 +435,6 @@ export async function createProjectWithLead({
             },
             commercialsAndClaims: {
               totalContractSum: inferredSpecs?.projectBudget ?? 0,
-              tenderTotalPrice: inferredSpecs?.projectBudget ?? 0,
-              contractPrice: inferredSpecs?.projectBudget ?? 0,
               gstIncluded: null,
               gstAmount: null,
               depositValue: null,

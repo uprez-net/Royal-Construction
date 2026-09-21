@@ -95,8 +95,6 @@ export interface ProjectLegalAdministrationSection {
 
 export interface ProjectCommercialSection {
   totalContractSum: number | null;
-  tenderTotalPrice: number | null;
-  contractPrice: number | null;
   gstIncluded: boolean | null;
   gstAmount: number | null;
   depositValue: number | null;

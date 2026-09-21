@@ -6,12 +6,7 @@ import type {
 } from "@/types/project-flow";
 
 export function resolveProjectBudget(draft: ProjectExtractionDraft) {
-  return (
-    draft.commercialsAndClaims.contractPrice ??
-    draft.commercialsAndClaims.totalContractSum ??
-    draft.commercialsAndClaims.tenderTotalPrice ??
-    0
-  );
+  return draft.commercialsAndClaims.totalContractSum ?? 0;
 }
 
 export function buildProjectRequirementsPayload(

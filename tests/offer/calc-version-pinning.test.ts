@@ -134,12 +134,14 @@ test("the two rule sets disagree only about the void, and only in the frame", ()
     INITIAL_AREA_CALCULATOR,
     rates,
     LEGACY_CALC_VERSION,
+    0,
   );
   const v2 = calculateOfferArea(
     basis,
     INITIAL_AREA_CALCULATOR,
     rates,
     CURRENT_CALC_VERSION,
+    0,
   );
 
   // The first floor gains the 15 m² void under v2.

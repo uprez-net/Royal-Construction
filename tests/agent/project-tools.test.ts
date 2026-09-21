@@ -18,7 +18,7 @@ test("requirements updates are optimistic and section-scoped", () => {
     updateProjectRequirementsInputSchema.safeParse({
       projectId,
       expectedUpdatedAt: "2026-09-17T10:00:00.000Z",
-      patch: { commercialsAndClaims: { contractPrice: 420000 } },
+      patch: { commercialsAndClaims: { totalContractSum: 420000 } },
     }).success,
     true,
   );

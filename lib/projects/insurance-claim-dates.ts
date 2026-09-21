@@ -101,8 +101,6 @@ const EMPTY_REQUIREMENTS: ProjectRequirementsDraft = {
   },
   commercialsAndClaims: {
     totalContractSum: null,
-    tenderTotalPrice: null,
-    contractPrice: null,
     gstIncluded: null,
     gstAmount: null,
     depositValue: null,

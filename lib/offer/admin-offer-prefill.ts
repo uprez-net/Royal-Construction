@@ -289,6 +289,7 @@ export function reevaluateFormulaCostLines(
     | "kitchenSqm"
     | "bedrooms"
     | "bathrooms"
+    | "hasGrannyHome"
     | "linenCount"
     | "showerCount"
     | "grannyBedrooms"
@@ -304,7 +305,15 @@ export function reevaluateFormulaCostLines(
 ): readonly OfferWorkspaceCostLine[] {
   const resolvedRates = resolveAreaRateConstants(rateConstants);
   const basis = offerAreaBasisFromJob(job);
-  const calc = calculateOfferArea(basis, area, resolvedRates, calcVersion);
+  const totalBathrooms =
+    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const calc = calculateOfferArea(
+    basis,
+    area,
+    resolvedRates,
+    calcVersion,
+    totalBathrooms,
+  );
 
   const measurements: Partial<Record<AreaMeasurementKey, number>> = {
     TOTAL_SLAB_COST: calc.totalSlabCost,
@@ -313,6 +322,7 @@ export function reevaluateFormulaCostLines(
     TOTAL_GROUND_FLOOR_FRAME_COST: calc.totalGroundFloorFrameCost,
     TOTAL_FIRST_FLOOR_FRAME_COST: calc.totalFirstFloorFrameCost,
     TOTAL_GROUND_FLOOR_AREA: calc.totalGroundFloorArea,
+    FIRST_FLOOR_AREA: basis.firstFloorSqm,
     STEEL: area.steel,
     INSTALLER: area.installer,
     EAVES: area.eaves,

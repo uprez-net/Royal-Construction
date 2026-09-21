@@ -36,9 +36,9 @@ function readClaimWindow(requirements: unknown) {
 }
 
 /**
- * Cover is written against the contract price, so that is the claim amount.
- * The extracted contract figures are preferred over `totalBudget`, which is the
- * builder's internal number and drifts from the insured value.
+ * Cover is written against the total contract sum, so that is the claim amount.
+ * The extracted contract sum is preferred over `totalBudget`, which is the
+ * builder's internal number and can drift from the insured value.
  */
 function readClaimAmount(
   requirements: unknown,
@@ -47,11 +47,7 @@ function readClaimAmount(
   const commercials = (requirements as ProjectRequirementsPayload | null)
     ?.commercialsAndClaims;
 
-  const candidates = [
-    commercials?.contractPrice,
-    commercials?.totalContractSum,
-    Number(totalBudget),
-  ];
+  const candidates = [commercials?.totalContractSum, Number(totalBudget)];
 
   for (const candidate of candidates) {
     const value = Number(candidate);

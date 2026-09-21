@@ -152,8 +152,6 @@ const SECTION_FIELDS: Record<ProjectFlowSectionKey, FieldConfig[]> = {
   ],
   commercialsAndClaims: [
     { key: "totalContractSum", label: "Total contract sum", type: "currency" },
-    { key: "tenderTotalPrice", label: "Tender total price", type: "currency" },
-    { key: "contractPrice", label: "Contract price", type: "currency" },
     { key: "gstIncluded", label: "GST included", type: "boolean" },
     { key: "gstAmount", label: "GST amount", type: "currency" },
     { key: "depositValue", label: "Deposit value", type: "currency" },

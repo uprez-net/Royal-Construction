@@ -140,21 +140,6 @@ const FIELD_GUIDE: Record<ProjectExtractionSectionKey, SectionGuide> = {
         importance:
           "The single source of truth for all downstream payment tracking.",
       },
-      commercialsAndClaimsTenderTotalPrice: {
-        label: "Tender Total Price",
-        source: "Tender: pricing summary",
-        logic:
-          "Extract the Tender's own total price figure for reconciliation against the Contract price.",
-        importance:
-          "Should equal the Contract price; a mismatch is a red-alert discrepancy.",
-      },
-      commercialsAndClaimsContractPrice: {
-        label: "Contract Price",
-        source: "Contract: Page ii (Price)",
-        logic: "Extract the signed Contract price, the legal master figure.",
-        importance:
-          "Legal master value used to reconcile against the Tender total price.",
-      },
       commercialsAndClaimsGstIncluded: {
         label: "GST Included",
         source: "Contract: Price section",
@@ -448,7 +433,6 @@ ${EXTRACTION_CONTRACT}
 
 <precedence_and_conflict_resolution>
   <!-- Reasoning aids only: these help you choose the correct single value per field. They do not add output fields or change the schema. -->
-  <rule name="contract_over_tender_price">If the Tender total price and Contract price disagree, the Contract price is the legal master for commercialsAndClaimsContractPrice/commercialsAndClaimsTotalContractSum; still record the Tender's own figure faithfully in commercialsAndClaimsTenderTotalPrice rather than overwriting it with the Contract value.</rule>
   <rule name="contract_overrides_tender_spec">Per Clause 4(a), where the Contract (including its Special Conditions) and the Tender specification conflict on scope or specification, the Contract value takes precedence for that field.</rule>
   <rule name="written_over_scaled">Where a written dimension (e.g. "2700mm") conflicts with a scaled drawing measurement, prefer the written dimension.</rule>
   <rule name="deposit_sanity">Deposit values are typically capped at 10% of the contract price under NSW rules; extract the figure as documented rather than recalculating it, but do not silently "correct" an implausible OCR read without re-checking the source text.</rule>

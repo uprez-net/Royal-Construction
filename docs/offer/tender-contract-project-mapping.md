@@ -33,8 +33,7 @@ The rules are simple:
 | Form field | Expected source section(s) |
 | --- | --- |
 | `commercialsAndClaimsTotalContractSum` | Tender cover total, price summary, acceptance value |
-| `commercialsAndClaimsTenderTotalPrice` | Tender cover, pricing summary |
-| `commercialsAndClaimsContractPrice` | Tender cover, Contract price reference, acceptance value |
+| `commercialsAndClaimsTotalContractSum` | Contract Page ii Price; the single commercial master value |
 | `commercialsAndClaimsGstIncluded` | Tender cover GST statement, pricing notes |
 | `commercialsAndClaimsGstAmount` | Tender cover, total price breakdown |
 | `commercialsAndClaimsDepositValue` | Tender payment schedule, Contract deposit clause |
