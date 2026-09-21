@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 
 import { auth } from "@clerk/nextjs/server";
 import { put } from "@vercel/blob";
 import { getProjectById } from "@/lib/data/projects";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import prisma from "@/lib/prisma";
 import { createProjectUpdate } from "@/lib/data/projectUpdates";
 import {
   createProjectUpdateSchema,
@@ -74,15 +74,15 @@ export async function POST(
         .getAll("photos")
         .filter(
           (file): file is File =>
-            file instanceof File &&
-            file.size > 0 &&
-            file.size <= MAX_IMAGE_SIZE &&
-            ALLOWED_IMAGE_TYPES.includes(file.type),
+            file instanceof File
+            && file.size > 0
+            && file.size <= MAX_IMAGE_SIZE
+            && ALLOWED_IMAGE_TYPES.includes(file.type),
         );
 
       if (
-        files.length > 0 &&
-        files.length !== formData.getAll("photos").length
+        files.length > 0
+        && files.length !== formData.getAll("photos").length
       ) {
         return badRequestResponse(
           "Some files were rejected: invalid type or size > 10MB",
@@ -111,22 +111,14 @@ export async function POST(
       return badRequestResponse("Notes are required");
     }
 
-    const milestone = milestoneId
-      ? await prisma.milestone.findUnique({
-          where: { id: milestoneId },
-          select: { id: true, isPhotoRequired: true },
-        })
-      : null;
-
-    await createProjectUpdate({
+    const { milestoneWasPhotoRequired } = await createProjectUpdate({
       projectId,
       milestoneId,
-      authorId: user.id,
       notes,
       photoUrls,
     });
 
-    if (milestone?.isPhotoRequired && milestoneId) {
+    if (milestoneWasPhotoRequired && milestoneId) {
       console.log(
         `[NOTIFICATION] Client notified for milestone ${milestoneId}`,
       );
@@ -140,6 +132,12 @@ export async function POST(
 
     return successResponse(updatedProject, { status: 201 });
   } catch (error) {
+    // A domain refusal answers with its own status and its own message —
+    // "That milestone does not belong to this project." is what the operator
+    // needs, and it is useless to them as an opaque 500.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+
     console.error(`/api/projects/${projectId}/updates POST error`, error);
     return errorResponse("Failed to create project update", {
       status: 500,

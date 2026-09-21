@@ -1,70 +1,52 @@
-import prisma from "@/lib/prisma";
-import type { CreateProjectUpdateInput } from "@/utils/validators";
+import "server-only";
+
+import { after } from "next/server";
 import { revalidateTag } from "next/cache";
+
+import prisma from "@/lib/prisma";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import { createProjectUpdate as createProjectUpdateCommand } from "@/lib/domain/projects/resources";
+import { triggerNotification } from "@/lib/notification/novu";
 import { CACHE_PROFILES } from "@/types/cache";
 import { createNotification } from "@/types/notification";
-import { triggerNotification } from "../notification/novu";
-import { after } from "next/server";
+import type { CreateProjectUpdateInput } from "@/utils/validators";
 
+/**
+ * The Next adapter over
+ * `lib/domain/projects/resources.ts#createProjectUpdate`.
+ *
+ * The site-update row, its activity entry and the milestone it completes are
+ * one transaction in the command — they used to be a transaction that wrote
+ * two of the three and an `after()` that did the rest. The notification and
+ * the cache tag are genuinely post-commit and stay here.
+ *
+ * `authorId` is no longer a parameter: the command resolves the author from
+ * the principal, so a caller cannot post an update in somebody else's name.
+ */
 export async function createProjectUpdate(
-  input: {
-    projectId: string;
-    authorId: string;
-  } & CreateProjectUpdateInput,
+  input: { projectId: string } & CreateProjectUpdateInput,
 ) {
-  const { projectId, milestoneId, authorId, notes, photoUrls = [] } = input;
+  const { projectId, milestoneId, notes, photoUrls = [] } = input;
+  const principal = await currentPrincipal();
 
-  const milestone = milestoneId
-    ? await prisma.milestone.findUnique({
-        where: { id: milestoneId },
-        select: { id: true, isPhotoRequired: true },
-      })
-    : null;
-
-  const updatedMilestone = await prisma.$transaction(async (tx) => {
-    await tx.siteUpdate.create({
-      data: {
-        projectId: projectId,
-        milestoneId: milestoneId,
-        authorId: authorId,
-        notes,
-        photoUrls,
-      },
-    });
-
-    await tx.activityLog.create({
-      data: {
-        projectId: projectId,
-        milestoneId: milestoneId,
-        authorId: authorId,
-        type: "site-update",
-        message: `Site update posted for ${projectId}`,
-      },
-    });
-
-    if (milestone?.isPhotoRequired && milestoneId) {
-      const updatedMilestone = await tx.milestone.update({
-        where: { id: milestoneId },
-        data: { status: "DONE", actualDate: new Date() },
-        include: { project: true },
-      });
-      return updatedMilestone;
-    }
-  });
+  const outcome = await prisma.$transaction((tx) =>
+    createProjectUpdateCommand(
+      principal,
+      { milestoneId, notes, photoUrls, projectId },
+      tx,
+    ),
+  );
 
   after(async () => {
-    if (updatedMilestone) {
-      const notificationPayload = createNotification("projectSiteUpdates", {
-        projectId: updatedMilestone.projectId,
-        projectName: updatedMilestone.project.name,
-        milestoneName: updatedMilestone.name,
-        updateNote: notes,
-      });
+    if (outcome.completedMilestone) {
       await triggerNotification(
-        updatedMilestone.project.siteManagerId
-          ? [updatedMilestone.project.siteManagerId]
-          : [],
-        notificationPayload,
+        outcome.siteManagerId ? [outcome.siteManagerId] : [],
+        createNotification("projectSiteUpdates", {
+          milestoneName: outcome.completedMilestone.name,
+          projectId: outcome.projectId,
+          projectName: outcome.projectName,
+          updateNote: notes,
+        }),
       );
     }
 
@@ -72,6 +54,6 @@ export async function createProjectUpdate(
   });
 
   return {
-    milestoneWasPhotoRequired: Boolean(milestone?.isPhotoRequired),
+    milestoneWasPhotoRequired: Boolean(outcome.completedMilestone),
   };
 }
