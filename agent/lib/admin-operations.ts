@@ -21,7 +21,7 @@ import { getXeroConnectionStatus } from "@/lib/data/xero-connection";
 import { getXeroContext } from "@/lib/xero/client";
 import {
   getAdminOfferContentNonCache,
-  resolveSingletonId,
+  updateAdminOfferContentSection,
 } from "@/lib/data/admin-offer-content-writes";
 import {
   buildScopeSchema,
@@ -391,7 +391,6 @@ export async function updateAuthorizedAdminContent(
     throw new Error(
       parsed.error.issues.map((issue) => issue.message).join("; "),
     );
-  const id = await resolveSingletonId();
   const updateData: Prisma.AdminOfferContentUpdateManyMutationInput =
     input.section === "buildScope"
       ? { buildScope: parsed.data as string[] }
@@ -402,19 +401,15 @@ export async function updateAuthorizedAdminContent(
           : input.section === "offerContent"
             ? { offerContent: parsed.data as Prisma.InputJsonValue }
             : { hbcfClaim: parsed.data as Prisma.InputJsonValue };
-  const updated = await prisma.adminOfferContent.updateMany({
-    where: { id, version: input.expectedVersion },
-    data: { ...updateData, version: { increment: 1 } },
+  const version = await updateAdminOfferContentSection({
+    data: updateData,
+    expectedVersion: input.expectedVersion,
   });
-  if (updated.count !== 1)
-    throw new Error(
-      "Admin offer content changed during the update; reload and review again.",
-    );
   return result(
     "confirmation",
     "Offer defaults updated",
     `${input.section} was saved as version ${input.expectedVersion + 1}.`,
-    { section: input.section, version: input.expectedVersion + 1 },
+    { section: input.section, version },
     {
       links: [
         { label: "Open admin offer content", href: "/admin/offer-content" },

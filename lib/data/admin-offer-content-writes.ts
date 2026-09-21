@@ -33,6 +33,8 @@ export {
   coerceOfferScope,
 };
 
+type AdminOfferContentDb = Prisma.TransactionClient | typeof prisma;
+
 /**
  * Read the application-wide singleton AdminOfferContent row, creating it with
  * defaults on first access if none exists. The only place that casts Prisma's
@@ -44,13 +46,15 @@ export {
  * @returns The singleton AdminOfferContent row, with Json fields coerced to
  * their typed shapes.
  */
-export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent> {
-  const row = await prisma.adminOfferContent.findFirst({
+export async function getAdminOfferContentNonCache(
+  db: AdminOfferContentDb = prisma,
+): Promise<AdminOfferContent> {
+  const row = await db.adminOfferContent.findFirst({
     orderBy: { createdAt: "asc" },
   });
 
   if (!row) {
-    const created = await prisma.adminOfferContent.create({
+    const created = await db.adminOfferContent.create({
       data: {
         buildScope: EMPTY_ADMIN_OFFER_CONTENT.buildScope,
         costSchedule:
@@ -95,14 +99,16 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
  * The callers in lib/actions/admin-offer-content.ts still revalidate
  * ADMIN_OFFER_CONTENT_TAG so the cached read picks the new version up.
  */
-export async function resolveSingletonId(): Promise<string> {
-  const existing = await prisma.adminOfferContent.findFirst({
+export async function resolveSingletonId(
+  db: AdminOfferContentDb = prisma,
+): Promise<string> {
+  const existing = await db.adminOfferContent.findFirst({
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });
   if (existing) return existing.id;
 
-  const created = await prisma.adminOfferContent.create({
+  const created = await db.adminOfferContent.create({
     data: {
       buildScope: EMPTY_ADMIN_OFFER_CONTENT.buildScope,
       costSchedule:
@@ -119,60 +125,73 @@ export async function resolveSingletonId(): Promise<string> {
   return created.id;
 }
 
+/**
+ * Persist one section through the same optimistic-version gate used by the
+ * Eve admin operation and the app's Server Actions. This module deliberately
+ * contains no Next.js imports: Eve loads it through Node's ESM loader.
+ *
+ * Omitting expectedVersion preserves the legacy unconditional writers used by
+ * the admin editor. Agent writes always provide it, so a retry or two-tab edit
+ * cannot overwrite a newer contractual default while reporting success.
+ */
+export async function updateAdminOfferContentSection(
+  input: {
+    data: Prisma.AdminOfferContentUpdateManyMutationInput;
+    expectedVersion?: number;
+  },
+  db: AdminOfferContentDb = prisma,
+): Promise<number> {
+  const id = await resolveSingletonId(db);
+  const updated = await db.adminOfferContent.updateMany({
+    where:
+      input.expectedVersion === undefined
+        ? { id }
+        : { id, version: input.expectedVersion },
+    data: {
+      ...input.data,
+      version: { increment: 1 },
+    },
+  });
+  if (updated.count !== 1) {
+    if (input.expectedVersion === undefined)
+      throw new Error("Admin offer content could not be saved.");
+    throw new Error(
+      "Admin offer content changed during the update; reload and review again.",
+    );
+  }
+  return (input.expectedVersion ?? 0) + 1;
+}
+
 export async function updateBuildScope(
   buildScope: BuildScopeLines,
 ): Promise<void> {
-  const id = await resolveSingletonId();
-  await prisma.adminOfferContent.update({
-    where: { id },
-    data: { buildScope, version: { increment: 1 } },
-  });
+  await updateAdminOfferContentSection({ data: { buildScope } });
 }
 
 export async function updateCostSchedule(
   data: CostScheduleData,
 ): Promise<void> {
-  const id = await resolveSingletonId();
-  await prisma.adminOfferContent.update({
-    where: { id },
-    data: {
-      costSchedule: data as unknown as Prisma.InputJsonValue,
-      version: { increment: 1 },
-    },
+  await updateAdminOfferContentSection({
+    data: { costSchedule: data as unknown as Prisma.InputJsonValue },
   });
 }
 
 export async function updateOfferScope(data: OfferScopeData): Promise<void> {
-  const id = await resolveSingletonId();
-  await prisma.adminOfferContent.update({
-    where: { id },
-    data: {
-      offerScope: data as unknown as Prisma.InputJsonValue,
-      version: { increment: 1 },
-    },
+  await updateAdminOfferContentSection({
+    data: { offerScope: data as unknown as Prisma.InputJsonValue },
   });
 }
 
 export async function updateOfferContent(
   data: OfferContentData,
 ): Promise<void> {
-  const id = await resolveSingletonId();
-  await prisma.adminOfferContent.update({
-    where: { id },
-    data: {
-      offerContent: data as unknown as Prisma.InputJsonValue,
-      version: { increment: 1 },
-    },
+  await updateAdminOfferContentSection({
+    data: { offerContent: data as unknown as Prisma.InputJsonValue },
   });
 }
 
 export async function updateHBCFClaim(data: HBCFClaimData): Promise<void> {
-  const id = await resolveSingletonId();
-  await prisma.adminOfferContent.update({
-    where: { id },
-    data: {
-      hbcfClaim: data as unknown as Prisma.InputJsonValue,
-      version: { increment: 1 },
-    },
+  await updateAdminOfferContentSection({
+    data: { hbcfClaim: data as unknown as Prisma.InputJsonValue },
   });
 }

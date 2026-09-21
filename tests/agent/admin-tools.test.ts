@@ -90,6 +90,12 @@ test("admin operations enforce admin authorization and audited writes", async ()
   assert.doesNotMatch(source, /app\/\(mcp\)/);
 });
 
+test("admin content writes use the shared Node-safe data service", async () => {
+  const source = await readFile("agent/lib/admin-operations.ts", "utf8");
+  assert.match(source, /updateAdminOfferContentSection/);
+  assert.doesNotMatch(source, /adminOfferContent\.updateMany/);
+});
+
 test("the agent offer-scope write uses the write schema", async () => {
   const source = await readFile("agent/lib/admin-operations.ts", "utf8");
   const fn = source.slice(
