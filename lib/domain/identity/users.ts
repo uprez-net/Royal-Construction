@@ -1,6 +1,6 @@
 import { Role, type User } from "@prisma/client";
 
-import type { DomainDb } from "../db";
+import type { DomainDb, TransactionalDomainDb } from "../db";
 import {
   type DomainPrincipal,
   type UserPrincipal,
@@ -107,4 +107,128 @@ export async function attributableAuthorId(
   if (principal.kind !== "user") return null;
   const user = await findUserById(principal.userId, db);
   return user?.id ?? null;
+}
+
+/**
+ * Create an application user, and a linked customer record when the role is
+ * CUSTOMER.
+ *
+ * The customer row and the link are two writes that only mean anything
+ * together — a CUSTOMER user with no customerId matches no project — so they
+ * go in one transaction. The original did them as three separate round trips
+ * and would leave a half-created account behind on a failure.
+ */
+export async function createUser(
+  input: {
+    name: string;
+    email: string;
+    clerkId: string;
+    phone: string;
+    role?: Role;
+  },
+  db: TransactionalDomainDb,
+): Promise<{
+  success: true;
+  message: string;
+  userId: string;
+  customerId: string | null;
+  role: Role;
+}> {
+  const role = input.role ?? Role.GUEST;
+
+  return db.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        clerkId: input.clerkId,
+        email: input.email,
+        name: input.name,
+        phone: input.phone,
+        role,
+      },
+    });
+
+    let customerId: string | null = null;
+    if (role === Role.CUSTOMER) {
+      const customer = await tx.customer.create({
+        data: { email: input.email, name: input.name, phone: input.phone },
+      });
+      await tx.user.update({
+        data: { customerId: customer.id },
+        where: { id: user.id },
+      });
+      customerId = customer.id;
+    }
+
+    return {
+      customerId,
+      message: "User created successfully",
+      role: user.role,
+      success: true as const,
+      userId: user.id,
+    };
+  });
+}
+
+/**
+ * Update an application user by Clerk id.
+ *
+ * Undefined fields are dropped rather than written as null — a partial update
+ * from the Clerk webhook carries only what changed.
+ *
+ * No last-admin guard here: this is the sync path, and it applies whatever
+ * Clerk says. A role change made inside the application goes through
+ * ./team.ts#changeTeamMemberRole, which does guard it.
+ */
+export async function updateUserByClerkId(
+  clerkId: string,
+  updates: Partial<{ name: string; email: string; phone: string; role: Role }>,
+  db: TransactionalDomainDb,
+): Promise<{
+  success: true;
+  message: string;
+  userId: string;
+  role: Role;
+  customerId: string | null;
+}> {
+  const data = Object.fromEntries(
+    Object.entries(updates).filter(([, value]) => value !== undefined),
+  );
+
+  return db.$transaction(async (tx) => {
+    const user = await tx.user.update({ data, where: { clerkId } });
+
+    let customerId: string | null = null;
+    if (updates.role === Role.CUSTOMER) {
+      const customer = await tx.customer.create({
+        data: { email: user.email, name: user.name, phone: user.phone },
+      });
+      await tx.user.update({
+        data: { customerId: customer.id },
+        where: { id: user.id },
+      });
+      customerId = customer.id;
+    }
+
+    return {
+      customerId,
+      message: "User updated successfully",
+      role: user.role,
+      success: true as const,
+      userId: user.id,
+    };
+  });
+}
+
+export async function deleteUserByClerkId(
+  clerkId: string,
+  db: DomainDb,
+): Promise<{ success: true; message: string }> {
+  await db.user.delete({ where: { clerkId } });
+  return { message: "User deleted successfully", success: true };
+}
+
+/** Every application user's Clerk id, for a broadcast notification. */
+export async function listAllClerkIds(db: DomainDb): Promise<string[]> {
+  const users = await db.user.findMany({ select: { clerkId: true } });
+  return users.map((user) => user.clerkId);
 }

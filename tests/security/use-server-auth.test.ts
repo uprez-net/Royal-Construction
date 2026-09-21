@@ -80,8 +80,13 @@ const TRADIES =
   "tradie records, some called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIE_SCHEDULES =
   "tradie schedule reads, some returning whole project rows; only server code calls it, so it wants server-only (follow-up)";
-const USERS =
-  "user accounts; proxy.ts imports this module, so server-only needs a build check first (follow-up)";
+// lib/data/user.ts is no longer a "use server" module (issue #301). Every one
+// of its exports used to be a POST endpoint, updateUser included — so
+// `updateUser(clerkId, { role: "ADMIN" })` was reachable by any signed-in
+// caller. Nothing ever called it from a client component, so dropping the
+// directive closed the surface outright. `import "server-only"` is still not
+// there, and that part of the follow-up stands: proxy.ts imports
+// getUserByClerkId and the middleware runtime cannot load it.
 
 const ALLOWLIST: Record<string, string> = {
   "lib/data/admin-offer-content.ts#getAdminOfferContent":
@@ -118,14 +123,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradies.ts#getTradieSchedules": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getTradies": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getTradiesForLookup": TRADIE_SCHEDULES,
-  "lib/data/user.ts#createUser": USERS,
-  "lib/data/user.ts#deleteUser": USERS,
-  "lib/data/user.ts#getAllAdminUsersIds": USERS,
-  "lib/data/user.ts#getAllUserClerkIds": USERS,
-  "lib/data/user.ts#getUserByClerkId": USERS,
-  "lib/data/user.ts#getUserByClerkIdCached": USERS,
-  "lib/data/user.ts#resolveUserIdsToClerkIds": USERS,
-  "lib/data/user.ts#updateUser": USERS,
   "lib/notification/novu.ts#triggerNotification":
     "sends in-app notifications; only server code calls it, so it wants server-only (follow-up)",
   "utils/generate-email-subject.ts#generateEmailSubject":
