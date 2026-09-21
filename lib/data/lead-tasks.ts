@@ -12,6 +12,7 @@ import {
   buildTaskCompletedHistoryEntry,
 } from "@/lib/leads/lead-helpers";
 import { sydneyDateOnly, sydneyWallClockToInstant } from "@/lib/dates/sydney";
+import { CLOSED_LEAD_STAGES, LIVE_LEAD } from "@/lib/leads/followup-due";
 import type { HistoryItem } from "@/lib/leads/types";
 
 /**
@@ -133,23 +134,12 @@ function toRow(t: RawRow): LeadTaskRow {
 }
 
 /**
- * Closed leads get no tasks in any list.
- *
- * Thirteen production leads that are won or lost still carry a stale date from
- * the old columns. Without this they would surface as live work the day the
- * tab starts reading tasks.
+ * Which leads count as live is defined once, in `lib/leads/followup-due.ts`,
+ * and shared with the dashboard. Two copies of the stage list were how the
+ * dashboard and the Follow-ups tab came to answer the same question
+ * differently.
  */
-const CLOSED_STAGES = [
-  "CONVERTED",
-  "WON",
-  "LOST",
-  "CANCELLED",
-  "DISQUALIFIED",
-] as const satisfies readonly LeadStage[];
-
-const LIVE_LEAD = {
-  stage: { notIn: [...CLOSED_STAGES] },
-} satisfies Prisma.LeadWhereInput;
+const CLOSED_STAGES = CLOSED_LEAD_STAGES;
 
 /**
  * A rule the caller can satisfy, not a server fault.
