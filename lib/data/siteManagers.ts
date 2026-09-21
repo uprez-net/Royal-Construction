@@ -1,117 +1,68 @@
-"use server";
+import "server-only";
 
-import { Role, type User } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
-import { Prisma } from "@prisma/client";
+
 import prisma from "@/lib/prisma";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import {
+  findAssignableSiteManager,
+  listSiteManagersForDropdown,
+  type PaginatedLookupResult,
+  type SiteManagerDropdownItem,
+} from "@/lib/domain/identity/site-managers";
+import type { DomainPrincipal } from "@/lib/domain/principal";
 import { CACHE_PROFILES } from "@/types/cache";
 
-export type SiteManagerDropdownItem = Pick<
-  User,
-  "id" | "name" | "email" | "phone" | "createdAt" | "role"
->;
+// The Next adapter over `lib/domain/identity/site-managers.ts`.
+//
+// **This module is no longer `"use server"`.** `getSiteManagerById` was an
+// exported Server Action returning a whole `User` row — email, phone, Clerk id
+// — to any signed-in caller who posted an id at it, including a
+// customer-portal account. The lookup is a domain read now and returns only
+// what a project assignment needs.
 
-export type PaginatedLookupResult<T> = {
-  items: T[];
-  page: number;
-  limit: number;
-  totalCount: number;
-  totalPages: number;
-};
+export type { PaginatedLookupResult, SiteManagerDropdownItem };
 
-const defaultPageSize = 10;
-
-function normalizeQuery(query?: string) {
-  return query?.trim() ?? "";
-}
-
-async function getSiteManagersDropdownPage(
+async function cachedSiteManagersForDropdown(
+  principal: DomainPrincipal,
   page: number,
   limit: number,
-  query?: string,
-): Promise<PaginatedLookupResult<SiteManagerDropdownItem>> {
-  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-  const safeLimit =
-    Number.isFinite(limit) && limit > 0
-      ? Math.min(Math.floor(limit), 50)
-      : defaultPageSize;
-  const search = normalizeQuery(query);
-
-  const where = {
-    role: {
-      not: {
-        in: [Role.GUEST, Role.CUSTOMER],
-      },
-    },
-    ...(search
-      ? {
-          OR: [
-            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-            { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
-            { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          ],
-        }
-      : {}),
-  };
-
-  const [items, totalCount] = await prisma.$transaction([
-    prisma.user.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (safePage - 1) * safeLimit,
-      take: safeLimit,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        createdAt: true,
-        role: true,
-      },
-    }),
-    prisma.user.count({ where }),
-  ]);
-
-  return {
-    items,
-    page: safePage,
-    limit: safeLimit,
-    totalCount,
-    totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
-  };
-}
-
-export async function getCachedSiteManagersForDropdown(
-  page = 1,
-  limit = defaultPageSize,
   query?: string,
 ) {
   "use cache";
 
   cacheTag("site-managers");
-
   cacheLife(CACHE_PROFILES.MEDIUM);
 
-  return getSiteManagersDropdownPage(page, limit, query);
+  return listSiteManagersForDropdown(principal, { limit, page, query }, prisma);
+}
+
+export async function getCachedSiteManagersForDropdown(
+  page = 1,
+  limit = 10,
+  query?: string,
+) {
+  return cachedSiteManagersForDropdown(
+    await currentPrincipal(),
+    page,
+    limit,
+    query,
+  );
 }
 
 export async function getSiteManagersForDropdown(
   page = 1,
-  limit = defaultPageSize,
+  limit = 10,
   query?: string,
 ) {
-  return getSiteManagersDropdownPage(page, limit, query);
+  return listSiteManagersForDropdown(
+    await currentPrincipal(),
+    { limit, page, query },
+    prisma,
+  );
 }
 
+/** The assignable staff member this id names, or null. */
 export async function getSiteManagerById(siteManagerId: string) {
-  return prisma.user.findFirst({
-    where: {
-      id: siteManagerId,
-      role: {
-        not: {
-          in: [Role.GUEST, Role.CUSTOMER],
-        },
-      },
-    },
-  });
+  return findAssignableSiteManager(siteManagerId, prisma);
 }

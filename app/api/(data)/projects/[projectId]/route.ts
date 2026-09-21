@@ -1,24 +1,18 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
-import { getUserByClerkIdCached } from "@/lib/data/user";
+import { currentPrincipal } from "@/lib/data/current-principal";
 import { getCachedProjectById, getProjectById } from "@/lib/data/projects";
 import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
-import {
-  collectProjectDateBlockers,
-  partitionBlockers,
-} from "@/lib/domain/projects/readiness";
-import { normalizeDateString } from "@/utils/date";
+import { isDomainError } from "@/lib/domain/errors";
+import { updateProject } from "@/lib/domain/projects/commands";
+import { ProjectDateBlockerError } from "@/lib/domain/projects/readiness";
 import { CACHE_PROFILES } from "@/types/cache";
-import { Role } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import {
   projectParamSchema,
   parseRouteParamsWithResponse,
   parseBodyWithResponse,
   successResponse,
-  unauthorizedResponse,
-  forbiddenResponse,
   notFoundResponse,
   errorResponse,
 } from "@/utils/validators";
@@ -84,16 +78,6 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return unauthorizedResponse();
-  }
-
-  const user = await getUserByClerkIdCached(userId);
-  if (!user) {
-    return unauthorizedResponse();
-  }
-
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
@@ -104,128 +88,34 @@ export async function PATCH(
   const body = await parseBodyWithResponse(request, updateProjectBodySchema);
   if (!body.success) return body.response;
 
+  const projectId = routeParams.data.projectId;
+
   try {
-    const existingProject = await prisma.project.findUnique({
-      where: { id: routeParams.data.projectId },
-      select: {
-        id: true,
-        customerId: true,
-        siteManagerId: true,
-        status: true,
-        startDate: true,
-        requirements: true,
-        Lead: {
-          select: {
-            assignedId: true,
-          },
-        },
+    // Who may edit, whether the resulting dates are possible, and the write
+    // itself are one domain command now
+    // (`lib/domain/projects/commands.ts#updateProject`). This handler used to
+    // carry its own `canEditProject`, its own merge of the incoming
+    // requirements with the persisted ones, and a blind `project.update` with
+    // no version check at all.
+    await updateProject(
+      await currentPrincipal(),
+      {
+        council: body.data.council,
+        description: body.data.description,
+        estimatedEndDate: body.data.estimatedEndDate,
+        location: body.data.location,
+        name: body.data.name,
+        projectId,
+        requirements: body.data.requirements as
+          | Record<string, unknown>
+          | undefined,
+        startDate: body.data.startDate,
+        totalBudget: body.data.totalBudget,
       },
-    });
+      prisma,
+    );
 
-    if (!existingProject) {
-      return notFoundResponse("Project");
-    }
-
-    const canEditProject =
-      user.role === Role.ADMIN
-      || existingProject.siteManagerId === user.id
-      || existingProject.Lead.assignedId === user.id
-      || (user.role === Role.CUSTOMER
-        && user.customerId === existingProject.customerId);
-
-    if (!canEditProject) {
-      return forbiddenResponse(
-        "You do not have access to update this project.",
-      );
-    }
-
-    // ── Phase 2: date reconciliation on PATCH ──
-    // A partial PATCH may send only `requirements` (the Overview tab does
-    // this) or only `startDate`. Merge with the persisted values so the
-    // blocker check compares the effective post-update state, not just the
-    // patch fragment.
-    const persistedRequirements = (existingProject.requirements ?? {}) as {
-      legalAdministration?: {
-        signedDate?: string | null;
-        pcaInspector?: string | null;
-        hbcfInsuranceNumber?: string | null;
-      };
-    };
-    const incomingRequirements = body.data.requirements as
-      | z.infer<typeof projectRequirementsPayloadSchema>
-      | undefined;
-    const mergedRequirements = incomingRequirements
-      ? { ...persistedRequirements, ...incomingRequirements }
-      : persistedRequirements;
-
-    // Normalize the signed date from the merged requirements so the
-    // comparison uses the canonical value.
-    const mergedSignedDate =
-      mergedRequirements.legalAdministration?.signedDate ?? null;
-    const normalizedSignedDate = mergedSignedDate
-      ? normalizeDateString(mergedSignedDate)
-      : null;
-    const effectiveSignedDate = normalizedSignedDate ?? mergedSignedDate;
-
-    const effectiveStartDate = body.data.startDate
-      ? body.data.startDate
-      : existingProject.startDate instanceof Date
-        ? existingProject.startDate.toISOString()
-        : String(existingProject.startDate);
-
-    const dateBlockers = collectProjectDateBlockers({
-      signedDate: effectiveSignedDate,
-      startDate: effectiveStartDate,
-      hbcfInsuranceNumber:
-        mergedRequirements.legalAdministration?.hbcfInsuranceNumber ?? null,
-      pcaInspector:
-        mergedRequirements.legalAdministration?.pcaInspector ?? null,
-      status: existingProject.status,
-    });
-    const { blocks } = partitionBlockers(dateBlockers);
-
-    if (blocks.length > 0) {
-      return errorResponse("Project date validation failed", {
-        status: 422,
-        code: "DATE_BLOCKER",
-        issues: {
-          blockers: blocks.map((b) => ({
-            id: b.id,
-            label: b.label,
-            fieldPath: b.fieldPath,
-            severity: b.severity,
-          })),
-        },
-      });
-    }
-
-    const project = await prisma.project.update({
-      where: { id: routeParams.data.projectId },
-      data: {
-        ...(body.data.name ? { name: body.data.name } : {}),
-        ...(body.data.location ? { location: body.data.location } : {}),
-        ...(body.data.council !== undefined
-          ? { council: body.data.council }
-          : {}),
-        ...(body.data.description !== undefined
-          ? { description: body.data.description }
-          : {}),
-        ...(body.data.startDate
-          ? { startDate: new Date(body.data.startDate) }
-          : {}),
-        ...(body.data.estimatedEndDate
-          ? { estimatedEndDate: new Date(body.data.estimatedEndDate) }
-          : {}),
-        ...(body.data.totalBudget !== undefined
-          ? { totalBudget: String(body.data.totalBudget) }
-          : {}),
-        ...(body.data.requirements !== undefined
-          ? { requirements: body.data.requirements as never }
-          : {}),
-      },
-    });
-
-    const updatedProject = await getProjectById(project.id);
+    const updatedProject = await getProjectById(projectId);
     if (!updatedProject) {
       return notFoundResponse("Project");
     }
@@ -235,10 +125,36 @@ export async function PATCH(
 
     return successResponse(updatedProject);
   } catch (error) {
-    console.error(
-      `PATCH /api/projects/${routeParams.data.projectId} error`,
-      error,
-    );
+    // The blocker list is worth more to the operator than the status code:
+    // the Overview tab binds each entry to the field that caused it. Kept at
+    // 422 with the same `DATE_BLOCKER` code the client already handles,
+    // rather than the 400 the error's own `status` would give.
+    if (error instanceof ProjectDateBlockerError) {
+      return errorResponse("Project date validation failed", {
+        status: 422,
+        code: "DATE_BLOCKER",
+        issues: {
+          blockers: error.blockers.map((blocker) => ({
+            id: blocker.id,
+            label: blocker.label,
+            fieldPath: blocker.fieldPath,
+            severity: blocker.severity,
+          })),
+        },
+      });
+    }
+
+    // Every other domain refusal answers with its own status and its own
+    // message. "You do not have access to update this project." is useless to
+    // the one person who can act on it as an opaque INTERNAL_ERROR.
+    if (isDomainError(error)) {
+      return errorResponse(error.message, {
+        status: error.status,
+        code: error.code.toUpperCase(),
+      });
+    }
+
+    console.error(`PATCH /api/projects/${projectId} error`, error);
     return errorResponse("Failed to update project", {
       status: 500,
       code: "INTERNAL_ERROR",

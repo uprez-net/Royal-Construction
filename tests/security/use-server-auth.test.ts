@@ -83,10 +83,6 @@ const SIGNED_IN_ONLY: Record<string, string> = {};
 // writes offers, leads, files or envelopes, but some return project data: the
 // tradie schedule reads include each schedule's whole project row. Every entry
 // is a follow-up, and the last test fails once one is fixed or removed.
-const CUSTOMERS =
-  "customer records; only server code calls it, so it wants server-only (follow-up)";
-const SITE_MANAGERS =
-  "site manager lookups; only server code calls it, so it wants server-only (follow-up)";
 const TRADIE_APPROVALS =
   "tradie approvals, called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIES =
@@ -104,14 +100,12 @@ const TRADIE_SCHEDULES =
 const ALLOWLIST: Record<string, string> = {
   "lib/data/admin-offer-content.ts#getAdminOfferContent":
     "the cached admin boilerplate every offer workspace pre-fills; no customer data, and 'use cache' cannot call auth()",
-  "lib/data/customers.ts#createCustomerForProject": CUSTOMERS,
-  "lib/data/customers.ts#findCustomerByContact": CUSTOMERS,
-  "lib/data/customers.ts#findCustomerById": CUSTOMERS,
-  "lib/data/customers.ts#getCachedCustomersForDropdown": CUSTOMERS,
-  "lib/data/customers.ts#getCustomersForDropdown": CUSTOMERS,
-  "lib/data/siteManagers.ts#getCachedSiteManagersForDropdown": SITE_MANAGERS,
-  "lib/data/siteManagers.ts#getSiteManagerById": SITE_MANAGERS,
-  "lib/data/siteManagers.ts#getSiteManagersForDropdown": SITE_MANAGERS,
+  // lib/data/customers.ts and lib/data/siteManagers.ts were listed here as
+  // known follow-ups: every export was a POST endpoint, and both
+  // `findCustomerById` and `getSiteManagerById` answered a whole record to any
+  // signed-in caller who posted an id at them. Phase 4 of issue #301 dropped
+  // the `"use server"` directive from both, so the surface is gone rather than
+  // guarded — the same fix phase 7 applied to lib/data/user.ts.
   "lib/data/tradie-approvals.ts#fetchApprovalKPI": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchApprovalKPICached": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchTradieApprovalById": TRADIE_APPROVALS,
@@ -171,8 +165,8 @@ function parse(fileName: string, text: string): ts.SourceFile {
 function isUseServerModule(file: ts.SourceFile): boolean {
   for (const statement of file.statements) {
     if (
-      !ts.isExpressionStatement(statement) ||
-      !ts.isStringLiteral(statement.expression)
+      !ts.isExpressionStatement(statement)
+      || !ts.isStringLiteral(statement.expression)
     ) {
       return false;
     }
@@ -183,8 +177,8 @@ function isUseServerModule(file: ts.SourceFile): boolean {
 
 function isExported(node: ts.Node): boolean {
   return (
-    ts.canHaveModifiers(node) &&
-    (ts.getModifiers(node) ?? []).some(
+    ts.canHaveModifiers(node)
+    && (ts.getModifiers(node) ?? []).some(
       (m) => m.kind === ts.SyntaxKind.ExportKeyword,
     )
   );
@@ -195,10 +189,10 @@ function unwrap(
 ): ts.Expression | undefined {
   let current = expression;
   while (
-    current &&
-    (ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current))
+    current
+    && (ts.isParenthesizedExpression(current)
+      || ts.isAsExpression(current)
+      || ts.isSatisfiesExpression(current))
   ) {
     current = current.expression;
   }
@@ -224,17 +218,17 @@ function readModule(file: ts.SourceFile) {
         const name = declaration.name.text;
         const value = unwrap(declaration.initializer);
         const isFunction =
-          value !== undefined &&
-          (ts.isArrowFunction(value) || ts.isFunctionExpression(value));
+          value !== undefined
+          && (ts.isArrowFunction(value) || ts.isFunctionExpression(value));
         if (isFunction) functions.set(name, value);
         if (isExported(statement))
           exports.push([name, isFunction ? name : null]);
       }
     } else if (
-      ts.isExportDeclaration(statement) &&
-      !statement.isTypeOnly &&
-      statement.exportClause &&
-      ts.isNamedExports(statement.exportClause)
+      ts.isExportDeclaration(statement)
+      && !statement.isTypeOnly
+      && statement.exportClause
+      && ts.isNamedExports(statement.exportClause)
     ) {
       for (const element of statement.exportClause.elements) {
         if (element.isTypeOnly) continue;
@@ -269,9 +263,9 @@ function checkReached(
       const callee = current.expression.text;
       const helper = functions.get(callee);
       if (
-        CALLER_CHECKS.has(callee) ||
-        (helper !== undefined &&
-          Object.hasOwn(LOCAL_CHECKS, `${fileName}#${callee}`))
+        CALLER_CHECKS.has(callee)
+        || (helper !== undefined
+          && Object.hasOwn(LOCAL_CHECKS, `${fileName}#${callee}`))
       ) {
         reached = "caller";
         return;
@@ -396,9 +390,9 @@ test("every Server Action checks its caller or is allowlisted with a reason", ()
   assert.deepEqual(
     unexplained,
     [],
-    `These "use server" exports check nobody. Authorize the caller, move the ` +
-      `function to a server-only module, or allowlist it with a reason:\n` +
-      unexplained.join("\n"),
+    `These "use server" exports check nobody. Authorize the caller, move the `
+      + `function to a server-only module, or allowlist it with a reason:\n`
+      + unexplained.join("\n"),
   );
 });
 
@@ -409,10 +403,10 @@ test("a Server Action that only proves sign-in is listed with what else limits i
   assert.deepEqual(
     unexplained,
     [],
-    `These "use server" exports only call auth(), which every signed-in user ` +
-      `passes, customers included. Check the role or the record, or list the ` +
-      `export in SIGNED_IN_ONLY with why sign-in is enough:\n` +
-      unexplained.join("\n"),
+    `These "use server" exports only call auth(), which every signed-in user `
+      + `passes, customers included. Check the role or the record, or list the `
+      + `export in SIGNED_IN_ONLY with why sign-in is enough:\n`
+      + unexplained.join("\n"),
   );
 });
 

@@ -1,18 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import {
-  getCachedProjectById,
   getCachedProjects,
   getCachedProjectsForLookup,
 } from "@/lib/data/projects";
-import { createProject } from "@/lib/data/projectsWrite";
 import {
-  createProjectSchema,
   projectListQuerySchema,
   projectLookupQuerySchema,
   parseSearchParamsWithResponse,
   successResponse,
-  unauthorizedResponse,
-  parseBodyWithResponse,
   errorResponse,
 } from "@/utils/validators";
 import { NextRequest } from "next/server";
@@ -51,33 +45,24 @@ export async function GET(request: NextRequest) {
   return successResponse(projects);
 }
 
-export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
-    return unauthorizedResponse();
-  }
-
-  try {
-    const body = await parseBodyWithResponse(request, createProjectSchema);
-    if (!body.success) return body.response;
-
-    const projectData = body.data;
-    const projectId = await createProject(projectData);
-    const createdProject = await getCachedProjectById(projectId);
-
-    if (!createdProject) {
-      return errorResponse("Project was created but could not be loaded", {
-        status: 500,
-        code: "POST_LOAD_FAILED",
-      });
-    }
-
-    return successResponse(createdProject, { status: 201 });
-  } catch (error) {
-    console.error("/api/projects POST error", error);
-    return errorResponse("Failed to create project", {
-      status: 500,
-      code: "INTERNAL_ERROR",
-    });
-  }
+/**
+ * Creating a project from scratch is not a thing this system does.
+ *
+ * `Project.leadId` is a required unique foreign key: a project exists only as
+ * a converted lead. The handler that used to sit here called
+ * `lib/data/projectsWrite.ts#createProject`, which wrote `leadId: 0` with the
+ * comment "To make this function fail" — so every POST died on a constraint
+ * violation and came back as an opaque 500 "Failed to create project". That
+ * is the silent-failure shape AGENTS.md calls out: the endpoint looked
+ * supported and never was.
+ *
+ * It answers honestly now, and names the path that works. The create-project
+ * wizard posts to `createProjectWithLeadAction`, which runs
+ * `lib/domain/projects/creation.ts#createProjectFromLead`.
+ */
+export async function POST() {
+  return errorResponse(
+    "A project is created by converting a lead. Use the create-project wizard, which starts from the lead the job came from.",
+    { status: 400, code: "PROJECT_REQUIRES_LEAD" },
+  );
 }

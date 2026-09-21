@@ -15,6 +15,12 @@ import {
   type ProjectExtractionData,
 } from "@/types/project-extraction";
 import {
+  DomainNotFoundError,
+  DomainTransitionError,
+  DomainValidationError,
+  isDomainError,
+} from "@/lib/domain/errors";
+import {
   ProjectDateBlockerError,
   type ProjectDateBlocker,
 } from "@/lib/domain/projects/readiness";
@@ -360,6 +366,60 @@ export function createProjectFailure(
   };
 }
 
+/**
+ * A typed domain refusal, bound to the wizard field it is about.
+ *
+ * `DomainValidationError` carries the `field` the rule named, which is either
+ * already a form key (`leadId`, `startDate`) or a dotted requirements path
+ * that `fieldPathToFormField` flattens — the same mapping a date blocker uses.
+ */
+function domainFailure(error: unknown): CreateProjectFailure | null {
+  if (!isDomainError(error)) return null;
+
+  const named =
+    error instanceof DomainValidationError && error.field
+      ? fieldPathToFormField(error.field)
+      : null;
+  const fieldErrors = named ? [{ field: named, message: error.message }] : [];
+
+  if (error instanceof DomainTransitionError) {
+    // The only transition this command has: the lead already has a project.
+    return createProjectFailure(
+      "PROJECT_ALREADY_EXISTS_FOR_LEAD",
+      "This lead already has a project",
+      "Someone converted this lead while you were reviewing. Open the existing project instead of creating a second one.",
+      {
+        fieldErrors: [
+          { field: "lead", message: "A project already exists for this lead." },
+        ],
+        retryable: false,
+      },
+    );
+  }
+
+  if (error instanceof DomainNotFoundError) {
+    // The command's one not-found is the site manager; anything else that
+    // reaches here is still a thing the operator has to pick again.
+    return createProjectFailure(
+      "SITE_MANAGER_NOT_FOUND",
+      "That site manager is no longer available",
+      error.message,
+      {
+        fieldErrors: [{ field: "siteManager", message: error.message }],
+      },
+    );
+  }
+
+  return createProjectFailure(
+    error.status === 403 ? "FORBIDDEN" : "VALIDATION",
+    error.status === 403
+      ? "You cannot create a project from this lead"
+      : "Some fields did not pass validation",
+    error.message,
+    { fieldErrors, retryable: error.status !== 403 },
+  );
+}
+
 export function isCreateProjectFailure(
   value: unknown,
 ): value is CreateProjectFailure {
@@ -453,6 +513,15 @@ export function failureFromThrownError(error: unknown): CreateProjectFailure {
   if (error instanceof ProjectDateBlockerError) {
     return blockersToFailure(error.blockers);
   }
+
+  // Phase 4 moved the conversion into `lib/domain/projects/creation.ts`, which
+  // throws typed refusals instead of `Error`s carrying a sentinel string. They
+  // are matched first, by class, so the wizard binds each one to the field
+  // that caused it rather than falling through to the substring rules below —
+  // those stay for the adapter's own remaining throws and for anything Prisma
+  // surfaces.
+  const domain = domainFailure(error);
+  if (domain) return domain;
 
   if (error instanceof ZodError) {
     const fieldErrors = error.issues.flatMap<CreateProjectFieldError>(

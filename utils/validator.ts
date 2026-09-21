@@ -7,8 +7,6 @@
 // Re-export from new modular validators for backward compatibility
 export {
   // Projects
-  createProjectSchema,
-  type CreateProjectInput,
   projectListQuerySchema,
   type ProjectListQuery,
   projectLookupQuerySchema,
