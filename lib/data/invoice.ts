@@ -30,51 +30,17 @@ import {
 } from "@/lib/domain/invoices/sync";
 import { createStageInvoice as createStageInvoiceDomain } from "@/lib/domain/invoices/stage-creation";
 import { CACHE_PROFILES } from "@/types/cache";
-import {
-  PROJECT_STAGE_LABELS,
-  type ProjectListInvoice,
-  type SafeInvoice,
-} from "@/types/project";
+import { PROJECT_STAGE_LABELS } from "@/types/project";
 
 /** Days the owner has to pay a progress claim. */
-/**
- * Strip Prisma `Decimal`s off an invoice for the RSC boundary.
- *
- * Decimals are class instances and are not serializable, so every money field
- * crosses as a string and the client does its own `Number(...)` — the same
- * contract `getProjectById` already applies to budgets and milestone spend.
- */
-export function serializeInvoice(invoice: InvoiceRow): SafeInvoice {
-  return {
-    ...invoice,
-    subTotal: invoice.subTotal.toString(),
-    totalTax: invoice.totalTax.toString(),
-    total: invoice.total.toString(),
-    amountDue: invoice.amountDue.toString(),
-    amountPaid: invoice.amountPaid.toString(),
-    amountCredited: invoice.amountCredited.toString(),
-  };
-}
-
-/** The narrower claim row the project LIST payload carries. */
-export function serializeListInvoice(invoice: {
-  id: string;
-  invoiceNumber: string | null;
-  projectStage: ProjectStage;
-  status: ProjectListInvoice["status"];
-  total: Prisma.Decimal;
-  amountPaid: Prisma.Decimal;
-  amountDue: Prisma.Decimal;
-  issuedDate: Date;
-  dueDate: Date;
-}): ProjectListInvoice {
-  return {
-    ...invoice,
-    total: invoice.total.toString(),
-    amountPaid: invoice.amountPaid.toString(),
-    amountDue: invoice.amountDue.toString(),
-  };
-}
+// The two pure serializers moved to `lib/domain/invoices/serialize.ts` in
+// phase 4 so the project queries could reach them without pulling `xero-node`
+// and `@vercel/blob` into the domain layer. Re-exported here because every
+// existing caller imports them from this module.
+export {
+  serializeInvoice,
+  serializeListInvoice,
+} from "@/lib/domain/invoices/serialize";
 
 /**
  * Raise the progress claim for the stage a milestone belongs to, if that stage
@@ -253,8 +219,8 @@ export async function createStageInvoice(
       );
       const created = response.body.invoices?.[0];
       if (
-        !created?.invoiceID ||
-        created.invoiceID === "00000000-0000-0000-0000-000000000000"
+        !created?.invoiceID
+        || created.invoiceID === "00000000-0000-0000-0000-000000000000"
       ) {
         const reason = created?.validationErrors
           ?.map((error) => error.message)
