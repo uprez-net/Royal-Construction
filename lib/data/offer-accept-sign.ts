@@ -33,11 +33,13 @@ import { randomUUID } from "node:crypto";
 import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 import {
+  beginEnvelopeSendAttempt,
   claimEnvelopeSend,
   persistSentEnvelope,
   readOfferForSend,
   recordEnvelopeSendEvent,
   releaseEnvelopeSendClaim,
+  resolveEnvelopeSendAttempt,
 } from "@/lib/domain/offers/envelope-send";
 import { userPrincipal } from "@/lib/domain/principal";
 import type { EnvelopeSendPort } from "@/lib/domain/ports/envelope-send";
@@ -238,6 +240,32 @@ export async function sendOfferForSignature(input: {
 
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
+  // Before the send, not after it goes wrong (issue #321). Written in the
+  // catch instead, a failed write left nothing blocking a recall, so a resend
+  // could put a second live document in front of the customer — the exact
+  // thing this record exists to prevent. Writing it first also covers the case
+  // no catch can reach: the process dying mid-send.
+  const sendAttemptRecordId = await beginEnvelopeSendAttempt(prisma, {
+    attemptStarted,
+    docType: EnvelopeDocType.OFFER,
+    offerId: offer.id,
+    sendAttemptId,
+  });
+  if (sendAttemptRecordId === null) {
+    // Give the claim back, exactly as the rejection path does — nothing was
+    // sent, so the offer must not sit at *_SENT. Refusing a send is
+    // recoverable; sending with nothing to block a later recall is not.
+    await releaseEnvelopeSendClaim(prisma, {
+      claimedStatus: OfferStatus.OFFER_SENT,
+      offerId: offer.id,
+      previousStatus: offer.offerStatus,
+    });
+    return {
+      ok: false,
+      error:
+        "Could not record the send attempt, so the Offer was not sent. Try again.",
+    };
+  }
   let envelope;
   let docusignContext: Awaited<
     ReturnType<typeof createDocusignContext>
@@ -261,13 +289,23 @@ export async function sendOfferForSignature(input: {
       attemptStarted,
     });
     if (recovery.kind === "reconciled") {
+      // Deliberately NOT settled here. The envelope exists, but nothing yet
+      // records it — the success transaction below writes the Envelope row
+      // AND settles this attempt together. Settling now would leave a real,
+      // live envelope with nothing blocking a recall if that transaction then
+      // failed, which is the same fail-open this record exists to close.
       envelope = {
         envelopeId: recovery.envelopeId,
         recipients: buildOfferAcceptanceRecipientRecords(owners),
       };
     } else if (recovery.kind === "outcome-unknown") {
       await recordEnvelopeSendEvent(userPrincipal(access.user), prisma, {
-        fromStatus: OfferStatus.SENT,
+        // offer.offerStatus, not a literal. It happens to be SENT today
+        // because that is the only status the claim above accepts — but the
+        // tender path proves what a literal costs when that list widens: it
+        // accepts TENDER_DRAFT *or* AGREED, and recorded a transition that
+        // never happened for every direct send from AGREED.
+        fromStatus: offer.offerStatus,
         note: `DocuSign did not respond in time — checking whether the acceptance envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
         offerId: offer.id,
         toStatus: OfferStatus.OFFER_SENT,
@@ -290,6 +328,9 @@ export async function sendOfferForSignature(input: {
         offerId: offer.id,
         toStatus: offer.offerStatus,
       });
+      // Definitively refused, so nothing is out for signature and the attempt
+      // must stop blocking a recall.
+      await resolveEnvelopeSendAttempt(prisma, sendAttemptRecordId);
       await releaseEnvelopeSendClaim(prisma, {
         claimedStatus: OfferStatus.OFFER_SENT,
         offerId: offer.id,
@@ -307,6 +348,7 @@ export async function sendOfferForSignature(input: {
     prisma,
     {
       claimedStatus: OfferStatus.OFFER_SENT,
+      sendAttemptRecordId,
       // A new envelope replaces the acceptance, so the last envelope's executed
       // PDF no longer describes it. The webhook files this one's.
       clearOfferExecutedPdf: true,

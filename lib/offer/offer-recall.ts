@@ -1,4 +1,4 @@
-import type { OfferStatus, Prisma } from "@prisma/client";
+import { EnvelopeDocType, type OfferStatus, type Prisma } from "@prisma/client";
 import { RECALL_EDGES, type RecallScope } from "./offer-workflow-transitions";
 
 // Recall decisions, kept out of the "use server" module so they can be tested.
@@ -27,6 +27,34 @@ export function envelopeScopeFilter(
       // Without this, an unknown scope fell out of the switch as undefined.
       // Prisma drops `OR: undefined`, so the void query matched every live
       // envelope in the database, for every customer.
+      const unknownScope: never = scope;
+      throw new Error(`Unknown envelope scope: ${String(unknownScope)}`);
+    }
+  }
+}
+
+// UnconfirmedEnvelopeSend.docType, for the same scope. Kept as its own
+// function rather than folded into envelopeScopeFilter: that one returns a
+// Prisma where-clause shape specific to Envelope's relations (tender/contract
+// nested filters), which UnconfirmedEnvelopeSend does not have — it hangs off
+// Offer directly and only needs the doc type.
+export function unconfirmedSendDocTypesForScope(
+  scope: OfferEnvelopeScope,
+): EnvelopeDocType[] {
+  switch (scope) {
+    case "offer":
+      return [EnvelopeDocType.OFFER];
+    case "tender":
+      return [EnvelopeDocType.TENDER];
+    case "contract":
+      return [EnvelopeDocType.CONTRACT];
+    case "all":
+      return [
+        EnvelopeDocType.TENDER,
+        EnvelopeDocType.CONTRACT,
+        EnvelopeDocType.OFFER,
+      ];
+    default: {
       const unknownScope: never = scope;
       throw new Error(`Unknown envelope scope: ${String(unknownScope)}`);
     }

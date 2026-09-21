@@ -8,6 +8,7 @@ import {
 } from "@/lib/docusign/envelope-status";
 import {
   envelopeScopeFilter,
+  unconfirmedSendDocTypesForScope,
   type EnvelopeVoidOutcome,
   type OfferEnvelopeScope,
   type UnsettledEnvelope,
@@ -97,27 +98,45 @@ export async function voidLiveOfferEnvelopes(
     readonly scope: OfferEnvelopeScope;
   },
 ): Promise<EnvelopeVoidOutcome> {
-  const liveEnvelopes = await db.envelope.findMany({
-    select: { docusignId: true, id: true, sentAt: true },
-    where: {
-      OR: envelopeScopeFilter(input.offerId, input.scope),
-      status: { in: LIVE_ENVELOPE_STATUSES },
-    },
-  });
+  const [liveEnvelopes, unresolvedSends] = await Promise.all([
+    db.envelope.findMany({
+      select: { docusignId: true, id: true },
+      where: {
+        OR: envelopeScopeFilter(input.offerId, input.scope),
+        status: { in: LIVE_ENVELOPE_STATUSES },
+      },
+    }),
+    // The other half of an ambiguous send. `Envelope` cannot record it on the
+    // Tender and Contract paths — no Tender/Contract row exists yet to hang it
+    // off at the moment the outcome goes unknown — so it lives on
+    // `UnconfirmedEnvelopeSend`, keyed by offer and docType the same way
+    // `envelopeScopeFilter` reads Envelope. Issue #321.
+    db.unconfirmedEnvelopeSend.findMany({
+      select: { id: true },
+      where: {
+        docType: { in: unconfirmedSendDocTypesForScope(input.scope) },
+        offerId: input.offerId,
+        resolvedAt: null,
+      },
+    }),
+  ]);
   const liveIds = liveEnvelopes.map((envelope) => envelope.id);
   const voidedIds: string[] = [];
   const endedIds: string[] = [];
-  const unsettled: UnsettledEnvelope[] = [];
+  // Seeded, not appended later: every return path below shares this array, and
+  // an unresolved send has to block a pull-back exactly like a live envelope
+  // does, however that path returns. DocuSign may have issued and emailed a
+  // real envelope for it that nothing else records, so there is nothing to
+  // void and no honest answer but to refuse and send a human to reconcile.
+  const unsettled: UnsettledEnvelope[] = unresolvedSends.map((send) => ({
+    docusignId: null,
+    id: send.id,
+    reason: "unconfirmed-send",
+  }));
 
   const providerEnvelopes: { id: string; docusignId: string }[] = [];
   for (const envelope of liveEnvelopes) {
-    if (envelope.docusignId === null && envelope.sentAt !== null) {
-      unsettled.push({
-        docusignId: null,
-        id: envelope.id,
-        reason: "unconfirmed-send",
-      });
-    } else if (envelope.docusignId === null) {
+    if (envelope.docusignId === null) {
       try {
         await writeEnvelopeEnded(db, envelope.id, EnvelopeStatus.VOIDED);
         voidedIds.push(envelope.id);

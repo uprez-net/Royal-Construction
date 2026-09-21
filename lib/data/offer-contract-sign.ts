@@ -43,12 +43,14 @@ import {
 } from "@/lib/offer/contract-terms";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 import {
+  beginEnvelopeSendAttempt,
   claimEnvelopeSend,
   persistSentEnvelope,
   readContractOfferForSend,
   readContractParticularsForSend,
   recordEnvelopeSendEvent,
   releaseEnvelopeSendClaim,
+  resolveEnvelopeSendAttempt,
   writeContractEnvelopeDocument,
 } from "@/lib/domain/offers/envelope-send";
 import type { EnvelopeSendPort } from "@/lib/domain/ports/envelope-send";
@@ -419,6 +421,32 @@ export async function sendContractForSignature(input: {
 
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
+  // Before the send, not after it goes wrong (issue #321). Written in the
+  // catch instead, a failed write left nothing blocking a recall, so a resend
+  // could put a second live document in front of the customer — the exact
+  // thing this record exists to prevent. Writing it first also covers the case
+  // no catch can reach: the process dying mid-send.
+  const sendAttemptRecordId = await beginEnvelopeSendAttempt(prisma, {
+    attemptStarted,
+    docType: EnvelopeDocType.CONTRACT,
+    offerId: offer.id,
+    sendAttemptId,
+  });
+  if (sendAttemptRecordId === null) {
+    // Give the claim back, exactly as the rejection path does — nothing was
+    // sent, so the offer must not sit at *_SENT. Refusing a send is
+    // recoverable; sending with nothing to block a later recall is not.
+    await releaseEnvelopeSendClaim(prisma, {
+      claimedStatus: OfferStatus.CONTRACT_SENT,
+      offerId: offer.id,
+      previousStatus: offer.offerStatus,
+    });
+    return {
+      ok: false,
+      error:
+        "Could not record the send attempt, so the Contract was not sent. Try again.",
+    };
+  }
   let envelope;
   let docusignContext: Awaited<
     ReturnType<typeof createDocusignContext>
@@ -457,6 +485,11 @@ export async function sendContractForSignature(input: {
       attemptStarted,
     });
     if (recovery.kind === "reconciled") {
+      // Deliberately NOT settled here. The envelope exists, but nothing yet
+      // records it — the success transaction below writes the Envelope row
+      // AND settles this attempt together. Settling now would leave a real,
+      // live envelope with nothing blocking a recall if that transaction then
+      // failed, which is the same fail-open this record exists to close.
       envelope = {
         envelopeId: recovery.envelopeId,
         recipients: [
@@ -507,6 +540,9 @@ export async function sendContractForSignature(input: {
         offerId: offer.id,
         toStatus: offer.offerStatus,
       });
+      // Definitively refused, so nothing is out for signature and the attempt
+      // must stop blocking a recall.
+      await resolveEnvelopeSendAttempt(prisma, sendAttemptRecordId);
       await releaseEnvelopeSendClaim(prisma, {
         claimedStatus: OfferStatus.CONTRACT_SENT,
         offerId: offer.id,
@@ -531,6 +567,7 @@ export async function sendContractForSignature(input: {
     prisma,
     {
       claimedStatus: OfferStatus.CONTRACT_SENT,
+      sendAttemptRecordId,
       docType: EnvelopeDocType.CONTRACT,
       documentVersion: offer.revisionNumber,
       envelopeId: envelope.envelopeId,

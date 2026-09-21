@@ -1,7 +1,21 @@
 import docusign from "docusign-esign";
 import type { DocusignContext } from "./client";
+import type { EnvelopeSearchResult } from "@/lib/domain/ports/envelope-search";
 
 export const DOCUSIGN_SEND_ATTEMPT_FIELD = "rcSendAttempt";
+
+// `beginEnvelopeSendAttempt` and `resolveEnvelopeSendAttempt` live in
+// `lib/domain/offers/envelope-send.ts`. They arrived here in PR #325 reaching
+// for the ambient Prisma client, but the unconfirmed-send record is a
+// durable-intent rule, not a DocuSign concern: it decides whether a recall may
+// proceed. In the domain it takes its database explicitly, which is what lets
+// the success path settle the attempt inside the same transaction that writes
+// the Envelope row, and what makes it reachable from the reconcile cron and
+// from a test.
+//
+// What stays here is genuinely about the provider: the custom field the send
+// stamps, classifying a create failure, and the paginated search that looks an
+// orphan up afterwards.
 
 export function attachSendAttemptCustomField(
   envelopeDefinition: docusign.EnvelopeDefinition,
@@ -69,37 +83,91 @@ export function isDocusignTransportFailure(error: unknown): boolean {
   );
 }
 
-export async function findEnvelopeIdBySendAttempt(
+// The three-shaped answer lives with the port the domain is handed
+// (`lib/domain/ports/envelope-search.ts`), because the reason it has three
+// shapes is a domain rule: only a search that reached a proven end of the
+// result set may say "not-found", since the reconcile job acts on that without
+// a human. This module is the DocuSign implementation of it.
+
+// DocuSign caps a page well below this; the cap is here so a very wide window
+// cannot spin forever, and hitting it reports "incomplete" rather than lying.
+const MAX_SEARCH_PAGES = 20;
+const SEARCH_PAGE_SIZE = 100;
+
+export async function findEnvelopeBySendAttempt(
   context: DocusignContext,
   sendAttemptId: string,
   since: Date,
-): Promise<string | null> {
+): Promise<EnvelopeSearchResult> {
   const envelopesApi = new docusign.EnvelopesApi(context.apiClient);
   const fromDate = since.toISOString();
   const toDate = new Date().toISOString();
 
-  const listed = await envelopesApi.listStatusChanges(context.accountId, {
-    fromDate,
-    toDate,
-  });
+  let startPosition = 0;
+  for (let page = 0; page < MAX_SEARCH_PAGES; page += 1) {
+    const listed = await envelopesApi.listStatusChanges(context.accountId, {
+      fromDate,
+      toDate,
+      startPosition: String(startPosition),
+      count: String(SEARCH_PAGE_SIZE),
+    });
 
-  for (const summary of listed.envelopes ?? []) {
-    const envelopeId = summary.envelopeId;
-    if (!envelopeId) continue;
-    const fields = await envelopesApi.listCustomFields(
-      context.accountId,
-      envelopeId,
-    );
-    const match = fields.textCustomFields?.find(
-      (field) =>
-        field.name === DOCUSIGN_SEND_ATTEMPT_FIELD &&
-        field.value === sendAttemptId,
-    );
-    if (match) {
-      return envelopeId;
+    const envelopes = listed.envelopes ?? [];
+    for (const summary of envelopes) {
+      const envelopeId = summary.envelopeId;
+      if (!envelopeId) continue;
+      const fields = await envelopesApi.listCustomFields(
+        context.accountId,
+        envelopeId,
+      );
+      const match = fields.textCustomFields?.find(
+        (field) =>
+          field.name === DOCUSIGN_SEND_ATTEMPT_FIELD &&
+          field.value === sendAttemptId,
+      );
+      if (match) {
+        return { kind: "found", envelopeId };
+      }
+    }
+
+    // Walk on only while there is demonstrably more to read. Every branch that
+    // stops has to be sure it stopped at the END of the result set — stopping
+    // early and reporting "not-found" is the false negative this type exists
+    // to prevent.
+    const returned = envelopes.length;
+    const total = Number(listed.totalSetSize);
+    const endPosition = Number(listed.endPosition);
+    startPosition = Number.isFinite(endPosition)
+      ? endPosition + 1
+      : startPosition + returned;
+
+    if (returned === 0) {
+      // An empty page is not proof of the end. DocuSign can return one while
+      // the total still says there is more to come, and calling that
+      // "not-found" lets the cron resolve the attempt and unblock a recall
+      // with a matching envelope still further down the result set.
+      if (Number.isFinite(total) && startPosition < total) {
+        return {
+          kind: "incomplete",
+          reason: `DocuSign returned an empty page at ${startPosition} of ${total}`,
+        };
+      }
+      return { kind: "not-found" };
+    }
+    if (Number.isFinite(total)) {
+      if (startPosition >= total) {
+        return { kind: "not-found" };
+      }
+    } else if (returned < SEARCH_PAGE_SIZE) {
+      // No totalSetSize to compare against, but a short page is the last page.
+      return { kind: "not-found" };
     }
   }
-  return null;
+
+  return {
+    kind: "incomplete",
+    reason: `more than ${MAX_SEARCH_PAGES} pages of envelope status changes since ${fromDate}`,
+  };
 }
 
 const RECONCILE_DELAYS_MS = [5_000, 10_000, 15_000];
@@ -111,13 +179,13 @@ export async function waitForEnvelopeBySendAttempt(
 ): Promise<string | null> {
   for (const delay of RECONCILE_DELAYS_MS) {
     await new Promise((resolve) => setTimeout(resolve, delay));
-    const envelopeId = await findEnvelopeIdBySendAttempt(
+    const found = await findEnvelopeBySendAttempt(
       context,
       sendAttemptId,
       since,
     );
-    if (envelopeId) {
-      return envelopeId;
+    if (found.kind === "found") {
+      return found.envelopeId;
     }
   }
   return null;

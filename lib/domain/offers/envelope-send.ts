@@ -160,6 +160,99 @@ export async function recordEnvelopeSendEvent(
   }
 }
 
+// ---------------------------------------------------------------------------
+// The unconfirmed-send record (issue #321)
+//
+// A DocuSign create call whose outcome we could not confirm may still have
+// issued and emailed a real envelope. Nothing else can record that: on the
+// Tender and Contract paths the parent row is created only on confirmed
+// success, so at the moment the outcome goes unknown there is no
+// `Envelope.tenderId`/`contractId` to hang a placeholder off. `UnconfirmedEnvelopeSend`
+// hangs off the Offer instead, keyed by the `rcSendAttempt` custom field the
+// send already stamps, and an unresolved row is what makes a recall refuse.
+//
+// It arrived on `staging` in PR #325 as two functions in
+// `lib/docusign/envelope-send-attempt.ts` that reached for the ambient Prisma
+// client. The lifecycle is a durable-intent rule, not a DocuSign concern —
+// the provider module keeps the custom field, the error classification and the
+// paginated search — so it lives here, takes its database explicitly, and is
+// therefore reachable from the reconcile cron and from a test.
+// ---------------------------------------------------------------------------
+
+/**
+ * Record that a send is about to happen, BEFORE calling DocuSign.
+ *
+ * The blocking record has to exist before the envelope can, or the protection
+ * fails open. Written afterwards — in the catch, once the outcome is already
+ * unknown — a failed write left no record at all: the operator was told not to
+ * resend, but nothing stopped a recall from proceeding and a resend from
+ * putting a second live document in front of the customer, which is the whole
+ * thing this guards.
+ *
+ * Writing it first also covers the case no catch block can reach: the process
+ * dying mid-send. The row stays unresolved and the reconcile cron picks it up.
+ *
+ * Returns null when the row could not be written, and the caller must then NOT
+ * send. Refusing a send is recoverable; sending without the record is not.
+ */
+export async function beginEnvelopeSendAttempt(
+  db: DomainDb,
+  input: {
+    readonly offerId: string;
+    readonly docType: EnvelopeDocType;
+    readonly sendAttemptId: string;
+    readonly attemptStarted: Date;
+  },
+): Promise<string | null> {
+  try {
+    const { id } = await db.unconfirmedEnvelopeSend.create({
+      data: {
+        attemptStartedAt: input.attemptStarted,
+        docType: input.docType,
+        offerId: input.offerId,
+        sendAttemptId: input.sendAttemptId,
+      },
+      select: { id: true },
+    });
+    return id;
+  } catch (error) {
+    console.error(
+      `[offer] could not record a send attempt for offer ${input.offerId}; refusing to send without it:`,
+      error,
+    );
+    return null;
+  }
+}
+
+/**
+ * Close a send attempt whose outcome is now known — the envelope was created
+ * (so a real `Envelope` row blocks a recall instead), or DocuSign definitively
+ * rejected it (so nothing is out there).
+ *
+ * Only an outcome that stays unknown leaves the row unresolved, which is what
+ * makes a recall refuse.
+ *
+ * `foundDocusignId` is set only when reconciliation found a matching envelope:
+ * a human still has to finish recording it, and the id is how they find it.
+ *
+ * Takes its database explicitly so the success path can settle the attempt in
+ * the same transaction that writes the Envelope row — the record must not stop
+ * blocking a recall unless the row taking over that job actually commits.
+ */
+export async function resolveEnvelopeSendAttempt(
+  db: DomainDb,
+  recordId: string,
+  foundDocusignId: string | null = null,
+): Promise<void> {
+  await db.unconfirmedEnvelopeSend.updateMany({
+    data: {
+      resolvedAt: new Date(),
+      ...(foundDocusignId ? { foundDocusignId } : {}),
+    },
+    where: { id: recordId, resolvedAt: null },
+  });
+}
+
 export type PersistedEnvelope =
   /** The claim held: the send owns the offer and the document is live. */
   | { readonly kind: "recorded" }
@@ -204,6 +297,16 @@ export async function persistSentEnvelope(
     readonly note: string;
     /** OFFER envelopes clear the offer's own executed PDF as they claim. */
     readonly clearOfferExecutedPdf?: boolean;
+    /**
+     * The unconfirmed-send record this send opened, settled in the same
+     * transaction as the Envelope row that takes over its job.
+     *
+     * Here rather than at each of the three call sites on purpose: settling it
+     * anywhere else means settling it on a transaction that may still roll
+     * back, which leaves a real live envelope with nothing blocking a recall —
+     * the exact fail-open the record exists to close.
+     */
+    readonly sendAttemptRecordId?: string | null;
     readonly writeDocument: EnvelopeDocumentWrite;
   },
 ): Promise<PersistedEnvelope> {
@@ -235,6 +338,13 @@ export async function persistSentEnvelope(
           status: EnvelopeStatus.SENT,
         },
       });
+
+      // With the Envelope row, not before it. A raced send settles it too: the
+      // envelope is recorded and voidable either way, so the thing that made a
+      // recall refuse has been replaced by something better.
+      if (input.sendAttemptRecordId) {
+        await resolveEnvelopeSendAttempt(tx, input.sendAttemptRecordId);
+      }
 
       if (!claimed) return { kind: "raced" as const };
 
