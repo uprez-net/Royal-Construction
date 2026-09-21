@@ -32,12 +32,24 @@ export function describeDocusignError(error: unknown): string {
   return (error as Error).message ?? "Unknown error";
 }
 
-/** Transport/timeouts: outcome is unknown — the envelope may still have been sent. */
+/**
+ * The outcome is unknown — DocuSign may still have created and emailed the
+ * envelope — so the caller must reconcile rather than release its claim.
+ *
+ * "Did a response arrive at all" is the primary test, but it is not sufficient
+ * on its own. A 5xx is a response, and DocuSign can return one AFTER creating
+ * the envelope; treating that as a definitive rejection releases the claim and
+ * lets a retry create a second legal envelope. Only a 4xx genuinely says the
+ * request was understood and refused.
+ */
 export function isDocusignTransportFailure(error: unknown): boolean {
   const response = (error as { response?: { status?: number } }).response;
-  if (response?.status !== undefined) {
-    // A definitive HTTP response from DocuSign is not a transport failure.
-    return false;
+  const status = response?.status;
+  if (status !== undefined) {
+    // 5xx (and anything outside the 4xx client-error band) leaves the outcome
+    // open: the request reached DocuSign and may have been acted on before it
+    // failed. 4xx is a refusal we can trust.
+    return !(status >= 400 && status < 500);
   }
   const code = (error as { code?: string }).code;
   if (
@@ -129,8 +141,13 @@ export async function resolveEnvelopeCreateError(args: {
     };
   }
   if (!args.context) {
+    // No context means createDocusignContext itself failed, so no create
+    // request was ever made and nothing can be out for signature. Calling that
+    // "unknown" kept the *_SENT claim and left the offer stuck: no envelope to
+    // find, no way to retry, and a trip to DocuSign that would show nothing.
+    // A rejection releases the claim, which is the honest answer.
     return {
-      kind: "outcome-unknown",
+      kind: "rejected",
       reason: describeDocusignError(args.error),
     };
   }
