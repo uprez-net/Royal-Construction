@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { NextRequest } from "next/server";
 import { getHbcfTimelineForLead } from "@/lib/data/insurance";
 import {
@@ -32,6 +33,12 @@ export async function GET(request: NextRequest) {
 
     return successResponse(timeline);
   } catch (error) {
+    // A domain refusal answers with its own status and its own message —
+    // "You do not have access to this project." is what the operator needs,
+    // and it is useless to them as an opaque 500.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+
     console.error("/api/insurance/hbcf-timeline GET error", error);
     return errorResponse("Failed to load HBCF claim timeline", {
       status: 500,
