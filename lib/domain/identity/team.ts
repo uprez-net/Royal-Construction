@@ -11,7 +11,7 @@ import {
   requireAdminPrincipal,
   type DomainPrincipal,
 } from "../principal";
-import { runOutboxEffect } from "../outbox";
+import { runOutboxEffect, runOutboxEffectWithOutcome } from "../outbox";
 
 // Changing a team member's role.
 //
@@ -34,6 +34,8 @@ export type TeamInvitationInput = {
   readonly role: Role;
   /** Stable request id from the App Idempotency-Key header or Eve call id. */
   readonly idempotencyKey?: string;
+  /** Overridable so a test does not depend on the wall clock. */
+  readonly now?: Date;
 };
 
 export type TeamInvitation = {
@@ -52,13 +54,23 @@ export type TeamInvitationRevokePort = (
   invitationId: string,
 ) => Promise<unknown>;
 
-/** Invite through an injected Clerk capability after one shared admin check. */
+/**
+ * Invite through an injected Clerk capability after one shared admin check.
+ *
+ * When the caller supplies no key the fallback is scoped to the day. An
+ * invitation is not idempotent on (email, role) for ever: a Clerk invitation
+ * expires after seven days and can be revoked, so a permanent key meant the
+ * second invitation to the same person at the same role was never sent while
+ * the API answered "Invitation sent successfully" — and with nobody watching
+ * logs here, the first sign would be a new starter saying they never got an
+ * email. A day still covers the double-submit the guard exists for.
+ */
 export async function inviteTeamMember(
   principal: DomainPrincipal,
   input: TeamInvitationInput,
   db: DomainDb,
   invite: TeamInvitationPort,
-): Promise<TeamInvitation> {
+): Promise<TeamInvitation & { alreadyInvited: boolean }> {
   requireAdminPrincipal(principal);
   const email = input.email.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -67,8 +79,10 @@ export async function inviteTeamMember(
       "email",
     );
   }
-  const operationKey = input.idempotencyKey?.trim() || `${email}:${input.role}`;
-  const result = await runOutboxEffect(
+  const day = (input.now ?? new Date()).toISOString().slice(0, 10);
+  const operationKey =
+    input.idempotencyKey?.trim() || `${day}:${email}:${input.role}`;
+  const { replayed, result } = await runOutboxEffectWithOutcome(
     db,
     {
       key: `team-invite:${operationKey}`,
@@ -89,6 +103,7 @@ export async function inviteTeamMember(
     },
   );
   return {
+    alreadyInvited: replayed,
     email: result.email,
     id: result.id,
     role: result.role,

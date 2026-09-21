@@ -44,6 +44,11 @@ const CALLER_CHECKS = new Set([
   "requestTradieRemoval",
   "rateTradieDomain",
   "reportTradieIncidentDomain",
+  // authorizeLeadFileDeletion calls authorizeLead before it returns a URL
+  // to delete, so the caller has been checked against the record — the
+  // lead — and not merely proved to be signed in. It also refuses a Blob
+  // path outside that lead's namespace.
+  "authorizeLeadFileDeletion",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export
@@ -62,8 +67,6 @@ const LOCAL_CHECKS: Record<string, string> = {
 };
 
 // Exports whose only check is sign-in, each with why that is enough for now.
-const TRADIE_REQUEST =
-  "files a tradie approval request that an ADMIN must approve; tradie domain (follow-up: staff only)";
 const SIGNED_IN_ONLY: Record<string, string> = {
   "lib/data/offer-image-ai.ts#generateOfferInspirationImage":
     "generates a stock image into Blob storage from a fixed prompt; reads no offer, spends image credits (follow-up: staff only)",

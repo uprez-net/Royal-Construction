@@ -85,31 +85,41 @@ export async function claimOutboxEvent(
  * Execute a provider call only after its durable intent is claimed. A
  * succeeded result is replayed; RUNNING or FAILED means the previous attempt
  * needs reconciliation and is never blindly repeated.
+ *
+ * `replayed` is part of the answer, not an implementation detail: a caller
+ * that reports "sent" for a replay is telling the office an email went out
+ * when none did. Every caller has to decide what to say about that.
  */
-export async function runOutboxEffect<T extends Prisma.InputJsonValue>(
+export async function runOutboxEffectWithOutcome<
+  T extends Prisma.InputJsonValue,
+>(
   db: DomainDb,
   intent: OutboxIntent,
   execute: () => Promise<T>,
-): Promise<T> {
+): Promise<{ result: T; replayed: boolean }> {
   const existing = await enqueueOutboxEvent(db, intent);
   if (existing.status === OutboxEventStatus.SUCCEEDED && existing.result !== null) {
-    return existing.result as T;
+    return { replayed: true, result: existing.result as T };
   }
+  // Name the key. Refusing to retry is the right call when a provider may
+  // already have accepted the request, but "needs reconciliation" with nothing
+  // to look up is a dead end for an office of three with no on-call: the key is
+  // what identifies the OutboxEvent row somebody has to check.
   if (existing.status !== OutboxEventStatus.PENDING) {
     throw new DomainTransitionError(
-      "This external effect was already attempted and needs reconciliation before retrying.",
+      `This external effect was already attempted and needs reconciliation before retrying (outbox key ${intent.key}).`,
     );
   }
   const claimed = await claimOutboxEvent(db, intent.key);
   if (!claimed) {
     throw new DomainTransitionError(
-      "This external effect is already being processed; inspect its outcome before retrying.",
+      `This external effect is already being processed; inspect its outcome before retrying (outbox key ${intent.key}).`,
     );
   }
   try {
     const result = await execute();
     await completeOutboxEvent(db, claimed.id, result);
-    return result;
+    return { replayed: false, result };
   } catch (error) {
     await failOutboxEvent(db, claimed.id, {
       message: "The external effect failed or its outcome was ambiguous.",
@@ -117,6 +127,16 @@ export async function runOutboxEffect<T extends Prisma.InputJsonValue>(
     });
     throw error;
   }
+}
+
+/** The same guard for callers that do not distinguish a replay. */
+export async function runOutboxEffect<T extends Prisma.InputJsonValue>(
+  db: DomainDb,
+  intent: OutboxIntent,
+  execute: () => Promise<T>,
+): Promise<T> {
+  const { result } = await runOutboxEffectWithOutcome(db, intent, execute);
+  return result;
 }
 
 /**

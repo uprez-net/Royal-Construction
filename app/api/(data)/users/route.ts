@@ -12,6 +12,7 @@ import {
   revokeTeamInvitation,
 } from "@/lib/domain/identity/team";
 import { userPrincipal } from "@/lib/domain/principal";
+import { isDomainError } from "@/lib/domain/errors";
 import {
   createUserInvitationSchema,
   errorResponse,
@@ -23,6 +24,20 @@ import {
   userSearchQuerySchema,
 } from "@/utils/validators";
 import { NextRequest } from "next/server";
+
+/**
+ * A refused request is not a server fault. The domain errors carry the status
+ * and the sentence to show — "The last admin cannot be demoted." is the whole
+ * point of the guard, and it is useless to the one person who can act on it if
+ * the route answers a bare 500.
+ */
+function domainErrorResponse(error: unknown) {
+  if (!isDomainError(error)) return null;
+  return errorResponse(error.message, {
+    status: error.status,
+    code: error.code.toUpperCase(),
+  });
+}
 
 async function currentAdmin() {
   const access = await requireAdminUser();
@@ -103,11 +118,15 @@ export async function POST(request: NextRequest) {
     );
 
     return successResponse({
-      message: "Invitation sent successfully",
+      message: invitation.alreadyInvited
+        ? "This invitation was already sent today; nothing was sent again"
+        : "Invitation sent successfully",
       success: true,
       invitation,
     });
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/users POST error", error);
     return errorResponse("Failed to create user invitation", {
       status: 500,
@@ -182,6 +201,8 @@ export async function PATCH(request: NextRequest) {
       throw error;
     }
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/users PATCH error", error);
     return errorResponse("Failed to update user", {
       status: 500,
@@ -222,6 +243,8 @@ export async function DELETE(request: NextRequest) {
       invitationId: revoked.invitationId,
     });
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/users DELETE error", error);
     return errorResponse("Failed to delete user", {
       status: 500,

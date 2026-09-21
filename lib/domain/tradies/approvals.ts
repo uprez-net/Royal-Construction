@@ -208,11 +208,19 @@ export async function resolveTradieApproval(
           const deleted = await tx.tradieSchedule.deleteMany({
             where: { id: scheduleId, tradieId: approval.tradieId },
           });
+          // The booking row is gone by now, so everything the adapter needs to
+          // describe it — the date a site manager reads in the notification,
+          // the milestone the activity entry is filed against — has to come off
+          // the request that recorded them. Dropping them here left the site
+          // manager a message reading "booking on  was removed".
           affected = {
             deleted: deleted.count === 1,
+            milestoneId: stringValue(payload?.milestoneId),
+            milestoneName: stringValue(payload?.milestoneName),
             projectId,
             projectName: stringValue(payload?.projectName),
             scheduleId,
+            scheduledDate: stringValue(payload?.scheduledDate),
             siteManagerId: project?.siteManagerId ?? null,
           };
           break;

@@ -102,13 +102,18 @@ export async function handleAdminApproval(input: ApprovalInput) {
       typeof resolved.affected.scheduleId === "string"
     ) {
       after(async () => {
+        const approved = resolved.resolution === "approved";
         await updateTradieSchedule(
           resolved.affected.scheduleId as string,
+          { status: approved ? "CONFIRMED" : "DECLINED" },
           {
-            status:
-              resolved.resolution === "approved" ? "CONFIRMED" : "DECLINED",
-          },
-          {
+            // Approving writes PENDING_FINAL_CONFIRMATION, not CONFIRMED, so
+            // name the committed status separately from the side effects being
+            // asked for — otherwise the guard throws here and the site manager
+            // is never told the booking was approved.
+            appliedStatus: approved
+              ? "PENDING_FINAL_CONFIRMATION"
+              : "DECLINED",
             approvalId: resolved.approvalId,
             statusAlreadyApplied: true,
           },
@@ -137,10 +142,14 @@ export async function handleAdminApproval(input: ApprovalInput) {
               tradieId: resolved.tradieId,
               tradieName: resolved.tradieName,
               trade: resolved.tradieTrade,
-              scheduleDate: String(
-                resolved.affected.scheduledDate ?? "",
+              scheduleDate: String(resolved.affected.scheduledDate ?? ""),
+              milestoneId:
+                typeof resolved.affected.milestoneId === "string"
+                  ? resolved.affected.milestoneId
+                  : undefined,
+              milestoneName: String(
+                resolved.affected.milestoneName ?? "General Task",
               ),
-              milestoneName: "General Task",
             }),
           );
         }
@@ -154,8 +163,13 @@ export async function handleAdminApproval(input: ApprovalInput) {
               scheduleId: resolved.affected.scheduleId as string,
               projectId: resolved.affected.projectId as string,
               projectName: String(resolved.affected.projectName ?? ""),
-              scheduledDate: String(
-                resolved.affected.scheduledDate ?? "",
+              scheduledDate: String(resolved.affected.scheduledDate ?? ""),
+              milestoneId:
+                typeof resolved.affected.milestoneId === "string"
+                  ? resolved.affected.milestoneId
+                  : undefined,
+              milestoneName: String(
+                resolved.affected.milestoneName ?? "General Task",
               ),
               tradieId: resolved.tradieId,
               tradieName: resolved.tradieName,

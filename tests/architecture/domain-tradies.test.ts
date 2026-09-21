@@ -21,8 +21,8 @@ import {
 } from "../../lib/domain/tradies/directory";
 import { reportTradieIncident } from "../../lib/domain/tradies/incidents";
 import { resolveTradieApproval } from "../../lib/domain/tradies/approvals";
+import { sendTradieScheduleReminder } from "../../lib/domain/tradies/reminders";
 import {
-  getTradieScheduleReminderRecipient,
   rescheduleTradieSchedule,
   transitionTradieSchedule,
 } from "../../lib/domain/tradies/schedules";
@@ -475,6 +475,7 @@ test("team invitations normalize the address before calling Clerk", async () => 
   );
 
   assert.deepEqual(invitation, {
+    alreadyInvited: false,
     email: "new.person@example.com",
     id: "inv_1",
     role: "SITE_MANAGER",
@@ -484,6 +485,71 @@ test("team invitations normalize the address before calling Clerk", async () => 
     expiresInDays: 7,
     publicMetadata: { role: "SITE_MANAGER" },
   });
+});
+
+test("a repeat invitation is sent, and a same-day duplicate is reported as a replay", async () => {
+  // The fallback key used to be `${email}:${role}` with no time in it, so the
+  // second invitation to the same person at the same role was silently
+  // swallowed for ever while the API answered "Invitation sent successfully".
+  // A Clerk invitation expires after seven days, so that is a real re-invite.
+  const keys: string[] = [];
+  const day = (result: unknown, status: OutboxEventStatus) =>
+    recordingDb({
+      "outboxEvent.upsert": (args: unknown) => {
+        const key = (args as { where: { key: string } }).where.key;
+        keys.push(key);
+        return { id: "effect_1", key, result, status };
+      },
+      "outboxEvent.findUnique": (args: unknown) => ({
+        attempts: 0,
+        id: "effect_1",
+        key: (args as { where: { key: string } }).where.key,
+        kind: "TEAM_INVITATION_CREATE",
+        payload: {},
+        status: OutboxEventStatus.PENDING,
+      }),
+      "outboxEvent.updateMany": { count: 1 },
+    });
+
+  let calls = 0;
+  const invite = async () => {
+    calls += 1;
+    return { id: "inv_1" };
+  };
+  const input = {
+    email: "new.person@example.com",
+    role: "SITE_MANAGER" as const,
+  };
+
+  const first = await inviteTeamMember(
+    adminPrincipal(),
+    { ...input, now: new Date("2026-09-21T09:00:00.000Z") },
+    day(null, OutboxEventStatus.PENDING).db,
+    invite,
+  );
+  assert.equal(first.alreadyInvited, false);
+
+  const later = await inviteTeamMember(
+    adminPrincipal(),
+    { ...input, now: new Date("2026-10-05T09:00:00.000Z") },
+    day(null, OutboxEventStatus.PENDING).db,
+    invite,
+  );
+  assert.equal(later.alreadyInvited, false);
+  assert.equal(calls, 2, "the re-invitation two weeks later must reach Clerk");
+  assert.notEqual(keys[0], keys[1]);
+
+  const duplicate = await inviteTeamMember(
+    adminPrincipal(),
+    { ...input, now: new Date("2026-09-21T16:00:00.000Z") },
+    day(
+      { email: input.email, id: "inv_1", role: input.role },
+      OutboxEventStatus.SUCCEEDED,
+    ).db,
+    invite,
+  );
+  assert.equal(duplicate.alreadyInvited, true);
+  assert.equal(calls, 2, "a same-day duplicate must not reach Clerk again");
 });
 
 test("invitation revoke is administrator-only and trims the target id", async () => {
@@ -614,6 +680,121 @@ test("approval resolution claims once and refuses an action-type mismatch", asyn
   assert.deepEqual(
     recorder.operations(),
     ["tradieApproval.updateMany", "tradieApproval.findUnique"],
+  );
+});
+
+test("a resolved deletion carries the booking details its notification needs", async () => {
+  // The schedule row is deleted inside this command, so the date a site
+  // manager reads and the milestone the activity entry is filed against can
+  // only come from the recorded request. Dropping them left the notification
+  // reading "booking on  was removed".
+  const recorder = recordingDb({
+    "tradieApproval.updateMany": { count: 1 },
+    "tradieApproval.findUnique": {
+      actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+      id: "approval_1",
+      tradie: { id: "t_1", name: "Sam", trade: "Electrical" },
+      tradieId: "t_1",
+      updationData: {
+        milestoneId: "m_1",
+        milestoneName: "Frame",
+        projectId: "p_1",
+        projectName: " 12 Example St",
+        scheduleId: "schedule_1",
+        scheduledDate: "2026-10-01T00:00:00.000Z",
+      },
+    },
+    "project.findUnique": { siteManagerId: "u_sm" },
+    "tradieSchedule.deleteMany": { count: 1 },
+  });
+
+  const result = await resolveTradieApproval(
+    adminPrincipal(),
+    {
+      actionType: TradieApprovalActionType.SCHEDULE_DELETION,
+      approvalId: "approval_1",
+      resolution: "approved",
+    },
+    recorder.db,
+  );
+
+  assert.deepEqual(result.affected, {
+    deleted: true,
+    milestoneId: "m_1",
+    milestoneName: "Frame",
+    projectId: "p_1",
+    projectName: " 12 Example St",
+    scheduleId: "schedule_1",
+    scheduledDate: "2026-10-01T00:00:00.000Z",
+    siteManagerId: "u_sm",
+  });
+});
+
+test("approval side effects run against the status that was actually committed", async () => {
+  // Approving a booking commits PENDING_FINAL_CONFIRMATION — the reminder job
+  // moves it to CONFIRMED a week out — but the notification the site manager
+  // needs is the CONFIRMED one. Comparing against toStatus threw here, so the
+  // decision committed and nobody was told.
+  const schedule = {
+    durationDays: 2,
+    id: "schedule_1",
+    milestone: null,
+    milestoneId: null,
+    project: { id: "p_1", name: "12 Example St", siteManagerId: "u_sm" },
+    projectId: "p_1",
+    quotedPrice: null,
+    scheduledDate: new Date("2026-10-01T00:00:00.000Z"),
+    status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
+    tradie: {
+      id: "t_1",
+      lastQuotedPrice: null,
+      lastQuotedPriceUnit: TradiePriceUnit.FIXED,
+      name: "Sam",
+      trade: "Electrical",
+    },
+    tradieId: "t_1",
+  };
+  const recorder = recordingDb({
+    "tradieSchedule.findUnique": schedule,
+    "project.findUnique": { id: "p_1", siteManagerId: "u_sm" },
+  });
+
+  const result = await transitionTradieSchedule(
+    adminPrincipal(),
+    {
+      appliedStatus: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
+      scheduleId: "schedule_1",
+      statusAlreadyApplied: true,
+      toStatus: TradieScheduleStatus.CONFIRMED,
+    },
+    recorder.db,
+  );
+
+  assert.equal(result.status, TradieScheduleStatus.CONFIRMED);
+  // Side effects only: naming the committed status must not write again.
+  assert.deepEqual(recorder.writes(), []);
+
+  // A booking that moved on since the decision is still refused.
+  const moved = recordingDb({
+    "tradieSchedule.findUnique": {
+      ...schedule,
+      status: TradieScheduleStatus.DECLINED,
+    },
+    "project.findUnique": { id: "p_1", siteManagerId: "u_sm" },
+  });
+  await assert.rejects(
+    () =>
+      transitionTradieSchedule(
+        adminPrincipal(),
+        {
+          appliedStatus: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
+          scheduleId: "schedule_1",
+          statusAlreadyApplied: true,
+          toStatus: TradieScheduleStatus.CONFIRMED,
+        },
+        moved.db,
+      ),
+    DomainTransitionError,
   );
 });
 
@@ -752,25 +933,49 @@ test("rescheduling checks the project milestone and uses old values as a stale g
 });
 
 test("schedule reminders resolve only the stored tradie recipient", async () => {
+  // One implementation of this rule, in lib/domain/tradies/reminders.ts. The
+  // copy that used to live in schedules.ts had no production caller and was
+  // kept alive only by this test — exactly the second implementation issue
+  // #301 exists to remove.
   const recorder = recordingDb({
     "tradieSchedule.findUnique": {
       tradie: { email: "  sam@example.com " },
     },
+    "outboxEvent.upsert": {
+      id: "event_1",
+      key: "tradie-manual-reminder:2026-09-21:request_1",
+      result: { to: "sam@example.com" },
+      status: "SUCCEEDED",
+    },
   });
-  const recipient = await getTradieScheduleReminderRecipient(
+  const sent = await sendTradieScheduleReminder(
     adminPrincipal(),
-    "schedule_1",
+    {
+      body: "Please confirm.",
+      idempotencyKey: "request_1",
+      now: new Date("2026-09-21T09:00:00.000Z"),
+      scheduleId: "schedule_1",
+      subject: "Reminder",
+    },
     recorder.db,
+    async () => {},
   );
-  assert.deepEqual(recipient, { to: "sam@example.com" });
+  assert.equal(sent.to, "sam@example.com");
+
   await assert.rejects(
     () =>
-      getTradieScheduleReminderRecipient(
+      sendTradieScheduleReminder(
         customerPrincipal(),
-        "schedule_1",
+        {
+          body: "Please confirm.",
+          idempotencyKey: "request_1",
+          scheduleId: "schedule_1",
+          subject: "Reminder",
+        },
         recordingDb().db,
+        async () => {},
       ),
-    DomainAuthorizationError,
+    DomainTransitionError,
   );
 });
 

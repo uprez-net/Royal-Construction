@@ -11,11 +11,7 @@ import {
   DomainTransitionError,
   DomainValidationError,
 } from "../errors";
-import {
-  attributionUserId,
-  isInternalPrincipal,
-  type DomainPrincipal,
-} from "../principal";
+import { attributionUserId, type DomainPrincipal } from "../principal";
 import { authorizeProject } from "../access/projects";
 import {
   normalizeQuoteBasis,
@@ -142,32 +138,6 @@ export type CreatedSchedule = {
   readonly status: TradieScheduleStatus;
   readonly requiresQuote: boolean;
 };
-
-/** Resolve the only recipient a staff reminder may ever target. */
-export async function getTradieScheduleReminderRecipient(
-  principal: DomainPrincipal,
-  scheduleId: string,
-  db: DomainDb,
-): Promise<{ to: string }> {
-  if (!isInternalPrincipal(principal)) {
-    throw new DomainAuthorizationError(
-      "Sending schedule reminders requires internal staff access.",
-    );
-  }
-  const schedule = await db.tradieSchedule.findUnique({
-    select: { tradie: { select: { email: true } } },
-    where: { id: scheduleId },
-  });
-  if (!schedule) throw new DomainNotFoundError("Schedule not found");
-  const to = schedule.tradie.email.trim();
-  if (!to) {
-    throw new DomainValidationError(
-      "This tradie has no email address.",
-      "scheduleId",
-    );
-  }
-  return { to };
-}
 
 /**
  * Book a tradie, with every check both callers should always have had.
@@ -329,6 +299,18 @@ export async function transitionTradieSchedule(
     toStatus: TradieScheduleStatus;
     /** App approval side effects may run after the state transition. */
     statusAlreadyApplied?: boolean;
+    /**
+     * The status that was actually committed, when it differs from the one
+     * whose side effects the caller wants.
+     *
+     * Approving a booking writes PENDING_FINAL_CONFIRMATION — the reminder job
+     * is what moves it to CONFIRMED a week out — but the notification the site
+     * manager needs is the CONFIRMED one. Checking `toStatus` here meant that
+     * call always threw, so approving a booking committed the decision and
+     * then silently told nobody. Pre-dates this branch; the rule lives here
+     * now, so it is fixed here.
+     */
+    appliedStatus?: TradieScheduleStatus;
   } & ScheduleQuoteInput,
   db: DomainDb,
 ): Promise<ScheduleMutationResult> {
@@ -337,7 +319,7 @@ export async function transitionTradieSchedule(
 
   if (
     input.statusAlreadyApplied &&
-    existing.status !== input.toStatus
+    existing.status !== (input.appliedStatus ?? input.toStatus)
   ) {
     throw new DomainTransitionError(
       "This schedule changed before its approval side effects completed.",

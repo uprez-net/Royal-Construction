@@ -3,7 +3,7 @@ import { OutboxEventKind, TradieScheduleStatus } from "@prisma/client";
 import type { DomainDb } from "../db";
 import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../principal";
-import { runOutboxEffect } from "../outbox";
+import { runOutboxEffectWithOutcome } from "../outbox";
 
 const NON_ACTIONABLE_STATUSES = new Set<TradieScheduleStatus>([
   TradieScheduleStatus.DECLINED,
@@ -16,7 +16,18 @@ export type TradieReminderEmailPort = (input: {
   readonly to: string;
 }) => Promise<void>;
 
-/** Send a manually requested reminder through the same durable effect guard. */
+/**
+ * Send a manually requested reminder through the same durable effect guard.
+ *
+ * The caller's idempotency key is scoped to the day it is used. The modal
+ * builds the subject and body deterministically from the schedule, so an
+ * unscoped content hash deduplicated *for ever*: the office sends a reminder
+ * on Monday, hears nothing, sends the same one on Thursday, and the second one
+ * is silently swallowed while the screen says it was sent. A day is long
+ * enough to cover the double-click and the retry-after-timeout this guard is
+ * actually for, and short enough that a deliberate resend goes out. A replay
+ * inside that day is reported as one rather than as a fresh send.
+ */
 export async function sendTradieScheduleReminder(
   principal: DomainPrincipal,
   input: {
@@ -24,10 +35,12 @@ export async function sendTradieScheduleReminder(
     readonly idempotencyKey: string;
     readonly scheduleId: string;
     readonly subject: string;
+    /** Overridable so a test does not depend on the wall clock. */
+    readonly now?: Date;
   },
   db: DomainDb,
   send: TradieReminderEmailPort,
-): Promise<{ to: string }> {
+): Promise<{ to: string; alreadySent: boolean }> {
   if (!isInternalPrincipal(principal)) {
     throw new DomainTransitionError(
       "Sending schedule reminders requires internal staff access.",
@@ -41,10 +54,11 @@ export async function sendTradieScheduleReminder(
   const to = schedule.tradie.email.trim();
   if (!to) throw new DomainTransitionError("This tradie has no email address.");
 
-  await runOutboxEffect(
+  const day = (input.now ?? new Date()).toISOString().slice(0, 10);
+  const { replayed } = await runOutboxEffectWithOutcome(
     db,
     {
-      key: `tradie-manual-reminder:${input.idempotencyKey}`,
+      key: `tradie-manual-reminder:${day}:${input.idempotencyKey}`,
       kind: OutboxEventKind.TRADIE_SCHEDULE_MANUAL_REMINDER,
       payload: {
         body: input.body,
@@ -58,7 +72,7 @@ export async function sendTradieScheduleReminder(
       return { to };
     },
   );
-  return { to };
+  return { alreadySent: replayed, to };
 }
 
 /** The schedule rows and eligible subset for the weekly reminder worker. */

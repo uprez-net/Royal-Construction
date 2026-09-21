@@ -20,6 +20,27 @@ import {
   markTradieReminderSent,
 } from "@/lib/domain/tradies/reminders";
 
+/**
+ * Settling one event must never end the run. failOutboxEvent throws when the
+ * event is no longer RUNNING — which is exactly the state a failure *after*
+ * the event was completed leaves it in — and an uncaught throw here skipped
+ * every reminder still queued behind it. With nobody watching this cron, that
+ * is a week of tradies not reminded because one row was odd.
+ */
+async function settleFailure(
+  eventId: string,
+  message: string,
+): Promise<void> {
+  try {
+    await failOutboxEvent(prisma, eventId, { message, retryable: false });
+  } catch (error) {
+    console.error(
+      `[REMINDER] Could not mark outbox event ${eventId} failed:`,
+      error,
+    );
+  }
+}
+
 function scheduleIdFromPayload(payload: Prisma.JsonValue): string | null {
   if (
     typeof payload !== "object" ||
@@ -62,10 +83,10 @@ export async function sendTradieReminders(): Promise<{
     try {
       const scheduleId = scheduleIdFromPayload(event.payload);
       if (!scheduleId) {
-        await failOutboxEvent(prisma, event.id, {
-          message: "The reminder payload did not contain a schedule id.",
-          retryable: false,
-        });
+        await settleFailure(
+          event.id,
+          "The reminder payload did not contain a schedule id.",
+        );
         failed += 1;
         continue;
       }
@@ -79,10 +100,10 @@ export async function sendTradieReminders(): Promise<{
         },
       });
       if (!schedule) {
-        await failOutboxEvent(prisma, event.id, {
-          message: "The scheduled booking no longer exists.",
-          retryable: false,
-        });
+        await settleFailure(
+          event.id,
+          "The scheduled booking no longer exists.",
+        );
         failed += 1;
         continue;
       }
@@ -157,11 +178,10 @@ export async function sendTradieReminders(): Promise<{
       );
     } catch (error) {
       failed += 1;
-      await failOutboxEvent(prisma, event.id, {
-        message:
-          "The reminder provider or final schedule write failed; reconcile before retrying.",
-        retryable: false,
-      });
+      await settleFailure(
+        event.id,
+        "The reminder provider or final schedule write failed; reconcile before retrying.",
+      );
       console.error(`[REMINDER] Failed for outbox event ${event.id}:`, error);
     }
   }

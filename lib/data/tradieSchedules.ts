@@ -413,7 +413,12 @@ export async function bulkCreateTradieSchedules(
 export async function updateTradieSchedule(
   scheduleId: string,
   updates: UpdateTradieScheduleInput,
-  options: { statusAlreadyApplied?: boolean; approvalId?: string } = {},
+  options: {
+    statusAlreadyApplied?: boolean;
+    /** The status actually committed, when the caller wants another's effects. */
+    appliedStatus?: TradieScheduleStatus;
+    approvalId?: string;
+  } = {},
 ) {
   try {
     const existingSchedule = await prisma.tradieSchedule.findUnique({
@@ -427,6 +432,7 @@ export async function updateTradieSchedule(
     const changed = await transitionTradieScheduleDomain(
       userPrincipal(actingUser),
       {
+        appliedStatus: options.appliedStatus,
         quote: updates.quote,
         quoteUnit: updates.quoteUnit,
         scheduleId,
@@ -835,14 +841,23 @@ export async function sendTradieScheduleReminder({
     const idempotencyKey = createHash("sha256")
       .update(`${scheduleId}\0${subject}\0${body}`)
       .digest("hex");
-    await sendTradieScheduleReminderDomain(
+    const sent = await sendTradieScheduleReminderDomain(
       userPrincipal(access.user),
       { body, idempotencyKey, scheduleId, subject },
       prisma,
       (input) => sendEmail(input),
     );
 
-    return { success: true, message: "Reminder sent successfully." };
+    // Say which it was. Reporting a deduplicated replay as a fresh send is how
+    // the office ends up believing a tradie was reminded when nothing left the
+    // mailbox.
+    return sent.alreadySent
+      ? {
+          success: true,
+          message:
+            "This exact reminder already went out today; nothing was sent again.",
+        }
+      : { success: true, message: "Reminder sent successfully." };
   } catch (error) {
     if (isDomainError(error)) {
       return { success: false, message: error.message };
