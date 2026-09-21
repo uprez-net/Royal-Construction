@@ -130,6 +130,12 @@ export async function handleAdminApproval(input: ApprovalInput) {
     if (!approval) {
       throw new Error("Approval request not found");
     }
+    if (approval.status !== "PENDING") {
+      throw new Error("This approval request has already been resolved.");
+    }
+    if (approval.actionType !== input.type) {
+      throw new Error("Approval action type does not match the request.");
+    }
 
     after(() => {
       revalidateTag(`tradie-${approval.tradieId}`, CACHE_PROFILES.MEDIUM);
@@ -139,13 +145,21 @@ export async function handleAdminApproval(input: ApprovalInput) {
     });
 
     return await prisma.$transaction(async (tx) => {
-      await tx.tradieApproval.update({
-        where: { id: input.approvalId },
+      // Claim the request and resolve it in one conditional write. This keeps
+      // a double-click or two tabs from applying the same approval twice.
+      const claimedApproval = await tx.tradieApproval.updateMany({
+        where: {
+          id: input.approvalId,
+          status: "PENDING",
+        },
         data: {
           status: input.resolution === "approved" ? "APPROVED" : "REJECTED",
           rejectionReason: input.rejectReason ?? null,
         },
       });
+      if (claimedApproval.count !== 1) {
+        throw new Error("This approval request has already been resolved.");
+      }
 
       switch (input.type) {
         case TradieApprovalActionType.PRICE_CHANGE: {
@@ -236,22 +250,74 @@ export async function handleAdminApproval(input: ApprovalInput) {
           const scheduleData =
             approval.updationData as unknown as ScheduleApprovalJsonPayload;
 
-          const updatedSchedule = await tx.tradieSchedule.update({
+          if (!scheduleData?.scheduleId) {
+            throw new Error(
+              "This schedule approval request has no recorded schedule and cannot be resolved.",
+            );
+          }
+
+          const currentSchedule = await tx.tradieSchedule.findUnique({
             where: { id: scheduleData.scheduleId },
+            select: { status: true },
+          });
+          if (
+            !currentSchedule ||
+            currentSchedule.status !==
+              TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+          ) {
+            throw new Error(
+              "This schedule is no longer awaiting admin approval and cannot be resolved.",
+            );
+          }
+
+          const changedSchedule = await tx.tradieSchedule.updateMany({
+            where: {
+              id: scheduleData.scheduleId,
+              status: TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+            },
             data: {
-              status: isApproved ? "CONFIRMED" : "DECLINED",
+              // Admin approval confirms the booking. The final confirmation
+              // state is entered later by the one-week reminder job.
+              status: isApproved ? "PENDING_FINAL_CONFIRMATION" : "DECLINED",
+              ...(isApproved ? { reminderSentAt: null } : {}),
             },
           });
+          if (changedSchedule.count !== 1) {
+            throw new Error(
+              "This schedule is no longer awaiting admin approval and cannot be resolved.",
+            );
+          }
+
+          const updatedSchedule = await tx.tradieSchedule.findUnique({
+            where: { id: scheduleData.scheduleId },
+          });
+          if (!updatedSchedule) {
+            throw new Error("Schedule not found after approval resolution.");
+          }
 
           after(async () => {
             if (isApproved) {
-              await updateTradieSchedule(updatedSchedule.id, {
-                status: TradieScheduleStatus.CONFIRMED,
-              });
+              await updateTradieSchedule(
+                updatedSchedule.id,
+                {
+                  status: TradieScheduleStatus.CONFIRMED,
+                },
+                {
+                  statusAlreadyApplied: true,
+                  approvalId: approval.id,
+                },
+              );
             } else {
-              await updateTradieSchedule(updatedSchedule.id, {
-                status: TradieScheduleStatus.DECLINED,
-              });
+              await updateTradieSchedule(
+                updatedSchedule.id,
+                {
+                  status: TradieScheduleStatus.DECLINED,
+                },
+                {
+                  statusAlreadyApplied: true,
+                  approvalId: approval.id,
+                },
+              );
             }
           });
 

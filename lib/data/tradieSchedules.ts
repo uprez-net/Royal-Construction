@@ -387,6 +387,7 @@ export async function bulkCreateTradieSchedules(
 export async function updateTradieSchedule(
   scheduleId: string,
   updates: UpdateTradieScheduleInput,
+  options: { statusAlreadyApplied?: boolean; approvalId?: string } = {},
 ) {
   try {
     const existingSchedule = await prisma.tradieSchedule.findUnique({
@@ -398,6 +399,7 @@ export async function updateTradieSchedule(
     }
     const userId = await userHasAccessToSchedule(existingSchedule.projectId);
     if (
+      !options.statusAlreadyApplied &&
       !TRADIE_SCHEDULE_STATE_MACHINE[existingSchedule.status].includes(
         updates.status,
       )
@@ -427,8 +429,28 @@ export async function updateTradieSchedule(
       existingSchedule.status === TradieScheduleStatus.AWAITING_ADMIN_APPROVAL;
 
     const schedule = await prisma.$transaction(async (tx) => {
-      const updatedSchedule = await tx.tradieSchedule.update({
-        where: { id: scheduleId },
+      if (options.statusAlreadyApplied) {
+        const alreadyUpdatedSchedule = await tx.tradieSchedule.findUnique({
+          where: { id: scheduleId },
+          include: {
+            tradie: true,
+            project: { include: { siteManager: true } },
+            milestone: true,
+          },
+        });
+        if (!alreadyUpdatedSchedule) {
+          throw new Error("Schedule not found after status update.");
+        }
+        if (alreadyUpdatedSchedule.status !== updates.status) {
+          throw new Error(
+            "This schedule changed before its approval side effects completed.",
+          );
+        }
+        return alreadyUpdatedSchedule;
+      }
+
+      const changed = await tx.tradieSchedule.updateMany({
+        where: { id: scheduleId, status: existingSchedule.status },
         data: {
           status: updates.status,
           ...(updates.status === TradieScheduleStatus.CONFIRMED &&
@@ -450,12 +472,24 @@ export async function updateTradieSchedule(
               }
             : {}),
         },
+      });
+      if (changed.count !== 1) {
+        throw new Error(
+          "This schedule changed before the status update completed. Refresh and try again.",
+        );
+      }
+
+      const updatedSchedule = await tx.tradieSchedule.findUnique({
+        where: { id: scheduleId },
         include: {
           tradie: true,
           project: { include: { siteManager: true } },
           milestone: true,
         },
       });
+      if (!updatedSchedule) {
+        throw new Error("Schedule not found after status update.");
+      }
 
       if (declinesPendingApproval) {
         await tx.tradieApproval.updateMany({
@@ -654,7 +688,7 @@ export async function updateTradieSchedule(
         const notificationPayload = createNotification(
           "tradieScheduleApproved",
           {
-            approvalId: "approval.id",
+            approvalId: options.approvalId ?? "",
             scheduleId: schedule.id,
             projectId: schedule.projectId,
             projectName: schedule.project.name,
@@ -707,7 +741,7 @@ export async function updateTradieSchedule(
         const notificationPayload = createNotification(
           "tradieScheduleRejected",
           {
-            approvalId: "approval.id",
+            approvalId: options.approvalId ?? "",
             scheduleId: schedule.id,
             projectId: schedule.projectId,
             projectName: schedule.project.name,
