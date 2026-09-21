@@ -77,17 +77,19 @@ test("every definitive outcome resolves the attempt, and only the unknown one do
   for (const [file] of SEND_PATHS) {
     const source = code(file);
 
-    // reconciled: the envelope exists after all.
+    // reconciled: the envelope exists, but nothing records it yet. Settling
+    // here would leave a real live envelope unblocked if the success
+    // transaction below then failed — the success path settles it atomically
+    // with the Envelope row instead.
     const reconciled = source.indexOf('recovery.kind === "reconciled"');
     const unknown = source.indexOf('recovery.kind === "outcome-unknown"');
     assert.ok(
       reconciled > 0 && unknown > reconciled,
       `${file}: branch order changed`,
     );
-    assert.match(
-      source.slice(reconciled, unknown),
-      /resolveEnvelopeSendAttempt\(sendAttemptRecordId\)/,
-      `${file} does not settle the attempt after reconciling the envelope`,
+    assert.ok(
+      !/resolveEnvelopeSendAttempt\(/.test(source.slice(reconciled, unknown)),
+      `${file} settles the attempt on reconcile, before the Envelope row that replaces it commits`,
     );
 
     // outcome-unknown: must NOT resolve — staying unresolved is what blocks.

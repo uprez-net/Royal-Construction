@@ -299,9 +299,11 @@ export async function sendOfferForSignature(input: {
       attemptStarted,
     });
     if (recovery.kind === "reconciled") {
-      // Settled: the envelope exists, and the success path below writes
-      // the Envelope row that blocks a recall from here on.
-      await resolveEnvelopeSendAttempt(sendAttemptRecordId);
+      // Deliberately NOT settled here. The envelope exists, but nothing yet
+      // records it — the success transaction below writes the Envelope row
+      // AND settles this attempt together. Settling now would leave a real,
+      // live envelope with nothing blocking a recall if that transaction then
+      // failed, which is the same fail-open this record exists to close.
       envelope = {
         envelopeId: recovery.envelopeId,
         recipients: buildOfferAcceptanceRecipientRecords(owners),
