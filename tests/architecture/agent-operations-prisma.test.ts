@@ -117,7 +117,7 @@ const BUDGET: Record<string, number> = {
   "agent/lib/admin-operations.ts": 16,
   "agent/lib/lead-operations.ts": 0,
   "agent/lib/offer-operations.ts": 21,
-  "agent/lib/project-operations.ts": 29,
+  "agent/lib/project-operations.ts": 25,
   "agent/lib/tradie-operations.ts": 25,
 };
 

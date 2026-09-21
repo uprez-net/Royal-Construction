@@ -27,7 +27,6 @@ import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import {
   REQUIRED_COMPLIANCE_DOCUMENTS,
   DA_DOCUMENTS,
-  isApprovableDocumentType,
   PARTY_LABEL,
   PARTY_OUTREACH_ATTACHMENTS,
 } from "@/constants/complianceDocuments";
@@ -44,6 +43,7 @@ import {
   authorizeMilestone,
   authorizeProject,
 } from "@/lib/domain/access/projects";
+import { resolveComplianceDocument as resolveComplianceDocumentDomain } from "@/lib/domain/compliance/documents";
 import { isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 
@@ -1068,6 +1068,15 @@ export async function startAuthorizedCompliance(
   });
 }
 
+/**
+ * Approve or reject one piece of compliance evidence.
+ *
+ * lib/domain/compliance/documents.ts owns the decision, shared with the app's
+ * route. This used to be a second copy that never checked whether the document
+ * had actually been SENT to the certifier — so an agent could approve evidence
+ * nobody had asked the certifier to look at, and the engagement would close on
+ * a review that never happened.
+ */
 async function resolveComplianceDocumentDirect(
   input: {
     decision: "approved" | "rejected";
@@ -1075,92 +1084,27 @@ async function resolveComplianceDocumentDirect(
     projectId: string;
     rejectionReason?: string;
   },
+  actor: ProjectActor,
   db: ProjectDb = prisma,
 ) {
-  const document = await db.complianceDocument.findFirst({
-    where: { id: input.documentId, engagement: { projectId: input.projectId } },
-    select: {
-      id: true,
-      engagementId: true,
-      documentType: true,
-      status: true,
-      _count: { select: { files: true } },
-    },
-  });
-  if (!document)
-    throw new Error("Compliance document not found on this project.");
-  if (!isApprovableDocumentType(document.documentType))
-    throw new Error(
-      "This compliance row is not reviewed through the approval action.",
+  try {
+    const outcome = await resolveComplianceDocumentDomain(
+      userPrincipal(actor),
+      input,
+      db,
     );
-  if (
-    document._count.files === 0 ||
-    (document.status !== ComplianceDocumentStatus.UPLOADED &&
-      document.status !== ComplianceDocumentStatus.RECEIVED)
-  )
-    throw new Error(
-      "Only uploaded or received evidence can be approved or rejected.",
-    );
-  if (input.decision === "rejected" && !input.rejectionReason?.trim())
-    throw new Error("A rejection reason is required.");
-  const update = await db.complianceDocument.updateMany({
-    where: {
-      id: document.id,
-      status: {
-        in: [
-          ComplianceDocumentStatus.UPLOADED,
-          ComplianceDocumentStatus.RECEIVED,
-        ],
-      },
-    },
-    data:
-      input.decision === "approved"
-        ? { status: ComplianceDocumentStatus.APPROVED, rejectionReason: null }
-        : {
-            status: ComplianceDocumentStatus.PENDING,
-            rejectionReason: input.rejectionReason?.trim() ?? null,
-          },
-  });
-  if (update.count !== 1)
-    return {
-      ok: false as const,
-      error: "The compliance row changed before this decision was applied.",
-    };
-  if (input.decision === "approved") {
-    const outstanding = await db.complianceDocument.count({
-      where: {
-        engagementId: document.engagementId,
-        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-        status: {
-          notIn: [
-            ComplianceDocumentStatus.APPROVED,
-            ComplianceDocumentStatus.NOT_REQUIRED,
-          ],
-        },
-      },
-    });
-    if (outstanding === 0)
-      await db.certifierEngagement.updateMany({
-        where: {
-          id: document.engagementId,
-          status: {
-            in: [
-              CertifierEngagementStatus.IN_REVIEW,
-              CertifierEngagementStatus.CHECKLIST_TRACKING,
-              CertifierEngagementStatus.INSURANCE,
-            ],
-          },
-        },
-        data: { status: CertifierEngagementStatus.APPROVED },
-      });
+    return outcome.resolved
+      ? { ok: true as const, status: outcome.status }
+      : {
+          ok: false as const,
+          error: "The compliance row changed before this decision was applied.",
+        };
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    if (error.code === "domain_unauthorized")
+      throw new AgentAuthorizationError();
+    throw new Error(error.message);
   }
-  return {
-    ok: true as const,
-    status:
-      input.decision === "approved"
-        ? ComplianceDocumentStatus.APPROVED
-        : ComplianceDocumentStatus.PENDING,
-  };
 }
 
 export async function resolveAuthorizedComplianceDocument(
@@ -1187,7 +1131,7 @@ export async function resolveAuthorizedComplianceDocument(
       decision: input.decision,
     },
     execute: async (tx) => {
-      const result = await resolveComplianceDocumentDirect(input, tx);
+      const result = await resolveComplianceDocumentDirect(input, actor, tx);
       return result.ok
         ? actionEnvelope({
             entityRef: projectReference(project),

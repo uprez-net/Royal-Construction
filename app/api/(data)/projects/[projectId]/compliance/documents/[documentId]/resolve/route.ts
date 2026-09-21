@@ -63,6 +63,9 @@ export async function POST(
       decision: body.data.decision,
       rejectionReason: body.data.rejectionReason,
       resolvedBy: admin.name || admin.email,
+      // The domain command re-checks admin itself — this is the decision that
+      // freezes a document, so it does not take the route's word for it.
+      actor: admin,
     });
 
     if (!result.resolved) {

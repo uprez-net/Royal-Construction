@@ -8,6 +8,7 @@ import {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
+  Role,
   Prisma,
 } from "@prisma/client";
 import { revalidateTag } from "next/cache";
@@ -17,7 +18,6 @@ import {
   CERTIFIER_RESPONSE_DOCUMENTS,
   complianceDocumentLabel,
   DA_DOCUMENTS,
-  isApprovableDocumentType,
   isNotRequired,
   isOutstandingEvidence,
   isReviewSubmissionType,
@@ -65,6 +65,8 @@ import { recordHomeInsuranceOnProject } from "@/lib/compliance/home-insurance";
 import { verifyTitleSearchOwners } from "@/lib/compliance/verify-title-search";
 import { notifyCompliance } from "@/lib/compliance/notify";
 import prisma from "@/lib/prisma";
+import { resolveComplianceDocument as resolveComplianceDocumentDomain } from "@/lib/domain/compliance/documents";
+import { userPrincipal } from "@/lib/domain/principal";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
@@ -1133,88 +1135,35 @@ export async function resolveComplianceDocument(params: {
   decision: "approved" | "rejected";
   rejectionReason?: string;
   resolvedBy: string;
+  /** The ADMIN the route already resolved through requireComplianceAdmin. */
+  actor: { id: string; role: Role };
 }) {
-  const document = await prisma.complianceDocument.findFirst({
-    where: {
-      id: params.documentId,
-      engagement: { projectId: params.projectId },
-    },
-    include: { files: true },
-  });
-
-  if (!document) {
-    throw new Error("Compliance document not found on this project.");
-  }
-
-  // The certifier reviews the evidence they asked for, and nothing else. The
-  // required pack and the signed copies are already theirs; approving or
-  // rejecting one of those is not a decision anybody is entitled to make, and
-  // the UI no longer offers it — this is what stops a stale tab, or a direct
-  // call, from making it anyway and freezing a row nobody can then re-upload.
-  if (!isApprovableDocumentType(document.documentType)) {
-    throw new Error(
-      `${complianceDocumentLabel(document.documentType, document.label)} is not reviewed by the certifier.`,
-    );
-  }
-
-  const engagement = await requireEngagement(document.engagementId);
-  if (!hasSentCurrentDocument(engagement, document)) {
-    throw new Error(
-      `${complianceDocumentLabel(document.documentType, document.label)} has not been sent to the certifier yet.`,
-    );
-  }
-
+  // The decision itself is lib/domain/compliance/documents.ts, which Eve's
+  // review tool now calls too — its own copy had no "has this been sent to the
+  // certifier yet" check, so an agent could approve evidence nobody had asked
+  // the certifier to look at.
+  //
+  // What stays here is everything that needs a request: the cache expiry, the
+  // rejection notification, and the activity-log entries. `after` cannot run
+  // outside one, which is why none of it could live in a shared module.
   after(() => revalidateEngagement(params.projectId));
 
-  const approving = params.decision === "approved";
-
-  const claim = await prisma.complianceDocument.updateMany({
-    where: {
-      id: document.id,
-      // Only a document with evidence on it can be decided. An APPROVED row is
-      // frozen, and a PENDING one has nothing to judge.
-      status: {
-        in: [
-          ComplianceDocumentStatus.UPLOADED,
-          ComplianceDocumentStatus.RECEIVED,
-        ],
-      },
-    },
-    data: approving
-      ? {
-          status: ComplianceDocumentStatus.APPROVED,
-          rejectionReason: null,
-        }
-      : {
-          status: ComplianceDocumentStatus.PENDING,
-          rejectionReason: params.rejectionReason ?? null,
-        },
-  });
-
-  if (claim.count === 0) {
-    // Someone else got there first, or this tab is stale. Re-read rather than
-    // assume which, so the caller can say what actually happened.
-    const current = await prisma.complianceDocument.findUnique({
-      where: { id: document.id },
-      select: { status: true },
-    });
-    return {
-      resolved: false as const,
-      status: current?.status ?? document.status,
-    };
-  }
-
-  const documentLabel = complianceDocumentLabel(
-    document.documentType,
-    document.label,
+  const outcome = await resolveComplianceDocumentDomain(
+    userPrincipal(params.actor),
+    params,
+    prisma,
   );
 
-  if (!approving) {
+  if (!outcome.resolved) {
+    return { resolved: false as const, status: outcome.status };
+  }
+
+  if (!outcome.approved) {
     // Only the rejection is announced. Approving one of twenty checklist items
     // is not news; being told to redo one is.
     after(async () => {
       await notifyCompliance("complianceDocumentRejected", params.projectId, {
-        documentLabel,
+        documentLabel: outcome.documentLabel,
         rejectionReason: params.rejectionReason ?? "",
         resolvedBy: params.resolvedBy,
       });
@@ -1223,76 +1172,34 @@ export async function resolveComplianceDocument(params: {
 
   after(async () => {
     await logAction(
-      approving
+      outcome.approved
         ? createActivityLogEntry("complianceDocumentApproved", {
             projectId: params.projectId,
-            engagementId: document.engagementId,
-            documentId: document.id,
-            documentLabel,
+            engagementId: outcome.engagementId,
+            documentId: outcome.documentId,
+            documentLabel: outcome.documentLabel,
             resolvedBy: params.resolvedBy,
           })
         : createActivityLogEntry("complianceDocumentRejected", {
             projectId: params.projectId,
-            engagementId: document.engagementId,
-            documentId: document.id,
-            documentLabel,
+            engagementId: outcome.engagementId,
+            documentId: outcome.documentId,
+            documentLabel: outcome.documentLabel,
             resolvedBy: params.resolvedBy,
             rejectionReason: params.rejectionReason ?? "",
           }),
     );
   });
 
-  // Every document being approved is what freezes the section, so the
-  // engagement's own status follows the last decision rather than needing a
-  // separate button nobody would remember to press.
-  if (approving) {
-    const outstanding = await prisma.complianceDocument.count({
-      where: {
-        engagementId: document.engagementId,
-        // Checklist evidence is the whole of the review loop, so it is the
-        // whole of what can hold the engagement open. Counting anything else
-        // left it permanently one approval short of closing, against rows the
-        // UI gives nobody a way to approve.
-        documentType: ComplianceDocumentType.CHECKLIST_ITEM,
-        // The two ways a row can be settled. NOT_REQUIRED never becomes
-        // APPROVED — nobody approves a document that was never supplied — so
-        // without it here a single waved-off line holds the engagement open
-        // for good.
-        status: {
-          notIn: [
-            ComplianceDocumentStatus.APPROVED,
-            ComplianceDocumentStatus.NOT_REQUIRED,
-          ],
-        },
-      },
+  // Announced only by the call that actually closed the engagement, so two
+  // admins approving the last two documents at once do not both announce it.
+  if (outcome.engagementClosed) {
+    after(async () => {
+      await notifyCompliance("complianceApproved", params.projectId, {});
     });
-    if (outstanding === 0) {
-      const closed = await advanceEngagementStatus(
-        document.engagementId,
-        [
-          CertifierEngagementStatus.IN_REVIEW,
-          CertifierEngagementStatus.CHECKLIST_TRACKING,
-          CertifierEngagementStatus.INSURANCE,
-        ],
-        CertifierEngagementStatus.APPROVED,
-      );
-      // Sent only by the call that actually closed the engagement. Two admins
-      // approving the last two documents at once would otherwise both see zero
-      // outstanding and both announce it.
-      if (closed) {
-        after(async () => {
-          await notifyCompliance("complianceApproved", params.projectId, {});
-        });
-      }
-    }
   }
 
-  return {
-    resolved: true as const,
-    status: approving
-      ? ComplianceDocumentStatus.APPROVED
-      : ComplianceDocumentStatus.PENDING,
-  };
+  return { resolved: true as const, status: outcome.status };
 }
 
 /**
