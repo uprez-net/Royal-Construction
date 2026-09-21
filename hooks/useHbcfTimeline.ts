@@ -23,7 +23,10 @@ interface TimelineResult {
  * The card owns its own data (§3) rather than taking it as a prop, so the lead
  * detail screen stays unaware of the insurance book.
  */
-export function useHbfcTimeline(leadId: number) {
+export function useHbcfTimeline(
+  leadId: number,
+  estimatedStartDate?: string | null,
+) {
   const [result, setResult] = useState<TimelineResult | null>(null);
 
   useEffect(() => {
@@ -41,7 +44,7 @@ export function useHbfcTimeline(leadId: number) {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
 
-        console.error("useHbfcTimeline error", error);
+        console.error("useHbcfTimeline error", error);
         setResult({
           leadId,
           data: null,
@@ -53,7 +56,7 @@ export function useHbfcTimeline(leadId: number) {
       });
 
     return () => controller.abort();
-  }, [leadId]);
+  }, [leadId, estimatedStartDate]);
 
   const settled = result?.leadId === leadId ? result : null;
 

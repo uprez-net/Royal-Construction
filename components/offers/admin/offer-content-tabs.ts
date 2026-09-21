@@ -4,7 +4,7 @@ export type AdminOfferTabs =
   | "job-setup"
   | "cost-schedule"
   | "offer-scope"
-  | "HBFC-claim"
+  | "HBCF-claim"
   | "offer-inclusions"
   | "offer-content";
 
@@ -17,7 +17,7 @@ export const ADMIN_OFFER_TABS: readonly {
   { id: "offer-scope", label: "Scope" },
   { id: "offer-inclusions", label: "Inclusions" },
   { id: "offer-content", label: "Offer Document" },
-  { id: "HBFC-claim", label: "HBCF Claim" },
+  { id: "HBCF-claim", label: "HBCF Claim" },
 ];
 
 // The slice section each tab saves. Inclusions and Offer Document are two
@@ -30,7 +30,7 @@ export const TAB_SECTION: Readonly<
   "offer-scope": "offerScope",
   "offer-inclusions": "offerContent",
   "offer-content": "offerContent",
-  "HBFC-claim": "hbfcClaim",
+  "HBCF-claim": "hbcfClaim",
 };
 
 export function dirtyByTab(
@@ -44,7 +44,7 @@ export function dirtyByTab(
 }
 
 // Stable ids tying each tab to the panel it controls. Derived from the tab id
-// rather than written out, because one of them ("HBFC-claim") is mixed case and
+// rather than written out, because one of them ("HBCF-claim") is mixed case and
 // a hand-typed copy would drift.
 export const adminTabId = (tab: AdminOfferTabs): string =>
   `admin-offer-tab-${tab}`;

@@ -128,6 +128,7 @@ const SECTION_FIELDS: Record<
     "estimatedValueSource",
     "probabilityOverride",
     "expectedCloseDate",
+    "estimatedStartDate",
   ],
   lostReason: ["lostReason"],
 };
@@ -197,6 +198,7 @@ function buildSectionPayload(
         estimatedValueSource: form.estimatedValueSource,
         probabilityOverride: parseLikelihood(form.probabilityOverride),
         expectedCloseDate: form.expectedCloseDate || null,
+        estimatedStartDate: form.estimatedStartDate || null,
       };
 
     case "lostReason":
@@ -681,6 +683,26 @@ export function LeadOverviewTab({
                   Lands in {expectedCloseQuarter}
                 </span>
               ) : null}
+            </div>
+
+            <div>
+              <Field
+                label="Est. start date"
+                htmlFor={fieldId("estimated-start")}
+              >
+                <Input
+                  id={fieldId("estimated-start")}
+                  type="date"
+                  className={FIELD_CONTROL_CLASS}
+                  value={form.estimatedStartDate}
+                  onChange={(e) =>
+                    patch({ estimatedStartDate: e.target.value })
+                  }
+                />
+              </Field>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                The date from which this lead enters HBCF capacity planning.
+              </span>
             </div>
 
             {weightedPreview ? (

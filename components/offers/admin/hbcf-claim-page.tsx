@@ -7,8 +7,8 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import {
-  hbfcClaimChanged,
-  saveHBFCClaim,
+  hbcfClaimChanged,
+  saveHBCFClaim,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import { FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -94,17 +94,17 @@ function PercentInput({
   );
 }
 
-export function HBFCClaimPage() {
+export function HBCFClaimPage() {
   const dispatch = useAppDispatch();
   const claimAmount = useAppSelector(
-    (s) => s.adminOfferContent.data.hbfcClaim.claimAmount,
+    (s) => s.adminOfferContent.data.hbcfClaim.claimAmount,
   );
   const loadingChargePercent = useAppSelector(
-    (s) => s.adminOfferContent.data.hbfcClaim.loadingChargePercent,
+    (s) => s.adminOfferContent.data.hbcfClaim.loadingChargePercent,
   );
-  const dirty = useAppSelector((s) => s.adminOfferContent.dirty.hbfcClaim);
-  const saving = useAppSelector((s) => s.adminOfferContent.saving.hbfcClaim);
-  const error = useAppSelector((s) => s.adminOfferContent.error.hbfcClaim);
+  const dirty = useAppSelector((s) => s.adminOfferContent.dirty.hbcfClaim);
+  const saving = useAppSelector((s) => s.adminOfferContent.saving.hbcfClaim);
+  const error = useAppSelector((s) => s.adminOfferContent.error.hbcfClaim);
   const blockedMessageId = useId();
   // An emptied field, or one holding only ".", commits NaN. Save refuses it,
   // and says so, rather than going grey with no reason given.
@@ -127,7 +127,7 @@ export function HBFCClaimPage() {
           <NumberField
             value={claimAmount}
             onChange={(claimAmount) =>
-              dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
+              dispatch(hbcfClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF claim amount"
             invalid={claimAmountMissing}
@@ -139,7 +139,7 @@ export function HBFCClaimPage() {
           <PercentInput
             value={loadingChargePercent}
             onChange={(loadingChargePercent) =>
-              dispatch(hbfcClaimChanged({ claimAmount, loadingChargePercent }))
+              dispatch(hbcfClaimChanged({ claimAmount, loadingChargePercent }))
             }
             placeholder="Enter the system wide HBCF loading charge percentage"
             invalid={loadingChargeMissing}
@@ -166,7 +166,7 @@ export function HBFCClaimPage() {
           dirty={dirty}
           saving={saving}
           disabled={saveBlocked}
-          onSave={() => dispatch(saveHBFCClaim()).unwrap()}
+          onSave={() => dispatch(saveHBCFClaim()).unwrap()}
           successMessage="HBCF settings saved."
         />
       </CardFooter>

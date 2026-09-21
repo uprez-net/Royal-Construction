@@ -1055,6 +1055,9 @@ model Lead {
   /// Never default this to 0 — that would read as 0% for every existing lead.
   probabilityOverride  Int?
   expectedCloseDate    DateTime?
+  /// The date from which this lead should be considered for HBCF capacity.
+  /// Null means the lead is ready to be considered immediately.
+  estimatedStartDate    DateTime?
   /// Stamped by closeDatePatch() on stage transitions. Weighted pipeline and
   /// win rate depend on these; updatedAt is not a usable substitute.
   wonAt                DateTime?
@@ -1079,6 +1082,7 @@ model Lead {
   @@index([assignedId])
   @@index([createdAt])
   @@index([expectedCloseDate])
+  @@index([estimatedStartDate])
   @@index([wonAt])
   @@index([lostAt])
 }
@@ -1452,7 +1456,7 @@ model AdminOfferContent {
   costSchedule Json
   offerScope   Json
   offerContent Json
-  hbfcClaim    Json     @default("{\"claimAmount\": 800000}")
+  hbcfClaim    Json     @default("{\"claimAmount\": 800000}")
   // Bumped by every per-section save. Each Offer stamps the version it was
   // built from into Offer.workspaceState, so opening a still-editable offer can
   // detect that admin content moved on and re-apply the current defaults, while

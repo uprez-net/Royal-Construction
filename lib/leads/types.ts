@@ -122,6 +122,7 @@ export interface Lead {
   /** Null inherits the stage default (lib/leads/pipeline-stages.ts). */
   probabilityOverride?: number | null;
   expectedCloseDate?: string | null;
+  estimatedStartDate?: string | null;
   type: string;
   notes: string;
   notesDoc?: LeadRichTextDocument | null;

@@ -115,7 +115,7 @@ test("the admin writers live in a module that is not 'use server'", () => {
     "updateCostSchedule",
     "updateOfferScope",
     "updateOfferContent",
-    "updateHBFCClaim",
+    "updateHBCFClaim",
   ]) {
     assert.match(text, new RegExp(`export async function ${writer}\\b`));
   }

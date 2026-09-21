@@ -21,14 +21,14 @@ const clean = {
   costSchedule: false,
   offerScope: false,
   offerContent: false,
-  hbfcClaim: false,
+  hbcfClaim: false,
 };
 const noError = {
   buildScope: null,
   costSchedule: null,
   offerScope: null,
   offerContent: null,
-  hbfcClaim: null,
+  hbcfClaim: null,
 };
 
 const localEdit: AdminOfferContent["costSchedule"] = {
@@ -72,7 +72,7 @@ const state: AdminOfferContentState = {
     costSchedule: 4,
     offerScope: 2,
     offerContent: 0,
-    hbfcClaim: 0,
+    hbcfClaim: 0,
   },
 };
 

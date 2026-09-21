@@ -1,13 +1,13 @@
 import type {
   CostScheduleData,
-  HBFCClaimData,
+  HBCFClaimData,
   OfferContentData,
   OfferScopeData,
 } from "@/types/admin-offer-content";
 import {
   costScheduleDataSchema,
   costScheduleRowSchema,
-  hbfcClaimDataSchema,
+  hbcfClaimDataSchema,
   inclusionScheduleRowSchema,
   offerAllowanceSchema,
   offerContentDataSchema,
@@ -126,8 +126,8 @@ export function coerceOfferContent(value: unknown): OfferContentData {
   };
 }
 
-export function coerceHBFCClaim(value: unknown): HBFCClaimData {
-  const parsed = hbfcClaimDataSchema.safeParse(value);
+export function coerceHBCFClaim(value: unknown): HBCFClaimData {
+  const parsed = hbcfClaimDataSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   const record = isRecord(value) ? value : {};
   const claimAmount = coerceNonnegNumber(record.claimAmount, 0);

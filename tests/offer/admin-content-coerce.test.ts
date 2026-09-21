@@ -3,12 +3,12 @@ import { test } from "node:test";
 
 import {
   coerceCostSchedule,
-  coerceHBFCClaim,
+  coerceHBCFClaim,
   coerceOfferContent,
   coerceOfferScope,
 } from "../../lib/data/admin-offer-content-coerce";
 
-// Production stored a good claimAmount beside two nulls. coerceHBFCClaim used
+// Production stored a good claimAmount beside two nulls. coerceHBCFClaim used
 // to safeParse the whole object and, on that failure, replace all three fields
 // with 0 — so the HBCF pool read as empty and the admin page showed 0 / 0.
 // Saving while it displayed zeros would then overwrite the stored 8,000,000.
@@ -17,7 +17,7 @@ import {
 test("a null sibling does not zero a valid HBCF claim amount", () => {
   // The production row from #271.
   assert.deepEqual(
-    coerceHBFCClaim({
+    coerceHBCFClaim({
       claimAmount: 8_000_000,
       loadingChargePercent: null,
       totalPremiumToBePaid: null,
@@ -32,7 +32,7 @@ test("a null sibling does not zero a valid HBCF claim amount", () => {
 
 test("a valid loading percent is kept when the premium is missing", () => {
   assert.deepEqual(
-    coerceHBFCClaim({
+    coerceHBCFClaim({
       claimAmount: 8_000_000,
       loadingChargePercent: 30,
       totalPremiumToBePaid: null,
@@ -47,7 +47,7 @@ test("a valid loading percent is kept when the premium is missing", () => {
 
 test("a stored finite premium is kept even when a sibling is repaired", () => {
   assert.deepEqual(
-    coerceHBFCClaim({
+    coerceHBCFClaim({
       claimAmount: 8_000_000,
       loadingChargePercent: null,
       totalPremiumToBePaid: 10_400_000,
@@ -62,7 +62,7 @@ test("a stored finite premium is kept even when a sibling is repaired", () => {
 
 test("a negative claim amount is defaulted without discarding the loading percent", () => {
   assert.deepEqual(
-    coerceHBFCClaim({
+    coerceHBCFClaim({
       claimAmount: -1,
       loadingChargePercent: 30,
       totalPremiumToBePaid: 0,
@@ -81,13 +81,13 @@ test("a fully valid HBCF object is returned unchanged", () => {
     loadingChargePercent: 30,
     totalPremiumToBePaid: 2_600_000,
   };
-  assert.deepEqual(coerceHBFCClaim(value), value);
+  assert.deepEqual(coerceHBCFClaim(value), value);
 });
 
 test("unreadable HBCF JSON still falls back to zeros", () => {
   for (const value of [null, "nope", 12, []]) {
     assert.deepEqual(
-      coerceHBFCClaim(value),
+      coerceHBCFClaim(value),
       {
         claimAmount: 0,
         loadingChargePercent: 0,

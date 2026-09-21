@@ -20,7 +20,7 @@ const flags = <T>(value: T) => ({
   costSchedule: value,
   offerScope: value,
   offerContent: value,
-  hbfcClaim: value,
+  hbcfClaim: value,
 });
 
 function freshState() {
@@ -81,9 +81,9 @@ test("an edit to another section during the save does not keep this one dirty", 
   state.saving.offerContent = true;
   const sentRevision = state.revision.offerContent;
 
-  markSectionEdited(state, "hbfcClaim");
+  markSectionEdited(state, "hbcfClaim");
   settleSavedSection(state, "offerContent", sentRevision);
 
   assert.equal(state.dirty.offerContent, false);
-  assert.equal(state.dirty.hbfcClaim, true);
+  assert.equal(state.dirty.hbcfClaim, true);
 });

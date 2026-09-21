@@ -8,7 +8,7 @@ export type AdminOfferContentSection =
   | "costSchedule"
   | "offerScope"
   | "offerContent"
-  | "hbfcClaim";
+  | "hbcfClaim";
 
 export interface AdminOfferContentState {
   data: AdminOfferContent;
@@ -44,7 +44,7 @@ export function mergeHydratedAdminContent(
       costSchedule: pick("costSchedule"),
       offerScope: pick("offerScope"),
       offerContent: pick("offerContent"),
-      hbfcClaim: pick("hbfcClaim"),
+      hbcfClaim: pick("hbcfClaim"),
     },
     dirty: { ...state.dirty },
     // In-flight saves settle through their own thunk; the payload knows nothing
@@ -58,7 +58,7 @@ export function mergeHydratedAdminContent(
       costSchedule: errorFor("costSchedule"),
       offerScope: errorFor("offerScope"),
       offerContent: errorFor("offerContent"),
-      hbfcClaim: errorFor("hbfcClaim"),
+      hbcfClaim: errorFor("hbcfClaim"),
     },
   };
 }

@@ -180,6 +180,7 @@ export function mapLead(
     estimatedValueSource: lead.estimatedValueSource ?? null,
     probabilityOverride: lead.probabilityOverride ?? null,
     expectedCloseDate: lead.expectedCloseDate?.toISOString() ?? null,
+    estimatedStartDate: lead.estimatedStartDate?.toISOString() ?? null,
     type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified",
     notes: lead.notes ?? "",
     notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes ?? ""),

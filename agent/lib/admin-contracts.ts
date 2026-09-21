@@ -8,7 +8,7 @@ import { jsonValueSchema } from "@/agent/lib/result-contracts";
 import {
   buildScopeSchema,
   costScheduleDataSchema,
-  hbfcClaimDataSchema,
+  hbcfClaimDataSchema,
   offerContentDataSchema,
   offerScopeWriteSchema,
 } from "@/lib/validations/admin-offer-content";
@@ -64,9 +64,9 @@ export const updateAdminContentInputSchema = z.discriminatedUnion("section", [
     data: offerContentDataSchema,
   }),
   z.object({
-    section: z.literal("hbfcClaim"),
+    section: z.literal("hbcfClaim"),
     expectedVersion: z.number().int().positive(),
-    data: hbfcClaimDataSchema,
+    data: hbcfClaimDataSchema,
   }),
 ]);
 

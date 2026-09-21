@@ -411,7 +411,7 @@ export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
     exclusions: resolveExclusions(adminContent),
     draft: resolveDraft(adminContent),
     areaCalculator: resolveAreaCalculator(),
-    loadingChargePercentage: adminContent.hbfcClaim.loadingChargePercent,
+    loadingChargePercentage: adminContent.hbcfClaim.loadingChargePercent,
     rateConstants: {
       ...DEFAULT_RATE_CONSTANTS,
       ...adminContent.costSchedule.rateConstants,

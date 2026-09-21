@@ -124,6 +124,8 @@ export interface HbcfAssessment {
   canStartFrom: string | null;
   /** The dashed projection bar on the Gantt. Null when there is nothing to project. */
   projectedWindow: { start: string; end: string } | null;
+  /** The date used as the floor for this lead's capacity planning. */
+  planningStartDate: string;
 }
 
 export interface HbcfTimelinePayload {
@@ -412,13 +414,26 @@ export function hbcfAssessment({
   needRange,
   today,
   totalSumAssured,
+  estimatedStartDate,
 }: {
   claims: readonly HbcfProjectClaim[];
   needRange: HbcfNeedRange | null;
   today: Date;
   totalSumAssured: number;
+  estimatedStartDate?: Date | null;
 }): HbcfAssessment {
-  const usedAmount = claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
+  const todayStart = startOfDay(today);
+  const requestedStart = estimatedStartDate
+    ? startOfDay(estimatedStartDate)
+    : todayStart;
+  const planningStart =
+    requestedStart.getTime() > todayStart.getTime()
+      ? requestedStart
+      : todayStart;
+  const hasPlanningDate = estimatedStartDate != null;
+  const usedAmount = hasPlanningDate
+    ? hbcfUsedAt(claims, planningStart)
+    : claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
   const directAvailable = Math.max(0, totalSumAssured - usedAmount);
   const projectionMonths = hbcfProjectionMonths(claims);
 
@@ -427,6 +442,7 @@ export function hbcfAssessment({
     usedAmount,
     directAvailable,
     needRange,
+    planningStartDate: toIso(planningStart),
   };
 
   if (!needRange) {
@@ -440,7 +456,7 @@ export function hbcfAssessment({
   }
 
   if (directAvailable >= needRange.high) {
-    const start = toIso(today);
+    const start = toIso(planningStart);
     return {
       ...base,
       sufficient: true,
@@ -457,7 +473,8 @@ export function hbcfAssessment({
   const upcoming = [...claims]
     .filter(
       (claim) =>
-        hbcfParseDate(claim.insuranceClaimEndDate).getTime() >= today.getTime(),
+        hbcfParseDate(claim.insuranceClaimEndDate).getTime() >=
+        planningStart.getTime(),
     )
     .sort(
       (a, b) =>

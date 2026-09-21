@@ -52,6 +52,7 @@ interface AddLeadFormData {
   budget: string;
   estimatedValue: string;
   expectedCloseDate: string;
+  estimatedStartDate: string;
   type: ProjectType[];
   notes: string;
   followupDate: string;
@@ -89,6 +90,7 @@ export function AddLeadModal({
     budget: "Not Discussed",
     estimatedValue: "",
     expectedCloseDate: "",
+    estimatedStartDate: "",
     type: ["Not Specified"],
     notes: "",
     followupDate: "",
@@ -223,6 +225,7 @@ export function AddLeadModal({
         budget: form.budget as BudgetRange,
         estimatedValue: form.estimatedValue === "" ? null : form.estimatedValue,
         expectedCloseDate: form.expectedCloseDate || null,
+        estimatedStartDate: form.estimatedStartDate || null,
         type: form.type.length > 0 ? form.type : ["Not Specified"],
         notes: form.notes,
         // The date is still stored on the lead for now, and the task below is
@@ -520,6 +523,23 @@ export function AddLeadModal({
               value={form.expectedCloseDate}
               onChange={(e) => updateField("expectedCloseDate", e.target.value)}
             />
+          </div>
+          <div>
+            <label htmlFor={fieldId("estimated-start")} className={itemLbl}>
+              Est. start date (optional)
+            </label>
+            <input
+              id={fieldId("estimated-start")}
+              type="date"
+              className={fieldCls}
+              value={form.estimatedStartDate}
+              onChange={(e) =>
+                updateField("estimatedStartDate", e.target.value)
+              }
+            />
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              When HBCF capacity planning should begin for this lead.
+            </span>
           </div>
         </div>
 

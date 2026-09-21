@@ -10,7 +10,7 @@ import LeadCommModal from "@/components/leads/modal-ui/lead-comm-modal";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import type { Lead } from "@/lib/leads/types";
 
-import { HbfcClaimCard } from "./hbfc-claim-card";
+import { HbcfClaimCard } from "./hbcf-claim-card";
 import { LeadDetailTabs } from "./lead-detail-tabs";
 import { LeadHeader } from "./lead-header";
 
@@ -64,7 +64,10 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
         onLeadUpdate={handleLeadUpdate}
       />
 
-      <HbfcClaimCard leadId={lead.id} />
+      <HbcfClaimCard
+        leadId={lead.id}
+        estimatedStartDate={lead.estimatedStartDate}
+      />
 
       <LeadDetailTabs
         lead={lead}

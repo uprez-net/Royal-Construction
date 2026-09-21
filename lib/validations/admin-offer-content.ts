@@ -88,7 +88,7 @@ export const offerScopeWriteSchema = offerScopeDataSchema.extend({
   allowances: z.array(offerAllowanceWriteSchema),
 });
 
-export const hbfcClaimDataSchema = z.object({
+export const hbcfClaimDataSchema = z.object({
   // Neither is ever negative: claimAmount is the whole-book HBCF sum assured
   // and loadingChargePercent a premium loading. The admin inputs refuse a minus
   // sign, but the action is a server action anyone signed in as an admin can

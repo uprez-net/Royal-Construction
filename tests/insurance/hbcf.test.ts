@@ -194,6 +194,39 @@ test("free capacity covering the top of the range means the build can start now"
   assert.equal(result.projectedWindow?.start, "2026-08-18");
 });
 
+test("an estimated start date becomes the capacity planning floor", () => {
+  const result = hbcfAssessment({
+    claims: [
+      claim({
+        projectId: "finished-before-planning",
+        claimAmount: 400_000,
+        insuranceClaimEndDate: "2027-01-01",
+      }),
+      claim({
+        projectId: "active-at-planning",
+        claimAmount: 300_000,
+        insuranceClaimEndDate: "2027-12-31",
+      }),
+    ],
+    needRange: {
+      low: 350_000,
+      high: 400_000,
+      source: "budgetBracket",
+      isOpenEnded: false,
+    },
+    today: TODAY,
+    estimatedStartDate: new Date(2027, 0, 15),
+    totalSumAssured: 800_000,
+  });
+
+  assert.equal(result.planningStartDate, "2027-01-15");
+  assert.equal(result.usedAmount, 300_000);
+  assert.equal(result.directAvailable, 500_000);
+  assert.equal(result.sufficient, true);
+  assert.equal(result.canStartFrom, "2027-01-15");
+  assert.equal(result.projectedWindow?.start, "2027-01-15");
+});
+
 test("the decisive claim is the expiry that tips capacity over the top of the range", () => {
   // $100K free, needing up to $350K.
   // Smith frees $250K first and clears it.

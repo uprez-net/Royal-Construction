@@ -10,7 +10,7 @@ import {
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   coerceCostSchedule,
-  coerceHBFCClaim,
+  coerceHBCFClaim,
   coerceOfferContent,
   coerceOfferScope,
 } from "./admin-offer-content-writes";
@@ -44,8 +44,8 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
           EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
         offerContent:
           EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
-        hbfcClaim:
-          EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
+        hbcfClaim:
+          EMPTY_ADMIN_OFFER_CONTENT.hbcfClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -53,7 +53,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
       costSchedule: coerceCostSchedule(created.costSchedule),
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
-      hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
+      hbcfClaim: coerceHBCFClaim(created.hbcfClaim),
       version: created.version,
     };
   }
@@ -63,7 +63,7 @@ export async function getAdminOfferContent(): Promise<AdminOfferContent> {
     costSchedule: coerceCostSchedule(row.costSchedule),
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
-    hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
+    hbcfClaim: coerceHBCFClaim(row.hbcfClaim),
     version: row.version,
   };
 }

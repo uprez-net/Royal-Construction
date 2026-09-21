@@ -223,6 +223,9 @@ const dealEconomicsFields = {
   expectedCloseDate: nullableDateInput
     .describe("Expected close date")
     .optional(),
+  estimatedStartDate: nullableDateInput
+    .describe("Estimated build start date")
+    .optional(),
 } as const;
 
 export const updateLeadSchema = z.object({

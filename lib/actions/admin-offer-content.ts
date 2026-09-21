@@ -8,14 +8,14 @@ import {
   type OfferScopeData,
   type OfferContentData,
   ADMIN_OFFER_CONTENT_TAG,
-  HBFCClaimData,
+  HBCFClaimData,
 } from "@/types/admin-offer-content";
 import {
   buildScopeSchema,
   costScheduleDataSchema,
   offerScopeWriteSchema,
   offerContentDataSchema,
-  hbfcClaimDataSchema,
+  hbcfClaimDataSchema,
 } from "@/lib/validations/admin-offer-content";
 import { requireAdminUser } from "@/lib/auth/require-admin";
 import {
@@ -23,7 +23,7 @@ import {
   updateCostSchedule,
   updateOfferScope,
   updateOfferContent,
-  updateHBFCClaim,
+  updateHBCFClaim,
 } from "@/lib/data/admin-offer-content-writes";
 
 export type ActionResult =
@@ -138,8 +138,8 @@ export async function saveOfferContentAction(
   }
 }
 
-export async function saveHBFCClaimAction(
-  data: HBFCClaimData,
+export async function saveHBCFClaimAction(
+  data: HBCFClaimData,
 ): Promise<ActionResult> {
   const denied = await guard();
   if (denied) {
@@ -150,12 +150,12 @@ export async function saveHBFCClaimAction(
   // read as the whole-book HBCF sum assured (lib/data/insurance.ts), so an
   // emptied field committing NaN wrote a value that reads back as zero and
   // reported success. z.number() rejects NaN and Infinity.
-  const parsed = hbfcClaimDataSchema.safeParse(data);
+  const parsed = hbcfClaimDataSchema.safeParse(data);
   if (!parsed.success) {
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }
   try {
-    await updateHBFCClaim(parsed.data);
+    await updateHBCFClaim(parsed.data);
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {

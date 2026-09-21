@@ -25,7 +25,7 @@ const allSaved = {
   costSchedule: false,
   offerScope: false,
   offerContent: false,
-  hbfcClaim: false,
+  hbcfClaim: false,
 };
 
 const markedTabs = (marks: Record<string, boolean>) =>
@@ -91,14 +91,14 @@ const accessibleNameOf = (button: string) =>
   );
 
 test("opening the last tab ticks nothing and numbers the tabs before it", () => {
-  const markup = renderStrip("HBFC-claim");
+  const markup = renderStrip("HBCF-claim");
   const buttons = buttonsOf(markup);
 
   assert.equal(buttons.length, ADMIN_OFFER_TABS.length);
   assert.doesNotMatch(markup, /<svg\b/, "no tab carries a tick icon");
   ADMIN_OFFER_TABS.forEach((tab, index) => {
     const expected =
-      tab.id === "HBFC-claim" ? tab.label : `${index + 1}${tab.label}`;
+      tab.id === "HBCF-claim" ? tab.label : `${index + 1}${tab.label}`;
     assert.equal(textOf(buttons[index]), expected);
   });
 });

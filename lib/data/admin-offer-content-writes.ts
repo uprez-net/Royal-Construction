@@ -14,21 +14,21 @@ import {
   type AdminOfferContent,
   type BuildScopeLines,
   type CostScheduleData,
-  type HBFCClaimData,
+  type HBCFClaimData,
   type OfferContentData,
   type OfferScopeData,
   EMPTY_ADMIN_OFFER_CONTENT,
 } from "@/types/admin-offer-content";
 import {
   coerceCostSchedule,
-  coerceHBFCClaim,
+  coerceHBCFClaim,
   coerceOfferContent,
   coerceOfferScope,
 } from "./admin-offer-content-coerce";
 
 export {
   coerceCostSchedule,
-  coerceHBFCClaim,
+  coerceHBCFClaim,
   coerceOfferContent,
   coerceOfferScope,
 };
@@ -59,8 +59,8 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
           EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
         offerContent:
           EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
-        hbfcClaim:
-          EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
+        hbcfClaim:
+          EMPTY_ADMIN_OFFER_CONTENT.hbcfClaim as unknown as Prisma.InputJsonValue,
       },
     });
     return {
@@ -68,7 +68,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
       costSchedule: coerceCostSchedule(created.costSchedule),
       offerScope: coerceOfferScope(created.offerScope),
       offerContent: coerceOfferContent(created.offerContent),
-      hbfcClaim: coerceHBFCClaim(created.hbfcClaim),
+      hbcfClaim: coerceHBCFClaim(created.hbcfClaim),
       version: created.version,
     };
   }
@@ -78,7 +78,7 @@ export async function getAdminOfferContentNonCache(): Promise<AdminOfferContent>
     costSchedule: coerceCostSchedule(row.costSchedule),
     offerScope: coerceOfferScope(row.offerScope),
     offerContent: coerceOfferContent(row.offerContent),
-    hbfcClaim: coerceHBFCClaim(row.hbfcClaim),
+    hbcfClaim: coerceHBCFClaim(row.hbcfClaim),
     version: row.version,
   };
 }
@@ -111,8 +111,8 @@ export async function resolveSingletonId(): Promise<string> {
         EMPTY_ADMIN_OFFER_CONTENT.offerScope as unknown as Prisma.InputJsonValue,
       offerContent:
         EMPTY_ADMIN_OFFER_CONTENT.offerContent as unknown as Prisma.InputJsonValue,
-      hbfcClaim:
-        EMPTY_ADMIN_OFFER_CONTENT.hbfcClaim as unknown as Prisma.InputJsonValue,
+      hbcfClaim:
+        EMPTY_ADMIN_OFFER_CONTENT.hbcfClaim as unknown as Prisma.InputJsonValue,
     },
     select: { id: true },
   });
@@ -166,12 +166,12 @@ export async function updateOfferContent(
   });
 }
 
-export async function updateHBFCClaim(data: HBFCClaimData): Promise<void> {
+export async function updateHBCFClaim(data: HBCFClaimData): Promise<void> {
   const id = await resolveSingletonId();
   await prisma.adminOfferContent.update({
     where: { id },
     data: {
-      hbfcClaim: data as unknown as Prisma.InputJsonValue,
+      hbcfClaim: data as unknown as Prisma.InputJsonValue,
       version: { increment: 1 },
     },
   });

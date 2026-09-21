@@ -26,7 +26,7 @@ import {
 import {
   buildScopeSchema,
   costScheduleDataSchema,
-  hbfcClaimDataSchema,
+  hbcfClaimDataSchema,
   offerContentDataSchema,
   offerScopeWriteSchema,
 } from "@/lib/validations/admin-offer-content";
@@ -365,7 +365,7 @@ export async function updateAuthorizedAdminContent(
       | "costSchedule"
       | "offerScope"
       | "offerContent"
-      | "hbfcClaim";
+      | "hbcfClaim";
     expectedVersion: number;
     data: unknown;
   },
@@ -386,7 +386,7 @@ export async function updateAuthorizedAdminContent(
           ? offerScopeWriteSchema.safeParse(input.data)
           : input.section === "offerContent"
             ? offerContentDataSchema.safeParse(input.data)
-            : hbfcClaimDataSchema.safeParse(input.data);
+            : hbcfClaimDataSchema.safeParse(input.data);
   if (!parsed.success)
     throw new Error(
       parsed.error.issues.map((issue) => issue.message).join("; "),
@@ -401,7 +401,7 @@ export async function updateAuthorizedAdminContent(
           ? { offerScope: parsed.data as Prisma.InputJsonValue }
           : input.section === "offerContent"
             ? { offerContent: parsed.data as Prisma.InputJsonValue }
-            : { hbfcClaim: parsed.data as Prisma.InputJsonValue };
+            : { hbcfClaim: parsed.data as Prisma.InputJsonValue };
   const updated = await prisma.adminOfferContent.updateMany({
     where: { id, version: input.expectedVersion },
     data: { ...updateData, version: { increment: 1 } },

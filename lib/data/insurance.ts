@@ -118,7 +118,12 @@ export async function getHbcfTimelineForLead(
   const [lead, claims, adminContent] = await Promise.all([
     prisma.lead.findUnique({
       where: { id: leadId },
-      select: { id: true, budget: true, estimatedValue: true },
+      select: {
+        id: true,
+        budget: true,
+        estimatedValue: true,
+        estimatedStartDate: true,
+      },
     }),
     getActiveHbcfClaims(),
     getAdminOfferContent(),
@@ -138,7 +143,8 @@ export async function getHbcfTimelineForLead(
         budget: lead.budget,
       }),
       today,
-      totalSumAssured: adminContent.hbfcClaim.claimAmount,
+      estimatedStartDate: lead.estimatedStartDate,
+      totalSumAssured: adminContent.hbcfClaim.claimAmount,
     }),
     generatedAt: format(today, "yyyy-MM-dd"),
   };
@@ -168,6 +174,6 @@ export async function getHbcfBreachForProject(
   return hbcfProjectBreach({
     claims,
     projectId,
-    totalSumAssured: adminContent.hbfcClaim.claimAmount,
+    totalSumAssured: adminContent.hbcfClaim.claimAmount,
   });
 }

@@ -909,6 +909,7 @@ export async function createLead(
         estimatedValue: createdValue,
         estimatedValueSource: createdValue === null ? null : "MANUAL",
         expectedCloseDate: input.expectedCloseDate ?? null,
+        estimatedStartDate: input.estimatedStartDate ?? null,
         // A lead created directly in a closed stage needs its close date
         // stamped, exactly as the two update paths do.
         ...closeDatePatch(null, mappedStage, new Date()),
@@ -1109,6 +1110,9 @@ export async function updateLead(
   }
   if (input.expectedCloseDate !== undefined) {
     updateData.expectedCloseDate = input.expectedCloseDate;
+  }
+  if (input.estimatedStartDate !== undefined) {
+    updateData.estimatedStartDate = input.estimatedStartDate;
   }
   if (input.type !== undefined) updateData.type = input.type;
   if (input.notes !== undefined) updateData.notes = input.notes;

@@ -27,7 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useHbfcTimeline } from "@/hooks/useHbfcTimeline";
+import { useHbcfTimeline } from "@/hooks/useHbcfTimeline";
 import {
   HBCF_FREE_COLOUR,
   hbcfAxisRange,
@@ -450,7 +450,13 @@ function NowMarker({ leftPercent }: { leftPercent: number }) {
 /*                          Build start assessment                            */
 /* -------------------------------------------------------------------------- */
 
-function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
+function BuildStartAssessment({
+  assessment,
+  estimatedStartDate,
+}: {
+  assessment: HbcfAssessment;
+  estimatedStartDate?: string | null;
+}) {
   const {
     needRange,
     // directAvailable,
@@ -484,6 +490,18 @@ function BuildStartAssessment({ assessment }: { assessment: HbcfAssessment }) {
         <AlertTriangle className="size-4 text-warning-ink" aria-hidden="true" />
         Build start assessment
       </h3>
+      {estimatedStartDate ? (
+        <p className="text-xs text-foreground">
+          Planning from:{" "}
+          <span className="font-mono font-semibold tabular-nums">
+            {dateFormat.format(hbcfParseDate(estimatedStartDate))}
+          </span>
+          <span className="text-muted-foreground">
+            {" "}
+            — HBCF capacity is assessed from this date.
+          </span>
+        </p>
+      ) : null}
       {/* Hidden now should later be pushed based on requirment */}
       {/* <p className="text-xs text-foreground">
         Direct amount available:{" "}
@@ -587,8 +605,14 @@ function CardSkeleton() {
   );
 }
 
-export function HbfcClaimCard({ leadId }: { leadId: number }) {
-  const { data, loading, error } = useHbfcTimeline(leadId);
+export function HbcfClaimCard({
+  leadId,
+  estimatedStartDate,
+}: {
+  leadId: number;
+  estimatedStartDate?: string | null;
+}) {
+  const { data, loading, error } = useHbcfTimeline(leadId, estimatedStartDate);
   const [open, setOpen] = useState(false);
 
   const claims = useMemo(() => data?.claims ?? [], [data]);
@@ -642,8 +666,8 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
             HBCF timeline
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track capacity across all active projects to determine build start
-            availability.
+            Track capacity across all active projects to determine when this
+            lead can be accommodated.
           </p>
         </div>
 
@@ -700,7 +724,10 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
                   </span>{" "}
                   is available.
                 </p>
-                <BuildStartAssessment assessment={assessment} />
+                <BuildStartAssessment
+                  assessment={assessment}
+                  estimatedStartDate={estimatedStartDate}
+                />
               </div>
             ) : (
               <>
@@ -717,7 +744,10 @@ export function HbfcClaimCard({ leadId }: { leadId: number }) {
                   usedAmount={assessment.usedAmount}
                   totalSumAssured={assessment.totalSumAssured}
                 />
-                <BuildStartAssessment assessment={assessment} />
+                <BuildStartAssessment
+                  assessment={assessment}
+                  estimatedStartDate={estimatedStartDate}
+                />
               </>
             )
           ) : null}

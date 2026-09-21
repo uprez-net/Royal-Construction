@@ -7,7 +7,7 @@ import { fetchJson } from "@/utils/fetch";
 /**
  * The outcome of one completed fetch, tagged with the project it belongs to.
  *
- * Same shape as `useHbfcTimeline`'s result, and for the same reason: keeping the
+ * Same shape as `useHbcfTimeline`'s result, and for the same reason: keeping the
  * id inside the state lets `loading` be derived during render, so a result for
  * the previous project is never mistaken for this one's.
  */

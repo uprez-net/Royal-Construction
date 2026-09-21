@@ -215,6 +215,7 @@ export interface LeadDetailFormData {
   /** Empty string means "inherit the stage default". */
   probabilityOverride: string;
   expectedCloseDate: string;
+  estimatedStartDate: string;
   type: ProjectType[];
   notes: string;
   notesDoc: LeadRichTextDocument;
@@ -474,6 +475,9 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     // <input type="date"> wants YYYY-MM-DD, not a full ISO timestamp.
     expectedCloseDate: lead.expectedCloseDate
       ? lead.expectedCloseDate.slice(0, 10)
+      : "",
+    estimatedStartDate: lead.estimatedStartDate
+      ? lead.estimatedStartDate.slice(0, 10)
       : "",
     type: normalizeTypes(lead.type),
     notes: lead.notes || "",
