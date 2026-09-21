@@ -26,6 +26,7 @@ import { auth } from "@clerk/nextjs/server";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
 import { authorizeProject } from "@/lib/domain/access/projects";
+import { createTradieSchedule as createTradieScheduleDomain } from "@/lib/domain/tradies/schedules";
 import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
@@ -131,7 +132,10 @@ const userHasAccessToSchedule = async (projectId: string) => {
     throw error;
   }
 
-  return user.id;
+  // The whole user, not just the id: callers that go on to invoke a domain
+  // command need a real principal, and inventing a role for one would make the
+  // command's own authorization meaningless.
+  return user;
 };
 
 /**
@@ -148,19 +152,26 @@ const userHasAccessToSchedule = async (projectId: string) => {
  */
 export async function createTradieSchedule(input: CreateTradieScheduleInput) {
   try {
-    await userHasAccessToSchedule(input.projectId);
-    const schedule = await prisma.tradieSchedule.create({
-      data: {
-        tradieId: input.tradieId,
-        projectId: input.projectId,
-        milestoneId: input.milestoneId ?? null,
-        scheduledDate: new Date(input.scheduledDate),
+    const actingUser = await userHasAccessToSchedule(input.projectId);
+    // The create itself is lib/domain/tradies/schedules.ts, shared with Eve's
+    // booking tool. Two checks arrive with it that this path never had: the
+    // milestone must belong to the project, and the tradie must not already
+    // hold an overlapping active booking. A double-booked tradie cannot show
+    // up to one of the two sites, and nothing here used to notice.
+    const created = await createTradieScheduleDomain(
+      userPrincipal(actingUser),
+      {
         durationDays: input.durationDays ?? 1,
-        status: input.requiresQuote
-          ? TradieScheduleStatus.AWAITING_QUOTE
-          : TradieScheduleStatus.PENDING,
+        milestoneId: input.milestoneId ?? null,
+        projectId: input.projectId,
         requiresQuote: input.requiresQuote ?? false,
+        scheduledDate: new Date(input.scheduledDate),
+        tradieId: input.tradieId,
       },
+      prisma,
+    );
+    const schedule = await prisma.tradieSchedule.findUniqueOrThrow({
+      where: { id: created.id },
       include: {
         tradie: true,
         project: { include: { siteManager: true } },
@@ -406,7 +417,8 @@ export async function updateTradieSchedule(
     if (!existingSchedule) {
       throw new Error("Schedule not found");
     }
-    const userId = await userHasAccessToSchedule(existingSchedule.projectId);
+    const userId = (await userHasAccessToSchedule(existingSchedule.projectId))
+      .id;
     if (
       !options.statusAlreadyApplied &&
       !TRADIE_SCHEDULE_STATE_MACHINE[existingSchedule.status].includes(
@@ -842,7 +854,7 @@ export async function requestTradieScheduleDeletion(
     if (!schedule) {
       throw new Error("Schedule not found");
     }
-    const userId = await userHasAccessToSchedule(schedule.projectId);
+    const userId = (await userHasAccessToSchedule(schedule.projectId)).id;
 
     // Without this an impatient click sends the same booking to the admin
     // queue twice, and the second approval then fails on a row the first one

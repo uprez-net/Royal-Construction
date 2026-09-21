@@ -8,6 +8,8 @@ import { createClerkClient } from "@clerk/backend";
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
 import prisma from "@/lib/prisma";
+import { changeTeamMemberRole } from "@/lib/domain/identity/team";
+import { userPrincipal } from "@/lib/domain/principal";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
@@ -501,39 +503,24 @@ export async function updateAuthorizedTeamRole(
     publicMetadata: { role: input.newRole },
   });
   try {
-    const updated = await prisma.$transaction(
-      async (tx) => {
-        const current = await tx.user.findUnique({
-          where: { id: target.id },
-          select: { id: true, name: true, role: true },
-        });
-        if (!current || current.role !== target.role)
-          throw new Error(
-            "The team member changed during this role update; refresh and retry.",
-          );
-        if (
-          current.role === Role.ADMIN &&
-          input.newRole !== Role.ADMIN &&
-          (await tx.user.count({ where: { role: Role.ADMIN } })) <= 1
-        )
-          throw new Error("The last admin cannot be demoted.");
-        const changed = await tx.user.updateMany({
-          where: { id: current.id, role: target.role },
-          data: { role: input.newRole },
-        });
-        if (changed.count !== 1)
-          throw new Error(
-            "The team member changed during this role update; refresh and retry.",
-          );
-        return { id: current.id, name: current.name, role: input.newRole };
+    // The last-admin guard and the optimistic role check are
+    // lib/domain/identity/team.ts. With two or three people on a shared login,
+    // demoting the only ADMIN locks the business out of its own admin surface
+    // with nobody left who can undo it.
+    const updated = await changeTeamMemberRole(
+      userPrincipal(actor),
+      {
+        expectedRole: target.role,
+        newRole: input.newRole,
+        userId: target.id,
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      prisma,
     );
     return result(
       "confirmation",
       "Team role updated",
       `${updated.name}'s role is now ${updated.role}.`,
-      { userId: updated.id, role: updated.role },
+      { userId: updated.userId, role: updated.role },
     );
   } catch (error) {
     try {

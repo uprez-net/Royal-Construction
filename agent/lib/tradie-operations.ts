@@ -31,6 +31,10 @@ import {
   tradieScheduleListScope,
 } from "@/lib/domain/access/tradies";
 import { projectManageScope } from "@/lib/domain/access/projects";
+import {
+  assertNoScheduleConflict,
+  createTradieSchedule as createTradieScheduleDomain,
+} from "@/lib/domain/tradies/schedules";
 import { isDomainError } from "@/lib/domain/errors";
 import { userPrincipal } from "@/lib/domain/principal";
 
@@ -649,6 +653,8 @@ export async function listAuthorizedTradieSchedules(
   );
 }
 
+// lib/domain/tradies/schedules.ts owns the overlap rule; the app had none at
+// all until this phase.
 async function ensureNoScheduleConflict(
   tradieId: string,
   scheduledDate: Date,
@@ -656,28 +662,15 @@ async function ensureNoScheduleConflict(
   ignoreId?: string,
   db: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
-  const end = new Date(scheduledDate);
-  end.setUTCDate(end.getUTCDate() + durationDays);
-  const candidates = await db.tradieSchedule.findMany({
-    where: {
-      tradieId,
-      id: ignoreId ? { not: ignoreId } : undefined,
-      status: {
-        notIn: [TradieScheduleStatus.DECLINED, TradieScheduleStatus.COMPLETED],
-      },
-      scheduledDate: { lt: end },
-    },
-    select: { id: true, scheduledDate: true, durationDays: true },
-  });
-  const conflict = candidates.find((candidate) => {
-    const candidateEnd = new Date(candidate.scheduledDate);
-    candidateEnd.setUTCDate(candidateEnd.getUTCDate() + candidate.durationDays);
-    return candidateEnd > scheduledDate;
-  });
-  if (conflict)
-    throw new Error(
-      "That tradie already has an overlapping active booking in the requested window.",
+  try {
+    await assertNoScheduleConflict(
+      { durationDays, ignoreScheduleId: ignoreId, scheduledDate, tradieId },
+      db,
     );
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new Error(error.message);
+  }
 }
 
 export async function createAuthorizedTradieSchedule(
@@ -694,49 +687,43 @@ export async function createAuthorizedTradieSchedule(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   const db = transaction ?? prisma;
-  const tradie = await db.tradie.findUnique({ where: { id: input.tradieId } });
-  if (!tradie) throw new AgentAuthorizationError();
-  const project = await db.project.findFirst({
-    where: {
-      id: input.projectId,
-      ...projectManageScope(userPrincipal(actor)),
-    },
-    select: { id: true, name: true, siteManagerId: true },
-  });
-  if (!project) throw new AgentAuthorizationError();
-  if (input.milestoneId) {
-    const milestone = await db.milestone.findFirst({
-      where: { id: input.milestoneId, projectId: project.id },
-      select: { id: true },
-    });
-    if (!milestone)
-      throw new Error("Milestone does not belong to the selected project.");
+  // Project scope, the milestone-belongs-to-project check and the overlap
+  // refusal are all lib/domain/tradies/schedules.ts now, shared with the app.
+  let created;
+  try {
+    created = await createTradieScheduleDomain(
+      userPrincipal(actor),
+      {
+        durationDays: input.durationDays,
+        milestoneId: input.milestoneId ?? null,
+        projectId: input.projectId,
+        requiresQuote: input.requiresQuote,
+        scheduledDate: new Date(input.scheduledDate),
+        tradieId: input.tradieId,
+      },
+      db,
+    );
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    if (
+      error.code === "domain_unauthorized" ||
+      error.code === "domain_not_found"
+    ) {
+      throw new AgentAuthorizationError();
+    }
+    throw new Error(error.message);
   }
-  const scheduledDate = new Date(input.scheduledDate);
-  await ensureNoScheduleConflict(
-    tradie.id,
-    scheduledDate,
-    input.durationDays,
-    undefined,
-    db,
-  );
-  const schedule = await db.tradieSchedule.create({
-    data: {
-      tradieId: tradie.id,
-      projectId: project.id,
-      milestoneId: input.milestoneId ?? null,
-      scheduledDate,
-      durationDays: input.durationDays,
-      requiresQuote: input.requiresQuote,
-      status: input.requiresQuote
-        ? TradieScheduleStatus.AWAITING_QUOTE
-        : TradieScheduleStatus.PENDING,
-    },
+
+  const schedule = await db.tradieSchedule.findUniqueOrThrow({
+    where: { id: created.id },
     include: {
       tradie: { select: { id: true, name: true, trade: true } },
       project: { select: { id: true, name: true } },
     },
   });
+  const tradie = schedule.tradie;
+  const project = schedule.project;
+  const scheduledDate = schedule.scheduledDate;
   return envelope(
     "confirmation",
     "Tradie scheduled",
