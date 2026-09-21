@@ -11,31 +11,25 @@ import {
   type AgentResultEnvelope,
   type EntityReference,
 } from "@/agent/lib/result-contracts";
-import prisma from "@/lib/prisma";
+import { agentDb } from "@/agent/lib/db";
+import { applyOfferWorkspacePatch } from "@/lib/domain/offers/workspace-save";
+import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
+import { syncLeadStageForOffer } from "@/lib/domain/leads/stage-sync";
+import { userPrincipal } from "@/lib/domain/principal";
 import { assertCanAccessLead, leadListScope } from "@/lib/offer/access";
 import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
 import {
   checkOfferConsistency,
   draftInclusionHighlights,
 } from "@/lib/offer/inclusion-consistency-ai";
-import {
-  classifyOfferTransition,
-  RECALL_EDGES,
-  requiresOwnerGate,
-} from "@/lib/offer/offer-workflow-transitions";
-import { leadStagePatchForOfferStatus } from "@/lib/leads/offer-stage-map";
-import { collectOwnerIssues } from "@/lib/offer/workspace-model";
+// The state machine, the owner gate, the workspace validation, the GST split
+// and the lead-stage projection used to be imported here and re-implemented
+// around them. They now live behind lib/domain/offers/*, which the app calls
+// too, so this file names none of them.
+import { RECALL_EDGES } from "@/lib/offer/offer-workflow-transitions";
 import { parseWorkspaceState } from "@/lib/offer/workspace-persistence";
 import { serializeContractParticulars } from "@/lib/offer/contract-particulars";
-import {
-  deserializeWorkspace,
-  planWorkspaceSave,
-  validatePersistedWorkspace,
-} from "@/lib/offer/workspace-persistence";
-import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
-import { splitContractValueByGst } from "@/lib/offer/workspace-pricing";
 import { OfferStatusLabels } from "@/types/offer";
-import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 
 type OfferSummary = {
   acceptedAt: Date | null;
@@ -59,7 +53,7 @@ type OfferSummary = {
     name: string;
   };
 };
-type OfferDb = Prisma.TransactionClient | typeof prisma;
+type OfferDb = Prisma.TransactionClient | typeof agentDb;
 
 const offerSummarySelect = {
   acceptedAt: true,
@@ -153,7 +147,7 @@ async function assertAgentCanAccessOffer(
   actor: Pick<User, "id" | "role">,
   offerId: string,
 ) {
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: offerId },
     select: { leadId: true },
   });
@@ -161,53 +155,8 @@ async function assertAgentCanAccessOffer(
   await assertAgentCanAccessLead(actor, offer.leadId);
 }
 
-const OFFER_WORKSPACE_PATCH_KEYS = new Set([
-  "job",
-  "costLines",
-  "allowances",
-  "exclusions",
-  "draft",
-  "areaCalculator",
-  "pricingSettings",
-  "paymentSchedule",
-  "rateCardProduct",
-  "rateCardTier",
-  "overrideReason",
-  "priceAdjustmentLabel",
-  "selectedPriceCents",
-  "standardPriceCents",
-  "images",
-  "tenderGate",
-  "adminContentVersion",
-  "calcVersion",
-]);
-
-function mergeOfferWorkspacePatch(
-  current: Record<string, unknown>,
-  patch: Record<string, unknown>,
-) {
-  const merged = { ...current };
-  for (const [key, value] of Object.entries(patch)) {
-    if (
-      key === "draft" &&
-      typeof value === "object" &&
-      value !== null &&
-      typeof current.draft === "object" &&
-      current.draft !== null
-    ) {
-      merged.draft = {
-        ...(current.draft as Record<string, unknown>),
-        ...(value as Record<string, unknown>),
-      };
-    } else {
-      merged[key] = value;
-    }
-  }
-  return merged;
-}
-
 async function getOfferDetailsDirect(input: { offerId: string }) {
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: offerSummarySelect,
   });
@@ -220,125 +169,70 @@ async function getOfferDetailsDirect(input: { offerId: string }) {
   };
 }
 
+/**
+ * Apply a patch to an offer workspace.
+ *
+ * The rule is lib/domain/offers/workspace-save.ts — the same command the app's
+ * autosave calls. This used to be a second implementation that skipped the
+ * calc-version pin, the unreadable-snapshot guard, the superseded/stale
+ * distinction and the lead deal-value sync, so an offer repriced through Eve
+ * left the pipeline showing a stale figure.
+ *
+ * The OfferStatusEvent below stays Eve's: it records in the offer's own
+ * timeline that the agent changed something, alongside the AgentActionAudit
+ * row runAuditedAgentOperation writes. It runs in the same transaction as the
+ * save, so the timeline cannot claim an edit that did not commit.
+ */
 async function updateOfferDetailsDirect(
   input: {
     expectedStateVersion: number;
     offerId: string;
     patch: Record<string, unknown>;
   },
-  actorId: string,
-  db: OfferDb = prisma,
+  actor: User,
+  db: OfferDb = agentDb,
 ) {
-  const current = await db.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      amount: true,
-      contractValueIncGst: true,
-      gstAmount: true,
-      isActive: true,
-      offerStatus: true,
-      stateVersion: true,
-      totalAmount: true,
-      workspaceState: true,
-    },
-  });
-  if (!current || !current.isActive)
-    throw new Error("The requested offer revision is unavailable.");
-  if (current.workspaceState === null)
-    throw new Error(
-      "Save an initial offer workspace before applying detail changes.",
-    );
-  if (current.stateVersion !== input.expectedStateVersion) {
-    return {
-      ok: false as const,
-      reason: "stale" as const,
-      currentStateVersion: current.stateVersion,
-    };
-  }
-  if (
-    Object.keys(input.patch).some((key) => !OFFER_WORKSPACE_PATCH_KEYS.has(key))
-  ) {
-    return {
-      ok: false as const,
-      reason: "invalid" as const,
-      error: "The patch contains an unsupported offer workspace section.",
-    };
+  const result = await applyOfferWorkspacePatch(
+    userPrincipal(actor),
+    input,
+    db,
+  );
+
+  if (!result.ok) {
+    return result.reason === "stale"
+      ? {
+          ok: false as const,
+          reason: "stale" as const,
+          currentStateVersion: result.currentStateVersion,
+        }
+      : {
+          ok: false as const,
+          reason: result.reason,
+          error:
+            result.reason === "superseded"
+              ? "This offer revision has been superseded; reload the live revision."
+              : (result.error ?? "The offer details could not be updated."),
+        };
   }
 
-  const stored = parseWorkspaceState(current.workspaceState);
-  const candidate = mergeOfferWorkspacePatch(
-    stored as unknown as Record<string, unknown>,
-    input.patch,
-  );
-  const validated = validatePersistedWorkspace(candidate);
-  if (!validated.ok)
-    return {
-      ok: false as const,
-      reason: "invalid" as const,
-      error: validated.error,
-    };
-  const plan = planWorkspaceSave(
-    current.offerStatus.toLowerCase() as OfferWorkspaceStatus,
-    stored,
-    validated.state,
-  );
-  if (!plan.ok)
-    return {
-      ok: false as const,
-      reason: "locked" as const,
-      error:
-        "Issued offer details are locked; create a revision before editing them.",
-    };
-
-  const snapshot = deserializeWorkspace(plan.state);
-  const contractValueIncGst =
-    buildProposalInput(snapshot).customerPrice.selectedContractValueIncGst;
-  const split = splitContractValueByGst({
-    contractValueIncGst,
-    gstRate: snapshot.workspacePricingSettings.gstRate,
-  });
-  const result = await db.offer.updateMany({
-    where: {
-      id: input.offerId,
-      isActive: true,
-      offerStatus: current.offerStatus,
-      stateVersion: input.expectedStateVersion,
-    },
-    data: {
-      workspaceState: plan.state as unknown as Prisma.InputJsonValue,
-      amount: new Prisma.Decimal(split.amountExGst),
-      gstAmount: new Prisma.Decimal(split.gstAmount),
-      totalAmount: new Prisma.Decimal(split.totalIncGst),
-      contractValueIncGst: new Prisma.Decimal(contractValueIncGst),
-      stateVersion: { increment: 1 },
-    },
-  });
-  if (result.count !== 1)
-    return {
-      ok: false as const,
-      reason: "stale" as const,
-      currentStateVersion:
-        (
-          await db.offer.findUnique({
-            where: { id: input.offerId },
-            select: { stateVersion: true },
-          })
-        )?.stateVersion ?? null,
-    };
+  // from === to: a detail edit does not move the status. The value comes back
+  // from the save rather than a second read, so the timeline records the
+  // status the write actually landed against.
   await db.offerStatusEvent.create({
     data: {
-      offerId: input.offerId,
-      fromStatus: current.offerStatus,
-      toStatus: current.offerStatus,
-      actorId,
+      actorId: actor.id,
+      fromStatus: result.offerStatus,
       note: `Offer details updated: ${Object.keys(input.patch).join(", ")}`,
+      offerId: input.offerId,
+      toStatus: result.offerStatus,
     },
   });
+
   return {
     ok: true as const,
-    stateVersion: input.expectedStateVersion + 1,
     changedSections: Object.keys(input.patch),
-    totalIncGst: split.totalIncGst,
+    stateVersion: result.stateVersion,
+    totalIncGst: result.totalIncGst,
   };
 }
 
@@ -349,7 +243,7 @@ export async function searchAuthorizedOffers(
   const actor = await requireCurrentAgentActor(ctx);
   const scope = leadListScope(actor);
   const query = input.query.trim();
-  const offers = await prisma.offer.findMany({
+  const offers = await agentDb.offer.findMany({
     where: {
       lead: {
         ...(scope.assignedId === null ? {} : { assignedId: scope.assignedId }),
@@ -386,7 +280,7 @@ export async function getAuthorizedOffer(
   input: { offerId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: offerSummarySelect,
   });
@@ -414,7 +308,7 @@ export async function listAuthorizedOfferRevisions(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessLead(actor, input.leadId);
-  const offers = await prisma.offer.findMany({
+  const offers = await agentDb.offer.findMany({
     where: { leadId: input.leadId },
     orderBy: [{ revisionNumber: "desc" }, { createdAt: "desc" }],
     take: input.limit,
@@ -488,6 +382,19 @@ function failedAction(title: string, error: string) {
   return actionEnvelope({ kind: "error", summary: error, title });
 }
 
+/**
+ * Move an offer through its lifecycle.
+ *
+ * The state machine, the owner gate, the AGREED freeze and the
+ * manual-signed-jump refusal are lib/domain/offers/status.ts — the same
+ * command the app's status controls call. This used to be a second copy with
+ * no manual-signed guard at all, and it synced the lead's stage INSIDE the
+ * transaction, where a failure silently rolls the status flip back while the
+ * tool reports success.
+ *
+ * The stage sync is now the caller's job, after the audited transaction
+ * commits.
+ */
 async function transitionOfferStatusDirect(
   input: {
     expectedStateVersion?: number;
@@ -495,104 +402,27 @@ async function transitionOfferStatusDirect(
     offerId: string;
     toStatus: OfferStatus;
   },
-  actorId: string,
-  db: OfferDb = prisma,
+  actor: User,
+  db: OfferDb = agentDb,
 ) {
-  const transition = async (tx: OfferDb) => {
-    const current = await tx.offer.findUnique({
-      where: { id: input.offerId },
-      select: {
-        offerStatus: true,
-        isActive: true,
-        workspaceState: true,
-        leadId: true,
-      },
-    });
-    if (!current || !current.isActive)
-      throw new Error("The requested offer revision is unavailable.");
-    const kind = classifyOfferTransition(current.offerStatus, input.toStatus);
-    if (kind !== "allowed" && kind !== "self") {
-      throw new Error(
-        kind === "send-only"
-          ? "This lifecycle step must use its dedicated document action."
-          : kind && typeof kind === "object"
-            ? "Recall the signing envelope before stepping this offer back."
-            : `Invalid offer transition from ${current.offerStatus} to ${input.toStatus}.`,
-      );
-    }
-    if (requiresOwnerGate(current.offerStatus, input.toStatus)) {
-      if (!current.workspaceState)
-        throw new Error("Save offer content before changing its lifecycle.");
-      const issues = collectOwnerIssues(
-        parseWorkspaceState(current.workspaceState).job.owners,
-      );
-      if (issues.length > 0)
-        throw new Error(`Complete owner details first: ${issues.join(" ")}`);
-    }
-    const written = await tx.offer.updateMany({
-      where: {
-        id: input.offerId,
-        offerStatus: current.offerStatus,
-        ...(input.expectedStateVersion === undefined
-          ? {}
-          : { stateVersion: input.expectedStateVersion }),
-        isActive: true,
-      },
-      data: {
-        offerStatus: input.toStatus,
-        stateVersion: { increment: 1 },
-        ...(input.toStatus === "SENT" ? { sentAt: new Date() } : {}),
-        ...(input.toStatus === "AGREED" &&
-        current.offerStatus !== "AGREED" &&
-        current.workspaceState !== null
-          ? {
-              agreedSnapshot: current.workspaceState as Prisma.InputJsonValue,
-              acceptedAt: new Date(),
-            }
-          : {}),
-      },
-    });
-    if (written.count !== 1)
-      throw new Error(
-        "The offer changed while this operation was running. Refresh and try again.",
-      );
-    await tx.offerStatusEvent.create({
-      data: {
-        offerId: input.offerId,
-        fromStatus: current.offerStatus,
-        toStatus: input.toStatus,
-        actorId,
-        note: input.note,
-      },
-    });
-    const lead = await tx.lead.findUnique({
-      where: { id: current.leadId },
-      select: { stage: true, wonAt: true },
-    });
-    const patch = lead
-      ? leadStagePatchForOfferStatus(
-          input.toStatus,
-          lead.stage,
-          new Date(),
-          lead.wonAt,
-        )
-      : null;
-    if (patch)
-      await tx.lead.update({ where: { id: current.leadId }, data: patch });
-    return { status: input.toStatus };
-  };
-  return db === prisma
-    ? prisma.$transaction(transition, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      })
-    : transition(db);
+  const result = await commitOfferStatusTransition(
+    userPrincipal(actor),
+    input,
+    db,
+  );
+  if (result === null) {
+    throw new Error(
+      "The offer changed while this operation was running. Refresh and try again.",
+    );
+  }
+  return { status: result.to };
 }
 
 async function createOfferRevisionDirect(
   input: { offerId: string },
   actorId: string,
 ) {
-  const current = await prisma.offer.findUnique({
+  const current = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: {
       id: true,
@@ -621,7 +451,7 @@ async function createOfferRevisionDirect(
     ].includes(current.offerStatus)
   )
     return { ok: false as const, reason: "locked" as const };
-  const liveEnvelopes = await prisma.envelope.count({
+  const liveEnvelopes = await agentDb.envelope.count({
     where: {
       status: { in: ["CREATED", "SENT", "DELIVERED"] },
       OR: [
@@ -638,7 +468,7 @@ async function createOfferRevisionDirect(
       error:
         "Recall all live signing envelopes before creating a new revision.",
     };
-  const next = await prisma.$transaction(async (tx) => {
+  const next = await agentDb.$transaction(async (tx) => {
     await tx.offer.update({
       where: { id: current.id },
       data: {
@@ -687,9 +517,9 @@ async function recallOfferEnvelopeDirect(
     toStatus: OfferStatus;
     note?: string;
   },
-  actorId: string,
+  actor: User,
 ) {
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: { offerStatus: true, isActive: true, leadId: true },
   });
@@ -702,7 +532,7 @@ async function recallOfferEnvelopeDirect(
       error:
         "The requested recall does not match the offer's current signing state.",
     };
-  const live = await prisma.envelope.count({
+  const live = await agentDb.envelope.count({
     where: {
       status: { in: ["CREATED", "SENT", "DELIVERED"] },
       OR:
@@ -720,8 +550,8 @@ async function recallOfferEnvelopeDirect(
         "A live DocuSign envelope must be voided in DocuSign before this agent can complete the recall.",
     };
   await transitionOfferStatusDirect(
-    { offerId: input.offerId, toStatus: input.toStatus, note: input.note },
-    actorId,
+    { note: input.note, offerId: input.offerId, toStatus: input.toStatus },
+    actor,
   );
   return {
     ok: true as const,
@@ -735,7 +565,7 @@ async function saveContractParticulars(input: {
   particulars: Record<string, string>;
   manualOverrides: readonly string[];
 }) {
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: { offerStatus: true, isActive: true },
   });
@@ -749,11 +579,11 @@ async function saveContractParticulars(input: {
     input.particulars as never,
     input.manualOverrides as never,
   ) as Prisma.InputJsonValue;
-  const existing = await prisma.contract.findUnique({
+  const existing = await agentDb.contract.findUnique({
     where: { offerId: input.offerId },
     select: { version: true },
   });
-  await prisma.contract.upsert({
+  await agentDb.contract.upsert({
     where: { offerId: input.offerId },
     update: { particulars: value },
     create: {
@@ -785,14 +615,14 @@ async function loadOfferActivity(input: { leadId: number }): Promise<
     }
   | { ok: false; error: string }
 > {
-  const offer = await prisma.offer.findFirst({
+  const offer = await agentDb.offer.findFirst({
     where: { leadId: input.leadId, isActive: true },
     orderBy: { createdAt: "desc" },
     select: { id: true },
   });
   if (!offer) return { ok: true as const, sends: [], events: [] };
   const [sends, events] = await Promise.all([
-    prisma.offerDocumentSend.findMany({
+    agentDb.offerDocumentSend.findMany({
       where: { offerId: offer.id },
       orderBy: { sentAt: "desc" },
       select: {
@@ -804,7 +634,7 @@ async function loadOfferActivity(input: { leadId: number }): Promise<
         lastReplyAt: true,
       },
     }),
-    prisma.offerStatusEvent.findMany({
+    agentDb.offerStatusEvent.findMany({
       where: { offerId: offer.id },
       orderBy: { at: "desc" },
       select: { fromStatus: true, toStatus: true, note: true, at: true },
@@ -823,7 +653,7 @@ async function loadOfferActivity(input: { leadId: number }): Promise<
   };
 }
 async function logOfferChangeRequest(input: { leadId: number; note: string }) {
-  const offer = await prisma.offer.findFirst({
+  const offer = await agentDb.offer.findFirst({
     where: { leadId: input.leadId, isActive: true },
     orderBy: { createdAt: "desc" },
     select: { id: true, offerStatus: true },
@@ -833,7 +663,7 @@ async function logOfferChangeRequest(input: { leadId: number; note: string }) {
       ok: false as const,
       error: "No active offer to log a change request against.",
     };
-  await prisma.offerStatusEvent.create({
+  await agentDb.offerStatusEvent.create({
     data: {
       offerId: offer.id,
       fromStatus: offer.offerStatus,
@@ -844,12 +674,12 @@ async function logOfferChangeRequest(input: { leadId: number; note: string }) {
   return { ok: true as const };
 }
 async function pollOfferSigningStatus(input: { offerId: string }) {
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: { offerStatus: true, stateVersion: true },
   });
   if (!offer) return { ok: false as const, error: "Offer not found." };
-  const envelopes = await prisma.envelope.findMany({
+  const envelopes = await agentDb.envelope.findMany({
     where: {
       OR: [
         { offerId: input.offerId },
@@ -940,11 +770,11 @@ export async function transitionAuthorizedOfferStatus(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessOffer(actor, input.offerId);
-  return runOfferMutation({
+  const envelope = await runOfferMutation({
     action: "offer.status.transition",
     ctx,
     execute: async (tx) => {
-      const result = await transitionOfferStatusDirect(input, actor.id, tx);
+      const result = await transitionOfferStatusDirect(input, actor, tx);
       return actionEnvelope({
         data: { status: result.status },
         entityRef: {
@@ -968,6 +798,15 @@ export async function transitionAuthorizedOfferStatus(
     ownerUserId: actor.id,
     targetId: input.offerId,
   });
+
+  // After the audited transaction commits, never inside it. Eve's previous
+  // copy of this ran the lead-stage write in the same transaction, where a
+  // failure rolls the status flip and its OfferStatusEvent back while
+  // `$transaction` still resolves — so the tool reported a status change that
+  // had been discarded. See lib/domain/leads/stage-sync.ts.
+  await syncLeadStageForOffer(input.offerId, agentDb);
+
+  return envelope;
 }
 
 export async function updateAuthorizedOfferDetails(
@@ -984,7 +823,7 @@ export async function updateAuthorizedOfferDetails(
     action: "offer.details.update",
     ctx,
     execute: async (tx) => {
-      const result = await updateOfferDetailsDirect(input, actor.id, tx);
+      const result = await updateOfferDetailsDirect(input, actor, tx);
       if (!result.ok) {
         return failedAction(
           "Offer details were not updated",
@@ -1036,7 +875,7 @@ export async function recallAuthorizedOfferEnvelope(
     action: "offer.envelope.recall",
     ctx,
     execute: async () => {
-      const result = await recallOfferEnvelopeDirect(input, actor.id);
+      const result = await recallOfferEnvelopeDirect(input, actor);
       return result.ok
         ? actionEnvelope({
             data: {
@@ -1157,7 +996,7 @@ export async function getAuthorizedOfferSigningStatus(
   input: { offerId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const offer = await prisma.offer.findUnique({
+  const offer = await agentDb.offer.findUnique({
     where: { id: input.offerId },
     select: { leadId: true },
   });

@@ -116,7 +116,7 @@ function businessModelAccesses(
 const BUDGET: Record<string, number> = {
   "agent/lib/admin-operations.ts": 19,
   "agent/lib/lead-operations.ts": 0,
-  "agent/lib/offer-operations.ts": 32,
+  "agent/lib/offer-operations.ts": 24,
   "agent/lib/project-operations.ts": 29,
   "agent/lib/tradie-operations.ts": 29,
 };

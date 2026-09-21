@@ -22,27 +22,23 @@ import {
   type RefusedVoidReading,
 } from "@/lib/docusign/envelope-status";
 import {
-  CURRENT_CALC_VERSION,
-  LEGACY_CALC_VERSION,
   deserializeWorkspace,
   parseWorkspaceState,
-  planWorkspaceSave,
   serializeWorkspace,
-  validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
-  type PersistedOfferWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
 import {
   applyAdminPrefillToSnapshot,
   buildAdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
 import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
-import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   resolveOfferContractValue,
   resolveOfferPriceSplit,
 } from "@/lib/offer/offer-contract-value";
-import { splitContractValueByGst } from "@/lib/offer/workspace-pricing";
+import { saveOfferWorkspace as saveOfferWorkspaceDomain } from "@/lib/domain/offers/workspace-save";
+import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
+import { userPrincipal } from "@/lib/domain/principal";
 import {
   parseContractParticularOverrides,
   parseContractParticulars,
@@ -58,14 +54,8 @@ import type {
   OfferSignerStatus,
   OfferSignerStatusValue,
 } from "@/lib/offer/signing-status";
-import {
-  collectOwnerIssues,
-  type OfferWorkspaceStatus,
-} from "@/lib/offer/workspace-model";
-import {
-  classifyOfferTransition,
-  requiresOwnerGate,
-} from "@/lib/offer/offer-workflow-transitions";
+import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
+import { classifyOfferTransition } from "@/lib/offer/offer-workflow-transitions";
 import {
   decideRecallPullBack,
   describeUnconfirmedVoid,
@@ -561,250 +551,49 @@ export async function pollOfferSigningStatus(input: {
   };
 }
 
-// The ONLY place CURRENT_CALC_VERSION is named on the server. See the CalcVersion
-// notes in lib/offer/workspace-persistence.ts.
-function pinCalcVersion(
-  persisted: PersistedOfferWorkspaceState,
-  storedCalcVersion: number | null,
-): PersistedOfferWorkspaceState {
-  return {
-    ...persisted,
-    calcVersion: storedCalcVersion ?? CURRENT_CALC_VERSION,
-  };
-}
-
-// Reads the pin off a raw stored blob without running the full zod parse — this
-// runs on the save path and must not throw on an offer whose state is otherwise
-// unparseable. A blob with no pin is pre-versioning, hence legacy.
-function readStoredCalcVersion(state: unknown): number | null {
-  if (state === null || state === undefined) {
-    return null;
-  }
-  if (typeof state !== "object") {
-    return LEGACY_CALC_VERSION;
-  }
-  const raw = (state as Record<string, unknown>).calcVersion;
-  return typeof raw === "number" && Number.isInteger(raw) && raw > 0
-    ? raw
-    : LEGACY_CALC_VERSION;
-}
-
-// Debounced autosave with optimistic concurrency (ADR 0002): the write only
-// lands if the caller's stateVersion still matches; otherwise it is rejected so
-// the client can reload rather than silently clobber a newer save.
+// Debounced autosave with optimistic concurrency (ADR 0002). The rule — the
+// calc-version pin, the issued-offer lock, the GST split, the optimistic
+// predicate and the lead deal-value sync — is
+// lib/domain/offers/workspace-save.ts, which Eve calls too. What is left here
+// is the Next half: Clerk identity, and the two cache expiries.
 export async function saveOfferWorkspace(input: {
   offerId: string;
   expectedStateVersion: number;
   snapshot: OfferWorkspaceSnapshot;
 }): Promise<SaveResult> {
-  // Resolved with allowInactive so a superseded revision comes back as a
-  // recoverable result rather than a throw: a second tab that was editing this
-  // offer when another tab forked a new revision should reload onto the live
-  // revision, not sit in a permanent error state.
   const access = await authorizeOfferAccess(input.offerId, {
     allowInactive: true,
   });
   if (!access.ok) {
     throw new Error(access.error);
   }
-  if (!access.isActive) {
-    return { ok: false, reason: "superseded" };
-  }
 
-  // The offer's calculation rules are stamped by the SERVER, never taken from
-  // the client: saveOfferWorkspace persists the client's serialized snapshot
-  // wholesale, so a stale tab could otherwise up- or down-grade the maths of a
-  // live quote. A row that has never been saved is a brand-new offer and gets
-  // today's rules; anything already saved keeps its stored pin forever.
-  const storedRow = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      workspaceState: true,
-      offerStatus: true,
-      amount: true,
-      gstAmount: true,
-      totalAmount: true,
-      contractValueIncGst: true,
-    },
-  });
-  if (storedRow === null) {
-    return { ok: false, reason: "stale", currentStateVersion: null };
-  }
-  const persisted = pinCalcVersion(
-    serializeWorkspace(input.snapshot),
-    readStoredCalcVersion(storedRow.workspaceState),
+  const result = await saveOfferWorkspaceDomain(
+    userPrincipal(access.user),
+    input,
+    prisma,
   );
-  const validated = validatePersistedWorkspace(persisted);
-  if (!validated.ok) {
-    console.error(
-      `[offer-workspace] refused an invalid snapshot for offer ${input.offerId}: ${validated.error}`,
-    );
-    return { ok: false, reason: "invalid" };
-  }
 
-  // The workspace locks a step's controls once the offer is issued, but this
-  // action writes the whole snapshot it is given. A tab still showing the offer
-  // as pending after another tab sent it could otherwise change the cost lines
-  // and reprice an issued offer. An accepted save still writes the frozen parts
-  // as stored, so a tab's hydrated form of them never moves the price.
-  const storedStatus =
-    storedRow.offerStatus.toLowerCase() as OfferWorkspaceStatus;
-  let storedState: PersistedOfferWorkspaceState | null = null;
-  if (storedRow.workspaceState !== null) {
-    try {
-      storedState = parseWorkspaceState(storedRow.workspaceState);
-    } catch (error) {
-      // Unreadable, so nothing can be compared. A pending offer has no issued
-      // record to protect and the save repairs the row; an issued one keeps it.
-      if (storedStatus !== "pending") {
-        console.error(
-          `[offer-workspace] stored snapshot for issued offer ${input.offerId} is unreadable; refusing the save:`,
-          error,
-        );
-        return { ok: false, reason: "locked" };
-      }
-    }
-  }
-  const plan = planWorkspaceSave(storedStatus, storedState, validated.state);
-  if (!plan.ok) {
-    return { ok: false, reason: "locked" };
-  }
-  const saved = plan.state;
-  const savedSnapshot = deserializeWorkspace(saved);
-  // Resolve the price through the same path the Tender/Contract and the project
-  // handoff use. `selectedPriceCents` is only the OPTIONAL manual override, and a
-  // blank override serialises to 0 cents — so reading it here stamped $0 on every
-  // offer priced the normal way, which is what the Versions timeline displayed.
-  const selectedContractValueIncGst = buildProposalInput(
-    // Deliberately the written state, not input.snapshot: the money columns must
-    // agree with what was actually persisted, including its calculation rules
-    // and, once issued, its stored frozen slices.
-    savedSnapshot,
-  ).customerPrice.selectedContractValueIncGst;
-  const contractValue = new Prisma.Decimal(selectedContractValueIncGst);
-  // The three money columns the Offers list prints (amount / GST / total) were
-  // never written after the row was minted at zero, so every offer read $0.00
-  // regardless of what the client was actually quoted. Derive them from the SAME
-  // number the proposal document prints, so the list and the PDF can never
-  // disagree — see splitContractValueByGst for why GST is a back-solve.
-  const priceSplit = splitContractValueByGst({
-    contractValueIncGst: selectedContractValueIncGst,
-    gstRate: savedSnapshot.workspacePricingSettings.gstRate,
-  });
-  const amount = new Prisma.Decimal(priceSplit.amountExGst);
-  const gstAmount = new Prisma.Decimal(priceSplit.gstAmount);
-  const totalAmount = new Prisma.Decimal(priceSplit.totalIncGst);
-  const moneyChanged =
-    !sameMoney(storedRow.amount, amount) ||
-    !sameMoney(storedRow.gstAmount, gstAmount) ||
-    !sameMoney(storedRow.totalAmount, totalAmount) ||
-    !sameMoney(storedRow.contractValueIncGst, contractValue);
-
-  // isActive is part of the predicate, not just the check above: forking a
-  // revision deactivates this row without touching its stateVersion, so a save
-  // that passed the check moments earlier would still satisfy an id+version
-  // predicate and land on the freshly archived revision. offerStatus is there
-  // for the same reason: the lock above was decided against that status, and a
-  // send landing in between must not let this write through.
-  const result = await prisma.offer.updateMany({
-    where: {
-      id: input.offerId,
-      isActive: true,
-      offerStatus: storedRow.offerStatus,
-      stateVersion: input.expectedStateVersion,
-    },
-    data: {
-      workspaceState: saved as unknown as Prisma.InputJsonValue,
-      amount,
-      gstAmount,
-      totalAmount,
-      contractValueIncGst: contractValue,
-      stateVersion: { increment: 1 },
-    },
-  });
-
-  if (result.count === 0) {
-    const current = await prisma.offer.findUnique({
-      where: { id: input.offerId },
-      select: { stateVersion: true, isActive: true },
-    });
-    // Distinguish the two ways the predicate can miss — they need different
-    // recoveries: a stale version reconciles against the same revision, a
-    // superseded one has to move to whichever revision is now live.
-    if (current !== null && !current.isActive) {
-      return { ok: false, reason: "superseded" };
-    }
-    return {
-      ok: false,
-      reason: "stale",
-      currentStateVersion: current?.stateVersion ?? null,
-    };
-  }
-
-  // Keep the lead's deal value in step with the quoted contract price.
-  // Offer.contractValueIncGst is the authoritative number once an offer
-  // exists; a second hand-typed figure on the lead would only ever disagree
-  // with it, and would leave the pipeline blank at exactly the stages where a
-  // real price is known.
-  //
-  // updateMany + the NOT filter skips manually-owned leads atomically, with no
-  // read-then-write race. A zero/absent price must not null an existing value,
-  // hence the greaterThan(0) guard. The offer update above is already scoped to
-  // isActive, so a superseded revision cannot reach this point.
-  //
-  // Deliberately non-fatal. The offer write above has ALREADY committed and
-  // bumped stateVersion; letting a sync failure throw here would report the
-  // save as failed while it actually succeeded, and the client would then
-  // retry against a stale expectedStateVersion and be told it is superseded.
-  // Mirroring the value onto the lead is secondary to persisting the offer.
-  try {
-    if (contractValue.greaterThan(0)) {
-      const offerLead = await prisma.offer.findUnique({
-        where: { id: input.offerId },
-        select: { leadId: true },
-      });
-      if (offerLead?.leadId) {
-        await prisma.lead.updateMany({
-          where: {
-            id: offerLead.leadId,
-            // Match the two syncable states EXPLICITLY. `NOT: { source: "MANUAL" }`
-            // looks equivalent but is not: it compiles to NOT (col = 'MANUAL'),
-            // which evaluates to NULL — not true — for rows where the column is
-            // NULL. That is every lead never manually overridden, so the sync
-            // would silently skip almost everything. Verified against Postgres.
-            OR: [
-              { estimatedValueSource: null },
-              { estimatedValueSource: "OFFER" },
-            ],
-          },
-          data: {
-            estimatedValue: contractValue,
-            estimatedValueSource: "OFFER",
-          },
-        });
-      }
-    }
-  } catch (error) {
-    console.error(
-      `[offer-workspace] lead value sync failed for offer ${input.offerId}; the offer itself saved successfully`,
-      error,
-    );
+  if (!result.ok) {
+    // The domain carries an operator-facing reason on `invalid`/`locked`; this
+    // action's contract has never included one, so it is dropped rather than
+    // widened here. The domain logs it.
+    return result.reason === "stale"
+      ? {
+          ok: false,
+          reason: "stale",
+          currentStateVersion: result.currentStateVersion,
+        }
+      : { ok: false, reason: result.reason };
   }
 
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   // The Offers list and its KPIs print these columns from a cached read. Only
   // a price edit moves them, and most autosaves are copy edits.
-  if (moneyChanged) {
+  if (result.moneyChanged) {
     updateTag("offers");
   }
-  return { ok: true, stateVersion: input.expectedStateVersion + 1 };
-}
-
-function sameMoney(
-  stored: Prisma.Decimal | null,
-  next: Prisma.Decimal,
-): boolean {
-  return stored !== null && stored.equals(next);
+  return { ok: true, stateVersion: result.stateVersion };
 }
 
 // Persist a lifecycle transition, record an audit event, and freeze the agreed
@@ -894,6 +683,12 @@ const RECALL_DOCUMENT_LABEL = {
  * result so it cannot be reached without authorizing first, and it is not
  * exported: this file is "use server".
  */
+// The single write behind every workspace status change.
+//
+// The state machine, the owner gate and the AGREED freeze are
+// lib/domain/offers/status.ts, shared with Eve's status tool. What stays here
+// is the transaction boundary, the post-commit lead-stage sync and the cache
+// expiry — and the boolean contract the two callers already use.
 async function commitOfferTransition(
   access: Extract<OfferAccess, { ok: true }>,
   input: {
@@ -904,81 +699,24 @@ async function commitOfferTransition(
     stampSentAt: boolean;
     actorId?: string;
     note?: string;
+    /** The recall path only — see CommitTransitionInput.skipTransitionCheck. */
+    skipTransitionCheck?: boolean;
   },
 ): Promise<boolean> {
-  const committed = await prisma.$transaction(async (tx) => {
-    const offer = await tx.offer.findUniqueOrThrow({
-      where: { id: input.offerId },
-      select: { workspaceState: true },
-    });
-
-    // Owner completeness gate (PR #124 review): SENT locks the offer and AGREED
-    // freezes it for the Tender, so both require complete owner parties. A
-    // missing name / Current Location / signer email (or a shared signer email)
-    // must not be lockable and advanced into the legal documents. This guards the
-    // generic "Mark sent" / "Mark agreed" path, which does not go through the
-    // send actions that already validate owners.
-    if (!input.skipOwnerGate && requiresOwnerGate(input.from, input.to)) {
-      const verb =
-        input.to === OfferStatus.SENT
-          ? "marking the offer sent"
-          : "marking the offer agreed";
-      // A blank offer (no workspaceState) has no owners at all — refuse to lock /
-      // freeze it, not just skip the check (PR #124).
-      if (!offer.workspaceState) {
-        throw new Error(`Add and save offer content before ${verb}.`);
-      }
-      const ownerIssues = collectOwnerIssues(
-        parseWorkspaceState(offer.workspaceState).job.owners,
-      );
-      if (ownerIssues.length > 0) {
-        throw new Error(
-          `Complete the owner details before ${verb}: ${ownerIssues.join(" ")}`,
-        );
-      }
-    }
-
-    // Freeze only on the first transition into AGREED. An AGREED → AGREED
-    // re-transition (a permitted self-transition) must not re-snapshot a since-mutated
-    // workspaceState over the frozen agreedSnapshot or reset acceptedAt.
-    const freezeAgreed =
-      input.to === OfferStatus.AGREED &&
-      input.from !== OfferStatus.AGREED &&
-      offer.workspaceState !== null;
-
-    const written = await tx.offer.updateMany({
-      where: {
-        id: input.offerId,
-        offerStatus: input.from,
-        isActive: true,
-      },
-      data: {
-        offerStatus: input.to,
-        ...(input.stampSentAt ? { sentAt: new Date() } : {}),
-        ...(freezeAgreed
-          ? {
-              agreedSnapshot: offer.workspaceState as Prisma.InputJsonValue,
-              acceptedAt: new Date(),
-            }
-          : {}),
-      },
-    });
-    if (written.count === 0) {
-      return false;
-    }
-
-    await tx.offerStatusEvent.create({
-      data: {
-        offerId: input.offerId,
-        fromStatus: input.from,
-        toStatus: input.to,
-        actorId: input.actorId,
+  const committed = await prisma.$transaction(async (tx) =>
+    commitOfferStatusTransition(
+      userPrincipal(access.user),
+      {
         note: input.note,
+        offerId: input.offerId,
+        skipOwnerGate: input.skipOwnerGate,
+        skipTransitionCheck: input.skipTransitionCheck,
+        toStatus: input.to,
       },
-    });
-    return true;
-  });
-  if (!committed) {
+      tx,
+    ),
+  );
+  if (committed === null) {
     return false;
   }
 
@@ -1428,6 +1166,10 @@ export async function recallOfferEnvelope(input: {
     from: recall.from,
     to: recall.to,
     skipOwnerGate: true,
+    // The envelope has just been voided; classifyOfferTransition would refuse
+    // this step back and tell the operator to use Recall, which is what this
+    // IS. See CommitTransitionInput.skipTransitionCheck.
+    skipTransitionCheck: true,
     stampSentAt: false,
     actorId: access.user.id,
     note: input.note,
