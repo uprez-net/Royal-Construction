@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import {
@@ -108,6 +112,19 @@ export async function sendOfferForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // Same gate as the proposal and the Tender. A document that tells the client
+  // their home is 0 m2 must not reach them, and this is the last place that can
+  // refuse before the envelope is created.
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
+  if (totalAreaSqm <= 0) {
+    return {
+      ok: false,
+      error: "Enter floor areas in Job setup before sending for signature.",
     };
   }
 
@@ -233,8 +250,9 @@ export async function sendOfferForSignature(input: {
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
   let envelope;
-  let docusignContext: Awaited<ReturnType<typeof createDocusignContext>> | null =
-    null;
+  let docusignContext: Awaited<
+    ReturnType<typeof createDocusignContext>
+  > | null = null;
   try {
     docusignContext = await createDocusignContext(config);
     envelope = await createOfferAcceptanceEnvelope({

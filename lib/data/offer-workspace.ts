@@ -1207,7 +1207,7 @@ async function voidLiveOfferEnvelopes(
       status: { in: LIVE_ENVELOPE_STATUSES },
       OR: envelopeScopeFilter(offerId, scope),
     },
-    select: { id: true, docusignId: true },
+    select: { id: true, docusignId: true, sentAt: true },
   });
   const liveIds = liveEnvelopes.map((env) => env.id);
   const voidedIds: string[] = [];
@@ -1216,7 +1216,22 @@ async function voidLiveOfferEnvelopes(
 
   const inDocusign: { id: string; docusignId: string }[] = [];
   for (const env of liveEnvelopes) {
-    if (env.docusignId === null) {
+    if (env.docusignId === null && env.sentAt !== null) {
+      // A send we started and never got an answer to. `docusignId` is null
+      // because the create call timed out, not because it definitively failed,
+      // so DocuSign may well have issued and emailed an envelope we cannot see.
+      //
+      // Treating this like the branch below — recording it voided and letting
+      // the pull-back proceed — is what allowed two live Tenders: the offer
+      // returned to draft, the estimator resent, and the orphan stayed
+      // signable. There is nothing to void, so the only honest answer is to
+      // refuse and send a human to DocuSign.
+      unsettled.push({
+        id: env.id,
+        docusignId: null,
+        reason: "unconfirmed-send",
+      });
+    } else if (env.docusignId === null) {
       // A failed write must not reject the whole pull-back: leaving the row out
       // of voidedIds makes decideRecallPullBack refuse, which is what both
       // callers document, instead of throwing past their refusal result.

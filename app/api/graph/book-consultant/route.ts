@@ -134,32 +134,54 @@ async function findConflictingEvent(
 const toDateOnly = sydneyDateOnly;
 const toTimeOnly = sydneyTimeOnly;
 
-async function resolveAuthorizedLeadId(
+/**
+ * Who this booking is for, as far as the caller can prove it.
+ *
+ * Three outcomes, and the middle one is the reason this returns a union rather
+ * than `number | null`:
+ *
+ *   anonymous    — no lead named. A prospect booking off the public page.
+ *                  Legitimate, and the booking creates a fresh lead.
+ *   lead         — a lead named AND proven, by a signed booking token or by a
+ *                  signed-in staff session.
+ *   unauthorized — a lead named but NOT proven. Previously indistinguishable
+ *                  from `anonymous`, which meant a caller guessing lead ids got
+ *                  a calendar event and an email anyway and merely lost the
+ *                  database write. The caller has to be refused instead.
+ */
+type LeadClaim =
+  | { kind: "anonymous" }
+  | { kind: "lead"; leadId: number }
+  | { kind: "unauthorized" };
+
+async function resolveLeadClaim(
   body: Record<string, unknown>,
-): Promise<number | null> {
+): Promise<LeadClaim> {
   const rawId = body.id;
-  const leadId =
-    typeof rawId === "number"
-      ? rawId
-      : typeof rawId === "string" && rawId.trim().length > 0
-        ? Number(rawId)
-        : NaN;
+  const hasId =
+    typeof rawId === "number" ||
+    (typeof rawId === "string" && rawId.trim().length > 0);
+  if (!hasId) {
+    return { kind: "anonymous" };
+  }
+
+  const leadId = typeof rawId === "number" ? rawId : Number(rawId);
   if (!Number.isSafeInteger(leadId) || leadId <= 0) {
-    return null;
+    return { kind: "unauthorized" };
   }
 
   const token =
     typeof body.bookingToken === "string" ? body.bookingToken.trim() : "";
   if (token && verifyBookConsultationToken(token, leadId)) {
-    return leadId;
+    return { kind: "lead", leadId };
   }
 
   const access = await authorizeLeadAccess(leadId);
   if (access.ok) {
-    return leadId;
+    return { kind: "lead", leadId };
   }
 
-  return null;
+  return { kind: "unauthorized" };
 }
 
 async function upsertBookingNotes({
@@ -287,6 +309,26 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json(
         { error: "Missing name, email, or startDateTime" },
         { status: 400 },
+      );
+    }
+
+    // Resolved HERE, before anything with an outside effect.
+    //
+    // This used to sit 37 lines further down, after the Graph event had already
+    // been created and the invitation already sent from the company mailbox. So
+    // a request naming a lead it could not prove it owned was refused only the
+    // database write — the calendar entry and the email had already gone out,
+    // against the builder's real availability and to an address of the sender's
+    // choosing. Authorisation that runs after the side effect is not
+    // authorisation.
+    const leadClaim = await resolveLeadClaim(body as Record<string, unknown>);
+    if (leadClaim.kind === "unauthorized") {
+      // Deliberately a refusal rather than a silent downgrade to an anonymous
+      // booking: the caller named a specific lead, so proceeding would attach
+      // this booking to a stranger's record or, failing that, quietly drop it.
+      return NextResponse.json(
+        { error: "This booking link is no longer valid. Request a new one." },
+        { status: 403 },
       );
     }
 
@@ -465,13 +507,9 @@ export async function POST(req: NextRequest): Promise<Response> {
         ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
         : `Appointment: ${appointmentLabel}`;
 
-    const existingLeadId = await resolveAuthorizedLeadId(
-      body as Record<string, unknown>,
-    );
-
     try {
       await upsertBookingNotes({
-        existingLeadId,
+        existingLeadId: leadClaim.kind === "lead" ? leadClaim.leadId : null,
         name,
         email,
         notes: trimmedNotes,

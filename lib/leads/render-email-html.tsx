@@ -13,6 +13,7 @@ import PortfolioEmail from "@/lib/graph/Email/portfolio-email";
 import { LeadEmailContext } from "@/lib/graph/Email/email-lead-context";
 import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
+import { authorizeLeadAccess } from "@/lib/data/offer-access";
 
 interface LeadPreview {
   id: number;
@@ -86,7 +87,23 @@ export async function renderEmailHtml(
       email: lead.email,
       id: String(lead.id),
     });
-    const token = signBookConsultationToken(lead.id);
+    // Authorise BEFORE minting, because this function is a Server Action: every
+    // export of a "use server" module is a POST endpoint that runs with
+    // whatever arguments the sender chooses, and `LeadPreview` is a bare
+    // interface erased at runtime, so `lead` is unvalidated caller input.
+    //
+    // Without this check the booking token — a 60-day credential that the
+    // public booking route accepts as proof of ownership — could be minted for
+    // any lead id by anyone able to reach the action, which would undo the very
+    // guard it was added for. tests/security/use-server-auth.test.ts exempted
+    // this export on the grounds that it "renders a fixed email template from
+    // values the caller already holds; reads no stored data". Minting a
+    // credential made that untrue, so the exemption is gone too.
+    //
+    // Failure is not fatal: the link simply goes out without a token, exactly
+    // as it did before booking tokens existed.
+    const access = await authorizeLeadAccess(lead.id);
+    const token = access.ok ? signBookConsultationToken(lead.id) : null;
     if (token) {
       params.set("bookingToken", token);
     }

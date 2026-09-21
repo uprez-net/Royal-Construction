@@ -131,26 +131,16 @@ export function EmailCampaignModal({
     const now = new Date();
 
     try {
+      // The AI template is used as written, then hydrated per recipient below.
+      //
+      // The iframe-scraping fallback that used to sit here was unreachable —
+      // `category === "custom"` is only ever set in a branch that already
+      // requires `hook.generatedHtml` — and scraping one shared preview is what
+      // sent every recipient the first lead's details in the first place.
       const isCustomTemplate = selectedTemplate.category === "custom";
-      let customHtmlTemplate: string | null = null;
-      if (isCustomTemplate) {
-        if (hook.generatedHtml) {
-          customHtmlTemplate = hook.generatedHtml;
-        } else {
-          const iframeDoc = emailIframeRef.current?.contentDocument;
-          if (iframeDoc) {
-            iframeDoc
-              .querySelectorAll(".rc-hover-toolbar")
-              .forEach((t) => t.remove());
-            let cleanHtml = iframeDoc.body.innerHTML;
-            cleanHtml = cleanHtml.replace(/\s*contenteditable="[^"]*"/gi, "");
-            cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, "");
-            cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, "");
-            cleanHtml = cleanHtml.replace(/<script[\s\S]*?<\/script>/gi, "");
-            customHtmlTemplate = cleanHtml;
-          }
-        }
-      }
+      const customHtmlTemplate = isCustomTemplate
+        ? (hook.generatedHtml ?? null)
+        : null;
 
       const updated: Lead[] = [];
       const batchSize = 20;
@@ -452,8 +442,9 @@ export function EmailCampaignModal({
             Email Preview
           </label>
           <p className="mb-2 text-[11px] text-muted-foreground">
-            Preview shows data for the first lead. All emails will be
-            personalized per lead.
+            Preview shows the first lead&apos;s details. Each email is rendered
+            separately with its own recipient&apos;s details, so this preview is
+            read-only.
           </p>
           {selectedTemplate &&
           selectedTemplate.id !== -1 &&

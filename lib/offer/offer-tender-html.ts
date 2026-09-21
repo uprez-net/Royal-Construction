@@ -949,7 +949,15 @@ function particularsPage(
         ${job.lotAreaSqm > 0 ? particular("Lot area", formatArea(job.lotAreaSqm)) : ""}
         ${particular("Build type", job.buildType)}
         ${job.facade ? particular("Façade", job.facade) : ""}
-        ${particular("Total build area", formatArea(totalArea))}
+        ${
+          /* Same rule as the lot area three lines up, and for the same reason:
+             a contract that states the build area is 0 m² is worse than one
+             that does not state it. Unreachable today — offer-tender-sign.ts
+             refuses to send a zero-area Tender before it renders — but this
+             file is the last line of defence for the document a client signs,
+             so it should not depend on a caller remembering to check. */ ""
+        }
+        ${totalArea > 0 ? particular("Total build area", formatArea(totalArea)) : ""}
         ${particular(
           "Major House Specifications",
           formatDwellingSpec({
