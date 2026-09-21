@@ -328,7 +328,8 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
       // every one of those pushed a genuinely upcoming trade further down a
       // list that shows four.
       const isConfirmedAndAhead =
-        schedule.status === "CONFIRMED" &&
+        (schedule.status === "CONFIRMED" ||
+          schedule.status === "PENDING_FINAL_CONFIRMATION") &&
         new Date(schedule.scheduledDate) >= today;
 
       // Kept as it was, and deliberately not bounded the same way: this arm is

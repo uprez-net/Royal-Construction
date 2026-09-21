@@ -119,7 +119,7 @@ export async function getTradieScheduleKPIs(): Promise<TradieKPIs> {
                 ) AS pending,
 
                 COUNT(*) FILTER (
-                    WHERE status = 'PENDING_RESPONSE'
+                    WHERE status IN ('PENDING_RESPONSE', 'PENDING_FINAL_CONFIRMATION')
                 ) AS pending_response,
 
                 COUNT(*) FILTER (

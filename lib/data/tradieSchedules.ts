@@ -426,6 +426,11 @@ export async function updateTradieSchedule(
       where: { id: scheduleId },
       data: {
         status: updates.status,
+        ...(updates.status === TradieScheduleStatus.CONFIRMED &&
+        existingSchedule.status !==
+          TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+          ? { reminderSentAt: null }
+          : {}),
         // `quotedPrice` is the whole job, which is what every downstream
         // display and approval treats it as - so a rate has to be costed
         // across the booked duration before it lands here.
@@ -497,7 +502,7 @@ export async function updateTradieSchedule(
             tradieId: schedule.tradieId,
             actionType: TradieApprovalActionType.SCHEDULE_APPROVAL,
             requestedBy: userId,
-            reason: `${schedule.tradie.name} has confirmed their availability for the scheduled task on ${dateFormat.format(schedule.scheduledDate)}. Please review and approve.`,
+            reason: `${schedule.tradie.name} has confirmed their availability for the scheduled task on ${dateFormat.format(schedule.scheduledDate)}. Please review and approve the booking.`,
             updationData: {
               scheduleId: schedule.id,
               projectId: schedule.projectId,

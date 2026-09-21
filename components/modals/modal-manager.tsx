@@ -136,7 +136,9 @@ export function ModalManager() {
     try {
       await updateScheduleStatuses(
         [row.id],
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+        row.status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+          ? TradieScheduleStatus.CONFIRMED
+          : TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
       );
     } catch (error) {
       toast.error("Failed to update status. Please try again.");

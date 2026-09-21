@@ -248,11 +248,13 @@ function buildWhere(
         );
         break;
       case "confirmed":
-        parts.push(Prisma.sql`ts.status = 'CONFIRMED'::"TradieScheduleStatus"`);
+        parts.push(
+          Prisma.sql`ts.status = ANY(ARRAY['CONFIRMED','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])`,
+        );
         break;
       case "pending":
         parts.push(
-          Prisma.sql`ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE']::"TradieScheduleStatus"[])`,
+          Prisma.sql`ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE','AWAITING_ADMIN_APPROVAL','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])`,
         );
         break;
       case "overdue":
@@ -308,8 +310,9 @@ function mapScheduleStatus(status: TradieScheduleStatus): {
   return {
     type: "warn",
     label:
-      status === TradieScheduleStatus.PENDING_RESPONSE
-        ? "is pending response"
+      status === TradieScheduleStatus.PENDING_RESPONSE ||
+      status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+        ? "is pending final confirmation"
         : "is pending",
   };
 }
@@ -486,7 +489,7 @@ export async function getTradieCoordinationDashboard(
         JOIN "Project" p ON p.id = ts."projectId"
         LEFT JOIN "Milestone" m ON m.id = ts."milestoneId"
         WHERE ${insightsWhere}
-          AND ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE']::"TradieScheduleStatus"[])
+          AND ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE','AWAITING_ADMIN_APPROVAL','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])
       `),
 
       // 8. Confirmed count
@@ -544,7 +547,9 @@ export async function getTradieCoordinationDashboard(
         SELECT
           COUNT(*) FILTER (WHERE ts.status = 'CONFIRMED'::"TradieScheduleStatus")       ::bigint AS confirmed,
           COUNT(*) FILTER (WHERE ts.status = 'PENDING'::"TradieScheduleStatus")         ::bigint AS pending,
-          COUNT(*) FILTER (WHERE ts.status = 'PENDING_RESPONSE'::"TradieScheduleStatus")::bigint AS pending_response,
+          COUNT(*) FILTER (
+            WHERE ts.status = ANY(ARRAY['PENDING_RESPONSE','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])
+          )::bigint AS pending_response,
           COUNT(*) FILTER (WHERE ts.status = 'NO_RESPONSE'::"TradieScheduleStatus")     ::bigint AS no_response,
           COUNT(*) FILTER (WHERE ts.status = 'DECLINED'::"TradieScheduleStatus")        ::bigint AS declined,
           COUNT(*) FILTER (WHERE ts.status = 'COMPLETED'::"TradieScheduleStatus")       ::bigint AS completed
@@ -566,7 +571,7 @@ export async function getTradieCoordinationDashboard(
             WHERE ts.status = 'CONFIRMED'::"TradieScheduleStatus"
           )::bigint AS tab_confirmed,
           COUNT(*) FILTER (
-            WHERE ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE']::"TradieScheduleStatus"[])
+            WHERE ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE','AWAITING_ADMIN_APPROVAL','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])
           )::bigint AS tab_pending,
           COUNT(*) FILTER (
             WHERE ts."scheduledDate" < ${today}

@@ -4,16 +4,8 @@ import type {
   TradieScheduleWithTradieAndMilestone,
   TradieUrgentReminderItem,
 } from "@/types/project";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertTriangle,
-  Plus,
-  Bell,
-  Phone,
-  Pencil,
-  Clock10,
-} from "lucide-react";
+import { Plus, Bell, Phone, Pencil, Clock10 } from "lucide-react";
 import { SectionCard } from "@/components/common/section-card";
 import { StatusPill } from "@/components/common/status-pill";
 import {
@@ -28,6 +20,10 @@ import { DataTable } from "@/components/common/data-table";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import { calculateScheduleTotalCost } from "@/utils/calculations";
+import {
+  TradieAttentionCard,
+  type TradieAttentionItem,
+} from "./tradie-attention-card";
 
 /**
  * Formats a money value, falling back to an em dash rather than rendering
@@ -48,6 +44,8 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       case "COMPLETED":
       case "CONFIRMED":
         return "success";
+      case "PENDING_FINAL_CONFIRMATION":
+        return "warning";
       case "DECLINED":
       case "NO_RESPONSE":
         return "danger";
@@ -78,7 +76,9 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       case "AWAITING_QUOTE":
         return "Awaiting quote";
       case "AWAITING_ADMIN_APPROVAL":
-        return "Awaiting admin approval";
+        return "Availability confirmed · admin review";
+      case "PENDING_FINAL_CONFIRMATION":
+        return "Pending final confirmation";
       default:
         // Never render a raw enum: a status added to the schema but not to this
         // switch still reads as a label rather than SCREAMING_SNAKE_CASE.
@@ -92,7 +92,15 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     status: TradieScheduleStatus,
   ): "success" | "warning" | "neutral" => {
     // Finalized states don't need reminder urgency
-    if (status === "CONFIRMED" || status === "COMPLETED") {
+    if (status === "COMPLETED") {
+      return "success";
+    }
+
+    if (status === "PENDING_FINAL_CONFIRMATION") {
+      return "warning";
+    }
+
+    if (status === "CONFIRMED") {
       return "success";
     }
 
@@ -100,15 +108,18 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
       return "warning";
     }
 
+    const now = new Date();
+    const daysUntilScheduled = differenceInDays(scheduledDate, now);
+
+    if (daysUntilScheduled <= 7) {
+      return "warning";
+    }
+
     if (!reminder) {
       return status === "NO_RESPONSE" ? "warning" : "neutral";
     }
 
-    const now = new Date();
-
     const daysSinceReminder = differenceInDays(now, reminder);
-
-    const daysUntilScheduled = differenceInDays(scheduledDate, now);
 
     // Recently reminded and still enough runway
     if (daysSinceReminder <= 3 && daysUntilScheduled > 7) {
@@ -131,10 +142,10 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
     return "neutral";
   };
 
-  const getAttentionStatus = (tradies: typeof project.tradieSchedules) => {
-    const getAttentionMessage = (
-      tradie: (typeof tradies)[number],
-    ): string | null => {
+  const getAttentionItems = (
+    tradies: typeof project.tradieSchedules,
+  ): TradieAttentionItem[] => {
+    return tradies.flatMap<TradieAttentionItem>((tradie) => {
       const reminderTone = getReminderTone(
         tradie.reminderSentAt,
         new Date(tradie.scheduledDate),
@@ -146,40 +157,70 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
         new Date(tradie.scheduledDate),
       );
 
-      // Switched on status rather than on tone: the previous version gated the
-      // switch on `getStatusTone(...) === "danger"`, so its PENDING and
-      // PENDING_RESPONSE cases (tone "warning") were unreachable.
       if (tradie.status === "NO_RESPONSE") {
-        return `${tradieName} is not responding`;
+        return [
+          {
+            schedule: tradie,
+            title: `${tradieName} has not responded`,
+            detail: `Follow up before the ${scheduledDate} booking.`,
+            tone: "danger" as const,
+          },
+        ];
       }
 
       if (tradie.status === "DECLINED") {
-        return `${tradieName} declined the ${scheduledDate} booking`;
+        return [
+          {
+            schedule: tradie,
+            title: `${tradieName} declined the booking`,
+            detail: `Arrange a replacement before ${scheduledDate}.`,
+            tone: "danger" as const,
+          },
+        ];
+      }
+
+      if (tradie.status === "PENDING_FINAL_CONFIRMATION") {
+        return [
+          {
+            schedule: tradie,
+            title: `Final confirmation needed from ${tradieName}`,
+            detail: `The approved booking is on ${scheduledDate}.`,
+            tone: "warning" as const,
+          },
+        ];
+      }
+
+      if (
+        tradie.status === "AWAITING_ADMIN_APPROVAL" &&
+        differenceInDays(new Date(tradie.scheduledDate), new Date()) <= 7
+      ) {
+        return [
+          {
+            schedule: tradie,
+            title: `Admin approval needed for ${tradieName}`,
+            detail: `Review availability before the ${scheduledDate} booking.`,
+            tone: "warning" as const,
+          },
+        ];
       }
 
       if (reminderTone === "warning") {
-        return `${tradieName} has not confirmed the ${scheduledDate} booking`;
+        return [
+          {
+            schedule: tradie,
+            title: `${tradieName} needs a confirmation follow-up`,
+            detail: `The booking is scheduled for ${scheduledDate}.`,
+            tone: "warning" as const,
+          },
+        ];
       }
 
-      return null;
-    };
-
-    const attentionMessages = tradies
-      .map(getAttentionMessage)
-      .filter((message): message is string => Boolean(message));
-
-    if (attentionMessages.length === 0) {
-      return null;
-    }
-
-    return {
-      count: attentionMessages.length,
-      summary: `${attentionMessages.join(". ")}.`,
-    };
+      return [];
+    });
   };
 
   const tradies = project.tradieSchedules;
-  const attentionStatus = getAttentionStatus(tradies);
+  const attentionItems = getAttentionItems(tradies);
   const dispatch = useAppDispatch();
 
   /**
@@ -256,30 +297,19 @@ export function ProjectTradiesTab({ project }: { project: ProjectDetail }) {
 
   return (
     <div className="space-y-4">
-      {attentionStatus && (
-        <Card
-          role="alert"
-          className="border-destructive/40 bg-destructive-light shadow-sm"
-        >
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-card text-destructive-ink">
-              <AlertTriangle className="size-5" aria-hidden="true" />
-            </div>
-
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-destructive-ink">
-                {attentionStatus.count === 1
-                  ? "1 tradie needs attention"
-                  : `${attentionStatus.count} tradies need attention`}
-              </p>
-
-              <p className="text-xs text-muted-foreground">
-                {attentionStatus.summary}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <TradieAttentionCard
+        items={attentionItems}
+        onReview={(schedule) =>
+          dispatch(
+            openModal({
+              type: "confirmStatus",
+              payload: {
+                schedule: toScheduleListItem(schedule, { includeQuote: true }),
+              },
+            }),
+          )
+        }
+      />
 
       <SectionCard
         title="Tradie coordination board"

@@ -3,7 +3,9 @@
 import {
   CalendarDays,
   Check,
+  CheckCircle2,
   Clock3,
+  AlertTriangle,
   Mail,
   Pencil,
   Phone,
@@ -47,6 +49,7 @@ function getStatusStyles(status: string) {
     case "PENDING":
     case "PENDING_RESPONSE":
     case "AWAITING_QUOTE":
+    case "PENDING_FINAL_CONFIRMATION":
       return "border-transparent bg-warning-light text-warning";
 
     case "NO_RESPONSE":
@@ -129,6 +132,13 @@ export function TradieScheduleDetailsModal({
   onUpdateStatus,
   onRequestDelete,
 }: ViewDetailsModalProps) {
+  const statusLabel =
+    schedule.status === "AWAITING_ADMIN_APPROVAL"
+      ? "Availability confirmed · admin review"
+      : schedule.status === "PENDING_FINAL_CONFIRMATION"
+        ? "Pending final confirmation"
+        : schedule.status.replaceAll("_", " ");
+
   const item = {
     id: schedule.id,
     tradieId: "tradieId",
@@ -181,6 +191,50 @@ export function TradieScheduleDetailsModal({
                 <p className="mt-1 text-[12.5px] text-muted-foreground">
                   {schedule.tradeType} — {schedule.abn}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mx-6 mt-5 rounded-xl border border-border/70 bg-muted/25 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                  Booking journey
+                </p>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  Availability is separate from the final day-before commitment.
+                </p>
+              </div>
+              {schedule.status === "PENDING_FINAL_CONFIRMATION" && (
+                <AlertTriangle className="size-5 shrink-0 text-warning" />
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-semibold">
+              <div className="rounded-lg bg-success-light px-2 py-2 text-success">
+                <CheckCircle2 className="mx-auto mb-1 size-3.5" />
+                Availability
+              </div>
+              <div
+                className={cn(
+                  "rounded-lg px-2 py-2",
+                  schedule.status === "AWAITING_ADMIN_APPROVAL"
+                    ? "bg-warning-light text-warning"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                Admin review
+              </div>
+              <div
+                className={cn(
+                  "rounded-lg px-2 py-2",
+                  schedule.status === "PENDING_FINAL_CONFIRMATION"
+                    ? "bg-warning-light text-warning"
+                    : schedule.status === "CONFIRMED"
+                      ? "bg-success-light text-success"
+                      : "bg-muted text-muted-foreground",
+                )}
+              >
+                Final check
               </div>
             </div>
           </div>
@@ -294,7 +348,7 @@ export function TradieScheduleDetailsModal({
                     getStatusStyles(schedule.status),
                   )}
                 >
-                  {schedule.status.replaceAll("_", " ")}
+                  {statusLabel}
                 </Badge>
               </div>
 
@@ -407,6 +461,7 @@ export function TradieScheduleDetailsModal({
             {/* Actions */}
             <div className="mt-5 flex flex-wrap gap-2">
               {schedule.status !== "CONFIRMED" &&
+                schedule.status !== "AWAITING_ADMIN_APPROVAL" &&
                 schedule.status !== "COMPLETED" &&
                 schedule.status !== "DECLINED" && (
                   <>
@@ -422,7 +477,9 @@ export function TradieScheduleDetailsModal({
                       )}
                     >
                       <Check className="mr-1.5 h-3.5 w-3.5" />
-                      Mark Confirmed
+                      {schedule.status === "PENDING_FINAL_CONFIRMATION"
+                        ? "Mark final confirmation received"
+                        : "Mark availability confirmed"}
                     </Button>
 
                     <Button
@@ -445,7 +502,8 @@ export function TradieScheduleDetailsModal({
               {(schedule.status === "NO_RESPONSE" ||
                 schedule.status === "PENDING" ||
                 schedule.status === "AWAITING_QUOTE" ||
-                schedule.status === "PENDING_RESPONSE") && (
+                schedule.status === "PENDING_RESPONSE" ||
+                schedule.status === "PENDING_FINAL_CONFIRMATION") && (
                 <Button
                   onClick={() => onCall(item)}
                   className={cn(

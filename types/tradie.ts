@@ -209,6 +209,13 @@ export const TRADIE_SCHEDULE_STATE_MACHINE: Record<
   [TradieScheduleStatus.CONFIRMED]: [
     TradieScheduleStatus.COMPLETED,
     TradieScheduleStatus.DECLINED,
+    // Admin approval updates the row in its transaction and then runs the
+    // normal side-effect path with the same final status.
+    TradieScheduleStatus.CONFIRMED,
+  ],
+  [TradieScheduleStatus.PENDING_FINAL_CONFIRMATION]: [
+    TradieScheduleStatus.CONFIRMED,
+    TradieScheduleStatus.DECLINED,
   ],
   [TradieScheduleStatus.NO_RESPONSE]: [
     TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
@@ -222,6 +229,7 @@ export const TRADIE_SCHEDULE_STATE_MACHINE: Record<
   [TradieScheduleStatus.COMPLETED]: [],
   [TradieScheduleStatus.AWAITING_QUOTE]: [
     TradieScheduleStatus.QUOTE_RECEIVED,
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
     TradieScheduleStatus.DECLINED,
   ],
   [TradieScheduleStatus.QUOTE_RECEIVED]: [

@@ -21,6 +21,7 @@ const statusOptions = [
   { label: "All statuses", value: "__all__" },
   { label: "Pending", value: "PENDING" },
   { label: "Pending response", value: "PENDING_RESPONSE" },
+  { label: "Pending final confirmation", value: "PENDING_FINAL_CONFIRMATION" },
   { label: "Confirmed", value: "CONFIRMED" },
   { label: "No response", value: "NO_RESPONSE" },
   { label: "Declined", value: "DECLINED" },

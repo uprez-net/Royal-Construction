@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { updateTradieScheduleStatus } from "@/lib/store/slices/tradiesSlice";
-import type { TradieScheduleStatus } from "@prisma/client";
+import { TradieScheduleStatus } from "@prisma/client";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +35,8 @@ type ScheduleStatus =
   | "AWAITING_MATERIALS"
   | "DECLINED"
   | "COMPLETED"
-  | "AWAITING_ADMIN_APPROVAL";
+  | "AWAITING_ADMIN_APPROVAL"
+  | "PENDING_FINAL_CONFIRMATION";
 
 const statusOptions: {
   value: ScheduleStatus;
@@ -48,8 +49,8 @@ const statusOptions: {
 }[] = [
   {
     value: "AWAITING_ADMIN_APPROVAL",
-    label: "Confirmed",
-    description: "Tradie confirmed and will attend",
+    label: "Availability confirmed",
+    description: "Tradie is available; admin approval is required next",
     icon: <CheckCircle2 className="h-5 w-5" />,
     color: "var(--success)",
     bg: "var(--success-light)",
@@ -64,6 +65,26 @@ const statusOptions: {
     color: "var(--warning)",
     bg: "var(--warning-light)",
     border: "color-mix(in oklab, var(--warning) 24%, var(--border))",
+  },
+
+  {
+    value: "PENDING_FINAL_CONFIRMATION",
+    label: "Pending final confirmation",
+    description: "The booking needs reconfirmation before the work date",
+    icon: <Clock3 className="h-5 w-5" />,
+    color: "var(--warning)",
+    bg: "var(--warning-light)",
+    border: "color-mix(in oklab, var(--warning) 24%, var(--border))",
+  },
+
+  {
+    value: "CONFIRMED",
+    label: "Final confirmation received",
+    description: "Tradie reconfirmed the approved booking",
+    icon: <CheckCircle2 className="h-5 w-5" />,
+    color: "var(--success)",
+    bg: "var(--success-light)",
+    border: "color-mix(in oklab, var(--success) 24%, var(--border))",
   },
 
   {
@@ -115,6 +136,9 @@ function getStatusStyles(status: string) {
   switch (status) {
     case "CONFIRMED":
       return "bg-[color:var(--success-light)] text-[color:var(--success)]";
+
+    case "PENDING_FINAL_CONFIRMATION":
+      return "bg-[color:var(--warning-light)] text-[color:var(--warning)]";
 
     case "PENDING":
     case "PENDING_RESPONSE":
@@ -175,31 +199,30 @@ export function ConfirmStatusModal({
     setActiveLoading(nextStatus);
     setError(null);
 
+    const resolvedStatus: TradieScheduleStatus =
+      nextStatus === "CONFIRMED"
+        ? schedule.status === "PENDING_FINAL_CONFIRMATION"
+          ? TradieScheduleStatus.CONFIRMED
+          : TradieScheduleStatus.AWAITING_ADMIN_APPROVAL
+        : (nextStatus as TradieScheduleStatus);
+
     startTransition(() => {
       dispatch(
         updateTradieScheduleStatus({
           scheduleId: schedule.id,
-          status:
-            nextStatus === "CONFIRMED"
-              ? "AWAITING_ADMIN_APPROVAL"
-              : (nextStatus as TradieScheduleStatus),
+          status: resolvedStatus,
         }),
       )
         .unwrap()
         .then(() => {
           setActiveLoading(null);
-          setStatus(
-            nextStatus === "CONFIRMED" ? "AWAITING_ADMIN_APPROVAL" : nextStatus,
-          );
+          setStatus(resolvedStatus as ScheduleStatus);
           dispatch(
             updateProjectTradieSchedule({
               scheduleId: schedule.id,
               projectId: schedule.projectId,
               update: {
-                status:
-                  nextStatus === "CONFIRMED"
-                    ? "AWAITING_ADMIN_APPROVAL"
-                    : (nextStatus as TradieScheduleStatus),
+                status: resolvedStatus,
               },
             }),
           );
@@ -276,6 +299,16 @@ export function ConfirmStatusModal({
                 )
               )
                 return null;
+
+              // Admin approval is intentionally handled in the approval
+              // queue. The status modal can record availability and final
+              // reconfirmation, but cannot bypass that approval boundary.
+              if (
+                schedule.status === "AWAITING_ADMIN_APPROVAL" &&
+                option.value === "CONFIRMED"
+              ) {
+                return null;
+              }
 
               return (
                 <button

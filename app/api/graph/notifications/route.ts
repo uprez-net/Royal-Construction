@@ -685,12 +685,7 @@ async function processNotifications(
                 tradieId: tradie!.id,
                 status: {
                   not: {
-                    in: [
-                      "DECLINED",
-                      "AWAITING_ADMIN_APPROVAL",
-                      "CONFIRMED",
-                      "QUOTE_RECEIVED",
-                    ],
+                    in: ["DECLINED", "AWAITING_ADMIN_APPROVAL", "CONFIRMED"],
                   },
                 }, // Only consider non-declined schedules
               },
@@ -737,8 +732,8 @@ async function processNotifications(
               continue;
             }
             const status = tradieInfo.scheduleConfirmation
-              ? tradieInfo.scheduleQuote != null
-                ? "QUOTE_RECEIVED"
+              ? schedule.status === "PENDING_FINAL_CONFIRMATION"
+                ? "CONFIRMED"
                 : "AWAITING_ADMIN_APPROVAL"
               : "DECLINED";
             await updateTradieSchedule(schedule.id, {

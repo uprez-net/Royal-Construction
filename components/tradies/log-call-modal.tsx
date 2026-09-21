@@ -41,8 +41,8 @@ const outcomeConfig: Record<
   }
 > = {
   CONFIRMED: {
-    title: "Confirmed",
-    description: "Tradie confirmed availability",
+    title: "Availability confirmed",
+    description: "Send the availability response for admin approval",
     icon: <CheckCircle2 className="h-5 w-5" />,
     border: "border-[color:var(--success)]",
     iconBg: "bg-[color:var(--success-light)]",
@@ -99,19 +99,27 @@ export function LogCallModal({
   const dispatch = useAppDispatch();
   const [isPending, startTransition] = useTransition();
   const pendingIds = useAppSelector((s) => s.tradies.pendingScheduleIds);
+  const isFinalConfirmation = schedule.status === "PENDING_FINAL_CONFIRMATION";
+  const availableOutcomes: CallStatus[] = isFinalConfirmation
+    ? ["CONFIRMED", "DECLINED"]
+    : ["CONFIRMED", "PENDING", "NO_RESPONSE", "DECLINED"];
 
   function submit(status: CallStatus) {
     setActiveLoading(status);
     setError(null);
 
+    const nextStatus: TradieScheduleStatus =
+      status === "CONFIRMED"
+        ? schedule.status === "PENDING_FINAL_CONFIRMATION"
+          ? "CONFIRMED"
+          : "AWAITING_ADMIN_APPROVAL"
+        : (status as TradieScheduleStatus);
+
     startTransition(() => {
       dispatch(
         updateTradieScheduleStatus({
           scheduleId: schedule.id,
-          status:
-            status === "CONFIRMED"
-              ? "AWAITING_ADMIN_APPROVAL"
-              : (status as TradieScheduleStatus),
+          status: nextStatus,
           notes,
         }),
       )
@@ -142,12 +150,15 @@ export function LogCallModal({
         <DialogHeader className="flex-row items-center justify-between border-b border-border/70 px-6 py-5">
           <div>
             <DialogTitle className="text-[18px] font-[700] tracking-[-0.02em] text-foreground">
-              Log Call Outcome
+              {isFinalConfirmation
+                ? "Record final confirmation"
+                : "Log call outcome"}
             </DialogTitle>
 
             <p className="mt-1 text-[12.5px] text-muted-foreground">
-              {schedule.tradieName} on {schedule.projectName} for{" "}
-              {schedule.milestoneName ?? "unscheduled milestone"}.
+              {isFinalConfirmation
+                ? `${schedule.tradieName} needs to reconfirm this approved booking.`
+                : `${schedule.tradieName} on ${schedule.projectName} for ${schedule.milestoneName ?? "unscheduled milestone"}.`}
             </p>
           </div>
         </DialogHeader>
@@ -171,6 +182,23 @@ export function LogCallModal({
 
             <div className="mt-0.5 text-[12px] text-muted-foreground">
               {schedule.abn}
+            </div>
+          </div>
+
+          <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-border/70 bg-muted/30 p-1 text-center text-[10px] font-semibold uppercase tracking-[0.06em]">
+            <div className="rounded-lg bg-primary/10 px-2 py-2 text-primary">
+              Availability
+            </div>
+            <div className="px-2 py-2 text-muted-foreground">Admin review</div>
+            <div
+              className={cn(
+                "px-2 py-2",
+                isFinalConfirmation
+                  ? "rounded-lg bg-warning-light text-warning"
+                  : "text-muted-foreground",
+              )}
+            >
+              Final check
             </div>
           </div>
 
@@ -213,56 +241,58 @@ export function LogCallModal({
                 CallStatus,
                 (typeof outcomeConfig)[CallStatus],
               ][]
-            ).map(([status, config]) => {
-              const isLoading =
-                activeLoading === status ||
-                (pendingIds.includes(schedule.id) && isPending);
+            )
+              .filter(([status]) => availableOutcomes.includes(status))
+              .map(([status, config]) => {
+                const isLoading =
+                  activeLoading === status ||
+                  (pendingIds.includes(schedule.id) && isPending);
 
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  disabled={isLoading}
-                  onClick={() => submit(status)}
-                  className={cn(
-                    "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-card px-4 py-[14px] text-left transition-all",
-                    "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
-                    "disabled:pointer-events-none disabled:opacity-60",
-                    config.border,
-                    schedule.status === status && "border-primary shadow-sm",
-                  )}
-                >
-                  <div
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => submit(status)}
                     className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]",
-                      config.iconBg,
-                      config.iconColor,
+                      "group flex w-full items-center gap-[10px] rounded-[10px] border-2 bg-card px-4 py-[14px] text-left transition-all",
+                      "hover:-translate-y-[2px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
+                      "disabled:pointer-events-none disabled:opacity-60",
+                      config.border,
+                      schedule.status === status && "border-primary shadow-sm",
                     )}
                   >
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      config.icon
-                    )}
-                  </div>
-
-                  <div className="min-w-0">
                     <div
                       className={cn(
-                        "text-[13px] font-[600]",
-                        config.titleColor,
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]",
+                        config.iconBg,
+                        config.iconColor,
                       )}
                     >
-                      {config.title}
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        config.icon
+                      )}
                     </div>
 
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      {config.description}
+                    <div className="min-w-0">
+                      <div
+                        className={cn(
+                          "text-[13px] font-[600]",
+                          config.titleColor,
+                        )}
+                      >
+                        {config.title}
+                      </div>
+
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        {config.description}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
           </div>
         </div>
       </DialogContent>
