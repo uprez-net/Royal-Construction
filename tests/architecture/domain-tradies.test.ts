@@ -23,6 +23,7 @@ import { reportTradieIncident } from "../../lib/domain/tradies/incidents";
 import { resolveTradieApproval } from "../../lib/domain/tradies/approvals";
 import { sendTradieScheduleReminder } from "../../lib/domain/tradies/reminders";
 import {
+  createTradieSchedules,
   rescheduleTradieSchedule,
   transitionTradieSchedule,
 } from "../../lib/domain/tradies/schedules";
@@ -63,6 +64,50 @@ const TRADIE = {
   phone: "0400000000",
   trade: "Electrical",
 };
+
+test("bulk scheduling authorizes every project inside one transaction", async () => {
+  const recorder = recordingDb({
+    "project.findUnique": (args: unknown) => {
+      const id = (args as { where: { id: string } }).where.id;
+      return { id, location: `${id} location`, name: id, siteManagerId: null };
+    },
+    "tradie.findUnique": { id: "t_1" },
+    "tradieSchedule.findMany": [],
+    "tradieSchedule.create": (args: unknown) => ({
+      ...(args as { data: Record<string, unknown> }).data,
+      id: `schedule_${
+        (args as { data: { projectId: string } }).data.projectId
+      }`,
+    }),
+  });
+  const scheduledDate = new Date("2026-10-01T00:00:00.000Z");
+
+  await createTradieSchedules(
+    adminPrincipal(),
+    ["project_1", "project_2"].map((projectId) => ({
+      durationDays: 1,
+      projectId,
+      requiresQuote: false,
+      scheduledDate,
+      tradieId: "t_1",
+    })),
+    recorder.transactionalDb,
+  );
+
+  const authorizedProjects = recorder.calls
+    .filter((call) => call.operation === "project.findUnique")
+    .map((call) => (call.args as { where: { id: string } }).where.id);
+  assert.deepEqual(authorizedProjects, ["project_1", "project_2"]);
+});
+
+test("schedule overlap checks and creates use serialisable transactions", () => {
+  const source = read("lib/domain/tradies/schedules.ts");
+  assert.ok(
+    (source.match(/TransactionIsolationLevel\.Serializable/g)?.length ?? 0) >=
+      2,
+    "single and bulk schedule creation must both be serialisable",
+  );
+});
 
 /* ------------------------------------------------------------- directory -- */
 
@@ -115,7 +160,11 @@ test("adding, changing or pricing a tradie is ADMIN only", async () => {
   ];
 
   for (const [name, run] of cases) {
-    await assert.rejects(run, DomainAuthorizationError, `${name} let a site manager through`);
+    await assert.rejects(
+      run,
+      DomainAuthorizationError,
+      `${name} let a site manager through`,
+    );
   }
 });
 
@@ -265,9 +314,8 @@ test("a rating refreshes the average from the ratings table", async () => {
     "tradieRating.aggregate",
     "tradie.update",
   ]);
-  const created = (
-    recorder.writes()[0].args as { data: { comment: unknown } }
-  ).data;
+  const created = (recorder.writes()[0].args as { data: { comment: unknown } })
+    .data;
   assert.equal(created.comment, "Good work");
 });
 
@@ -641,9 +689,9 @@ test("approval resolution applies the stored price, not approver input", async (
   );
 
   assert.deepEqual(result.affected, { amount: 125, unit: "HOURLY" });
-  const write = recorder.writes().find(
-    (call) => call.operation === "tradie.update",
-  );
+  const write = recorder
+    .writes()
+    .find((call) => call.operation === "tradie.update");
   assert.deepEqual((write?.args as { data: unknown }).data, {
     lastQuotedPrice: 125,
     lastQuotedPriceUnit: "HOURLY",
@@ -677,10 +725,10 @@ test("approval resolution claims once and refuses an action-type mismatch", asyn
   );
   // The mismatch is thrown inside the transaction, so the real database rolls
   // the claim back instead of leaving a pending request looking resolved.
-  assert.deepEqual(
-    recorder.operations(),
-    ["tradieApproval.updateMany", "tradieApproval.findUnique"],
-  );
+  assert.deepEqual(recorder.operations(), [
+    "tradieApproval.updateMany",
+    "tradieApproval.findUnique",
+  ]);
 });
 
 test("a resolved deletion carries the booking details its notification needs", async () => {
@@ -825,9 +873,12 @@ test("schedule approval uses the shared awaiting-admin state transition", async 
     scheduleId: "schedule_1",
     status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
   });
-  const args = recorder.writes().find(
-    (call) => call.operation === "tradieSchedule.updateMany",
-  )?.args as { data: unknown; where: unknown };
+  const args = recorder
+    .writes()
+    .find((call) => call.operation === "tradieSchedule.updateMany")?.args as {
+    data: unknown;
+    where: unknown;
+  };
   assert.deepEqual(args.data, {
     reminderSentAt: null,
     status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
@@ -875,9 +926,9 @@ test("schedule transition normalizes a daily quote once and persists the total",
   );
 
   assert.equal(result.quotedPrice, "1900.00");
-  const scheduleWrite = recorder.writes().find(
-    (call) => call.operation === "tradieSchedule.updateMany",
-  );
+  const scheduleWrite = recorder
+    .writes()
+    .find((call) => call.operation === "tradieSchedule.updateMany");
   assert.deepEqual((scheduleWrite?.args as { data: unknown }).data, {
     quotedPrice: "1900.00",
     requiresQuote: true,
@@ -922,9 +973,11 @@ test("rescheduling checks the project milestone and uses old values as a stale g
       ),
     DomainTransitionError,
   );
-  const args = recorder.writes().find(
-    (call) => call.operation === "tradieSchedule.updateMany",
-  )?.args as { where: unknown };
+  const args = recorder
+    .writes()
+    .find((call) => call.operation === "tradieSchedule.updateMany")?.args as {
+    where: unknown;
+  };
   assert.deepEqual(args.where, {
     durationDays: 1,
     id: "schedule_1",

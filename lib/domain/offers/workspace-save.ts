@@ -284,8 +284,6 @@ export async function saveOfferWorkspace(
     };
   }
 
-  await syncLeadDealValue(input.offerId, contractValue, db);
-
   return {
     contractValueIncGst: selectedContractValueIncGst,
     moneyChanged,
@@ -312,11 +310,12 @@ export async function saveOfferWorkspace(
  * Eve's copy of the save simply did not do this, so an offer priced through
  * the agent left the pipeline showing whatever the lead was last worth.
  */
-async function syncLeadDealValue(
+export async function syncLeadDealValue(
   offerId: string,
-  contractValue: Prisma.Decimal,
+  contractValueIncGst: number,
   db: DomainDb,
 ): Promise<void> {
+  const contractValue = new Prisma.Decimal(contractValueIncGst);
   if (!contractValue.greaterThan(0)) return;
   try {
     const offerLead = await db.offer.findUnique({

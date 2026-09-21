@@ -233,4 +233,11 @@ test("the booking route and the app routes call the same task command", () => {
     read("app/api/(data)/leads/tasks/[taskId]/route.ts"),
     /authorizeLeadTask/,
   );
+
+  const collectionRoute = read("app/api/(data)/leads/tasks/route.ts");
+  assert.equal(
+    collectionRoute.match(/await requireInternalUser\(\)/g)?.length,
+    2,
+    "both collection handlers must refuse customer accounts",
+  );
 });

@@ -1,4 +1,5 @@
 import {
+  Prisma,
   TradieApprovalActionType,
   TradieApprovalStatus,
   TradieScheduleStatus,
@@ -50,12 +51,12 @@ export type CreateScheduleInput = {
 };
 
 /**
- * Statuses that still hold the tradie's time.
+ * Statuses that no longer hold the tradie's time.
  *
  * A declined booking was never accepted and a completed one is in the past, so
  * neither blocks a new one.
  */
-const BLOCKING_STATUSES = [
+const NON_BLOCKING_STATUSES = [
   TradieScheduleStatus.DECLINED,
   TradieScheduleStatus.COMPLETED,
 ];
@@ -86,7 +87,7 @@ export async function assertNoScheduleConflict(
     where: {
       id: input.ignoreScheduleId ? { not: input.ignoreScheduleId } : undefined,
       scheduledDate: { lt: end },
-      status: { notIn: BLOCKING_STATUSES },
+      status: { notIn: NON_BLOCKING_STATUSES },
       tradieId: input.tradieId,
     },
   });
@@ -151,52 +152,66 @@ export async function createTradieSchedule(
   input: CreateScheduleInput,
   db: DomainDb,
 ): Promise<CreatedSchedule> {
-  const project = await authorizeProject(principal, input.projectId, db);
+  const write = async (transactionDb: DomainDb): Promise<CreatedSchedule> => {
+    const project = await authorizeProject(
+      principal,
+      input.projectId,
+      transactionDb,
+    );
 
-  const tradie = await db.tradie.findUnique({
-    select: { id: true },
-    where: { id: input.tradieId },
-  });
-  if (!tradie) throw new DomainNotFoundError("Tradie not found");
+    const tradie = await transactionDb.tradie.findUnique({
+      select: { id: true },
+      where: { id: input.tradieId },
+    });
+    if (!tradie) throw new DomainNotFoundError("Tradie not found");
 
-  if (input.milestoneId) {
-    await assertMilestoneOnProject(project.id, input.milestoneId, db);
-  }
+    if (input.milestoneId) {
+      await assertMilestoneOnProject(
+        project.id,
+        input.milestoneId,
+        transactionDb,
+      );
+    }
 
-  await assertNoScheduleConflict(
-    {
-      durationDays: input.durationDays,
-      scheduledDate: input.scheduledDate,
-      tradieId: tradie.id,
-    },
-    db,
-  );
+    await assertNoScheduleConflict(
+      {
+        durationDays: input.durationDays,
+        scheduledDate: input.scheduledDate,
+        tradieId: tradie.id,
+      },
+      transactionDb,
+    );
 
-  const created = await db.tradieSchedule.create({
-    data: {
-      durationDays: input.durationDays,
-      milestoneId: input.milestoneId ?? null,
-      projectId: project.id,
-      requiresQuote: input.requiresQuote,
-      scheduledDate: input.scheduledDate,
-      status: input.requiresQuote
-        ? TradieScheduleStatus.AWAITING_QUOTE
-        : TradieScheduleStatus.PENDING,
-      tradieId: tradie.id,
-    },
-    select: {
-      durationDays: true,
-      id: true,
-      milestoneId: true,
-      projectId: true,
-      requiresQuote: true,
-      scheduledDate: true,
-      status: true,
-      tradieId: true,
-    },
-  });
+    return transactionDb.tradieSchedule.create({
+      data: {
+        durationDays: input.durationDays,
+        milestoneId: input.milestoneId ?? null,
+        projectId: project.id,
+        requiresQuote: input.requiresQuote,
+        scheduledDate: input.scheduledDate,
+        status: input.requiresQuote
+          ? TradieScheduleStatus.AWAITING_QUOTE
+          : TradieScheduleStatus.PENDING,
+        tradieId: tradie.id,
+      },
+      select: {
+        durationDays: true,
+        id: true,
+        milestoneId: true,
+        projectId: true,
+        requiresQuote: true,
+        scheduledDate: true,
+        status: true,
+        tradieId: true,
+      },
+    });
+  };
 
-  return created;
+  return "$transaction" in db
+    ? db.$transaction(write, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      })
+    : write(db);
 }
 
 /**
@@ -222,7 +237,11 @@ export async function createTradieSchedules(
     }
     return created;
   };
-  return "$transaction" in db ? db.$transaction(run) : run(db);
+  return "$transaction" in db
+    ? db.$transaction(run, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      })
+    : run(db);
 }
 
 const ALLOWED_TRANSITIONS: Record<
@@ -486,7 +505,10 @@ export async function rescheduleTradieSchedule(
     );
   }
   if (Number.isNaN(input.scheduledDate.getTime())) {
-    throw new DomainValidationError("The scheduled date is invalid.", "scheduledDate");
+    throw new DomainValidationError(
+      "The scheduled date is invalid.",
+      "scheduledDate",
+    );
   }
   if (input.milestoneId) {
     await assertMilestoneOnProject(existing.projectId, input.milestoneId, db);

@@ -63,6 +63,26 @@ test("an unscripted read fails loudly instead of answering undefined", async () 
   );
 });
 
+test("parallel unscripted reads all record their calls before rejecting", async () => {
+  const recorder = recordingDb();
+  await assert.rejects(
+    Promise.all([recorder.db.offer.findMany(), recorder.db.lead.findMany()]),
+    /unscripted read/,
+  );
+  assert.deepEqual(recorder.operations(), ["offer.findMany", "lead.findMany"]);
+});
+
+test("createManyAndReturn defaults to Prisma's array result shape", async () => {
+  const recorder = recordingDb();
+  const db = recorder.db as unknown as {
+    example: {
+      createManyAndReturn(args: unknown): Promise<unknown[]>;
+    };
+  };
+
+  assert.deepEqual(await db.example.createManyAndReturn({ data: [] }), []);
+});
+
 test("the recorder replays scripted reads and records writes in order", async () => {
   const recorder = recordingDb({
     "offer.findUnique": { stateVersion: 3 },

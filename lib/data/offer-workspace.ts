@@ -24,7 +24,10 @@ import {
   buildAdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
 import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
-import { saveOfferWorkspace as saveOfferWorkspaceDomain } from "@/lib/domain/offers/workspace-save";
+import {
+  saveOfferWorkspace as saveOfferWorkspaceDomain,
+  syncLeadDealValue,
+} from "@/lib/domain/offers/workspace-save";
 import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
 import { userPrincipal } from "@/lib/domain/principal";
 import {
@@ -473,6 +476,10 @@ export async function saveOfferWorkspace(input: {
       : { ok: false, reason: result.reason };
   }
 
+  // This projection is deliberately outside the save transaction. A failed
+  // lead update must not roll back an offer price that the UI reports saved.
+  await syncLeadDealValue(input.offerId, result.contractValueIncGst, prisma);
+
   revalidateTag(`offer-${input.offerId}`, CACHE_PROFILES.SHORT);
   // The Offers list and its KPIs print these columns from a cached read. Only
   // a price edit moves them, and most autosaves are copy edits.
@@ -594,6 +601,7 @@ async function commitOfferTransition(
       userPrincipal(access.user),
       {
         note: input.note,
+        expectedFromStatus: input.from,
         offerId: input.offerId,
         skipOwnerGate: input.skipOwnerGate,
         skipTransitionCheck: input.skipTransitionCheck,

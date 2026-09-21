@@ -2,7 +2,7 @@ import { OfferStatus, Prisma } from "@prisma/client";
 
 import type { TransactionalDomainDb } from "../db";
 import type { DomainPrincipal } from "../principal";
-import { authorizeOffer } from "../access/offers";
+import { OfferSupersededError, authorizeOffer } from "../access/offers";
 import {
   CONTRACT_PARTICULAR_FIELDS,
   CONTRACT_PARTICULAR_MAX_LENGTH,
@@ -55,7 +55,14 @@ export async function saveContractParticulars(
   },
   db: TransactionalDomainDb,
 ): Promise<SaveParticularsResult> {
-  await authorizeOffer(principal, input.offerId, db);
+  try {
+    await authorizeOffer(principal, input.offerId, db);
+  } catch (error) {
+    if (error instanceof OfferSupersededError) {
+      return { error: error.message, ok: false };
+    }
+    throw error;
+  }
 
   const normalized = normalizeContractParticulars(input.particulars);
   const totalLength = CONTRACT_PARTICULAR_FIELDS.reduce(

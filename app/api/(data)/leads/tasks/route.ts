@@ -15,6 +15,7 @@ import {
   successResponse,
 } from "@/utils/validators";
 import { resolveActingUserId } from "@/lib/data/acting-user";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
 
 /**
  * Open work by default; `?state=completed` for the history.
@@ -28,6 +29,11 @@ import { resolveActingUserId } from "@/lib/data/acting-user";
  */
 export async function GET(request: NextRequest) {
   try {
+    const guard = await requireInternalUser();
+    if (!guard.ok) {
+      return errorResponse(guard.error, { status: 403, code: "FORBIDDEN" });
+    }
+
     // Anything other than the two known values is a caller mistake. Silently
     // treating ?state=complete (or a typo) as "open" would hand back the wrong
     // list and look like data loss.
@@ -66,6 +72,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireInternalUser();
+    if (!guard.ok) {
+      return errorResponse(guard.error, { status: 403, code: "FORBIDDEN" });
+    }
+
     const parsed = createLeadTaskSchema.safeParse(await request.json());
     if (!parsed.success) return badRequestResponse(parsed.error.message);
 

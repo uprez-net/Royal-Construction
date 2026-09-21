@@ -47,6 +47,8 @@ export type CommitTransitionInput = {
   readonly offerId: string;
   readonly toStatus: OfferStatus;
   readonly note?: string;
+  /** The status a caller already made its decision against. */
+  readonly expectedFromStatus?: OfferStatus;
   /**
    * Refuse the write unless the offer is still at this version. Optional: the
    * app's status controls do not carry one, an Eve tool call does.
@@ -170,6 +172,13 @@ export async function commitOfferStatusTransition(
     );
   }
 
+  if (
+    input.expectedFromStatus !== undefined &&
+    offer.offerStatus !== input.expectedFromStatus
+  ) {
+    return null;
+  }
+
   if (input.skipTransitionCheck !== true) {
     assertTransitionAllowed(offer.offerStatus, input.toStatus);
   }
@@ -225,7 +234,7 @@ export async function commitOfferStatusTransition(
     where: {
       id: input.offerId,
       isActive: true,
-      offerStatus: offer.offerStatus,
+      offerStatus: input.expectedFromStatus ?? offer.offerStatus,
       ...(input.expectedStateVersion === undefined
         ? {}
         : { stateVersion: input.expectedStateVersion }),

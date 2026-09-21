@@ -66,6 +66,7 @@ export async function recallOfferEnvelope(
     principal,
     {
       note: input.note,
+      expectedFromStatus: offer.offerStatus,
       offerId: input.offerId,
       skipOwnerGate: true,
       skipTransitionCheck: true,

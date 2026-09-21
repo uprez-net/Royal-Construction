@@ -13,6 +13,8 @@ import {
   OFFER_WORKSPACE_PATCH_KEYS,
   applyOfferWorkspacePatch,
 } from "../../lib/domain/offers/workspace-save";
+import { saveContractParticulars } from "../../lib/domain/offers/contract-particulars";
+import { EMPTY_CONTRACT_PARTICULARS } from "../../lib/offer/contract-particulars";
 import { DomainTransitionError } from "../../lib/domain/errors";
 import { ROOT } from "./module-graph";
 import { adminPrincipal, recordingDb } from "./domain-harness";
@@ -57,7 +59,14 @@ test("a manual jump into a signed state is refused outside development", () => {
       );
     }
   } finally {
-    Object.assign(process.env, { NODE_ENV: previous });
+    if (previous === undefined) {
+      // NODE_ENV is typed readonly, so restoring "unset" goes through
+      // Reflect, for the same reason the assignment above goes through
+      // Object.assign.
+      Reflect.deleteProperty(process.env, "NODE_ENV");
+    } else {
+      Object.assign(process.env, { NODE_ENV: previous });
+    }
   }
 });
 
@@ -169,6 +178,32 @@ test("the transition's predicate pins the status it decided against", async () =
   });
 });
 
+test("a delegated transition refuses a status that changed before commit", async () => {
+  const recorder = recordingDb({
+    "lead.findUnique": { assignedId: null, id: 7 },
+    "offer.findUnique": {
+      isActive: true,
+      leadId: 7,
+      offerStatus: OfferStatus.TENDER_SENT,
+      workspaceState: null,
+    },
+  });
+
+  const result = await commitOfferStatusTransition(
+    adminPrincipal(),
+    {
+      expectedFromStatus: OfferStatus.OFFER_SENT,
+      offerId: "offer_1",
+      skipTransitionCheck: true,
+      toStatus: OfferStatus.SENT,
+    },
+    recorder.db,
+  );
+
+  assert.equal(result, null);
+  assert.deepEqual(recorder.writes(), []);
+});
+
 test("the lead-stage sync is not part of the transition", () => {
   // Eve's copy wrote the lead's stage inside the same transaction. A failure
   // there rolls the status flip and its OfferStatusEvent back while
@@ -252,6 +287,27 @@ test("a patch on a superseded revision says superseded, not stale", async () => 
   assert.equal(result.ok === false && result.reason, "superseded");
 });
 
+test("contract particulars map a superseded revision to a failed result", async () => {
+  const recorder = recordingDb({
+    "lead.findUnique": { assignedId: null, id: 7 },
+    "offer.findUnique": { isActive: false, leadId: 7 },
+  });
+
+  const result = await saveContractParticulars(
+    adminPrincipal(),
+    {
+      manualOverrides: [],
+      offerId: "offer_1",
+      particulars: EMPTY_CONTRACT_PARTICULARS,
+    },
+    recorder.transactionalDb,
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? "" : result.error, /superseded/);
+  assert.deepEqual(recorder.writes(), []);
+});
+
 /* ------------------------------------------ the duplicate really is deleted */
 
 test("Eve's offer specialist no longer carries the save or the state machine", () => {
@@ -283,6 +339,39 @@ test("Eve syncs the lead stage after its audited transaction, not inside it", ()
   assert.ok(
     body.indexOf("runOfferMutation") < body.indexOf("syncLeadStageForOffer"),
     "the stage sync runs inside the audited transaction again",
+  );
+});
+
+test("offer saves sync the lead value only after their transaction commits", () => {
+  const domain = read("lib/domain/offers/workspace-save.ts");
+  const save = domain.slice(
+    domain.indexOf("export async function saveOfferWorkspace("),
+    domain.indexOf("export async function syncLeadDealValue("),
+  );
+  assert.doesNotMatch(save, /syncLeadDealValue\(/);
+
+  const agent = read("agent/lib/offer-operations.ts");
+  const update = agent.slice(
+    agent.indexOf("export async function updateAuthorizedOfferDetails("),
+    agent.indexOf("export async function recallAuthorizedOfferEnvelope("),
+  );
+  assert.ok(
+    update.indexOf("await runOfferMutation(") <
+      update.indexOf("await syncLeadDealValue("),
+    "Eve syncs the lead value before its audited transaction commits",
+  );
+});
+
+test("Eve syncs the lead stage after a successful recall transaction", () => {
+  const source = read("agent/lib/offer-operations.ts");
+  const recall = source.slice(
+    source.indexOf("export async function recallAuthorizedOfferEnvelope("),
+    source.indexOf("export async function createAuthorizedOfferRevision("),
+  );
+  assert.ok(
+    recall.indexOf("await runOfferMutation(") <
+      recall.indexOf("await syncLeadStageForOffer("),
+    "the recall lead-stage sync runs inside the audited transaction",
   );
 });
 

@@ -20,9 +20,10 @@ A domain module:
   reaches for the ambient client.
 - **Takes its caller explicitly.** A [`DomainPrincipal`](./principal.ts), never
   `auth()`, `@clerk/nextjs`, request headers, or an Eve `ctx`. Crons and
-  webhooks pass `SYSTEM_PRINCIPAL`; the public booking route passes
-  `ANONYMOUS_PRINCIPAL`. "Nobody is signed in" is a value here, not an
-  exception.
+  webhooks call `systemPrincipal(reason)` with a stable audit label naming the
+  authenticated channel; open routes call `anonymousPrincipal(source)` with a
+  stable label naming the public entry point. "Nobody is signed in" is a value
+  here, not an exception.
 - **Owns the rule.** Intrinsic validation, authorization predicates, query
   scopes, state machines, optimistic concurrency, transaction boundaries, and
   the durable write.
@@ -53,8 +54,8 @@ every channel: a cron, a webhook and a test runner are all plain Node too.
 | --- | --- | --- |
 | App page / Server Action / route | Clerk `auth()` + application `User` lookup | `UserPrincipal` |
 | Eve tool | `ctx.session.auth.current` via `requireCurrentAgentActor` | `UserPrincipal` |
-| Cron / webhook / Graph subscription | its own channel secret | `SYSTEM_PRINCIPAL` |
-| Public booking | nothing — the route is open | `ANONYMOUS_PRINCIPAL` |
+| Cron / webhook / Graph subscription | its own channel secret | `systemPrincipal(reason)`, where `reason` identifies the authenticated channel in audit history |
+| Public booking | nothing — the route is open | `anonymousPrincipal(source)`, where `source` identifies the public entry point in audit history |
 
 ## Layout
 

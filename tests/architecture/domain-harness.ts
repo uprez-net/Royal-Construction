@@ -92,6 +92,7 @@ export function recordingDb(script: Script = {}): RecordingDb {
 
     const [, verb] = operation.split(".");
     if (WRITE_OPERATIONS.has(verb)) {
+      if (verb === "createManyAndReturn") return [];
       return verb.endsWith("Many") ? { count: 1 } : {};
     }
     throw new Error(
@@ -107,10 +108,10 @@ export function recordingDb(script: Script = {}): RecordingDb {
           if (!WRITE_OPERATIONS.has(verb) && !READ_OPERATIONS.has(verb)) {
             return undefined;
           }
-          return (args: unknown) => {
+          return async (args: unknown) => {
             const operation = `${name}.${verb}`;
             calls.push({ args, operation });
-            return Promise.resolve(answer(operation, args));
+            return answer(operation, args);
           };
         },
       },

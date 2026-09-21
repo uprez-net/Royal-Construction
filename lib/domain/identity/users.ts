@@ -198,7 +198,7 @@ export async function updateUserByClerkId(
     const user = await tx.user.update({ data, where: { clerkId } });
 
     let customerId: string | null = null;
-    if (updates.role === Role.CUSTOMER) {
+    if (updates.role === Role.CUSTOMER && !user.customerId) {
       const customer = await tx.customer.create({
         data: { email: user.email, name: user.name, phone: user.phone },
       });
@@ -207,6 +207,8 @@ export async function updateUserByClerkId(
         where: { id: user.id },
       });
       customerId = customer.id;
+    } else if (updates.role === Role.CUSTOMER) {
+      customerId = user.customerId;
     }
 
     return {

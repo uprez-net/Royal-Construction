@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
@@ -7,6 +8,7 @@ import {
   ROOT,
   collectSourceFiles,
   formatViolations,
+  valueSpecifiers,
   walkGraph,
 } from "./module-graph";
 
@@ -34,6 +36,20 @@ import {
 // module may name a type from a Next-coupled file. Only value edges count.
 
 const DOMAIN_DIR = join(ROOT, "lib", "domain");
+
+test("the graph parser treats .ts generic arrows as TypeScript, not JSX", () => {
+  const directory = mkdtempSync(join(tmpdir(), "guri-module-graph-"));
+  const file = join(directory, "generic.ts");
+  try {
+    writeFileSync(
+      file,
+      'const load = <T>(value: T) => import("./forbidden");\nvoid load;\n',
+    );
+    assert.deepEqual(valueSpecifiers(file), ["./forbidden"]);
+  } finally {
+    rmSync(directory, { recursive: true });
+  }
+});
 
 // Packages that only load inside a Next/React server bundle.
 const FORBIDDEN_PACKAGES = [

@@ -49,12 +49,21 @@ export function collectSourceFiles(
 
 /** Module specifiers this file imports for their values. */
 export function valueSpecifiers(file: string): string[] {
+  const extension = extname(file);
+  const scriptKind =
+    extension === ".tsx"
+      ? ts.ScriptKind.TSX
+      : extension === ".jsx"
+        ? ts.ScriptKind.JSX
+        : extension === ".js" || extension === ".mjs" || extension === ".cjs"
+          ? ts.ScriptKind.JS
+          : ts.ScriptKind.TS;
   const source = ts.createSourceFile(
     file,
     readFileSync(file, "utf8"),
     ts.ScriptTarget.Latest,
     false,
-    ts.ScriptKind.TSX,
+    scriptKind,
   );
   const specifiers: string[] = [];
 

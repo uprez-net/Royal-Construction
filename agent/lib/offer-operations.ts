@@ -12,7 +12,10 @@ import {
   type EntityReference,
 } from "@/agent/lib/result-contracts";
 import { agentDb } from "@/agent/lib/db";
-import { applyOfferWorkspacePatch } from "@/lib/domain/offers/workspace-save";
+import {
+  applyOfferWorkspacePatch,
+  syncLeadDealValue,
+} from "@/lib/domain/offers/workspace-save";
 import { commitOfferStatusTransition } from "@/lib/domain/offers/status";
 import { saveContractParticulars as saveContractParticularsDomain } from "@/lib/domain/offers/contract-particulars";
 import {
@@ -48,6 +51,12 @@ import {
 // around them. They now live behind lib/domain/offers/*, which the app calls
 // too, so this file names none of them.
 import { OfferStatusLabels } from "@/types/offer";
+import {
+  isContractParticularKey,
+  normalizeContractParticulars,
+  type ContractParticularKey,
+  type ContractParticulars,
+} from "@/lib/offer/contract-particulars";
 
 type OfferDb = Prisma.TransactionClient | typeof agentDb;
 
@@ -197,6 +206,7 @@ async function updateOfferDetailsDirect(
   return {
     ok: true as const,
     changedSections: Object.keys(input.patch),
+    contractValueIncGst: result.contractValueIncGst,
     stateVersion: result.stateVersion,
     totalIncGst: result.totalIncGst,
   };
@@ -385,17 +395,17 @@ async function transitionOfferStatusDirect(
 async function saveContractParticulars(
   input: {
     offerId: string;
-    particulars: Record<string, string>;
-    manualOverrides: readonly string[];
+    particulars: ContractParticulars;
+    manualOverrides: readonly ContractParticularKey[];
   },
   actor: User,
 ) {
   return saveContractParticularsDomain(
     userPrincipal(actor),
     {
-      manualOverrides: input.manualOverrides as never,
+      manualOverrides: input.manualOverrides,
       offerId: input.offerId,
-      particulars: input.particulars as never,
+      particulars: input.particulars,
     },
     agentDb,
   );
@@ -476,7 +486,8 @@ export async function updateAuthorizedOfferDetails(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessOffer(actor, input.offerId);
-  return runOfferMutation({
+  let leadValueToSync: number | null = null;
+  const envelope = await runOfferMutation({
     action: "offer.details.update",
     ctx,
     execute: async (tx) => {
@@ -489,6 +500,7 @@ export async function updateAuthorizedOfferDetails(
             : (result.error ?? "The offer details could not be updated."),
         );
       }
+      leadValueToSync = result.contractValueIncGst;
       return actionEnvelope({
         data: {
           changedSections: result.changedSections,
@@ -515,6 +527,11 @@ export async function updateAuthorizedOfferDetails(
     ownerUserId: actor.id,
     targetId: input.offerId,
   });
+
+  if (leadValueToSync !== null) {
+    await syncLeadDealValue(input.offerId, leadValueToSync, agentDb);
+  }
+  return envelope;
 }
 
 export async function recallAuthorizedOfferEnvelope(
@@ -528,16 +545,18 @@ export async function recallAuthorizedOfferEnvelope(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessOffer(actor, input.offerId);
-  return runOfferMutation({
+  let recalled = false;
+  const envelope = await runOfferMutation({
     action: "offer.envelope.recall",
     ctx,
-    execute: async () => {
+    execute: async (tx) => {
       const result = await recallOfferEnvelope(
         userPrincipal(actor),
         input,
-        agentDb,
+        tx ?? agentDb,
         unavailableEnvelopeControl,
       );
+      recalled = result.ok;
       return result.ok
         ? actionEnvelope({
             data: {
@@ -558,6 +577,11 @@ export async function recallAuthorizedOfferEnvelope(
     ownerUserId: actor.id,
     targetId: input.offerId,
   });
+
+  if (recalled) {
+    await syncLeadStageForOffer(input.offerId, agentDb);
+  }
+  return envelope;
 }
 
 export async function createAuthorizedOfferRevision(
@@ -610,11 +634,19 @@ export async function saveAuthorizedContractParticulars(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertAgentCanAccessOffer(actor, input.offerId);
+  const particulars: ContractParticulars = normalizeContractParticulars(
+    input.particulars,
+  );
+  const manualOverrides: readonly ContractParticularKey[] =
+    input.manualOverrides.filter(isContractParticularKey);
   return runOfferMutation({
     action: "offer.contract.particulars.save",
     ctx,
     execute: async () => {
-      const result = await saveContractParticulars(input as never, actor);
+      const result = await saveContractParticulars(
+        { ...input, manualOverrides, particulars },
+        actor,
+      );
       return result.ok
         ? actionEnvelope({
             data: { offerId: input.offerId },
