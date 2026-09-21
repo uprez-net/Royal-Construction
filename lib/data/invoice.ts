@@ -6,7 +6,7 @@ import {
   type ProjectStage,
 } from "@prisma/client";
 import { put } from "@vercel/blob";
-import { addDays, format } from "date-fns";
+import { format } from "date-fns";
 import { Invoice, type Invoices, LineAmountTypes } from "xero-node";
 
 import prisma from "@/lib/prisma";
@@ -15,7 +15,6 @@ import {
   buildMilestoneTree,
   groupRootsByStage,
 } from "@/lib/projects/milestone-tree";
-import { resolveStageClaims } from "@/lib/projects/stage-claim";
 import {
   getXeroContext,
   XeroNotConnectedError,
@@ -23,19 +22,18 @@ import {
 } from "@/lib/xero/client";
 import { getXeroConfig } from "@/lib/xero/config";
 import { resolveXeroContactId } from "@/lib/xero/contact";
-import { invoiceStatusRank, toInvoiceStatus } from "@/lib/xero/invoice-status";
+import { toInvoiceStatus } from "@/lib/xero/invoice-status";
 import { parseXeroDate } from "@/lib/xero/xero-date";
+import { syncInvoiceFromExternal } from "@/lib/domain/invoices/sync";
+import { createStageInvoice as createStageInvoiceDomain } from "@/lib/domain/invoices/stage-creation";
 import { CACHE_PROFILES } from "@/types/cache";
 import {
   PROJECT_STAGE_LABELS,
   type ProjectListInvoice,
   type SafeInvoice,
 } from "@/types/project";
-import type { ProjectRequirementsPayload } from "@/types/project-flow";
 
 /** Days the owner has to pay a progress claim. */
-const PAYMENT_TERMS_DAYS = 14;
-
 /**
  * Strip Prisma `Decimal`s off an invoice for the RSC boundary.
  *
@@ -190,143 +188,100 @@ export async function createStageInvoice(
   projectId: string,
   projectStage: ProjectStage,
 ): Promise<InvoiceRow | null> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { customer: true },
-  });
-  if (!project) {
-    throw new Error(`Project ${projectId} not found.`);
-  }
+  const stageLabel = PROJECT_STAGE_LABELS[projectStage] ?? projectStage;
+  const issuedDate = new Date();
+  let context: XeroContext | null = null;
 
-  const requirements =
-    project.requirements as ProjectRequirementsPayload | null;
-  const claims = resolveStageClaims(
-    requirements?.commercialsAndClaims?.paymentStages,
-    Number(project.totalBudget),
+  const row = await createStageInvoiceDomain(
+    {
+      issuedDate,
+      projectId,
+      projectStage,
+      stageLabel,
+    },
+    prisma,
+    async ({ claim, dueDate, gstIncluded, project }) => {
+      // An AUTHORISED invoice has to be complete enough to post to the ledger,
+      // so Xero requires a revenue account on every line. Resolve provider
+      // configuration only after the domain has confirmed there is a claim;
+      // an unconfigured Xero connection must not turn a no-op stage into an
+      // error.
+      const config = getXeroConfig();
+      if (!config.salesAccountCode) {
+        throw new Error(
+          "Xero invoicing is not configured — set XERO_SALES_ACCOUNT_CODE to the revenue account progress claims should post to.",
+        );
+      }
+      const salesAccountCode = config.salesAccountCode;
+      context = await getXeroContext();
+      const contactID = await resolveXeroContactId(context, project.customer);
+      const invoices: Invoices = {
+        invoices: [
+          {
+            type: Invoice.TypeEnum.ACCREC,
+            contact: { contactID },
+            date: format(issuedDate, "yyyy-MM-dd"),
+            dueDate: format(dueDate, "yyyy-MM-dd"),
+            reference: `${project.name} / ${stageLabel}`,
+            status: Invoice.StatusEnum.AUTHORISED,
+            lineAmountTypes: gstIncluded
+              ? LineAmountTypes.Inclusive
+              : LineAmountTypes.Exclusive,
+            lineItems: [
+              {
+                description: `${project.name} — ${stageLabel} progress claim`,
+                quantity: 1,
+                unitAmount: claim,
+                accountCode: salesAccountCode,
+                ...(config.salesTaxType
+                  ? { taxType: config.salesTaxType }
+                  : {}),
+              },
+            ],
+          },
+        ],
+      };
+      const response = await context.xero.accountingApi.createInvoices(
+        context.tenantId,
+        invoices,
+        false,
+        undefined,
+        `stage-invoice-${projectId}-${projectStage}`,
+      );
+      const created = response.body.invoices?.[0];
+      if (
+        !created?.invoiceID ||
+        created.invoiceID === "00000000-0000-0000-0000-000000000000"
+      ) {
+        const reason = created?.validationErrors
+          ?.map((error) => error.message)
+          .join("; ");
+        throw new Error(
+          `Xero rejected the ${stageLabel} claim for project ${projectId}${reason ? `: ${reason}` : "."}`,
+        );
+      }
+      return {
+        fields: invoiceFieldsFromXero(created),
+        xeroInvoiceId: created.invoiceID,
+      };
+    },
   );
-  const claim = claims[projectStage]?.claim;
 
-  // An unknown claim is not a zero claim. Invoicing the owner for $0 — or for a
-  // figure nobody agreed to — is worse than raising nothing and letting someone
-  // notice the stage has no claim against it on the Payments tab.
-  if (claim == null || !Number.isFinite(claim) || claim <= 0) {
+  if (!row) {
     console.warn(
       `[xero] No claim amount resolved for ${projectStage} on project ${projectId}; nothing invoiced.`,
     );
     return null;
   }
 
-  // An AUTHORISED invoice has to be complete enough to post to the ledger, so
-  // Xero requires a revenue account on every line — and without one it cannot
-  // derive the tax treatment either, which is why a missing account code shows
-  // up as two errors ("Account code or ID must be specified; The TaxType field
-  // is mandatory"). A DRAFT would have been accepted without it and failed the
-  // moment anyone approved it.
-  const config = getXeroConfig();
-  if (!config.salesAccountCode) {
-    throw new Error(
-      "Xero invoicing is not configured — set XERO_SALES_ACCOUNT_CODE to the revenue account progress claims should post to.",
-    );
-  }
-
-  const context = await getXeroContext();
-  const contactID = await resolveXeroContactId(context, project.customer);
-
-  const stageLabel = PROJECT_STAGE_LABELS[projectStage] ?? projectStage;
-  const issuedDate = new Date();
-  const dueDate = addDays(issuedDate, PAYMENT_TERMS_DAYS);
-
-  const invoices: Invoices = {
-    invoices: [
-      {
-        type: Invoice.TypeEnum.ACCREC,
-        contact: { contactID },
-        // Xero wants plain calendar dates here; a full ISO timestamp is rejected.
-        date: format(issuedDate, "yyyy-MM-dd"),
-        dueDate: format(dueDate, "yyyy-MM-dd"),
-        reference: `${project.name} / ${stageLabel}`,
-        status: Invoice.StatusEnum.AUTHORISED,
-        // Whether the contract's figures already carry GST decides how Xero
-        // treats the line amount. Getting this backwards moves the total by
-        // 10%, on a document the owner is being asked to pay.
-        lineAmountTypes: requirements?.commercialsAndClaims?.gstIncluded
-          ? LineAmountTypes.Inclusive
-          : LineAmountTypes.Exclusive,
-        lineItems: [
-          {
-            description: `${project.name} — ${stageLabel} progress claim`,
-            quantity: 1,
-            unitAmount: claim,
-            accountCode: config.salesAccountCode,
-            // Omitted unless overridden, so Xero applies the sales account's
-            // own default tax rate — the setting the bookkeeper already chose.
-            ...(config.salesTaxType ? { taxType: config.salesTaxType } : {}),
-          },
-        ],
-      },
-    ],
-  };
-
-  const response = await context.xero.accountingApi.createInvoices(
-    context.tenantId,
-    invoices,
-    // `summarizeErrors: false` — Xero answers 200 with the rejection recorded on
-    // the invoice rather than failing the request with an opaque 400.
-    false,
-    undefined,
-    // Xero's own duplicate guard, keyed the same way our unique index is. Two
-    // concurrent hook runs that both get past the existence check still leave
-    // one invoice in Xero rather than billing the owner twice.
-    `stage-invoice-${projectId}-${projectStage}`,
-  );
-
-  const created = response.body.invoices?.[0];
-  if (
-    !created?.invoiceID ||
-    created.invoiceID === "00000000-0000-0000-0000-000000000000"
-  ) {
-    const reason = created?.validationErrors?.map((e) => e.message).join("; ");
-    throw new Error(
-      `Xero rejected the ${stageLabel} claim for project ${projectId}${reason ? `: ${reason}` : "."}`,
-    );
-  }
-
-  let row: InvoiceRow;
-  try {
-    row = await prisma.invoice.create({
-      data: {
-        projectId,
-        projectStage,
-        ...invoiceFieldsFromXero(created),
-        xeroInvoiceId: created.invoiceID,
-      },
-    });
-  } catch (error) {
-    // P2002 on (projectId, projectStage): another run claimed this stage while
-    // we were talking to Xero. The idempotency key means Xero handed back that
-    // same invoice, so the existing row is the right answer, not an error.
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return prisma.invoice.findUnique({
-        where: { projectId_projectStage: { projectId, projectStage } },
-      });
-    }
-    // The claim now exists in Xero but not here. Name it in the log: the id is
-    // what anyone reconciling by hand needs, and the generic handler upstream
-    // does not have it.
-    console.error(
-      `[xero] Invoice ${created.invoiceID} was raised in Xero but could not be recorded for project ${projectId} / ${projectStage}:`,
-      error,
-    );
-    throw error;
+  if (!context) {
+    throw new Error("Xero invoice context was not created.");
   }
 
   // The PDF is a convenience, not the claim. Archiving after the row is
   // committed means a blob failure costs a link we can re-fetch, rather than
   // losing an invoice that already exists in Xero and would be raised again.
-  await archiveInvoicePdf(context, row.id, created.invoiceID, projectId);
+  await archiveInvoicePdf(context, row.id, row.xeroInvoiceId, projectId);
 
   revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
 
@@ -340,62 +295,34 @@ export async function createStageInvoice(
 export async function syncInvoiceFromXero(
   xeroInvoiceId: string,
 ): Promise<void> {
-  const existing = await prisma.invoice.findUnique({
-    where: { xeroInvoiceId },
-    select: {
-      id: true,
-      projectId: true,
-      status: true,
-      xeroUpdatedAt: true,
-      pdfUrl: true,
-    },
-  });
-  // Not one of ours. The webhook fires for every invoice in the organisation,
-  // and invoices the bookkeeper raised by hand are none of our business.
-  if (!existing) {
-    return;
-  }
-
   const context = await getXeroContext();
-  const response = await context.xero.accountingApi.getInvoice(
-    context.tenantId,
+  const result = await syncInvoiceFromExternal(
     xeroInvoiceId,
+    prisma,
+    async ({ projectId }) => {
+      const response = await context.xero.accountingApi.getInvoice(
+        context.tenantId,
+        xeroInvoiceId,
+      );
+      const invoice = response.body.invoices?.[0];
+      if (!invoice) return null;
+      return {
+        fields: invoiceFieldsFromXero(invoice),
+        archivePdf: () =>
+          archiveInvoicePdfToBlob(context, xeroInvoiceId, projectId),
+      };
+    },
   );
-  const invoice = response.body.invoices?.[0];
-  if (!invoice) {
-    return;
+
+  if (result.kind === "updated") {
+    const invoice = await prisma.invoice.findUnique({
+      select: { projectId: true },
+      where: { id: result.invoiceId },
+    });
+    if (invoice) {
+      revalidateTag(`project-${invoice.projectId}`, CACHE_PROFILES.MEDIUM);
+    }
   }
-
-  const fields = invoiceFieldsFromXero(invoice);
-
-  // Forward-only, on two independent axes. Xero's `updatedDateUTC` rejects a
-  // stale delivery outright; the status rank additionally refuses to walk a
-  // status backwards, which covers a replay carrying the same timestamp.
-  if (
-    existing.xeroUpdatedAt &&
-    fields.xeroUpdatedAt &&
-    fields.xeroUpdatedAt <= existing.xeroUpdatedAt
-  ) {
-    return;
-  }
-  if (invoiceStatusRank(fields.status) < invoiceStatusRank(existing.status)) {
-    return;
-  }
-
-  await prisma.invoice.update({ where: { id: existing.id }, data: fields });
-
-  // An invoice that had no PDF when it was created — an archive failure, or a
-  // claim that was still a draft — gets one now.
-  if (!existing.pdfUrl) {
-    await archiveInvoicePdf(
-      context,
-      existing.id,
-      xeroInvoiceId,
-      existing.projectId,
-    );
-  }
-
-  revalidateTag(`project-${existing.projectId}`, CACHE_PROFILES.MEDIUM);
 }
 
 /** Download the rendered invoice from Xero and park it in our own blob store. */
@@ -405,6 +332,21 @@ async function archiveInvoicePdf(
   xeroInvoiceId: string,
   projectId: string,
 ): Promise<void> {
+  const url = await archiveInvoicePdfToBlob(context, xeroInvoiceId, projectId);
+  if (url) {
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { pdfUrl: url },
+    });
+  }
+}
+
+/** Xero/Blob adapter used by both initial creation and webhook sync. */
+async function archiveInvoicePdfToBlob(
+  context: XeroContext,
+  xeroInvoiceId: string,
+  projectId: string,
+): Promise<string | null> {
   try {
     const pdf = await context.xero.accountingApi.getInvoiceAsPdf(
       context.tenantId,
@@ -428,10 +370,7 @@ async function archiveInvoicePdf(
       },
     );
 
-    await prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { pdfUrl: blob.url },
-    });
+    return blob.url;
   } catch (error) {
     // Best effort: Xero holds the document and it can be fetched again on the
     // next webhook. Losing our copy must not lose the claim.
@@ -439,6 +378,7 @@ async function archiveInvoicePdf(
       `[xero] Failed to archive the PDF for invoice ${xeroInvoiceId}:`,
       error,
     );
+    return null;
   }
 }
 
