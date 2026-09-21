@@ -169,12 +169,15 @@ export async function GET(request: Request) {
               resolvedNotFound += 1;
             }
           })
-          .catch((updateError) =>
+          .catch((updateError) => {
+            // Counted, not just logged: the row is still unresolved, so the
+            // run did not do what it reports doing.
+            failed += 1;
             console.error(
               `[cron] failed to resolve unconfirmed send ${row.id} as not-found:`,
               updateError,
-            ),
-          );
+            );
+          });
         continue;
       }
 
@@ -227,6 +230,7 @@ export async function GET(request: Request) {
           found += 1;
         }
       } catch (recordError) {
+        failed += 1;
         console.error(
           `[cron] failed to record the found envelope for unconfirmed send ${row.id} — left unmarked so the next run retries:`,
           recordError,

@@ -202,6 +202,16 @@ export async function findEnvelopeBySendAttempt(
       : startPosition + returned;
 
     if (returned === 0) {
+      // An empty page is not proof of the end. DocuSign can return one while
+      // the total still says there is more to come, and calling that
+      // "not-found" lets the cron resolve the attempt and unblock a recall
+      // with a matching envelope still further down the result set.
+      if (Number.isFinite(total) && startPosition < total) {
+        return {
+          kind: "incomplete",
+          reason: `DocuSign returned an empty page at ${startPosition} of ${total}`,
+        };
+      }
       return { kind: "not-found" };
     }
     if (Number.isFinite(total)) {

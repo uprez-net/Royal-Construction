@@ -401,3 +401,27 @@ test("a run with failed rows does not report success", () => {
     "a run with failures still returns a success response",
   );
 });
+
+test("an empty page is only the end when the metadata says so", () => {
+  // DocuSign can return an empty page while totalSetSize still says more is
+  // coming. Calling that "not-found" resolves the attempt and unblocks a
+  // recall with a matching envelope still further down the result set.
+  const source = code("lib/docusign/envelope-send-attempt.ts");
+  assert.match(
+    source,
+    /if \(returned === 0\) \{[\s\S]{0,400}Number\.isFinite\(total\) && startPosition < total[\s\S]{0,200}kind:\s*"incomplete"/,
+    "an empty page short-circuits to not-found without checking the total",
+  );
+});
+
+test("a database failure counts as a failed row, not a quiet log line", () => {
+  // The row is still unresolved either way, so a run that could not persist
+  // its decisions must not report success.
+  const source = code(CRON);
+  const failedIncrements = (source.match(/failed \+= 1/g) ?? []).length;
+  assert.equal(
+    failedIncrements,
+    3,
+    "expected the search failure, the not-found update failure and the found-envelope transaction failure all to count",
+  );
+});
