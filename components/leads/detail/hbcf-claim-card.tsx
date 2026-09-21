@@ -214,6 +214,26 @@ interface AxisBar {
   widthPercent: number;
 }
 
+interface MonthPosition {
+  key: string;
+  leftPercent: number;
+}
+
+function MonthBoundaryLines({ months }: { months: readonly MonthPosition[] }) {
+  return (
+    <>
+      {months.map((month) => (
+        <span
+          key={month.key}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 z-0 w-px bg-border/45"
+          style={{ left: `${month.leftPercent}%` }}
+        />
+      ))}
+    </>
+  );
+}
+
 function CapacityTimeline({
   claims,
   colours,
@@ -300,6 +320,7 @@ function CapacityTimeline({
             <div className="flex">
               <div className="w-20 shrink-0" />
               <div className="relative h-5 flex-1">
+                <MonthBoundaryLines months={months} />
                 {months.map((month) => (
                   <span
                     key={month.key}
@@ -314,7 +335,7 @@ function CapacityTimeline({
                 ))}
                 {/* Labelled once, at the top; the line itself repeats per row. */}
                 <span
-                  className="absolute top-4 -translate-x-1/2 rounded-sm bg-foreground px-1 text-[9px] font-bold tracking-wide text-background"
+                  className="absolute top-4 z-10 -translate-x-1/2 rounded-sm bg-foreground px-1 text-[9px] font-bold tracking-wide text-background"
                   style={{ left: `${nowLeft}%` }}
                 >
                   NOW
@@ -335,12 +356,13 @@ function CapacityTimeline({
                       {hbcfClaimLabel(claim)}
                     </span>
                     <div className="relative h-7 flex-1 rounded-md bg-muted/40">
+                      <MonthBoundaryLines months={months} />
                       <NowMarker leftPercent={nowLeft} />
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div
                             tabIndex={0}
-                            className="absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                            className="absolute inset-y-0.5 z-1 flex items-center justify-center overflow-hidden rounded-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                             style={{
                               left: `${bar.leftPercent}%`,
                               width: `${bar.widthPercent}%`,
@@ -385,12 +407,13 @@ function CapacityTimeline({
                     This lead
                   </span>
                   <div className="relative h-7 flex-1 rounded-md bg-muted/40">
+                    <MonthBoundaryLines months={months} />
                     <NowMarker leftPercent={nowLeft} />
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div
                           tabIndex={0}
-                          className="absolute inset-y-0.5 flex items-center justify-center overflow-hidden rounded-md border border-dashed px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                          className="absolute inset-y-0.5 z-1 flex items-center justify-center overflow-hidden rounded-md border border-dashed px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                           style={{
                             left: `${projected.leftPercent}%`,
                             width: `${projected.widthPercent}%`,
