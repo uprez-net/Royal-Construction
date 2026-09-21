@@ -126,14 +126,16 @@ export function requireUserPrincipal(
  * because that is how `lib/offer/access.ts` has always scoped lead access, and
  * splitting the two rules apart is a change of behaviour, not a refactor.
  */
-const INTERNAL_ROLES: ReadonlySet<Role> = new Set([
+export const INTERNAL_ROLES: readonly Role[] = [
   Role.ADMIN,
   Role.SITE_MANAGER,
   Role.GUEST,
-]);
+];
+
+const INTERNAL_ROLE_SET: ReadonlySet<Role> = new Set(INTERNAL_ROLES);
 
 export function isInternalRole(role: Role): boolean {
-  return INTERNAL_ROLES.has(role);
+  return INTERNAL_ROLE_SET.has(role);
 }
 
 /**

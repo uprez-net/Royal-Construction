@@ -40,6 +40,12 @@ import {
 } from "@/lib/compliance/party-mail";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
+import {
+  authorizeMilestone,
+  authorizeProject,
+} from "@/lib/domain/access/projects";
+import { isDomainError } from "@/lib/domain/errors";
+import { userPrincipal } from "@/lib/domain/principal";
 
 type ProjectActor = Pick<User, "id" | "role">;
 type ProjectDb = Prisma.TransactionClient | typeof prisma;
@@ -60,31 +66,35 @@ function projectReference(project: {
   };
 }
 
+// The project scope rule is lib/domain/access/projects.ts, shared with the app
+// (lib/data/tradieSchedules.ts had its own copy) — Eve only translates the
+// refusal. One answer covers "no such project" and "not yours": an Eve caller
+// chose the id, so telling the two apart is information.
 async function assertProjectAccess(
   actor: ProjectActor,
   projectId: string,
   db: Prisma.TransactionClient | typeof prisma = prisma,
 ) {
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-    select: { id: true, name: true, location: true, siteManagerId: true },
-  });
-  if (
-    !project ||
-    (actor.role !== "ADMIN" && project.siteManagerId !== actor.id)
-  )
+  try {
+    return await authorizeProject(userPrincipal(actor), projectId, db);
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
     throw new AgentAuthorizationError();
-  return project;
+  }
 }
 
 async function assertMilestoneAccess(actor: ProjectActor, milestoneId: string) {
-  const milestone = await prisma.milestone.findUnique({
-    where: { id: milestoneId },
-    select: { projectId: true },
-  });
-  if (!milestone) throw new Error("The requested milestone is unavailable.");
-  await assertProjectAccess(actor, milestone.projectId);
-  return milestone;
+  try {
+    const { project } = await authorizeMilestone(
+      userPrincipal(actor),
+      milestoneId,
+      prisma,
+    );
+    return { projectId: project.id };
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new AgentAuthorizationError();
+  }
 }
 
 function actionEnvelope(input: {

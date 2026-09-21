@@ -1,39 +1,34 @@
+import {
+  type FileTargetProject as UploadTargetProject,
+  type FileUploader as ProjectUploader,
+  canAttachFileToProject,
+} from "@/lib/domain/access/projects";
+import { INTERNAL_ROLES } from "@/lib/domain/principal";
+
 // Who may attach a file to a project, as one pure rule.
 //
 // Staff may attach to any project: every project screen offers them its upload
 // controls, and the writes those uploads feed (milestone photos, project
 // updates) accept any of them, so a narrower gate here only broke uploads the
 // page had just offered. A customer may attach only to their own project.
-// Kept free of Prisma so the decision is testable.
+//
+// The rule moved to lib/domain/access/projects.ts. This module stays as the
+// name the upload route and the file-writer tests already import.
 
-// canAccessLead's internal roles in lib/offer/access.ts, the roles that read
-// every lead. Spelled out as strings so this module does not load Prisma; a
-// test holds the two lists in step.
-export const PROJECT_STAFF_ROLES: readonly string[] = [
-  "ADMIN",
-  "SITE_MANAGER",
-  "GUEST",
-];
+export type { ProjectUploader, UploadTargetProject };
 
-export type ProjectUploader = {
-  readonly role: string;
-  readonly customerId?: string | null;
-};
-
-export type UploadTargetProject = {
-  readonly customerId: string;
-};
+/**
+ * The roles that may attach to any project.
+ *
+ * Derived from the domain's internal roles rather than restated: these used to
+ * be two hand-kept lists with a test holding them in step, and a list that
+ * cannot drift needs no test to catch it drifting.
+ */
+export const PROJECT_STAFF_ROLES: readonly string[] = INTERNAL_ROLES;
 
 export function canAttachToProject(
   user: ProjectUploader,
   project: UploadTargetProject,
 ): boolean {
-  if (PROJECT_STAFF_ROLES.includes(user.role)) {
-    return true;
-  }
-  return (
-    user.role === "CUSTOMER" &&
-    Boolean(user.customerId) &&
-    user.customerId === project.customerId
-  );
+  return canAttachFileToProject(user, project);
 }

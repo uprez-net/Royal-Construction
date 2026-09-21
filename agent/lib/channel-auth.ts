@@ -11,17 +11,19 @@ import {
   isAgentFeatureEnabled,
 } from "@/agent/lib/session-identity";
 import { waitForOwnedAgentSession } from "@/agent/lib/session-owner";
+import { findAgentSessionOwner } from "@/lib/domain/access/agent-sessions";
+import { principalForClerkId } from "@/lib/domain/identity/users";
 
 const clerkClient = createClerkClient({
   publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   secretKey: process.env.CLERK_SECRET_KEY,
 });
 
+// Null means "not registered yet", not "no owner" — see
+// lib/domain/access/agent-sessions.ts. waitForOwnedAgentSession waits that
+// race out; a row that exists with a foreign owner is refused immediately.
 async function findSessionOwner(eveSessionId: string) {
-  const session = await prisma.agentSession.findUnique({
-    where: { eveSessionId },
-    select: { ownerUserId: true },
-  });
+  const session = await findAgentSessionOwner(eveSessionId, prisma);
   return session?.ownerUserId ?? null;
 }
 
@@ -53,10 +55,7 @@ export function clerkInternalUserAuth(): AuthFn<Request> {
         });
       }
 
-      const user = await prisma.user.findUnique({
-        where: { clerkId: clerkAuth.userId },
-        select: { id: true, role: true },
-      });
+      const user = await principalForClerkId(clerkAuth.userId, prisma);
       if (!user) {
         throw new ForbiddenError({
           code: "agent_access_denied",
@@ -69,7 +68,7 @@ export function clerkInternalUserAuth(): AuthFn<Request> {
         const ownsSession = await waitForOwnedAgentSession(
           findSessionOwner,
           eveSessionId,
-          user.id,
+          user.userId,
         );
         if (!ownsSession) {
           throw new ForbiddenError({
@@ -85,7 +84,7 @@ export function clerkInternalUserAuth(): AuthFn<Request> {
         },
         authenticator: "clerk",
         issuer: "clerk",
-        principalId: user.id,
+        principalId: user.userId,
         principalType: "user",
         subject: clerkAuth.userId,
       };

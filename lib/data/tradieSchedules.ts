@@ -25,6 +25,9 @@ import { TradieScheduleListItem } from "@/types/project";
 import { auth } from "@clerk/nextjs/server";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
 import { getAllAdminUsersIds, getUserByClerkIdCached } from "./user";
+import { authorizeProject } from "@/lib/domain/access/projects";
+import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
+import { userPrincipal } from "@/lib/domain/principal";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { sendEmail } from "../azureClient";
 import {
@@ -102,6 +105,11 @@ const convertToTradieScheduleListItem = (
  * @throws {Error} If the project does not exist.
  * @throws {Error} If the authenticated user is not the project's site manager.
  */
+// ADMIN, or the project's own site manager. The rule is
+// lib/domain/access/projects.ts#canManageProject, which Eve's schedule tools
+// call too — this used to be one of three separate spellings of it. The
+// messages are unchanged, and the unused siteManager join went with the old
+// query.
 const userHasAccessToSchedule = async (projectId: string) => {
   const { userId } = await auth();
   if (!userId) {
@@ -111,15 +119,16 @@ const userHasAccessToSchedule = async (projectId: string) => {
   if (!user) {
     throw new Error("User not found");
   }
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { siteManager: true },
-  });
-  if (!project) {
-    throw new Error("Project not found");
-  }
-  if (project.siteManagerId !== user.id && user.role !== "ADMIN") {
-    throw new Error("User does not have access to this schedule");
+  try {
+    await authorizeProject(userPrincipal(user), projectId, prisma);
+  } catch (error) {
+    if (error instanceof DomainNotFoundError) {
+      throw new Error("Project not found");
+    }
+    if (isDomainError(error)) {
+      throw new Error("User does not have access to this schedule");
+    }
+    throw error;
   }
 
   return user.id;

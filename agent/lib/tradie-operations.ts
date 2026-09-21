@@ -26,6 +26,13 @@ import {
   scheduleTotalCost,
 } from "@/utils/calculations";
 import { TRADIE_SCHEDULE_STATE_MACHINE } from "@/types/tradie";
+import {
+  assertCanReadTradieDirectory,
+  tradieScheduleListScope,
+} from "@/lib/domain/access/tradies";
+import { projectManageScope } from "@/lib/domain/access/projects";
+import { isDomainError } from "@/lib/domain/errors";
+import { userPrincipal } from "@/lib/domain/principal";
 
 type TradieInput = {
   name: string;
@@ -118,13 +125,20 @@ function requireAdmin(actor: User) {
   if (!isAdmin(actor)) throw new AgentAuthorizationError();
 }
 
+// Directory lookup is an internal coordination surface. Site managers may
+// select any registered tradie for a booking; project scope is enforced on the
+// schedule/project mutation itself. The rule is
+// lib/domain/access/tradies.ts#canReadTradieDirectory; this keeps the
+// "match nothing" spelling the directory queries are built around, so a
+// refusal reads as an empty directory rather than an error mid-listing.
 function scopeForTradie(actor: User): Prisma.TradieWhereInput {
-  // Directory lookup is an internal coordination surface. Site managers may
-  // select any registered tradie for a booking; project scope is enforced on
-  // the schedule/project mutation itself.
-  return isAdmin(actor) || actor.role === Role.SITE_MANAGER
-    ? {}
-    : { id: "__unreachable__" };
+  try {
+    assertCanReadTradieDirectory(userPrincipal(actor));
+    return {};
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    return { id: "__unreachable__" };
+  }
 }
 
 async function getVisibleTradie(
@@ -147,7 +161,7 @@ async function getVisibleSchedule(
   const schedule = await db.tradieSchedule.findFirst({
     where: {
       id: scheduleId,
-      ...(isAdmin(actor) ? {} : { project: { siteManagerId: actor.id } }),
+      ...tradieScheduleListScope(userPrincipal(actor)),
     },
     include: {
       tradie: true,
@@ -248,10 +262,7 @@ export async function getAuthorizedTradie(
           ? { orderBy: { createdAt: "desc" }, take: 25 }
           : false,
       schedules: {
-        where:
-          actor.role === Role.ADMIN
-            ? undefined
-            : { project: { siteManagerId: actor.id } },
+        where: tradieScheduleListScope(userPrincipal(actor)),
         orderBy: { scheduledDate: "desc" },
         take: 50,
         include: {
@@ -555,7 +566,7 @@ function scheduleWhere(
     tradieId: input.tradieId,
     projectId: input.projectId,
     status: input.status,
-    ...(isAdmin(actor) ? {} : { project: { siteManagerId: actor.id } }),
+    ...tradieScheduleListScope(userPrincipal(actor)),
     ...(input.from || input.to
       ? {
           scheduledDate: {
@@ -688,7 +699,7 @@ export async function createAuthorizedTradieSchedule(
   const project = await db.project.findFirst({
     where: {
       id: input.projectId,
-      ...(isAdmin(actor) ? {} : { siteManagerId: actor.id }),
+      ...projectManageScope(userPrincipal(actor)),
     },
     select: { id: true, name: true, siteManagerId: true },
   });
@@ -1004,7 +1015,7 @@ export async function authorizeTradieWrite(
     const project = await transaction.project.findFirst({
       where: {
         id: inputString(input, "projectId"),
-        ...(isAdmin(actor) ? {} : { siteManagerId: actor.id }),
+        ...projectManageScope(userPrincipal(actor)),
       },
       select: { id: true },
     });

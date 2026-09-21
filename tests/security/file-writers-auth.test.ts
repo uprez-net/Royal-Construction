@@ -71,10 +71,15 @@ test("a customer may attach files only to their own project", () => {
 });
 
 test("the upload staff roles are the roles that read every lead", () => {
-  const access = read("lib/offer/access.ts");
-  const declared = /const INTERNAL_ROLES = new Set<Role>\(\[([^\]]*)\]\)/.exec(
-    access,
-  );
+  // These were two hand-kept lists, and this test held them in step. They are
+  // now one list: PROJECT_STAFF_ROLES is INTERNAL_ROLES from
+  // lib/domain/principal.ts. The test stays to pin the membership itself —
+  // adding a role here silently widens who may upload to any project.
+  const principal = read("lib/domain/principal.ts");
+  const declared =
+    /export const INTERNAL_ROLES: readonly Role\[\] = \[([^\]]*)\]/.exec(
+      principal,
+    );
   assert.ok(declared, "INTERNAL_ROLES moved; point this test at it");
   const internal = declared[1]
     .split(",")
@@ -82,6 +87,7 @@ test("the upload staff roles are the roles that read every lead", () => {
     .filter(Boolean)
     .sort();
   assert.deepEqual([...PROJECT_STAFF_ROLES].sort(), internal);
+  assert.deepEqual(internal, ["ADMIN", "GUEST", "SITE_MANAGER"]);
 });
 
 test("the upload route checks the lead and the project before issuing a token", () => {

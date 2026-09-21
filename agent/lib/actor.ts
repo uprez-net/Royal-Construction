@@ -1,6 +1,7 @@
 import type { SessionContext } from "eve/context";
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
+import { findUserById } from "@/lib/domain/identity/users";
 
 export class AgentAuthorizationError extends Error {
   readonly code = "agent_access_denied";
@@ -20,9 +21,9 @@ export async function requireCurrentAgentActor(
     throw new AgentAuthorizationError();
   }
 
-  const user = await db.user.findUnique({
-    where: { id: caller.principalId },
-  });
+  // lib/domain/identity/users.ts owns the lookup, so Eve and the app resolve
+  // an application user the same way.
+  const user = await findUserById(caller.principalId, db);
 
   if (!user) throw new AgentAuthorizationError();
   return user;

@@ -6,6 +6,7 @@ import {
 import type { ToolContext } from "eve/tools";
 import type { ZodType } from "zod";
 import prisma from "@/lib/prisma";
+import { authorizeAgentSession } from "@/lib/domain/access/agent-sessions";
 
 export class AgentOperationConflictError extends Error {
   readonly code = "agent_operation_conflict";
@@ -54,13 +55,15 @@ export async function runAuditedAgentOperation<T>(params: {
     | { replay: null; operationId: string; auditId: string };
 
   async function prepare(tx: TransactionClient): Promise<PreparedOperation> {
-    const session = await tx.agentSession.findUnique({
-      where: { eveSessionId: params.ctx.session.id },
-      select: { id: true, ownerUserId: true },
-    });
-    if (!session || session.ownerUserId !== params.ownerUserId) {
-      throw new Error("The agent session is unavailable.");
-    }
+    // Re-checked inside the transaction even though the channel already
+    // authenticated: the channel check ran before this transaction opened, and
+    // the audit row this writes claims the operation was owner-scoped.
+    // lib/domain/access/agent-sessions.ts owns the rule.
+    const session = await authorizeAgentSession(
+      params.ctx.session.id,
+      params.ownerUserId,
+      tx,
+    );
     await params.authorize?.(tx);
 
     const existing = await tx.agentOperation.findUnique({
@@ -82,7 +85,7 @@ export async function runAuditedAgentOperation<T>(params: {
     const operation = await tx.agentOperation.create({
       data: {
         action: params.action,
-        agentSessionId: session.id,
+        agentSessionId: session.agentSessionId,
         operationKey,
         ownerUserId: params.ownerUserId,
         status: AgentOperationStatus.RUNNING,
@@ -92,7 +95,7 @@ export async function runAuditedAgentOperation<T>(params: {
     const audit = await tx.agentActionAudit.create({
       data: {
         action: params.action,
-        agentSessionId: session.id,
+        agentSessionId: session.agentSessionId,
         approvalOutcome: "approved",
         eveCallId: params.ctx.callId,
         eveSessionId: params.ctx.session.id,
