@@ -1,6 +1,8 @@
 import "server-only";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
+import { createHash } from "node:crypto";
+
 import prisma from "@/lib/prisma";
 import {
   mapLead,
@@ -58,6 +60,10 @@ import {
   updateLead as updateLeadDomain,
 } from "@/lib/domain/leads/commands";
 import { currentLeadPrincipal } from "@/lib/data/current-principal";
+import {
+  authorizeLeadEmail,
+  sendLeadEmailOnce,
+} from "@/lib/domain/leads/email";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -1283,6 +1289,25 @@ export async function getForecast(
  *
  * @throws {Error} If the lead does not exist or the email could not be sent.
  */
+/**
+ * The name that signs a lead email.
+ *
+ * Presentation, so it stays in the adapter. The fallback matters: a cron or a
+ * webhook has nobody behind it, and "Royal Constructions" is a better
+ * signature than a crash or an empty line.
+ */
+async function resolveSenderName(): Promise<string> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return "Royal Constructions";
+    const user = await getUserByClerkIdCached(userId);
+    return user?.name?.trim() || "Royal Constructions";
+  } catch (error) {
+    console.error("[Lead email] Could not resolve the sender name", error);
+    return "Royal Constructions";
+  }
+}
+
 export async function sendLeadEmail(
   leadId: number,
   location: string,
@@ -1291,20 +1316,20 @@ export async function sendLeadEmail(
   replyingToEmail?: LeadEmails,
 ): Promise<LeadEmails> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      throw new Error("User not authenticated");
-    }
-    const user = await getUserByClerkIdCached(userId);
-    if (!user) {
-      throw new Error("Authenticated user not found");
-    }
-    const existingLead = await prisma.lead.findUnique({
-      where: { id: leadId },
-    });
-    if (!existingLead) {
-      throw new Error("Lead not found");
-    }
+    // Who may send, and to whom. The recipient used to come straight from the
+    // browser and was never checked against the lead, so an authorised caller
+    // could send an arbitrary body to an arbitrary address from Royal's
+    // mailbox.
+    const authorized = await authorizeLeadEmail(
+      await currentLeadPrincipal(),
+      { leadId, to },
+      prisma,
+    );
+    to = authorized.to;
+
+    // The signature the client reads. Presentation, so it stays here — and the
+    // fallback matters: a cron or a webhook has no person behind it.
+    const senderName = await resolveSenderName();
 
     const signedBody = `
     <head>
@@ -1350,8 +1375,8 @@ export async function sendLeadEmail(
 <body>
   <div style="background-color:#f7f6f2;margin:0;padding:0">
     ${EMAIL_HEADER_HTML}
-    <p>Hi ${escapeEmailHtml(existingLead.name)},</p>
-    ${buildLeadEmailHtml(body, user.name)}
+    <p>Hi ${escapeEmailHtml(authorized.leadName)},</p>
+    ${buildLeadEmailHtml(body, senderName)}
     ${EMAIL_FOOTER_HTML}
   </div>
 </body>
@@ -1362,46 +1387,73 @@ export async function sendLeadEmail(
     const aiSubject = replyingToEmail
       ? `Re: ${replyingToEmail.subject}`
       : await generateEmailSubject(escapeEmailHtml(signedBody));
-    await sendEmail({
-      to,
-      subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
-      body: signedBody,
-    });
-    const strippedEmailBody = getAllEmailThreads(signedBody, {
-      from: normalizeEmailAddress(
-        process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
-      ),
-      to: normalizeEmailAddress(to),
-      subject: `${aiSubject} - ${location}`,
-      sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    });
-    let recordedEmail: LeadEmails | null = null;
-    for (const thread of strippedEmailBody) {
-      const checksum = await generateEmailChecksum(
-        thread.subject,
-        thread.body,
-        normalizeEmailAddress(thread.from),
-        normalizeEmailAddress(thread.to),
-      );
-      const emailRecord = await prisma.leadEmails.create({
-        data: {
-          leadId,
-          subject: `${aiSubject} - ${location}`,
-          body: thread.body,
-          emailTo: normalizeEmailAddress(thread.to),
-          emailFrom: normalizeEmailAddress(thread.from),
-          checksum,
-          sentAt: new Date(),
-        },
-      });
-      console.log(
-        `[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`,
-      );
-      recordedEmail = emailRecord;
-    }
 
+    // The send and the thread record are one durable effect, keyed on the lead,
+    // the recipient and the body. A double-click, or a retry after a slow Graph
+    // call, used to send the client the same message twice.
+    const { alreadySent, result } = await sendLeadEmailOnce(
+      authorized,
+      {
+        bodyFingerprint: createHash("sha256")
+          .update(`${aiSubject}\u0000${location}\u0000${signedBody}`)
+          .digest("hex"),
+      },
+      prisma,
+      async () => {
+        await sendEmail({
+          to,
+          subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
+          body: signedBody,
+        });
+        const strippedEmailBody = getAllEmailThreads(signedBody, {
+          from: normalizeEmailAddress(
+            process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
+          ),
+          to: normalizeEmailAddress(to),
+          subject: `${aiSubject} - ${location}`,
+          sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
+        });
+        let lastId: string | null = null;
+        for (const thread of strippedEmailBody) {
+          const checksum = await generateEmailChecksum(
+            thread.subject,
+            thread.body,
+            normalizeEmailAddress(thread.from),
+            normalizeEmailAddress(thread.to),
+          );
+          const emailRecord = await prisma.leadEmails.create({
+            data: {
+              leadId,
+              subject: `${aiSubject} - ${location}`,
+              body: thread.body,
+              emailTo: normalizeEmailAddress(thread.to),
+              emailFrom: normalizeEmailAddress(thread.from),
+              checksum,
+              sentAt: new Date(),
+            },
+          });
+          console.log(
+            `[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`,
+          );
+          lastId = emailRecord.id;
+        }
+        if (!lastId) throw new Error("Failed to record email");
+        // Only the id goes in the intent; a replay reads the row back rather
+        // than reconstructing a stored copy of the message.
+        return { emailId: lastId };
+      },
+    );
+
+    const recordedEmail = await prisma.leadEmails.findUnique({
+      where: { id: result.emailId },
+    });
     if (!recordedEmail) {
       throw new Error("Failed to record email");
+    }
+    if (alreadySent) {
+      console.log(
+        `[Lead ${leadId}] This message already went out today; nothing was sent again.`,
+      );
     }
 
     return recordedEmail;
