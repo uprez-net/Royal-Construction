@@ -648,15 +648,15 @@ model TradieIncident {
 }
 
 model TradieApproval {
-  id              String                   @id @default(uuid())
-  tradieId        String
-  actionType      TradieApprovalActionType
-  status          TradieApprovalStatus     @default(PENDING)
-  reason          String                   @db.Text
-  updationData    Json?
-  rejectionReason String?                  @db.Text
-  pendingDeletionKey String?                @unique
-  requestedBy     String
+  id                 String                   @id @default(uuid())
+  tradieId           String
+  actionType         TradieApprovalActionType
+  status             TradieApprovalStatus     @default(PENDING)
+  reason             String                   @db.Text
+  updationData       Json?
+  rejectionReason    String?                  @db.Text
+  pendingDeletionKey String?                  @unique
+  requestedBy        String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1058,7 +1058,7 @@ model Lead {
   expectedCloseDate    DateTime?
   /// The date from which this lead should be considered for HBCF capacity.
   /// Null means the lead is ready to be considered immediately.
-  estimatedStartDate    DateTime?
+  estimatedStartDate   DateTime?
   /// Stamped by closeDatePatch() on stage transitions. Weighted pipeline and
   /// win rate depend on these; updatedAt is not a usable substitute.
   wonAt                DateTime?
@@ -1212,14 +1212,15 @@ model Offer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offerItems          OfferItem[]
-  offerFiles          OfferFile[]
-  tender              Tender?
-  contract            Contract?
-  acceptanceEnvelopes Envelope[]          @relation("OfferAcceptanceEnvelopes")
-  documentSends       OfferDocumentSend[]
-  statusEvents        OfferStatusEvent[]
-  lead                Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offerItems               OfferItem[]
+  offerFiles               OfferFile[]
+  tender                   Tender?
+  contract                 Contract?
+  acceptanceEnvelopes      Envelope[]                @relation("OfferAcceptanceEnvelopes")
+  documentSends            OfferDocumentSend[]
+  statusEvents             OfferStatusEvent[]
+  unconfirmedEnvelopeSends UnconfirmedEnvelopeSend[]
+  lead                     Lead                      @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   // NOTE: one-active-per-lead is enforced via a partial unique index
   // (CREATE UNIQUE INDEX ... WHERE "isActive") added in the migration, since
@@ -1327,6 +1328,49 @@ model Envelope {
   @@index([contractId])
   @@index([offerId])
   @@index([status])
+}
+
+/// A DocuSign create call whose outcome the app could not confirm — a timeout
+/// or gateway error where DocuSign may have issued and emailed a real
+/// envelope anyway. Recorded because nothing else can be: for the Tender and
+/// Contract paths the parent row (`Tender`/`Contract`) is created only on
+/// confirmed success, so at the moment the outcome is unknown there is no
+/// `Envelope.tenderId`/`contractId` to attach a placeholder row to. This
+/// table hangs off `Offer` directly instead, keyed by the `rcSendAttempt`
+/// custom field the send already stamps on the envelope, which is the only
+/// way to find an orphan afterwards. See issue #321.
+///
+/// `resolvedAt == null` is the load-bearing state: `collectVoidOutcome`
+/// refuses a recall or revision while any row for the offer is unresolved,
+/// because a real live envelope may exist that nothing else records. It is
+/// cleared by reconciliation, not by a recall attempt itself — a recall must
+/// never be the thing that decides a mystery send is safe to ignore.
+model UnconfirmedEnvelopeSend {
+  id      String          @id @default(uuid())
+  offerId String
+  offer   Offer           @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  docType EnvelopeDocType
+
+  /// The custom field value stamped on the envelope, if DocuSign received the
+  /// create call. Unique per attempt (`${offerId}.${randomUUID()}`).
+  sendAttemptId String @unique
+
+  attemptStartedAt DateTime
+
+  /// Null means still pending — unresolved rows block recall/revision.
+  resolvedAt DateTime?
+
+  /// Set alongside resolvedAt only when reconciliation found a matching
+  /// envelope in DocuSign. A human still needs to finish recording it: create
+  /// the missing Tender/Contract and Envelope rows, or void the orphan by
+  /// hand. Null at resolution means nothing was found — the send genuinely
+  /// never reached DocuSign, and normal recall/revision may proceed.
+  foundDocusignId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([offerId])
+  @@index([resolvedAt])
 }
 
 model EnvelopeSignature {

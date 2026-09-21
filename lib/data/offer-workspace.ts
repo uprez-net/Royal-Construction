@@ -71,6 +71,7 @@ import {
   describeUnconfirmedVoid,
   envelopeScopeFilter,
   resolveRecall,
+  unconfirmedSendDocTypesForScope,
   type EnvelopeVoidOutcome,
   type OfferEnvelopeScope,
   type UnsettledEnvelope,
@@ -1202,36 +1203,45 @@ async function voidLiveOfferEnvelopes(
   reason: string,
   scope: OfferEnvelopeScope,
 ): Promise<EnvelopeVoidOutcome> {
-  const liveEnvelopes = await prisma.envelope.findMany({
-    where: {
-      status: { in: LIVE_ENVELOPE_STATUSES },
-      OR: envelopeScopeFilter(offerId, scope),
-    },
-    select: { id: true, docusignId: true, sentAt: true },
-  });
+  const [liveEnvelopes, unresolvedSends] = await Promise.all([
+    prisma.envelope.findMany({
+      where: {
+        status: { in: LIVE_ENVELOPE_STATUSES },
+        OR: envelopeScopeFilter(offerId, scope),
+      },
+      select: { id: true, docusignId: true },
+    }),
+    // The Tender/Contract-path half of an ambiguous send: `Envelope` cannot
+    // record it (no Tender/Contract row exists yet to hang it off — see
+    // UnconfirmedEnvelopeSend's doc comment and issue #321), so it lives here
+    // instead, keyed by offer + docType the same way `envelopeScopeFilter`
+    // reads Envelope.
+    prisma.unconfirmedEnvelopeSend.findMany({
+      where: {
+        offerId,
+        docType: { in: unconfirmedSendDocTypesForScope(scope) },
+        resolvedAt: null,
+      },
+      select: { id: true },
+    }),
+  ]);
   const liveIds = liveEnvelopes.map((env) => env.id);
   const voidedIds: string[] = [];
   const endedIds: string[] = [];
-  const unsettled: UnsettledEnvelope[] = [];
+  // Seeded, not appended later: every return path below shares this array, and
+  // an unresolved send has to block a pull-back exactly like a live envelope
+  // does, however that path returns. DocuSign may have issued and emailed a
+  // real envelope for it that nothing else records, so there is nothing to
+  // void and no honest answer but to refuse and send a human to reconcile.
+  const unsettled: UnsettledEnvelope[] = unresolvedSends.map((send) => ({
+    id: send.id,
+    docusignId: null,
+    reason: "unconfirmed-send",
+  }));
 
   const inDocusign: { id: string; docusignId: string }[] = [];
   for (const env of liveEnvelopes) {
-    if (env.docusignId === null && env.sentAt !== null) {
-      // A send we started and never got an answer to. `docusignId` is null
-      // because the create call timed out, not because it definitively failed,
-      // so DocuSign may well have issued and emailed an envelope we cannot see.
-      //
-      // Treating this like the branch below — recording it voided and letting
-      // the pull-back proceed — is what allowed two live Tenders: the offer
-      // returned to draft, the estimator resent, and the orphan stayed
-      // signable. There is nothing to void, so the only honest answer is to
-      // refuse and send a human to DocuSign.
-      unsettled.push({
-        id: env.id,
-        docusignId: null,
-        reason: "unconfirmed-send",
-      });
-    } else if (env.docusignId === null) {
+    if (env.docusignId === null) {
       // A failed write must not reject the whole pull-back: leaving the row out
       // of voidedIds makes decideRecallPullBack refuse, which is what both
       // callers document, instead of throwing past their refusal result.

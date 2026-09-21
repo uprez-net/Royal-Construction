@@ -268,8 +268,11 @@ export async function sendTenderForSignature(input: {
       await prisma.offerStatusEvent
         .create({
           data: {
+            // offer.offerStatus, not a literal: the claim above accepts
+            // TENDER_DRAFT *or* AGREED, so a direct send from AGREED was
+            // recording a transition that never happened.
             offerId: offer.id,
-            fromStatus: OfferStatus.TENDER_DRAFT,
+            fromStatus: offer.offerStatus,
             toStatus: OfferStatus.TENDER_SENT,
             note: `DocuSign did not respond in time — checking whether the Tender envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
             actorId: access.user.id,
@@ -279,6 +282,25 @@ export async function sendTenderForSignature(input: {
           console.error(
             "[offer] recording the unknown tender envelope outcome failed:",
             eventError,
+          ),
+        );
+      // The durable half of the reconcile attempt. `Tender` is only created on
+      // confirmed success (below), so there is no row an Envelope could hang
+      // off yet — this is the only record of the attempt until reconciliation
+      // resolves it. See UnconfirmedEnvelopeSend's doc comment and #321.
+      await prisma.unconfirmedEnvelopeSend
+        .create({
+          data: {
+            offerId: offer.id,
+            docType: EnvelopeDocType.TENDER,
+            sendAttemptId,
+            attemptStartedAt: attemptStarted,
+          },
+        })
+        .catch((recordError) =>
+          console.error(
+            "[offer] recording the unconfirmed tender send failed — a recall will not see it:",
+            recordError,
           ),
         );
       return {

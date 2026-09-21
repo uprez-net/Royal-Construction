@@ -514,6 +514,24 @@ export async function sendContractForSignature(input: {
             eventError,
           ),
         );
+      // The durable half of the reconcile attempt — see UnconfirmedEnvelopeSend
+      // and #321. `Contract` is only created on confirmed success, so there is
+      // no row an Envelope could hang off yet.
+      await prisma.unconfirmedEnvelopeSend
+        .create({
+          data: {
+            offerId: offer.id,
+            docType: EnvelopeDocType.CONTRACT,
+            sendAttemptId,
+            attemptStartedAt: attemptStarted,
+          },
+        })
+        .catch((recordError) =>
+          console.error(
+            "[offer] recording the unconfirmed contract send failed — a recall will not see it:",
+            recordError,
+          ),
+        );
       return {
         ok: false,
         error:

@@ -280,8 +280,10 @@ export async function sendOfferForSignature(input: {
       await prisma.offerStatusEvent
         .create({
           data: {
+            // Read off the offer rather than assumed, for the same reason as
+            // the sibling events below.
             offerId: offer.id,
-            fromStatus: OfferStatus.SENT,
+            fromStatus: offer.offerStatus,
             toStatus: OfferStatus.OFFER_SENT,
             note: `DocuSign did not respond in time — checking whether the acceptance envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
             actorId: access.user.id,
@@ -291,6 +293,25 @@ export async function sendOfferForSignature(input: {
           console.error(
             "[offer] recording the unknown acceptance envelope outcome failed:",
             eventError,
+          ),
+        );
+      // The durable half of the reconcile attempt — see UnconfirmedEnvelopeSend
+      // and #321. Acceptance is the one path where Envelope COULD attach
+      // directly to the offer already, but this table is used uniformly across
+      // all three send paths so collectVoidOutcome only has one place to look.
+      await prisma.unconfirmedEnvelopeSend
+        .create({
+          data: {
+            offerId: offer.id,
+            docType: EnvelopeDocType.OFFER,
+            sendAttemptId,
+            attemptStartedAt: attemptStarted,
+          },
+        })
+        .catch((recordError) =>
+          console.error(
+            "[offer] recording the unconfirmed acceptance send failed — a recall will not see it:",
+            recordError,
           ),
         );
       return {
