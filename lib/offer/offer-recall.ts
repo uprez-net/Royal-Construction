@@ -88,12 +88,17 @@ export function resolveRecall(
 export type UnsettledEnvelope = {
   readonly id: string;
   // DocuSign's envelope id, which is what the estimator can find in DocuSign.
-  readonly docusignId: string;
+  // Null only for "unconfirmed-send": there is no id precisely because the
+  // create call never came back.
+  readonly docusignId: string | null;
   // "still-out": DocuSign refused the void or could not be reached, and does not
   // say the envelope ended, so the customer may still be able to sign it.
   // "signed": DocuSign shows it signed, but the signed copy never reached us.
   // "unrecorded": DocuSign has it voided or declined, but writing that failed.
-  readonly reason: "still-out" | "signed" | "unrecorded";
+  // "unconfirmed-send": the create call timed out and reconciliation could not
+  // find the envelope, so DocuSign may or may not have sent one. There is no
+  // id to look up, which is what makes it different from "still-out".
+  readonly reason: "still-out" | "signed" | "unrecorded" | "unconfirmed-send";
 };
 
 export type EnvelopeVoidOutcome = {
@@ -135,14 +140,28 @@ export function describeUnconfirmedVoid(input: {
   const idsFor = (reason: UnsettledEnvelope["reason"]) =>
     input.unsettled
       .filter((env) => env.reason === reason)
-      .map((env) => env.docusignId);
+      .map((env) => env.docusignId)
+      .filter((id): id is string => id !== null);
   const stillOut = idsFor("still-out");
   const signed = idsFor("signed");
   const unrecorded = idsFor("unrecorded");
+  const unconfirmed = input.unsettled.filter(
+    (env) => env.reason === "unconfirmed-send",
+  );
   const retry =
     input.action === "recall" ? "recall again" : "create the revision again";
 
   const sentences: string[] = [];
+  if (unconfirmed.length > 0) {
+    // Deliberately first, and deliberately without an id: this is the case the
+    // estimator cannot resolve from inside the app, and the one that produces
+    // two live envelopes if they simply try again.
+    sentences.push(
+      unconfirmed.length === 1
+        ? "A send timed out and the app could not confirm whether DocuSign issued the envelope. Open DocuSign and check for an envelope on this offer before sending again — sending now can leave the client with two."
+        : `${unconfirmed.length} sends timed out and the app could not confirm whether DocuSign issued the envelopes. Open DocuSign and check this offer before sending again — sending now can leave the client with duplicates.`,
+    );
+  }
   if (stillOut.length > 0) {
     sentences.push(
       `The document is still out for signature: DocuSign did not confirm the void of ${envelopeNames(stillOut)}.`,

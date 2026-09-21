@@ -198,6 +198,7 @@ test("only a pending offer is re-applied to; sent and agreed stay frozen", () =>
 
 test("a frozen offer whose admin content moved on warns rather than blocks", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",
@@ -213,6 +214,7 @@ test("a frozen offer whose admin content moved on warns rather than blocks", () 
 
 test("no stale blocker when admin content is current", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",

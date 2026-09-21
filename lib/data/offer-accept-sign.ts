@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import {
@@ -25,7 +29,12 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
-import { createOfferAcceptanceEnvelope } from "@/lib/docusign/offer-envelope";
+import {
+  buildOfferAcceptanceRecipientRecords,
+  createOfferAcceptanceEnvelope,
+} from "@/lib/docusign/offer-envelope";
+import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
+import { randomUUID } from "node:crypto";
 import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
@@ -103,6 +112,19 @@ export async function sendOfferForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // Same gate as the proposal and the Tender. A document that tells the client
+  // their home is 0 m2 must not reach them, and this is the last place that can
+  // refuse before the envelope is created.
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
+  if (totalAreaSqm <= 0) {
+    return {
+      ok: false,
+      error: "Enter floor areas in Job setup before sending for signature.",
     };
   }
 
@@ -225,52 +247,89 @@ export async function sendOfferForSignature(input: {
     };
   }
 
+  const sendAttemptId = `${offer.id}.${randomUUID()}`;
+  const attemptStarted = new Date();
   let envelope;
+  let docusignContext: Awaited<
+    ReturnType<typeof createDocusignContext>
+  > | null = null;
   try {
-    const context = await createDocusignContext(config);
+    docusignContext = await createDocusignContext(config);
     envelope = await createOfferAcceptanceEnvelope({
-      context,
+      context: docusignContext,
       config,
       pdfBase64,
       documentName: `Offer-Acceptance-${reference}.pdf`,
       emailSubject: `Offer acceptance — Royal Constructions ${reference}`,
       owners,
+      sendAttemptId,
     });
   } catch (error) {
-    const reason = describeDocusignError(error);
-    // Logged and recorded before the claim is released. The release puts the
-    // offer back exactly where it was and the refusal reaches only whoever
-    // clicked, so otherwise nothing showed that a send was tried and rejected.
-    console.error(
-      `[offer] acceptance envelope creation failed for offer ${offer.id}; claim released:`,
-      reason,
+    const recovery = await resolveEnvelopeCreateError({
       error,
-    );
-    await prisma.offerStatusEvent
-      .create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: offer.offerStatus,
-          note: `DocuSign rejected the offer acceptance envelope: ${reason}`,
-          actorId: access.user.id,
-        },
-      })
-      .catch((eventError) =>
-        console.error(
-          "[offer] recording the rejected acceptance envelope failed:",
-          eventError,
-        ),
-      );
-    // Release the claim so the estimator can retry.
-    await prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
-      data: { offerStatus: offer.offerStatus },
+      context: docusignContext,
+      sendAttemptId,
+      attemptStarted,
     });
-    return {
-      ok: false,
-      error: `DocuSign envelope failed: ${describeDocusignError(error)}`,
-    };
+    if (recovery.kind === "reconciled") {
+      envelope = {
+        envelopeId: recovery.envelopeId,
+        recipients: buildOfferAcceptanceRecipientRecords(owners),
+      };
+    } else if (recovery.kind === "outcome-unknown") {
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: OfferStatus.SENT,
+            toStatus: OfferStatus.OFFER_SENT,
+            note: `DocuSign did not respond in time — checking whether the acceptance envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the unknown acceptance envelope outcome failed:",
+            eventError,
+          ),
+        );
+      return {
+        ok: false,
+        error:
+          "DocuSign did not confirm whether the acceptance envelope was sent. Do not resend — wait for reconciliation or check DocuSign before trying again.",
+      };
+    } else {
+      const reason = recovery.reason;
+      console.error(
+        `[offer] acceptance envelope creation failed for offer ${offer.id}; claim released:`,
+        reason,
+        error,
+      );
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: offer.offerStatus,
+            toStatus: offer.offerStatus,
+            note: `DocuSign rejected the offer acceptance envelope: ${reason}`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the rejected acceptance envelope failed:",
+            eventError,
+          ),
+        );
+      await prisma.offer.updateMany({
+        where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
+        data: { offerStatus: offer.offerStatus },
+      });
+      return {
+        ok: false,
+        error: `DocuSign envelope failed: ${reason}`,
+      };
+    }
   }
 
   const stillClaimed = await prisma
@@ -371,15 +430,3 @@ export async function sendOfferForSignature(input: {
 }
 
 // DocuSign SDK errors bury the useful message in response.body.
-function describeDocusignError(error: unknown): string {
-  const response = (error as { response?: { body?: unknown } }).response;
-  if (response?.body) {
-    const body = response.body as { errorCode?: string; message?: string };
-    if (body.message) {
-      return body.errorCode
-        ? `${body.errorCode}: ${body.message}`
-        : body.message;
-    }
-  }
-  return (error as Error).message ?? "Unknown error";
-}

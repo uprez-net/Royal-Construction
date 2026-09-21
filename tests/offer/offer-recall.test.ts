@@ -382,3 +382,78 @@ test("the refusal names every envelope still out", () => {
   assert.match(message, /envelopes ds-1, ds-2/);
   assert.match(message, /void any still out for signature, then recall again/);
 });
+
+// ── A send whose outcome DocuSign never confirmed ──
+//
+// #289: the create call times out, DocuSign may or may not have issued and
+// emailed an envelope, and reconciliation cannot find one. The offer stays at
+// *_SENT with no usable envelope id. If a recall then treats that as "nothing
+// is out for signature", the offer returns to draft, the estimator resends, and
+// the client can end up holding two live documents — with a signature on the
+// orphan reaching nobody.
+
+test("an unconfirmed send blocks a pull-back instead of vanishing", () => {
+  const decision = decideRecallPullBack({
+    liveIds: ["env-1"],
+    voidedIds: [],
+    endedIds: [],
+    unsettled: [{ id: "env-1", docusignId: null, reason: "unconfirmed-send" }],
+  });
+  assert.equal(
+    decision.proceed,
+    false,
+    "the offer would have gone back to draft with a possible live envelope out",
+  );
+});
+
+test("the estimator is told to check DocuSign, without being given an id that does not exist", () => {
+  const message = describeUnconfirmedVoid({
+    unsettled: [{ id: "env-1", docusignId: null, reason: "unconfirmed-send" }],
+    voidedCount: 0,
+    action: "recall",
+  });
+
+  assert.match(message, /timed out/);
+  assert.match(message, /Open DocuSign/);
+  assert.match(
+    message,
+    /two/,
+    "the duplicate risk is the point of the warning",
+  );
+  assert.ok(
+    !message.includes("null") && !message.includes("undefined"),
+    "a missing envelope id leaked into the operator's message",
+  );
+});
+
+test("a mixed outcome names the envelopes it can and still refuses", () => {
+  const message = describeUnconfirmedVoid({
+    unsettled: [
+      { id: "env-1", docusignId: null, reason: "unconfirmed-send" },
+      { id: "env-2", docusignId: "ds-2", reason: "still-out" },
+    ],
+    voidedCount: 1,
+    action: "recall",
+  });
+
+  assert.match(message, /Open DocuSign/);
+  assert.match(
+    message,
+    /ds-2/,
+    "the identifiable envelope should still be named",
+  );
+  assert.match(message, /status was not changed/);
+});
+
+test("a definitively failed send is still cleaned up, not escalated", () => {
+  // The pre-existing case: the row exists but the call never reached DocuSign,
+  // so there is genuinely nothing signable. That must keep proceeding, or every
+  // failed send would need a trip to DocuSign to clear.
+  const decision = decideRecallPullBack({
+    liveIds: ["env-1"],
+    voidedIds: ["env-1"],
+    endedIds: [],
+    unsettled: [],
+  });
+  assert.equal(decision.proceed, true);
+});

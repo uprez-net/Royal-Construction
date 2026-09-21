@@ -1,4 +1,5 @@
 import "server-only";
+import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
 import prisma from "@/lib/prisma";
 import {
@@ -983,7 +984,14 @@ export async function createLead(
       };
 
       // 2. Generate the HTML body using your React Email template
-      const htmlBody = await renderEmailHtml("Welcome", leadPreview);
+      // Same reason as the inbound-lead workflow: createLead runs from the
+      // public booking route and the lead webhook, neither of which has a
+      // Clerk session, so renderEmailHtml would authorise and strip the token.
+      const htmlBody = await renderEmailHtml(
+        "Welcome",
+        leadPreview,
+        signBookConsultationToken(created.id),
+      );
 
       if (htmlBody) {
         // 3. Initialize Graph Client

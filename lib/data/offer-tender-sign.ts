@@ -26,8 +26,17 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
-import { createTenderEnvelope } from "@/lib/docusign/tender-envelope";
+import {
+  buildTenderEnvelopeRecipientRecords,
+  createTenderEnvelope,
+} from "@/lib/docusign/tender-envelope";
+import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
+import { randomUUID } from "node:crypto";
 import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type TenderSendResult =
@@ -88,6 +97,16 @@ export async function sendTenderForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending the Tender: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
+  if (totalAreaSqm <= 0) {
+    return {
+      ok: false,
+      error: "Enter floor areas in Job setup before sending the Tender.",
     };
   }
 
@@ -198,11 +217,16 @@ export async function sendTenderForSignature(input: {
     };
   }
 
+  const sendAttemptId = `${offer.id}.${randomUUID()}`;
+  const attemptStarted = new Date();
   let envelope;
+  let docusignContext: Awaited<
+    ReturnType<typeof createDocusignContext>
+  > | null = null;
   try {
-    const context = await createDocusignContext(config);
+    docusignContext = await createDocusignContext(config);
     envelope = await createTenderEnvelope({
-      context,
+      context: docusignContext,
       config,
       pdfBase64,
       documentName: `Building-Tender-${reference}.pdf`,
@@ -212,42 +236,88 @@ export async function sendTenderForSignature(input: {
         email: config.builderSignerEmail,
       },
       owners,
+      sendAttemptId,
     });
   } catch (error) {
-    const reason = describeDocusignError(error);
-    // Logged and recorded before the claim is released. The release puts the
-    // offer back exactly where it was and the refusal reaches only whoever
-    // clicked, so otherwise nothing showed that a send was tried and rejected.
-    console.error(
-      `[offer] tender envelope creation failed for offer ${offer.id}; claim released:`,
-      reason,
+    const recovery = await resolveEnvelopeCreateError({
       error,
-    );
-    await prisma.offerStatusEvent
-      .create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: offer.offerStatus,
-          note: `DocuSign rejected the Tender envelope: ${reason}`,
-          actorId: access.user.id,
-        },
-      })
-      .catch((eventError) =>
-        console.error(
-          "[offer] recording the rejected tender envelope failed:",
-          eventError,
-        ),
-      );
-    // Release the claim so the builder can retry.
-    await prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
-      data: { offerStatus: offer.offerStatus },
+      context: docusignContext,
+      sendAttemptId,
+      attemptStarted,
     });
-    return {
-      ok: false,
-      error: `DocuSign envelope failed: ${describeDocusignError(error)}`,
-    };
+    if (recovery.kind === "reconciled") {
+      console.warn(
+        `[offer] tender envelope for offer ${offer.id} reconciled after transport failure: ${recovery.envelopeId}`,
+      );
+      envelope = {
+        envelopeId: recovery.envelopeId,
+        recipients: buildTenderEnvelopeRecipientRecords(
+          {
+            name: config.builderSignerName,
+            email: config.builderSignerEmail,
+          },
+          owners,
+        ),
+      };
+    } else if (recovery.kind === "outcome-unknown") {
+      console.error(
+        `[offer] tender envelope for offer ${offer.id} outcome unknown; claim kept:`,
+        recovery.reason,
+        error,
+      );
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: OfferStatus.TENDER_DRAFT,
+            toStatus: OfferStatus.TENDER_SENT,
+            note: `DocuSign did not respond in time — checking whether the Tender envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the unknown tender envelope outcome failed:",
+            eventError,
+          ),
+        );
+      return {
+        ok: false,
+        error:
+          "DocuSign did not confirm whether the Tender was sent. Do not resend — wait for reconciliation or check DocuSign before trying again.",
+      };
+    } else {
+      const reason = recovery.reason;
+      console.error(
+        `[offer] tender envelope creation failed for offer ${offer.id}; claim released:`,
+        reason,
+        error,
+      );
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: offer.offerStatus,
+            toStatus: offer.offerStatus,
+            note: `DocuSign rejected the Tender envelope: ${reason}`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the rejected tender envelope failed:",
+            eventError,
+          ),
+        );
+      await prisma.offer.updateMany({
+        where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
+        data: { offerStatus: offer.offerStatus },
+      });
+      return {
+        ok: false,
+        error: `DocuSign envelope failed: ${reason}`,
+      };
+    }
   }
 
   // The render input the Tender was printed from, plus the payment terms on it:
@@ -370,18 +440,4 @@ export async function sendTenderForSignature(input: {
   // and outside any transaction — see syncLeadStageForOffer.
   await syncLeadStageForOffer(offer.id);
   return { ok: true, reference, envelopeId: envelope.envelopeId };
-}
-
-// DocuSign SDK errors bury the useful message in response.body.
-function describeDocusignError(error: unknown): string {
-  const response = (error as { response?: { body?: unknown } }).response;
-  if (response?.body) {
-    const body = response.body as { errorCode?: string; message?: string };
-    if (body.message) {
-      return body.errorCode
-        ? `${body.errorCode}: ${body.message}`
-        : body.message;
-    }
-  }
-  return (error as Error).message ?? "Unknown error";
 }

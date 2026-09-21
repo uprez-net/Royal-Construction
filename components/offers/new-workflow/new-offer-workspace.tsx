@@ -496,6 +496,7 @@ export function NewOfferWorkspace({
     () =>
       collectOfferSendBlockers({
         hasLead: leadId !== undefined,
+        hasKnownFloorArea: totalAreaSqm > 0,
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
@@ -504,10 +505,23 @@ export function NewOfferWorkspace({
     [
       adminContentStale,
       leadId,
+      totalAreaSqm,
       customerPrice.needsOverrideReason,
       offerExpiry,
       ownerIssues,
     ],
+  );
+
+  // Derived from the blockers rather than restated, because the two had already
+  // drifted: the list gained a block-severity "floor-area" entry and the Send
+  // button carried its own hand-written copy of the rule that did not, so the
+  // workspace showed "Enter floor areas before sending a proposal" above a Send
+  // button that was still enabled. The four block-severity ids — no-lead,
+  // override-reason, owner-*, floor-area — are exactly what this used to spell
+  // out by hand, so a new one now gates the button by existing.
+  const canSend = useMemo(
+    () => !sendBlockers.some((blocker) => blocker.severity === "block"),
+    [sendBlockers],
   );
 
   // A build that includes a granny flat must not also say the granny flat is
@@ -2087,11 +2101,7 @@ export function NewOfferWorkspace({
         revisionNotice={revisionNotice}
         revisionExecuted={status === "contract_signed" || status === "project"}
         onSendOffer={sendOffer}
-        canSend={
-          leadId !== undefined &&
-          !customerPrice.needsOverrideReason &&
-          ownersComplete
-        }
+        canSend={canSend}
         sending={sending}
         sendError={sendError}
         sentInfo={sentInfo}

@@ -89,6 +89,7 @@ export type OfferSendBlocker = {
 
 export type OfferSendReadinessInput = {
   readonly hasLead: boolean;
+  readonly hasKnownFloorArea: boolean;
   readonly needsOverrideReason: boolean;
   readonly expiryState: OfferExpiryState;
   // Owner party problems from collectOwnerIssues (missing owner name / Current
@@ -109,6 +110,7 @@ export type OfferSendReadinessInput = {
 
 export function collectOfferSendBlockers({
   hasLead,
+  hasKnownFloorArea,
   needsOverrideReason,
   expiryState,
   ownerIssues = [],
@@ -116,6 +118,15 @@ export function collectOfferSendBlockers({
   adminContentStale = false,
 }: OfferSendReadinessInput): readonly OfferSendBlocker[] {
   const blockers: OfferSendBlocker[] = [];
+
+  if (!hasKnownFloorArea) {
+    blockers.push({
+      id: "floor-area",
+      label: "Enter floor areas in Job setup before sending a proposal.",
+      stepId: "offer-step-job-setup",
+      severity: "block",
+    });
+  }
 
   ownerIssues.forEach((issue, index) => {
     blockers.push({

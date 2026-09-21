@@ -357,16 +357,24 @@ export function buildWelcomeParagraphs(
   // void, so the letter quoted a smaller home than the page before it.
   // Up to two decimals, like formatArea on the cover and in the Tender, so a
   // 435.5 m² home is not quoted here as 436.
-  const totalArea = new Intl.NumberFormat("en-AU", {
-    maximumFractionDigits: 2,
-  }).format(rawTotalAreaSqm(offerAreaBasisFromJob(job)));
+  const totalAreaSqm = rawTotalAreaSqm(offerAreaBasisFromJob(job));
+  const totalArea =
+    totalAreaSqm > 0
+      ? new Intl.NumberFormat("en-AU", {
+          maximumFractionDigits: 2,
+        }).format(totalAreaSqm)
+      : null;
   // Only assert what we can derive from this job (client, site, area). Specific
   // design features, "photos match your home", and finish guarantees were
   // hard-coded and often wrong (e.g. "double storey" on a single-storey build),
   // so they're omitted rather than promised.
+  const reviewedLine =
+    totalArea !== null
+      ? `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`
+      : "We have reviewed your plans carefully and we're genuinely excited to build your home with the care a proper custom build deserves.";
   return [
     `Thank you for trusting Royal Constructions to build your forever home at ${shortLocation(job.siteAddress)}. We don't take that lightly.`,
-    `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`,
+    reviewedLine,
     "Every finish described in this proposal is part of your inclusions, locked into the fixed price below.",
     "We are here every step of the way.",
   ];

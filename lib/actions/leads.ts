@@ -7,6 +7,8 @@ import * as leads from "@/lib/data/leads";
 import type { FollowupStats, SafeForecast } from "@/lib/data/leads";
 import type { FyQuarter } from "@/lib/leads/fy-quarter";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
+import { bookConsultationHref } from "@/lib/leads/lead-actions";
+import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 import type { LeadAnalyticsData } from "@/types/lead";
 
 // The lead screens call these from the browser. lib/data/leads.ts is
@@ -64,6 +66,28 @@ export async function getForecast(
 ): Promise<SafeForecast> {
   await assertStaff();
   return leads.getForecast(fy, quarter);
+}
+
+/** Staff-only booking URL with a signed lead token for the public booking route. */
+export async function bookConsultationUrlForLead(
+  lead: Pick<UiLead, "id" | "name" | "email">,
+  teammateName?: string | null,
+): Promise<string> {
+  const access = await authorizeLeadAccess(lead.id);
+  if (!access.ok) {
+    throw new Error(access.error);
+  }
+  const token = signBookConsultationToken(lead.id);
+  if (!token) {
+    throw new Error(
+      "Booking links are not configured (set BOOK_CONSULTATION_TOKEN_SECRET).",
+    );
+  }
+  return bookConsultationHref(
+    { ...lead, email: lead.email ?? "" } as UiLead,
+    teammateName,
+    token,
+  );
 }
 
 export async function sendLeadEmail(

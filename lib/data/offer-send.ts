@@ -22,6 +22,10 @@ import {
   deserializeWorkspace,
   parseWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { getGraphConfig } from "@/lib/graph/config";
 import { createGraphContext } from "@/lib/graph/client";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
@@ -153,6 +157,16 @@ export async function sendOfferDocument(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
+  if (totalAreaSqm <= 0) {
+    return {
+      ok: false,
+      error: "Enter floor areas in Job setup before sending the proposal.",
     };
   }
 

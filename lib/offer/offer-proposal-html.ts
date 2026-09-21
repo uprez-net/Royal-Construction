@@ -350,7 +350,7 @@ function coverPage(
       ${currentLocationRow}
       ${coverRow("Site Location", job.siteAddress)}
       ${coverRow("Build Type", job.buildType)}
-      ${coverRow("Total Build Area", data.areaLabel)}
+      ${data.areaLabel ? coverRow("Total Build Area", data.areaLabel) : ""}
       ${coverRow("Contract Price", data.priceLine, true)}
       ${coverRow("Quote Reference", `${job.reference}-${job.revision} | Valid: ${data.validUntilLabel}`)}
       ${coverRow("Prepared By", job.preparedBy)}
@@ -456,11 +456,15 @@ function snapshotPage(
       <div class="box"><div class="lbl">Site</div><div class="big">${esc(job.siteAddress)}</div><div style="margin-top:10px;">${job.dpNumber.trim() ? `<p class="muted" style="font-size:12px;">${esc(job.dpNumber)}</p>` : ""}${particulars ? `<p class="muted" style="font-size:12px;">${esc(particulars)}</p>` : ""}</div></div>
       <div class="box"><div class="lbl">Build scope</div><div class="big">${esc(job.buildType)}</div><ul style="margin-top:8px;list-style:none;">${scope}</ul></div>
     </div>
-    <div class="areatable">
+    ${
+      area.totalSqm > 0
+        ? `<div class="areatable">
       ${area.cells.map((entry) => cell(entry.label, formatArea(entry.sqm))).join("")}
       ${cell("Total Area", formatArea(area.totalSqm))}
     </div>
-    <p class="muted" style="margin-top:22px;font-size:12px;">Total build area ${esc(data.areaLabel)}.</p>
+    <p class="muted" style="margin-top:22px;font-size:12px;">Total build area ${esc(data.areaLabel)}.</p>`
+        : ""
+    }
     ${specSection("Major House Specifications", {
       bathrooms: job.bathrooms,
       bedrooms: job.bedrooms,

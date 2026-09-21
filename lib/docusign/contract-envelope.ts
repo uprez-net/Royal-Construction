@@ -2,6 +2,7 @@ import docusign from "docusign-esign";
 import type { DocusignConfig } from "./config";
 import type { DocusignContext } from "./client";
 import type { EnvelopeRecipientRecord } from "./tender-envelope";
+import { attachSendAttemptCustomField } from "./envelope-send-attempt";
 
 // The Contract is the MBA BC4 licensed form, sent from a DocuSign template
 // (created once via scripts/docusign/create-bc4-template.ts) rather than a
@@ -52,6 +53,7 @@ export interface CreateContractEnvelopeArgs {
     readonly tabLabel: string;
     readonly selected: boolean;
   }[];
+  readonly sendAttemptId?: string;
 }
 
 export interface CreateContractEnvelopeResult {
@@ -199,6 +201,10 @@ export async function createContractEnvelope(
           ],
           status: "sent",
         };
+
+  if (args.sendAttemptId) {
+    attachSendAttemptCustomField(envelopeDefinition, args.sendAttemptId);
+  }
 
   if (config.connectWebhookUrl) {
     envelopeDefinition.eventNotification = {

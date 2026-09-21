@@ -367,7 +367,9 @@ function PrintCoverPage({
           ) : null}
           <CoverRow label="Site Location" value={job.siteAddress} />
           <CoverRow label="Build Type" value={job.buildType} />
-          <CoverRow label="Total Build Area" value={data.areaLabel} />
+          {data.areaLabel ? (
+            <CoverRow label="Total Build Area" value={data.areaLabel} />
+          ) : null}
           <CoverRow emphasis label="Contract Price" value={data.priceLine} />
           <CoverRow
             label="Quote Reference"
@@ -476,14 +478,21 @@ function PrintSnapshotPage({
   // The same cells and total as snapshotPage() in offer-proposal-html.ts, so the
   // grid adds up and matches the cover, the letter and the Tender.
   const area = buildAreaBreakdown(job);
-  const areaCells = [
-    ...area.cells.map((cell) => ({
-      label: cell.label,
-      value: formatArea(cell.sqm),
-      emphasis: false,
-    })),
-    { label: "Total Area", value: formatArea(area.totalSqm), emphasis: true },
-  ];
+  const areaCells =
+    area.totalSqm > 0
+      ? [
+          ...area.cells.map((cell) => ({
+            label: cell.label,
+            value: formatArea(cell.sqm),
+            emphasis: false,
+          })),
+          {
+            label: "Total Area",
+            value: formatArea(area.totalSqm),
+            emphasis: true,
+          },
+        ]
+      : [];
   const granny = grannyDwellingSpec(job);
   const siteParticulars = formatSiteParticulars(job);
   return (
@@ -519,31 +528,35 @@ function PrintSnapshotPage({
           </div>
         </div>
       </PrintSection>
-      <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
-        {areaCells.map((cell) => (
-          <div
-            key={cell.label}
-            className={
-              cell.emphasis
-                ? "bg-sidebar px-2 py-4 text-white"
-                : "border-r border-border px-2 py-4 last:border-r-0"
-            }
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
-              {cell.label}
-            </p>
-            {/* With void and granny flat both showing, seven cells leave ~77px
+      {areaCells.length > 0 ? (
+        <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
+          {areaCells.map((cell) => (
+            <div
+              key={cell.label}
+              className={
+                cell.emphasis
+                  ? "bg-sidebar px-2 py-4 text-white"
+                  : "border-r border-border px-2 py-4 last:border-r-0"
+              }
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+                {cell.label}
+              </p>
+              {/* With void and granny flat both showing, seven cells leave ~77px
                 for a value and "187.35 m²" is ~76px of monospace: it broke at
                 the space and printed the unit on a line of its own. */}
-            <p className="mt-2 whitespace-nowrap font-mono font-semibold">
-              {cell.value}
-            </p>
-          </div>
-        ))}
-      </div>
-      <p className="mt-6 text-xs text-muted-foreground">
-        Total build area {data.areaLabel}.
-      </p>
+              <p className="mt-2 whitespace-nowrap font-mono font-semibold">
+                {cell.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {data.areaLabel ? (
+        <p className="mt-6 text-xs text-muted-foreground">
+          Total build area {data.areaLabel}.
+        </p>
+      ) : null}
       <PrintDwellingSpec
         title="Major House Specifications"
         spec={{
