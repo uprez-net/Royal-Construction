@@ -1,7 +1,9 @@
-import { Section, Row, Column, Text, Link, Img } from '@react-email/components';
-import { FONTS, RC_URLS, RC_COLORS, LOGO_EMAIL } from './email-theme';
+import { Section, Row, Column, Text, Link, Img } from "@react-email/components";
+import { FONTS, RC_URLS, RC_COLORS, LOGO_EMAIL } from "./email-theme";
 
-const FOOTER_LOGO_HEIGHT = Math.round((110 * LOGO_EMAIL.height) / LOGO_EMAIL.width);
+const FOOTER_LOGO_HEIGHT = Math.round(
+  (110 * LOGO_EMAIL.height) / LOGO_EMAIL.width,
+);
 
 export function EmailFooter() {
   return (
@@ -14,26 +16,33 @@ export function EmailFooter() {
       }}
     >
       <Row>
-        <Column className="mobile_px-4 mobile_py-12" style={{ padding: '2.5rem 1.5rem' }}>
+        <Column
+          className="mobile_px-4 mobile_py-12"
+          style={{ padding: "2.5rem 1.5rem" }}
+        >
           <Row>
             <Column
               className="mobile_footer_left"
               width="55%"
-              style={{ verticalAlign: 'top', paddingRight: '1.5rem' }}
+              style={{ verticalAlign: "top", paddingRight: "1.5rem" }}
             >
-              <Link href={RC_URLS.website} target="_blank" style={{ textDecoration: 'none' }}>
+              <Link
+                href={RC_URLS.website}
+                target="_blank"
+                style={{ textDecoration: "none" }}
+              >
                 <Img
                   alt="Royal Constructions"
                   src={RC_URLS.logo}
                   width={110}
                   height={FOOTER_LOGO_HEIGHT}
                   style={{
-                    display: 'block',
+                    display: "block",
                     width: 110,
                     height: FOOTER_LOGO_HEIGHT,
                     marginBottom: 20,
-                    outline: 'none',
-                    border: 'none',
+                    outline: "none",
+                    border: "none",
                   }}
                 />
               </Link>
@@ -49,43 +58,60 @@ export function EmailFooter() {
                   maxWidth: 300,
                 }}
               >
-                Royal Constructions — Building exceptional homes across NSW with quality
-                craftsmanship and attention to detail.
+                Royal Constructions — Building exceptional homes across NSW with
+                quality craftsmanship and attention to detail.
               </Text>
 
-              <Text className="m-0 mb-6" style={{ fontSize: 14, lineHeight: 1.5 }}>
+              <Text
+                className="m-0 mb-6"
+                style={{ fontSize: 14, lineHeight: 1.5 }}
+              >
                 <Link
                   href={RC_URLS.facebookPage}
                   target="_blank"
                   style={{
                     color: RC_COLORS.gold,
-                    textDecoration: 'none',
+                    textDecoration: "none",
                     fontFamily: FONTS.body,
                     fontWeight: 500,
                   }}
                 >
                   Facebook
                 </Link>
-                <span style={{ color: RC_COLORS.textMutedOnLight, margin: '0 10px' }}>·</span>
+                <span
+                  style={{
+                    color: RC_COLORS.textMutedOnLight,
+                    margin: "0 10px",
+                  }}
+                >
+                  ·
+                </span>
                 <Link
                   href={RC_URLS.instagramPage}
                   target="_blank"
                   style={{
                     color: RC_COLORS.gold,
-                    textDecoration: 'none',
+                    textDecoration: "none",
                     fontFamily: FONTS.body,
                     fontWeight: 500,
                   }}
                 >
                   Instagram
                 </Link>
-                <span style={{ color: RC_COLORS.textMutedOnLight, margin: '0 10px' }}>·</span>
+                <span
+                  style={{
+                    color: RC_COLORS.textMutedOnLight,
+                    margin: "0 10px",
+                  }}
+                >
+                  ·
+                </span>
                 <Link
                   href={RC_URLS.website}
                   target="_blank"
                   style={{
                     color: RC_COLORS.gold,
-                    textDecoration: 'none',
+                    textDecoration: "none",
                     fontFamily: FONTS.body,
                     fontWeight: 500,
                   }}
@@ -103,7 +129,9 @@ export function EmailFooter() {
                   color: RC_COLORS.textMutedOnLight,
                 }}
               >
-                <span style={{ color: RC_COLORS.textOnLight, fontWeight: 500 }}>Office</span>
+                <span style={{ color: RC_COLORS.textOnLight, fontWeight: 500 }}>
+                  Office
+                </span>
                 <br />
                 38/62 Turner RD
                 <br />
@@ -119,18 +147,26 @@ export function EmailFooter() {
                   color: RC_COLORS.textMutedOnLight,
                 }}
               >
-                <span style={{ color: RC_COLORS.textOnLight, fontWeight: 500 }}>Contact</span>
+                <span style={{ color: RC_COLORS.textOnLight, fontWeight: 500 }}>
+                  Contact
+                </span>
                 <br />
                 <Link
                   href={`tel:${RC_URLS.phone}`}
-                  style={{ color: RC_COLORS.textMutedOnLight, textDecoration: 'none' }}
+                  style={{
+                    color: RC_COLORS.textMutedOnLight,
+                    textDecoration: "none",
+                  }}
                 >
                   {RC_URLS.phoneDisplay}
                 </Link>
                 <br />
                 <Link
                   href={`mailto:${RC_URLS.email}`}
-                  style={{ color: RC_COLORS.textMutedOnLight, textDecoration: 'none' }}
+                  style={{
+                    color: RC_COLORS.textMutedOnLight,
+                    textDecoration: "none",
+                  }}
                 >
                   {RC_URLS.email}
                 </Link>
@@ -147,14 +183,17 @@ export function EmailFooter() {
               >
                 <Link
                   href={RC_URLS.privacy}
-                  style={{ color: RC_COLORS.gold, textDecoration: 'underline' }}
+                  style={{ color: RC_COLORS.gold, textDecoration: "underline" }}
                 >
                   Privacy Policy
                 </Link>
-                {' · '}
-                <Link href="#" style={{ color: RC_COLORS.gold, textDecoration: 'underline' }}>
+                {" · "}
+                <Link
+                  href="#"
+                  style={{ color: RC_COLORS.gold, textDecoration: "underline" }}
+                >
                   Unsubscribe
-                </Link>{' '}
+                </Link>{" "}
                 from Royal Constructions marketing emails.
               </Text>
             </Column>
@@ -162,14 +201,14 @@ export function EmailFooter() {
             <Column
               className="mobile_footer_right"
               width="45%"
-              style={{ verticalAlign: 'top' }}
+              style={{ verticalAlign: "top" }}
             >
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '1.25rem',
+                  border: "1px solid #E2E8F0",
+                  padding: "1.25rem",
                 }}
               >
                 <Row>
@@ -180,42 +219,50 @@ export function EmailFooter() {
                         fontFamily: FONTS.body,
                         fontWeight: 500,
                         fontSize: 10,
-                        letterSpacing: '0.8px',
+                        letterSpacing: "0.8px",
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
                       Accredited by
                     </Text>
-                    <Link href={RC_URLS.website} target="_blank" style={{ textDecoration: 'none' }}>
+                    <Link
+                      href={RC_URLS.website}
+                      target="_blank"
+                      style={{ textDecoration: "none" }}
+                    >
                       <Img
                         alt="Master Builders Association"
                         src={RC_URLS.mbaLogo}
                         width={100}
                         height={40}
                         style={{
-                          display: 'block',
+                          display: "block",
                           width: 100,
-                          height: 'auto',
+                          height: "auto",
                           maxHeight: 48,
                           marginBottom: 16,
-                          outline: 'none',
-                          border: 'none',
+                          outline: "none",
+                          border: "none",
                         }}
                       />
                     </Link>
-                    <Link href={RC_URLS.website} target="_blank" style={{ textDecoration: 'none' }}>
+                    <Link
+                      href={RC_URLS.website}
+                      target="_blank"
+                      style={{ textDecoration: "none" }}
+                    >
                       <Img
                         alt="Oran Park"
                         src={RC_URLS.oranPark}
                         width={120}
                         height={36}
                         style={{
-                          display: 'block',
+                          display: "block",
                           width: 120,
-                          height: 'auto',
+                          height: "auto",
                           maxHeight: 40,
-                          outline: 'none',
-                          border: 'none',
+                          outline: "none",
+                          border: "none",
                         }}
                       />
                     </Link>

@@ -1,5 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
-import { getCachedProjectById, getCachedProjects, getCachedProjectsForLookup } from "@/lib/data/projects";
+import {
+  getCachedProjectById,
+  getCachedProjects,
+  getCachedProjectsForLookup,
+} from "@/lib/data/projects";
 import { createProject } from "@/lib/data/projectsWrite";
 import {
   createProjectSchema,

@@ -32,6 +32,9 @@ interface FormulaEditorProps {
   /** Stream of validation results so the parent can disable Save until every
    * formula row passes. Called on every change (debounced by the editor). */
   onValidationChange?: (result: FormulaValidation) => void;
+  /** Show the error for a blank formula too. Set where a blank formula blocks
+   * the parent's Save, so the field that blocks it says why. */
+  showEmptyError?: boolean;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
@@ -76,6 +79,7 @@ export function FormulaEditor({
   variables,
   sampleValues,
   onValidationChange,
+  showEmptyError = false,
   placeholder = "e.g. TOTAL_BRICKS_REQUIRED * BRICK_PRICE_PER_BRICK",
   ariaLabel,
   className,
@@ -377,7 +381,8 @@ export function FormulaEditor({
     return () => document.removeEventListener("mousedown", handler);
   }, [open, closeMenu]);
 
-  const hasError = !validation.valid && value.trim().length > 0;
+  const hasError =
+    !validation.valid && (showEmptyError || value.trim().length > 0);
   const preview =
     validation.valid && validation.preview !== null
       ? formatNumber(validation.preview)

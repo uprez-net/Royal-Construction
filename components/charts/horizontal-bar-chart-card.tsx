@@ -3,11 +3,18 @@
 import type { ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 import { ChartCardShell } from "./chart-card-shell";
 
-export function HorizontalBarChartCard<T extends Record<string, string | number>>({
+export function HorizontalBarChartCard<
+  T extends Record<string, string | number>,
+>({
   title,
   subtitle,
   action,
@@ -38,17 +45,33 @@ export function HorizontalBarChartCard<T extends Record<string, string | number>
   return (
     <ChartCardShell title={title} subtitle={subtitle} action={action}>
       <ChartContainer config={config} className="h-70 w-full">
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 8, left: 8, bottom: 4 }}
+        >
           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-          <YAxis type="category" dataKey={String(categoryKey)} tickLine={false} axisLine={false} width={120} />
+          <YAxis
+            type="category"
+            dataKey={String(categoryKey)}
+            tickLine={false}
+            axisLine={false}
+            width={120}
+          />
           <XAxis
             type="number"
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => (xAxisFormatter ? xAxisFormatter(Number(value)) : `${value}`)}
+            tickFormatter={(value) =>
+              xAxisFormatter ? xAxisFormatter(Number(value)) : `${value}`
+            }
           />
           <ChartTooltip content={<ChartTooltipContent />} />
-          <Bar dataKey={String(valueKey)} fill={`var(--color-${String(valueKey)})`} radius={[0, 6, 6, 0]} />
+          <Bar
+            dataKey={String(valueKey)}
+            fill={`var(--color-${String(valueKey)})`}
+            radius={[0, 6, 6, 0]}
+          />
         </BarChart>
       </ChartContainer>
     </ChartCardShell>

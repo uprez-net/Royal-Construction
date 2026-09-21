@@ -3,105 +3,127 @@ import { CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { Input } from "../ui/input";
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { fetchOffers } from "@/lib/store/slices/offerSlice";
-import type { OfferStatus } from "@prisma/client";
-
-type TabId = "all" | "pending" | "approved" | "rejected" | "sent";
+import type { OfferStatusBucket } from "@/types/offer";
 
 interface OfferFilterProps {
-  initialTabCounts: Record<TabId, number>;
-  initialTotalCount: number;
+  /**
+   * Global, per-bucket lead counts from `queryOfferKPIs`. These are the same
+   * numbers the KPI cards show, so the tab badges stay consistent with the cards
+   * regardless of which page/search the table is on. The badges are deliberately
+   * *not* recomputed from the current page slice: a 10-row page can't sum to the
+   * population, and the old recompute dropped every lead whose representative
+   * revision was in a modern lifecycle state (AGREED, TENDER_SIGNED, ...) because
+   * it mapped each tab to a single `OfferStatus`.
+   */
+  initialTabCounts: Record<OfferStatusBucket, number>;
 }
 
-export function OfferFilter({
-  initialTabCounts,
-  initialTotalCount,
-}: OfferFilterProps) {
+const TABS = ["all", "pending", "approved", "rejected", "sent"] as const;
+
+const SEARCH_DEBOUNCE_MS = 300;
+
+export function OfferFilter({ initialTabCounts }: OfferFilterProps) {
   const dispatch = useAppDispatch();
-  const { offers } = useAppSelector((state) => state.offers);
-  const [searchInput, setSearchInput] = useState("");
-  const [tabId, setTabId] = useState("all");
-  const { tabCounts, totalCount } = useMemo(() => {
-    if (offers.items.length === 0) {
-      return {
-        tabCounts: initialTabCounts,
-        totalCount: initialTotalCount,
-      };
-    }
-    // Counted off each group's representative revision so a client with four
-    // revisions contributes one, matching what the table now renders.
-    const statusOf = (status: OfferStatus) =>
-      offers.items.filter((group) => group.latest.offerStatus === status).length;
+  const { offers, filters, hydrated } = useAppSelector((state) => state.offers);
+  const [searchInput, setSearchInput] = useState(filters.q);
+  // Seed from the store so a re-mount after a client-side fetch (e.g. navigating
+  // into an offer and back via the browser) keeps the active tab selected.
+  const [tabId, setTabId] = useState<OfferStatusBucket>(filters.status);
+  // The box updates on every keystroke; the fetch waits for a pause in typing,
+  // so a name costs one request rather than one per letter.
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const counts: Record<TabId, number> = {
-      all: offers.totalCount,
-      pending: statusOf("PENDING"),
-      approved: statusOf("ACCEPTED"),
-      rejected: statusOf("REJECTED"),
-      sent: statusOf("SENT"),
-    };
-    return {
-      tabCounts: counts,
-      totalCount: offers.totalCount,
-    };
-  }, [offers, initialTabCounts, initialTotalCount]);
+  useEffect(
+    () => () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    },
+    [],
+  );
 
-  const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTabChange = (tab: OfferStatusBucket) => {
+    if (tab === tabId) return;
+    setTabId(tab);
+    // This fetch already carries the current search text. A search still
+    // waiting on its debounce would refetch the previous tab over it.
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    // A tab change starts a fresh filtered view on page 1, carrying the current
+    // search term so the two filters compose.
+    dispatch(
+      fetchOffers({
+        status: tab,
+        q: searchInput,
+        page: 1,
+        limit: offers.limit || 10,
+      }),
+    );
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchInput(query);
-    if (query.trim() === "") return;
-    try {
-      await dispatch(fetchOffers({ q: query })).unwrap();
-    } catch (error) {
-      console.error("Error searching offers", error);
-    }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    // Re-fetch on every change *including clear*: the old guard returned early
+    // on an empty string, so clearing the box left the filtered results on
+    // screen. An empty string maps to "no query" server-side.
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      dispatch(
+        fetchOffers({
+          q: query,
+          status: tabId,
+          page: 1,
+          limit: offers.limit || 10,
+        }),
+      );
+    }, SEARCH_DEBOUNCE_MS);
   };
 
   return (
     <CardHeader className="border-b border-border/70 px-5 py-4">
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 pb-4">
-          {(["all", "pending", "approved", "rejected", "sent"] as const).map(
-            (tab) => {
-              const active = tabId === tab;
+          {TABS.map((tab) => {
+            const active = tabId === tab;
 
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setTabId(tab)}
+            return (
+              <button
+                key={tab}
+                type="button"
+                aria-pressed={active}
+                onClick={() => handleTabChange(tab)}
+                className={cn(
+                  "group relative inline-flex h-9 items-center rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                  active
+                    ? "bg-royal-gold-light text-royal-gold-ink shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                )}
+              >
+                <span>
+                  {tab === "all"
+                    ? "All"
+                    : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </span>
+
+                <span
                   className={cn(
-                    "group relative inline-flex h-9 items-center rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                    "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
                     active
-                      ? "bg-teal-50 text-teal-700 shadow-sm"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                      ? "bg-royal-gold-ink text-white"
+                      : "bg-muted text-muted-foreground group-hover:bg-background",
                   )}
                 >
-                  <span>
-                    {tab === "all"
-                      ? "All"
-                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </span>
+                  {initialTabCounts[tab]}
+                </span>
 
-                  <span
-                    className={cn(
-                      "ml-2 inline-flex min-w-4.5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
-                      active
-                        ? "bg-teal-600 text-white"
-                        : "bg-muted text-muted-foreground group-hover:bg-background",
-                    )}
-                  >
-                    {tabCounts[tab]}
-                  </span>
-
-                  {active && (
-                    <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
-                  )}
-                </button>
-              );
-            },
-          )}
+                {active && (
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-royal-gold-ink" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -114,16 +136,23 @@ export function OfferFilter({
 
             <Input
               id="search"
-              className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-teal-500/10 focus-visible:border-teal-600"
-              placeholder="Search offers..."
+              className="h-10 rounded-lg border-border bg-background pl-9 text-[13px] shadow-none transition-all focus-visible:ring-4 focus-visible:ring-royal-gold/20 focus-visible:border-royal-gold-ink"
+              placeholder="Search offer #, client, email, phone or suburb"
               value={searchInput}
               onChange={handleSearchChange}
             />
           </div>
 
-          <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
-            {totalCount} results
-          </p>
+          {/* Reflects the *current view* (filtered + searched), not the global
+              KPI total — that's what `offers.totalCount` holds after a fetch,
+              and it is what the pagination footer divides up. Hidden until the
+              store holds a result: before that it is the empty initial state,
+              and a hard reload flashed "0 results". */}
+          {hydrated ? (
+            <p className="ml-auto whitespace-nowrap text-[12px] font-medium text-muted-foreground">
+              {offers.totalCount} results
+            </p>
+          ) : null}
         </div>
       </div>
     </CardHeader>

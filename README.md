@@ -15,7 +15,7 @@ Construction management portal for coordinating projects, tradies, site updates,
 
 **In progress (mock or partial)**
 
-Several module routes (financials, quotations, milestones, catalogue, architect, government, site manager, chatbot) are still driven by the legacy screen registry in `lib/mock-data.tsx` and are being migrated to live data.
+Several module routes (financials, quotations, milestones, catalogue, architect, government, site manager) are still driven by the legacy screen registry in `lib/mock-data.tsx` and are being migrated to live data. The feature-flagged `/agent` workspace is the current operations assistant surface.
 
 ## Tech stack
 
@@ -32,7 +32,7 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 24+ (required by the Eve agent runtime)
 - [pnpm](https://pnpm.io) 9 (see `packageManager` in `package.json`)
 - PostgreSQL database (local or hosted, e.g. [Neon](https://neon.tech))
 - [Clerk](https://dashboard.clerk.com) application
@@ -64,6 +64,20 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
    # Cron jobs (production)
    CRON_SECRET="..."
 
+   # Signs the workflow stream links handed to the browser (any long random
+   # string; set it in Vercel Preview and Production). Without it, project and
+   # checklist extraction refuse to start.
+   WORKFLOW_RUN_CAPABILITY_SECRET="..."
+
+   # Eve operations agent (fail-closed unless explicitly enabled)
+   AI_GATEWAY_API_KEY="..."
+   EVE_OPERATIONS_AGENT_ENABLED="false"
+   EVE_OPERATIONS_SPECIALISTS_ENABLED="false"
+
+   # Optional agent working-memory cache. Postgres remains authoritative.
+   UPSTASH_REDIS_REST_URL="https://...upstash.io"
+   UPSTASH_REDIS_REST_TOKEN="..."
+
    # Local dev auto sign-in (optional — skips manual Clerk login)
    DEV_AUTO_SIGN_IN="true"
    DEV_AUTH_EMAIL="you@example.com"
@@ -76,8 +90,14 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
    | --- | --- |
    | `GOOGLE_MAPS_API_KEY`, `GEOSCAPE_API_KEY` | Address lookup |
    | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Microsoft Graph |
-   | `GRAPH_MODE`, `GRAPH_SENDER_UPN`, `BUSINESS_EMAIL` | Graph email / leadgen |
+   | `GRAPH_MODE`, `GRAPH_SENDER_UPN`, `BUSINESS_EMAIL` | Business Graph email / leadgen |
+   | `GRAPH_ADMIN_SENDER_UPN`, `BUSINESS_ADMIN_EMAIL`, `GRAPH_ADMIN_MAIL_CC` | Compliance Graph mailbox |
+   | `GRAPH_ADMIN_WEBHOOK_CLIENT_STATE`, `GRAPH_ADMIN_SUBSCRIPTION_RESOURCE` | Admin Graph webhook (client state must be unique) |
    | `GEMINI_API_KEY` | AI lead extraction |
+   | `AI_GATEWAY_API_KEY` | Vercel AI Gateway access for the Eve operations agent |
+   | `EVE_OPERATIONS_AGENT_ENABLED` | Enables the authenticated Eve channel; defaults to disabled |
+   | `EVE_OPERATIONS_SPECIALISTS_ENABLED` | Exposes the declared specialist shells; keep disabled until their authorized tools pass evals |
+   | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Optional disposable cache/coordination layer for agent memory; Postgres remains authoritative |
    | `TWILIO_*` | Outbound IVR (see `docs/twillo-outbound-ivr.md`) |
 
 3. **Set up the database**
@@ -102,9 +122,11 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
 
 | Command | Description |
 | --- | --- |
+| `pnpm eve:build` | Compile the standalone Eve runtime (run before a local production Next.js build) |
+| `pnpm eve:eval` | Run strict Eve evals and emit JUnit output under `.eve/` |
 | `pnpm dev` | Start dev server (Turbopack) |
 | `pnpm dev:webpack` | Start dev server with Webpack |
-| `pnpm build` | Production build |
+| `pnpm build` | Compile Eve, then create the production Next.js build |
 | `pnpm start` | Run production server |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript check |

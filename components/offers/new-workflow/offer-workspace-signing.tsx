@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { SignerState } from "@/lib/offer/signing-status";
 import { formatCurrency } from "./offer-workspace-format";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // Per-signer state. Now sourced from real per-recipient DocuSign status written
 // by the Connect webhook (#121/#123) rather than hard-coded: "awaiting" is the
@@ -57,9 +58,7 @@ export function SigningTracker({
 }) {
   return (
     <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        DocuSign envelope
-      </p>
+      <p className={GROUP_HEADING_CLASS}>DocuSign envelope</p>
       {recipients.map((recipient) => {
         const pill = SIGNER_PILL[recipient.state];
         const pillLabel =
@@ -146,7 +145,10 @@ export function EnvelopeSendConfirm({
         <Row label="Reference" mono value={reference} />
       </dl>
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <AlertTriangle
+          className="mt-0.5 size-3.5 shrink-0"
+          aria-hidden="true"
+        />
         Creates a DocuSign envelope and routes it to{" "}
         {customerOnly
           ? "the customer to sign as acceptance"
@@ -158,11 +160,11 @@ export function EnvelopeSendConfirm({
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
-          className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
           disabled={sending}
           onClick={onConfirm}
           size="sm"
           type="button"
+          variant="royal"
         >
           <Send className="size-4" aria-hidden="true" />
           {sending ? "Sending envelope…" : "Confirm & send"}

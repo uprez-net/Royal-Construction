@@ -208,12 +208,17 @@ export function ProjectMaterialsTab({ project }: ProjectMaterialsTabProps) {
             emptyState={
               <div className="flex flex-col items-center justify-center gap-3">
                 <div className="flex size-12 items-center justify-center">
-                  <Boxes className="size-5 text-muted-foreground" aria-hidden="true" />
+                  <Boxes
+                    className="size-5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </div>
 
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-foreground">
-                    {isFiltered ? "No matching materials" : "No materials added"}
+                    {isFiltered
+                      ? "No matching materials"
+                      : "No materials added"}
                   </p>
 
                   <p className="text-xs text-muted-foreground">

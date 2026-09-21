@@ -11,13 +11,16 @@ export async function GET(request: NextRequest) {
   // Next.js 16 + Cache Components: force request-time execution for request URL usage.
   await connection();
   try {
-    const params = parseSearchParamsWithResponse(request.nextUrl, tradieSearchQuerySchema);
+    const params = parseSearchParamsWithResponse(
+      request.nextUrl,
+      tradieSearchQuerySchema,
+    );
     if (!params.success) return params.response;
 
     const search = params.data.search || params.data.q || "";
     const limit = params.data.limit;
 
-    const tradies = await getTradiesForLookup(limit, search);
+    const tradies = await getTradiesForLookup(limit, search, params.data.trade);
 
     return successResponse(tradies);
   } catch (error) {

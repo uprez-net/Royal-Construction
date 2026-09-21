@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withEve } from "eve/next";
 import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
@@ -43,4 +44,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withWorkflow(nextConfig);
+export default withEve(withWorkflow(nextConfig));

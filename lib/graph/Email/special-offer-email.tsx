@@ -10,7 +10,7 @@ import {
   Link,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -18,13 +18,16 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 // Updated stroke color to match RC_COLORS.gold (#C9A84C) and Navy (#1B2D45)
@@ -42,26 +45,26 @@ function OfferCard({
   icon,
   title,
   badge,
-  badgeVariant = 'outline',
-  mobileClass = '',
+  badgeVariant = "outline",
+  mobileClass = "",
 }: {
   icon: string;
   title: string | React.ReactNode;
   badge: string;
-  badgeVariant?: 'solid' | 'outline';
+  badgeVariant?: "solid" | "outline";
   mobileClass?: string;
 }) {
   return (
     <Column
       className={`mobile_offer_stack ${mobileClass}`}
-      style={{ width: '33.33%', verticalAlign: 'top' }}
+      style={{ width: "33.33%", verticalAlign: "top" }}
     >
       <Section
         style={{
           backgroundColor: RC_COLORS.light,
-          border: '1px solid #E2E8F0',
+          border: "1px solid #E2E8F0",
           borderRadius: 6,
-          height: '100%',
+          height: "100%",
         }}
       >
         <Row>
@@ -84,10 +87,12 @@ function OfferCard({
               {title}
             </Text>
 
-            {badgeVariant === 'solid' ? (
-              <Section className="mx-auto" style={{ display: 'inline-block' }}>
+            {badgeVariant === "solid" ? (
+              <Section className="mx-auto" style={{ display: "inline-block" }}>
                 <Row>
-                  <Column style={{ backgroundColor: RC_COLORS.gold, borderRadius: 4 }}>
+                  <Column
+                    style={{ backgroundColor: RC_COLORS.gold, borderRadius: 4 }}
+                  >
                     <Text
                       className="m-0 uppercase tracking-[0.5px]"
                       style={{
@@ -95,8 +100,8 @@ function OfferCard({
                         fontWeight: 500,
                         fontSize: 11,
                         lineHeight: 1,
-                        color: '#FFFFFF',
-                        padding: '0.25rem 0.5rem',
+                        color: "#FFFFFF",
+                        padding: "0.25rem 0.5rem",
                       }}
                     >
                       {badge}
@@ -105,12 +110,12 @@ function OfferCard({
                 </Row>
               </Section>
             ) : (
-              <Section className="mx-auto" style={{ display: 'inline-block' }}>
+              <Section className="mx-auto" style={{ display: "inline-block" }}>
                 <Row>
                   <Column
                     style={{
-                      backgroundColor: '#FFFFFF',
-                      border: '1px solid #E2E8F0',
+                      backgroundColor: "#FFFFFF",
+                      border: "1px solid #E2E8F0",
                       borderRadius: 4,
                     }}
                   >
@@ -122,7 +127,7 @@ function OfferCard({
                         fontSize: 11,
                         lineHeight: 1,
                         color: RC_COLORS.gold,
-                        padding: '0.25rem 0.5rem',
+                        padding: "0.25rem 0.5rem",
                       }}
                     >
                       {badge}
@@ -148,8 +153,8 @@ interface SpecialOfferEmailProps {
 }
 
 export default function SpecialOfferEmail({
-  name = 'Homeowner',
-  savingsAmount = '$8,500',
+  name = "Homeowner",
+  savingsAmount = "$8,500",
   claimUrl = RC_URLS.claimOffer,
   leadContext,
 }: SpecialOfferEmailProps) {
@@ -174,15 +179,21 @@ export default function SpecialOfferEmail({
           }}
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
-            Exclusive upgrade package — confirm within 7 days to claim your offer
-            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
+            Exclusive upgrade package — confirm within 7 days to claim your
+            offer
+            <div>
+              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
+            </div>
           </div>
 
-          <Container className="max-w-[640px] mx-auto" style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}>
+          <Container
+            className="max-w-[640px] mx-auto"
+            style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}
+          >
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 0' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 0" }}>
               <Row>
                 <Column className="text-center">
                   <Text
@@ -192,7 +203,7 @@ export default function SpecialOfferEmail({
                       fontWeight: 500,
                       fontSize: 11,
                       lineHeight: 1,
-                      letterSpacing: '1.5px',
+                      letterSpacing: "1.5px",
                       color: RC_COLORS.gold,
                     }}
                   >
@@ -205,7 +216,7 @@ export default function SpecialOfferEmail({
                       fontWeight: 500,
                       fontSize: 48,
                       lineHeight: 1,
-                      letterSpacing: '-1.4px',
+                      letterSpacing: "-1.4px",
                       color: RC_COLORS.textOnLight,
                     }}
                   >
@@ -220,12 +231,14 @@ export default function SpecialOfferEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                       maxWidth: 440,
                     }}
                   >
-                    Dear {name}, as a valued Royal Constructions client, we&apos;re thrilled to offer you an exclusive upgrade package — on us.
+                    Dear {name}, as a valued Royal Constructions client,
+                    we&apos;re thrilled to offer you an exclusive upgrade
+                    package — on us.
                   </Text>
                 </Column>
               </Row>
@@ -234,7 +247,7 @@ export default function SpecialOfferEmail({
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Big Savings Callout ── */}
-            <EmailSectionWhite style={{ padding: '2.5rem 1.5rem 3rem' }}>
+            <EmailSectionWhite style={{ padding: "2.5rem 1.5rem 3rem" }}>
               <Row>
                 <Column className="text-center">
                   <Section
@@ -243,7 +256,7 @@ export default function SpecialOfferEmail({
                       backgroundColor: RC_COLORS.light,
                       border: `2px solid ${RC_COLORS.gold}`,
                       borderRadius: 6,
-                      display: 'inline-block',
+                      display: "inline-block",
                     }}
                   >
                     <Row>
@@ -255,7 +268,7 @@ export default function SpecialOfferEmail({
                             fontWeight: 500,
                             fontSize: 11,
                             lineHeight: 1,
-                            letterSpacing: '1px',
+                            letterSpacing: "1px",
                             color: RC_COLORS.textMutedOnLight,
                           }}
                         >
@@ -269,7 +282,7 @@ export default function SpecialOfferEmail({
                             fontSize: 56,
                             lineHeight: 1,
                             color: RC_COLORS.gold,
-                            letterSpacing: '-1px',
+                            letterSpacing: "-1px",
                           }}
                         >
                           {savingsAmount}
@@ -282,7 +295,7 @@ export default function SpecialOfferEmail({
             </EmailSectionWhite>
 
             {/* ── 3 Offer Cards ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 3rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 3rem" }}>
               <Row>
                 <OfferCard
                   icon={ICONS.star}
@@ -327,18 +340,32 @@ export default function SpecialOfferEmail({
             </EmailSectionLight>
 
             {/* ── Urgency Bar ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
-                <Column style={{ backgroundColor: RC_COLORS.gold, borderRadius: 6 }}>
+                <Column
+                  style={{ backgroundColor: RC_COLORS.gold, borderRadius: 6 }}
+                >
                   <Section className="py-5 px-6">
                     <Row>
                       <Column className="text-center">
-                        <Section className="mx-auto" style={{ display: 'inline-block' }}>
+                        <Section
+                          className="mx-auto"
+                          style={{ display: "inline-block" }}
+                        >
                           <Row>
-                            <Column className="pr-3" style={{ verticalAlign: 'middle' }}>
-                              <Img alt="" height={20} src={ICONS.clockDark} width={20} className="block outline-none border-none" />
+                            <Column
+                              className="pr-3"
+                              style={{ verticalAlign: "middle" }}
+                            >
+                              <Img
+                                alt=""
+                                height={20}
+                                src={ICONS.clockDark}
+                                width={20}
+                                className="block outline-none border-none"
+                              />
                             </Column>
-                            <Column style={{ verticalAlign: 'middle' }}>
+                            <Column style={{ verticalAlign: "middle" }}>
                               <Text
                                 className="m-0 uppercase tracking-[0.8px]"
                                 style={{
@@ -346,7 +373,7 @@ export default function SpecialOfferEmail({
                                   fontWeight: 500,
                                   fontSize: 14,
                                   lineHeight: 1,
-                                  color: '#1B2D45', // Navy text on gold for premium contrast
+                                  color: "#1B2D45", // Navy text on gold for premium contrast
                                 }}
                               >
                                 Confirm within 7 days to unlock this offer
@@ -362,8 +389,8 @@ export default function SpecialOfferEmail({
             </EmailSectionWhite>
 
             {/* ── CTA ── */}
-            <EmailSectionLight style={{ padding: '0.5rem 1.5rem 2.5rem' }}>
-              <Section style={{ textAlign: 'center' }}>
+            <EmailSectionLight style={{ padding: "0.5rem 1.5rem 2.5rem" }}>
+              <Section style={{ textAlign: "center" }}>
                 <Text
                   className="m-0 mb-7"
                   style={{
@@ -371,18 +398,23 @@ export default function SpecialOfferEmail({
                     fontWeight: 350,
                     fontSize: 14,
                     lineHeight: 1.7,
-                    letterSpacing: '0.3px',
+                    letterSpacing: "0.3px",
                     color: RC_COLORS.textMutedOnLight,
                   }}
                 >
-                  Let&apos;s discuss how we can make your dream home even better.
+                  Let&apos;s discuss how we can make your dream home even
+                  better.
                 </Text>
-                <EmailCtaButton href={claimUrl} label="Claim Your Offer" align="center" />
+                <EmailCtaButton
+                  href={claimUrl}
+                  label="Claim Your Offer"
+                  align="center"
+                />
               </Section>
             </EmailSectionLight>
 
             {/* ── Terms ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 3rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 3rem" }}>
               <Row>
                 <Column className="text-center">
                   <Text
@@ -392,15 +424,19 @@ export default function SpecialOfferEmail({
                       fontWeight: 350,
                       fontSize: 11,
                       lineHeight: 1.5,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.dimmed, // Lighter slate for terms
                     }}
                   >
-                    Offer valid for new confirmations only. Kitchen upgrade applies to selected ranges.{' '}
+                    Offer valid for new confirmations only. Kitchen upgrade
+                    applies to selected ranges.{" "}
                     <Link
                       href={RC_URLS.terms}
                       target="_blank"
-                      style={{ color: RC_COLORS.dimmed, textDecoration: 'underline' }}
+                      style={{
+                        color: RC_COLORS.dimmed,
+                        textDecoration: "underline",
+                      }}
                     >
                       Full terms &amp; conditions
                     </Link>
@@ -411,8 +447,10 @@ export default function SpecialOfferEmail({
             </EmailSectionWhite>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section
+                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+              >
                 <Row>
                   <Column>
                     <Text
@@ -425,9 +463,13 @@ export default function SpecialOfferEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      We look forward to building something extraordinary with you.
+                      We look forward to building something extraordinary with
+                      you.
                     </Text>
-                    <Text className="m-0 mb-1" style={{ fontSize: 14, color: RC_COLORS.textOnLight }}>
+                    <Text
+                      className="m-0 mb-1"
+                      style={{ fontSize: 14, color: RC_COLORS.textOnLight }}
+                    >
                       Warm regards,
                     </Text>
                     <Text
@@ -442,7 +484,10 @@ export default function SpecialOfferEmail({
                     </Text>
                     <Text
                       className="m-0"
-                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
+                      style={{
+                        fontSize: 13,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
                     >
                       Royal Constructions Pty Ltd
                     </Text>

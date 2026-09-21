@@ -3,20 +3,35 @@
 import { auth } from "@clerk/nextjs/server";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
-import { OfferStatus } from "@prisma/client";
+import { EnvelopeStatus, OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { getUserByClerkId } from "@/lib/data/user";
 import { assertCanAccessLead } from "@/lib/offer/access";
 import { createProjectWithLead } from "@/lib/data/projectsWrite";
+import { archiveExecuted } from "@/lib/docusign/archive-executed";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import {
+  buildHandoffCommercials,
+  describeMissingExecutedDocuments,
+  resolveSignedTenderExclusions,
+  type MissingExecutedDocument,
+} from "@/lib/offer/project-handoff-commercials";
+import {
+  describeLegacyContractScheduleDrift,
+  resolveContractPaymentSource,
+  type ContractPaymentSource,
+} from "@/lib/offer/contract-payment-source";
 import {
   deserializeWorkspace,
   parseWorkspaceState,
   type OfferWorkspaceSnapshot,
 } from "@/lib/offer/workspace-persistence";
 import { collectOfferSigners } from "@/lib/offer/workspace-model";
-import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
+import type {
+  ProjectRequirementsPayload,
+  ProjectSourceDocumentReference,
+} from "@/types/project-flow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -45,7 +60,10 @@ export async function createProjectFromOffer(input: {
   }
   const actor = clerkId ? await getUserByClerkId(clerkId) : null;
   if (!actor) {
-    return { ok: false, error: "No internal user found for the signed-in account." };
+    return {
+      ok: false,
+      error: "No internal user found for the signed-in account.",
+    };
   }
 
   const offer = await prisma.offer.findUnique({
@@ -58,9 +76,42 @@ export async function createProjectFromOffer(input: {
       offerStatus: true,
       workspaceState: true,
       agreedSnapshot: true,
-      tender: { select: { executedPdfUrl: true } },
-      contract: { select: { executedPdfUrl: true } },
-      lead: { select: { id: true, name: true, email: true, phone: true, project: { select: { id: true } } } },
+      // Each document's latest-sent envelope: the one the Connect webhook treats
+      // as current. An older completed envelope was recalled or replaced and
+      // is never filed as the executed document.
+      tender: {
+        select: {
+          id: true,
+          executedPdfUrl: true,
+          documentData: true,
+          envelopes: {
+            orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+            select: { docusignId: true, status: true },
+          },
+        },
+      },
+      contract: {
+        select: {
+          id: true,
+          executedPdfUrl: true,
+          documentData: true,
+          envelopes: {
+            orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+            select: { docusignId: true, status: true },
+          },
+        },
+      },
+      lead: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          project: { select: { id: true } },
+        },
+      },
     },
   });
   if (!offer || !offer.lead) {
@@ -72,7 +123,10 @@ export async function createProjectFromOffer(input: {
     return { ok: false, error: "You do not have access to this offer." };
   }
   if (offer.offerStatus === OfferStatus.PROJECT) {
-    return { ok: false, error: "A project has already been created from this offer." };
+    return {
+      ok: false,
+      error: "A project has already been created from this offer.",
+    };
   }
   if (offer.offerStatus !== OfferStatus.CONTRACT_SIGNED) {
     return {
@@ -91,24 +145,29 @@ export async function createProjectFromOffer(input: {
     return { ok: false, error: "No agreed offer snapshot found." };
   }
 
-  // Both executed PDFs must be on file before a project can be created.
-  // executedPdfUrl is written only by the DocuSign completion webhook
-  // (app/api/docusign/connect/route.ts) after it archives the signed document;
-  // a null URL means the offer reached CONTRACT_SIGNED without a genuine
-  // completion (e.g. a manual status advance, or a completion webhook rejected
-  // at the HMAC gate), so there is no executed tender/contract to attach.
-  // Block here rather than creating a project with empty documents (issue #90).
+  // Both executed PDFs must be on file before a project can be created, rather
+  // than creating a project with empty documents (issue #90). The Connect
+  // webhook files them once it archives the signed document, but an archive can
+  // fail after the signature, so a null URL does not prove the document is
+  // unsigned: when DocuSign has the document's latest envelope completed, it is
+  // fetched and filed now. Only a document DocuSign has not completed blocks.
   // Runs before the claim below, so a failed gate needs no status rollback.
-  const missingExecutedDocs: string[] = [];
-  if (!offer.tender?.executedPdfUrl) missingExecutedDocs.push("tender");
-  if (!offer.contract?.executedPdfUrl) missingExecutedDocs.push("contract");
-  if (missingExecutedDocs.length > 0) {
-    return {
-      ok: false,
-      error: `Cannot create the project: no executed ${missingExecutedDocs.join(
-        " and ",
-      )} PDF is on file. Complete signing via DocuSign so the executed document is archived, then try again.`,
-    };
+  const executedTender = await ensureExecutedPdf("tender", offer.tender);
+  const executedContract = await ensureExecutedPdf("contract", offer.contract);
+  const missingExecutedDocs: MissingExecutedDocument[] = [];
+  if (!executedTender.url) {
+    missingExecutedDocs.push({ kind: "tender", signed: executedTender.signed });
+  }
+  if (!executedContract.url) {
+    missingExecutedDocs.push({
+      kind: "contract",
+      signed: executedContract.signed,
+    });
+  }
+  const missingExecutedError =
+    describeMissingExecutedDocuments(missingExecutedDocs);
+  if (missingExecutedError) {
+    return { ok: false, error: missingExecutedError };
   }
 
   // Atomically claim the handoff: flip CONTRACT_SIGNED → PROJECT in one
@@ -120,7 +179,10 @@ export async function createProjectFromOffer(input: {
     data: { offerStatus: OfferStatus.PROJECT },
   });
   if (claim.count !== 1) {
-    return { ok: false, error: "This offer is already being handed off to a project." };
+    return {
+      ok: false,
+      error: "This offer is already being handed off to a project.",
+    };
   }
 
   // Normally a no-op — the deal is already WON from CONTRACT_SIGNED — but this
@@ -185,7 +247,11 @@ export async function createProjectFromOffer(input: {
   // catch below must ASK the database rather than assume (PR #124 review): if a
   // project now exists for this lead, rolling back would strand a live project on
   // an offer that claims none — and `offer.lead.project` would block every retry.
-  let handoff: { projectId: string; projectName: string; milestoneCount: number };
+  let handoff: {
+    projectId: string;
+    projectName: string;
+    milestoneCount: number;
+  };
   try {
     const snapshot = deserializeWorkspace(parseWorkspaceState(state));
     const job = snapshot.job;
@@ -207,7 +273,9 @@ export async function createProjectFromOffer(input: {
           where: { id: offer.lead.id },
           data: { email: jobEmail },
         });
-        warnings.push(`Lead email was blank — set to ${jobEmail} from the offer.`);
+        warnings.push(
+          `Lead email was blank — set to ${jobEmail} from the offer.`,
+        );
       } else {
         const rollbackFailures = await rollback();
         return {
@@ -232,7 +300,9 @@ export async function createProjectFromOffer(input: {
         // present. Kept as a defensive invariant so a future refactor can never
         // silently attach an empty document reference (the root of issue #90). The
         // outer catch rolls back the claim + files so the offer stays retryable.
-        throw new Error(`Executed ${kind} PDF unexpectedly missing after gate.`);
+        throw new Error(
+          `Executed ${kind} PDF unexpectedly missing after gate.`,
+        );
       }
       const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
       const file = await prisma.file.create({
@@ -249,11 +319,56 @@ export async function createProjectFromOffer(input: {
       return { fileId: file.id, fileName, url, kind };
     };
     const sourceDocuments = {
-      tender: await docRef(offer.tender?.executedPdfUrl, "tender"),
-      contract: await docRef(offer.contract?.executedPdfUrl, "contract"),
+      tender: await docRef(executedTender.url, "tender"),
+      contract: await docRef(executedContract.url, "contract"),
     };
 
-    const extraction = buildExtractionPayload(snapshot, contractValue, reference, sourceDocuments);
+    // Payment stages and deposit from the signed Tender, the same source the
+    // Contract was sent with; the price stays the agreed snapshot's.
+    const payment = resolveContractPaymentSource({
+      tenderDocumentData: offer.tender?.documentData ?? null,
+      agreedPaymentSchedule: snapshot.paymentSchedule,
+    });
+    if (payment.source === "agreed-snapshot") {
+      console.warn(
+        `[offer] handoff for offer ${offer.id}: no payment schedule on the Tender row, using the agreed snapshot's`,
+      );
+    } else {
+      console.info(
+        `[offer] handoff for offer ${offer.id}: payment stages from the signed Tender (${payment.source})`,
+      );
+    }
+    const scheduleDrift = describeLegacyContractScheduleDrift({
+      contractDocumentData: offer.contract?.documentData ?? null,
+      agreedPaymentSchedule: snapshot.paymentSchedule,
+      resolved: payment,
+      contractValueIncGst: contractValue,
+    });
+    if (scheduleDrift) {
+      console.warn(`[offer] handoff for offer ${offer.id}: ${scheduleDrift}`);
+      warnings.push(scheduleDrift);
+    }
+
+    // The exclusions the signed Tender printed. The workspace can still be
+    // written after the offer is agreed, so rebuilding them from the snapshot
+    // could hand the project a list the customer never signed.
+    const signedExclusions = resolveSignedTenderExclusions({
+      tenderDocumentData: offer.tender?.documentData ?? null,
+      snapshot,
+    });
+    if (signedExclusions.source === "agreed-snapshot") {
+      console.warn(
+        `[offer] handoff for offer ${offer.id}: no readable exclusions on the Tender row, using the agreed snapshot's`,
+      );
+    }
+    const extraction = buildExtractionPayload(
+      snapshot,
+      contractValue,
+      reference,
+      sourceDocuments,
+      payment,
+      signedExclusions.lines,
+    );
 
     // The start date defaults to +14 days from today; the signed date written
     // by buildExtractionPayload is today's date. The start is therefore always
@@ -315,7 +430,8 @@ export async function createProjectFromOffer(input: {
     // rollback — and a DB blip is the most likely reason the original call threw,
     // so the verification query is exactly when it's likeliest to fail too. Only a
     // SUCCESSFUL query that returns project: null proves the rollback is safe.
-    let committed: { project: { id: string; name: string } | null } | null = null;
+    let committed: { project: { id: string; name: string } | null } | null =
+      null;
     let verificationFailed = false;
     try {
       committed = await prisma.lead.findUnique({
@@ -416,13 +532,58 @@ export async function createProjectFromOffer(input: {
   };
 }
 
+// The executed PDF for one document: the filed URL, or one fetched from
+// DocuSign now when the document's latest envelope completed but its archive
+// failed. `signed` says whether DocuSign completed it, which decides what the
+// estimator is told when no URL comes back. Not exported: this file is
+// "use server", and the caller has already authorized.
+async function ensureExecutedPdf(
+  kind: "tender" | "contract",
+  parent: {
+    id: string;
+    executedPdfUrl: string | null;
+    envelopes: { docusignId: string | null; status: EnvelopeStatus }[];
+  } | null,
+): Promise<{ url: string | null; signed: boolean }> {
+  if (!parent) {
+    return { url: null, signed: false };
+  }
+  if (parent.executedPdfUrl) {
+    return { url: parent.executedPdfUrl, signed: true };
+  }
+  const latest = parent.envelopes[0];
+  if (!latest?.docusignId || latest.status !== EnvelopeStatus.COMPLETED) {
+    return { url: null, signed: false };
+  }
+  try {
+    const url = await archiveExecuted(
+      { kind, id: parent.id },
+      latest.docusignId,
+    );
+    return { url, signed: true };
+  } catch (error) {
+    console.error(
+      `[offer] handoff: fetching the executed ${kind} for envelope ${latest.docusignId} failed:`,
+      error,
+    );
+    return { url: null, signed: true };
+  }
+}
+
 // ─── Snapshot → ProjectRequirementsPayload ───
 
 function buildExtractionPayload(
   snapshot: OfferWorkspaceSnapshot,
   contractValue: number,
   reference: string,
-  sourceDocuments: { tender: ProjectSourceDocumentReference; contract: ProjectSourceDocumentReference },
+  sourceDocuments: {
+    tender: ProjectSourceDocumentReference;
+    contract: ProjectSourceDocumentReference;
+  },
+  payment: Pick<ContractPaymentSource, "paymentSchedule" | "deposit">,
+  // Resolved by the caller, which can read the Tender row: the exclusions the
+  // SIGNED Tender printed, not whatever the workspace holds now.
+  signedExclusions: readonly string[],
 ): ProjectRequirementsPayload {
   const job = snapshot.job;
   // Owner contacts for the project-extraction legalAdministration block, now
@@ -446,13 +607,14 @@ function buildExtractionPayload(
       signers.map((signer) => signer.signatory.phone.trim()).filter(Boolean),
     ),
   );
-  const paymentStages = snapshot.paymentSchedule.map((row) => ({
-    label: row.stageName,
-    percentage: row.percentOfContract * 100,
-    amount: Math.round(contractValue * row.percentOfContract),
-  }));
-  const depositStage =
-    paymentStages.find((s) => s.label.toLowerCase().includes("deposit")) ?? paymentStages[0];
+  // GST and stage amounts to the cent, matching the offer's own GST split and
+  // the figures the BC4 contract printed.
+  const { gstAmount, paymentStages, depositValue } = buildHandoffCommercials({
+    contractValueIncGst: contractValue,
+    gstRate: snapshot.workspacePricingSettings.gstRate,
+    paymentSchedule: payment.paymentSchedule,
+    deposit: payment.deposit,
+  });
 
   return {
     version: 1,
@@ -488,11 +650,9 @@ function buildExtractionPayload(
     },
     commercialsAndClaims: {
       totalContractSum: contractValue,
-      tenderTotalPrice: contractValue,
-      contractPrice: contractValue,
       gstIncluded: true,
-      gstAmount: Math.round(contractValue / 11),
-      depositValue: depositStage?.amount ?? null,
+      gstAmount,
+      depositValue,
       claimStageSlabPercentage: null,
       claimStageSlabDollarValue: null,
       variationAdminFee: null,
@@ -500,24 +660,37 @@ function buildExtractionPayload(
       paymentStages,
     },
     subStructureAndGround: {
-      concreteSlabClass: null, concreteStrengthMpa: null, vapourBarrier: null,
-      termiteSystem: null, sewerConnection: null,
+      concreteSlabClass: null,
+      concreteStrengthMpa: null,
+      vapourBarrier: null,
+      termiteSystem: null,
+      sewerConnection: null,
     },
     inclusionsAndExclusions: {
       inclusions: [...snapshot.draft.inclusionHighlights],
-      exclusions: [...snapshot.draft.exclusionBullets],
+      exclusions: [...signedExclusions],
     },
     utilityInfrastructure: {
-      electricalPhase: null, communicationConduit: null, gasConnection: null,
-      fridgeWaterPoint: null, smartLockBrand: null,
+      electricalPhase: null,
+      communicationConduit: null,
+      gasConnection: null,
+      fridgeWaterPoint: null,
+      smartLockBrand: null,
     },
     wetAreaCompliance: {
-      waterproofingStandard: null, showerScreenType: null, tiledNicheCount: null,
-      showerCount: null, floorToCeilingTiles: null, floorWasteType: null,
+      waterproofingStandard: null,
+      showerScreenType: null,
+      tiledNicheCount: null,
+      showerCount: null,
+      floorToCeilingTiles: null,
+      floorWasteType: null,
     },
     safetyAndSiteLogistics: {
-      roofGuardrails: null, sedimentControl: null, scaffoldingSafety: null,
-      tradeWaste: null, finalCleanStatus: null,
+      roofGuardrails: null,
+      sedimentControl: null,
+      scaffoldingSafety: null,
+      tradeWaste: null,
+      finalCleanStatus: null,
     },
     conflicts: [],
     automationTriggers: {

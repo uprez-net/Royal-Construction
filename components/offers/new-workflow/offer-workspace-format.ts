@@ -15,6 +15,24 @@ export function formatCurrency(
   }).format(value);
 }
 
+// A money delta keeps its cents whenever it has any. The send gate compares
+// prices to the cent, so a 37-cent override blocks Send and must not print as
+// "$0" — and a $1.50 one must not print as "+$2", which overstates the very
+// difference this chip reports. Whole-dollar deltas stay unadorned: "-$50,000"
+// reads better than "-$50,000.00" beside the hero figure.
+export function moneyDeltaFractionDigits(delta: number): number {
+  return Number.isInteger(delta) ? 0 : 2;
+}
+
+// A signed money delta, "+$0.37" or "-$50,000", for the override chip and the
+// Variance line.
+export function formatMoneyDelta(delta: number): string {
+  const sign = delta > 0 ? "+" : delta < 0 ? "-" : "";
+  return `${sign}${formatCurrency(Math.abs(delta), {
+    maximumFractionDigits: moneyDeltaFractionDigits(delta),
+  })}`;
+}
+
 // Value for a numeric <input>. A zero renders as an empty field (with a "0"
 // placeholder) rather than a literal "0": a "0" sitting in the box collides with
 // typing — the caret lands beside it and "400" becomes "4000", and any value not
@@ -33,12 +51,8 @@ export function formatOfferReference(
   return reference.trim().length > 0 ? `${reference}-${revision}` : revision;
 }
 
-export function formatPercent(value: number): string {
-  return new Intl.NumberFormat("en-AU", {
-    style: "percent",
-    maximumFractionDigits: 1,
-  }).format(value);
-}
+// Re-exported so the rail digest and the strip chip cannot drift apart.
+export { formatPercent } from "@/lib/offer/format";
 
 export function getMarginStatusLabel(status: MarginStatus): string {
   switch (status) {
@@ -48,5 +62,7 @@ export function getMarginStatusLabel(status: MarginStatus): string {
       return "Acceptable";
     case "below_minimum":
       return "Below minimum";
+    case "not_priced":
+      return "Not priced";
   }
 }

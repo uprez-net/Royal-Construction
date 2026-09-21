@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { findLeadById } from "@/lib/data/leads";
 import { assertCanAccessLead } from "@/lib/offer/access";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import { resolveLeadNotesText } from "@/lib/leads/notes-text";
 import {
   generateOfferPrefillDraft,
   type OfferPrefillDraft,
@@ -100,23 +101,28 @@ export async function generateOfferPrefillFromLead(input: {
     `# Lead\nName: ${lead.name}${lead.secondaryName ? ` & ${lead.secondaryName}` : ""}\nLocation/site: ${lead.location || "(not given)"}\nBuild type interest: ${lead.type || "(not given)"}\nBudget: ${lead.budget || "(not given)"}`,
   );
 
-  if (lead.notes?.trim()) {
+  // Resolved, not read straight off the column. The Notes tab clears
+  // `Lead.notes` on save because a note's home is its history entry, so on any
+  // lead whose notes went through the composer this block was simply absent and
+  // the draft lost the discovery conversation it exists to use.
+  const salesNotes = resolveLeadNotesText(lead);
+  if (salesNotes) {
     sources.push("sales notes");
-    contextParts.push(`# Sales notes\n${lead.notes.trim()}`);
+    contextParts.push(`# Sales notes\n${salesNotes}`);
   }
 
   const emails = (lead.emails ?? []).slice(0, 8);
   if (emails.length > 0) {
-    sources.push(
-      `${emails.length} email${emails.length === 1 ? "" : "s"}`,
-    );
+    sources.push(`${emails.length} email${emails.length === 1 ? "" : "s"}`);
     const emailBlock = emails
       .map((email) => {
         const body = stripToText(email.body).slice(0, 1500);
         return `From: ${email.emailFrom}\nSubject: ${email.subject}\n${body}`;
       })
       .join("\n---\n");
-    contextParts.push(`# Email conversation (most recent first)\n${emailBlock}`);
+    contextParts.push(
+      `# Email conversation (most recent first)\n${emailBlock}`,
+    );
   }
 
   const history = (lead.history ?? [])
@@ -154,9 +160,7 @@ export async function generateOfferPrefillFromLead(input: {
     if (d.buildType.trim()) job.buildType = d.buildType.trim();
     // The schema constrains facade to a valid option or "" (no guess).
     if (d.facade) job.facade = d.facade;
-    const scope = d.buildScope
-      .map((bullet) => bullet.trim())
-      .filter(Boolean);
+    const scope = d.buildScope.map((bullet) => bullet.trim()).filter(Boolean);
     if (scope.length > 0) job.buildScope = scope;
     if (d.introText.trim()) draft.introText = d.introText.trim();
     confidence = d.confidence;

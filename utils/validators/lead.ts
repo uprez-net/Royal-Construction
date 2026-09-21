@@ -97,9 +97,7 @@ const nullableDateInput = z.preprocess((value) => {
 
 const typeSchema = z.preprocess((value) => {
   if (Array.isArray(value)) {
-    return value
-      .map((entry) => String(entry).trim())
-      .filter(Boolean);
+    return value.map((entry) => String(entry).trim()).filter(Boolean);
   }
 
   if (typeof value === "string") {
@@ -125,9 +123,7 @@ export const historyItemSchema = z.object({
 
 const typeArraySchema = z.preprocess((value) => {
   if (Array.isArray(value)) {
-    return value
-      .map((entry) => String(entry).trim())
-      .filter(Boolean);
+    return value.map((entry) => String(entry).trim()).filter(Boolean);
   }
 
   if (typeof value === "string") {
@@ -197,10 +193,14 @@ const dealEconomicsFields = {
     .refine(
       (value) => {
         if (value === null || value === undefined || value === "") return true;
-        const numeric = typeof value === "number" ? value : Number(String(value).trim());
+        const numeric =
+          typeof value === "number" ? value : Number(String(value).trim());
         return Number.isFinite(numeric) && numeric >= 0 && numeric < 1e12;
       },
-      { message: "Deal value must be a non-negative number below 1,000,000,000,000" },
+      {
+        message:
+          "Deal value must be a non-negative number below 1,000,000,000,000",
+      },
     )
     .describe("Numeric deal value"),
   // Must be persistable: without it, a user's typed-over value would be
@@ -222,6 +222,9 @@ const dealEconomicsFields = {
   // date-only strings a <input type="date"> emits.
   expectedCloseDate: nullableDateInput
     .describe("Expected close date")
+    .optional(),
+  estimatedStartDate: nullableDateInput
+    .describe("Estimated build start date")
     .optional(),
 } as const;
 
@@ -250,7 +253,7 @@ export const updateLeadSchema = z.object({
   meetingDate: nullableDateInput.describe("Meeting date").optional(),
   meetingTime: nullableTrimmedString.optional(),
   meetingMode: nullableTrimmedString.optional(),
-  
+
   followupReminderSentAt: z.iso.datetime().optional(),
   meetingReminderSentAt: z.iso.datetime().optional(),
 
@@ -259,7 +262,9 @@ export const updateLeadSchema = z.object({
   followupTime: nullableTrimmedString.optional(),
   followupNotes: nullableTrimmedString.optional(),
 
-  followupResponseOutcome: z.enum(["yes", "reschedule", "notRequired"]).optional(),
+  followupResponseOutcome: z
+    .enum(["yes", "reschedule", "notRequired"])
+    .optional(),
 
   meetingReviewOutcome: z.enum(["yes", "no"]).optional(),
   discussionNotes: nullableTrimmedString.optional(),
@@ -352,6 +357,6 @@ export const leadLookupParamSchema = z.object({
   upcomingFollowUps: z.string().optional(),
   pendingMeetings: z.string().optional(),
   upcomingMeetings: z.string().optional(),
-})
+});
 
 export const leadStatusSchema = z.enum(leadStages);

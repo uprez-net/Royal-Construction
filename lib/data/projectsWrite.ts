@@ -1,6 +1,11 @@
-"use server";
+import "server-only";
+
 import prisma from "@/lib/prisma";
-import { createCustomerForProject, findCustomerByContact, findCustomerById } from "@/lib/data/customers";
+import {
+  createCustomerForProject,
+  findCustomerByContact,
+  findCustomerById,
+} from "@/lib/data/customers";
 import { getSiteManagerById } from "@/lib/data/siteManagers";
 import type { CreateProjectInput } from "@/utils/validators";
 import { CACHE_PROFILES } from "@/types/cache";
@@ -10,14 +15,21 @@ import { triggerNotification } from "../notification/novu";
 import { createMilestonesFromTemplateForProject } from "./milestones";
 import { ProjectDetail } from "@/types/project";
 import { getCachedProjectById } from "./projects";
-import { after } from "next/server"
+import { after } from "next/server";
 import { handleProjectSpecsGeneration } from "../agent/projectCreationAgent";
 import { createLeadProjectInferencePrompt } from "../agent/project-prompt";
+import { LEAD_NOTES_HISTORY_INCLUDE } from "@/lib/leads/notes-text";
 import { createActivityLogEntry } from "@/types/activityLog";
 import { logAction } from "./actionLog";
 import { Prisma } from "@prisma/client";
-import type { ProjectRequirementsPayload, ProjectSourceDocumentReference } from "@/types/project-flow";
-import { buildProjectRequirementsPayload, resolveProjectBudget } from "@/lib/data/projectFlow";
+import type {
+  ProjectRequirementsPayload,
+  ProjectSourceDocumentReference,
+} from "@/types/project-flow";
+import {
+  buildProjectRequirementsPayload,
+  resolveProjectBudget,
+} from "@/lib/data/projectFlow";
 import type { ProjectExtractionData } from "@/types/project-extraction";
 import { paymentStagesFromLabels } from "@/lib/projects/payment-stages";
 import { OfferWorkspaceCostLine } from "../offer/workspace-model";
@@ -62,7 +74,10 @@ export async function createProject(projectData: CreateProjectInput) {
     }
     customerId = existingCustomer.id;
   } else {
-    const existingCustomer = await findCustomerByContact(projectData.customerEmail!, projectData.customerPhone!);
+    const existingCustomer = await findCustomerByContact(
+      projectData.customerEmail!,
+      projectData.customerPhone!,
+    );
     if (existingCustomer) {
       customerId = existingCustomer.id;
     } else {
@@ -118,8 +133,11 @@ export async function createProject(projectData: CreateProjectInput) {
       customerEmail: project.customer.email,
       customerPhone: project.customer.phone,
     });
-    await triggerNotification(project.siteManagerId ? [project.siteManagerId] : [], notificationPayload);
-  })
+    await triggerNotification(
+      project.siteManagerId ? [project.siteManagerId] : [],
+      notificationPayload,
+    );
+  });
 
   return project.id;
 }
@@ -161,15 +179,21 @@ export interface CreateProjectWithLeadInput {
   confirmDateBlockers?: boolean;
 }
 
-function isFlatExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData): extraction is ProjectExtractionData {
-  return "legalAdministrationSiteAddress" in extraction || "commercialsAndClaimsContractPrice" in extraction;
+function isFlatExtraction(
+  extraction: ProjectRequirementsPayload | ProjectExtractionData,
+): extraction is ProjectExtractionData {
+  return (
+    "legalAdministrationSiteAddress" in extraction ||
+    "commercialsAndClaimsTotalContractSum" in extraction
+  );
 }
 
-function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExtractionData,
+function normalizeExtraction(
+  extraction: ProjectRequirementsPayload | ProjectExtractionData,
   sourceDocuments: {
     tender: ProjectSourceDocumentReference;
     contract: ProjectSourceDocumentReference;
-  }
+  },
 ): ProjectRequirementsPayload {
   if (!isFlatExtraction(extraction)) {
     return extraction;
@@ -197,13 +221,13 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
       },
       commercialsAndClaims: {
         totalContractSum: extraction.commercialsAndClaimsTotalContractSum,
-        tenderTotalPrice: extraction.commercialsAndClaimsTenderTotalPrice,
-        contractPrice: extraction.commercialsAndClaimsContractPrice,
         gstIncluded: extraction.commercialsAndClaimsGstIncluded,
         gstAmount: extraction.commercialsAndClaimsGstAmount,
         depositValue: extraction.commercialsAndClaimsDepositValue,
-        claimStageSlabPercentage: extraction.commercialsAndClaimsClaimStageSlabPercentage,
-        claimStageSlabDollarValue: extraction.commercialsAndClaimsClaimStageSlabDollarValue,
+        claimStageSlabPercentage:
+          extraction.commercialsAndClaimsClaimStageSlabPercentage,
+        claimStageSlabDollarValue:
+          extraction.commercialsAndClaimsClaimStageSlabDollarValue,
         variationAdminFee: extraction.commercialsAndClaimsVariationAdminFee,
         latePenaltyRate: extraction.commercialsAndClaimsLatePenaltyRate,
         paymentStages: paymentStagesFromLabels(
@@ -213,7 +237,8 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
       },
       subStructureAndGround: {
         concreteSlabClass: extraction.subStructureAndGroundConcreteSlabClass,
-        concreteStrengthMpa: extraction.subStructureAndGroundConcreteStrengthMpa,
+        concreteStrengthMpa:
+          extraction.subStructureAndGroundConcreteStrengthMpa,
         vapourBarrier: extraction.subStructureAndGroundVapourBarrier,
         termiteSystem: extraction.subStructureAndGroundTermiteSystem,
         sewerConnection: extraction.subStructureAndGroundSewerConnection,
@@ -224,13 +249,15 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
       },
       utilityInfrastructure: {
         electricalPhase: extraction.utilityInfrastructureElectricalPhase,
-        communicationConduit: extraction.utilityInfrastructureCommunicationConduit,
+        communicationConduit:
+          extraction.utilityInfrastructureCommunicationConduit,
         gasConnection: extraction.utilityInfrastructureGasConnection,
         fridgeWaterPoint: extraction.utilityInfrastructureFridgeWaterPoint,
         smartLockBrand: extraction.utilityInfrastructureSmartLockBrand,
       },
       wetAreaCompliance: {
-        waterproofingStandard: extraction.wetAreaComplianceWaterproofingStandard,
+        waterproofingStandard:
+          extraction.wetAreaComplianceWaterproofingStandard,
         showerScreenType: extraction.wetAreaComplianceShowerScreenType,
         tiledNicheCount: extraction.wetAreaComplianceTiledNicheCount,
         showerCount: extraction.wetAreaComplianceShowerCount,
@@ -273,6 +300,10 @@ function normalizeExtraction(extraction: ProjectRequirementsPayload | ProjectExt
  *
  * This is the preferred project creation workflow as it guarantees data
  * consistency between leads, customers, projects, milestones, and activity logs.
+ *
+ * Authorizes nobody: the caller must already have checked that the signed-in
+ * user may open `leadId`. The browser reaches it only through
+ * `createProjectWithLeadAction` in lib/actions/projects.ts, which does.
  *
  * The entire creation process is executed inside a database transaction and
  * performs the following operations:
@@ -328,9 +359,9 @@ export async function createProjectWithLead({
   customerName,
   customerEmail,
   customerPhone,
-  customerAddress, 
-  parties, 
-  extraction, 
+  customerAddress,
+  parties,
+  extraction,
   sourceDocuments,
   costLines,
   confirmDateBlockers = false,
@@ -340,7 +371,12 @@ export async function createProjectWithLead({
       where: { id: leadId },
       include: {
         project: true,
-      }
+        // Sales notes reach the inference prompt through here when the Notes
+        // composer has cleared the lead's own columns, which it does on every
+        // save. Without them the prompt says "No notes available." and the
+        // project is inferred from the contact details alone.
+        history: LEAD_NOTES_HISTORY_INCLUDE,
+      },
     });
 
     if (!lead) {
@@ -353,111 +389,117 @@ export async function createProjectWithLead({
 
     const inferredSpecs = extraction
       ? null
-      : await handleProjectSpecsGeneration(createLeadProjectInferencePrompt(lead));
+      : await handleProjectSpecsGeneration(
+          createLeadProjectInferencePrompt(lead),
+        );
 
-    const extractedSummary = extraction && typeof extraction === "object"
-      ? (extraction as { summary?: string }).summary ?? ""
-      : "";
-    const extractedProjectType = extraction && typeof extraction === "object"
-      ? (extraction as { projectType?: string }).projectType ?? "Unknown"
-      : "Unknown";
-    const projectDescription = extractedSummary || inferredSpecs?.projectDescription || "";
-    const projectType = extractedProjectType || (inferredSpecs?.projectType ?? "Unknown");
-    const normalizedExtraction = extraction ? normalizeExtraction(extraction, sourceDocuments) : null;
+    const extractedSummary =
+      extraction && typeof extraction === "object"
+        ? ((extraction as { summary?: string }).summary ?? "")
+        : "";
+    const extractedProjectType =
+      extraction && typeof extraction === "object"
+        ? ((extraction as { projectType?: string }).projectType ?? "Unknown")
+        : "Unknown";
+    const projectDescription =
+      extractedSummary || inferredSpecs?.projectDescription || "";
+    const projectType =
+      extractedProjectType || (inferredSpecs?.projectType ?? "Unknown");
+    const normalizedExtraction = extraction
+      ? normalizeExtraction(extraction, sourceDocuments)
+      : null;
     const projectBudget = extraction
-      ? (isFlatExtraction(extraction)
-        ? extraction.commercialsAndClaimsContractPrice ?? extraction.commercialsAndClaimsTotalContractSum ?? extraction.commercialsAndClaimsTenderTotalPrice ?? 0
-        : resolveProjectBudget(extraction))
-      : inferredSpecs?.projectBudget ?? 0;
+      ? isFlatExtraction(extraction)
+        ? (extraction.commercialsAndClaimsTotalContractSum ?? 0)
+        : resolveProjectBudget(extraction)
+      : (inferredSpecs?.projectBudget ?? 0);
     const projectRequirements = normalizedExtraction
       ? normalizedExtraction
       : buildProjectRequirementsPayload(
-        {
-          projectName,
-          projectType: inferredSpecs?.projectType ?? "",
-          summary: inferredSpecs?.projectDescription ?? "",
-          legalAdministration: {
-            siteAddress: address,
-            ownerContacts: {
-              names: [lead.name],
-              emails: lead.email ? [lead.email] : [],
-              phones: lead.phone ? [lead.phone] : [],
+          {
+            projectName,
+            projectType: inferredSpecs?.projectType ?? "",
+            summary: inferredSpecs?.projectDescription ?? "",
+            legalAdministration: {
+              siteAddress: address,
+              ownerContacts: {
+                names: [lead.name],
+                emails: lead.email ? [lead.email] : [],
+                phones: lead.phone ? [lead.phone] : [],
+              },
+              commencementTrigger: "",
+              signedDate: "",
+              pcaInspector: "",
+              hbcfInsuranceNumber: null,
+              hbcfInsuranceDocument: null,
             },
-            commencementTrigger: "",
-            signedDate: "",
-            pcaInspector: "",
-            hbcfInsuranceNumber: null,
-            hbcfInsuranceDocument: null,
+            commercialsAndClaims: {
+              totalContractSum: inferredSpecs?.projectBudget ?? 0,
+              gstIncluded: null,
+              gstAmount: null,
+              depositValue: null,
+              claimStageSlabPercentage: null,
+              claimStageSlabDollarValue: null,
+              variationAdminFee: null,
+              latePenaltyRate: null,
+              paymentStages: [],
+            },
+            subStructureAndGround: {
+              concreteSlabClass: "",
+              concreteStrengthMpa: null,
+              vapourBarrier: "",
+              termiteSystem: "",
+              sewerConnection: "",
+            },
+            inclusionsAndExclusions: {
+              inclusions: [],
+              exclusions: [],
+            },
+            utilityInfrastructure: {
+              electricalPhase: "",
+              communicationConduit: "",
+              gasConnection: "",
+              fridgeWaterPoint: "",
+              smartLockBrand: "",
+            },
+            wetAreaCompliance: {
+              waterproofingStandard: "",
+              showerScreenType: "",
+              tiledNicheCount: null,
+              showerCount: null,
+              floorToCeilingTiles: "",
+              floorWasteType: "",
+            },
+            safetyAndSiteLogistics: {
+              roofGuardrails: "",
+              sedimentControl: "",
+              scaffoldingSafety: "",
+              tradeWaste: "",
+              finalCleanStatus: "",
+            },
+            conflicts: [],
+            automationTriggers: {
+              orderReminders: true,
+              rainDelayCalculations: true,
+              noticeCountdowns: true,
+            },
           },
-          commercialsAndClaims: {
-            totalContractSum: inferredSpecs?.projectBudget ?? 0,
-            tenderTotalPrice: inferredSpecs?.projectBudget ?? 0,
-            contractPrice: inferredSpecs?.projectBudget ?? 0,
-            gstIncluded: null,
-            gstAmount: null,
-            depositValue: null,
-            claimStageSlabPercentage: null,
-            claimStageSlabDollarValue: null,
-            variationAdminFee: null,
-            latePenaltyRate: null,
-            paymentStages: [],
+          {
+            tender: {
+              fileId: "",
+              fileName: "",
+              url: "",
+              kind: "tender",
+            },
+            contract: {
+              fileId: "",
+              fileName: "",
+              url: "",
+              kind: "contract",
+            },
           },
-          subStructureAndGround: {
-            concreteSlabClass: "",
-            concreteStrengthMpa: null,
-            vapourBarrier: "",
-            termiteSystem: "",
-            sewerConnection: "",
-          },
-          inclusionsAndExclusions: {
-            inclusions: [],
-            exclusions: [],
-          },
-          utilityInfrastructure: {
-            electricalPhase: "",
-            communicationConduit: "",
-            gasConnection: "",
-            fridgeWaterPoint: "",
-            smartLockBrand: "",
-          },
-          wetAreaCompliance: {
-            waterproofingStandard: "",
-            showerScreenType: "",
-            tiledNicheCount: null,
-            showerCount: null,
-            floorToCeilingTiles: "",
-            floorWasteType: "",
-          },
-          safetyAndSiteLogistics: {
-            roofGuardrails: "",
-            sedimentControl: "",
-            scaffoldingSafety: "",
-            tradeWaste: "",
-            finalCleanStatus: "",
-          },
-          conflicts: [],
-          automationTriggers: {
-            orderReminders: true,
-            rainDelayCalculations: true,
-            noticeCountdowns: true,
-          },
-        },
-        {
-          tender: {
-            fileId: "",
-            fileName: "",
-            url: "",
-            kind: "tender",
-          },
-          contract: {
-            fileId: "",
-            fileName: "",
-            url: "",
-            kind: "contract",
-          },
-        },
-        [],
-      );
+          [],
+        );
 
     // ── Phase 2: normalize the signed date and run the readiness gate ──
     // The signed date is a free-text field from OCR extraction, so normalize
@@ -465,11 +507,15 @@ export async function createProjectWithLead({
     // run `collectProjectDateBlockers` against the start date to catch
     // impossible pairs (start before signed) and advisory gaps (missing
     // PCA, unparseable signed date) before the project becomes Active.
-    const requirementsWithSignedDate = projectRequirements as ProjectRequirementsPayload & {
-      legalAdministration: { signedDate: string | null };
-    };
-    const rawSignedDate = requirementsWithSignedDate.legalAdministration?.signedDate ?? null;
-    const normalizedSignedDate = rawSignedDate ? normalizeDateString(rawSignedDate) : null;
+    const requirementsWithSignedDate =
+      projectRequirements as ProjectRequirementsPayload & {
+        legalAdministration: { signedDate: string | null };
+      };
+    const rawSignedDate =
+      requirementsWithSignedDate.legalAdministration?.signedDate ?? null;
+    const normalizedSignedDate = rawSignedDate
+      ? normalizeDateString(rawSignedDate)
+      : null;
     // Write the canonical value back so the header and Overview read one
     // consistent value. If parsing failed, keep the raw string so the header
     // can render it with the "unverified" marker rather than silently
@@ -482,10 +528,14 @@ export async function createProjectWithLead({
     }
 
     const dateBlockers = collectProjectDateBlockers({
-      signedDate: requirementsWithSignedDate.legalAdministration?.signedDate ?? null,
+      signedDate:
+        requirementsWithSignedDate.legalAdministration?.signedDate ?? null,
       startDate,
-      hbcfInsuranceNumber: requirementsWithSignedDate.legalAdministration?.hbcfInsuranceNumber ?? null,
-      pcaInspector: requirementsWithSignedDate.legalAdministration?.pcaInspector ?? null,
+      hbcfInsuranceNumber:
+        requirementsWithSignedDate.legalAdministration?.hbcfInsuranceNumber ??
+        null,
+      pcaInspector:
+        requirementsWithSignedDate.legalAdministration?.pcaInspector ?? null,
       status: "ACTIVE",
     });
     const { blocks, warns } = partitionBlockers(dateBlockers);
@@ -497,17 +547,19 @@ export async function createProjectWithLead({
     // Advisory warns (missing PCA, unparseable signed date) create the
     // project as NEEDS_ATTENTION instead of relying on the Prisma
     // @default(ACTIVE), so the gap is visible rather than silent.
-    const shouldFlagNeedsAttention =
-      warns.length > 0 && !confirmDateBlockers;
+    const shouldFlagNeedsAttention = warns.length > 0 && !confirmDateBlockers;
 
     const newProjectId = await prisma.$transaction(async (tx) => {
       // Create customer first, then reference by customerId to satisfy Prisma types
-      const customer = await createCustomerForProject({
-        name: customerName?.trim() || lead.name,
-        email: customerEmail?.trim() || lead.email,
-        phone: customerPhone?.trim() || lead.phone,
-        address: customerAddress ?? null,
-      }, tx);
+      const customer = await createCustomerForProject(
+        {
+          name: customerName?.trim() || lead.name,
+          email: customerEmail?.trim() || lead.email,
+          phone: customerPhone?.trim() || lead.phone,
+          address: customerAddress ?? null,
+        },
+        tx,
+      );
 
       const normalisedStartDate = new Date(startDate);
       const normalisedEstimatedEndDate = new Date(estimatedEndDate);
@@ -525,14 +577,22 @@ export async function createProjectWithLead({
           startDate: normalisedStartDate,
           estimatedEndDate: normalisedEstimatedEndDate,
           siteManagerId: siteManagerId,
-          requirements: requirementsWithSignedDate as unknown as Prisma.InputJsonValue,
+          requirements:
+            requirementsWithSignedDate as unknown as Prisma.InputJsonValue,
           ...(parties ? { parties } : {}),
-          ...(shouldFlagNeedsAttention ? { status: "NEEDS_ATTENTION" as const } : {}),
+          ...(shouldFlagNeedsAttention
+            ? { status: "NEEDS_ATTENTION" as const }
+            : {}),
           customerId: customer.id,
-        }
+        },
       });
 
-      await createMilestonesFromTemplateForProject(newProject.id, normalisedStartDate, costLines, tx);
+      await createMilestonesFromTemplateForProject(
+        newProject.id,
+        normalisedStartDate,
+        costLines,
+        tx,
+      );
 
       const activityLogEntry = createActivityLogEntry("projectCreated", {
         projectType: projectType,
@@ -541,26 +601,22 @@ export async function createProjectWithLead({
         projectId: newProject.id,
         projectName: newProject.name,
         location: newProject.location,
-        customerName: customer.name
+        customerName: customer.name,
       });
       await logAction(activityLogEntry, tx);
+      // Only this lead's files. The tender and contract are among them: the
+      // wizard uploads both with this leadId and the offer handoff creates
+      // their rows on the lead. Matching sourceDocuments URLs as well, which
+      // the wizard's action takes from the browser, moved whatever File row
+      // had that URL, including another project's signed contract.
       await tx.file.updateMany({
         where: {
-          OR: [
-            {
-              url: {
-                in: [sourceDocuments.tender.url, sourceDocuments.contract.url]
-              }
-            },
-            {
-              leadId: lead.id
-            }
-          ]
+          leadId: lead.id,
         },
         data: {
-          projectId: newProject.id
-        }
-      })
+          projectId: newProject.id,
+        },
+      });
 
       return newProject.id;
     });
@@ -590,8 +646,11 @@ export async function createProjectWithLead({
         customerEmail: newProjectDetail.customer.email,
         customerPhone: newProjectDetail.customer.phone,
       });
-      await triggerNotification(newProjectDetail.siteManagerId ? [newProjectDetail.siteManagerId] : [], notificationPayload);
-    })
+      await triggerNotification(
+        newProjectDetail.siteManagerId ? [newProjectDetail.siteManagerId] : [],
+        notificationPayload,
+      );
+    });
 
     return newProjectDetail;
   } catch (error) {
@@ -604,14 +663,19 @@ export async function createProjectWithLead({
         case "LEAD_NOT_FOUND":
           throw new Error(`Lead with ID ${leadId} not found.`);
         case "PROJECT_ALREADY_EXISTS_FOR_LEAD":
-          throw new Error(`A project has already been created for lead ID ${leadId}.`);
+          throw new Error(
+            `A project has already been created for lead ID ${leadId}.`,
+          );
         case "PROJECT_DETAIL_NOT_FOUND":
-          throw new Error(`Project was created but could not be retrieved for lead ID ${leadId}.`);
+          throw new Error(
+            `Project was created but could not be retrieved for lead ID ${leadId}.`,
+          );
         default:
-          throw new Error(`An unexpected error occurred while creating the project: ${error.message}`);
+          throw new Error(
+            `An unexpected error occurred while creating the project: ${error.message}`,
+          );
       }
-    }
-    else {
+    } else {
       throw new Error("An unknown error occurred while creating the project.");
     }
   }

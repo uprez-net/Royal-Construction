@@ -17,12 +17,22 @@ import {
 import { usePathname } from "next/navigation";
 import { useAppSelector } from "@/lib/store/hooks";
 import { isUUID } from "@/utils/parser";
-import { getScreenTitle } from "@/utils/uiHelper";
+import {
+  getScreenTitle,
+  getShellSectionSlug,
+  getShellTrail,
+} from "@/utils/shell-nav";
 import Image from "next/image";
 import { Notifications } from "./notifications";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+type AgentSessionTitleDetail = {
+  path: string;
+  sessionId: string;
+  title: string;
+};
 
 export function AppShell({
   isAdmin,
@@ -42,14 +52,41 @@ export function AppShell({
   const [queryClient] = useState(() => new QueryClient());
   const [time, setTime] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [agentSessionTitle, setAgentSessionTitle] =
+    useState<AgentSessionTitleDetail | null>(null);
   const activeProject = useAppSelector((state) => state.projects.activeProject);
-  const activeTradie = useAppSelector((state) => state.tradieManagement.selectedTradieDetails);
+  const activeTradie = useAppSelector(
+    (state) => state.tradieManagement.selectedTradieDetails,
+  );
   const pathName = usePathname();
   const lastSegment = pathName.split("/").filter(Boolean).pop() ?? "";
-  const activeSlug = isUUID(lastSegment)
-    ? "Loading..."
-    : (pathName.split("/").pop() ?? "dashboard");
-  const title = activeProject ? activeProject.name : activeTradie ? activeTradie.name : getScreenTitle(activeSlug);
+  const sectionSlug = getShellSectionSlug(pathName);
+  const titleSlug = isUUID(lastSegment) ? "Loading..." : lastSegment;
+  const isAgentSessionRoute = pathName.startsWith("/agent/");
+  const title = activeProject
+    ? activeProject.name
+    : activeTradie
+      ? activeTradie.name
+      : isAgentSessionRoute && agentSessionTitle?.path === pathName
+        ? agentSessionTitle.title
+        : isAgentSessionRoute
+          ? "Conversation"
+          : getScreenTitle(titleSlug);
+
+  useEffect(() => {
+    const handleAgentSessionTitle = (event: Event) => {
+      const detail = (event as CustomEvent<AgentSessionTitleDetail>).detail;
+      if (!detail?.path || !detail.title) return;
+      setAgentSessionTitle(detail);
+    };
+
+    window.addEventListener("agent-session-title", handleAgentSessionTitle);
+    return () =>
+      window.removeEventListener(
+        "agent-session-title",
+        handleAgentSessionTitle,
+      );
+  }, []);
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -68,17 +105,16 @@ export function AppShell({
   }, []);
 
   const trail = useMemo(
-    () => breadcrumbs ?? ["Home", title],
-    [breadcrumbs, title],
+    () => breadcrumbs ?? getShellTrail(pathName, title),
+    [breadcrumbs, pathName, title],
   );
 
   return (
-    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-slate-900">
+    <div className="relative h-[calc(100dvh-var(--sandbox-banner-height,0))] overflow-hidden bg-[#F7F6F2] text-foreground">
       {/* Clean Light Background matching Email Theme */}
       <div className="flex h-full">
-        
         {/* ── Desktop Sidebar ── */}
-        <aside className="hidden w-16 shrink-0 border-r border-[#E2E8F0] bg-white text-slate-600 shadow-sm md:flex md:flex-col md:items-center md:py-4">
+        <aside className="hidden w-16 shrink-0 border-r border-border bg-white text-muted-foreground shadow-sm md:flex md:flex-col md:items-center md:py-4">
           <div className="mb-5 grid size-10 place-items-center rounded-2xl bg-[#F7F6F2]">
             <Image
               src="/favicon.ico"
@@ -87,25 +123,29 @@ export function AppShell({
               height={32}
             />
           </div>
-          <nav aria-label="Main" className="flex flex-1 flex-col items-center gap-1">
+          <nav
+            aria-label="Main"
+            className="flex flex-1 flex-col items-center gap-1"
+          >
             {navigationItems.map((item) => (
               <Link
                 key={item.slug}
                 href={`/${item.slug}`}
                 className={cn(
-                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-slate-100 hover:text-slate-900",
-                  item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]",
-                  item.checkAdmin && !isAdmin && "hidden"
+                  "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-muted hover:text-foreground",
+                  item.slug === sectionSlug &&
+                    "bg-royal-gold-light text-royal-gold-ink",
+                  item.checkAdmin && !isAdmin && "hidden",
                 )}
                 aria-label={item.label}
-                aria-current={item.slug === activeSlug ? "page" : undefined}
+                aria-current={item.slug === sectionSlug ? "page" : undefined}
               >
                 {item.icon}
                 {/* Duplicate of the Link's aria-label; hide it from the a11y
                     tree so the item is not announced twice. */}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-slate-100 shadow-xl group-hover:block"
+                  className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-xl group-hover:block"
                 >
                   {item.label}
                 </span>
@@ -114,17 +154,16 @@ export function AppShell({
           </nav>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {/* ── Mobile Sidebar Sheet ── */}
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
             <SheetContent
               side="left"
               showCloseButton={false}
-              className="w-80 border-r border-[#E2E8F0] bg-white p-0 text-slate-900"
+              className="w-80 border-r border-border bg-white p-0 text-foreground"
             >
               <div className="flex h-full flex-col">
-                <div className="flex items-start justify-between gap-4 border-b border-[#E2E8F0] px-4 py-4">
+                <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-4">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#F7F6F2]">
                       <Image
@@ -135,7 +174,7 @@ export function AppShell({
                       />
                     </div>
                     <div className="min-w-0">
-                      <SheetTitle className="font-heading truncate text-base font-semibold text-slate-900">
+                      <SheetTitle className="font-heading truncate text-base font-semibold text-foreground">
                         Royal Constructions
                       </SheetTitle>
                     </div>
@@ -145,7 +184,7 @@ export function AppShell({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="rounded-lg border border-[#E2E8F0] bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                      className="rounded-lg border border-border bg-muted text-muted-foreground hover:bg-border hover:text-foreground"
                       aria-label="Close navigation menu"
                     >
                       <X className="size-4" aria-hidden="true" />
@@ -163,20 +202,24 @@ export function AppShell({
                         onClick={() => setMobileNavOpen(false)}
                         href={`/${item.slug}`}
                         aria-current={
-                          item.slug === activeSlug ? "page" : undefined
+                          item.slug === sectionSlug ? "page" : undefined
                         }
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900",
-                          item.slug === activeSlug
-                            ? "bg-[#C6923A]/10 text-[#C6923A]"
-                            : "text-slate-600",
-                          item.checkAdmin && !isAdmin && "hidden"
+                          "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground",
+                          item.slug === sectionSlug
+                            ? "bg-royal-gold-light text-royal-gold-ink"
+                            : "text-muted-foreground",
+                          item.checkAdmin && !isAdmin && "hidden",
                         )}
                       >
-                        <span aria-hidden="true" className={cn(
-                          "grid size-9 place-items-center rounded-lg bg-slate-100 text-slate-500",
-                          item.slug === activeSlug && "bg-[#C6923A]/10 text-[#C6923A]"
-                        )}>
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
+                            item.slug === sectionSlug &&
+                              "bg-royal-gold-light text-royal-gold-ink",
+                          )}
+                        >
                           {item.icon}
                         </span>
                         <span>{item.label}</span>
@@ -186,17 +229,18 @@ export function AppShell({
                 </nav>
 
                 {!isSignedIn ? (
-                  <div className="border-t border-[#E2E8F0] px-4 py-4">
+                  <div className="border-t border-border px-4 py-4">
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        className="flex-1 rounded-lg border-[#E2E8F0] bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                        className="flex-1 rounded-lg border-border bg-white text-foreground hover:bg-muted hover:text-foreground"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
                       <Button
-                        className="flex-1 rounded-lg bg-[#C6923A] text-white hover:bg-[#C6923A]/90"
+                        variant="royal"
+                        className="flex-1 rounded-lg"
                         asChild
                       >
                         <Link href="/sign-up">Sign up</Link>
@@ -204,16 +248,17 @@ export function AppShell({
                     </div>
                   </div>
                 ) : (
-                  <div className="border-t border-[#E2E8F0] px-4 py-4">
+                  <div className="border-t border-border px-4 py-4">
                     <UserButton
                       showName={true}
                       appearance={{
                         elements: {
                           avatarBox: "size-9",
                           userButtonBox:
-                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-slate-900",
+                            "w-full! flex! flex-row-reverse!  gap-2 justify-end text-foreground",
                           userButtonTrigger: "w-full",
-                          userButtonOuterIdentifier: "text-base text-slate-900",
+                          userButtonOuterIdentifier:
+                            "text-base text-foreground",
                           userButtonAvatarBox: "w-8 h-8",
                           rootBox: "w-full shadow-xs",
                         },
@@ -231,33 +276,37 @@ export function AppShell({
           </Sheet>
 
           {/* ── Top Header ── */}
-          <header className="shrink-0 z-30 border-b border-[#E2E8F0] bg-white text-slate-900 shadow-sm backdrop-blur">
+          <header className="shrink-0 z-30 border-b border-border bg-white text-foreground shadow-sm backdrop-blur">
             <div className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex min-w-0 items-center gap-4">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-10 rounded-lg border border-[#E2E8F0] bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 md:hidden"
+                  className="size-10 rounded-lg border border-border bg-muted text-muted-foreground hover:bg-border hover:text-foreground md:hidden"
                   onClick={() => setMobileNavOpen(true)}
                   aria-label="Open navigation menu"
                 >
                   <Menu className="size-4" aria-hidden="true" />
                 </Button>
                 <div>
-                  <p className="font-heading text-xl font-semibold tracking-tight text-[#C6923A]">
+                  <p className="font-heading text-xl font-semibold tracking-tight text-royal-gold-ink">
                     Royal Constructions
                   </p>
-                  <div className="hidden items-center gap-2 text-xs text-slate-500 md:flex">
+                  <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
                     {trail.map((segment, index) => (
                       <div key={segment} className="flex items-center gap-2">
                         {index > 0 ? (
-                          <span className="text-slate-300" aria-hidden="true">
+                          <span
+                            className="text-muted-foreground/50"
+                            aria-hidden="true"
+                          >
                             /
                           </span>
                         ) : null}
                         <span
                           className={cn(
-                            index === trail.length - 1 && "font-medium text-slate-900",
+                            index === trail.length - 1 &&
+                              "font-medium text-foreground",
                           )}
                         >
                           {segment}
@@ -269,8 +318,8 @@ export function AppShell({
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="hidden text-right text-xs text-slate-500 md:block">
-                  <div className="font-medium text-slate-900">
+                <div className="hidden text-right text-xs text-muted-foreground md:block">
+                  <div className="font-medium text-foreground">
                     {time || "--:--:--"}
                   </div>
                   <div>AEST</div>
@@ -287,15 +336,12 @@ export function AppShell({
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
-                        className="rounded-lg border-[#E2E8F0] bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                        className="rounded-lg border-border bg-white text-foreground hover:bg-muted hover:text-foreground"
                         asChild
                       >
                         <Link href="/sign-in">Sign in</Link>
                       </Button>
-                      <Button
-                        className="rounded-lg bg-[#C6923A] text-white hover:bg-[#C6923A]/90"
-                        asChild
-                      >
+                      <Button variant="royal" className="rounded-lg" asChild>
                         <Link href="/sign-up">Sign up</Link>
                       </Button>
                     </div>
@@ -315,8 +361,10 @@ export function AppShell({
 
           <main
             className={cn(
-              "flex min-h-0 w-full flex-1 flex-col gap-6",
-              "overflow-y-auto",
+              "min-h-0 w-full flex-1 gap-6",
+              pathName.startsWith("/agent")
+                ? "grid h-0 grid-rows-[minmax(0,1fr)] overflow-hidden"
+                : "flex flex-col overflow-y-auto",
               "px-4 py-5 sm:px-6 lg:px-8 lg:py-6",
               "scrollbar-none",
               "[-ms-overflow-style:none]",

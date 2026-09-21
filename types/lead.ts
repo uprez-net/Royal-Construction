@@ -12,6 +12,10 @@ import type {
 } from "@prisma/client";
 import type { HistoryItem, Lead as UiLead, LeadStage } from "@/lib/leads/types";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import {
+  resolveFollowup,
+  type NextFollowupTask,
+} from "@/lib/leads/followup-resolution";
 
 export const stageMap: Record<PrismaLeadStage, LeadStage> = {
   NEW: "New",
@@ -47,14 +51,20 @@ export const stageToPrismaMap: Record<LeadStage, PrismaLeadStage> = {
   Disqualified: "DISQUALIFIED",
 };
 
-const historyTypeMap: Record<"SYSTEM" | "CALL" | "EMAIL" | "REFERRAL", HistoryItem["type"]> = {
+const historyTypeMap: Record<
+  "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL",
+  HistoryItem["type"]
+> = {
   SYSTEM: "system",
   CALL: "call",
   EMAIL: "email",
   REFERRAL: "referral",
 };
 
-export const historyTypeToPrisma: Record<HistoryItem["type"], PrismaHistoryType> = {
+export const historyTypeToPrisma: Record<
+  HistoryItem["type"],
+  PrismaHistoryType
+> = {
   system: "SYSTEM",
   call: "CALL",
   email: "EMAIL",
@@ -86,7 +96,9 @@ export function toTimeOnly(date: Date | null): string | null {
   return sydneyTimeOnly(date);
 }
 
-export function mapHistory(history: PrismaLeadHistory & { author: User | null }): HistoryItem {
+export function mapHistory(
+  history: PrismaLeadHistory & { author: User | null },
+): HistoryItem {
   return {
     date: toDateOnly(history.actionDate) ?? "",
     time: toTimeOnly(history.actionDate) ?? "",
@@ -109,12 +121,20 @@ export function mapLead(
     chatSessions: ChatSession[];
     assignedUser?: { id: string; name: string; email: string } | null;
     /**
-     * The lead's next open task, when the caller asked for it.
+     * The one task that decides this lead's follow-up date.
      *
-     * Optional so every existing caller keeps compiling; when it is absent the
-     * mapping falls back to the retired columns below.
+     * Required, and that is the point. It used to be optional "so every
+     * existing caller keeps compiling", and four of the six queries feeding
+     * this function duly never asked for it — `findLeadById`, `findLeadByEmail`
+     * and both create paths. `tasks` arrived as `undefined`, the guard below
+     * read falsy, and those callers ALWAYS got the retired column: the lead
+     * detail page, the PATCH response after every save, and the public booking
+     * route showed a stale date even for a lead with a live open task. The
+     * optionality is what let half a migration compile cleanly, so it is gone.
+     *
+     * Load it with `NEXT_FOLLOWUP_TASK`.
      */
-    tasks?: { dueDate: Date | null; dueTime: string | null }[];
+    tasks: NextFollowupTask[];
     noteAnnotations?: Array<{
       id: string;
       selectedText: string;
@@ -126,10 +146,18 @@ export function mapLead(
     }>;
     emails: LeadEmails[];
     files: File[];
-  }
+  },
 ): UiLead {
   const assignedUserFromRelation = lead.assignedUser ?? null;
-  const assignedUserFallback = lead.assigned ? { id: "", name: lead.assigned, email: "" } : null;
+  const assignedUserFallback = lead.assigned
+    ? { id: "", name: lead.assigned, email: "" }
+    : null;
+
+  const followup = resolveFollowup(
+    lead.tasks,
+    lead.followupDate,
+    lead.followupTime,
+  );
 
   return {
     id: lead.id,
@@ -152,6 +180,7 @@ export function mapLead(
     estimatedValueSource: lead.estimatedValueSource ?? null,
     probabilityOverride: lead.probabilityOverride ?? null,
     expectedCloseDate: lead.expectedCloseDate?.toISOString() ?? null,
+    estimatedStartDate: lead.estimatedStartDate?.toISOString() ?? null,
     type: lead.type.length > 0 ? lead.type.join(", ") : "Not Specified",
     notes: lead.notes ?? "",
     notesDoc: coerceLeadNotesDocument(lead.notesDoc, lead.notes ?? ""),
@@ -167,28 +196,11 @@ export function mapLead(
     meetingDate: toDateOnly(lead.meetingDate),
     meetingTime: lead.meetingTime ?? null,
     meetingMode: lead.meetingMode ?? null,
-    // The next open task first, the retired column only as a fallback.
-    //
-    // Lead.followupDate is no longer written by the thing that books work: the
-    // Set date dialog creates a LeadTask and sends updateLead nothing but a
-    // history entry. The table's Follow-up cell reads these two fields, so it
-    // stayed blank however many times someone booked a call — which read as
-    // "that did not save", so they booked it again, and each attempt added
-    // another task to the count. Only Add Lead still writes the column, which
-    // is why it is populated for some leads and never for others.
-    //
-    // The fallback keeps legacy rows that carry a date but no task rendering.
-    // Presence of a task decides, not the date on it. An open task with no due
-    // date is real work deliberately left unscheduled; `?? lead.followupDate`
-    // would have skipped past its null and shown a stale legacy date instead,
-    // which is worse than showing nothing.
-    followupDate: toDateOnly(
-      lead.tasks && lead.tasks.length > 0 ? lead.tasks[0].dueDate : lead.followupDate,
-    ),
-    followupTime:
-      lead.tasks && lead.tasks.length > 0
-        ? lead.tasks[0].dueTime
-        : (lead.followupTime ?? null),
+    // Open task -> its date. Completed task -> nothing upcoming. No task ever
+    // -> the retired column. See resolveFollowup for why the middle case is
+    // the whole bug: it used to fall through to a column nothing ever clears.
+    followupDate: toDateOnly(followup.date),
+    followupTime: followup.time,
     followupNotes: lead.followupNotes ?? "",
     followupReminderSentAt: lead.followupReminderSentAt?.toISOString() ?? null,
     meetingReminderSentAt: lead.meetingReminderSentAt?.toISOString() ?? null,
@@ -208,7 +220,7 @@ export function mapLead(
       name: file.filename,
       size: file.filesize,
       url: file.url,
-    }))
+    })),
   };
 }
 

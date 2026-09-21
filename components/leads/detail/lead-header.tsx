@@ -26,11 +26,11 @@ import {
   type BudgetBracket,
 } from "@/lib/leads/lead-helpers";
 import {
-  bookConsultationHref,
   leadActions,
   offerWorkspaceHref,
   type LeadActionState,
 } from "@/lib/leads/lead-actions";
+import { bookConsultationUrlForLead } from "@/lib/actions/leads";
 import type { Lead, LeadStage } from "@/lib/leads/types";
 import { compactCurrency, dateFormat } from "@/utils/formatters";
 import { StageBadgeSelect } from "./select-stage-badge";
@@ -347,9 +347,12 @@ export function LeadHeader({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() =>
-                  router.push(bookConsultationHref(lead, user?.fullName))
-                }
+                onClick={() => {
+                  void bookConsultationUrlForLead(lead, user?.fullName).then(
+                    (href) => router.push(href),
+                    () => toast.error("Could not open the booking link."),
+                  );
+                }}
                 disabled={actions.bookMeeting.disabled}
                 title={actions.bookMeeting.disabledReason ?? undefined}
                 className="h-9 rounded-lg px-3.5 text-sm font-medium"

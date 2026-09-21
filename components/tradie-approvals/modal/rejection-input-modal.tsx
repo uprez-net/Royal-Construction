@@ -23,13 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { approveRequests } from "@/lib/store/slices/tradieApprovalSlice";
 
-import {
-  AlertTriangle,
-  Hammer,
-  Loader2,
-  User,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Hammer, Loader2, User, X } from "lucide-react";
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";

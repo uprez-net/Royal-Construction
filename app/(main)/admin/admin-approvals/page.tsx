@@ -31,7 +31,7 @@ async function AdminApprovalsRender() {
     fetchTradieApprovals({
       page: 1,
       pageSize: 10,
-    })
+    }),
   ]);
 
   return (
@@ -40,7 +40,7 @@ async function AdminApprovalsRender() {
 }
 
 export default function AdminApprovalsPage() {
-  return(
+  return (
     <Suspense fallback={<ApprovalDashboardSkeleton />}>
       <AdminApprovalsRender />
     </Suspense>

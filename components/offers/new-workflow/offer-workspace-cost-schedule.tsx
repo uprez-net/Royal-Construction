@@ -41,8 +41,14 @@ import {
 } from "./offer-workspace-card-heading";
 import { numberInputValue } from "./offer-workspace-format";
 import { WorkbookImportControl } from "./offer-workspace-import";
+import { FIELD_LABEL_CLASS } from "./offer-workspace-fields";
 
 type CostSchedulePanelProps = {
+  // Which rows have their building-sequence editor open. Owned by the screen so
+  // it survives a trip to another step: only the active step is mounted now, so
+  // local state here was wiped every time the estimator went to Pricing.
+  readonly expandedLineIds: ReadonlySet<string>;
+  readonly onToggleLineExpanded: (lineId: string) => void;
   readonly importResult: OfferWorkbookImportResult | null;
   readonly lines: readonly OfferWorkspaceCostLine[];
   readonly onImported: (result: OfferWorkbookImportResult) => void;
@@ -59,12 +65,12 @@ const TASK_DATALIST_ID = "offer-calculation-task-options";
 const SEQUENCE_STEP_DATALIST_ID = "offer-calculation-sequence-step-options";
 
 const gridCellControlClass =
-  "h-9 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40 focus-visible:ring-inset";
+  "h-9 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset";
 
 // Auto-fits to content (base Textarea sets `field-sizing-content`): one line when
 // short, grows only when the wording is long. No manual resize handle.
 const gridAutoTextCellControlClass =
-  "min-h-9 w-full resize-none rounded-none border-0 bg-transparent px-3 py-2 text-sm leading-5 shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-royal-gold/40 focus-visible:ring-inset";
+  "min-h-9 w-full resize-none rounded-none border-0 bg-transparent px-3 py-2 text-sm leading-5 shadow-none focus-visible:border-royal-gold focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset";
 
 function focusEditableCell(element: HTMLElement) {
   element.focus();
@@ -98,6 +104,8 @@ function handleGridCellKeyDown(event: KeyboardEvent<HTMLElement>) {
 }
 
 export function CostSchedulePanel({
+  expandedLineIds,
+  onToggleLineExpanded,
   importResult,
   lines,
   onImported,
@@ -111,21 +119,6 @@ export function CostSchedulePanel({
   const importedCount = lines.filter(
     (line) => line.sourceReference !== undefined,
   ).length;
-  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-
-  const toggleExpanded = (lineId: string) => {
-    setExpandedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(lineId)) {
-        next.delete(lineId);
-      } else {
-        next.add(lineId);
-      }
-      return next;
-    });
-  };
 
   return (
     <Card
@@ -159,7 +152,7 @@ export function CostSchedulePanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 pt-4">
+      <CardContent className="grid gap-3">
         <WorkbookImportControl
           importResult={importResult}
           onImported={onImported}
@@ -174,7 +167,7 @@ export function CostSchedulePanel({
           {importedCount > 0 ? (
             <OfferSummaryBadge label="imported" value={importedCount} />
           ) : null}
-          <span className="rounded-md border border-border bg-background px-2 py-1 lg:hidden">
+          <span className="rounded-md border border-border bg-background px-2 py-1 @6xl/pane:hidden">
             Scroll sideways to review all columns
           </span>
         </div>
@@ -286,7 +279,7 @@ export function CostSchedulePanel({
                 const rowNumber = index + 1;
                 const rowLabelId = `cost-row-${line.id}`;
                 const rowLabel = line.itemName || `Row ${rowNumber}`;
-                const isExpanded = expandedIds.has(line.id);
+                const isExpanded = expandedLineIds.has(line.id);
                 const detailRowId = `cost-sequence-detail-${line.id}`;
                 const stepCount = line.buildingSequenceTasks.length;
 
@@ -299,8 +292,8 @@ export function CostSchedulePanel({
                             aria-controls={detailRowId}
                             aria-expanded={isExpanded}
                             aria-label={`${isExpanded ? "Collapse" : "Expand"} building sequence for ${rowLabel}`}
-                            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
-                            onClick={() => toggleExpanded(line.id)}
+                            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-royal-gold-light/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                            onClick={() => onToggleLineExpanded(line.id)}
                             type="button"
                           >
                             {isExpanded ? (
@@ -348,12 +341,12 @@ export function CostSchedulePanel({
                           aria-labelledby={`${rowLabelId} cost-sequence-column`}
                           className={cn(
                             "flex h-9 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-royal-gold/40",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
                             stepCount > 0
                               ? "text-foreground hover:bg-royal-gold-light/30"
                               : "text-muted-foreground/80 hover:bg-muted/60",
                           )}
-                          onClick={() => toggleExpanded(line.id)}
+                          onClick={() => onToggleLineExpanded(line.id)}
                           type="button"
                         >
                           {stepCount > 0 ? (
@@ -432,7 +425,7 @@ export function CostSchedulePanel({
                             aria-labelledby={`${rowLabelId} cost-included-column`}
                             aria-keyshortcuts="Enter Shift+Enter"
                             checked={line.includedInContract}
-                            className="size-5 rounded-[5px] focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+                            className="size-5 rounded-[5px] focus-visible:ring-2 focus-visible:ring-ring/50"
                             data-cost-grid-cell=""
                             onKeyDown={handleGridCellKeyDown}
                             onCheckedChange={(checked) =>
@@ -525,7 +518,7 @@ function SequenceStepEditor({
   return (
     <div className="grid gap-3 px-4 py-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className={FIELD_LABEL_CLASS}>
           Building sequence · {count} {count === 1 ? "step" : "steps"}
         </p>
         <p className="text-xs text-muted-foreground/80">

@@ -37,7 +37,10 @@ test("every task lands in exactly one bucket", () => {
     const inOne = Number(isDue(t)) + Number(isUpcoming(t));
     assert.equal(inOne, 1, `${t.dueDate} landed in ${inOne} buckets`);
   }
-  assert.equal(tasks.filter(isDue).length + tasks.filter(isUpcoming).length, tasks.length);
+  assert.equal(
+    tasks.filter(isDue).length + tasks.filter(isUpcoming).length,
+    tasks.length,
+  );
 });
 
 test("meetings and other work are split by type, not by stage", () => {
@@ -74,6 +77,9 @@ test("the pending badge counts the same rows the list renders", () => {
   const nonMeeting = listed.filter((t) => t.type !== "MEETING");
   assert.equal(listed.length, 4, "the list shows every type");
   assert.equal(nonMeeting.length, 2, "the breakdown excludes meetings");
-  assert.notEqual(listed.length, nonMeeting.length,
-    "these are different numbers, which is why the badge must use the first");
+  assert.notEqual(
+    listed.length,
+    nonMeeting.length,
+    "these are different numbers, which is why the badge must use the first",
+  );
 });

@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import {
@@ -76,7 +82,9 @@ function CompletedItem({
         className="size-3.5 shrink-0 text-success-ink"
         aria-hidden="true"
       />
-      <span className="text-sm font-medium text-foreground">{task.lead.name}</span>
+      <span className="text-sm font-medium text-foreground">
+        {task.lead.name}
+      </span>
       <Badge variant="outline">{typeLabel}</Badge>
       {task.completedAt && (
         <span className="text-xs text-muted-foreground">
@@ -358,7 +366,10 @@ function FollowupItem({
                   await completeTask(task.id);
                   onDone(task.id);
                 } catch {
-                  showToast("Could not close the task. Please try again.", "error");
+                  showToast(
+                    "Could not close the task. Please try again.",
+                    "error",
+                  );
                 } finally {
                   setClosing(false);
                 }
@@ -456,7 +467,10 @@ function FollowupsView({
         // this whole change exists to stop telling.
         if (err instanceof DOMException && err.name === "AbortError") return;
         setTasksError(true);
-        toastRef.current("Could not load tasks. Refresh to try again.", "error");
+        toastRef.current(
+          "Could not load tasks. Refresh to try again.",
+          "error",
+        );
       })
       .finally(() => setTasksLoading(false));
     return () => controller.abort();
@@ -537,8 +551,14 @@ function FollowupsView({
   const todayKey = getAustralianDate().toDateString();
   const today = useMemo(() => new Date(todayKey), [todayKey]);
 
-  const meetings = useMemo(() => tasks.filter((t) => t.type === "MEETING"), [tasks]);
-  const nonMeetings = useMemo(() => tasks.filter((t) => t.type !== "MEETING"), [tasks]);
+  const meetings = useMemo(
+    () => tasks.filter((t) => t.type === "MEETING"),
+    [tasks],
+  );
+  const nonMeetings = useMemo(
+    () => tasks.filter((t) => t.type !== "MEETING"),
+    [tasks],
+  );
 
   // Undated tasks count as pending. They are work nobody has scheduled, and
   // hiding them is how 5 production leads ended up parked while the tab said
@@ -554,7 +574,9 @@ function FollowupsView({
   const dueLaterTasks = useMemo(
     () =>
       tasks
-        .filter((t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today))
+        .filter(
+          (t) => t.dueDate !== null && isAfter(parseISO(t.dueDate), today),
+        )
         .sort(
           (a, b) =>
             parseISO(a.dueDate!).getTime() - parseISO(b.dueDate!).getTime(),
@@ -680,7 +702,11 @@ function FollowupsView({
           ) : listIsEmpty ? (
             <div className="fu-empty">
               <div className="fu-empty-icon">
-                {tasksError ? <AlertCircle size={28} /> : <Calendar size={28} />}
+                {tasksError ? (
+                  <AlertCircle size={28} />
+                ) : (
+                  <Calendar size={28} />
+                )}
               </div>
               {/* A failed request must never render as "nothing due". That
                   sentence is what let 5 production leads sit parked with

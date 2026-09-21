@@ -136,7 +136,7 @@ export function FollowupModal({
         <div className="flex flex-wrap gap-2 pt-2">
           <button
             type="button"
-            className={`inline-flex items-center justify-center gap-2 rounded-full bg-royal-gold px-4 py-2 text-xs font-medium text-primary-foreground transition hover:bg-royal-gold-dark ${date ? "" : "cursor-not-allowed opacity-50"}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-full bg-royal-gold-ink px-4 py-2 text-xs font-medium text-white transition hover:bg-royal-gold-ink-hover ${date ? "" : "cursor-not-allowed opacity-50"}`}
             onClick={handleSave}
             disabled={!date || saving}
             aria-describedby={!date ? dateHelperId : undefined}

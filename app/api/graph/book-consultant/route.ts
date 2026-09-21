@@ -1,18 +1,24 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { ClientSecretCredential } from '@azure/identity';
-import { fromZonedTime } from 'date-fns-tz';
-import { getGraphConfig } from '@/lib/graph/config';
-import { createLead, findLeadByEmail, updateLead } from '@/lib/data/leads';
-import { createLeadTask } from '@/lib/data/lead-tasks';
-import { sydneyDateOnly, sydneyTimeOnly } from '@/lib/dates/sydney';
-import type { HistoryItem } from '@/lib/leads/types';
-import BookConsultantScheduleMeeting from '@/lib/graph/Email/book-consultant-ScheduleMeeting';
-import { render } from '@react-email/components';
+import { NextRequest, NextResponse } from "next/server";
+import { ClientSecretCredential } from "@azure/identity";
+import { fromZonedTime } from "date-fns-tz";
+import { getGraphConfig } from "@/lib/graph/config";
+import { createLead, findLeadById, updateLead } from "@/lib/data/leads";
+import { authorizeLeadAccess } from "@/lib/data/offer-access";
+import { verifyBookConsultationToken } from "@/lib/leads/book-consultation-token";
+import { createLeadTask } from "@/lib/data/lead-tasks";
+import {
+  sydneyDateOnly,
+  sydneyTimeOnly,
+  sydneyTimeZoneAbbreviation,
+} from "@/lib/dates/sydney";
+import type { HistoryItem } from "@/lib/leads/types";
+import BookConsultantScheduleMeeting from "@/lib/graph/Email/book-consultant-ScheduleMeeting";
+import { render } from "@react-email/components";
 
-const NOTE_ACTION = 'NOTE';
-const NOTE_SOURCE_DETAIL = 'Book consultation form';
+const NOTE_ACTION = "NOTE";
+const NOTE_SOURCE_DETAIL = "Book consultation form";
 
-const BOOKING_TIMEZONE = 'Australia/Sydney';
+const BOOKING_TIMEZONE = "Australia/Sydney";
 const SLOT_DURATION_MS = 60 * 60 * 1000;
 
 // calendarView's boundary behaviour is not documented, so the window is padded
@@ -22,7 +28,7 @@ const CONFLICT_WINDOW_PAD_MS = 24 * 60 * 60 * 1000;
 
 // showAs values that mean the calendar owner is genuinely unavailable. 'free'
 // and 'workingElsewhere' deliberately do not block.
-const BLOCKING_SHOW_AS = new Set(['busy', 'oof', 'tentative']);
+const BLOCKING_SHOW_AS = new Set(["busy", "oof", "tentative"]);
 
 interface GraphDateTime {
   dateTime?: string;
@@ -39,7 +45,7 @@ interface CalendarViewEvent {
 
 interface CalendarViewPage {
   value?: CalendarViewEvent[];
-  '@odata.nextLink'?: string;
+  "@odata.nextLink"?: string;
 }
 
 // Graph hands back a naive wall clock plus a separate timeZone field. Passing
@@ -51,7 +57,7 @@ function parseGraphDateTime(value?: GraphDateTime): Date | null {
 
   const parsed = /(?:Z|[+-]\d{2}:?\d{2})$/.test(dateTime)
     ? new Date(dateTime)
-    : fromZonedTime(dateTime, value?.timeZone || 'UTC');
+    : fromZonedTime(dateTime, value?.timeZone || "UTC");
 
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -83,13 +89,15 @@ async function findConflictingEvent(
 
   while (nextUrl && pagesFetched < 10) {
     const response = await fetch(nextUrl, {
-      method: 'GET',
+      method: "GET",
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
-      throw new Error(`calendarView returned ${response.status}: ${await response.text()}`);
+      throw new Error(
+        `calendarView returned ${response.status}: ${await response.text()}`,
+      );
     }
 
     const page = (await response.json()) as CalendarViewPage;
@@ -104,16 +112,18 @@ async function findConflictingEvent(
 
       // Half-open overlap: a 10:00-11:00 event must not block an 11:00 booking.
       if (eventStart < slotEnd && eventEnd > slotStart) {
-        return event.subject || '(untitled event)';
+        return event.subject || "(untitled event)";
       }
     }
 
-    nextUrl = page['@odata.nextLink'];
+    nextUrl = page["@odata.nextLink"];
     pagesFetched += 1;
   }
 
   if (nextUrl) {
-    throw new Error('calendarView paging did not terminate; availability is unverified.');
+    throw new Error(
+      "calendarView paging did not terminate; availability is unverified.",
+    );
   }
 
   return null;
@@ -124,17 +134,58 @@ async function findConflictingEvent(
 const toDateOnly = sydneyDateOnly;
 const toTimeOnly = sydneyTimeOnly;
 
-function upsertNoteHistory(existing: HistoryItem[], nextNote: HistoryItem) {
-  const noteIndex = existing.findIndex(entry => entry.action.trim().toLowerCase() === 'note');
-  if (noteIndex === -1) {
-    return [...existing, nextNote];
+/**
+ * Who this booking is for, as far as the caller can prove it.
+ *
+ * Three outcomes, and the middle one is the reason this returns a union rather
+ * than `number | null`:
+ *
+ *   anonymous    — no lead named. A prospect booking off the public page.
+ *                  Legitimate, and the booking creates a fresh lead.
+ *   lead         — a lead named AND proven, by a signed booking token or by a
+ *                  signed-in staff session.
+ *   unauthorized — a lead named but NOT proven. Previously indistinguishable
+ *                  from `anonymous`, which meant a caller guessing lead ids got
+ *                  a calendar event and an email anyway and merely lost the
+ *                  database write. The caller has to be refused instead.
+ */
+type LeadClaim =
+  | { kind: "anonymous" }
+  | { kind: "lead"; leadId: number }
+  | { kind: "unauthorized" };
+
+async function resolveLeadClaim(
+  body: Record<string, unknown>,
+): Promise<LeadClaim> {
+  const rawId = body.id;
+  const hasId =
+    typeof rawId === "number" ||
+    (typeof rawId === "string" && rawId.trim().length > 0);
+  if (!hasId) {
+    return { kind: "anonymous" };
   }
 
-  return existing.map((entry, index) => (index === noteIndex ? nextNote : entry));
+  const leadId = typeof rawId === "number" ? rawId : Number(rawId);
+  if (!Number.isSafeInteger(leadId) || leadId <= 0) {
+    return { kind: "unauthorized" };
+  }
+
+  const token =
+    typeof body.bookingToken === "string" ? body.bookingToken.trim() : "";
+  if (token && verifyBookConsultationToken(token, leadId)) {
+    return { kind: "lead", leadId };
+  }
+
+  const access = await authorizeLeadAccess(leadId);
+  if (access.ok) {
+    return { kind: "lead", leadId };
+  }
+
+  return { kind: "unauthorized" };
 }
 
 async function upsertBookingNotes({
-  id,
+  existingLeadId,
   name,
   email,
   notes,
@@ -142,7 +193,7 @@ async function upsertBookingNotes({
   /** When the consultation actually is. */
   meetingAt,
 }: {
-  id: number;
+  existingLeadId: number | null;
   name: string;
   email: string;
   notes: string;
@@ -155,15 +206,21 @@ async function upsertBookingNotes({
     time: toTimeOnly(now),
     action: NOTE_ACTION,
     detail: noteDetail,
-    type: 'system',
+    type: "system",
   };
 
-  const existingLead = await findLeadByEmail(id);
-  if (existingLead) {
-    const updatedHistory = upsertNoteHistory(existingLead.history, noteEntry);
-    const updatedNotes = notes.length > 0 ? notes : existingLead.notes;
+  if (existingLeadId !== null) {
+    const existingLead = await findLeadById(existingLeadId);
+    if (!existingLead) {
+      throw new Error(`Lead ${existingLeadId} was not found.`);
+    }
     await updateLead(existingLead.id, {
-      notes: updatedNotes,
+      // Lead.notes is deliberately left alone. Overwriting it put this booking's
+      // agenda where the sales notes belong, and everything that reads that
+      // column — the offer pre-fill's "# Sales notes" block above all — then
+      // described the booking instead. The agenda's home is the history entry
+      // below, which is where the Notes tab puts a note too.
+      //
       // Not 'Meeting Scheduled'. That stage was retired: it described a booked
       // task rather than progress, and completing it wrote CONTACTED. The lead
       // is in Discovery, and the booking is a task.
@@ -171,8 +228,10 @@ async function upsertBookingNotes({
       // when work is scheduled and leaves anything further on alone.
       meetingDate: meetingAt.toISOString(),
       meetingTime: toTimeOnly(meetingAt),
-      meetingMode: 'Online',
-      history: updatedHistory,
+      meetingMode: "Online",
+      // Only the new entry. Handing back the merged list re-inserted every row
+      // the lead already had, once per booking.
+      history: [noteEntry],
     });
     // The Graph event already exists by this point, so a failed task must not
     // fail the booking: the customer has the invitation either way. Log loudly
@@ -180,84 +239,118 @@ async function upsertBookingNotes({
     try {
       await createLeadTask({
         leadId: existingLead.id,
-        type: 'MEETING',
+        type: "MEETING",
         dueDate: meetingAt,
         dueTime: toTimeOnly(meetingAt),
-        notes: 'Consultation booked from the website',
+        notes: "Consultation booked from the website",
       });
     } catch (taskError) {
-      console.error('Booking saved but the meeting task was not created', taskError);
+      console.error(
+        "Booking saved but the meeting task was not created",
+        taskError,
+      );
     }
     return;
   }
 
   const created = await createLead(
     {
-      name: name.trim() || 'Client',
-      phone: '',
+      name: name.trim() || "Client",
+      phone: "",
       email: email.trim(),
-      location: '',
-      source: 'Website',
+      location: "",
+      source: "Website",
       sourceDetail: NOTE_SOURCE_DETAIL,
-      stage: 'Discovery',
-      budget: 'Not Discussed',
-      type: ['Not Specified'],
+      stage: "Discovery",
+      budget: "Not Discussed",
+      type: ["Not Specified"],
       notes,
       meetingDate: meetingAt.toISOString(),
       meetingTime: toTimeOnly(meetingAt),
-      meetingMode: 'Online',
-      followupNotes: '',
+      meetingMode: "Online",
+      followupNotes: "",
       urgent: false,
       history: [
         {
           action: NOTE_ACTION,
           detail: noteDetail,
-          type: 'system',
+          type: "system",
           actionDate: now.toISOString(),
         },
       ],
     },
-    { skipWelcomeEmail: true }
+    { skipWelcomeEmail: true },
   );
 
   // The Follow-ups tab reads tasks, so a booking that only set meetingDate on
   // the lead would be invisible there. createLead returns a conflict object
   // rather than a lead when the email already exists, hence the id check.
-  if (created && typeof created === 'object' && 'id' in created) {
+  if (created && typeof created === "object" && "id" in created) {
     try {
       await createLeadTask({
         leadId: Number(created.id),
-        type: 'MEETING',
+        type: "MEETING",
         dueDate: meetingAt,
         dueTime: toTimeOnly(meetingAt),
-        notes: 'Consultation booked from the website',
+        notes: "Consultation booked from the website",
       });
     } catch (taskError) {
-      console.error('Lead created but the meeting task was not', taskError);
+      console.error("Lead created but the meeting task was not", taskError);
     }
   }
 }
 
-
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const body = await req.json();
-    const { id, name = 'Client', email, startDateTime, notes } = body;
+    const { name = "Client", email, startDateTime, notes } = body;
 
     if (!name || !email || !startDateTime) {
-      return NextResponse.json({ error: 'Missing name, email, or startDateTime' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing name, email, or startDateTime" },
+        { status: 400 },
+      );
+    }
+
+    // Resolved HERE, before anything with an outside effect.
+    //
+    // This used to sit 37 lines further down, after the Graph event had already
+    // been created and the invitation already sent from the company mailbox. So
+    // a request naming a lead it could not prove it owned was refused only the
+    // database write — the calendar entry and the email had already gone out,
+    // against the builder's real availability and to an address of the sender's
+    // choosing. Authorisation that runs after the side effect is not
+    // authorisation.
+    const leadClaim = await resolveLeadClaim(body as Record<string, unknown>);
+    if (leadClaim.kind === "unauthorized") {
+      // Deliberately a refusal rather than a silent downgrade to an anonymous
+      // booking: the caller named a specific lead, so proceeding would attach
+      // this booking to a stranger's record or, failing that, quietly drop it.
+      return NextResponse.json(
+        { error: "This booking link is no longer valid. Request a new one." },
+        { status: 403 },
+      );
     }
 
     const config = getGraphConfig();
-    if (config.mode !== 'app-only' || !config.senderUpn) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+    if (config.mode !== "app-only" || !config.senderUpn) {
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 },
+      );
     }
 
-    const credential = new ClientSecretCredential(config.tenantId, config.clientId, config.clientSecret);
-    const tokenResult = await credential.getToken('https://graph.microsoft.com/.default');
+    const credential = new ClientSecretCredential(
+      config.tenantId,
+      config.clientId,
+      config.clientSecret,
+    );
+    const tokenResult = await credential.getToken(
+      "https://graph.microsoft.com/.default",
+    );
     const accessToken = tokenResult?.token;
 
-    if (!accessToken) throw new Error('Unable to acquire Graph access token');
+    if (!accessToken) throw new Error("Unable to acquire Graph access token");
 
     const start = new Date(startDateTime);
 
@@ -265,7 +358,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const endDateTimeObj = new Date(start.getTime() + 60 * 60 * 1000);
 
     // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
-    const pad = (n: number) => n.toString().padStart(2, '0');
+    const pad = (n: number) => n.toString().padStart(2, "0");
     const formatToGraphDateTime = (d: Date) =>
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
@@ -283,76 +376,95 @@ export async function POST(req: NextRequest): Promise<Response> {
     // so an unverifiable calendar refuses the booking rather than risking one.
     let conflict: string | null;
     try {
-      conflict = await findConflictingEvent(accessToken, config.senderUpn, slotStart, slotEnd);
+      conflict = await findConflictingEvent(
+        accessToken,
+        config.senderUpn,
+        slotStart,
+        slotEnd,
+      );
     } catch (availabilityError) {
-      console.error('Could not verify calendar availability:', availabilityError);
+      console.error(
+        "Could not verify calendar availability:",
+        availabilityError,
+      );
       return NextResponse.json(
-        { error: 'We could not confirm that time is still free. Please try again.' },
-        { status: 503 }
+        {
+          error:
+            "We could not confirm that time is still free. Please try again.",
+        },
+        { status: 503 },
       );
     }
 
     if (conflict) {
       // Deliberately not logging the conflicting event's subject — meeting
       // titles carry client names and other personal detail.
-      console.warn(`Rejected booking at ${slotStart.toISOString()}; slot already occupied.`);
+      console.warn(
+        `Rejected booking at ${slotStart.toISOString()}; slot already occupied.`,
+      );
       return NextResponse.json(
-        { error: 'That time has just been taken. Please choose another slot.' },
-        { status: 409 }
+        { error: "That time has just been taken. Please choose another slot." },
+        { status: 409 },
       );
     }
 
-
     // Helper: Format Date object to requested email display strings
     const formatDisplayDate = (d: Date) =>
-      d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); // "Saturday 6 June 2026"
+      d.toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }); // "Saturday 6 June 2026"
 
     const formatDisplayTime = (d: Date) => {
       const hours = d.getHours();
       const minutes = d.getMinutes();
-      const ampm = hours >= 12 ? 'pm' : 'am';
-      const formattedHours = (hours % 12 || 12).toString().padStart(2, '0');
-      const formattedMinutes = minutes.toString().padStart(2, '0');
+      const ampm = hours >= 12 ? "pm" : "am";
+      const formattedHours = (hours % 12 || 12).toString().padStart(2, "0");
+      const formattedMinutes = minutes.toString().padStart(2, "0");
       return `${formattedHours}:${formattedMinutes} ${ampm}`;
     };
 
     const displayDate = formatDisplayDate(start);
-    const displayTime = `${formatDisplayTime(start)} - ${formatDisplayTime(endDateTimeObj)} (AEST)`;
+    // Derived from slotStart, the real instant, so the label agrees with the
+    // calendar invitation sitting beside it in the same email. Hardcoded
+    // "AEST", it disagreed with every booking made on daylight saving.
+    const displayTime = `${formatDisplayTime(start)} - ${formatDisplayTime(endDateTimeObj)} (${sydneyTimeZoneAbbreviation(slotStart)})`;
 
     const emailHtml = await render(
       BookConsultantScheduleMeeting({
         name,
         formattedDate: displayDate,
         formattedTime: displayTime,
-      }
-      )
+      }),
     );
 
     const attendees = [
-      { emailAddress: { address: email, name }, type: 'required' } // Main Lead
+      { emailAddress: { address: email, name }, type: "required" }, // Main Lead
     ];
 
     // Add CC from .env if it exists (Graph API uses 'optional' type for CC)
     const ccEmail = process.env.MAIL_ID_CC;
     if (ccEmail) {
       attendees.push({
-        emailAddress: { address: ccEmail, name: 'Admin' },
-        type: 'optional' // This acts as the CC in Outlook Calendar
+        emailAddress: { address: ccEmail, name: "Admin" },
+        type: "optional", // This acts as the CC in Outlook Calendar
       });
     }
 
     const event = {
       subject: `Consultation with ${name} - Royal Constructions`,
       body: {
-        contentType: 'HTML',
+        contentType: "HTML",
         content: emailHtml,
       },
-      start: { dateTime: graphStartStr, timeZone: 'Australia/Sydney' },
-      end: { dateTime: graphEndStr, timeZone: 'Australia/Sydney' },
-      location: { displayName: 'Microsoft Teams Meeting' },
+      start: { dateTime: graphStartStr, timeZone: "Australia/Sydney" },
+      end: { dateTime: graphEndStr, timeZone: "Australia/Sydney" },
+      location: { displayName: "Microsoft Teams Meeting" },
       attendees: attendees,
       isOnlineMeeting: true,
-      onlineMeetingProvider: 'teamsForBusiness',
+      onlineMeetingProvider: "teamsForBusiness",
     };
 
     // ═══════════════════════════════════════════════════════
@@ -361,20 +473,23 @@ export async function POST(req: NextRequest): Promise<Response> {
     const response = await fetch(
       `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'outlook.timezone="Australia/Sydney"' // <--- THIS IS THE KEY
+          "Content-Type": "application/json",
+          Prefer: 'outlook.timezone="Australia/Sydney"', // <--- THIS IS THE KEY
         },
         body: JSON.stringify(event),
-      }
+      },
     );
 
     if (!response.ok) {
       const detail = await response.text();
-      console.error('Graph event create failed:', detail);
-      return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
+      console.error("Graph event create failed:", detail);
+      return NextResponse.json(
+        { error: "Failed to create event" },
+        { status: 500 },
+      );
     }
 
     const eventData = await response.json();
@@ -385,31 +500,43 @@ export async function POST(req: NextRequest): Promise<Response> {
     const joinUrl = eventData?.onlineMeeting?.joinUrl || null;
     //console.log('Graph event created successfully. Join URL:', joinUrl);
 
-    const trimmedNotes = typeof notes === 'string' ? notes.trim() : '';
+    const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
     const appointmentLabel = `${displayDate} at ${displayTime}`;
-    const noteDetail = trimmedNotes.length > 0
-      ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
-      : `Appointment: ${appointmentLabel}`;
+    const noteDetail =
+      trimmedNotes.length > 0
+        ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
+        : `Appointment: ${appointmentLabel}`;
 
     try {
       await upsertBookingNotes({
-        id: Number(id),
+        existingLeadId: leadClaim.kind === "lead" ? leadClaim.leadId : null,
         name,
         email,
         notes: trimmedNotes,
         noteDetail,
-        meetingAt: start,
+        // slotStart, not `start`. `start` is the Sydney wall clock carried as
+        // UTC, which is exactly what the Graph payload needs and exactly wrong
+        // for a stored instant: a 3:00 PM booking was saved as 15:00Z and read
+        // back as 1:00 AM the next day, so the client's invitation and the
+        // builder's own task list disagreed by ten hours. slotStart is the same
+        // moment the conflict check already uses.
+        meetingAt: slotStart,
       });
     } catch (leadError) {
-      console.error('Failed to save booking notes to lead', leadError);
-      return NextResponse.json({ error: 'Failed to save booking notes' }, { status: 500 });
+      console.error("Failed to save booking notes to lead", leadError);
+      return NextResponse.json(
+        { error: "Failed to save booking notes" },
+        { status: 500 },
+      );
     }
 
     // Return the joinUrl to your frontend
     return NextResponse.json({ success: true, joinUrl });
-
   } catch (error) {
-    console.error('Book consultant failed', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error("Book consultant failed", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

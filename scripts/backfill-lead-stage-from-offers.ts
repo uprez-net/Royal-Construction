@@ -34,10 +34,17 @@ const isWon = (stage: LeadStage) => stageDef(stage).outcome === "WON";
 const isLost = (stage: LeadStage) => stageDef(stage).outcome === "LOST";
 
 async function main() {
-  console.log(COMMIT ? "Backfilling lead stages from offers…" : "DRY RUN — pass --commit to write");
+  console.log(
+    COMMIT
+      ? "Backfilling lead stages from offers…"
+      : "DRY RUN — pass --commit to write",
+  );
 
   const offers = await prisma.offer.findMany({
-    where: { isActive: true, offerStatus: { in: ["CONTRACT_SIGNED", "PROJECT"] } },
+    where: {
+      isActive: true,
+      offerStatus: { in: ["CONTRACT_SIGNED", "PROJECT"] },
+    },
     select: {
       id: true,
       offerStatus: true,
@@ -100,10 +107,14 @@ async function main() {
   }
 
   console.log("");
-  console.log(`  ${moved} lead(s) ${COMMIT ? "moved to" : "would move to"} CONVERTED`);
+  console.log(
+    `  ${moved} lead(s) ${COMMIT ? "moved to" : "would move to"} CONVERTED`,
+  );
   console.log(`  ${skippedWon} already won, ${skippedLost} left alone as lost`);
   if (approximated > 0) {
-    console.log(`  ${approximated} had no status event; wonAt approximated from offer.updatedAt`);
+    console.log(
+      `  ${approximated} had no status event; wonAt approximated from offer.updatedAt`,
+    );
   }
   if (!COMMIT) console.log("\n  nothing written — re-run with --commit");
 }

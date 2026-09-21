@@ -177,6 +177,11 @@ export type OfferWorkspaceScopeItem = {
   readonly unit: string;
   readonly variationRule: string;
   readonly includedInOfferDocument: boolean;
+  // Allowances only: whether the signed Tender lists this item. Separate from
+  // includedInOfferDocument so the sales proposal can stay short while the
+  // document the customer signs still discloses every allowance in the price.
+  // Exclusions carry it too, but their single Scope box is includedInOfferDocument.
+  readonly includedInTender: boolean;
 };
 
 export type OfferScopeItemCategory =
@@ -285,19 +290,20 @@ export const OFFER_STATUS_LABEL: Record<OfferWorkspaceStatus, string> = {
 // the former single 20%), each set per job. HBCF and the impact fee are the only
 // fixed additions; admin/labour/engineering/legal/licence were removed in #115
 // as they are captured once inside the Calculation Workbook's direct-cost lines.
-export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings = {
-  royalConstructionOverheadPct: 0.1,
-  royalConstructionFeePct: 0.1,
-  gstRate: 0.1,
-  hbcfTotalContractValue: 0,
-  // Keep in sync with DEFAULT_HBCF_RATE in workspace-pricing.ts (#116) —
-  // icare H01 metro base rate ex GST/stamp (0.966%).
-  hbcfRate: 0.00966,
-  homeWarrantyHbcfFixed: 0,
-  impactFeeFixed: 0,
-  // Loading charge percentage applied to whole premium
-  loadingChargePercentage: 0,
-};
+export const DEFAULT_WORKSPACE_PRICING_SETTINGS: OfferWorkspacePricingSettings =
+  {
+    royalConstructionOverheadPct: 0.1,
+    royalConstructionFeePct: 0.1,
+    gstRate: 0.1,
+    hbcfTotalContractValue: 0,
+    // Keep in sync with DEFAULT_HBCF_RATE in workspace-pricing.ts (#116) —
+    // icare H01 metro base rate ex GST/stamp (0.966%).
+    hbcfRate: 0.00966,
+    homeWarrantyHbcfFixed: 0,
+    impactFeeFixed: 0,
+    // Loading charge percentage applied to whole premium
+    loadingChargePercentage: 0,
+  };
 
 // Façade options the client picks in Job setup. `imageHint` is the visual
 // descriptor woven into the exterior AI image prompts (see offer-image-context).
@@ -337,13 +343,16 @@ export const FACADE_OPTIONS: readonly {
   {
     value: "Coastal",
     label: "Coastal",
-    imageHint: "coastal facade, light palette, timber batten accents, large windows",
+    imageHint:
+      "coastal facade, light palette, timber batten accents, large windows",
   },
 ];
 
 // Visual descriptor for a selected façade, or "" when none/unknown.
 export function facadeImageHint(facade: string): string {
-  return FACADE_OPTIONS.find((option) => option.value === facade)?.imageHint ?? "";
+  return (
+    FACADE_OPTIONS.find((option) => option.value === facade)?.imageHint ?? ""
+  );
 }
 
 // A fresh offer starts with blank client/site identity — it is synced from the
@@ -379,7 +388,9 @@ export function createIndividualOwner(id: string): OfferOwner {
     displayName: "",
     currentLocation: "",
     abn: "",
-    signatories: [createOfferSignatory(`${id}-signer-1`, OWNER_SIGNER_CAPACITY)],
+    signatories: [
+      createOfferSignatory(`${id}-signer-1`, OWNER_SIGNER_CAPACITY),
+    ],
   };
 }
 
@@ -391,7 +402,9 @@ export function createCompanyOwner(id: string): OfferOwner {
     displayName: "",
     currentLocation: "",
     abn: "",
-    signatories: [createOfferSignatory(`${id}-dir-1`, DIRECTOR_SIGNER_CAPACITY)],
+    signatories: [
+      createOfferSignatory(`${id}-dir-1`, DIRECTOR_SIGNER_CAPACITY),
+    ],
   };
 }
 
@@ -449,7 +462,8 @@ export function collectOfferSigners(
 export function offerSignerLabel(signer: OfferSignerContext): string {
   const name = signer.signatory.name.trim();
   if (signer.entityName) {
-    const capacity = signer.signatory.capacity.trim() || DIRECTOR_SIGNER_CAPACITY;
+    const capacity =
+      signer.signatory.capacity.trim() || DIRECTOR_SIGNER_CAPACITY;
     const who = name || capacity;
     return `${who} (${capacity}, ${signer.entityName})`;
   }
@@ -492,7 +506,9 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
     const isCompany = owner.kind === "company";
     const who = owner.displayName.trim() || `Owner ${index + 1}`;
     if (owner.displayName.trim().length === 0) {
-      issues.push(`Owner ${index + 1} needs a ${isCompany ? "company name" : "name"}.`);
+      issues.push(
+        `Owner ${index + 1} needs a ${isCompany ? "company name" : "name"}.`,
+      );
     }
     // A company is a legal person identified by its ABN/ACN — the Tender/Contract
     // print the number next to the company name, so an entity owner without one
@@ -518,11 +534,15 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
     // defaults signatories to [], so guard it here (the individual editor can't
     // repair a zero-signatory owner either).
     if (owner.signatories.length === 0) {
-      issues.push(`${who} needs at least one ${isCompany ? "director" : "signatory"}.`);
+      issues.push(
+        `${who} needs at least one ${isCompany ? "director" : "signatory"}.`,
+      );
     }
     owner.signatories.forEach((signatory) => {
       if (signatory.name.trim().length === 0) {
-        issues.push(`${who} has a ${isCompany ? "director" : "signatory"} without a name.`);
+        issues.push(
+          `${who} has a ${isCompany ? "director" : "signatory"} without a name.`,
+        );
       }
       if (!OWNER_EMAIL_PATTERN.test(signatory.email.trim())) {
         const label =
@@ -940,7 +960,8 @@ export const INITIAL_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = [
     amount: 8500,
     unit: "package",
     variationRule: "Selections above allowance become a variation.",
-    includedInOfferDocument: true,
+    includedInOfferDocument: false,
+    includedInTender: true,
   },
   {
     id: "allowance-2",
@@ -951,7 +972,8 @@ export const INITIAL_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = [
     amount: 70,
     unit: "sqm",
     variationRule: "Tile selections above the rate are priced as a variation.",
-    includedInOfferDocument: true,
+    includedInOfferDocument: false,
+    includedInTender: true,
   },
 ];
 
@@ -966,6 +988,7 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
     unit: "",
     variationRule: "Can be priced later as a written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   },
   {
     id: "exclusion-2",
@@ -977,6 +1000,7 @@ export const INITIAL_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = [
     unit: "",
     variationRule: "Owner-supplied unless added by written variation.",
     includedInOfferDocument: true,
+    includedInTender: true,
   },
 ];
 
@@ -996,7 +1020,9 @@ export function updateOfferScopeItems(
   itemId: string,
   patch: Partial<OfferWorkspaceScopeItem>,
 ): readonly OfferWorkspaceScopeItem[] {
-  return items.map((item) => (item.id === itemId ? { ...item, ...patch } : item));
+  return items.map((item) =>
+    item.id === itemId ? { ...item, ...patch } : item,
+  );
 }
 
 // A blank scope item ready for the operator to fill in. Exclusions default to a
@@ -1015,8 +1041,18 @@ export function createOfferScopeItem(
     amount: 0,
     unit: "",
     variationRule: "",
-    includedInOfferDocument: true,
+    // A new allowance stays off the sales proposal until the estimator ticks it,
+    // and is listed in the signed Tender unless they untick it. An exclusion
+    // keeps its single box, ticked.
+    includedInOfferDocument: !isAllowanceCategory(category),
+    includedInTender: true,
   };
+}
+
+// Prime-cost and provisional-sum items are allowances; the other categories are
+// exclusions and owner selections, which live in the Exclusions list.
+function isAllowanceCategory(category: OfferScopeItemCategory): boolean {
+  return category === "prime_cost" || category === "provisional_sum";
 }
 
 export function removeOfferScopeItem(
@@ -1055,7 +1091,6 @@ export function applyTaskMappingToCostLine(
   };
 }
 
-
 // Inclusions Schedule pagination, in LINE UNITS rather than rows. The schedule
 // is estimator-editable free text, so a fixed rows-per-page count overflows the
 // moment someone writes specifications longer than the seeded ones — and an
@@ -1091,7 +1126,8 @@ export function chunkInclusionSchedule(
     1,
     INCLUSIONS_LINES_PER_PAGE - INCLUSIONS_INTRO_LINES,
   );
-  const first = chunkByEstimatedHeight([...entries], firstBudget, heightOf)[0] ?? [];
+  const first =
+    chunkByEstimatedHeight([...entries], firstBudget, heightOf)[0] ?? [];
   const rest = entries.slice(first.length);
   return [
     first,
@@ -1113,6 +1149,75 @@ export function inclusionPageStartIndexes(
   return starts;
 }
 
+// The prime-cost and provisional-sum table's two text columns. Both offer
+// renderers give it a 30mm Allowance column and a 70mm "If the actual cost
+// differs" column, leaving ~74mm for the Item cell; net of padding that is about
+// 36 and 32 characters at the React template's 14px. Rounded DOWN, like every
+// CHARS_PER_LINE_* above, so a row's height is over-counted rather than under.
+export const CHARS_PER_LINE_ALLOWANCE_ITEM = 34;
+export const CHARS_PER_LINE_ALLOWANCE_RULE = 30;
+// The allowances intro runs a line longer than the inclusions one.
+export const ALLOWANCES_INTRO_LINES = 4;
+// The Download (window.print) copy is the tallest of the three renderers and the
+// one no Chromium test can measure. Its row carries 12px of padding top and
+// bottom, a 1px rule and a 4px gap above any description, against a 20px line:
+// 29px, which the inclusions' single chrome line (sized on the emailed 13px
+// table) under-counts by 9px a row.
+export const ALLOWANCE_ROW_CHROME_LINES = 1.5;
+// At 20px a line, 40 lines is 800px against the ~804px that page leaves for
+// rows: no headroom for a wrap estimate that runs short. 36 leaves ~80px. The
+// emailed proposal and the Tender just fit fewer rows on a page.
+export const ALLOWANCES_LINES_PER_PAGE = 36;
+
+type AllowanceRowText = {
+  readonly label: string;
+  readonly description: string;
+  readonly variationRule: string;
+};
+
+// The Item cell stacks the label over the description and the rule sits beside
+// them, so a row is as tall as the taller of the two, plus its own padding.
+export function allowanceRowLines(row: AllowanceRowText): number {
+  const itemLines =
+    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
+    (row.description.trim().length > 0
+      ? estimateWrappedLines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
+      : 0);
+  return (
+    Math.max(
+      itemLines,
+      estimateWrappedLines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE),
+    ) + ALLOWANCE_ROW_CHROME_LINES
+  );
+}
+
+// Pack the disclosed allowances into pages. Every row used to go on one
+// fixed-height page counted as one, so a long list ran past the footer onto a
+// sheet "Page N of M" never declared. Shared by the emailed proposal, the React
+// print template and the Tender so none of them can count it differently.
+export function chunkAllowanceRows<T extends AllowanceRowText>(
+  rows: readonly T[],
+): T[][] {
+  if (rows.length === 0) {
+    return [];
+  }
+  const firstBudget = Math.max(
+    1,
+    ALLOWANCES_LINES_PER_PAGE - ALLOWANCES_INTRO_LINES,
+  );
+  const first =
+    chunkByEstimatedHeight(rows, firstBudget, allowanceRowLines)[0] ?? [];
+  const rest = rows.slice(first.length);
+  return [
+    first,
+    ...chunkByEstimatedHeight(
+      rest,
+      ALLOWANCES_LINES_PER_PAGE,
+      allowanceRowLines,
+    ),
+  ].filter((page) => page.length > 0);
+}
+
 export function getIncludedOfferTenderLineItems(
   lines: readonly OfferWorkspaceCostLine[],
 ): readonly string[] {
@@ -1129,7 +1234,6 @@ export function getIncludedOfferTenderLineItems(
     ),
   );
 }
-
 
 export function inferOfferStageCode(taskName: string): OfferStageCode {
   const lowerName = taskName.toLowerCase();
@@ -1162,7 +1266,11 @@ export function inferOfferStageCode(taskName: string): OfferStageCode {
   if (/air conditioning|hvac/.test(lowerName)) {
     return "H";
   }
-  if (/insulation|gyprock|stair|door|lock|carpenter|wardrobe|floor/.test(lowerName)) {
+  if (
+    /insulation|gyprock|stair|door|lock|carpenter|wardrobe|floor/.test(
+      lowerName,
+    )
+  ) {
     return "I";
   }
   if (/waterproof|tile|tiling|sand|cement/.test(lowerName)) {

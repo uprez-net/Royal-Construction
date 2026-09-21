@@ -9,7 +9,12 @@ import {
   TradieCoordinationTab,
   TradieScheduleListItem,
 } from "@/types/project";
-import { differenceInCalendarDays, startOfDay, addDays, startOfWeek } from "date-fns";
+import {
+  differenceInCalendarDays,
+  startOfDay,
+  addDays,
+  startOfWeek,
+} from "date-fns";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -145,14 +150,18 @@ type TabCountRow = {
 // Query resolution helpers
 // ---------------------------------------------------------------------------
 
-function resolveCoordinationQuery(query?: TradieCoordinationQuery): ResolvedCoordinationQuery {
+function resolveCoordinationQuery(
+  query?: TradieCoordinationQuery,
+): ResolvedCoordinationQuery {
   const rawPage = query?.page ?? 1;
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  const page =
+    Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
   const rawLimit = query?.limit ?? DEFAULT_PAGE_SIZE;
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0
-    ? Math.min(Math.floor(rawLimit), 50)
-    : DEFAULT_PAGE_SIZE;
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), 50)
+      : DEFAULT_PAGE_SIZE;
 
   return {
     page,
@@ -174,9 +183,9 @@ function resolveCoordinationQuery(query?: TradieCoordinationQuery): ResolvedCoor
 const SORT_COLUMN_MAP: Record<TradieCoordinationSortBy, string> = {
   scheduledDate: 'ts."scheduledDate"',
   tradieName: "t.name",
-  tradeType: "t.\"tradeType\"",
+  tradeType: 't."tradeType"',
   projectName: "p.name",
-  status: 'ts.status::text',
+  status: "ts.status::text",
 };
 
 function getSortColumn(sortBy: TradieCoordinationSortBy): string {
@@ -226,22 +235,32 @@ function buildWhere(
   }
 
   if (!opts.ignoreStatus && resolved.status) {
-    parts.push(Prisma.sql`ts.status = ${resolved.status}::"TradieScheduleStatus"`);
+    parts.push(
+      Prisma.sql`ts.status = ${resolved.status}::"TradieScheduleStatus"`,
+    );
   }
 
   if (!opts.ignoreTab) {
     switch (resolved.tab) {
       case "week":
-        parts.push(Prisma.sql`ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek}`);
+        parts.push(
+          Prisma.sql`ts."scheduledDate" >= ${today} AND ts."scheduledDate" < ${nextWeek}`,
+        );
         break;
       case "confirmed":
-        parts.push(Prisma.sql`ts.status = 'CONFIRMED'::"TradieScheduleStatus"`);
+        parts.push(
+          Prisma.sql`ts.status = ANY(ARRAY['CONFIRMED','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])`,
+        );
         break;
       case "pending":
-        parts.push(Prisma.sql`ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE']::"TradieScheduleStatus"[])`);
+        parts.push(
+          Prisma.sql`ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE','AWAITING_ADMIN_APPROVAL','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])`,
+        );
         break;
       case "overdue":
-        parts.push(Prisma.sql`ts."scheduledDate" < ${today} AND ts.status <> 'COMPLETED'::"TradieScheduleStatus"`);
+        parts.push(
+          Prisma.sql`ts."scheduledDate" < ${today} AND ts.status <> 'COMPLETED'::"TradieScheduleStatus"`,
+        );
         break;
       case "completed":
         parts.push(Prisma.sql`ts.status = 'COMPLETED'::"TradieScheduleStatus"`);
@@ -262,22 +281,39 @@ function buildWhere(
 // Activity label helper (mirrors original mapScheduleStatus)
 // ---------------------------------------------------------------------------
 
-function mapScheduleStatus(status: TradieScheduleStatus): { type: TradieActivityItem["type"]; label: string } {
-  if (status === TradieScheduleStatus.CONFIRMED || status === TradieScheduleStatus.COMPLETED) {
+function mapScheduleStatus(status: TradieScheduleStatus): {
+  type: TradieActivityItem["type"];
+  label: string;
+} {
+  if (
+    status === TradieScheduleStatus.CONFIRMED ||
+    status === TradieScheduleStatus.COMPLETED
+  ) {
     return {
       type: "done",
-      label: status === TradieScheduleStatus.COMPLETED ? "completed" : "confirmed",
+      label:
+        status === TradieScheduleStatus.COMPLETED ? "completed" : "confirmed",
     };
   }
-  if (status === TradieScheduleStatus.DECLINED || status === TradieScheduleStatus.NO_RESPONSE) {
+  if (
+    status === TradieScheduleStatus.DECLINED ||
+    status === TradieScheduleStatus.NO_RESPONSE
+  ) {
     return {
       type: "urgent",
-      label: status === TradieScheduleStatus.DECLINED ? "declined" : "had no response",
+      label:
+        status === TradieScheduleStatus.DECLINED
+          ? "declined"
+          : "had no response",
     };
   }
   return {
     type: "warn",
-    label: status === TradieScheduleStatus.PENDING_RESPONSE ? "is pending response" : "is pending",
+    label:
+      status === TradieScheduleStatus.PENDING_RESPONSE ||
+      status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+        ? "is pending final confirmation"
+        : "is pending",
   };
 }
 
@@ -286,7 +322,10 @@ function mapScheduleStatus(status: TradieScheduleStatus): { type: TradieActivity
 // ---------------------------------------------------------------------------
 
 function getWeekLabel(date: Date): string {
-  return new Intl.DateTimeFormat("en-AU", { day: "2-digit", month: "short" }).format(date);
+  return new Intl.DateTimeFormat("en-AU", {
+    day: "2-digit",
+    month: "short",
+  }).format(date);
 }
 
 // ---------------------------------------------------------------------------
@@ -316,14 +355,18 @@ export async function getTradieCoordinationDashboard(
 
   // Trend window: date-fns startOfWeek defaults to Sunday (weekStartsOn: 0)
   const trendWindowStart = addDays(startOfWeek(today), -7 * 7); // 7 weeks before current week start
-  const trendWindowEnd = addDays(startOfWeek(today), 7);      // 1 week after current week start
+  const trendWindowEnd = addDays(startOfWeek(today), 7); // 1 week after current week start
 
   const sortCol = getSortColumn(resolved.sortBy);
-  const sortDir = resolved.sortOrder === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  const sortDir =
+    resolved.sortOrder === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
   const offset = (resolved.page - 1) * resolved.limit;
 
   const listWhere = buildWhere(resolved, today, nextWeek);
-  const insightsWhere = buildWhere(resolved, today, nextWeek, { ignoreStatus: true, ignoreTab: true });
+  const insightsWhere = buildWhere(resolved, today, nextWeek, {
+    ignoreStatus: true,
+    ignoreTab: true,
+  });
 
   try {
     // -----------------------------------------------------------------------
@@ -351,7 +394,6 @@ export async function getTradieCoordinationDashboard(
       activityRows,
       urgentRows,
     ] = await Promise.all([
-
       // 1. Paginated schedule list
       prisma.$queryRaw<ScheduleRow[]>(Prisma.sql`
         SELECT
@@ -447,7 +489,7 @@ export async function getTradieCoordinationDashboard(
         JOIN "Project" p ON p.id = ts."projectId"
         LEFT JOIN "Milestone" m ON m.id = ts."milestoneId"
         WHERE ${insightsWhere}
-          AND ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE']::"TradieScheduleStatus"[])
+          AND ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE','AWAITING_ADMIN_APPROVAL','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])
       `),
 
       // 8. Confirmed count
@@ -505,7 +547,9 @@ export async function getTradieCoordinationDashboard(
         SELECT
           COUNT(*) FILTER (WHERE ts.status = 'CONFIRMED'::"TradieScheduleStatus")       ::bigint AS confirmed,
           COUNT(*) FILTER (WHERE ts.status = 'PENDING'::"TradieScheduleStatus")         ::bigint AS pending,
-          COUNT(*) FILTER (WHERE ts.status = 'PENDING_RESPONSE'::"TradieScheduleStatus")::bigint AS pending_response,
+          COUNT(*) FILTER (
+            WHERE ts.status = ANY(ARRAY['PENDING_RESPONSE','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])
+          )::bigint AS pending_response,
           COUNT(*) FILTER (WHERE ts.status = 'NO_RESPONSE'::"TradieScheduleStatus")     ::bigint AS no_response,
           COUNT(*) FILTER (WHERE ts.status = 'DECLINED'::"TradieScheduleStatus")        ::bigint AS declined,
           COUNT(*) FILTER (WHERE ts.status = 'COMPLETED'::"TradieScheduleStatus")       ::bigint AS completed
@@ -527,7 +571,7 @@ export async function getTradieCoordinationDashboard(
             WHERE ts.status = 'CONFIRMED'::"TradieScheduleStatus"
           )::bigint AS tab_confirmed,
           COUNT(*) FILTER (
-            WHERE ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE']::"TradieScheduleStatus"[])
+            WHERE ts.status = ANY(ARRAY['PENDING','PENDING_RESPONSE','NO_RESPONSE','AWAITING_ADMIN_APPROVAL','PENDING_FINAL_CONFIRMATION']::"TradieScheduleStatus"[])
           )::bigint AS tab_pending,
           COUNT(*) FILTER (
             WHERE ts."scheduledDate" < ${today}
@@ -662,12 +706,36 @@ export async function getTradieCoordinationDashboard(
 
     const sc = statusCountRows[0];
     const statusMetrics: TradieStatusMetric[] = [
-      { label: "Confirmed", value: n(sc?.confirmed ?? ZERO), status: TradieScheduleStatus.CONFIRMED },
-      { label: "Pending", value: n(sc?.pending ?? ZERO), status: TradieScheduleStatus.PENDING },
-      { label: "Pending Response", value: n(sc?.pending_response ?? ZERO), status: TradieScheduleStatus.PENDING_RESPONSE },
-      { label: "No Response", value: n(sc?.no_response ?? ZERO), status: TradieScheduleStatus.NO_RESPONSE },
-      { label: "Declined", value: n(sc?.declined ?? ZERO), status: TradieScheduleStatus.DECLINED },
-      { label: "Completed", value: n(sc?.completed ?? ZERO), status: TradieScheduleStatus.COMPLETED },
+      {
+        label: "Confirmed",
+        value: n(sc?.confirmed ?? ZERO),
+        status: TradieScheduleStatus.CONFIRMED,
+      },
+      {
+        label: "Pending",
+        value: n(sc?.pending ?? ZERO),
+        status: TradieScheduleStatus.PENDING,
+      },
+      {
+        label: "Pending Response",
+        value: n(sc?.pending_response ?? ZERO),
+        status: TradieScheduleStatus.PENDING_RESPONSE,
+      },
+      {
+        label: "No Response",
+        value: n(sc?.no_response ?? ZERO),
+        status: TradieScheduleStatus.NO_RESPONSE,
+      },
+      {
+        label: "Declined",
+        value: n(sc?.declined ?? ZERO),
+        status: TradieScheduleStatus.DECLINED,
+      },
+      {
+        label: "Completed",
+        value: n(sc?.completed ?? ZERO),
+        status: TradieScheduleStatus.COMPLETED,
+      },
     ];
 
     const tc = tabCountRows[0];
@@ -685,25 +753,39 @@ export async function getTradieCoordinationDashboard(
     // We need tradeType per tradieId — batch-fetch distinct tradieIds
     // -----------------------------------------------------------------------
 
-    const distinctTradieIds = Array.from(new Set(tradeStatusGroupRows.map((r) => r.tradie_id)));
+    const distinctTradieIds = Array.from(
+      new Set(tradeStatusGroupRows.map((r) => r.tradie_id)),
+    );
 
-    const tradeTypeRows: TradeTypeRow[] = distinctTradieIds.length > 0
-      ? await prisma.$queryRaw<TradeTypeRow[]>(Prisma.sql`
+    const tradeTypeRows: TradeTypeRow[] =
+      distinctTradieIds.length > 0
+        ? await prisma.$queryRaw<TradeTypeRow[]>(Prisma.sql`
           SELECT id, "trade" AS trade_type
           FROM "Tradie"
           WHERE id::text = ANY(${distinctTradieIds})
         `)
-      : [];
+        : [];
 
-    const tradeTypeMap = new Map(tradeTypeRows.map((r) => [r.id, r.trade_type]));
-    const tradeBreakdownMap = new Map<string, { total: number; confirmed: number }>();
+    const tradeTypeMap = new Map(
+      tradeTypeRows.map((r) => [r.id, r.trade_type]),
+    );
+    const tradeBreakdownMap = new Map<
+      string,
+      { total: number; confirmed: number }
+    >();
 
     for (const row of tradeStatusGroupRows) {
       const tradeType = tradeTypeMap.get(row.tradie_id) ?? "Unknown";
-      const current = tradeBreakdownMap.get(tradeType) ?? { total: 0, confirmed: 0 };
+      const current = tradeBreakdownMap.get(tradeType) ?? {
+        total: 0,
+        confirmed: 0,
+      };
       const count = n(row.cnt);
       current.total += count;
-      if (row.status === TradieScheduleStatus.CONFIRMED || row.status === TradieScheduleStatus.COMPLETED) {
+      if (
+        row.status === TradieScheduleStatus.CONFIRMED ||
+        row.status === TradieScheduleStatus.COMPLETED
+      ) {
         current.confirmed += count;
       }
       tradeBreakdownMap.set(tradeType, current);
@@ -713,7 +795,8 @@ export async function getTradieCoordinationDashboard(
       .map(([tradeType, v]) => ({
         tradeType,
         total: v.total,
-        confirmedRate: v.total > 0 ? Math.round((v.confirmed / v.total) * 100) : 0,
+        confirmedRate:
+          v.total > 0 ? Math.round((v.confirmed / v.total) * 100) : 0,
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 8);
@@ -755,40 +838,43 @@ export async function getTradieCoordinationDashboard(
     // Map schedule rows → TradieScheduleListItem
     // -----------------------------------------------------------------------
 
-    const schedules = scheduleRows.map((row) => ({
-      id: row.id,
-      tradieId: row.tradie_id,
-      tradieName: row.tradie_name,
-      lastQuotedPriceUnit: row.last_quoted_price_unit,
-      tradeType: row.trade_type,
-      abn: row.abn,
-      projectId: row.project_id,
-      projectName: row.project_name,
-      isFavourite: row.isFavourite ?? false,
-      note: row.note ?? null,
-      milestoneId: row.milestone_id ?? undefined,
-      milestoneName: row.milestone_name ?? undefined,
-      taskLabel: row.milestone_name ?? "General trade task",
-      scheduledDate: row.scheduled_date.toISOString(),
-      durationDays: row.duration_days,
-      status: row.status,
-      lastQuotedPrice: row.last_quoted_price ?? undefined,
-      rating: row.rating ?? undefined,
-      reminderSentAt: row.reminder_sent_at?.toISOString(),
-      updatedAt: row.updated_at.toISOString(),
-      contact: {
-        email: row.tradie_email,
-        phone: row.tradie_phone,
-        additionalEmails: [],
-      },
-      siteManager: {
-        name: row.site_manager_name ?? "Site manager",
-        email: row.site_manager_email ?? "",
-        phone: row.site_manager_phone ?? "",
-      },
-      requiresQuote: row.requiresQuote,
-      quotedPrice: row.quotedPrice ?? undefined,
-    } satisfies TradieScheduleListItem));
+    const schedules = scheduleRows.map(
+      (row) =>
+        ({
+          id: row.id,
+          tradieId: row.tradie_id,
+          tradieName: row.tradie_name,
+          lastQuotedPriceUnit: row.last_quoted_price_unit,
+          tradeType: row.trade_type,
+          abn: row.abn,
+          projectId: row.project_id,
+          projectName: row.project_name,
+          isFavourite: row.isFavourite ?? false,
+          note: row.note ?? null,
+          milestoneId: row.milestone_id ?? undefined,
+          milestoneName: row.milestone_name ?? undefined,
+          taskLabel: row.milestone_name ?? "General trade task",
+          scheduledDate: row.scheduled_date.toISOString(),
+          durationDays: row.duration_days,
+          status: row.status,
+          lastQuotedPrice: row.last_quoted_price ?? undefined,
+          rating: row.rating ?? undefined,
+          reminderSentAt: row.reminder_sent_at?.toISOString(),
+          updatedAt: row.updated_at.toISOString(),
+          contact: {
+            email: row.tradie_email,
+            phone: row.tradie_phone,
+            additionalEmails: [],
+          },
+          siteManager: {
+            name: row.site_manager_name ?? "Site manager",
+            email: row.site_manager_email ?? "",
+            phone: row.site_manager_phone ?? "",
+          },
+          requiresQuote: row.requiresQuote,
+          quotedPrice: row.quotedPrice ?? undefined,
+        }) satisfies TradieScheduleListItem,
+    );
 
     // -----------------------------------------------------------------------
     // Activity feed
@@ -840,10 +926,12 @@ export async function getTradieCoordinationDashboard(
     // -----------------------------------------------------------------------
 
     const activeTradieCount = activeTradieRows.length;
-    const totalScheduledForCompletion = confirmedCount + completedCount + pendingNoResponse;
-    const completionRate = totalScheduledForCompletion > 0
-      ? Math.round((completedCount / totalScheduledForCompletion) * 100)
-      : 0;
+    const totalScheduledForCompletion =
+      confirmedCount + completedCount + pendingNoResponse;
+    const completionRate =
+      totalScheduledForCompletion > 0
+        ? Math.round((completedCount / totalScheduledForCompletion) * 100)
+        : 0;
 
     // -----------------------------------------------------------------------
     // Return
@@ -887,7 +975,12 @@ export async function getTradieCoordinationDashboard(
 
     const empty: TradieCoordinationDashboard = {
       query: resolved,
-      pagination: { page: resolved.page, limit: resolved.limit, totalCount: 0, totalPages: 1 },
+      pagination: {
+        page: resolved.page,
+        limit: resolved.limit,
+        totalCount: 0,
+        totalPages: 1,
+      },
       schedules: [],
       summary: {
         registeredTradies: 0,
@@ -900,7 +993,14 @@ export async function getTradieCoordinationDashboard(
         inactiveTradies: 0,
         completionRate: 0,
       },
-      tabCounts: { all: 0, week: 0, confirmed: 0, pending: 0, overdue: 0, completed: 0 },
+      tabCounts: {
+        all: 0,
+        week: 0,
+        confirmed: 0,
+        pending: 0,
+        overdue: 0,
+        completed: 0,
+      },
       tradeOptions: [],
       statusMetrics: [],
       tradeBreakdown: [],

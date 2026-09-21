@@ -20,6 +20,7 @@ import {
 } from "@/lib/leads/lead-helpers";
 import { Button } from "@/components/ui/button";
 import { ReactEmailIframe } from "../render-email";
+import { renderEmailHtml } from "@/lib/leads/render-email-html";
 import { useEmailAdHock } from "@/hooks/use-email-ad-hock";
 import { CustomTemplateCreation } from "./custom-template-creation";
 import { getEditablePreviewHtml } from "@/lib/utils/email-preview";
@@ -130,6 +131,17 @@ export function EmailCampaignModal({
     const now = new Date();
 
     try {
+      // The AI template is used as written, then hydrated per recipient below.
+      //
+      // The iframe-scraping fallback that used to sit here was unreachable —
+      // `category === "custom"` is only ever set in a branch that already
+      // requires `hook.generatedHtml` — and scraping one shared preview is what
+      // sent every recipient the first lead's details in the first place.
+      const isCustomTemplate = selectedTemplate.category === "custom";
+      const customHtmlTemplate = isCustomTemplate
+        ? (hook.generatedHtml ?? null)
+        : null;
+
       const updated: Lead[] = [];
       const batchSize = 20;
       for (let index = 0; index < allLeads.length; index += batchSize) {
@@ -140,41 +152,16 @@ export function EmailCampaignModal({
             let finalHtmlBody = "";
             try {
               const subject = hydrateVariable(subjectTemplate, lead);
-              const iframeDoc = emailIframeRef.current?.contentDocument;
-              if (iframeDoc) {
-                // Clean up DOM artifacts from interactive preview
-                iframeDoc
-                  .querySelectorAll(".rc-hover-toolbar")
-                  .forEach((t) => t.remove());
-                iframeDoc.querySelectorAll("a, button").forEach((el) => {
-                  (el as HTMLElement).style.outline = "";
-                  (el as HTMLElement).style.outlineOffset = "";
-                });
-                iframeDoc.body.contentEditable = "false";
-
-                let cleanHtml = iframeDoc.body.innerHTML;
-                cleanHtml = cleanHtml.replace(
-                  /\s*contenteditable="[^"]*"/gi,
-                  "",
+              if (isCustomTemplate && customHtmlTemplate) {
+                finalHtmlBody = hydrateVariable(
+                  DOMPurify.sanitize(customHtmlTemplate),
+                  lead,
                 );
-                cleanHtml = cleanHtml.replace(/\s*spellcheck="[^"]*"/gi, "");
-                cleanHtml = cleanHtml.replace(/<style[\s\S]*?<\/style>/gi, "");
-                cleanHtml = cleanHtml.replace(
-                  /<script[\s\S]*?<\/script>/gi,
-                  "",
+              } else if (selectedTemplate.category) {
+                finalHtmlBody = await renderEmailHtml(
+                  selectedTemplate.category,
+                  lead,
                 );
-                cleanHtml = cleanHtml.replace(
-                  /outline:\s*2px dashed #c6923a;?\s*/gi,
-                  "",
-                );
-                cleanHtml = cleanHtml.replace(
-                  /outline-offset:\s*2px;?\s*/gi,
-                  "",
-                );
-                cleanHtml = cleanHtml.replace(/outline:\s*none;?\s*/gi, "");
-                // Capture the updated HTML
-                finalHtmlBody = cleanHtml;
-                finalHtmlBody = hydrateVariable(finalHtmlBody, lead);
               }
 
               if (!finalHtmlBody) {
@@ -225,7 +212,10 @@ export function EmailCampaignModal({
       );
     } catch (error) {
       console.error("Campaign error:", error);
-      showToast("Failed to send the email campaign. Please try again.", "error");
+      showToast(
+        "Failed to send the email campaign. Please try again.",
+        "error",
+      );
     } finally {
       setSending(false);
       onClose();
@@ -452,8 +442,9 @@ export function EmailCampaignModal({
             Email Preview
           </label>
           <p className="mb-2 text-[11px] text-muted-foreground">
-            Preview shows data for the first lead. All emails will be
-            personalized per lead.
+            Preview shows the first lead&apos;s details. Each email is rendered
+            separately with its own recipient&apos;s details, so this preview is
+            read-only.
           </p>
           {selectedTemplate &&
           selectedTemplate.id !== -1 &&
@@ -479,7 +470,9 @@ export function EmailCampaignModal({
                   // allow-scripts that would let AI-generated markup run script
                   // in our origin — so sanitize the untrusted HTML first; the
                   // only script left to run is our trusted preview toolbar.
-                  srcDoc={getEditablePreviewHtml(DOMPurify.sanitize(hook.generatedHtml))}
+                  srcDoc={getEditablePreviewHtml(
+                    DOMPurify.sanitize(hook.generatedHtml),
+                  )}
                   className="w-full h-full"
                   title="Email Preview"
                   sandbox="allow-same-origin allow-scripts"

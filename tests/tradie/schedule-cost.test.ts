@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { NORMAL_WORKING_HOURS, scheduleTotalCost } from "../../utils/calculations";
+import {
+  NORMAL_WORKING_HOURS,
+  scheduleTotalCost,
+} from "../../utils/calculations";
 
 test("an hourly price is costed per site day", () => {
-  assert.equal(scheduleTotalCost(120, 3, "HOURLY"), 120 * NORMAL_WORKING_HOURS * 3);
+  assert.equal(
+    scheduleTotalCost(120, 3, "HOURLY"),
+    120 * NORMAL_WORKING_HOURS * 3,
+  );
 });
 
 test("a fixed price is the whole job, however long it takes", () => {
@@ -21,7 +27,9 @@ test("duration does not change a fixed price", () => {
 });
 
 test("hourly still scales with duration", () => {
-  assert.ok(scheduleTotalCost(100, 5, "HOURLY") > scheduleTotalCost(100, 1, "HOURLY"));
+  assert.ok(
+    scheduleTotalCost(100, 5, "HOURLY") > scheduleTotalCost(100, 1, "HOURLY"),
+  );
 });
 
 test("zero duration costs nothing hourly but still owes a fixed quote", () => {
@@ -75,7 +83,10 @@ test("no component renders a tradie price without its unit", async () => {
     for (const [i, raw] of source.split(/\r?\n/).entries()) {
       const line = raw.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
       // A raw currency format of a price, not routed through the formatter.
-      if (/rateCurrency\.format\(/.test(line) && !/formatQuotedPrice|rateCurrency\.format,/.test(line)) {
+      if (
+        /rateCurrency\.format\(/.test(line) &&
+        !/formatQuotedPrice|rateCurrency\.format,/.test(line)
+      ) {
         offenders.push(`${file}:${i + 1}`);
       }
       // A hardcoded per-hour suffix next to a rendered value.
@@ -84,7 +95,11 @@ test("no component renders a tradie price without its unit", async () => {
       }
     }
   }
-  assert.deepEqual(offenders, [], `price rendered without its unit:\n${offenders.join("\n")}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `price rendered without its unit:\n${offenders.join("\n")}`,
+  );
 });
 
 /* ── emailed quotes ────────────────────────────────────────────────── */
@@ -150,8 +165,14 @@ test("a day rate is standardised to an hourly one at 8 hours a day", () => {
 });
 
 test("hourly and fixed quotes pass through untouched", () => {
-  assert.deepEqual(normalizeQuoteBasis(120, "HOURLY"), { amount: 120, unit: "HOURLY" });
-  assert.deepEqual(normalizeQuoteBasis(4800, "FIXED"), { amount: 4800, unit: "FIXED" });
+  assert.deepEqual(normalizeQuoteBasis(120, "HOURLY"), {
+    amount: 120,
+    unit: "HOURLY",
+  });
+  assert.deepEqual(normalizeQuoteBasis(4800, "FIXED"), {
+    amount: 4800,
+    unit: "FIXED",
+  });
 });
 
 test("a normalised day rate is not rounded before it is costed", () => {

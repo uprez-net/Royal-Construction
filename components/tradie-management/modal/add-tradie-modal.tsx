@@ -72,7 +72,9 @@ const tradieSchema = z.object({
       "Enter a valid Australian number, e.g. 04XX XXX XXX or 02 XXXX XXXX",
     ),
   location: z.string().min(2, "Location is required"),
-  lastQuotedPrice: z.number().positive("Last quoted price must be greater than 0"),
+  lastQuotedPrice: z
+    .number()
+    .positive("Last quoted price must be greater than 0"),
   lastQuotedPriceUnit: z.enum(["HOURLY", "FIXED"]),
   abn: z
     .string()
@@ -337,7 +339,9 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                     value={formData.lastQuotedPrice || ""}
                     aria-invalid={Boolean(fieldError("lastQuotedPrice"))}
                     aria-describedby={
-                      fieldError("lastQuotedPrice") ? "tradie-rate-error" : undefined
+                      fieldError("lastQuotedPrice")
+                        ? "tradie-rate-error"
+                        : undefined
                     }
                     onChange={(e) =>
                       updateField(
@@ -374,7 +378,9 @@ export default function AddTradieModal({ open, onClose }: AddTradieModalProps) {
                           name="tradie-price-unit"
                           value={unit}
                           checked={formData.lastQuotedPriceUnit === unit}
-                          onChange={() => updateField("lastQuotedPriceUnit", unit)}
+                          onChange={() =>
+                            updateField("lastQuotedPriceUnit", unit)
+                          }
                           className="accent-primary"
                         />
                         {label}

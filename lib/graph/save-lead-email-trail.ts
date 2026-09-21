@@ -1,16 +1,17 @@
-'use server';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
-import { getAllEmailThreads, parseEmailDate } from '@/utils/email-parser';
-import { generateEmailChecksum } from '@/utils/generator';
-import { dataTimeFormat, normalizeEmailAddress } from '@/utils/formatters';
+import "server-only";
+
+import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { getAllEmailThreads, parseEmailDate } from "@/utils/email-parser";
+import { generateEmailChecksum } from "@/utils/generator";
+import { dataTimeFormat, normalizeEmailAddress } from "@/utils/formatters";
 
 interface SaveLeadEmailTrailParams {
-    from: string;
-    to: string;
-    subject: string;
-    body: string;
-    sentAt: Date;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  sentAt: Date;
 }
 
 /**
@@ -43,48 +44,62 @@ interface SaveLeadEmailTrailParams {
  * @throws {Error} If no lead exists with the provided sender email.
  * @throws {Error} If an unexpected database or persistence error occurs.
  */
-export async function saveLeadEmailTrail({ from, to, subject, body, sentAt }: SaveLeadEmailTrailParams) {
-    try {
-        const leadId = await prisma.lead.findFirst({
-            where: {
-                email: from,
-            }
-        });
-        if (!leadId) {
-            console.log(`  No lead found with email: ${from}. Aborting save to email trail.`);
-            throw new Error(`No lead found with email: ${from}. Aborting save to email trail.`);
-        }
-        const threads = getAllEmailThreads(body, {
-            from: from,
-            to: to,
-            subject: subject,
-            sentAt: dataTimeFormat.format(new Date(sentAt))
-        });
-        if (threads.length === 0) {
-            return;
-        }
-        const createManyData: Prisma.LeadEmailsCreateManyInput[] = [];
-        for (const thread of threads) {
-            const persistedSubject = thread.subject.trim() || subject;
-            const checksum = await generateEmailChecksum(persistedSubject, thread.body, thread.from, thread.to);
-            createManyData.push({
-                leadId: leadId.id,
-                emailTo: normalizeEmailAddress(thread.to),
-                subject: persistedSubject,
-                body: thread.body,
-                checksum: checksum,
-                sentAt: parseEmailDate(thread.sentAt) ?? new Date(sentAt),
-                emailFrom: normalizeEmailAddress(thread.from),
-            });
-        }
+export async function saveLeadEmailTrail({
+  from,
+  to,
+  subject,
+  body,
+  sentAt,
+}: SaveLeadEmailTrailParams) {
+  try {
+    const leadId = await prisma.lead.findFirst({
+      where: {
+        email: from,
+      },
+    });
+    if (!leadId) {
+      console.log(
+        `  No lead found with email: ${from}. Aborting save to email trail.`,
+      );
+      throw new Error(
+        `No lead found with email: ${from}. Aborting save to email trail.`,
+      );
+    }
+    const threads = getAllEmailThreads(body, {
+      from: from,
+      to: to,
+      subject: subject,
+      sentAt: dataTimeFormat.format(new Date(sentAt)),
+    });
+    if (threads.length === 0) {
+      return;
+    }
+    const createManyData: Prisma.LeadEmailsCreateManyInput[] = [];
+    for (const thread of threads) {
+      const persistedSubject = thread.subject.trim() || subject;
+      const checksum = await generateEmailChecksum(
+        persistedSubject,
+        thread.body,
+        thread.from,
+        thread.to,
+      );
+      createManyData.push({
+        leadId: leadId.id,
+        emailTo: normalizeEmailAddress(thread.to),
+        subject: persistedSubject,
+        body: thread.body,
+        checksum: checksum,
+        sentAt: parseEmailDate(thread.sentAt) ?? new Date(sentAt),
+        emailFrom: normalizeEmailAddress(thread.from),
+      });
+    }
 
-        await prisma.leadEmails.createMany({
-            data: createManyData,
-            skipDuplicates: true, // This will skip inserting records with duplicate checksums
-        });
-    }
-    catch (error) {
-        console.error('Error saving lead email trail:', error);
-        throw error;
-    }
+    await prisma.leadEmails.createMany({
+      data: createManyData,
+      skipDuplicates: true, // This will skip inserting records with duplicate checksums
+    });
+  } catch (error) {
+    console.error("Error saving lead email trail:", error);
+    throw error;
+  }
 }

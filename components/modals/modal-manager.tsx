@@ -27,9 +27,14 @@ import {
 } from "@/lib/store/slices/tradiesSlice";
 import { toast } from "sonner";
 import {
+  ComplianceApprovalDecision,
   MilestoneStatus,
+  ProjectStage,
   TradieApprovalActionType,
   TradieScheduleStatus,
+  type ComplianceDocumentType,
+  type ComplianceExternalApplicationKind,
+  type CompliancePartyType,
 } from "@prisma/client";
 import { ProjectDetailModal } from "../projects/project-detail-modal";
 import { AddMaterialModal } from "../projects/add-material-modal";
@@ -59,6 +64,29 @@ import { WorkflowStreamProvider } from "@/context/WorkFlowStatusContext";
 import EditTradieModal from "../tradie-management/modal/edit-tradie-modal";
 import { LeadStage } from "../leads";
 import FilePreviewCanvas from "../shared/file-preview-canvas";
+import { StartCertifierEngagementModal } from "./start-certifier-engagement-modal";
+import type {
+  ComplianceExternalApplicationRecord,
+  VaultAttachmentOption,
+} from "@/types/compliance";
+import type { DeveloperApprovalDocument } from "@/constants/complianceDocuments";
+import { ApplicationModal } from "./compliance/application-modal";
+import { ConnectPartyModal } from "./compliance/connect-party-modal";
+import { PartyRevisionModal } from "./compliance/party-revision-modal";
+import { DeveloperDecisionModal } from "./compliance/developer-decision-modal";
+import { DeveloperResendModal } from "./compliance/developer-resend-modal";
+import { ResubmitApplicationModal } from "./compliance/resubmit-application-modal";
+import { WasteManagementModal } from "./compliance/waste-management-modal";
+import { ResolveAlertModal } from "./compliance/resolve-alert-modal";
+import { ResolveMeetingModal } from "./compliance/resolve-meeting-modal";
+import { ReviewPlansModal } from "./compliance/review-plans-modal";
+import { ScheduleMeetingModal } from "./compliance/schedule-meeting-modal";
+import { CertifierDiscoveryModal } from "./certifier-discovery-modal";
+import { CertifierExtractModal } from "./certifier-extract-modal";
+import { CertifierPackReadyModal } from "./certifier-pack-ready-modal";
+import { CertifierSendSignedCopiesModal } from "./certifier-send-signed-copies-modal";
+import { ComplianceCompleteModal } from "./compliance-complete-modal";
+import { ComplianceRejectModal } from "./compliance-reject-modal";
 
 export function ModalManager() {
   const modal = useAppSelector((state) => state.ui.modal);
@@ -106,7 +134,12 @@ export function ModalManager() {
     const loading = toast.loading("Updating status...");
     handleClose();
     try {
-      await updateScheduleStatuses([row.id], TradieScheduleStatus.AWAITING_ADMIN_APPROVAL);
+      await updateScheduleStatuses(
+        [row.id],
+        row.status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+          ? TradieScheduleStatus.CONFIRMED
+          : TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+      );
     } catch (error) {
       toast.error("Failed to update status. Please try again.");
       console.error("Error updating tradie schedule status:", error);
@@ -352,17 +385,23 @@ export function ModalManager() {
         />
       );
     }
-    case "addMilestone":
-      const { projectId: addMilestoneProjectId } = modal.payload as {
+    case "addMilestone": {
+      const {
+        projectId: addMilestoneProjectId,
+        projectStage: addMilestoneProjectStage,
+      } = modal.payload as {
         projectId: string;
+        projectStage?: ProjectStage;
       };
       return (
         <AddMilestoneModal
           projectId={addMilestoneProjectId}
+          projectStage={addMilestoneProjectStage}
           isOpen
           onClose={handleClose}
         />
       );
+    }
     case "updateMilestoneStatus":
       const {
         milestoneId: updateMilestoneStatusId,
@@ -582,12 +621,481 @@ export function ModalManager() {
       return <EditTradieModal open onClose={handleClose} tradie={tradie} />;
     }
     case "previewFile": {
-      const { fileUrl } = modal.payload as { fileUrl: string };
+      const { fileUrl, fileName, fileType } = modal.payload as {
+        fileUrl: string;
+        fileName?: string | null;
+        fileType?: string | null;
+      };
       return (
         <FilePreviewCanvas
           key={fileUrl} // extra safety net — forces a clean remount
           url={fileUrl}
+          fileName={fileName}
+          fileType={fileType}
           onClose={handleClose} // swap in your actual close action
+        />
+      );
+    }
+    case "startCertifierEngagement": {
+      const { projectId: id, defaultAddress } = modal.payload as {
+        projectId: string;
+        defaultAddress: string;
+      };
+      return (
+        <StartCertifierEngagementModal
+          projectId={id}
+          defaultAddress={defaultAddress}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceApplication": {
+      const {
+        projectId: id,
+        kind,
+        application,
+        portalUrl,
+      } = modal.payload as {
+        projectId: string;
+        kind: ComplianceExternalApplicationKind;
+        application: ComplianceExternalApplicationRecord | null;
+        portalUrl?: string | null;
+      };
+      return (
+        <ApplicationModal
+          projectId={id}
+          kind={kind}
+          application={application}
+          portalUrl={portalUrl}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+
+    case "requestWasteManagementPlan": {
+      const {
+        projectId: id,
+        contactName,
+        contactEmail,
+        attachments,
+        vaultOptions,
+        checklistDocumentId,
+      } = modal.payload as {
+        projectId: string;
+        contactName: string | null;
+        contactEmail: string | null;
+        attachments: { name: string; url: string }[];
+        vaultOptions?: VaultAttachmentOption[];
+        checklistDocumentId?: string;
+      };
+      return (
+        <WasteManagementModal
+          projectId={id}
+          contactName={contactName}
+          contactEmail={contactEmail}
+          attachments={attachments}
+          vaultOptions={vaultOptions}
+          checklistDocumentId={checklistDocumentId}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+
+    case "connectComplianceParty": {
+      const {
+        projectId: id,
+        party,
+        subjectAddress,
+        prefilled,
+        checklistDocumentId,
+        deliverables,
+        council,
+        location,
+        customer,
+        vaultOptions,
+      } = modal.payload as {
+        projectId: string;
+        party: CompliancePartyType;
+        subjectAddress: string;
+        prefilled: { name: string; url: string }[];
+        checklistDocumentId?: string;
+        deliverables?: {
+          documentType: ComplianceDocumentType;
+          checklistDocumentId?: string;
+        }[];
+        council?: string | null;
+        location?: string | null;
+        customer: {
+          name: string;
+          email: string | null;
+          phone: string | null;
+          address: string | null;
+        };
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <ConnectPartyModal
+          projectId={id}
+          party={party}
+          subjectAddress={subjectAddress}
+          prefilled={prefilled}
+          checklistDocumentId={checklistDocumentId}
+          deliverables={deliverables ?? []}
+          council={council}
+          location={location}
+          customer={customer}
+          vaultOptions={vaultOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "requestCompliancePartyRevision": {
+      const {
+        projectId: id,
+        outreachId,
+        party,
+        contactName,
+        contactEmail,
+        subjectAddress,
+        documentLabel,
+        rejectionReason,
+        attachments,
+        vaultOptions,
+      } = modal.payload as {
+        projectId: string;
+        outreachId: string;
+        party: CompliancePartyType;
+        contactName?: string | null;
+        contactEmail?: string | null;
+        subjectAddress: string;
+        documentLabel: string;
+        rejectionReason: string;
+        attachments: {
+          fileId: string;
+          name: string;
+          url: string;
+        }[];
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <PartyRevisionModal
+          key={`${outreachId}:${documentLabel}:${rejectionReason}`}
+          projectId={id}
+          outreachId={outreachId}
+          party={party}
+          contactName={contactName}
+          contactEmail={contactEmail}
+          subjectAddress={subjectAddress}
+          documentLabel={documentLabel}
+          rejectionReason={rejectionReason}
+          attachments={attachments}
+          vaultOptions={vaultOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "developerDecision": {
+      const {
+        projectId: id,
+        documentType,
+        decision,
+        estate,
+      } = modal.payload as {
+        projectId: string;
+        // Which document they are answering about. Optional on the wire and
+        // defaulted in the data layer to the bushfire report, which is what every
+        // caller meant before the architectural design came under covenant.
+        documentType?: DeveloperApprovalDocument;
+        decision?: ComplianceApprovalDecision;
+        estate?: string | null;
+      };
+      // A guard rather than a cast, for the reason the certifierExtract case
+      // below keeps one. `DeveloperDecisionModal` reads `isRejecting` as
+      // `decision === REJECTED`, so a payload arriving without one renders the
+      // approval copy and dispatches `recordDeveloperDecision` with
+      // `decision: undefined`. That click opens a covenant gate the dialog
+      // itself says cannot be undone from the screen, and defaulting it to the
+      // approval branch is the worst of the two ways to be wrong.
+      if (
+        decision !== ComplianceApprovalDecision.APPROVED &&
+        decision !== ComplianceApprovalDecision.REJECTED
+      ) {
+        return null;
+      }
+      return (
+        <DeveloperDecisionModal
+          projectId={id}
+          documentType={documentType}
+          decision={decision}
+          estate={estate}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "resubmitApplication": {
+      const {
+        projectId: id,
+        kind,
+        nextRound,
+        applicationRef,
+      } = modal.payload as {
+        projectId: string;
+        kind: ComplianceExternalApplicationKind;
+        nextRound: number;
+        applicationRef?: string | null;
+      };
+      return (
+        <ResubmitApplicationModal
+          projectId={id}
+          kind={kind}
+          nextRound={nextRound}
+          applicationRef={applicationRef}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "developerResend": {
+      const {
+        projectId: id,
+        documentType,
+        previousReason,
+        vaultOptions,
+      } = modal.payload as {
+        projectId: string;
+        documentType?: DeveloperApprovalDocument;
+        previousReason?: string | null;
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <DeveloperResendModal
+          projectId={id}
+          documentType={documentType}
+          previousReason={previousReason}
+          vaultOptions={vaultOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "scheduleComplianceMeeting": {
+      const { projectId: id, vaultOptions } = modal.payload as {
+        projectId: string;
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <ScheduleMeetingModal
+          projectId={id}
+          vaultOptions={vaultOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "resolveComplianceMeeting": {
+      const {
+        projectId: id,
+        scheduledFor,
+        vaultOptions,
+      } = modal.payload as {
+        projectId: string;
+        scheduledFor: string;
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <ResolveMeetingModal
+          projectId={id}
+          vaultOptions={vaultOptions}
+          scheduledFor={scheduledFor}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "reviewArchitectPlans": {
+      const { projectId: id, vaultOptions } = modal.payload as {
+        projectId: string;
+        vaultOptions?: VaultAttachmentOption[];
+      };
+      return (
+        <ReviewPlansModal
+          projectId={id}
+          vaultOptions={vaultOptions}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "resolveComplianceAlert": {
+      const {
+        projectId: id,
+        alertId,
+        alertTitle,
+        guidance,
+      } = modal.payload as {
+        projectId: string;
+        alertId: string;
+        alertTitle: string;
+        guidance: string;
+      };
+      return (
+        <ResolveAlertModal
+          projectId={id}
+          alertId={alertId}
+          alertTitle={alertTitle}
+          guidance={guidance}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierDiscovery": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <CertifierDiscoveryModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierPackReady": {
+      const {
+        projectId: id,
+        documentCount,
+        updatedCount,
+        isResend,
+      } = modal.payload as {
+        projectId: string;
+        documentCount: number;
+        updatedCount: number;
+        isResend?: boolean;
+      };
+      return (
+        <CertifierPackReadyModal
+          projectId={id}
+          documentCount={documentCount}
+          updatedCount={updatedCount}
+          isResend={isResend ?? false}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "certifierExtract": {
+      const {
+        projectId: id,
+        engagementId,
+        documentId,
+      } = modal.payload as {
+        projectId: string;
+        engagementId: string;
+        documentId?: string;
+      };
+      // Both entry points guarantee this — the tab's button is disabled until a
+      // checklist exists, and the notification url is only parsed into a
+      // payload when it carries one. Kept as a guard rather than a cast so a
+      // third caller cannot quietly open a modal with nothing to run.
+      if (!documentId) {
+        return null;
+      }
+      return (
+        // Scoped to the modal, as the createProject case is: the provider holds
+        // one run, and a second stream opened elsewhere would overwrite it.
+        <WorkflowStreamProvider initialRunId={""}>
+          <CertifierExtractModal
+            projectId={id}
+            engagementId={engagementId}
+            documentId={documentId}
+            open
+            onOpenChange={(open) => {
+              if (!open) handleClose();
+            }}
+          />
+        </WorkflowStreamProvider>
+      );
+    }
+    case "certifierSendSignedCopies": {
+      const { projectId: id } = modal.payload as { projectId: string };
+      return (
+        <CertifierSendSignedCopiesModal
+          projectId={id}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceComplete": {
+      const { projectId: id, documentCount } = modal.payload as {
+        projectId: string;
+        documentCount: number;
+      };
+      return (
+        <ComplianceCompleteModal
+          projectId={id}
+          documentCount={documentCount}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
+        />
+      );
+    }
+    case "complianceReject": {
+      const {
+        projectId: id,
+        documentId,
+        documentLabel,
+      } = modal.payload as {
+        projectId: string;
+        documentId: string;
+        documentLabel: string;
+      };
+      return (
+        <ComplianceRejectModal
+          projectId={id}
+          documentId={documentId}
+          documentLabel={documentLabel}
+          open
+          onOpenChange={(open) => {
+            if (!open) handleClose();
+          }}
         />
       );
     }

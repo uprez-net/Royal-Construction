@@ -22,7 +22,18 @@ export function OfferCardHeading({
         {icon}
       </span>
       <div className="min-w-0">
-        <CardTitle id={titleId}>{title}</CardTitle>
+        {/* h3: the enclosing step section renders the h2 (see
+            offer-workspace-step-section.tsx). Card titles were <div>s, so the
+            outline jumped h2 -> h3 with the card boundary invisible to a screen
+            reader. */}
+        {/* font-semibold, not the CardTitle default of font-medium: the card
+            title is the top of the panel's three-level ramp (see the type ramp
+            note in offer-workspace-fields.tsx) and has to clear the group
+            headings below it decisively. Scoped here rather than in
+            components/ui/card.tsx, which every other surface shares. */}
+        <CardTitle as="h3" className="font-semibold" id={titleId}>
+          {title}
+        </CardTitle>
         <CardDescription
           className={
             singleLineDescription

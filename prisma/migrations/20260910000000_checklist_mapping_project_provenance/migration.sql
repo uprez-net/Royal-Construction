@@ -1,0 +1,32 @@
+-- Provenance for a checklist line answered from a document the project holds
+-- rather than from one on the compliance file.
+--
+-- The HBCF warranty is the only one: cover is raised on the Overview tab, so
+-- the certificate is a File with no ComplianceDocument behind it and
+-- `mappedFromDocumentId` had nothing to point at. It was left null, which the
+-- mapper's own guards read as "somebody filled this in by hand" -- so the line
+-- was skipped on every pass after the first, and replacing the certificate on
+-- the project left the old copy on the checklist for good.
+--
+-- Additive and defaulted, so every existing row keeps its current meaning.
+--
+-- No backfill, and the reason is narrower than "we cannot tell them apart".
+-- A copy's File id is derived -- sha256 of the line id and the source file id --
+-- so a legacy row whose project certificate has NOT been replaced could be
+-- identified exactly, by re-deriving the id from the certificate the project
+-- holds now and matching it. What cannot be identified is the row whose
+-- certificate HAS been replaced, because the id it was derived from is gone.
+--
+-- That is the whole of the population worth repairing, and it is the half a
+-- backfill cannot reach. Marking the other half fixes nothing that is currently
+-- wrong -- those rows behave correctly until their next replacement -- while
+-- costing a migration that must parse project JSON, re-implement the digest in
+-- SQL and decide which checklist lines are HBCF lines, which needs the label and
+-- detail parsing that lives in application code. Getting any of that wrong marks
+-- a hand-uploaded row as ours, and the mapper then overwrites somebody's own
+-- work.
+--
+-- A legacy row is repaired by replacing the file on the checklist row itself,
+-- which is a control the row already has.
+ALTER TABLE "ComplianceDocument"
+  ADD COLUMN "mappedFromProject" BOOLEAN NOT NULL DEFAULT false;

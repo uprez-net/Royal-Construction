@@ -85,9 +85,10 @@ function resolveItems(
   const buildType = input.job.buildType.trim();
   return [
     {
-      label: buildType.length > 0
-        ? `${buildType} — fixed price building works (including GST)`
-        : "Fixed price building works (including GST)",
+      label:
+        buildType.length > 0
+          ? `${buildType} — fixed price building works (including GST)`
+          : "Fixed price building works (including GST)",
       amount: money(total),
     },
   ];
@@ -114,7 +115,9 @@ export function buildOfferQuotationEmailProps(input: {
     location: location.length > 0 ? location : undefined,
     quoteNumber: input.reference,
     items: resolveItems(input.template),
-    totalAmount: money(input.template.customerPrice.selectedContractValueIncGst),
+    totalAmount: money(
+      input.template.customerPrice.selectedContractValueIncGst,
+    ),
     validityPeriod: resolveValidityPeriod(job.validUntil),
     // No quotationUrl / CTA: the full quotation travels as the attached PDF, so
     // the template has no call-to-action button to point anywhere.

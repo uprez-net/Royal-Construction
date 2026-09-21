@@ -17,3 +17,18 @@ export async function voidEnvelope(
     } as docusign.Envelope,
   });
 }
+
+// What DocuSign reports for an envelope now. Read only after a void is refused:
+// DocuSign voids only an envelope still out for signature, so a refusal may mean
+// the envelope already ended without its Connect event ever reaching us.
+export async function getEnvelopeStatus(
+  context: DocusignContext,
+  envelopeId: string,
+): Promise<string | null> {
+  const envelopesApi = new docusign.EnvelopesApi(context.apiClient);
+  const envelope = await envelopesApi.getEnvelope(
+    context.accountId,
+    envelopeId,
+  );
+  return envelope.status ?? null;
+}

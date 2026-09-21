@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 import {
   CheckCircle2,
   Clock,
@@ -19,6 +20,10 @@ import {
   type OfferActivityEvent,
   type OfferActivitySend,
 } from "@/lib/data/offer-activity-types";
+import {
+  formatActivityNote,
+  formatActivityWhen,
+} from "@/lib/offer/activity-format";
 import {
   OFFER_STATUS_LABEL,
   type OfferWorkspaceStatus,
@@ -45,12 +50,16 @@ export function OfferWorkspaceActivity({
   const [note, setNote] = useState("");
   const [logging, setLogging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What "this year" means for the timestamps. Restamped on each load rather
+  // than read during render, which must stay pure.
+  const [now, setNow] = useState<Date>(() => new Date());
 
   const applyResult = useCallback(
     (result: Awaited<ReturnType<typeof loadOfferActivity>>) => {
       if (result.ok) {
         setSends(result.sends);
         setEvents(result.events);
+        setNow(new Date());
         setError(null);
       } else {
         setError(result.error);
@@ -112,7 +121,9 @@ export function OfferWorkspaceActivity({
           setError(result.error);
         }
       } catch (logError) {
-        setError(`Couldn't log the change request: ${(logError as Error).message}`);
+        setError(
+          `Couldn't log the change request: ${(logError as Error).message}`,
+        );
       } finally {
         setLogging(false);
       }
@@ -124,14 +135,12 @@ export function OfferWorkspaceActivity({
     return null;
   }
 
-  const items = mergeTimeline(sends, events);
+  const items = mergeTimeline(sends, events, now);
 
   return (
     <div className="grid gap-3 rounded-lg border border-border/70 bg-white/95 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Negotiation activity
-        </p>
+        <p className={GROUP_HEADING_CLASS}>Negotiation activity</p>
         <Button
           disabled={loading}
           onClick={() => void refresh()}
@@ -149,8 +158,8 @@ export function OfferWorkspaceActivity({
 
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No activity yet — sends, opens, replies, and status changes will appear
-          here.
+          No activity yet — sends, opens, replies, and status changes will
+          appear here.
         </p>
       ) : (
         <ol className="grid gap-2">
@@ -164,7 +173,7 @@ export function OfferWorkspaceActivity({
               </span>
               <span className="flex-1">{item.label}</span>
               <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                {formatWhen(item.at)}
+                {formatActivityWhen(item.at, now)}
               </span>
             </li>
           ))}
@@ -214,30 +223,52 @@ type TimelineItem = {
 function mergeTimeline(
   sends: readonly OfferActivitySend[],
   events: readonly OfferActivityEvent[],
+  now: Date,
 ): TimelineItem[] {
-  const sendItems: TimelineItem[] = sends.map((send, index) => ({
-    key: `send-${index}-${send.sentAt}`,
-    at: send.sentAt,
-    icon: <Send className="size-3.5" aria-hidden="true" />,
-    label: (
-      <span>
-        <span className="font-medium text-foreground">
-          Offer v{send.offerFileVersion}
-        </span>{" "}
-        sent to <span className="font-mono">{send.recipientEmail}</span>
-        {send.openedAt ? (
-          <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
-            <MailOpen className="size-3" aria-hidden="true" /> opened
-          </span>
-        ) : null}
-        {send.repliedAt ? (
-          <span className="ml-1 inline-flex items-center gap-1 text-success">
-            <Reply className="size-3" aria-hidden="true" /> replied
-          </span>
-        ) : null}
-      </span>
-    ),
-  }));
+  const sendItems: TimelineItem[] = sends.map((send, index) => {
+    const repliedWhen = send.repliedAt
+      ? formatActivityWhen(send.repliedAt, now)
+      : null;
+    // repliedAt is stamped on the first reply and lastReplyAt on the latest, so
+    // the second only adds anything once the client has written back again.
+    // Decided on the instants, never on the labels: formatActivityWhen renders
+    // to the minute, so a second reply arriving seconds after the first formats
+    // identically and the timeline would hide it.
+    const hasLaterReply =
+      send.lastReplyAt !== null &&
+      send.lastReplyAt !== undefined &&
+      send.lastReplyAt !== send.repliedAt;
+    const lastReplyWhen = hasLaterReply
+      ? formatActivityWhen(send.lastReplyAt as string, now)
+      : null;
+
+    return {
+      key: `send-${index}-${send.sentAt}`,
+      at: send.sentAt,
+      icon: <Send className="size-3.5" aria-hidden="true" />,
+      label: (
+        <span>
+          <span className="font-medium text-foreground">
+            Offer v{send.offerFileVersion}
+          </span>{" "}
+          sent to <span className="font-mono">{send.recipientEmail}</span>
+          {send.openedAt ? (
+            <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
+              <MailOpen className="size-3" aria-hidden="true" /> opened{" "}
+              {formatActivityWhen(send.openedAt, now)}
+            </span>
+          ) : null}
+          {repliedWhen ? (
+            <span className="ml-1 inline-flex items-center gap-1 text-success">
+              <Reply className="size-3" aria-hidden="true" /> replied{" "}
+              {repliedWhen}
+              {lastReplyWhen ? ` · last reply ${lastReplyWhen}` : null}
+            </span>
+          ) : null}
+        </span>
+      ),
+    };
+  });
 
   const eventItems: TimelineItem[] = events.map((event, index) => ({
     key: `event-${index}-${event.at}`,
@@ -272,16 +303,38 @@ function describeEvent(event: OfferActivityEvent): React.ReactNode {
     return (
       <span>
         <span className="font-medium text-foreground">{to}</span>
-        {event.note ? ` — ${event.note}` : ""}
+        <ActivityNote note={event.note} />
       </span>
     );
   }
   return (
     <span>
-      <span className="text-muted-foreground">{statusLabel(event.fromStatus)}</span>{" "}
+      <span className="text-muted-foreground">
+        {statusLabel(event.fromStatus)}
+      </span>{" "}
       → <span className="font-medium text-foreground">{to}</span>
-      {event.note ? ` — ${event.note}` : ""}
+      <ActivityNote note={event.note} />
     </span>
+  );
+}
+
+// Webhook notes print as sentences; the envelope id stays as secondary text so a
+// signed or declined envelope can still be looked up in DocuSign.
+function ActivityNote({ note }: { readonly note: string | null }) {
+  if (!note) {
+    return null;
+  }
+  const { text, envelopeId } = formatActivityNote(note);
+  return (
+    <>
+      {` — ${text}`}
+      {envelopeId ? (
+        <span className="text-muted-foreground">
+          {" · envelope "}
+          <span className="font-mono">{envelopeId}</span>
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -290,14 +343,4 @@ function describeEvent(event: OfferActivityEvent): React.ReactNode {
 function statusLabel(status: string): string {
   const key = status.toLowerCase() as OfferWorkspaceStatus;
   return OFFER_STATUS_LABEL[key] ?? status;
-}
-
-function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  return date.toLocaleString("en-AU", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

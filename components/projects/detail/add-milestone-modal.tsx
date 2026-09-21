@@ -34,18 +34,26 @@ import { parseCurrency } from "@/utils/parser";
 
 interface AddMilestoneProps {
   projectId: string;
+  /**
+   * The stage the user was looking at when they asked to add an activity.
+   * Without it the form always opened on Deposit, so an activity added from
+   * any other stage landed in the wrong one unless the user noticed.
+   */
+  projectStage?: ProjectStage;
   isOpen: boolean;
   onClose: () => void;
 }
 
-const initialFormState: MilestoneCreationData = {
+const buildInitialFormState = (
+  projectStage: ProjectStage = "Deposit",
+): MilestoneCreationData => ({
   name: "",
   description: "",
   targetDate: "",
   budget: 0,
   parentId: undefined,
-  projectStage: "Deposit",
-};
+  projectStage,
+});
 
 type MilestoneFormErrors = Partial<Record<keyof MilestoneCreationData, string>>;
 
@@ -70,6 +78,7 @@ function RequiredMark() {
 
 export default function AddMilestoneModal({
   projectId,
+  projectStage,
   isOpen,
   onClose,
 }: AddMilestoneProps) {
@@ -78,8 +87,9 @@ export default function AddMilestoneModal({
     (state) => state.projects.activeProject?.milestones ?? [],
   );
   const [isPending, startTransition] = useTransition();
-  const [formState, setFormState] =
-    useState<MilestoneCreationData>(initialFormState);
+  const [formState, setFormState] = useState<MilestoneCreationData>(() =>
+    buildInitialFormState(projectStage),
+  );
   const [fieldErrors, setFieldErrors] = useState<MilestoneFormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -91,7 +101,7 @@ export default function AddMilestoneModal({
   };
 
   const handleFormReset = () => {
-    setFormState(initialFormState);
+    setFormState(buildInitialFormState(projectStage));
     setFieldErrors({});
     setSubmitError(null);
   };
@@ -143,14 +153,14 @@ export default function AddMilestoneModal({
           projectId,
         }),
       ).unwrap();
-      toast.success("Milestone created successfully");
+      toast.success("Activity created successfully");
       handleFormReset();
       onClose();
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to create milestone. Please try again.";
+          : "Failed to create activity. Please try again.";
       setSubmitError(message);
       toast.error(message);
       console.error("Error creating milestone:", error);
@@ -162,11 +172,11 @@ export default function AddMilestoneModal({
       <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-card p-0 shadow-lg sm:max-w-160">
         <DialogHeader className="border-b border-border/70 px-6 py-5">
           <DialogTitle className="text-lg font-semibold text-foreground">
-            Add milestone
+            Add activity
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Define the scope, budget, and parent milestone for a new project
-            phase. Fields marked * are required.
+            Define the scope, budget, and parent for a new activity in this
+            stage. Fields marked * are required.
           </DialogDescription>
         </DialogHeader>
 
@@ -221,7 +231,7 @@ export default function AddMilestoneModal({
               <Textarea
                 id="description"
                 className={textareaClassName}
-                placeholder="What this milestone covers"
+                placeholder="What this activity covers"
                 value={formState.description}
                 onChange={(e) =>
                   handleFormChange("description", e.target.value)
@@ -320,7 +330,7 @@ export default function AddMilestoneModal({
 
             <div className="space-y-1.5">
               <Label htmlFor="parentId" className={labelClassName}>
-                Parent milestone
+                Parent activity
               </Label>
               <Select
                 value={formState.parentId ?? "__none__"}
@@ -336,10 +346,10 @@ export default function AddMilestoneModal({
                   aria-describedby="parentId-hint"
                   className={selectTriggerClassName}
                 >
-                  <SelectValue placeholder="No parent milestone" />
+                  <SelectValue placeholder="No parent activity" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">No parent milestone</SelectItem>
+                  <SelectItem value="__none__">No parent activity</SelectItem>
                   {milestones
                     .filter(
                       (milestone) =>
@@ -354,7 +364,7 @@ export default function AddMilestoneModal({
                 </SelectContent>
               </Select>
               <p id="parentId-hint" className="text-xs text-muted-foreground">
-                Use this to nest the milestone under a larger phase.
+                Use this to nest the activity under a larger one.
               </p>
             </div>
           </div>
@@ -383,7 +393,7 @@ export default function AddMilestoneModal({
               ) : (
                 <Plus className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              {isPending ? "Creating milestone…" : "Create milestone"}
+              {isPending ? "Creating activity…" : "Create activity"}
             </Button>
           </div>
         </form>

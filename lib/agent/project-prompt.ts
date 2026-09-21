@@ -1,5 +1,6 @@
 import type { Lead } from "@prisma/client";
 import { sydneyDateOnly } from "@/lib/dates/sydney";
+import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
 
 export const LEAD_INFO_TO_PROJECT_INFERENCE_PROMPT = `
 You are an experienced residential construction estimator and project planner working for a construction company.
@@ -93,23 +94,15 @@ Project Information
 Budget: ${lead.budget ?? "Not specified"}
 
 Project Types Selected:
-${
-  lead.type.length
-    ? lead.type.map((t) => `- ${t}`).join("\n")
-    : "None"
-}
+${lead.type.length ? lead.type.map((t) => `- ${t}`).join("\n") : "None"}
 
 Sales Notes
 -----------
-${lead.notes?.trim() || "No notes available."}
+${resolveLeadNotesTextOr(lead, "No notes available.")}
 
 Follow Up
 ---------
-Date: ${
-    lead.followupDate
-      ? sydneyDateOnly(lead.followupDate)
-      : "Not scheduled"
-}
+Date: ${lead.followupDate ? sydneyDateOnly(lead.followupDate) : "Not scheduled"}
 
 Time: ${lead.followupTime ?? "Not specified"}
 

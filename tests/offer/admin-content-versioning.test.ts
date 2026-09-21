@@ -25,6 +25,7 @@ import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
 } from "../../lib/offer/workspace-persistence";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Admin offer content is versioned (AdminOfferContent.version) and every offer
 // stamps the version it was built from. Opening a STILL-EDITABLE offer whose
@@ -60,6 +61,7 @@ function scopeItem(id: string, label: string): OfferWorkspaceScopeItem {
     unit: "",
     variationRule: "",
     includedInOfferDocument: true,
+    includedInTender: true,
   };
 }
 
@@ -81,6 +83,7 @@ const BASE_SNAPSHOT: OfferWorkspaceSnapshot = {
   images: EMPTY_OFFER_IMAGES,
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 3,
+  calcVersion: LEGACY_CALC_VERSION,
 };
 
 const PREFILL: AdminOfferPrefill = {
@@ -148,7 +151,12 @@ test("an estimator's figure on a line the admin does not price is preserved", ()
   // "the price is zero", so the estimator's entered cost must survive.
   const snapshot = {
     ...BASE_SNAPSHOT,
-    lines: [costLine("task-landscaping", { costExGst: 8_500, includedInContract: true })],
+    lines: [
+      costLine("task-landscaping", {
+        costExGst: 8_500,
+        includedInContract: true,
+      }),
+    ],
   };
 
   const next = applyAdminPrefillToSnapshot(snapshot, PREFILL);
@@ -161,7 +169,11 @@ test("an estimator's figure on a line the admin does not price is preserved", ()
 test("project-specific state is never touched by a re-apply", () => {
   const snapshot = {
     ...BASE_SNAPSHOT,
-    job: { ...INITIAL_OFFER_JOB, siteAddress: "12 Example St", groundFloorSqm: 180 },
+    job: {
+      ...INITIAL_OFFER_JOB,
+      siteAddress: "12 Example St",
+      groundFloorSqm: 180,
+    },
     selectedPriceInput: "512000",
     priceAdjustmentLabel: "Launch saving",
   };
@@ -186,12 +198,15 @@ test("only a pending offer is re-applied to; sent and agreed stay frozen", () =>
 
 test("a frozen offer whose admin content moved on warns rather than blocks", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",
     adminContentStale: true,
   });
-  const stale = blockers.find((blocker) => blocker.id === "admin-content-stale");
+  const stale = blockers.find(
+    (blocker) => blocker.id === "admin-content-stale",
+  );
 
   assert.ok(stale, "expected a stale-admin-content blocker");
   assert.equal(stale?.severity, "warn");
@@ -199,6 +214,7 @@ test("a frozen offer whose admin content moved on warns rather than blocks", () 
 
 test("no stale blocker when admin content is current", () => {
   const blockers = collectOfferSendBlockers({
+    hasKnownFloorArea: true,
     hasLead: true,
     needsOverrideReason: false,
     expiryState: "valid",
@@ -221,7 +237,10 @@ test("the admin version survives a persistence round-trip", () => {
 });
 
 test("an offer persisted before versioning parses as version 0, so it reads as stale", () => {
-  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<string, unknown>;
+  const persisted = serializeWorkspace(BASE_SNAPSHOT) as Record<
+    string,
+    unknown
+  >;
   delete persisted.adminContentVersion;
 
   const restored = deserializeWorkspace(parseWorkspaceState(persisted));

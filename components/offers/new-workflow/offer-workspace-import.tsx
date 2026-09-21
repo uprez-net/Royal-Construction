@@ -8,6 +8,7 @@ import { readWorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
 import { FileSpreadsheet } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useState } from "react";
+import { FIELD_LABEL_CLASS } from "./offer-workspace-fields";
 
 type WorkbookImportControlProps = {
   readonly importResult: OfferWorkbookImportResult | null;
@@ -73,13 +74,8 @@ export function WorkbookImportControl({
             </p>
           </div>
         </div>
-        <label
-          className="grid w-full gap-1"
-          htmlFor="offer-workbook-import"
-        >
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Workbook file
-          </span>
+        <label className="grid w-full gap-1" htmlFor="offer-workbook-import">
+          <span className={FIELD_LABEL_CLASS}>Workbook file</span>
           <Input
             accept=".xlsx,.xlsm"
             className="bg-white/95"
@@ -109,7 +105,7 @@ function ImportSummary({
   return (
     <div className="grid gap-3 rounded-lg border border-border bg-background/70 p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge className="bg-royal-gold text-white">
+        <Badge className="bg-royal-gold-ink text-white">
           {importResult.costLines.length} Offer rows
         </Badge>
         <Badge variant="outline">{importResult.sourceName}</Badge>

@@ -1,103 +1,109 @@
 import type { TradiePriceUnit } from "@prisma/client";
 
 import type { SafeTradie } from "./project";
-import type { TradieRating, TradieIncident, IncidentSeverity, TradieApprovalActionType, TradieApproval } from "@prisma/client";
+import type {
+  TradieRating,
+  TradieIncident,
+  IncidentSeverity,
+  TradieApprovalActionType,
+  TradieApproval,
+} from "@prisma/client";
 import { TradieScheduleStatus } from "@prisma/client";
 
 export interface TradieRow {
-    id: string;
-    name: string;
-    trade: string;
-    isFavourite: boolean;
-    lastQuotedPrice: string | null;
-    lastQuotedPriceUnit: TradiePriceUnit;
-    rating: string | null;
-    jobsCompleted: number;
-    incidentCount: {
-        open: number;
-        resolved: number;
-    };
+  id: string;
+  name: string;
+  trade: string;
+  isFavourite: boolean;
+  lastQuotedPrice: string | null;
+  lastQuotedPriceUnit: TradiePriceUnit;
+  rating: string | null;
+  jobsCompleted: number;
+  incidentCount: {
+    open: number;
+    resolved: number;
+  };
 }
 
 export interface TradiesByCategory {
-    category: string;
-    avgRating: number;
-    totalCategoryJobsCompleted: number;
-    tradies: TradieRow[];
+  category: string;
+  avgRating: number;
+  totalCategoryJobsCompleted: number;
+  tradies: TradieRow[];
 }
 
-export interface ReviewWithUser extends Omit<TradieRating, 'rating'> {
-    rating: string;
-    user: {
-        id: string;
-        name: string;
-    }
+export interface ReviewWithUser extends Omit<TradieRating, "rating"> {
+  rating: string;
+  user: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface TradieDetails extends SafeTradie {
-    jobsCompleted: number;
-    reviews: ReviewWithUser[];
-    incidents: TradieIncident[];
+  jobsCompleted: number;
+  reviews: ReviewWithUser[];
+  incidents: TradieIncident[];
 }
 
 export interface CreateTradieInput {
-    name: string;
-    trade: string;
-    // Matches the column. `createTradie` passes this object straight to
-    // `prisma.tradie.create({ data: input })`, so a field the schema does not
-    // have is an unknown-argument failure at runtime — and because `data`
-    // receives a variable rather than an object literal, TypeScript performs
-    // no excess-property check and the build stays green.
-    lastQuotedPrice: number;
-    lastQuotedPriceUnit: TradiePriceUnit;
-    abn: string;
-    phone: string;
-    email: string;
-    additionalEmails?: string[];
-    location: string;
-    note?: string;
+  name: string;
+  trade: string;
+  // Matches the column. `createTradie` passes this object straight to
+  // `prisma.tradie.create({ data: input })`, so a field the schema does not
+  // have is an unknown-argument failure at runtime — and because `data`
+  // receives a variable rather than an object literal, TypeScript performs
+  // no excess-property check and the build stays green.
+  lastQuotedPrice: number;
+  lastQuotedPriceUnit: TradiePriceUnit;
+  abn: string;
+  phone: string;
+  email: string;
+  additionalEmails?: string[];
+  location: string;
+  note?: string;
 }
 
 export interface UpdatePriceInput {
-    tradieId: string;
-    newHourlyRate: number;
-    /** The basis the new amount is quoted on. Optional so an older pending
-     *  approval, raised before the basis was captured, still applies against
-     *  whatever the tradie is currently set to. */
-    newPriceUnit?: TradiePriceUnit;
-    reason: string;
+  tradieId: string;
+  newHourlyRate: number;
+  /** The basis the new amount is quoted on. Optional so an older pending
+   *  approval, raised before the basis was captured, still applies against
+   *  whatever the tradie is currently set to. */
+  newPriceUnit?: TradiePriceUnit;
+  reason: string;
 }
 
 export interface ReportIncidentInput {
-    tradieId: string;
-    incidentType: string;
-    incidentSeverity: IncidentSeverity;
-    incidentDescription: string;
-    fileIds?: string[];
+  tradieId: string;
+  incidentType: string;
+  incidentSeverity: IncidentSeverity;
+  incidentDescription: string;
+  fileIds?: string[];
 }
 
 export interface RatingInput {
-    tradieId: string;
-    rating: number;
-    comment?: string;
+  tradieId: string;
+  rating: number;
+  comment?: string;
 }
 
 export interface DeleteInput {
-    tradieId: string;
-    reason: string;
+  tradieId: string;
+  reason: string;
 }
 
 export interface DeleteScheduleInput {
-    scheduleId: string;
-    reason: string;
+  scheduleId: string;
+  reason: string;
 }
 
 export interface TradieTableQuery {
-    search?: string;
-    category?: string;
-    rating?: number;
-    favourite?: boolean;
-    tab: "all" | "flagged";
+  search?: string;
+  category?: string;
+  rating?: number;
+  favourite?: boolean;
+  tab: "all" | "flagged";
 }
 
 /**
@@ -110,31 +116,31 @@ export interface TradieTableQuery {
 export type TradieViewTab = "category" | "list";
 
 export interface UpdatePriceApprovalPayload {
-    newHourlyRate: number;
-    newPriceUnit?: TradiePriceUnit;
+  newHourlyRate: number;
+  newPriceUnit?: TradiePriceUnit;
 }
 
 export interface IncidentReportApprovalPayload {
-    resolution: string;
+  resolution: string;
 }
 
 export interface ApprovalInput {
-    approvalId: string;
-    resolution: "approved" | "rejected";
-    type: TradieApprovalActionType;
-    payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload;
-    rejectReason?: string;
+  approvalId: string;
+  resolution: "approved" | "rejected";
+  type: TradieApprovalActionType;
+  payload?: UpdatePriceApprovalPayload | IncidentReportApprovalPayload;
+  rejectReason?: string;
 }
 
 export interface ScheduleApprovalJsonPayload {
-    scheduleId: string;
-    projectId: string;
-    projectName: string;
-    milestoneId?: string;
-    milestoneName: string;
-    scheduledDate: string;
-    durationDays: number;
-    cost: string;
+  scheduleId: string;
+  projectId: string;
+  projectName: string;
+  milestoneId?: string;
+  milestoneName: string;
+  scheduledDate: string;
+  durationDays: number;
+  cost: string;
 }
 
 /**
@@ -143,72 +149,94 @@ export interface ScheduleApprovalJsonPayload {
  * disappear, and so the resolver knows which schedule to delete.
  */
 export interface ScheduleDeletionJsonPayload {
-    scheduleId: string;
-    projectId: string;
-    projectName: string;
-    milestoneId?: string;
-    milestoneName: string;
-    scheduledDate: string;
-    durationDays: number;
-    cost: string;
-    /** The status the schedule sat in when removal was requested. */
-    currentStatus: TradieScheduleStatus;
+  scheduleId: string;
+  projectId: string;
+  projectName: string;
+  milestoneId?: string;
+  milestoneName: string;
+  scheduledDate: string;
+  durationDays: number;
+  cost: string;
+  /** The status the schedule sat in when removal was requested. */
+  currentStatus: TradieScheduleStatus;
 }
 
 export interface PriceUpdateJsonPayload {
-    newHourlyRate: number;
-    newPriceUnit?: TradiePriceUnit;
+  newHourlyRate: number;
+  newPriceUnit?: TradiePriceUnit;
 }
 
 export interface IncidentReportJsonPayload {
-    incidentId: string;
-    incidentType: string;
-    incidentSeverity: IncidentSeverity;
-    incidentDescription: string;
+  incidentId: string;
+  incidentType: string;
+  incidentSeverity: IncidentSeverity;
+  incidentDescription: string;
 }
 
-export type TradieApprovalPayload = ScheduleApprovalJsonPayload | ScheduleDeletionJsonPayload | PriceUpdateJsonPayload | IncidentReportJsonPayload | undefined;
+export type TradieApprovalPayload =
+  | ScheduleApprovalJsonPayload
+  | ScheduleDeletionJsonPayload
+  | PriceUpdateJsonPayload
+  | IncidentReportJsonPayload
+  | undefined;
 
-export interface SafeTradieApproval extends Omit<TradieApproval, "requestedBy" | "updationData"> {
-    tradie: SafeTradie;
-    requestBy: string;
-    updationData: TradieApprovalPayload;
+export interface SafeTradieApproval extends Omit<
+  TradieApproval,
+  "requestedBy" | "updationData"
+> {
+  tradie: SafeTradie;
+  requestBy: string;
+  updationData: TradieApprovalPayload;
 }
 
-export const TRADIE_SCHEDULE_STATE_MACHINE: Record<TradieScheduleStatus, TradieScheduleStatus[]> = {
-    [TradieScheduleStatus.PENDING]: [
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-        TradieScheduleStatus.NO_RESPONSE,
-        TradieScheduleStatus.PENDING_RESPONSE,
-    ],
-    [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
-        TradieScheduleStatus.CONFIRMED,
-        TradieScheduleStatus.DECLINED,
-    ],
-    [TradieScheduleStatus.PENDING_RESPONSE]: [
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-        TradieScheduleStatus.DECLINED,
-    ],
-    [TradieScheduleStatus.CONFIRMED]: [
-        TradieScheduleStatus.COMPLETED,
-        TradieScheduleStatus.DECLINED,
-    ],
-    [TradieScheduleStatus.NO_RESPONSE]: [
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-        TradieScheduleStatus.DECLINED,
-    ],
-    [TradieScheduleStatus.DECLINED]: [
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-        TradieScheduleStatus.PENDING_RESPONSE,
-        TradieScheduleStatus.NO_RESPONSE,
-    ],
-    [TradieScheduleStatus.COMPLETED]: [],
-    [TradieScheduleStatus.AWAITING_QUOTE]: [
-        TradieScheduleStatus.QUOTE_RECEIVED,
-        TradieScheduleStatus.DECLINED,
-    ],
-    [TradieScheduleStatus.QUOTE_RECEIVED]: [
-        TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
-        TradieScheduleStatus.DECLINED,
-    ],
-}
+export const TRADIE_SCHEDULE_STATE_MACHINE: Record<
+  TradieScheduleStatus,
+  TradieScheduleStatus[]
+> = {
+  [TradieScheduleStatus.PENDING]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.NO_RESPONSE,
+    TradieScheduleStatus.PENDING_RESPONSE,
+  ],
+  [TradieScheduleStatus.AWAITING_ADMIN_APPROVAL]: [
+    TradieScheduleStatus.CONFIRMED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.PENDING_RESPONSE]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.CONFIRMED]: [
+    TradieScheduleStatus.COMPLETED,
+    TradieScheduleStatus.DECLINED,
+    // Admin approval updates the row in its transaction and then runs the
+    // normal side-effect path with the same final status.
+    TradieScheduleStatus.CONFIRMED,
+  ],
+  [TradieScheduleStatus.PENDING_FINAL_CONFIRMATION]: [
+    TradieScheduleStatus.CONFIRMED,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.NO_RESPONSE]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.DECLINED]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.PENDING_RESPONSE,
+    TradieScheduleStatus.NO_RESPONSE,
+    // Admin rejection updates the row first, then runs the shared status
+    // side-effect path with DECLINED again.
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.COMPLETED]: [],
+  [TradieScheduleStatus.AWAITING_QUOTE]: [
+    TradieScheduleStatus.QUOTE_RECEIVED,
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+  [TradieScheduleStatus.QUOTE_RECEIVED]: [
+    TradieScheduleStatus.AWAITING_ADMIN_APPROVAL,
+    TradieScheduleStatus.DECLINED,
+  ],
+};

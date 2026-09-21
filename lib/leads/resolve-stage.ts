@@ -45,7 +45,11 @@ export function resolveLeadStage({
   // Booking work on a lead nobody has worked yet means Discovery has started.
   // Strictly an advance: a lead at Qualified or beyond keeps its stage, and a
   // closed lead is not dragged back open by a calendar action.
-  if (taskScheduled && currentStage !== null && isBeforeDiscovery(currentStage)) {
+  if (
+    taskScheduled &&
+    currentStage !== null &&
+    isBeforeDiscovery(currentStage)
+  ) {
     return "DISCOVERY";
   }
 
@@ -62,5 +66,8 @@ export function resolveLeadStage({
  */
 function isBeforeDiscovery(stage: LeadStage): boolean {
   const def = PIPELINE_STAGES[stage];
-  return def.outcome === "OPEN" && def.probability < PIPELINE_STAGES.DISCOVERY.probability;
+  return (
+    def.outcome === "OPEN" &&
+    def.probability < PIPELINE_STAGES.DISCOVERY.probability
+  );
 }

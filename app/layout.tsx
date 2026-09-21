@@ -54,14 +54,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             : undefined
         }
       >
-          <SandboxBanner />
-          <ClerkProvider>
-            <ReduxProvider>
-              {children}
-              <Toaster />
-              <ModalManager />
-            </ReduxProvider>
-          </ClerkProvider>
+        <SandboxBanner />
+        <ClerkProvider>
+          <ReduxProvider>
+            {children}
+            <Toaster />
+            <ModalManager />
+          </ReduxProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

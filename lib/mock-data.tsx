@@ -1,6 +1,7 @@
 import {
   // Banknote,
   BarChart3,
+  Bot,
   // CalendarDays,
   // CircleDot,
   ClipboardList,
@@ -17,7 +18,12 @@ import {
   // ShoppingCart,
   Users,
 } from "lucide-react";
-import { NavItem, ProjectBudgetPoint, ProjectDetailKpi, QuoteRequestItem } from "@/types/ui";
+import {
+  NavItem,
+  ProjectBudgetPoint,
+  ProjectDetailKpi,
+  QuoteRequestItem,
+} from "@/types/ui";
 import { SiteManagerPerformance } from "@/components/dashboard/dashboard-site-manager-table";
 
 export const navigationItems: NavItem[] = [
@@ -41,6 +47,11 @@ export const navigationItems: NavItem[] = [
     slug: "offers",
     label: "Offers",
     icon: <ReceiptText className="size-4" />,
+  },
+  {
+    slug: "agent",
+    label: "Operations Agent",
+    icon: <Bot className="size-4" />,
   },
   // {
   //   slug: "catalogue",
@@ -92,7 +103,7 @@ export const navigationItems: NavItem[] = [
     label: "Admin",
     icon: <UserCog className="size-4" />,
     checkAdmin: true,
-  }
+  },
 ];
 
 export const dashboardMetrics = [
@@ -236,9 +247,18 @@ export const tickerItems = [
 ];
 
 export const activityItems = [
-  { type: "progress" as const, text: "Frame stage 65% complete — Penrith Residence" },
-  { type: "warning" as const, text: "Invoice overdue: Berala Duplex variation" },
-  { type: "upcoming" as const, text: "Architect sketches due tomorrow — Castle Hill Villa" },
+  {
+    type: "progress" as const,
+    text: "Frame stage 65% complete — Penrith Residence",
+  },
+  {
+    type: "warning" as const,
+    text: "Invoice overdue: Berala Duplex variation",
+  },
+  {
+    type: "upcoming" as const,
+    text: "Architect sketches due tomorrow — Castle Hill Villa",
+  },
   { type: "info" as const, text: "Worker attendance: 53/56 checked in today" },
 ];
 
@@ -363,7 +383,7 @@ export const projectTeamMock = {
       hours: 7.5,
     },
   ],
-}
+};
 
 export const siteManagersMock: SiteManagerPerformance[] = [
   {

@@ -142,14 +142,16 @@ export function formatFileType(fileType: string): string {
   const mapping: Record<string, string> = {
     "application/pdf": "PDF",
     "application/msword": "DOC",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      "DOCX",
     "application/vnd.ms-excel": "XLS",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-      "XLSX",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
     "text/csv": "CSV",
   };
 
-  return mapping[fileType] || fileType.split("/").pop()?.toUpperCase() || "FILE";
+  return (
+    mapping[fileType] || fileType.split("/").pop()?.toUpperCase() || "FILE"
+  );
 }
 
 /**
@@ -220,7 +222,6 @@ export function variationStatusTone(status: VariationStatus) {
   return "warning" as const;
 }
 
-
 /**
  * Replace invalid characters in a filename with dashes and collapse duplicates.
  * @param fileName - original filename
@@ -256,7 +257,15 @@ interface BlobPathParams {
  * })
  * // projects/abc/123-quote.pdf
  */
-export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId, offerId, tradieId }: BlobPathParams) {
+export function buildBlobPath({
+  fileId,
+  fileName,
+  milestoneId,
+  projectId,
+  leadId,
+  offerId,
+  tradieId,
+}: BlobPathParams) {
   if (milestoneId) {
     return `projects/${projectId ?? "Unknown"}/milestones/${milestoneId}/${fileId}-${sanitizeFileName(fileName)}`;
   }
@@ -271,9 +280,7 @@ export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId
 
   if (offerId) {
     return `offers/${offerId}/${fileId}-${sanitizeFileName(fileName)}`;
-  }
-
-  else {
+  } else {
     return `projects/${projectId ?? "Unknown"}/${fileId}-${sanitizeFileName(fileName)}`;
   }
 }
@@ -288,7 +295,7 @@ export function buildBlobPath({ fileId, fileName, milestoneId, projectId, leadId
  * @returns Base64 encoded representation of the stream.
  */
 export async function streamToBase64(
-  stream: ReadableStream<Uint8Array>
+  stream: ReadableStream<Uint8Array>,
 ): Promise<string> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
@@ -317,20 +324,24 @@ export async function streamToBase64(
  *
  * Includes a fallback label for undefined role values.
  */
-export const RoleLabelRecord: Partial<Record<Role, string>> & { undefined: string } = {
+export const RoleLabelRecord: Partial<Record<Role, string>> & {
+  undefined: string;
+} = {
   ADMIN: "Admin",
   SITE_MANAGER: "Site Manager",
   GUEST: "Guest",
   CUSTOMER: "Customer",
   undefined: "No role",
-}
+};
 
 /**
  * Narrowing helper: checks whether a value is a plain object (not null, not an array).
  * @param value - unknown value to test
  * @returns boolean indicating if the value is a plain object
  */
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -339,8 +350,14 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
  * @param value - value to test
  * @returns boolean indicating primitiveness
  */
-export function isPrimitive(value: unknown): value is string | number | boolean | null | undefined {
-  return value === null || value === undefined || ["string", "number", "boolean"].includes(typeof value);
+export function isPrimitive(
+  value: unknown,
+): value is string | number | boolean | null | undefined {
+  return (
+    value === null ||
+    value === undefined ||
+    ["string", "number", "boolean"].includes(typeof value)
+  );
 }
 /**
  * Formats unknown values into display-friendly strings.
@@ -352,7 +369,10 @@ export function isPrimitive(value: unknown): value is string | number | boolean 
  */
 export function formatValue(value: unknown) {
   if (value === null || value === undefined) return "-";
-  if (typeof value === "number") return new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 }).format(value);
+  if (typeof value === "number")
+    return new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 }).format(
+      value,
+    );
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
 }
@@ -465,10 +485,7 @@ export const base64ToBlob = (base64: string) => {
  * calculateTrend(120, 100)
  * // { total: 120, trendDelta: 20 }
  */
-export function calculateTrend(
-  current: number,
-  previous: number
-): DataPoint {
+export function calculateTrend(current: number, previous: number): DataPoint {
   if (previous === 0) {
     return {
       total: current,
@@ -478,9 +495,7 @@ export function calculateTrend(
 
   return {
     total: current,
-    trendDelta: Number(
-      (((current - previous) / previous) * 100).toFixed(1)
-    ),
+    trendDelta: Number((((current - previous) / previous) * 100).toFixed(1)),
   };
 }
 
@@ -496,29 +511,35 @@ export function calculateTrend(
  * @returns The cleaned email body containing only the most recent message.
  */
 export function stripEmailThread(text: string): string {
-  if (!text) return '';
+  if (!text) return "";
 
   // 1. Remove HTML-specific thread containers first (if input contains HTML)
   let cleanedText = text
-    .replace(/<div class="gmail_quote">[\s\S]*?<\/div>/gi, '')
-    .replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, '')
-    .replace(/<span id="OLK_SRC_BODY_SECTION">[\s\S]*?<\/span>/gi, '')
-    .replace(/<div id="divRplyFwdMsg"[^>]*>[\s\S]*?<\/div>/gi, '')
-    .replace(/<div style="border-top:\s*solid\s+#[a-f0-9]{3,6}\s+1\.0pt[^>]*>[\s\S]*?<\/div>/gi, '')
-    .replace(/<div style="border-top:\s*none[^>]*>[\s\S]*?<\/div>/gi, '')
-    .replace(/<hr[^>]*(id="stopSpelling"|tabindex="-1"|style="[^"]*width:\s*98%")[^>]*>[\s\S]*/gi, '')
-    .replace(/<div class="gmail_signature"[^>]*>[\s\S]*?<\/div>/gi, '')
-    .replace(/<div class="outlook_signature"[^>]*>[\s\S]*?<\/div>/gi, '');
+    .replace(/<div class="gmail_quote">[\s\S]*?<\/div>/gi, "")
+    .replace(/<blockquote[^>]*>[\s\S]*?<\/blockquote>/gi, "")
+    .replace(/<span id="OLK_SRC_BODY_SECTION">[\s\S]*?<\/span>/gi, "")
+    .replace(/<div id="divRplyFwdMsg"[^>]*>[\s\S]*?<\/div>/gi, "")
+    .replace(
+      /<div style="border-top:\s*solid\s+#[a-f0-9]{3,6}\s+1\.0pt[^>]*>[\s\S]*?<\/div>/gi,
+      "",
+    )
+    .replace(/<div style="border-top:\s*none[^>]*>[\s\S]*?<\/div>/gi, "")
+    .replace(
+      /<hr[^>]*(id="stopSpelling"|tabindex="-1"|style="[^"]*width:\s*98%")[^>]*>[\s\S]*/gi,
+      "",
+    )
+    .replace(/<div class="gmail_signature"[^>]*>[\s\S]*?<\/div>/gi, "")
+    .replace(/<div class="outlook_signature"[^>]*>[\s\S]*?<\/div>/gi, "");
 
   // 2. Common text-based markers indicating the start of a thread history or previous replies
   const threadMarkers = [
-    /________________________________/i,     // Outlook divider line
-    /-----Original Message-----/i,           // Standard desktop email clients
-    /\n\s*From:/i,                            // Outlook/Exchange format "From: ..."
-    /\n\s*On\s+.+?wrote:/i,                   // Gmail format "On [Date], [User] wrote:"
-    /\n\s*On\s+.+?at\s+.+?/i,                 // Alternative iOS/Gmail format
-    /Sent from my iPhone/i,                   // Trim default mobile signatures
-    /Get Outlook for/i                        // Trim Outlook mobile signatures
+    /________________________________/i, // Outlook divider line
+    /-----Original Message-----/i, // Standard desktop email clients
+    /\n\s*From:/i, // Outlook/Exchange format "From: ..."
+    /\n\s*On\s+.+?wrote:/i, // Gmail format "On [Date], [User] wrote:"
+    /\n\s*On\s+.+?at\s+.+?/i, // Alternative iOS/Gmail format
+    /Sent from my iPhone/i, // Trim default mobile signatures
+    /Get Outlook for/i, // Trim Outlook mobile signatures
   ];
 
   for (const marker of threadMarkers) {
@@ -542,18 +563,18 @@ export function stripEmailThread(text: string): string {
  * @returns A whitespace-normalized plain text representation of the HTML.
  */
 export function stripHtml(html: string): string {
-  if (!html) return '';
+  if (!html) return "";
   return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ') // Remove style blocks
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ') // Remove script blocks
-    .replace(/<[^>]+>/g, ' ') // Remove all HTML tags
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ") // Remove style blocks
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ") // Remove script blocks
+    .replace(/<[^>]+>/g, " ") // Remove all HTML tags
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/\s{2,}/g, ' ') // Collapse multiple spaces/newlines into one space
+    .replace(/\s{2,}/g, " ") // Collapse multiple spaces/newlines into one space
     .trim();
 }
 
@@ -634,13 +655,13 @@ export function stripEmailBody(body: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, "\"")
+    .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'");
 
   // Remove MIME headers/artifacts
   cleaned = cleaned.replace(
     /^(content-type|content-transfer-encoding|mime-version|boundary|message-id):.*$/gim,
-    ""
+    "",
   );
   // Remove MIME separators (e.g. "--boundary123--"). Anchored so it only
   // matches lines that ARE the separator, not marker lines that happen to
@@ -660,14 +681,14 @@ export function stripEmailBody(body: string): string {
   // Remove mobile signatures
   cleaned = cleaned.replace(
     /sent from my (iphone|ipad|android|mobile).*$/gim,
-    ""
+    "",
   );
 
   // Remove a leading greeting line, e.g. "Hi Khushi Singh," / "Hello John" /
   // plain "Hi," with no name.
   cleaned = cleaned.replace(
     /^\s*(hi|hello|hey|dear)(?:\s+[a-z][a-z .'-]{0,40})?,?\s*\n+/i,
-    ""
+    "",
   );
 
   cleaned = cleaned.trim();
@@ -700,7 +721,7 @@ export function stripEmailBody(body: string): string {
     "(facebook|instagram|linkedin|twitter|youtube|tiktok|pinterest|whatsapp)";
   const SOCIAL_ROW_RE = new RegExp(
     `^${SOCIAL_PLATFORM}(\\s*[·•|,/-]\\s*${SOCIAL_PLATFORM})*$`,
-    "i"
+    "i",
   );
 
   const FOOTER_KEYWORD_RE =
@@ -713,7 +734,11 @@ export function stripEmailBody(body: string): string {
   // Regards," / "Best,") on its own line, followed only by a short name /
   // title / company block.
   const isSignoffParagraph = (p: string): boolean => {
-    const lines = p.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    const lines = p
+      .trim()
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (lines.length === 0 || lines.length > 5) return false;
     return SIGNOFF_LINE_RE.test(lines[0]);
   };
@@ -723,7 +748,10 @@ export function stripEmailBody(body: string): string {
   // block, even without a preceding sign-off word.
   const isContactBlock = (p: string): boolean => {
     const trimmed = p.trim();
-    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+    const lines = trimmed
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (lines.length === 0 || lines.length > 4) return false;
     const hasContactInfo = EMAIL_RE.test(trimmed) || PHONE_RE.test(trimmed);
     const endsLikeSentence = /[.?!]\s*$/.test(lines[lines.length - 1] || "");
@@ -819,9 +847,7 @@ export function normalizeEmailAddress(email: string): string {
     .replace(/\s+/g, "");
 
   // Extract first valid email occurrence
-  const match = normalized.match(
-    /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i
-  );
+  const match = normalized.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
 
   return match?.[0] ?? "";
 }

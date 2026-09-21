@@ -32,7 +32,7 @@ import {
   updateOfferScope,
   updateOfferContent,
   getAdminOfferContentNonCache,
-} from "@/lib/data/admin-offer-content";
+} from "@/lib/data/admin-offer-content-writes";
 
 async function seed() {
   console.log("Building seed payload from static data…");
@@ -95,10 +95,10 @@ async function seed() {
       exclusions: [...INITIAL_OFFER_DRAFT.exclusionBullets],
       termsAndConditions: INITIAL_OFFER_DRAFT.termsSummary,
     },
-    hbfcClaim: {
+    hbcfClaim: {
       claimAmount: 800_000,
       loadingChargePercent: 0,
-      totalPremiumToBePaid: 800_000, // default HBFC total premium to be paid
+      totalPremiumToBePaid: 800_000, // default HBCF total premium to be paid
     },
     // Not written by the seed: the update* helpers below own the version, each
     // bumping the stored row. Present only to satisfy the payload shape.

@@ -11,31 +11,25 @@ import {
 import { Events, Notification, Novu } from "@novu/js";
 import { useUser } from "@clerk/nextjs";
 import { toast } from "sonner";
-import {
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { certifierExtractPayloadFromUrl } from "@/components/notification/notification-item";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { openModal } from "@/lib/store/slices/uiSlice";
 
 interface NotificationContextType {
   notifications: Notification[];
   isLoading: boolean;
   fetchNotifications: () => Promise<void>;
-  markNotificationAsRead: (
-    notificationId: string,
-  ) => Promise<void>;
+  markNotificationAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
-  archiveNotification: (
-    notificationId: string,
-  ) => Promise<void>;
+  archiveNotification: (notificationId: string) => Promise<void>;
 }
 
-const applicationIdentifier =
-  process.env.NEXT_PUBLIC_NOVU_APP_IDENTIFIER!;
+const applicationIdentifier = process.env.NEXT_PUBLIC_NOVU_APP_IDENTIFIER!;
 
-const NotificationContext =
-  createContext<NotificationContextType | undefined>(
-    undefined,
-  );
+const NotificationContext = createContext<NotificationContextType | undefined>(
+  undefined,
+);
 
 export const NotificationProvider = ({
   children,
@@ -44,6 +38,7 @@ export const NotificationProvider = ({
 }) => {
   const { user, isLoaded } = useUser();
   const queryClient = useQueryClient();
+  const dispatch = useAppDispatch();
 
   const novu = useMemo(() => {
     if (!isLoaded || !user) return null;
@@ -54,10 +49,7 @@ export const NotificationProvider = ({
     });
   }, [isLoaded, user]);
 
-  const queryKey = useMemo(
-    () => ["notifications", user?.id],
-    [user?.id],
-  );
+  const queryKey = useMemo(() => ["notifications", user?.id], [user?.id]);
 
   const {
     data: notifications = [],
@@ -67,10 +59,9 @@ export const NotificationProvider = ({
     queryKey,
     enabled: !!novu,
     queryFn: async () => {
-      const response =
-        await novu!.notifications.list({
-          limit: 50,
-        });
+      const response = await novu!.notifications.list({
+        limit: 50,
+      });
 
       return response.data?.notifications ?? [];
     },
@@ -81,46 +72,46 @@ export const NotificationProvider = ({
     try {
       await refetch();
     } catch (error) {
-      console.error(
-        "Error fetching notifications:",
-        error,
-      );
+      console.error("Error fetching notifications:", error);
       toast.error("Failed to fetch notifications.");
     }
   }, [refetch]);
 
   const updateNotificationCache = useCallback(
     (updated: Notification) => {
-      queryClient.setQueryData<Notification[]>(
-        queryKey,
-        (old = []) =>
-          old.map((notification) =>
-            notification.id === updated.id
-              ? updated
-              : notification,
-          ),
+      queryClient.setQueryData<Notification[]>(queryKey, (old = []) =>
+        old.map((notification) =>
+          notification.id === updated.id ? updated : notification,
+        ),
       );
     },
     [queryClient, queryKey],
   );
 
   const onNotificationReceived = useEffectEvent(
-    (
-      data: Events["notifications.notification_received"],
-    ) => {
-      queryClient.setQueryData<Notification[]>(
-        queryKey,
-        (old = []) => {
-          const exists = old.some(
-            (notification) =>
-              notification.id === data.result.id,
-          );
+    (data: Events["notifications.notification_received"]) => {
+      queryClient.setQueryData<Notification[]>(queryKey, (old = []) => {
+        const exists = old.some(
+          (notification) => notification.id === data.result.id,
+        );
 
-          if (exists) return old;
+        if (exists) return old;
 
-          return [data.result, ...old];
-        },
-      );
+        return [data.result, ...old];
+      });
+
+      // A certifier reply carrying a checklist opens the extraction popup as
+      // it arrives, rather than waiting for someone to notice the bell. The
+      // routing rides the redirect url because triggerNotification carries no
+      // structured payload; the same predicate backs the click-to-open button
+      // in notification-item.tsx.
+      const url = data.result.redirect?.url;
+      if (url && url.includes("action=certifierExtract")) {
+        const payload = certifierExtractPayloadFromUrl(url);
+        if (payload) {
+          dispatch(openModal({ type: "certifierExtract", payload }));
+        }
+      }
     },
   );
 
@@ -140,46 +131,22 @@ export const NotificationProvider = ({
   useEffect(() => {
     if (!novu) return;
 
-    novu.on(
-      "notifications.notification_received",
-      onNotificationReceived,
-    );
+    novu.on("notifications.notification_received", onNotificationReceived);
 
-    novu.on(
-      "notification.unread.resolved",
-      onNotificationUpdated,
-    );
+    novu.on("notification.unread.resolved", onNotificationUpdated);
 
-    novu.on(
-      "notification.read.resolved",
-      onNotificationUpdated,
-    );
+    novu.on("notification.read.resolved", onNotificationUpdated);
 
-    novu.on(
-      "notification.archive.resolved",
-      onNotificationUpdated,
-    );
+    novu.on("notification.archive.resolved", onNotificationUpdated);
 
     return () => {
-      novu.off(
-        "notifications.notification_received",
-        onNotificationReceived,
-      );
+      novu.off("notifications.notification_received", onNotificationReceived);
 
-      novu.off(
-        "notification.unread.resolved",
-        onNotificationUpdated,
-      );
+      novu.off("notification.unread.resolved", onNotificationUpdated);
 
-      novu.off(
-        "notification.read.resolved",
-        onNotificationUpdated,
-      );
+      novu.off("notification.read.resolved", onNotificationUpdated);
 
-      novu.off(
-        "notification.archive.resolved",
-        onNotificationUpdated,
-      );
+      novu.off("notification.archive.resolved", onNotificationUpdated);
     };
   }, [novu]);
 
@@ -187,21 +154,15 @@ export const NotificationProvider = ({
     async (notificationId: string) => {
       try {
         const notification = notifications.find(
-          (notification) =>
-            notification.id === notificationId,
+          (notification) => notification.id === notificationId,
         );
 
         if (!notification) return;
 
         await notification.read();
       } catch (error) {
-        console.error(
-          "Error marking notification as read:",
-          error,
-        );
-        toast.error(
-          "Failed to mark notification as read.",
-        );
+        console.error("Error marking notification as read:", error);
+        toast.error("Failed to mark notification as read.");
       }
     },
     [notifications],
@@ -209,27 +170,18 @@ export const NotificationProvider = ({
 
   const markAllAsRead = useCallback(async () => {
     try {
-      const unreadNotifications =
-        notifications.filter(
-          (notification) =>
-            !notification.isRead,
-        );
+      const unreadNotifications = notifications.filter(
+        (notification) => !notification.isRead,
+      );
 
       if (unreadNotifications.length === 0) return;
 
       await Promise.all(
-        unreadNotifications.map((notification) =>
-          notification.read(),
-        ),
+        unreadNotifications.map((notification) => notification.read()),
       );
     } catch (error) {
-      console.error(
-        "Error marking all notifications as read:",
-        error,
-      );
-      toast.error(
-        "Failed to mark all notifications as read.",
-      );
+      console.error("Error marking all notifications as read:", error);
+      toast.error("Failed to mark all notifications as read.");
     }
   }, [notifications]);
 
@@ -237,21 +189,15 @@ export const NotificationProvider = ({
     async (notificationId: string) => {
       try {
         const notification = notifications.find(
-          (notification) =>
-            notification.id === notificationId,
+          (notification) => notification.id === notificationId,
         );
 
         if (!notification) return;
 
         await notification.archive();
       } catch (error) {
-        console.error(
-          "Error archiving notification:",
-          error,
-        );
-        toast.error(
-          "Failed to archive notification.",
-        );
+        console.error("Error archiving notification:", error);
+        toast.error("Failed to archive notification.");
       }
     },
     [notifications],
@@ -283,17 +229,14 @@ export const NotificationProvider = ({
   );
 };
 
-export const useNotification =
-  (): NotificationContextType => {
-    const context = useContext(
-      NotificationContext,
+export const useNotification = (): NotificationContextType => {
+  const context = useContext(NotificationContext);
+
+  if (!context) {
+    throw new Error(
+      "useNotification must be used within a NotificationProvider",
     );
+  }
 
-    if (!context) {
-      throw new Error(
-        "useNotification must be used within a NotificationProvider",
-      );
-    }
-
-    return context;
-  };
+  return context;
+};

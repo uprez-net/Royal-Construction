@@ -6,6 +6,7 @@ import type {
   EnvelopeRecipientRecord,
   CreateEnvelopeResult,
 } from "./tender-envelope";
+import { attachSendAttemptCustomField } from "./envelope-send-attempt";
 
 // Customer-only Offer-acceptance envelope (ADR 0004).
 //
@@ -30,6 +31,21 @@ function anchorTab(tag: string): docusign.SignHere {
   } as docusign.SignHere;
 }
 
+export function buildOfferAcceptanceRecipientRecords(
+  owners: readonly EnvelopeSignerInput[],
+): readonly EnvelopeRecipientRecord[] {
+  return owners.map<EnvelopeRecipientRecord>((owner, index) => ({
+    role: "CUSTOMER",
+    name: owner.name,
+    email: owner.email,
+    routingOrder: 1,
+    recipientId: String(index + 1),
+    capacity: owner.capacity ?? null,
+    entityName: owner.entityName ?? null,
+    entityAbn: owner.entityAbn ?? null,
+  }));
+}
+
 export async function createOfferAcceptanceEnvelope(args: {
   readonly context: DocusignContext;
   readonly config: DocusignConfig;
@@ -37,6 +53,7 @@ export async function createOfferAcceptanceEnvelope(args: {
   readonly documentName: string;
   readonly emailSubject: string;
   readonly owners: readonly EnvelopeSignerInput[];
+  readonly sendAttemptId?: string;
 }): Promise<CreateEnvelopeResult> {
   const { context, config, pdfBase64, documentName, emailSubject } = args;
 
@@ -68,6 +85,10 @@ export async function createOfferAcceptanceEnvelope(args: {
     recipients: { signers: ownerSigners },
     status: "sent",
   };
+
+  if (args.sendAttemptId) {
+    attachSendAttemptCustomField(envelopeDefinition, args.sendAttemptId);
+  }
 
   // Envelope-level Connect: status events reach our webhook without any
   // account-level Connect config. includeHMAC is what makes DocuSign sign the
@@ -107,15 +128,6 @@ export async function createOfferAcceptanceEnvelope(args: {
 
   return {
     envelopeId: result.envelopeId,
-    recipients: args.owners.map<EnvelopeRecipientRecord>((owner, index) => ({
-      role: "CUSTOMER",
-      name: owner.name,
-      email: owner.email,
-      routingOrder: 1,
-      recipientId: String(index + 1),
-      capacity: owner.capacity ?? null,
-      entityName: owner.entityName ?? null,
-      entityAbn: owner.entityAbn ?? null,
-    })),
+    recipients: buildOfferAcceptanceRecipientRecords(args.owners),
   };
 }

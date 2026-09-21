@@ -43,7 +43,10 @@ export const fetchSiteManagers = createAsyncThunk<
   SiteManagerLookupResponse,
   { page?: number; limit?: number; query?: string }
 >("siteManagers/fetch", async ({ page = 1, limit = 10, query = "" }) => {
-  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+  });
   if (query.trim()) {
     params.set("q", query.trim());
   }
@@ -51,7 +54,7 @@ export const fetchSiteManagers = createAsyncThunk<
   const response = await fetchJson<SiteManagerLookupResponse>(
     `/api/site-managers?${params.toString()}`,
     { method: "GET" },
-    "Failed to load site managers"
+    "Failed to load site managers",
   );
 
   return response.data;
@@ -86,7 +89,13 @@ const siteManagersSlice = createSlice({
 
         state.items = isFirstPage
           ? nextItems
-          : [...state.items, ...nextItems.filter((item) => !state.items.some((existing) => existing.id === item.id))];
+          : [
+              ...state.items,
+              ...nextItems.filter(
+                (item) =>
+                  !state.items.some((existing) => existing.id === item.id),
+              ),
+            ];
         state.page = action.payload.page;
         state.limit = action.payload.limit;
         state.totalCount = action.payload.totalCount;

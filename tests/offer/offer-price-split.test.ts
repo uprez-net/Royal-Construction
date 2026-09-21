@@ -22,6 +22,7 @@ import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-sche
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
 import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
 import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Backs the Offers list's Amount / GST / Total columns. Offer.amount,
 // Offer.gstAmount and Offer.totalAmount were minted at zero and never written
@@ -68,6 +69,7 @@ function makeSnapshot(
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
     ...overrides,
   };
 }

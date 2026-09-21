@@ -65,28 +65,31 @@ export function ScopePanel({
           title="Allowances and exclusions"
         />
       </CardHeader>
-      <CardContent className="flex flex-col gap-8 pt-6">
+      <CardContent className="flex flex-col gap-8">
         <ScopeList
-          icon={<Coins className="size-4 text-amber-600" aria-hidden="true" />}
+          icon={
+            <Coins className="size-4 text-warning-ink" aria-hidden="true" />
+          }
           banner={{
             tone: "warning",
             icon: (
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
             ),
-            text: "These allowances appear on the Offer document. Items exceeding their allowance trigger a variation per the rule specified.",
+            text: "The signed Tender lists every allowance ticked for it. The Offer document shows only the ones ticked for the Offer. Items exceeding their allowance trigger a variation per the rule specified.",
           }}
           items={allowances}
           title="PC allowances"
           singular="Allowance"
           documentLabel="Show on Offer document"
+          tenderLabel="Show on Tender"
           addLabel="Add allowance"
-          emptyLabel="No allowances yet. Add prime-cost or provisional-sum items to show on the Offer."
+          emptyLabel="No allowances yet. Add the prime-cost or provisional-sum items in the price."
           onItemChange={onAllowanceChange}
           onAddItem={onAddAllowance}
           onRemoveItem={onRemoveAllowance}
         />
         <ScopeList
-          icon={<Ban className="size-4 text-primary" aria-hidden="true" />}
+          icon={<Ban className="size-4 text-info-ink" aria-hidden="true" />}
           banner={{
             tone: "info",
             icon: <Info className="size-4 shrink-0" aria-hidden="true" />,
@@ -125,6 +128,7 @@ function ScopeList({
   title,
   singular,
   documentLabel,
+  tenderLabel,
   addLabel,
   emptyLabel,
 }: {
@@ -144,6 +148,9 @@ function ScopeList({
   readonly title: string;
   readonly singular: string;
   readonly documentLabel: string;
+  // Allowances only: a second box for whether the signed Tender lists the item,
+  // with a warning on the row when it does not.
+  readonly tenderLabel?: string;
   readonly addLabel: string;
   readonly emptyLabel: string;
 }) {
@@ -151,15 +158,15 @@ function ScopeList({
     <section className="rounded-xl border border-border/70 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         {icon}
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
       </div>
 
       <div
         className={
           "mb-5 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm " +
           (banner.tone === "warning"
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-blue-200 bg-blue-50 text-blue-800")
+            ? "border-warning/40 bg-warning-light text-foreground"
+            : "border-info/40 bg-info-light text-foreground")
         }
       >
         {banner.icon}
@@ -287,7 +294,32 @@ function ScopeList({
                     />
                     {documentLabel}
                   </label>
+                  {tenderLabel ? (
+                    <label className="flex h-9 shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        checked={item.includedInTender}
+                        className="size-4 accent-royal-gold"
+                        type="checkbox"
+                        onChange={(event) =>
+                          onItemChange(item.id, {
+                            includedInTender: event.target.checked,
+                          })
+                        }
+                      />
+                      {tenderLabel}
+                    </label>
+                  ) : null}
                 </div>
+
+                {tenderLabel && !item.includedInTender ? (
+                  <p className="flex items-center gap-2 text-xs font-medium text-amber-700">
+                    <AlertTriangle
+                      className="size-3.5 shrink-0"
+                      aria-hidden="true"
+                    />
+                    In the price but not listed in the signed Tender.
+                  </p>
+                ) : null}
 
                 <AmountControl item={item} onItemChange={onItemChange} />
               </div>
@@ -308,7 +340,7 @@ function ScopeList({
       <button
         onClick={onAddItem}
         type="button"
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-amber-300 py-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-50"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
       >
         <Plus className="size-4" aria-hidden="true" />
         {addLabel}

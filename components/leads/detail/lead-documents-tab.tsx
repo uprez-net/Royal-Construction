@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { ExternalLink, Files, Loader2, Upload } from "lucide-react";
+import { Files, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
   formatFileSize,
   formatFileType,
 } from "@/utils/formatters";
+import { filePreviewModal } from "@/utils/file-preview";
 import type { ClientPayload } from "@/utils/validators/files";
 
 const MAX_FILES = 5;
@@ -94,13 +95,6 @@ export function LeadDocumentsTab({
         >
           {formatFileSize(file.size)}
         </span>,
-
-        <Button key={`${file.id}-actions`} asChild size="sm" variant="ghost">
-          <a href={file.url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="mr-1 size-4" aria-hidden="true" />
-            Open
-          </a>
-        </Button>,
       ]),
     [files],
   );
@@ -295,14 +289,19 @@ export function LeadDocumentsTab({
         <CardContent className="p-4">
           <DataTable
             onRowClick={(index) => {
-              const file = files[index];
-              dispatch(
-                openModal({
-                  type: "previewFile",
-                  payload: { fileUrl: file.url },
-                }),
+              // Lead files carry no stored MIME type (see fileTypeFromName
+              // above), so the name is the only signal the helper has for
+              // telling a photo from a document.
+              const action = filePreviewModal(
+                files.map((candidate) => ({
+                  url: candidate.url,
+                  name: candidate.name,
+                })),
+                index,
               );
+              if (action) dispatch(openModal(action));
             }}
+            rowLabel={(index) => `Open ${files[index]?.name ?? "file"}`}
             caption="Files uploaded against this lead, with type and size."
             headers={["#", "Name", "Type", "Size", ""]}
             align={["end", "start", "start", "end", "start"]}

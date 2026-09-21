@@ -2,10 +2,13 @@ import { getAdminOfferContent } from "@/lib/data/admin-offer-content";
 import {
   inferOfferStageCode,
   type OfferDocumentDraft,
+  type OfferInclusionEntry,
   type OfferWorkspaceCostLine,
   type OfferWorkspaceScopeItem,
   type OfferWorkspaceJob,
+  type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
 import {
   OFFER_SEQUENCE_MAPPINGS,
   type OfferSequenceMapping,
@@ -14,6 +17,7 @@ import {
   INITIAL_AREA_CALCULATOR,
   calculateOfferArea,
   offerAreaBasisFromJob,
+  rawTotalAreaSqm,
   type AreaRateConstants,
   type OfferAreaCalculator,
 } from "@/lib/offer/workspace-area";
@@ -26,7 +30,10 @@ import type {
   RateConstantKey,
 } from "@/lib/offer/formula-variables";
 import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
-import type { AdminOfferContent } from "@/types/admin-offer-content";
+import type {
+  AdminOfferContent,
+  InclusionScheduleRow,
+} from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
   STANDARD_INCLUSION_ENTRIES,
@@ -77,8 +84,7 @@ function resolveCostLines(
     seenKeys.add(row.taskKey);
     const mapping = mappingByKey.get(row.taskKey) ?? null;
     const itemName = (row.task || mapping?.taskName) ?? "";
-    const offerTenderLineItem =
-      mapping?.offerTenderWording ?? row.task ?? "";
+    const offerTenderLineItem = mapping?.offerTenderWording ?? row.task ?? "";
     const costExGst =
       row.priceMode === "fixed"
         ? row.value
@@ -120,7 +126,7 @@ function resolveCostLines(
 }
 
 // Admin allowance category → runtime scope item category + amountType.
-function resolveAllowances(
+export function resolveAllowances(
   adminContent: AdminOfferContent,
 ): readonly OfferWorkspaceScopeItem[] {
   return adminContent.offerScope.allowances.map((a, index) => {
@@ -136,9 +142,16 @@ function resolveAllowances(
       label: a.name,
       description: a.variationRule,
       amount: a.amount,
-      unit: a.category === "per-sqm" ? "sqm" : a.category === "per-lm" ? "lm" : "package",
+      unit:
+        a.category === "per-sqm"
+          ? "sqm"
+          : a.category === "per-lm"
+            ? "lm"
+            : "package",
       variationRule: a.variationRule,
-      includedInOfferDocument: true,
+      // Off the sales proposal until the estimator ticks it; on the signed Tender.
+      includedInOfferDocument: false,
+      includedInTender: true,
     } satisfies OfferWorkspaceScopeItem;
   });
 }
@@ -150,7 +163,8 @@ function resolveExclusions(
 ): readonly OfferWorkspaceScopeItem[] {
   return adminContent.offerScope.exclusions.map((e, index) => ({
     id: `admin-exclusion-${index + 1}-${e.id}`,
-    category: e.exclusionKind === "owner_supplied" ? "owner_selection" : "exclusion",
+    category:
+      e.exclusionKind === "owner_supplied" ? "owner_selection" : "exclusion",
     amountType: "included_note" as const,
     label: e.name,
     description: e.description,
@@ -158,51 +172,69 @@ function resolveExclusions(
     unit: "",
     variationRule: e.variationRule,
     includedInOfferDocument: true,
+    includedInTender: true,
   })) satisfies OfferWorkspaceScopeItem[];
 }
 
-function resolveDraft(
+// The admin's configured list IS the list; the hardcoded constants are the
+// fallback for an install whose admin content has never been populated.
+//
+// This used to spread the constants FIRST and then append only those admin
+// lines that did not already match one. Because the seed writes those same
+// constants into the admin row (scripts/seed-admin-offer-content.ts:88-96 via
+// INITIAL_OFFER_DRAFT), every line an admin could see was one the constants
+// re-added unconditionally. Deleting a line was a silent no-op, and correcting
+// a line's wording printed BOTH the old and the new version on the customer's
+// fixed-price contract, because the edited line no longer matched the constant
+// and was appended alongside it.
+//
+// The empty-list fallback is kept deliberately, for the same reason
+// resolveCostLines keeps its own: a missing or unseeded admin row must never
+// silently drop every exclusion from every offer. The difference is that the
+// fallback is now per-LIST, not per-LINE, so a populated list is honoured
+// exactly as the admin left it.
+function adminLinesOrDefault(
+  lines: readonly string[],
+  fallback: readonly string[],
+): readonly string[] {
+  const configured = lines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return configured.length > 0 ? configured : fallback;
+}
+
+function adminScheduleOrDefault(
+  rows: readonly InclusionScheduleRow[],
+  fallback: readonly OfferInclusionEntry[],
+): readonly OfferInclusionEntry[] {
+  const configured = rows
+    .map((row) => ({ spec: row.spec.trim(), category: row.category }))
+    .filter((row) => row.spec.length > 0);
+  return configured.length > 0 ? configured : fallback;
+}
+
+// Exported for tests: the admin-vs-constants precedence is the whole point of
+// this function and it is not reachable through buildAdminOfferPrefill without a
+// database.
+export function resolveDraft(
   adminContent: AdminOfferContent,
 ): OfferDocumentDraft {
   const c = adminContent.offerContent;
   return {
     headline: c.headline,
     introText: c.introText,
-    exclusionBullets: [
-      ...OFFER_EXCLUDES_BULLETS,
-      ...c.exclusions
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !OFFER_EXCLUDES_BULLETS.includes(line)),
-    ],
+    exclusionBullets: adminLinesOrDefault(c.exclusions, OFFER_EXCLUDES_BULLETS),
     // Admin-configured inclusion copy IS the selling list — short lines for the
     // page beside the price. It is not schedule wording, so it no longer gets
     // turned into contract rows.
-    inclusionHighlights: [
-      ...STANDARD_INCLUSION_HIGHLIGHTS,
-      ...c.inclusions
-        .map((line) => line.trim())
-        .filter(
-          (line) =>
-            line.length > 0 && !STANDARD_INCLUSION_HIGHLIGHTS.includes(line),
-        ),
-    ],
-    inclusionSchedule: [
-      ...STANDARD_INCLUSION_ENTRIES,
-      ...c.inclusionSchedule
-        .map((row) => ({
-          spec: row.spec,
-          category: row.category,
-        }))
-        .filter(
-          (row) =>
-            row.spec.trim().length > 0 &&
-            !STANDARD_INCLUSION_ENTRIES.some(
-              (standard) =>
-                standard.spec === row.spec &&
-                standard.category === row.category,
-            ),
-        ),
-    ],
+    inclusionHighlights: adminLinesOrDefault(
+      c.inclusions,
+      STANDARD_INCLUSION_HIGHLIGHTS,
+    ),
+    inclusionSchedule: adminScheduleOrDefault(
+      c.inclusionSchedule,
+      STANDARD_INCLUSION_ENTRIES,
+    ),
     termsSummary: c.termsAndConditions,
   };
 }
@@ -257,6 +289,7 @@ export function reevaluateFormulaCostLines(
     | "kitchenSqm"
     | "bedrooms"
     | "bathrooms"
+    | "hasGrannyHome"
     | "linenCount"
     | "showerCount"
     | "grannyBedrooms"
@@ -264,10 +297,23 @@ export function reevaluateFormulaCostLines(
     | "grannyGarageSpaces"
   >,
   area: OfferAreaCalculator,
+  // This function is the bridge from a display calculation to persisted money:
+  // it republishes the area results into the cost-formula scope, and the effect
+  // that calls it runs on every open of an editable offer. It must therefore
+  // price on the offer's OWN rules, never on today's.
+  calcVersion: number,
 ): readonly OfferWorkspaceCostLine[] {
   const resolvedRates = resolveAreaRateConstants(rateConstants);
   const basis = offerAreaBasisFromJob(job);
-  const calc = calculateOfferArea(basis, area, resolvedRates);
+  const totalBathrooms =
+    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const calc = calculateOfferArea(
+    basis,
+    area,
+    resolvedRates,
+    calcVersion,
+    totalBathrooms,
+  );
 
   const measurements: Partial<Record<AreaMeasurementKey, number>> = {
     TOTAL_SLAB_COST: calc.totalSlabCost,
@@ -276,6 +322,7 @@ export function reevaluateFormulaCostLines(
     TOTAL_GROUND_FLOOR_FRAME_COST: calc.totalGroundFloorFrameCost,
     TOTAL_FIRST_FLOOR_FRAME_COST: calc.totalFirstFloorFrameCost,
     TOTAL_GROUND_FLOOR_AREA: calc.totalGroundFloorArea,
+    FIRST_FLOOR_AREA: basis.firstFloorSqm,
     STEEL: area.steel,
     INSTALLER: area.installer,
     EAVES: area.eaves,
@@ -285,18 +332,8 @@ export function reevaluateFormulaCostLines(
     TIE_COST: area.tieCost,
     TOTAL_TILES_REQUIRED: calc.totalTilesRequired,
     KITCHEN_AREA: basis.kitchenSqm,
-    TOTAL_FLOORING_AREA:
-      basis.firstFloorSqm +
-      basis.balconySqm,
-    TOTAL_AREA:
-      basis.groundFloorSqm +
-      basis.firstFloorSqm +
-      basis.garageSqm +
-      basis.alfrescoSqm +
-      basis.porchSqm +
-      basis.grannyFlatSqm +
-      basis.balconySqm +
-      basis.voidSqm,
+    TOTAL_FLOORING_AREA: basis.firstFloorSqm,
+    TOTAL_AREA: rawTotalAreaSqm(basis),
     TOTAL_SHOWERS: job.showerCount,
     TOTAL_BEDROOMS: job.bedrooms + job.grannyBedrooms,
     TOTAL_LINENS: job.linenCount,
@@ -305,9 +342,29 @@ export function reevaluateFormulaCostLines(
   const scope = buildFormulaScope(rateConstants, measurements);
   return costLines.map((line) =>
     line.formula
-      ? { ...line, costExGst: Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000 }
+      ? {
+          ...line,
+          costExGst:
+            Math.ceil(evaluateCostFormula(line.formula, scope) / 1000) * 1000,
+        }
       : line,
   );
+}
+
+// The workspace calls this, not reevaluateFormulaCostLines. Its effect re-runs
+// whenever the job or the area calculator changes, and a reload changes both.
+// On an issued offer that re-priced formula lines from today's admin rate
+// constants, so the quoted price moved with nobody editing it. Lines are only
+// re-evaluated while the cost schedule is editable; otherwise they come back
+// untouched, same array.
+export function reevaluateFormulaCostLinesForStatus(
+  status: OfferWorkspaceStatus,
+  ...args: Parameters<typeof reevaluateFormulaCostLines>
+): readonly OfferWorkspaceCostLine[] {
+  if (!isOfferBuildStepEditable("cost-schedule", status)) {
+    return args[0];
+  }
+  return reevaluateFormulaCostLines(...args);
 }
 
 // Re-seed an EXISTING offer's admin-derived fields from the current admin
@@ -364,7 +421,10 @@ export async function buildAdminOfferPrefill(): Promise<AdminOfferPrefill> {
     exclusions: resolveExclusions(adminContent),
     draft: resolveDraft(adminContent),
     areaCalculator: resolveAreaCalculator(),
-    loadingChargePercentage: adminContent.hbfcClaim.loadingChargePercent,
-    rateConstants: { ...DEFAULT_RATE_CONSTANTS, ...adminContent.costSchedule.rateConstants },
+    loadingChargePercentage: adminContent.hbcfClaim.loadingChargePercent,
+    rateConstants: {
+      ...DEFAULT_RATE_CONSTANTS,
+      ...adminContent.costSchedule.rateConstants,
+    },
   };
 }

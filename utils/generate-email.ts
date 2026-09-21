@@ -1,27 +1,26 @@
 import { LOGO_EMAIL, RC_COLORS, RC_URLS } from "@/lib/graph/Email/email-theme";
 import { TradieScheduleListItem } from "@/types/project";
 
-
 export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
-    subject: string;
-    html: string;
+  subject: string;
+  html: string;
 } {
-    const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
-        "en-AU",
-        {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-        }
-    );
+  const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
+    "en-AU",
+    {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    },
+  );
 
-    const subject = input.requiresQuote
-        ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
-        : `Availability Confirmation Required – ${input.projectName}`;
+  const subject = input.requiresQuote
+    ? `Request for Quotation – ${input.projectName} | ${input.tradeType}`
+    : `Availability Confirmation Required – ${input.projectName}`;
 
-    const intro = input.requiresQuote
-        ? `
+  const intro = input.requiresQuote
+    ? `
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
         Dear ${input.tradieName},
       </p>
@@ -29,7 +28,8 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
         Royal Constructions is inviting you to provide a quotation for an upcoming project.
         Based on your trade expertise, we would like you to review the project information
-        and submit your pricing for the requested scope of works.
+        and submit your pricing for the requested scope of works, together with confirmation
+        that you can attend on the scheduled date.
       </p>
 
       <p style="margin:0;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
@@ -37,7 +37,7 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
         specifications and milestone information, will be attached to this email for your review.
       </p>
     `
-        : `
+    : `
       <p style="margin:0 0 16px;color:${RC_COLORS.text};font-size:16px;line-height:26px;">
         Dear ${input.tradieName},
       </p>
@@ -54,22 +54,22 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
       </p>
     `;
 
-    const actionText = input.requiresQuote
-        ? `
+  const actionText = input.requiresQuote
+    ? `
       Please review the attached documentation and submit your quotation based on
       the requested scope of works. Your quotation should include labour,
       materials (where applicable), exclusions and any assumptions relevant
-      to your pricing.
+      to your pricing. Please also confirm your availability for the scheduled date.
     `
-        : `
+    : `
       Please confirm whether you are available to complete these works on the
       scheduled date. If you are unavailable, notify the site manager as soon
       as possible so alternative arrangements can be made.
     `;
 
-    return {
-        subject,
-        html: `
+  return {
+    subject,
+    html: `
             <!DOCTYPE html>
             <html>
             <head>
@@ -178,8 +178,9 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             </td>
             </tr>
 
-            ${!input.requiresQuote
-                            ? `
+            ${
+              !input.requiresQuote
+                ? `
             <tr>
             <td style="padding:14px 20px;color:${RC_COLORS.muted};border-top:1px solid ${RC_COLORS.border};">
             Agreed Price
@@ -262,5 +263,44 @@ export function generateTradieOutreachEmail(input: TradieScheduleListItem): {
             </body>
             </html>
             `,
-    };
+  };
+}
+
+/**
+ * A separate one-week reconfirmation request. The original outreach asks
+ * whether the tradie can take the date; this message asks whether an already
+ * approved booking is still going ahead.
+ */
+export function generateTradieFinalConfirmationEmail(
+  input: TradieScheduleListItem,
+): { subject: string; html: string } {
+  const formattedDate = new Date(input.scheduledDate).toLocaleDateString(
+    "en-AU",
+    { weekday: "long", day: "numeric", month: "long", year: "numeric" },
+  );
+  const subject = `Final confirmation required – ${input.projectName} | ${input.tradeType}`;
+
+  return {
+    subject,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:${RC_COLORS.text};">
+        <div style="background:${RC_COLORS.dark};padding:28px;text-align:center;">
+          <img src="${RC_URLS.logo}" width="${LOGO_EMAIL.width}" height="${LOGO_EMAIL.height}" alt="Royal Constructions" />
+        </div>
+        <div style="padding:32px 28px;border:1px solid ${RC_COLORS.border};">
+          <h1 style="margin:0 0 18px;font-size:28px;">Final booking confirmation</h1>
+          <p>Dear ${input.tradieName},</p>
+          <p>Please confirm that you are still available for the approved booking below. Reply to this email with <strong>confirmed</strong> or let us know immediately if anything has changed.</p>
+          <table style="width:100%;border-collapse:collapse;margin:24px 0;background:${RC_COLORS.card};">
+            <tr><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">Project</td><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};"><strong>${input.projectName}</strong></td></tr>
+            <tr><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">Trade</td><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">${input.tradeType}</td></tr>
+            <tr><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">Milestone</td><td style="padding:12px;border-bottom:1px solid ${RC_COLORS.border};">${input.milestoneName ?? input.taskLabel}</td></tr>
+            <tr><td style="padding:12px;">Scheduled date</td><td style="padding:12px;"><strong>${formattedDate}</strong></td></tr>
+          </table>
+          <p style="color:${RC_COLORS.muted};">If we do not receive confirmation, the booking will remain flagged for follow-up by the site team.</p>
+          <p>Kind regards,<br /><strong>${input.siteManager.name}</strong><br />${input.siteManager.email}<br />${input.siteManager.phone}</p>
+        </div>
+      </div>
+    `,
+  };
 }

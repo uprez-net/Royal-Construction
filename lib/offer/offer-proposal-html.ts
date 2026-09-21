@@ -1,4 +1,5 @@
 import {
+  buildAreaBreakdown,
   buildOfferPrintTemplateData,
   formatArea,
   formatRoomCount,
@@ -8,12 +9,14 @@ import {
   getPrintFooterText,
   PROPOSAL_TAGLINE,
   COMPANY_LINE,
+  type OfferPrintScopeRow,
   type OfferPrintTemplateInput,
 } from "./workspace-print-template";
 import {
   buildWelcomeParagraphs,
   OFFER_SPEC_FACTS,
 } from "./workspace-proposal-content";
+import { formatPercent } from "./format";
 import {
   getAttachedOfferImageSlots,
   offerImageCaption,
@@ -24,6 +27,7 @@ import {
   formatBoundedOwnerList,
   CHARS_PER_LINE_INVESTMENT,
   CHARS_PER_LINE_SIGNATURE,
+  chunkAllowanceRows,
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
@@ -58,9 +62,7 @@ type SignatureBlock = { readonly html: string; readonly lines: number };
 // Counting blocks instead of lines is what let long company names overflow.
 function signatureBlockLines(whoText: string): number {
   const CHROME_LINES = 4;
-  return (
-    CHROME_LINES + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE)
-  );
+  return CHROME_LINES + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE);
 }
 
 // Line-unit budget for a dedicated signature page, and for the FIRST one, which
@@ -74,17 +76,19 @@ const MIN_FIRST_SIGNATURE_PAGE_BUDGET = 10;
 const INLINE_SIGNATURE_BUDGET = 22;
 
 function esc(value: string): string {
-  return value
-    // Strip backslashes so user-controlled text (client name, address, scope)
-    // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the signed
-    // acceptance PDF and steal a signature/date field via AutoPlace. Harmless for
-    // the emailed copy (real names/addresses carry no backslashes); real anchors
-    // are emitted by anchor(), never through esc(). Mirrors offer-tender-html.esc.
-    .replace(/\\/g, "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return (
+    value
+      // Strip backslashes so user-controlled text (client name, address, scope)
+      // cannot smuggle a DocuSign anchor token like \sigOwner1\ into the signed
+      // acceptance PDF and steal a signature/date field via AutoPlace. Harmless for
+      // the emailed copy (real names/addresses carry no backslashes); real anchors
+      // are emitted by anchor(), never through esc(). Mirrors offer-tender-html.esc.
+      .replace(/\\/g, "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+  );
 }
 
 function money(value: number | null): string {
@@ -111,8 +115,8 @@ function ownerDisplayName(owner: OfferOwner): string {
 // a muted "and …" sub-line (companies annotated). Falls back to the legacy
 // clientNames projection when owners[] is somehow empty.
 function ownerNamesCellHtml(job: OfferWorkspaceJob): string {
-  const owners = (job.owners ?? []).filter((owner) =>
-    owner.displayName.trim().length > 0,
+  const owners = (job.owners ?? []).filter(
+    (owner) => owner.displayName.trim().length > 0,
   );
   if (owners.length === 0) {
     return esc(job.clientNames);
@@ -186,11 +190,12 @@ export function buildProposalHtml(
       MIN_FIRST_SIGNATURE_PAGE_BUDGET,
       SIGNATURE_PAGE_BUDGET - acceptanceLines - SIGNATURE_PAGE_HEADING_LINES,
     );
-    const first = chunkByEstimatedHeight(
-      signatureBlocks,
-      firstBudget,
-      (block) => block.lines,
-    )[0] ?? [];
+    const first =
+      chunkByEstimatedHeight(
+        signatureBlocks,
+        firstBudget,
+        (block) => block.lines,
+      )[0] ?? [];
     const rest = signatureBlocks.slice(first.length);
     signatureChunks = [
       first,
@@ -198,10 +203,15 @@ export function buildProposalHtml(
     ].filter((chunk) => chunk.length > 0);
   }
 
+  // Only when there is something to disclose, so an offer with no allowances
+  // keeps the page count it had before.
+  const allowancePages = chunkAllowanceRows(data.scopeRows);
+
   const totalPages =
     5 +
     inclusionPages.length +
     (galleryImages.length > 0 ? 1 : 0) +
+    allowancePages.length +
     signatureChunks.length;
   let pageNo = 0;
   const foot = () => {
@@ -217,6 +227,9 @@ export function buildProposalHtml(
     investmentPage(input, data, foot()),
     ...inclusionPages.map((rows, index) =>
       inclusionsPage(rows, inclusionStartIndexes[index], index > 0, foot()),
+    ),
+    ...allowancePages.map((rows, index) =>
+      allowancesPage(rows, index > 0, foot()),
     ),
     termsPage(input, data, inlineSignatures ? signatureBlocks : null, foot()),
     ...signatureChunks.map((chunk, index) =>
@@ -258,12 +271,13 @@ export function buildProposalHtml(
   .box { border: 1px solid ${BORDER}; padding: 16px; }
   .box .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
   .box .big { font-weight: 700; color: ${NAVY}; margin-top: 6px; }
-  .areatable { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid ${BORDER}; margin-top: 26px; text-align: center; }
+  /* Column flow, not a fixed 5: void and granny flat add cells only when present. */
+  .areatable { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid ${BORDER}; margin-top: 26px; text-align: center; }
   .areatable > div { padding: 14px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
   .areatable > div:last-child { border-right: none; background: ${NAVY}; color: #fff; }
   .areatable .cap { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: ${MUTED}; }
   .areatable > div:last-child .cap { color: #cfd6e6; }
-  .areatable .num { font-family: monospace; font-weight: 700; margin-top: 6px; }
+  .areatable .num { font-family: monospace; font-weight: 700; margin-top: 6px; white-space: nowrap; }
   .spechead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${NAVY}; margin-top: 22px; }
   .spectable { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid ${BORDER}; margin-top: 8px; text-align: center; }
   .spectable > div { padding: 12px 6px; border-right: 1px solid ${BORDER}; font-size: 12px; }
@@ -293,6 +307,11 @@ export function buildProposalHtml(
   .inc th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .inc td { border-bottom: 1px solid ${BORDER}; padding: 10px; vertical-align: top; }
   .inc td.cat { font-weight: 700; color: ${NAVY}; width: 45mm; }
+  .inc th.amt, .inc td.amt { text-align: right; width: 30mm; white-space: nowrap; }
+  .inc .sub { font-weight: 400; color: ${MUTED}; font-size: 11px; margin-top: 3px; line-height: 1.45; }
+  .inc.alw td.cat { width: auto; }
+  .inc.alw th:last-child, .inc.alw td:last-child { width: 70mm; }
+  .inc td.amt { font-family: monospace; color: ${NAVY}; }
   .pay th { text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; color: ${MUTED}; background: #f2f3f5; border-top: 1px solid ${BORDER}; border-bottom: 1px solid ${BORDER}; padding: 10px; }
   .pay td { border-bottom: 1px solid ${BORDER}; padding: 12px 10px; font-size: 13px; }
   .pay td.stage { font-weight: 700; }
@@ -331,7 +350,7 @@ function coverPage(
       ${currentLocationRow}
       ${coverRow("Site Location", job.siteAddress)}
       ${coverRow("Build Type", job.buildType)}
-      ${coverRow("Total Build Area", data.areaLabel)}
+      ${data.areaLabel ? coverRow("Total Build Area", data.areaLabel) : ""}
       ${coverRow("Contract Price", data.priceLine, true)}
       ${coverRow("Quote Reference", `${job.reference}-${job.revision} | Valid: ${data.validUntilLabel}`)}
       ${coverRow("Prepared By", job.preparedBy)}
@@ -366,8 +385,7 @@ function welcomePage(
       .replace(/\s*&\s*(Ms|Mrs)\s+/i, " and ");
     return secondary ? `${primary} and ${secondary}` : primary;
   })();
-  const greeting =
-    formatOwnerGreetingNames(job.owners ?? []) || legacyGreeting;
+  const greeting = formatOwnerGreetingNames(job.owners ?? []) || legacyGreeting;
   const paragraphs = buildWelcomeParagraphs(job)
     .map((p) => `<p style="margin-bottom:14px;">${esc(p)}</p>`)
     .join("");
@@ -410,12 +428,12 @@ function snapshotPage(
   foot: string,
 ): string {
   const { job } = input;
-  const gfGarage = job.groundFloorSqm + job.garageSqm;
-  const total =
-    gfGarage + job.firstFloorSqm + job.alfrescoPorchSqm + job.porchSqm + job.grannyFlatSqm;
+  const area = buildAreaBreakdown(job);
   const scope = job.buildScope
     .filter((line) => line.trim())
-    .map((line) => `<li style="font-size:13px;color:${MUTED};">${esc(line)}</li>`)
+    .map(
+      (line) => `<li style="font-size:13px;color:${MUTED};">${esc(line)}</li>`,
+    )
     .join("");
   const cell = (cap: string, num: string) =>
     `<div><div class="cap">${esc(cap)}</div><div class="num">${esc(num)}</div></div>`;
@@ -438,14 +456,15 @@ function snapshotPage(
       <div class="box"><div class="lbl">Site</div><div class="big">${esc(job.siteAddress)}</div><div style="margin-top:10px;">${job.dpNumber.trim() ? `<p class="muted" style="font-size:12px;">${esc(job.dpNumber)}</p>` : ""}${particulars ? `<p class="muted" style="font-size:12px;">${esc(particulars)}</p>` : ""}</div></div>
       <div class="box"><div class="lbl">Build scope</div><div class="big">${esc(job.buildType)}</div><ul style="margin-top:8px;list-style:none;">${scope}</ul></div>
     </div>
-    <div class="areatable">
-      ${cell("Ground Floor + Garage", formatArea(gfGarage))}
-      ${cell("First Floor", formatArea(job.firstFloorSqm))}
-      ${cell("Alfresco + Balcony", formatArea(job.alfrescoPorchSqm))}
-      ${cell("Porch", formatArea(job.porchSqm))}
-      ${cell("Total Area", formatArea(total))}
+    ${
+      area.totalSqm > 0
+        ? `<div class="areatable">
+      ${area.cells.map((entry) => cell(entry.label, formatArea(entry.sqm))).join("")}
+      ${cell("Total Area", formatArea(area.totalSqm))}
     </div>
-    <p class="muted" style="margin-top:22px;font-size:12px;">Total build area ${esc(data.areaLabel)}.</p>
+    <p class="muted" style="margin-top:22px;font-size:12px;">Total build area ${esc(data.areaLabel)}.</p>`
+        : ""
+    }
     ${specSection("Major House Specifications", {
       bathrooms: job.bathrooms,
       bedrooms: job.bedrooms,
@@ -468,7 +487,8 @@ export function investmentListDensity(
 ): "" | "tight" | "tighter" | "tightest" {
   const lines = (items: readonly string[]) =>
     items.reduce(
-      (sum, item) => sum + estimateWrappedLines(item, CHARS_PER_LINE_INVESTMENT),
+      (sum, item) =>
+        sum + estimateWrappedLines(item, CHARS_PER_LINE_INVESTMENT),
       0,
     );
   const tallest = Math.max(lines(includes), lines(excludes));
@@ -483,13 +503,18 @@ function investmentPage(
   data: ReturnType<typeof buildOfferPrintTemplateData>,
   foot: string,
 ): string {
-  const { draft, customerPrice, priceAdjustmentLabel, standardPriceIncGst } = input;
+  const { draft, customerPrice, priceAdjustmentLabel, standardPriceIncGst } =
+    input;
   const saving =
     data.savingAmount !== null && data.savingAmount > 0
       ? `<div class="save">Standard price ${money(standardPriceIncGst)} - ${esc(priceAdjustmentLabel || "saving")} ${money(data.savingAmount)}</div>`
       : "";
-  const includes = data.summaryInclusions.map((b) => `<li>${esc(b)}</li>`).join("");
-  const excludes = data.exclusionBullets.map((b) => `<li>${esc(b)}</li>`).join("");
+  const includes = data.summaryInclusions
+    .map((b) => `<li>${esc(b)}</li>`)
+    .join("");
+  const excludes = data.exclusionBullets
+    .map((b) => `<li>${esc(b)}</li>`)
+    .join("");
   return `<div class="page">
     <div class="masthead">${esc(COMPANY_LINE)}</div>
     <div class="eyebrow">Investment summary</div>
@@ -534,6 +559,32 @@ function inclusionsPage(
   </div>`;
 }
 
+// Prime cost and provisional sums, mirroring PrintAllowancesPage in
+// offer-workspace-print-template.tsx so the emailed PDF and the printed
+// document disclose the same allowances in the same place. `scopeRows` was
+// computed and rendered by neither before this. A continued page drops the intro,
+// as the inclusions schedule does.
+function allowancesPage(
+  rows: readonly OfferPrintScopeRow[],
+  continued: boolean,
+  foot: string,
+): string {
+  const body = rows
+    .map(
+      (row) =>
+        `<tr><td class="cat">${esc(row.label)}${row.description ? `<div class="sub">${esc(row.description)}</div>` : ""}</td><td class="amt">${esc(row.amountLabel)}</td><td class="muted">${esc(row.variationRule) || "&mdash;"}</td></tr>`,
+    )
+    .join("");
+  return `<div class="page">
+    <div class="masthead">${esc(COMPANY_LINE)}</div>
+    <div class="eyebrow">Allowances</div>
+    <h1 class="title">Prime cost &amp; provisional sums${continued ? " (cont.)" : ""}</h1>
+    ${continued ? "" : `<p class="muted" style="margin-top:12px;max-width:155mm;">The amounts below are allowances held within your fixed contract price, not fixed costs. Where your final selection costs more or less than the allowance, the difference is adjusted by written variation as set out against each item.</p>`}
+    <table class="inc alw"><thead><tr><th>Item</th><th class="amt">Allowance</th><th>If the actual cost differs</th></tr></thead><tbody>${body}</tbody></table>
+    ${foot}
+  </div>`;
+}
+
 // Acceptance paragraph — names every owner ("I/We, A and B and C, accept…").
 // Single-owner offers keep the "I/We, <owner>, accept…" wording; `I/We` covers
 // both. Falls back to the clientNames projection when owners[] is empty.
@@ -574,7 +625,11 @@ function acceptanceLineText(job: OfferWorkspaceJob): string {
 // (both walk collectOfferSigners in the same order), so sigOwner{k} maps to
 // recipient k. Only the customer blocks carry anchors — the acceptance is
 // customer-only (ADR 0004).
-function signLine(kind: "sig" | "date", index: number, forSignature: boolean): string {
+function signLine(
+  kind: "sig" | "date",
+  index: number,
+  forSignature: boolean,
+): string {
   if (!forSignature) {
     return "_______________________";
   }
@@ -643,10 +698,12 @@ function termsPage(
   foot: string,
 ): string {
   const { job } = input;
+  // formatPercent, as the React print path uses: toFixed(0) printed a 12.5% stage
+  // as 13% beside an amount computed from 12.5%.
   const rows = data.paymentRows
     .map(
       (row) =>
-        `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${(row.percentOfContract * 100).toFixed(0)}% - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
+        `<tr><td class="stage">${esc(row.stageName)}</td><td class="amt">${formatPercent(row.percentOfContract)} - ${money(row.amount)}</td><td class="muted">${esc(row.trigger)}</td></tr>`,
     )
     .join("");
   const acceptance = inlineBlocks

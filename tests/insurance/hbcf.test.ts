@@ -62,10 +62,7 @@ test("the budget bracket is the fallback, used as the range it already is", () =
   );
 
   // The top bracket's ceiling is a display cap, and says so.
-  assert.equal(
-    hbcfNeedRange({ budget: "$700K+" })?.isOpenEnded,
-    true,
-  );
+  assert.equal(hbcfNeedRange({ budget: "$700K+" })?.isOpenEnded, true);
 });
 
 test("an unpriced lead with no readable bracket has no range at all", () => {
@@ -135,15 +132,9 @@ test("hbcfUsedAt only counts claims active on the requested date", () => {
     }),
   ];
 
-  assert.equal(
-    hbcfUsedAt(claims, TODAY),
-    200_000,
-  );
+  assert.equal(hbcfUsedAt(claims, TODAY), 200_000);
 
-  assert.equal(
-    hbcfUsedAt(claims, new Date(2026, 8, 15)),
-    600_000,
-  );
+  assert.equal(hbcfUsedAt(claims, new Date(2026, 8, 15)), 600_000);
 });
 
 test("an active commitment contributes its full amount midway through its window", () => {
@@ -154,10 +145,7 @@ test("an active commitment contributes its full amount midway through its window
     insuranceClaimEndDate: "2026-06-30",
   });
 
-  assert.equal(
-    hbcfUsedAt([single], new Date(2026, 2, 15)),
-    600_000,
-  );
+  assert.equal(hbcfUsedAt([single], new Date(2026, 2, 15)), 600_000);
 });
 
 test("an active commitment still contributes its full amount on its last day", () => {
@@ -168,10 +156,7 @@ test("an active commitment still contributes its full amount on its last day", (
     insuranceClaimEndDate: "2026-06-30",
   });
 
-  assert.equal(
-    hbcfUsedAt([single], new Date(2026, 5, 30)),
-    600_000,
-  );
+  assert.equal(hbcfUsedAt([single], new Date(2026, 5, 30)), 600_000);
 });
 
 test("a commitment contributes zero the day after its end date", () => {
@@ -182,10 +167,7 @@ test("a commitment contributes zero the day after its end date", () => {
     insuranceClaimEndDate: "2026-06-30",
   });
 
-  assert.equal(
-    hbcfUsedAt([single], new Date(2026, 6, 1)),
-    0,
-  );
+  assert.equal(hbcfUsedAt([single], new Date(2026, 6, 1)), 0);
 });
 
 /* ── Assessment ─────────────────────────────────────────────────────────── */
@@ -210,6 +192,41 @@ test("free capacity covering the top of the range means the build can start now"
   assert.equal(result.decisiveClaim, null);
   assert.equal(result.canStartFrom, "2026-08-18");
   assert.equal(result.projectedWindow?.start, "2026-08-18");
+});
+
+test("an estimated start date becomes the capacity planning floor", () => {
+  const result = hbcfAssessment({
+    claims: [
+      claim({
+        projectId: "finished-before-planning",
+        claimAmount: 400_000,
+        insuranceClaimEndDate: "2027-01-01",
+      }),
+      claim({
+        projectId: "active-at-planning",
+        claimAmount: 300_000,
+        insuranceClaimEndDate: "2027-12-31",
+      }),
+    ],
+    needRange: {
+      low: 350_000,
+      high: 400_000,
+      source: "budgetBracket",
+      isOpenEnded: false,
+    },
+    today: TODAY,
+    estimatedStartDate: new Date(2027, 0, 15),
+    totalSumAssured: 800_000,
+  });
+
+  assert.equal(result.planningStartDate, "2027-01-15");
+  assert.equal(result.usedAmount, 700_000);
+  assert.equal(result.directAvailable, 100_000);
+  assert.equal(result.availableAtPlanningStart, 500_000);
+  assert.equal(result.sufficient, true);
+  assert.equal(result.canStartFrom, "2027-01-15");
+  assert.equal(result.projectedWindow?.start, "2027-01-15");
+  assert.equal(result.projectedWindow?.end, "2028-07-15");
 });
 
 test("the decisive claim is the expiry that tips capacity over the top of the range", () => {
@@ -535,10 +552,7 @@ test("the projection length is the mean of the cover windows already on the book
   ]);
 
   assert.equal(months, 9);
-  assert.equal(
-    hbcfProjectionMonths([]),
-    HBCF_DEFAULT_PROJECTION_MONTHS,
-  );
+  assert.equal(hbcfProjectionMonths([]), HBCF_DEFAULT_PROJECTION_MONTHS);
 });
 
 test("projection months are clamped to the minimum bound", () => {

@@ -10,6 +10,7 @@ import {
   withStagePercentage,
 } from "@/lib/projects/payment-stages";
 import { currency } from "@/utils/formatters";
+import { fieldElementId } from "@/lib/projects/create-project-errors";
 import {
   createEmptyProjectExtractionData,
   projectExtractionSchema,
@@ -28,6 +29,7 @@ import {
   HardHat,
   X,
   Plus,
+  AlertCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -94,8 +96,6 @@ const PAYMENT_STAGES_FIELD = "commercialsAndClaimsPaymentStages";
 
 const CURRENCY_FIELDS = new Set([
   "commercialsAndClaimsTotalContractSum",
-  "commercialsAndClaimsTenderTotalPrice",
-  "commercialsAndClaimsContractPrice",
   "commercialsAndClaimsGstAmount",
   "commercialsAndClaimsDepositValue",
   "commercialsAndClaimsClaimStageSlabDollarValue",
@@ -126,6 +126,9 @@ const LARGE_TEXT_FIELDS = new Set([
 ]);
 
 const SPAN_TWO_FIELDS = new Set(["summary", "legalAdministrationSiteAddress"]);
+
+/** Field key -> message. Shared by the section card, groups and fields. */
+export type FieldErrorMap = Readonly<Record<string, string | undefined>>;
 
 type FieldType =
   | "text"
@@ -484,7 +487,12 @@ interface TagListControlProps {
 /* removes without entering edit mode. Text truncates on one line with a     */
 /* native title tooltip for the full value.                                  */
 
-function TagRow({ value, icon, onCommit, onRemove }: TagRowProps): React.JSX.Element {
+function TagRow({
+  value,
+  icon,
+  onCommit,
+  onRemove,
+}: TagRowProps): React.JSX.Element {
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<string>(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -661,7 +669,10 @@ function TagListControl({
         )}
 
         <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-2.5 py-1.5">
-          <Plus className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Plus
+            className="h-3 w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             value={draft}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -942,11 +953,14 @@ export function ExtractionField({
   field,
   value,
   onChange,
+  error,
 }: {
   title?: string;
   field: string;
   value: unknown;
   onChange: (field: string, value: unknown) => void;
+  /** Validation message for this field; renders inline and rings the control. */
+  error?: string;
 }) {
   const label = title
     ? fieldLabel(removeTitleFromFieldName(title, field))
@@ -954,37 +968,97 @@ export function ExtractionField({
   const type = resolveFieldType(field);
   const emit = (raw: string) => onChange(field, coerceFieldValue(field, raw));
 
-  switch (type) {
-    case "currency":
-      return <CurrencyControl label={label} value={value} onChange={emit} />;
-    case "percent":
-      return <PercentControl label={label} value={value} onChange={emit} />;
-    case "number":
-      return (
-        <NumberControl
-          label={label}
-          value={value}
-          onChange={emit}
-          unit={NUMBER_UNITS[field]}
-        />
-      );
-    case "boolean":
-      return <BooleanControl label={label} value={value} onChange={emit} />;
-    case "array":
-      return (
-        <TagListControl
-          label={label}
-          values={Array.isArray(value) ? (value as string[]) : []}
-          onChange={(values) => onChange(field, values)}
-        />
-      );
-    case "textarea":
-      return (
-        <TextControl label={label} value={value} onChange={emit} multiline />
-      );
-    default:
-      return <TextControl label={label} value={value} onChange={emit} />;
+  return (
+    <FieldErrorBoundaryShell field={field} error={error}>
+      {renderControl()}
+    </FieldErrorBoundaryShell>
+  );
+
+  function renderControl() {
+    switch (type) {
+      case "currency":
+        return <CurrencyControl label={label} value={value} onChange={emit} />;
+      case "percent":
+        return <PercentControl label={label} value={value} onChange={emit} />;
+      case "number":
+        return (
+          <NumberControl
+            label={label}
+            value={value}
+            onChange={emit}
+            unit={NUMBER_UNITS[field]}
+          />
+        );
+      case "boolean":
+        return <BooleanControl label={label} value={value} onChange={emit} />;
+      case "array":
+        return (
+          <TagListControl
+            label={label}
+            values={Array.isArray(value) ? (value as string[]) : []}
+            onChange={(values) => onChange(field, values)}
+          />
+        );
+      case "textarea":
+        return (
+          <TextControl label={label} value={value} onChange={emit} multiline />
+        );
+      default:
+        return <TextControl label={label} value={value} onChange={emit} />;
+    }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Error shell
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps any field control with the stable id the wizard scrolls to, the
+ * invalid ring, and the inline message. Done at this level rather than inside
+ * each control so every field type (text, currency, tag list, boolean) gets
+ * identical error affordances for free.
+ */
+export function FieldErrorBoundaryShell({
+  field,
+  error,
+  children,
+}: {
+  field: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  const errorId = `${fieldElementId(field)}-error`;
+
+  return (
+    <div
+      id={fieldElementId(field)}
+      data-field={field}
+      data-invalid={error ? "true" : undefined}
+      className={cn(
+        "scroll-mt-24 rounded-lg transition-shadow",
+        error &&
+          "bg-destructive-light/40 p-2 -m-2 ring-1 ring-destructive/60 ring-offset-0",
+      )}
+    >
+      <div
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+      >
+        {children}
+      </div>
+      {error ? (
+        <p
+          id={errorId}
+          role="alert"
+          className="mt-1.5 flex items-start gap-1 text-[11px] font-medium leading-snug text-destructive-ink"
+        >
+          <AlertCircle className="mt-px size-3 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -998,6 +1072,7 @@ function FieldGroupPanel({
   fields,
   values,
   onChange,
+  errors,
 }: {
   title: string;
   heading: string;
@@ -1005,6 +1080,7 @@ function FieldGroupPanel({
   fields: string[];
   values: ProjectExtractionData;
   onChange: (field: string, value: unknown) => void;
+  errors?: FieldErrorMap;
 }) {
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
@@ -1027,6 +1103,7 @@ function FieldGroupPanel({
             field={field}
             value={values[field as keyof ProjectExtractionData]}
             onChange={onChange}
+            error={errors?.[field]}
           />
         ))}
       </div>
@@ -1062,6 +1139,7 @@ export function ExtractionSectionCard({
   fields,
   values,
   onChange,
+  errors,
 }: {
   sectionKey: ProjectExtractionSectionKey;
   title: string;
@@ -1069,10 +1147,15 @@ export function ExtractionSectionCard({
   fields: readonly string[];
   values: ProjectExtractionData;
   onChange: (field: string, value: unknown) => void;
+  /** Field key -> validation message, from client checks or the server. */
+  errors?: FieldErrorMap;
 }) {
   const meta = SECTION_META[sectionKey];
   const Icon = meta.icon;
   const filledCount = countFilledFields(values, fields);
+  const errorCount = errors
+    ? fields.filter((field) => Boolean(errors[field])).length
+    : 0;
 
   const activeGroups = FIELD_GROUPS.filter((group) =>
     group.fields.every((field) => fields.includes(field)),
@@ -1087,7 +1170,12 @@ export function ExtractionSectionCard({
   const hasPaymentStages = fields.includes(PAYMENT_STAGES_FIELD);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div
+      className={cn(
+        "rounded-2xl border bg-white p-5 shadow-sm",
+        errorCount > 0 ? "border-destructive/50" : "border-slate-200",
+      )}
+    >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
@@ -1100,17 +1188,27 @@ export function ExtractionSectionCard({
             </p>
           </div>
         </div>
-        <Badge
-          variant="outline"
-          className={cn(
-            "shrink-0 rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            filledCount === fields.length && fields.length > 0
-              ? "border-teal-200 bg-teal-50 text-teal-700"
-              : "text-slate-500",
-          )}
-        >
-          {filledCount}/{fields.length} filled
-        </Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          {errorCount > 0 ? (
+            <Badge
+              variant="outline"
+              className="shrink-0 rounded-full border-destructive/40 bg-destructive-light px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-destructive-ink"
+            >
+              {errorCount} {errorCount === 1 ? "issue" : "issues"}
+            </Badge>
+          ) : null}
+          <Badge
+            variant="outline"
+            className={cn(
+              "shrink-0 rounded-full border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              filledCount === fields.length && fields.length > 0
+                ? "border-teal-200 bg-teal-50 text-teal-700"
+                : "text-slate-500",
+            )}
+          >
+            {filledCount}/{fields.length} filled
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1131,6 +1229,7 @@ export function ExtractionSectionCard({
               field={field}
               value={values[field as keyof ProjectExtractionData]}
               onChange={onChange}
+              error={errors?.[field]}
             />
           </div>
         ))}
@@ -1138,11 +1237,16 @@ export function ExtractionSectionCard({
 
       {hasPaymentStages ? (
         <div className="mt-4">
-          <PaymentStagesControl
-            labels={values.commercialsAndClaimsPaymentStages ?? []}
-            totalContractSum={values.commercialsAndClaimsTotalContractSum}
-            onChange={(labels) => onChange(PAYMENT_STAGES_FIELD, labels)}
-          />
+          <FieldErrorBoundaryShell
+            field={PAYMENT_STAGES_FIELD}
+            error={errors?.[PAYMENT_STAGES_FIELD]}
+          >
+            <PaymentStagesControl
+              labels={values.commercialsAndClaimsPaymentStages ?? []}
+              totalContractSum={values.commercialsAndClaimsTotalContractSum}
+              onChange={(labels) => onChange(PAYMENT_STAGES_FIELD, labels)}
+            />
+          </FieldErrorBoundaryShell>
         </div>
       ) : null}
 
@@ -1157,6 +1261,7 @@ export function ExtractionSectionCard({
               fields={group.fields}
               values={values}
               onChange={onChange}
+              errors={errors}
             />
           ))}
         </div>

@@ -26,10 +26,16 @@ function isBlank(value: string | null | undefined): boolean {
  * an accordion — easy to glance past between site visits. This banner only
  * renders when something is actually missing; silence when compliance is set.
  */
-export function ProjectComplianceAlert({ project }: { project: ProjectDetail }) {
-  const legal = ((project.requirements ?? {}) as {
-    legalAdministration?: LegalRequirements;
-  }).legalAdministration;
+export function ProjectComplianceAlert({
+  project,
+}: {
+  project: ProjectDetail;
+}) {
+  const legal = (
+    (project.requirements ?? {}) as {
+      legalAdministration?: LegalRequirements;
+    }
+  ).legalAdministration;
 
   const pcaMissing = isBlank(legal?.pcaInspector);
   const hbcfMissing = isBlank(legal?.hbcfInsuranceNumber);
@@ -53,18 +59,14 @@ export function ProjectComplianceAlert({ project }: { project: ProjectDetail }) 
       className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-warning/40 bg-warning-light px-4 py-3 text-sm text-warning-ink shadow-sm"
     >
       <div className="flex min-w-0 flex-1 items-start gap-3">
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0"
-          aria-hidden="true"
-        />
+        <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <div className="min-w-0">
           <p className="font-medium text-foreground">
             Compliance details still needed
           </p>
           <p className="mt-0.5 text-warning-ink/90">
-            {missing.join(" and ")}{" "}
-            {missing.length === 1 ? "is" : "are"} not recorded for this
-            active project.
+            {missing.join(" and ")} {missing.length === 1 ? "is" : "are"} not
+            recorded for this active project.
           </p>
         </div>
       </div>

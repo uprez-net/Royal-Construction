@@ -19,7 +19,8 @@ import {
   isKpiCohortMetric,
   sortLeadOpenTasks,
 } from "@/lib/leads/lead-helpers";
-import { bookConsultationHref, leadActions } from "@/lib/leads/lead-actions";
+import { leadActions } from "@/lib/leads/lead-actions";
+import { bookConsultationUrlForLead } from "@/lib/actions/leads";
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
 import { EmailFlowModal } from "@/components/leads/modal-ui/email-flow-modal";
 import {
@@ -162,7 +163,10 @@ export default function TableView({
   };
 
   const redirectToScheduleMeeting = (lead: Lead) => {
-    window.location.assign(bookConsultationHref(lead, user?.fullName));
+    void bookConsultationUrlForLead(lead, user?.fullName).then(
+      (href) => window.location.assign(href),
+      () => showToast("Could not open the booking link.", "error"),
+    );
   };
 
   /** The lead detail modal was replaced by a full page at /leads/[id]. */
@@ -230,185 +234,187 @@ export default function TableView({
                       const actions = leadActions(lead);
 
                       return (
-                      <tr
-                        key={lead.id}
-                        className={cn(
-                          lead.urgent && "urgent-row bg-rose-50/50",
-                          lead.isArchived && "opacity-50",
-                        )}
-                        onClick={() => openLeadDetail(lead)}
-                      >
-                        <td className="col-lead">
-                          <div className="cell-name">
-                            {lead.urgent && (
-                              <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
-                            )}
-                            <div className="cell-name-text">
-                              <strong>{lead.name}</strong>
-                              <small>{lead.email}</small>
-                              {lead.secondaryName ? (
-                                <small className="text-muted-foreground/80">
-                                  + {lead.secondaryName}
-                                  {lead.secondaryEmail ? ` · ${lead.secondaryEmail}` : ""}
-                                </small>
-                              ) : null}
+                        <tr
+                          key={lead.id}
+                          className={cn(
+                            lead.urgent && "urgent-row bg-rose-50/50",
+                            lead.isArchived && "opacity-50",
+                          )}
+                          onClick={() => openLeadDetail(lead)}
+                        >
+                          <td className="col-lead">
+                            <div className="cell-name">
+                              {lead.urgent && (
+                                <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                              )}
+                              <div className="cell-name-text">
+                                <strong>{lead.name}</strong>
+                                <small>{lead.email}</small>
+                                {lead.secondaryName ? (
+                                  <small className="text-muted-foreground/80">
+                                    + {lead.secondaryName}
+                                    {lead.secondaryEmail
+                                      ? ` · ${lead.secondaryEmail}`
+                                      : ""}
+                                  </small>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="col-phone">{lead.phone}</td>
-                        <td className="col-location">{lead.location}</td>
-                        <td className="col-source-detail">
-                          {lead.sourceDetail}
-                        </td>
-                        <td className="col-stage">
-                          <span
-                            className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
-                          >
-                            {lead.stage}
-                          </span>
-                        </td>
-                        <td className="col-followup">
-                          {tasksReady ? (
-                            <LeadTaskCell
-                              next={tasksByLeadId.get(lead.id)?.[0]}
-                              disabled={lead.isArchived}
-                              onOpen={() => setTasksLead(lead)}
-                            />
-                          ) : (
+                          </td>
+                          <td className="col-phone">{lead.phone}</td>
+                          <td className="col-location">{lead.location}</td>
+                          <td className="col-source-detail">
+                            {lead.sourceDetail}
+                          </td>
+                          <td className="col-stage">
                             <span
-                              className="text-xs text-muted-foreground"
-                              title={
-                                tasksError
-                                  ? "Could not load tasks. Refresh to try again."
-                                  : "Loading tasks"
-                              }
+                              className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
                             >
-                              —
+                              {lead.stage}
                             </span>
-                          )}
-                        </td>
-                        <td className="col-assigned">
-                          {!lead.assignedId ? (
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAssignedLead(lead);
-                              }}
-                              title="Assign Lead"
-                              disabled={lead.isArchived}
-                            >
-                              <UserPlus size={12} />
-                              <span>Assign</span>
-                            </button>
-                          ) : (
-                            <span
-                              className="assigned-name cursor-pointer transition-colors hover:text-royal-gold"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAssignedLead(lead);
-                              }}
-                            >
-                              {lead.assignedUser?.name}
-                            </span>
-                          )}
-                        </td>
-                        <td className="col-actions">
-                          <div className="action-buttons">
-                            {actions.call.visible && (
+                          </td>
+                          <td className="col-followup">
+                            {tasksReady ? (
+                              <LeadTaskCell
+                                next={tasksByLeadId.get(lead.id)?.[0]}
+                                disabled={lead.isArchived}
+                                onOpen={() => setTasksLead(lead)}
+                              />
+                            ) : (
+                              <span
+                                className="text-xs text-muted-foreground"
+                                title={
+                                  tasksError
+                                    ? "Could not load tasks. Refresh to try again."
+                                    : "Loading tasks"
+                                }
+                              >
+                                —
+                              </span>
+                            )}
+                          </td>
+                          <td className="col-assigned">
+                            {!lead.assignedId ? (
                               <button
                                 type="button"
-                                className="action-btn-icon"
-                                title={
-                                  actions.call.disabledReason ??
-                                  `Call ${lead.name}`
-                                }
-                                aria-label={`Call ${lead.name}`}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-royal-gold hover:bg-royal-gold-light hover:text-royal-gold"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCall(lead);
+                                  setAssignedLead(lead);
                                 }}
-                                disabled={actions.call.disabled}
+                                title="Assign Lead"
+                                disabled={lead.isArchived}
                               >
-                                <Phone size={15} />
+                                <UserPlus size={12} />
+                                <span>Assign</span>
                               </button>
-                            )}
-                            {actions.email.visible && (
-                              <button
-                                type="button"
-                                className="action-btn-icon"
-                                title={
-                                  actions.email.disabledReason ??
-                                  `Send follow-up email to ${lead.name}`
-                                }
-                                aria-label={`Send follow-up email to ${lead.name}`}
+                            ) : (
+                              <span
+                                className="assigned-name cursor-pointer transition-colors hover:text-royal-gold"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setEmailLead(lead);
+                                  setAssignedLead(lead);
                                 }}
-                                disabled={actions.email.disabled}
                               >
-                                <Mail size={15} />
-                              </button>
+                                {lead.assignedUser?.name}
+                              </span>
                             )}
-                            {actions.sendText.visible && (
-                              <button
-                                type="button"
-                                className="action-btn-icon"
-                                title={
-                                  actions.sendText.disabledReason ??
-                                  `Send message to ${lead.name}`
-                                }
-                                aria-label={`Send message to ${lead.name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCommLead(lead.id.toString());
-                                }}
-                                disabled={actions.sendText.disabled}
-                              >
-                                <MessageSquare size={15} />
-                              </button>
-                            )}
-                            {actions.archive.visible && (
-                              <button
-                                type="button"
-                                className="action-btn-icon"
-                                title={
-                                  actions.archive.disabledReason ??
-                                  `Archive ${lead.name}`
-                                }
-                                aria-label={`Archive ${lead.name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLeadToDelete(lead);
-                                }}
-                                disabled={actions.archive.disabled}
-                              >
-                                <Archive size={15} />
-                              </button>
-                            )}
-                            {actions.bookMeeting.visible && (
-                              <button
-                                type="button"
-                                className="action-btn-icon"
-                                title={
-                                  actions.bookMeeting.disabledReason ??
-                                  `Meeting schedule for ${lead.name}`
-                                }
-                                aria-label={`Meeting schedule for ${lead.name}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  redirectToScheduleMeeting(lead);
-                                }}
-                                disabled={actions.bookMeeting.disabled}
-                              >
-                                <CalendarCheck size={15} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="col-actions">
+                            <div className="action-buttons">
+                              {actions.call.visible && (
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={
+                                    actions.call.disabledReason ??
+                                    `Call ${lead.name}`
+                                  }
+                                  aria-label={`Call ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCall(lead);
+                                  }}
+                                  disabled={actions.call.disabled}
+                                >
+                                  <Phone size={15} />
+                                </button>
+                              )}
+                              {actions.email.visible && (
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={
+                                    actions.email.disabledReason ??
+                                    `Send follow-up email to ${lead.name}`
+                                  }
+                                  aria-label={`Send follow-up email to ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEmailLead(lead);
+                                  }}
+                                  disabled={actions.email.disabled}
+                                >
+                                  <Mail size={15} />
+                                </button>
+                              )}
+                              {actions.sendText.visible && (
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={
+                                    actions.sendText.disabledReason ??
+                                    `Send message to ${lead.name}`
+                                  }
+                                  aria-label={`Send message to ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCommLead(lead.id.toString());
+                                  }}
+                                  disabled={actions.sendText.disabled}
+                                >
+                                  <MessageSquare size={15} />
+                                </button>
+                              )}
+                              {actions.archive.visible && (
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={
+                                    actions.archive.disabledReason ??
+                                    `Archive ${lead.name}`
+                                  }
+                                  aria-label={`Archive ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLeadToDelete(lead);
+                                  }}
+                                  disabled={actions.archive.disabled}
+                                >
+                                  <Archive size={15} />
+                                </button>
+                              )}
+                              {actions.bookMeeting.visible && (
+                                <button
+                                  type="button"
+                                  className="action-btn-icon"
+                                  title={
+                                    actions.bookMeeting.disabledReason ??
+                                    `Meeting schedule for ${lead.name}`
+                                  }
+                                  aria-label={`Meeting schedule for ${lead.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    redirectToScheduleMeeting(lead);
+                                  }}
+                                  disabled={actions.bookMeeting.disabled}
+                                >
+                                  <CalendarCheck size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       );
                     })}
                   </tbody>
@@ -440,148 +446,152 @@ export default function TableView({
                 const actions = leadActions(lead);
 
                 return (
-                <article
-                  key={lead.id}
-                  className={cn(
-                    "mobile-lead-card",
-                    lead.urgent && "urgent",
-                    lead.isArchived && "opacity-50",
-                  )}
-                >
-                  <button
-                    type="button"
-                    className="mobile-lead-main"
-                    onClick={() => openLeadDetail(lead)}
-                    aria-label={`Open ${lead.name} lead details`}
+                  <article
+                    key={lead.id}
+                    className={cn(
+                      "mobile-lead-card",
+                      lead.urgent && "urgent",
+                      lead.isArchived && "opacity-50",
+                    )}
                   >
-                    <span className="mobile-lead-name-row">
-                      <span className="mobile-lead-name">
-                        {lead.urgent && (
-                          <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
-                        )}
-                        {lead.name}
+                    <button
+                      type="button"
+                      className="mobile-lead-main"
+                      onClick={() => openLeadDetail(lead)}
+                      aria-label={`Open ${lead.name} lead details`}
+                    >
+                      <span className="mobile-lead-name-row">
+                        <span className="mobile-lead-name">
+                          {lead.urgent && (
+                            <span className="urgent-dot inline-block size-2 rounded-full bg-rose-600 animate-pulse" />
+                          )}
+                          {lead.name}
+                        </span>
+                        <span
+                          className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
+                        >
+                          {lead.stage}
+                        </span>
                       </span>
-                      <span
-                        className={`stage-badge ${STAGE_STYLES[lead.stage]}`}
-                      >
-                        {lead.stage}
+                      <span className="mobile-lead-email">
+                        {lead.email || lead.phone || "No contact saved"}
                       </span>
-                    </span>
-                    <span className="mobile-lead-email">
-                      {lead.email || lead.phone || "No contact saved"}
-                    </span>
-                    {lead.secondaryName ? (
-                      <span className="mobile-lead-email text-muted-foreground/80">
-                        + {lead.secondaryName}
-                        {lead.secondaryEmail ? ` · ${lead.secondaryEmail}` : ""}
-                      </span>
-                    ) : null}
-                  </button>
+                      {lead.secondaryName ? (
+                        <span className="mobile-lead-email text-muted-foreground/80">
+                          + {lead.secondaryName}
+                          {lead.secondaryEmail
+                            ? ` · ${lead.secondaryEmail}`
+                            : ""}
+                        </span>
+                      ) : null}
+                    </button>
 
-                  <dl className="mobile-lead-meta">
-                    <div>
-                      <dt>Task</dt>
-                      <dd>
-                        {tasksReady ? (
-                          <LeadTaskCell
-                            next={tasksByLeadId.get(lead.id)?.[0]}
-                            disabled={lead.isArchived}
-                            onOpen={() => setTasksLead(lead)}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            —
-                          </span>
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Assigned</dt>
-                      <dd>
+                    <dl className="mobile-lead-meta">
+                      <div>
+                        <dt>Task</dt>
+                        <dd>
+                          {tasksReady ? (
+                            <LeadTaskCell
+                              next={tasksByLeadId.get(lead.id)?.[0]}
+                              disabled={lead.isArchived}
+                              onOpen={() => setTasksLead(lead)}
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Assigned</dt>
+                        <dd>
+                          <button
+                            type="button"
+                            className="mobile-link-action"
+                            onClick={() => setAssignedLead(lead)}
+                          >
+                            {lead.assignedUser?.name || "Assign"}
+                          </button>
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="mobile-lead-actions">
+                      {actions.call.visible && (
                         <button
                           type="button"
-                          className="mobile-link-action"
-                          onClick={() => setAssignedLead(lead)}
+                          className="mobile-action-btn"
+                          onClick={() => handleCall(lead)}
+                          title={actions.call.disabledReason ?? undefined}
+                          aria-label={`Call ${lead.name}`}
+                          disabled={actions.call.disabled}
                         >
-                          {lead.assignedUser?.name || "Assign"}
+                          <Phone size={15} />
+                          Call
                         </button>
-                      </dd>
+                      )}
+                      {actions.email.visible && (
+                        <button
+                          type="button"
+                          className="mobile-action-btn"
+                          onClick={() => setEmailLead(lead)}
+                          title={actions.email.disabledReason ?? undefined}
+                          aria-label={`Send follow-up email to ${lead.name}`}
+                          disabled={actions.email.disabled}
+                        >
+                          <Mail size={15} />
+                          Email
+                        </button>
+                      )}
+                      {actions.archive.visible && (
+                        <button
+                          type="button"
+                          className="mobile-action-btn"
+                          title={
+                            actions.archive.disabledReason ??
+                            `Archive ${lead.name}`
+                          }
+                          aria-label={`Archive ${lead.name}`}
+                          onClick={() => {
+                            setLeadToDelete(lead);
+                          }}
+                          disabled={actions.archive.disabled}
+                        >
+                          <Archive size={15} />
+                          Archive
+                        </button>
+                      )}
+                      {actions.sendText.visible && (
+                        <button
+                          type="button"
+                          className="mobile-action-btn"
+                          onClick={() => setCommLead(lead.id.toString())}
+                          title={actions.sendText.disabledReason ?? undefined}
+                          aria-label={`Communicate with ${lead.name}`}
+                          disabled={actions.sendText.disabled}
+                        >
+                          <MessageSquare size={15} />
+                          Text
+                        </button>
+                      )}
+                      {actions.bookMeeting.visible && (
+                        <button
+                          type="button"
+                          className="mobile-action-btn"
+                          onClick={() => redirectToScheduleMeeting(lead)}
+                          title={
+                            actions.bookMeeting.disabledReason ?? undefined
+                          }
+                          aria-label={`Meeting Schedule for ${lead.name}`}
+                          disabled={actions.bookMeeting.disabled}
+                        >
+                          <CalendarCheck size={15} />
+                          Actions
+                        </button>
+                      )}
                     </div>
-                  </dl>
-
-                  <div className="mobile-lead-actions">
-                    {actions.call.visible && (
-                      <button
-                        type="button"
-                        className="mobile-action-btn"
-                        onClick={() => handleCall(lead)}
-                        title={actions.call.disabledReason ?? undefined}
-                        aria-label={`Call ${lead.name}`}
-                        disabled={actions.call.disabled}
-                      >
-                        <Phone size={15} />
-                        Call
-                      </button>
-                    )}
-                    {actions.email.visible && (
-                      <button
-                        type="button"
-                        className="mobile-action-btn"
-                        onClick={() => setEmailLead(lead)}
-                        title={actions.email.disabledReason ?? undefined}
-                        aria-label={`Send follow-up email to ${lead.name}`}
-                        disabled={actions.email.disabled}
-                      >
-                        <Mail size={15} />
-                        Email
-                      </button>
-                    )}
-                    {actions.archive.visible && (
-                      <button
-                        type="button"
-                        className="mobile-action-btn"
-                        title={
-                          actions.archive.disabledReason ??
-                          `Archive ${lead.name}`
-                        }
-                        aria-label={`Archive ${lead.name}`}
-                        onClick={() => {
-                          setLeadToDelete(lead);
-                        }}
-                        disabled={actions.archive.disabled}
-                      >
-                        <Archive size={15} />
-                        Archive
-                      </button>
-                    )}
-                    {actions.sendText.visible && (
-                      <button
-                        type="button"
-                        className="mobile-action-btn"
-                        onClick={() => setCommLead(lead.id.toString())}
-                        title={actions.sendText.disabledReason ?? undefined}
-                        aria-label={`Communicate with ${lead.name}`}
-                        disabled={actions.sendText.disabled}
-                      >
-                        <MessageSquare size={15} />
-                        Text
-                      </button>
-                    )}
-                    {actions.bookMeeting.visible && (
-                      <button
-                        type="button"
-                        className="mobile-action-btn"
-                        onClick={() => redirectToScheduleMeeting(lead)}
-                        title={actions.bookMeeting.disabledReason ?? undefined}
-                        aria-label={`Meeting Schedule for ${lead.name}`}
-                        disabled={actions.bookMeeting.disabled}
-                      >
-                        <CalendarCheck size={15} />
-                        Actions
-                      </button>
-                    )}
-                  </div>
-                </article>
+                  </article>
                 );
               })}
             </div>

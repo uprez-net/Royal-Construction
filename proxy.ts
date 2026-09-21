@@ -1,6 +1,6 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server"
-import { NextResponse } from "next/server"
-import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth"
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth";
 import { getUserByClerkId } from "./lib/data/user";
 
 const isPublicRoute = createRouteMatcher([
@@ -15,20 +15,39 @@ const isPublicRoute = createRouteMatcher([
   "/api/graph/notifications(.*)",
   "/api/graph/book-consultant(.*)",
   "/api/graph/read-calender-dateTime(.*)",
+  "/api/graph/subscribe(.*)",
   // DocuSign Connect webhook — authenticated via HMAC signature, not Clerk.
   "/api/docusign(.*)",
-  '/.well-known(.*)',
-  '/api/mcp(.*)',
-  '/api/sse(.*)',
-  '/api/message(.*)',
+  // Xero webhook — Xero calls it; authenticated by the x-xero-signature HMAC.
+  "/api/xero/notification(.*)",
+  // Xero OAuth consent + callback. "Public" here only means the blanket
+  // /api/ JSON-401 below does not apply: both legs are BROWSER navigations
+  // (the admin clicks Connect; Xero redirects back with ?code), and answering
+  // one with a JSON error body strands the operator on a blob of JSON with a
+  // spent authorization code. The handler runs its own Clerk + ADMIN check and
+  // answers with redirects, and `auth()` still resolves inside it because
+  // clerkMiddleware runs for public routes too — it just stops enforcing.
+  "/api/xero/connect(.*)",
+  "/.well-known(.*)",
+  "/api/mcp(.*)",
+  "/api/sse(.*)",
+  "/api/message(.*)",
   "/api/cron(.*)",
   "/book-consultation",
   "/api/upload(.*)",
   "/api/resume-stream(.*)",
-])
-const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"])
-const isDevAuthRoute = createRouteMatcher(["/dev/sign-in(.*)", "/api/dev/(.*)"])
-const isAdminRoute = createRouteMatcher(["/admin(.*)"])
+  // Eve owns authentication for its browser-facing HTTP channel. Keeping the
+  // route out of Clerk's page/API protection is important: auth.protect() can
+  // turn an unauthenticated fetch into a redirect (and, after the redirect,
+  // an HTML 404), while Eve must return its own structured 401/403 response.
+  "/eve/v1(.*)",
+]);
+const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+const isDevAuthRoute = createRouteMatcher([
+  "/dev/sign-in(.*)",
+  "/api/dev/(.*)",
+]);
+const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 
 // Next 16 renamed the `middleware` convention to `proxy` and deprecated the
 // `middleware` export name. A `proxy.ts` file is resolved as `mod.proxy ||
@@ -36,22 +55,31 @@ const isAdminRoute = createRouteMatcher(["/admin(.*)"])
 // form — keep it the only handler export, multiple are not supported.
 export const proxy = clerkMiddleware(async (auth, request) => {
   // Dev auth routes always pass through — they create the session
-  if (isDevAuthRoute(request)) return
+  if (isDevAuthRoute(request)) return;
 
-  const pathname = request.nextUrl.pathname
-  const isApiRoute = pathname.startsWith("/api/") || pathname.startsWith("/trpc/")
+  const pathname = request.nextUrl.pathname;
+  const isApiRoute =
+    pathname.startsWith("/api/") || pathname.startsWith("/trpc/");
 
   // Dev: auto-redirect unauthenticated page navigations to the token sign-in flow
-  if (isDevAutoSignInEnabled() && !isPublicRoute(request) && !isAuthRoute(request) && !isApiRoute) {
-    const { userId } = await auth()
+  if (
+    isDevAutoSignInEnabled() &&
+    !isPublicRoute(request) &&
+    !isAuthRoute(request) &&
+    !isApiRoute
+  ) {
+    const { userId } = await auth();
     if (!userId) {
-      const signInUrl = new URL("/api/dev/sign-in", request.url)
-      signInUrl.searchParams.set("redirect_url", `${pathname}${request.nextUrl.search}`)
-      return NextResponse.redirect(signInUrl)
+      const signInUrl = new URL("/api/dev/sign-in", request.url);
+      signInUrl.searchParams.set(
+        "redirect_url",
+        `${pathname}${request.nextUrl.search}`,
+      );
+      return NextResponse.redirect(signInUrl);
     }
   }
 
-  const { userId, sessionClaims } = await auth()
+  const { userId, sessionClaims } = await auth();
 
   if (!isPublicRoute(request) && !isAuthRoute(request)) {
     // auth.protect() only redirects requests it recognises as page navigations.
@@ -63,32 +91,35 @@ export const proxy = clerkMiddleware(async (auth, request) => {
     // describes what actually happened.
     if (isApiRoute) {
       if (!userId) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     } else {
-      await auth.protect()
+      await auth.protect();
     }
   }
 
-  if (isAdminRoute(request) && (await getUserByClerkId(userId ?? ""))?.role !== "ADMIN") {
+  if (
+    isAdminRoute(request) &&
+    (await getUserByClerkId(userId ?? ""))?.role !== "ADMIN"
+  ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   if (sessionClaims?.public_metadata.role === "GUEST") {
     // Same reasoning: a redirect to an HTML page is not a usable answer to a
     // fetch(), which follows it and then fails to parse the body as JSON.
     if (isApiRoute) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    return NextResponse.redirect(new URL("/guest", request.url))
+    return NextResponse.redirect(new URL("/guest", request.url));
   }
   if (isAuthRoute(request) && userId) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-})
+});
 
 export const config = {
   matcher: [
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
   ],
-}
+};

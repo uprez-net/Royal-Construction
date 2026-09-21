@@ -1,13 +1,95 @@
 import type { TradiePriceUnit } from "@prisma/client";
-import { Milestone, Project, Tradie, Variation, File as ProjectFile, SiteUpdate, User, TradieSchedule, TradieScheduleStatus, Customer, ActivityLog, Material, ProjectStage, LeadEmails } from "@prisma/client";
+import {
+  Milestone,
+  Project,
+  Tradie,
+  Variation,
+  File as ProjectFile,
+  SiteUpdate,
+  User,
+  TradieSchedule,
+  TradieScheduleStatus,
+  Customer,
+  ActivityLog,
+  Material,
+  ProjectStage,
+  ProjectStatus,
+  LeadEmails,
+  Invoice,
+} from "@prisma/client";
 import { ProjectRequirementsPayload } from "./project-flow";
+import type { CertifierEngagementDetail } from "./compliance";
 
-export interface SafeProject extends Omit<Project, "totalBudget" | "spent" | "lotSize" | "requirements"> {
+export interface SafeProject extends Omit<
+  Project,
+  "totalBudget" | "spent" | "lotSize" | "requirements"
+> {
   totalBudget: string;
   spent: string;
   lotSize?: string;
   requirements?: ProjectRequirementsPayload;
 }
+
+/**
+ * A progress claim across the RSC boundary.
+ *
+ * Every money field is a string: Prisma `Decimal`s are class instances and do
+ * not survive serialization, so consumers do their own `Number(...)` — the same
+ * contract `SafeProject` and `SafeMilestone` follow.
+ */
+export interface SafeInvoice extends Omit<
+  Invoice,
+  | "subTotal"
+  | "totalTax"
+  | "total"
+  | "amountDue"
+  | "amountPaid"
+  | "amountCredited"
+> {
+  subTotal: string;
+  totalTax: string;
+  total: string;
+  amountDue: string;
+  amountPaid: string;
+  amountCredited: string;
+}
+
+/**
+ * A progress claim as it appears on the project LIST payload.
+ *
+ * A narrower row than `SafeInvoice`: the list feeds a quick-view summary, not
+ * the claim ledger, so it carries only what a summary table shows. The full
+ * rows live on `ProjectDetail`.
+ */
+export type ProjectListInvoice = {
+  id: string;
+  invoiceNumber: string | null;
+  projectStage: ProjectStage;
+  status: Invoice["status"];
+  total: string;
+  amountPaid: string;
+  amountDue: string;
+  issuedDate: Date;
+  dueDate: Date;
+};
+
+/**
+ * A project's invoicing position, rolled up from its claims.
+ *
+ * Carried on the list payload as well as the detail one because the project
+ * card and the financial tab both show cleared money, and neither has the
+ * invoice rows to add up themselves.
+ */
+export type ProjectInvoiceTotals = {
+  /** Raised, whatever its payment state. */
+  invoiced: string;
+  /** Money actually received — the "cleared" figure. */
+  paid: string;
+  /** Still owed on claims that have not been voided. */
+  outstanding: string;
+  /** Claims still awaiting payment, i.e. the Payments tab badge. */
+  pendingCount: number;
+};
 
 /**
  * Shared budget health classification. Derived purely from
@@ -91,12 +173,14 @@ export interface ProjectWithStats extends SafeProject {
     tradies: {
       name: string;
       tradeType: string;
-    }[]
+    }[];
   }[];
   milestoneCount: number;
   completedMilestoneCount: number;
   progressPercent: number;
   approvedVariationSpend: string;
+  invoiceTotals: ProjectInvoiceTotals;
+  invoices: ProjectListInvoice[];
 }
 
 export interface ActivityLogWithAuthor extends ActivityLog {
@@ -120,7 +204,35 @@ export interface ProjectDetail extends SafeProject {
   tradieSchedules: TradieScheduleWithTradieAndMilestone[];
   files: ProjectFile[];
   materials: SafeMaterial[];
+  /** Null until someone presses "Connect with Certifier". */
+  certifierEngagement: CertifierEngagementDetail | null;
+  /** Progress claims raised against this project, newest first. */
+  invoices: SafeInvoice[];
 }
+
+/**
+ * The pipeline, as one filter value.
+ *
+ * Not a `ProjectStatus`, deliberately. It is a question the list asks — "what
+ * has not started on site yet" — and the answer spans three statuses a reader
+ * has no reason to distinguish between while scanning a list. Expressing it as
+ * a filter value rather than as three chips is what keeps the chip row
+ * readable; expressing it here rather than as a fourth status is what keeps the
+ * ladder honest, because the three are genuinely different stages and just not
+ * different answers to this question.
+ *
+ * It lives here rather than beside the query it feeds because that module is
+ * `"use server"`, which may export nothing but async functions — and the chip
+ * that sends this value is a client component.
+ */
+export const PRE_CONSTRUCTION_FILTER = "PRE_CONSTRUCTION";
+
+/** The statuses it covers, in ladder order. */
+export const PRE_CONSTRUCTION_STATUSES: readonly ProjectStatus[] = [
+  ProjectStatus.DRAFT,
+  ProjectStatus.COMPLIANCE_STARTED,
+  ProjectStatus.COMPLIANCE_COMPLETED,
+];
 
 export type ProjectKPIs = {
   totalActive: number;
@@ -129,6 +241,16 @@ export type ProjectKPIs = {
   needsAttention: number;
   delayed: number;
   completed: number;
+  /**
+   * Projects that have not started on site yet — draft, in compliance, or
+   * through compliance and waiting on a start date.
+   *
+   * One count across the three rather than one each, because they are one
+   * answer to the question the chip asks: what is in the pipeline. Somebody
+   * looking at the list wants to know how many jobs have not begun, not how
+   * many are between the certifier's checklist and their certificate.
+   */
+  preConstruction: number;
 };
 
 export type TradieKPIs = {
@@ -141,9 +263,20 @@ export type TradieKPIs = {
   completed: number;
 };
 
-export type TradieCoordinationTab = "all" | "week" | "confirmed" | "pending" | "overdue" | "completed";
+export type TradieCoordinationTab =
+  | "all"
+  | "week"
+  | "confirmed"
+  | "pending"
+  | "overdue"
+  | "completed";
 
-export type TradieCoordinationSortBy = "scheduledDate" | "tradieName" | "tradeType" | "projectName" | "status";
+export type TradieCoordinationSortBy =
+  | "scheduledDate"
+  | "tradieName"
+  | "tradeType"
+  | "projectName"
+  | "status";
 
 export type TradieCoordinationQuery = {
   page?: number;
@@ -301,7 +434,11 @@ export type ProjectMutationState = {
   error: string | null;
 };
 
-export type ProjectUploadStatus = "queued" | "uploading" | "completed" | "failed";
+export type ProjectUploadStatus =
+  | "queued"
+  | "uploading"
+  | "completed"
+  | "failed";
 
 export type ProjectUploadRecord = {
   id: string;
@@ -357,13 +494,13 @@ export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
   Lockup: "Lock Up",
   Interior_Fit_Out: "Interior Fit-Out",
   Final: "Final",
-}
+};
 
 export const PROJECT_STAGE_PERCENTAGE: Record<ProjectStage, number> = {
   Deposit: 0.05,
   Slab: 0.15,
   Frame: 0.25,
   Lockup: 0.25,
-  Interior_Fit_Out: 0.20,
-  Final: 0.10,
-}
+  Interior_Fit_Out: 0.2,
+  Final: 0.1,
+};

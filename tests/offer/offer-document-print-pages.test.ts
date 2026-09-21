@@ -23,10 +23,15 @@ import {
   INITIAL_OFFER_JOB,
   MAX_OWNER_SIGNERS,
   type OfferOwner,
+  type OfferWorkspaceScopeItem,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Counting `<div class="page">` in the HTML only proves what the document
 // DECLARES. It cannot see a page whose content overflows its A4 box, which is
@@ -63,15 +68,19 @@ function declaredPageTotal(html: string): number {
   return Number(match[1]);
 }
 
-function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
+function snapshotWithOwners(
+  owners: OfferOwner[],
+  allowances: readonly OfferWorkspaceScopeItem[] = INITIAL_ALLOWANCES,
+): OfferWorkspaceSnapshot {
   return {
     job: { ...INITIAL_OFFER_JOB, owners },
     lines: INITIAL_COST_LINES,
-    allowances: INITIAL_ALLOWANCES,
+    allowances,
     exclusions: INITIAL_EXCLUSIONS,
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,
@@ -185,7 +194,9 @@ for (const nameLength of [70, 110, MAX_OWNER_NAME_LENGTH]) {
   const label = `10 companies, ${nameLength}-char legal names`;
 
   test(`Tender prints what it declares — ${label}`, async () => {
-    const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+    const html = buildTenderHtml(
+      buildProposalInput(snapshotWithOwners(owners)),
+    );
     const printed = await printedPageCount(html);
     const declared = declaredPageTotal(html);
     assert.equal(
@@ -243,7 +254,9 @@ for (const nameLength of [70, 110, MAX_OWNER_NAME_LENGTH]) {
 
 for (const { label, owners } of OWNER_CONFIGURATIONS) {
   test(`Tender prints what it declares — ${label}`, async () => {
-    const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+    const html = buildTenderHtml(
+      buildProposalInput(snapshotWithOwners(owners)),
+    );
     const printed = await printedPageCount(html);
     const declared = declaredPageTotal(html);
     assert.equal(
@@ -269,7 +282,9 @@ for (const { label, owners } of OWNER_CONFIGURATIONS) {
 }
 
 test("Tender prints exactly the number of pages it declares at max owners", async () => {
-  const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(maxOwners())));
+  const html = buildTenderHtml(
+    buildProposalInput(snapshotWithOwners(maxOwners())),
+  );
   const printed = await printedPageCount(html);
   const declared = declaredPageTotal(html);
   assert.equal(
@@ -299,6 +314,156 @@ test("Proposal prints exactly the number of pages it declares at max signers", a
     `Proposal printed ${printed} A4 pages but declares ${declared}`,
   );
 });
+
+// Allowance pages are sized from estimated text length, one chunking shared by
+// all three renderers, and no fixture above had more than the two seeded rows.
+// Two long lists: rules that wrap to four lines, and seeded-shaped rows whose
+// description stacks under the label.
+const LONG_VARIATION_RULE =
+  "Selections above this allowance are priced as a written variation before the affected works proceed on site.";
+const ALLOWANCE_CONFIGURATIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly allowances: readonly OfferWorkspaceScopeItem[];
+}> = [
+  {
+    label: "30 allowances with long variation rules",
+    allowances: Array.from({ length: 30 }, (_, i) => ({
+      ...INITIAL_ALLOWANCES[0],
+      id: `allowance-long-${i + 1}`,
+      label: `Allowance item ${i + 1}`,
+      variationRule: LONG_VARIATION_RULE,
+      includedInOfferDocument: true,
+      includedInTender: true,
+    })),
+  },
+  {
+    label: "40 seeded-shaped allowances",
+    allowances: Array.from({ length: 40 }, (_, i) => ({
+      ...INITIAL_ALLOWANCES[i % INITIAL_ALLOWANCES.length],
+      id: `allowance-seeded-${i + 1}`,
+      includedInOfferDocument: true,
+      includedInTender: true,
+    })),
+  },
+];
+
+for (const { label, allowances } of ALLOWANCE_CONFIGURATIONS) {
+  const snapshot = () => snapshotWithOwners([individualOwner(1)], allowances);
+
+  test(`Tender prints what it declares — ${label}`, async () => {
+    const html = buildTenderHtml(buildProposalInput(snapshot()));
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Tender printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  test(`Proposal prints what it declares — ${label}`, async () => {
+    const html = buildProposalHtml(
+      buildProposalInput(snapshot()),
+      EMPTY_OFFER_IMAGES,
+    );
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Proposal printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+
+  test(`Browser print view paginates identically to the emailed PDF — ${label}`, () => {
+    const input = buildProposalInput(snapshot());
+    const emailed = buildProposalHtml(input, EMPTY_OFFER_IMAGES);
+    const browser = renderToStaticMarkup(
+      createElement(OfferWorkspacePrintTemplate, {
+        ...input,
+        images: EMPTY_OFFER_IMAGES,
+      }),
+    );
+    assert.equal(declaredPageTotal(browser), declaredPageTotal(emailed));
+    assert.equal(
+      (browser.match(/min-h-\[297mm\]/g) ?? []).length,
+      (emailed.match(/<div class="page">/g) ?? []).length,
+      `renderers emit a different number of pages (${label})`,
+    );
+  });
+}
+
+// The Tender puts its allowances beneath the exclusions and Important Notes while
+// they fit (layoutTenderAllowances). These pin that shared sheet against
+// Chromium: seeded allowances that must share it, a long exclusions table that
+// pushes them off it, a sheet filled close to its budget, and a long list split
+// across both.
+const LONG_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = Array.from(
+  { length: 7 },
+  (_, i) => ({
+    ...INITIAL_EXCLUSIONS[0],
+    id: `exclusion-long-${i + 1}`,
+    label: `Excluded item number ${i + 1} with a longer name`,
+    description: LONG_VARIATION_RULE,
+    variationRule: LONG_VARIATION_RULE,
+    includedInOfferDocument: true,
+    includedInTender: true,
+  }),
+);
+const SHORT_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = Array.from(
+  { length: 12 },
+  (_, i) => ({
+    ...INITIAL_ALLOWANCES[0],
+    id: `allowance-short-${i + 1}`,
+    label: `PC item ${i + 1}`,
+    description: "",
+    variationRule: "By variation.",
+  }),
+);
+const SHARED_SHEET_CONFIGURATIONS: ReadonlyArray<{
+  readonly label: string;
+  readonly allowances: readonly OfferWorkspaceScopeItem[];
+  readonly exclusions: readonly OfferWorkspaceScopeItem[];
+}> = [
+  {
+    label: "seeded allowances beneath seeded exclusions",
+    allowances: INITIAL_ALLOWANCES,
+    exclusions: INITIAL_EXCLUSIONS,
+  },
+  {
+    label: "seeded allowances beneath a long exclusions table",
+    allowances: INITIAL_ALLOWANCES,
+    exclusions: LONG_EXCLUSIONS,
+  },
+  {
+    label: "12 one-line allowances filling the shared sheet",
+    allowances: SHORT_ALLOWANCES,
+    exclusions: INITIAL_EXCLUSIONS,
+  },
+  {
+    label: "30 long allowances beneath a long exclusions table",
+    allowances: ALLOWANCE_CONFIGURATIONS[0].allowances,
+    exclusions: LONG_EXCLUSIONS,
+  },
+];
+
+for (const { label, allowances, exclusions } of SHARED_SHEET_CONFIGURATIONS) {
+  test(`Tender prints what it declares — ${label}`, async () => {
+    const html = buildTenderHtml(
+      buildProposalInput({
+        ...snapshotWithOwners([individualOwner(1)], allowances),
+        exclusions,
+      }),
+    );
+    const printed = await printedPageCount(html);
+    const declared = declaredPageTotal(html);
+    assert.equal(
+      printed,
+      declared,
+      `Tender printed ${printed} A4 pages but declares ${declared} (${label})`,
+    );
+  });
+}
 
 test("Contract annexure does not overflow its pages at max overflow signers", async () => {
   // The annexure carries MAX_OWNER_SIGNERS - 1 overflow signers and declares no

@@ -12,11 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { FormulaEditor } from "@/components/shared/formula-editor";
 import type { FormulaValidation } from "@/lib/offer/formula-validation";
-import type {
-  CostScheduleRow,
-  CostScheduleRowBase,
-  PriceMode,
-} from "@/types/admin-offer-content";
+import type { CostScheduleRow, PriceMode } from "@/types/admin-offer-content";
+import { stripBase, withMode } from "./price-mode";
 
 interface PriceModeCellProps {
   row: CostScheduleRow;
@@ -26,27 +23,10 @@ interface PriceModeCellProps {
   formulaSampleValues?: Record<string, number>;
   /** Streams each formula row's validation result up to the parent so the
    * Save button can be disabled while any row is invalid. */
-  onFormulaValidationChange?: (rowId: string, result: FormulaValidation) => void;
-}
-
-function stripBase(row: CostScheduleRow): CostScheduleRowBase {
-  const { priceMode: _priceMode, ...base } = row;
-  void _priceMode;
-  return base;
-}
-
-function withMode(
-  base: CostScheduleRowBase,
-  mode: PriceMode,
-): CostScheduleRow {
-  switch (mode) {
-    case "none":
-      return { ...base, priceMode: "none" };
-    case "fixed":
-      return { ...base, priceMode: "fixed", value: 0 };
-    case "formula":
-      return { ...base, priceMode: "formula", formula: "" };
-  }
+  onFormulaValidationChange?: (
+    rowId: string,
+    result: FormulaValidation,
+  ) => void;
 }
 
 export function PriceModeCell({
@@ -62,9 +42,7 @@ export function PriceModeCell({
     <div className="flex items-center gap-2">
       <Select
         value={row.priceMode}
-        onValueChange={(value) =>
-          onChange(withMode(base, value as PriceMode))
-        }
+        onValueChange={(value) => onChange(withMode(row, value as PriceMode))}
       >
         <SelectTrigger size="sm" className="w-28" aria-label="Price mode">
           <SelectValue />
@@ -117,6 +95,7 @@ export function PriceModeCell({
             })
           }
           ariaLabel="Formula"
+          showEmptyError
           className="w-64"
         />
       )}

@@ -57,7 +57,10 @@ test("no blocked reason leaks a raw enum value at the operator", () => {
         `${status}'s message prints the raw enum ${value}`,
       );
     }
-    assert.ok(!/_/.test(reason), `${status}'s message contains a SCREAMING_CASE token`);
+    assert.ok(
+      !/_/.test(reason),
+      `${status}'s message contains a SCREAMING_CASE token`,
+    );
   }
 });
 
@@ -69,6 +72,10 @@ test("every blocked reason names a way forward", () => {
   for (const status of ALL_STATUSES) {
     const reason = describeAcceptanceSendBlock(status);
     if (reason === null) continue;
-    assert.match(reason, NEXT_STEP, `${status}: "${reason}" names no next step`);
+    assert.match(
+      reason,
+      NEXT_STEP,
+      `${status}: "${reason}" names no next step`,
+    );
   }
 });

@@ -16,12 +16,14 @@ import {
   type TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { cn } from "@/lib/utils";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 
 // The one-off architectural-plan fee the gate waits on. Manual checkbox only —
 // no payment integration is in scope (see plan §7).
-const ARCHITECTURAL_PLAN_FEE_LABEL = "$5,000 AUD architectural plan fee collected";
+const ARCHITECTURAL_PLAN_FEE_LABEL =
+  "$5,000 AUD architectural plan fee collected";
 
 type TenderGatePanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -33,6 +35,9 @@ type TenderGatePanelProps = {
   readonly onCreateRevision: () => void;
   readonly canRevise: boolean;
   readonly revising: boolean;
+  // The lifecycle action running, or null. Create revision disables while any
+  // runs, as it does on the Send & negotiate panel.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function TenderGatePanel({
@@ -43,6 +48,7 @@ export function TenderGatePanel({
   onCreateRevision,
   canRevise,
   revising,
+  lifecycleBusy,
 }: TenderGatePanelProps) {
   const gateStatus = deriveTenderGateStatus(tenderGate);
   const planNeeded = tenderGate.needsArchitecturalPlan;
@@ -64,7 +70,7 @@ export function TenderGatePanel({
           title="Tender access"
         />
       </CardHeader>
-      <CardContent className="grid gap-5 pt-4">
+      <CardContent className="grid gap-5">
         {gatePassed ? (
           <Banner tone="success">
             Tender access unlocked — proceed to the Tender step below.
@@ -111,7 +117,7 @@ export function TenderGatePanel({
 
                 {feeCollected ? (
                   <div className="grid gap-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className={GROUP_HEADING_CLASS}>
                       Upload the architectural plan
                     </p>
                     <UploadButton
@@ -137,10 +143,7 @@ export function TenderGatePanel({
                     />
                     {uploaded ? (
                       <p className="flex items-center gap-1.5 text-xs font-medium text-success">
-                        <CheckCircle2
-                          className="size-3.5"
-                          aria-hidden="true"
-                        />
+                        <CheckCircle2 className="size-3.5" aria-hidden="true" />
                         {uploaded.fileName} uploaded — answer the design-changes
                         question below to continue.
                       </p>
@@ -173,22 +176,24 @@ export function TenderGatePanel({
                             aria-hidden="true"
                           />
                           <span>
-                            You can&apos;t proceed — design changes were detected
-                            and a revision is required.
+                            You can&apos;t proceed — design changes were
+                            detected and a revision is required.
                           </span>
                         </p>
                         <div>
                           <Button
-                            disabled={!canRevise || revising}
+                            aria-busy={
+                              lifecycleBusy === "revision" || undefined
+                            }
+                            disabled={
+                              !canRevise || revising || lifecycleBusy !== null
+                            }
                             onClick={onCreateRevision}
                             size="sm"
                             type="button"
                             variant="outline"
                           >
-                            <GitBranch
-                              className="size-4"
-                              aria-hidden="true"
-                            />
+                            <GitBranch className="size-4" aria-hidden="true" />
                             {revising ? "Creating…" : "Create revision"}
                           </Button>
                         </div>
@@ -237,12 +242,10 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value === true ? "default" : "outline"}
-          className={cn(
-            value === true
-              ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              : "",
-          )}
+          variant={value === true ? "royal" : "outline"}
+          // Colour is the only other cue, and the question is tri-state:
+          // unanswered must not read as "No".
+          aria-pressed={value === true}
           onClick={() => onChange(true)}
         >
           Yes
@@ -250,12 +253,8 @@ function YesNoQuestion({
         <Button
           size="sm"
           type="button"
-          variant={value === false ? "default" : "outline"}
-          className={cn(
-            value === false
-              ? "bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              : "",
-          )}
+          variant={value === false ? "royal" : "outline"}
+          aria-pressed={value === false}
           onClick={() => onChange(false)}
         >
           No

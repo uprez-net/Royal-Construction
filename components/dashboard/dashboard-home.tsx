@@ -46,7 +46,9 @@ export function DashboardHome({
             aria-hidden="true"
           />
           <div>
-            <p className="font-semibold">Some dashboard sections are temporarily unavailable.</p>
+            <p className="font-semibold">
+              Some dashboard sections are temporarily unavailable.
+            </p>
             <p className="text-muted-foreground">
               Showing available data while {dataWarnings.join(", ")} refreshes.
             </p>

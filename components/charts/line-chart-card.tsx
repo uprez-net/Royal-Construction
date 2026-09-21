@@ -3,7 +3,14 @@
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { ReactNode } from "react";
 
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 import { ChartCardShell } from "./chart-card-shell";
 
@@ -43,14 +50,22 @@ export function LineChartCard<T extends Record<string, string | number>>({
 
   return (
     <ChartCardShell title={title} subtitle={subtitle} action={action}>
-      <ChartContainer config={chartConfig} className={className ?? "h-[260px] w-full"}>
-        <LineChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+      <ChartContainer
+        config={chartConfig}
+        className={className ?? "h-[260px] w-full"}
+      >
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 8, left: -12, bottom: 0 }}
+        >
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey={String(xKey)} tickLine={false} axisLine={false} />
           <YAxis
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => (yAxisFormatter ? yAxisFormatter(Number(value)) : `${value}`)}
+            tickFormatter={(value) =>
+              yAxisFormatter ? yAxisFormatter(Number(value)) : `${value}`
+            }
           />
           <ChartTooltip content={<ChartTooltipContent />} />
           <ChartLegend content={<ChartLegendContent />} />

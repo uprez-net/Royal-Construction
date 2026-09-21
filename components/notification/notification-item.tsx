@@ -19,7 +19,44 @@ const isAdminApprovalNotification = (url: string): boolean => {
 };
 
 const isLeadActionNotification = (url: string): boolean => {
-  return url.includes("action=followup") || url.includes("action=meetingReview");
+  return (
+    url.includes("action=followup") || url.includes("action=meetingReview")
+  );
+};
+
+/**
+ * A certifier reply that has a checklist waiting to be extracted.
+ *
+ * Matched on the query string because `triggerNotification` carries no
+ * structured payload — the url is the only channel the sender has, so the
+ * routing information rides in it. Same convention as the lead actions above.
+ */
+const isCertifierExtractNotification = (url: string): boolean => {
+  return url.includes("action=certifierExtract");
+};
+
+export const certifierExtractPayloadFromUrl = (
+  url: string,
+): {
+  projectId: string;
+  engagementId: string;
+  documentId: string;
+} | null => {
+  const cleaned = url.replaceAll("&amp;", "&");
+  const [path, query = ""] = cleaned.split("?");
+  const params = new URLSearchParams(query);
+  const engagementId = params.get("engagementId");
+  // Which checklist the extraction runs against. Required, not optional: the
+  // modal has nothing to do without it, and returning a partial payload would
+  // put a modal type in the store that renders nothing and cannot be closed.
+  const documentId = params.get("documentId");
+  // The project id is the last path segment of /projects/<id>.
+  const projectId = path.split("/").filter(Boolean).pop();
+
+  if (!engagementId || !documentId || !projectId) {
+    return null;
+  }
+  return { projectId, engagementId, documentId };
 };
 
 const getApprovalIdAndTypeFromUrl = (
@@ -46,7 +83,8 @@ const getLeadActionFromUrl = (
   );
 
   const params = new URLSearchParams(queryString);
-  const action = params.get("action") === "meetingReview" ? "meetingReview" : "followup";
+  const action =
+    params.get("action") === "meetingReview" ? "meetingReview" : "followup";
   return {
     leadId: params.get("leadId")!,
     action,
@@ -84,6 +122,12 @@ export function NotificationItem({
   const isBusy = busyId === n.id;
   const isAdminApproval = url ? isAdminApprovalNotification(url) : false;
   const isLeadAction = url ? isLeadActionNotification(url) : false;
+  // Gated on the payload parsing, not just on the marker: a notification whose
+  // url is missing an id would otherwise show a button that does nothing.
+  const isCertifierExtract =
+    !!url &&
+    isCertifierExtractNotification(url) &&
+    certifierExtractPayloadFromUrl(url) !== null;
 
   const handleAdminApprovalAction = () => {
     if (isAdminApproval) {
@@ -109,6 +153,13 @@ export function NotificationItem({
         payload: { leadId },
       }),
     );
+  };
+
+  const handleCertifierExtract = () => {
+    if (!url) return;
+    const payload = certifierExtractPayloadFromUrl(url);
+    if (!payload) return;
+    dispatch(openModal({ type: "certifierExtract", payload }));
   };
 
   return (
@@ -250,6 +301,20 @@ export function NotificationItem({
                   >
                     <SquareArrowOutUpRight />
                     Open
+                  </Button>
+                )}
+                {isCertifierExtract && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-sm border-[#C6923A] text-[#C6923A] hover:bg-[#F7F4EE] hover:text-[#8B6420] flex items-center gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCertifierExtract();
+                    }}
+                  >
+                    <SquareArrowOutUpRight />
+                    Extract checklist
                   </Button>
                 )}
               </div>

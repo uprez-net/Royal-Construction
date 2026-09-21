@@ -20,7 +20,9 @@ function individual(
     ...createIndividualOwner(id),
     displayName: name,
     currentLocation,
-    signatories: [{ id: `${id}-s`, name, email, phone: "", mobile: "", capacity: "Owner" }],
+    signatories: [
+      { id: `${id}-s`, name, email, phone: "", mobile: "", capacity: "Owner" },
+    ],
   };
 }
 
@@ -102,7 +104,9 @@ test("two signers sharing an email is flagged (PR #124 P1)", () => {
   ];
   const issues = collectOwnerIssues(owners);
   assert.ok(
-    issues.some((i) => i.includes("shared@example.com") && i.includes("own email")),
+    issues.some(
+      (i) => i.includes("shared@example.com") && i.includes("own email"),
+    ),
     `expected a shared-email issue, got: ${JSON.stringify(issues)}`,
   );
 });

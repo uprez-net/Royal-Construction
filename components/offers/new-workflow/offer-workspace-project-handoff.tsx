@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import type {
@@ -23,6 +25,12 @@ type ProjectHandoffPanelProps = {
   readonly onCreateProject: () => void;
   readonly projectCreating?: boolean;
   readonly projectResult?: ProjectHandoffResult | null;
+  // The project this offer was handed off to, from the handoff itself or, after
+  // a reload, from the loader. Null until one exists.
+  readonly projectId?: string | null;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function ProjectHandoffPanel({
@@ -34,6 +42,8 @@ export function ProjectHandoffPanel({
   onCreateProject,
   projectCreating = false,
   projectResult = null,
+  projectId = null,
+  lifecycleBusy,
 }: ProjectHandoffPanelProps) {
   const isCreated = status === "project";
   const costLineCount = lines.filter((line) => line.includedInContract).length;
@@ -49,7 +59,7 @@ export function ProjectHandoffPanel({
           title="Project handoff"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
+      <CardContent className="grid gap-4">
         {isCreated ? (
           <Banner tone="success">
             <span className="flex items-center gap-2 font-medium">
@@ -67,7 +77,11 @@ export function ProjectHandoffPanel({
         )}
 
         <dl className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
-          <SummaryItem label="Reference" value={`${job.reference}-${job.revision}`} mono />
+          <SummaryItem
+            label="Reference"
+            value={`${job.reference}-${job.revision}`}
+            mono
+          />
           <SummaryItem label="Client" value={job.clientNames} />
           <SummaryItem label="Site" value={job.siteAddress} />
           <SummaryItem
@@ -86,14 +100,22 @@ export function ProjectHandoffPanel({
         </dl>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isCreated ? (
+          {/* Open Project was a permanently disabled button, so the handoff's
+              end state led nowhere. It stays disabled only while the project's
+              id is unknown. */}
+          {isCreated && projectId ? (
+            <Button asChild variant="royal" size="sm">
+              <Link href={`/projects/${projectId}`}>Open Project</Link>
+            </Button>
+          ) : isCreated ? (
             <Button disabled size="sm" type="button" variant="outline">
               Open Project
             </Button>
           ) : (
             <Button
-              className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
-              disabled={projectCreating}
+              variant="royal"
+              aria-busy={projectCreating || undefined}
+              disabled={projectCreating || lifecycleBusy !== null}
               size="sm"
               type="button"
               onClick={onCreateProject}
@@ -110,13 +132,21 @@ export function ProjectHandoffPanel({
         </div>
 
         {projectResult && !projectResult.ok ? (
-          <p className="text-xs font-medium text-destructive">{projectResult.error}</p>
+          <p className="text-xs font-medium text-destructive">
+            {projectResult.error}
+          </p>
         ) : null}
         {projectResult?.ok && projectResult.warnings.length > 0 ? (
           <div className="grid gap-1.5 rounded-lg border border-warning/40 bg-warning-light/40 p-3">
             {projectResult.warnings.map((warning) => (
-              <p key={warning} className="flex items-start gap-2 text-xs text-foreground">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
+              <p
+                key={warning}
+                className="flex items-start gap-2 text-xs text-foreground"
+              >
+                <AlertTriangle
+                  className="mt-0.5 size-3.5 shrink-0 text-warning"
+                  aria-hidden="true"
+                />
                 {warning}
               </p>
             ))}
@@ -141,7 +171,11 @@ function SummaryItem({
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
-      <dd className={mono ? "text-sm font-medium font-mono" : "text-sm font-medium"}>
+      <dd
+        className={
+          mono ? "text-sm font-medium font-mono" : "text-sm font-medium"
+        }
+      >
         {value || "—"}
       </dd>
     </div>

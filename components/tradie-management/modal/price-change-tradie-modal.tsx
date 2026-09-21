@@ -135,11 +135,14 @@ export default function PriceChangeTradieModal({
               }
             >
               {hasCurrentRate
-                ? formatQuotedPrice(currentRate, tradie.lastQuotedPriceUnit, rateCurrency.format)
+                ? formatQuotedPrice(
+                    currentRate,
+                    tradie.lastQuotedPriceUnit,
+                    rateCurrency.format,
+                  )
                 : "Not set"}
               {hasCurrentRate && (
-                <span className="ml-1 font-sans text-sm font-medium text-muted-foreground">
-                </span>
+                <span className="ml-1 font-sans text-sm font-medium text-muted-foreground"></span>
               )}
             </div>
           </div>
@@ -244,8 +247,8 @@ export default function PriceChangeTradieModal({
               />
 
               <p className="text-xs leading-relaxed text-foreground/80">
-                This request is submitted for approval. The new proposed price is only
-                updated once the request has been reviewed and approved.
+                This request is submitted for approval. The new proposed price
+                is only updated once the request has been reviewed and approved.
               </p>
             </div>
           </div>

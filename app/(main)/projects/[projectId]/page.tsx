@@ -37,7 +37,9 @@ async function ProjectDetailContent({
   const { projectId } = await params;
   const [project, user] = await Promise.all([
     getProjectById(projectId),
-    auth().then(({ userId }) => (userId ? getUserByClerkIdCached(userId) : null)),
+    auth().then(({ userId }) =>
+      userId ? getUserByClerkIdCached(userId) : null,
+    ),
   ]);
 
   if (!project) {

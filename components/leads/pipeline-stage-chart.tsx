@@ -26,7 +26,9 @@ export function PipelineStageChart({ metrics }: PipelineStageChartProps) {
     <Card>
       <CardHeader className="flex-row items-baseline justify-between gap-3">
         <CardTitle className="text-base">Where the money sits</CardTitle>
-        <span className="text-[11.5px] text-muted-foreground">Open leads only</span>
+        <span className="text-[11.5px] text-muted-foreground">
+          Open leads only
+        </span>
       </CardHeader>
       <CardContent className="flex flex-col">
         {metrics.byStage.length === 0 ? (
@@ -45,7 +47,9 @@ export function PipelineStageChart({ metrics }: PipelineStageChartProps) {
                   className="flex flex-col gap-1.5 border-t border-dashed border-border py-2.5 first:border-t-0"
                 >
                   <div className="flex flex-wrap items-baseline gap-2">
-                    <span className="text-[12.5px] font-semibold">{bucket.label}</span>
+                    <span className="text-[12.5px] font-semibold">
+                      {bucket.label}
+                    </span>
                     <span className="rounded bg-muted px-1.5 font-mono text-[10.5px] text-muted-foreground">
                       {bucket.probability}%
                     </span>
@@ -79,11 +83,12 @@ export function PipelineStageChart({ metrics }: PipelineStageChartProps) {
 
             <div className="mt-3 flex flex-wrap justify-between gap-3 border-t-2 border-foreground pt-3 text-[12.5px]">
               <span>
-                {metrics.openCount} open {metrics.openCount === 1 ? "lead" : "leads"}
+                {metrics.openCount} open{" "}
+                {metrics.openCount === 1 ? "lead" : "leads"}
               </span>
               <span className="font-mono tabular-nums">
-                Face {compactCurrency.format(Number(metrics.totalValue))} → Weighted{" "}
-                {compactCurrency.format(Number(metrics.weightedValue))}
+                Face {compactCurrency.format(Number(metrics.totalValue))} →
+                Weighted {compactCurrency.format(Number(metrics.weightedValue))}
               </span>
             </div>
           </>

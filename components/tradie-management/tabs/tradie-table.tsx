@@ -42,7 +42,15 @@ export function TradieTable({
   return (
     <DataTable
       caption="Tradies with their trade, last quoted price, rating, completed jobs and incident counts."
-      headers={["Tradie", "Trade", "Last Quoted Price", "Rating", "Jobs", "Incidents", "Actions"]}
+      headers={[
+        "Tradie",
+        "Trade",
+        "Last Quoted Price",
+        "Rating",
+        "Jobs",
+        "Incidents",
+        "Actions",
+      ]}
       align={COLUMN_ALIGN}
       rows={filteredTradies.map((tradie) => [
         tradie.name,
@@ -76,11 +84,17 @@ export function TradieTable({
             {tradie.incidentCount.resolved} closed
           </span>
         </span>,
-        <TradieActionsDropdown tradieRow={tradie} key={`actions-${tradie.id}`} />,
+        <TradieActionsDropdown
+          tradieRow={tradie}
+          key={`actions-${tradie.id}`}
+        />,
       ])}
       emptyState={
         <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-          <HardHat className="size-5 text-muted-foreground" aria-hidden="true" />
+          <HardHat
+            className="size-5 text-muted-foreground"
+            aria-hidden="true"
+          />
 
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">

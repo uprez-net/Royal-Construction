@@ -1,6 +1,7 @@
 import {
   createAsyncThunk,
   createSlice,
+  current,
   type PayloadAction,
 } from "@reduxjs/toolkit";
 import {
@@ -10,7 +11,7 @@ import {
   type OfferAllowance,
   type OfferExclusion,
   EMPTY_ADMIN_OFFER_CONTENT,
-  HBFCClaimData,
+  HBCFClaimData,
   InclusionScheduleRow,
 } from "@/types/admin-offer-content";
 import {
@@ -19,31 +20,62 @@ import {
   saveOfferScopeAction,
   saveOfferContentAction,
   type ActionResult,
-  saveHBFCClaimAction,
+  saveHBCFClaimAction,
 } from "@/lib/actions/admin-offer-content";
+import {
+  mergeHydratedAdminContent,
+  type AdminOfferContentSection,
+  type AdminOfferContentState,
+} from "./admin-offer-content-hydrate";
+import { insertAt } from "./admin-offer-content-list";
+import {
+  markSectionEdited,
+  saveReceipt,
+  settleSavedSection,
+  type AdminSaveReceipt,
+} from "./admin-offer-content-save";
 
-type Section = "buildScope" | "costSchedule" | "offerScope" | "offerContent" | "hbfcClaim";
+type Section = AdminOfferContentSection;
 
-interface AdminOfferContentState {
-  data: AdminOfferContent;
-  hydrated: boolean;
-  dirty: Record<Section, boolean>;
-  saving: Record<Section, boolean>;
-  error: Record<Section, string | null>;
-}
-
-const allClean = { buildScope: false, costSchedule: false, offerScope: false, offerContent: false, hbfcClaim: false };
-const noError = { buildScope: null, costSchedule: null, offerScope: null, offerContent: null, hbfcClaim: null };
+const allClean = {
+  buildScope: false,
+  costSchedule: false,
+  offerScope: false,
+  offerContent: false,
+  hbcfClaim: false,
+};
+const noError = {
+  buildScope: null,
+  costSchedule: null,
+  offerScope: null,
+  offerContent: null,
+  hbcfClaim: null,
+};
+const noEdits = {
+  buildScope: 0,
+  costSchedule: 0,
+  offerScope: 0,
+  offerContent: 0,
+  hbcfClaim: 0,
+};
 
 const initialState: AdminOfferContentState = {
   data: structuredClone(EMPTY_ADMIN_OFFER_CONTENT),
-  hydrated: false,
   dirty: { ...allClean },
   saving: { ...allClean },
   error: { ...noError },
+  revision: { ...noEdits },
 };
 
-function upsertRow(rows: CostScheduleRow[], row: CostScheduleRow): CostScheduleRow[] {
+function adminState(rootState: unknown): AdminOfferContentState {
+  return (rootState as { adminOfferContent: AdminOfferContentState })
+    .adminOfferContent;
+}
+
+function upsertRow(
+  rows: CostScheduleRow[],
+  row: CostScheduleRow,
+): CostScheduleRow[] {
   const idx = rows.findIndex((r) => r.id === row.id);
   if (idx === -1) return [...rows, row];
   const next = rows.slice();
@@ -51,7 +83,10 @@ function upsertRow(rows: CostScheduleRow[], row: CostScheduleRow): CostScheduleR
   return next;
 }
 
-function upsertAllowance(items: OfferAllowance[], item: OfferAllowance): OfferAllowance[] {
+function upsertAllowance(
+  items: OfferAllowance[],
+  item: OfferAllowance,
+): OfferAllowance[] {
   const idx = items.findIndex((a) => a.id === item.id);
   if (idx === -1) return [...items, item];
   const next = items.slice();
@@ -59,7 +94,10 @@ function upsertAllowance(items: OfferAllowance[], item: OfferAllowance): OfferAl
   return next;
 }
 
-function upsertExclusion(items: OfferExclusion[], item: OfferExclusion): OfferExclusion[] {
+function upsertExclusion(
+  items: OfferExclusion[],
+  item: OfferExclusion,
+): OfferExclusion[] {
   const idx = items.findIndex((e) => e.id === item.id);
   if (idx === -1) return [...items, item];
   const next = items.slice();
@@ -77,8 +115,8 @@ function unwrap(result: ActionResult): void {
 
 // Only claimAmount and loadingChargePercent are user-editable now;
 // totalPremiumToBePaid is always derived.
-type HBFCClaimInput = Pick<
-  HBFCClaimData,
+type HBCFClaimInput = Pick<
+  HBCFClaimData,
   "claimAmount" | "loadingChargePercent"
 >;
 
@@ -93,15 +131,21 @@ function calcTotalPremium(
   return Math.round(total * 100) / 100; // avoid float cruft on currency
 }
 
+// Each save remembers the section revision it sent and, once the server has
+// answered, reports whether the admin edited that section in the meantime.
 export const saveBuildScope = createAsyncThunk(
   "adminOfferContent/saveBuildScope",
   async (arg: void, thunkAPI) => {
     try {
-      const state = (thunkAPI.getState() as { adminOfferContent: AdminOfferContentState })
-        .adminOfferContent;
+      const state = adminState(thunkAPI.getState());
+      const sentRevision = state.revision.buildScope;
       const result = await saveBuildScopeAction(state.data.buildScope);
       unwrap(result);
-      return undefined;
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "buildScope",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save build scope.",
@@ -114,14 +158,20 @@ export const saveCostSchedule = createAsyncThunk(
   "adminOfferContent/saveCostSchedule",
   async (arg: void, thunkAPI) => {
     try {
-      const state = (thunkAPI.getState() as { adminOfferContent: AdminOfferContentState })
-        .adminOfferContent;
+      const state = adminState(thunkAPI.getState());
+      const sentRevision = state.revision.costSchedule;
       const result = await saveCostScheduleAction(state.data.costSchedule);
       unwrap(result);
-      return undefined;
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "costSchedule",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error instanceof Error ? error.message : "Failed to save cost schedule.",
+        error instanceof Error
+          ? error.message
+          : "Failed to save cost schedule.",
       );
     }
   },
@@ -131,11 +181,15 @@ export const saveOfferScope = createAsyncThunk(
   "adminOfferContent/saveOfferScope",
   async (arg: void, thunkAPI) => {
     try {
-      const state = (thunkAPI.getState() as { adminOfferContent: AdminOfferContentState })
-        .adminOfferContent;
+      const state = adminState(thunkAPI.getState());
+      const sentRevision = state.revision.offerScope;
       const result = await saveOfferScopeAction(state.data.offerScope);
       unwrap(result);
-      return undefined;
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "offerScope",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save offer scope.",
@@ -148,30 +202,39 @@ export const saveOfferContent = createAsyncThunk(
   "adminOfferContent/saveOfferContent",
   async (arg: void, thunkAPI) => {
     try {
-      const state = (thunkAPI.getState() as { adminOfferContent: AdminOfferContentState })
-        .adminOfferContent;
+      const state = adminState(thunkAPI.getState());
+      const sentRevision = state.revision.offerContent;
       const result = await saveOfferContentAction(state.data.offerContent);
       unwrap(result);
-      return undefined;
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "offerContent",
+        sentRevision,
+      );
     } catch (error) {
       return thunkAPI.rejectWithValue(
-        error instanceof Error ? error.message : "Failed to save offer content.",
+        error instanceof Error
+          ? error.message
+          : "Failed to save offer content.",
       );
     }
   },
 );
 
-export const saveHBFCClaim = createAsyncThunk(
-  "adminOfferContent/saveHBFCClaim",
+export const saveHBCFClaim = createAsyncThunk(
+  "adminOfferContent/saveHBCFClaim",
   async (arg: void, thunkAPI) => {
     try {
-      const state = (thunkAPI.getState() as { adminOfferContent: AdminOfferContentState })
-        .adminOfferContent;
-      const result = await saveHBFCClaimAction(state.data.hbfcClaim);
+      const state = adminState(thunkAPI.getState());
+      const sentRevision = state.revision.hbcfClaim;
+      const result = await saveHBCFClaimAction(state.data.hbcfClaim);
       unwrap(result);
-      return undefined;
-    }
-    catch (error) {
+      return saveReceipt(
+        adminState(thunkAPI.getState()),
+        "hbcfClaim",
+        sentRevision,
+      );
+    } catch (error) {
       return thunkAPI.rejectWithValue(
         error instanceof Error ? error.message : "Failed to save HBCF claim.",
       );
@@ -184,31 +247,35 @@ const slice = createSlice({
   initialState,
   reducers: {
     hydrated(state, action: PayloadAction<AdminOfferContent>) {
-      state.data = action.payload;
-      state.hydrated = true;
-      state.dirty = { ...allClean };
-      state.saving = { ...allClean };
-      state.error = { ...noError };
+      return mergeHydratedAdminContent(current(state), action.payload);
     },
     buildScopeChanged(state, action: PayloadAction<BuildScopeLines>) {
       state.data.buildScope = action.payload;
-      state.dirty.buildScope = true;
-      state.error.buildScope = null;
+      markSectionEdited(state, "buildScope");
     },
     costScheduleRowUpserted(state, action: PayloadAction<CostScheduleRow>) {
       state.data.costSchedule.rows = upsertRow(
         state.data.costSchedule.rows,
         action.payload,
       );
-      state.dirty.costSchedule = true;
-      state.error.costSchedule = null;
+      markSectionEdited(state, "costSchedule");
     },
     costScheduleRowRemoved(state, action: PayloadAction<string>) {
       state.data.costSchedule.rows = state.data.costSchedule.rows.filter(
         (r) => r.id !== action.payload,
       );
-      state.dirty.costSchedule = true;
-      state.error.costSchedule = null;
+      markSectionEdited(state, "costSchedule");
+    },
+    costScheduleRowRestored(
+      state,
+      action: PayloadAction<{ row: CostScheduleRow; index: number }>,
+    ) {
+      const { row, index } = action.payload;
+      const list = state.data.costSchedule.rows;
+      // Undo lives on a toast; a second click must not duplicate the item.
+      if (list.some((existing) => existing.id === row.id)) return;
+      state.data.costSchedule.rows = insertAt(list, row, index);
+      markSectionEdited(state, "costSchedule");
     },
     rateConstantChanged(
       state,
@@ -218,78 +285,132 @@ const slice = createSlice({
         ...state.data.costSchedule.rateConstants,
         [action.payload.key]: action.payload.value,
       };
-      state.dirty.costSchedule = true;
-      state.error.costSchedule = null;
+      markSectionEdited(state, "costSchedule");
     },
     allowanceUpserted(state, action: PayloadAction<OfferAllowance>) {
       state.data.offerScope.allowances = upsertAllowance(
         state.data.offerScope.allowances,
         action.payload,
       );
-      state.dirty.offerScope = true;
-      state.error.offerScope = null;
+      markSectionEdited(state, "offerScope");
     },
     allowanceRemoved(state, action: PayloadAction<string>) {
-      state.data.offerScope.allowances = state.data.offerScope.allowances.filter(
-        (a) => a.id !== action.payload,
-      );
-      state.dirty.offerScope = true;
-      state.error.offerScope = null;
+      state.data.offerScope.allowances =
+        state.data.offerScope.allowances.filter((a) => a.id !== action.payload);
+      markSectionEdited(state, "offerScope");
+    },
+    allowanceRestored(
+      state,
+      action: PayloadAction<{ item: OfferAllowance; index: number }>,
+    ) {
+      const { item, index } = action.payload;
+      const list = state.data.offerScope.allowances;
+      // Undo lives on a toast; a second click must not duplicate the item.
+      if (list.some((existing) => existing.id === item.id)) return;
+      state.data.offerScope.allowances = insertAt(list, item, index);
+      markSectionEdited(state, "offerScope");
     },
     exclusionUpserted(state, action: PayloadAction<OfferExclusion>) {
       state.data.offerScope.exclusions = upsertExclusion(
         state.data.offerScope.exclusions,
         action.payload,
       );
-      state.dirty.offerScope = true;
-      state.error.offerScope = null;
+      markSectionEdited(state, "offerScope");
     },
     exclusionRemoved(state, action: PayloadAction<string>) {
-      state.data.offerScope.exclusions = state.data.offerScope.exclusions.filter(
-        (e) => e.id !== action.payload,
-      );
-      state.dirty.offerScope = true;
-      state.error.offerScope = null;
+      state.data.offerScope.exclusions =
+        state.data.offerScope.exclusions.filter((e) => e.id !== action.payload);
+      markSectionEdited(state, "offerScope");
+    },
+    exclusionRestored(
+      state,
+      action: PayloadAction<{ item: OfferExclusion; index: number }>,
+    ) {
+      const { item, index } = action.payload;
+      const list = state.data.offerScope.exclusions;
+      // Undo lives on a toast; a second click must not duplicate the item.
+      if (list.some((existing) => existing.id === item.id)) return;
+      state.data.offerScope.exclusions = insertAt(list, item, index);
+      markSectionEdited(state, "offerScope");
     },
     exclusionsListChanged(state, action: PayloadAction<string[]>) {
       state.data.offerContent.exclusions = action.payload;
-      state.dirty.offerContent = true;
-      state.error.offerContent = null;
+      markSectionEdited(state, "offerContent");
     },
     inclusionsChanged(state, action: PayloadAction<string[]>) {
       state.data.offerContent.inclusions = action.payload;
-      state.dirty.offerContent = true;
-      state.error.offerContent = null;
+      markSectionEdited(state, "offerContent");
     },
-    inclusionsScheduleChanged(state, action: PayloadAction<InclusionScheduleRow[]>) {
+    // Bullet and schedule Undo toasts outlive the editor that raised them, so
+    // they restore into the current list here rather than one the editor held.
+    // Plain bullets have no id to dedupe on; the toast closes on its first
+    // Undo click.
+    inclusionBulletRestored(
+      state,
+      action: PayloadAction<{ bullet: string; index: number }>,
+    ) {
+      const { bullet, index } = action.payload;
+      state.data.offerContent.inclusions = insertAt(
+        state.data.offerContent.inclusions,
+        bullet,
+        index,
+      );
+      markSectionEdited(state, "offerContent");
+    },
+    exclusionBulletRestored(
+      state,
+      action: PayloadAction<{ bullet: string; index: number }>,
+    ) {
+      const { bullet, index } = action.payload;
+      state.data.offerContent.exclusions = insertAt(
+        state.data.offerContent.exclusions,
+        bullet,
+        index,
+      );
+      markSectionEdited(state, "offerContent");
+    },
+    inclusionsScheduleChanged(
+      state,
+      action: PayloadAction<InclusionScheduleRow[]>,
+    ) {
       state.data.offerContent.inclusionSchedule = action.payload;
-      state.dirty.offerContent = true;
-      state.error.offerContent = null;
+      markSectionEdited(state, "offerContent");
+    },
+    inclusionScheduleRowRestored(
+      state,
+      action: PayloadAction<{ row: InclusionScheduleRow; index: number }>,
+    ) {
+      const { row, index } = action.payload;
+      state.data.offerContent.inclusionSchedule = insertAt(
+        state.data.offerContent.inclusionSchedule,
+        row,
+        index,
+      );
+      markSectionEdited(state, "offerContent");
     },
     headlineChanged(state, action: PayloadAction<string>) {
       state.data.offerContent.headline = action.payload;
-      state.dirty.offerContent = true;
-      state.error.offerContent = null;
+      markSectionEdited(state, "offerContent");
     },
     introTextChanged(state, action: PayloadAction<string>) {
       state.data.offerContent.introText = action.payload;
-      state.dirty.offerContent = true;
-      state.error.offerContent = null;
+      markSectionEdited(state, "offerContent");
     },
     termsAndConditionsChanged(state, action: PayloadAction<string>) {
       state.data.offerContent.termsAndConditions = action.payload;
-      state.dirty.offerContent = true;
-      state.error.offerContent = null;
+      markSectionEdited(state, "offerContent");
     },
-    hbfcClaimChanged(state, action: PayloadAction<HBFCClaimInput>) {
+    hbcfClaimChanged(state, action: PayloadAction<HBCFClaimInput>) {
       const { claimAmount, loadingChargePercent } = action.payload;
-      state.data.hbfcClaim = {
+      state.data.hbcfClaim = {
         claimAmount,
         loadingChargePercent,
-        totalPremiumToBePaid: calcTotalPremium(claimAmount, loadingChargePercent),
+        totalPremiumToBePaid: calcTotalPremium(
+          claimAmount,
+          loadingChargePercent,
+        ),
       };
-      state.dirty.hbfcClaim = true;
-      state.error.hbfcClaim = null;
+      markSectionEdited(state, "hbcfClaim");
     },
     resetSectionError(state, action: PayloadAction<Section>) {
       state.error[action.payload] = null;
@@ -301,11 +422,16 @@ const slice = createSlice({
         state.saving[section] = true;
         state.error[section] = null;
       },
-      fulfilled: (state: AdminOfferContentState) => {
-        state.saving[section] = false;
-        state.dirty[section] = false;
+      fulfilled: (
+        state: AdminOfferContentState,
+        action: PayloadAction<AdminSaveReceipt>,
+      ) => {
+        settleSavedSection(state, section, action.payload.sentRevision);
       },
-      rejected: (state: AdminOfferContentState, action: { payload: unknown }) => {
+      rejected: (
+        state: AdminOfferContentState,
+        action: { payload: unknown },
+      ) => {
         state.saving[section] = false;
         state.error[section] =
           (action.payload as string | undefined) ?? "Save failed.";
@@ -316,7 +442,7 @@ const slice = createSlice({
     const cs = makeSaveHandlers("costSchedule");
     const os = makeSaveHandlers("offerScope");
     const oc = makeSaveHandlers("offerContent");
-    const hbfc = makeSaveHandlers("hbfcClaim");
+    const hbcf = makeSaveHandlers("hbcfClaim");
 
     builder
       .addCase(saveBuildScope.pending, bs.pending)
@@ -331,9 +457,9 @@ const slice = createSlice({
       .addCase(saveOfferContent.pending, oc.pending)
       .addCase(saveOfferContent.fulfilled, oc.fulfilled)
       .addCase(saveOfferContent.rejected, oc.rejected)
-      .addCase(saveHBFCClaim.pending, hbfc.pending)
-      .addCase(saveHBFCClaim.fulfilled, hbfc.fulfilled)
-      .addCase(saveHBFCClaim.rejected, hbfc.rejected);
+      .addCase(saveHBCFClaim.pending, hbcf.pending)
+      .addCase(saveHBCFClaim.fulfilled, hbcf.fulfilled)
+      .addCase(saveHBCFClaim.rejected, hbcf.rejected);
   },
 });
 
@@ -342,21 +468,31 @@ export const {
   buildScopeChanged,
   costScheduleRowUpserted,
   costScheduleRowRemoved,
+  costScheduleRowRestored,
   rateConstantChanged,
   allowanceUpserted,
   allowanceRemoved,
+  allowanceRestored,
   exclusionUpserted,
   exclusionRemoved,
+  exclusionRestored,
   exclusionsListChanged,
+  exclusionBulletRestored,
   inclusionsChanged,
+  inclusionBulletRestored,
   inclusionsScheduleChanged,
+  inclusionScheduleRowRestored,
   headlineChanged,
   introTextChanged,
   termsAndConditionsChanged,
-  hbfcClaimChanged,
+  hbcfClaimChanged,
   resetSectionError,
 } = slice.actions;
 
 export const adminOfferContentReducer = slice.reducer;
 
-export type { AdminOfferContentState, Section as AdminOfferContentSection };
+export type {
+  AdminOfferContentState,
+  AdminOfferContentSection,
+  AdminSaveReceipt,
+};

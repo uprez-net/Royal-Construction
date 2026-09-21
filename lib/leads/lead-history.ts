@@ -1,0 +1,74 @@
+/**
+ * History rows are CREATED, never reconciled.
+ *
+ * `updateLead` inserts every entry it is handed, which is right for a caller
+ * that passes what just happened and catastrophic for one that passes the
+ * lead's whole history back. Two did: the email modal sent
+ * `[...lead.history, entry]` and the consultation booking route sent the list
+ * `upsertNoteHistory` had merged. Every send and every booking therefore
+ * re-inserted every row already on the lead, and because the round trip
+ * re-encoded each instant as a Sydney wall clock that was then read as UTC, the
+ * copies arrived ten hours after the originals. Four entries became nine on a
+ * single booking, and the next booking would have made that fourteen.
+ *
+ * The callers now pass only what is new. This is the guard that keeps any
+ * caller which has not been updated — the MCP surface, a future route — from
+ * reintroducing it.
+ */
+
+export interface RecordedHistoryEntry {
+  action: string;
+  detail: string;
+  actionDate: Date;
+}
+
+/**
+ * A separator that cannot occur in an action or a detail.
+ *
+ * Written as an escape, never as the character itself: a literal NUL in the
+ * source makes git treat the whole file as binary, and this file spent its
+ * first three commits invisible — "Binary files differ" in the PR, skipped by
+ * grep and rg, and unreviewed by CodeRabbit, while compiling and passing its
+ * tests because NUL is a legal string character.
+ */
+const SEPARATOR = "\u0000";
+
+/**
+ * Minute precision, deliberately.
+ *
+ * A row is stored with whatever precision its writer had — "Lead created" lands
+ * on 22:32:37.501 — but it travels to the client as a Sydney date and an HH:mm
+ * time, so the copy that comes back is the same event at 22:32:00.000. Compared
+ * exactly, the echo looks new and is inserted; compared to the minute, it is
+ * recognised.
+ *
+ * Coarse enough to be dangerous if it were applied to everything: two mentions
+ * or two stage moves in the same minute carry identical text and would collapse
+ * into one. That is why only CALLER-SUPPLIED history goes through it — see
+ * dropAlreadyRecorded.
+ */
+function identity(entry: RecordedHistoryEntry): string {
+  const minute = Math.floor(entry.actionDate.getTime() / 60_000);
+  return [entry.action.trim(), entry.detail.trim(), minute].join(SEPARATOR);
+}
+
+/**
+ * The entries in `candidates` that are not already on the lead, with duplicates
+ * inside `candidates` itself collapsed. Order is preserved.
+ */
+export function dropAlreadyRecorded<T extends RecordedHistoryEntry>(
+  candidates: readonly T[],
+  existing: readonly RecordedHistoryEntry[],
+): T[] {
+  const seen = new Set(existing.map(identity));
+  const kept: T[] = [];
+
+  for (const candidate of candidates) {
+    const key = identity(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(candidate);
+  }
+
+  return kept;
+}

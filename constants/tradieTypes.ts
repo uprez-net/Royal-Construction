@@ -24,6 +24,10 @@ import {
   Droplets,
   Construction,
   BadgeCheck,
+  PencilRuler,
+  Leaf,
+  Flame,
+  TrafficCone,
 } from "lucide-react";
 
 export const TRADIE_TYPES = {
@@ -57,40 +61,53 @@ export const TRADIE_TYPES = {
   GYPROCK_INSTALLER: "Gyprock",
   METAL_ROOFER: "Metal Roofing",
   CERTIFIER: "Certifier",
+  ARCHITECT: "Architecture",
+
+  // The compliance file's consultants.
+  //
+  // Every one of these is picked from this directory by the Compliance tab
+  // (PARTY_TRADE_LABEL in constants/complianceDocuments.ts keys straight off
+  // these labels), so a party with no trade here is a party whose contact
+  // picker comes back empty however many firms are on the books.
+  BASIX_ASSESSOR: "BASIX Assessment",
+  BUSHFIRE_ASSESSOR: "Bushfire Assessment",
+  TRAFFIC_CONTROLLER: "Traffic Control",
 } as const;
 
-export const TRADIE_TYPE_ICONS: Record<
-  keyof typeof TRADIE_TYPES,
-  LucideIcon
-> = {
-  ELECTRICIAN: Zap,
-  PLUMBER: Wrench,
-  CARPENTER: Hammer,
-  PAINTER: Paintbrush,
-  ROOFER: House,
-  HVAC_TECHNICIAN: Fan,
-  LANDSCAPER: Trees,
-  MASON: BrickWall,
-  BRICKLAYER: BrickWall,
-  PLASTERER: PanelTop,
-  TILING_SPECIALIST: Grid3X3,
-  GLAZIER: SquareStack,
-  FLOORING_SPECIALIST: LayoutGrid,
-  KITCHEN_SPECIALIST: Building2,
-  CONCRETE_SPECIALIST: Hammer,
+export const TRADIE_TYPE_ICONS: Record<keyof typeof TRADIE_TYPES, LucideIcon> =
+  {
+    ELECTRICIAN: Zap,
+    PLUMBER: Wrench,
+    CARPENTER: Hammer,
+    PAINTER: Paintbrush,
+    ROOFER: House,
+    HVAC_TECHNICIAN: Fan,
+    LANDSCAPER: Trees,
+    MASON: BrickWall,
+    BRICKLAYER: BrickWall,
+    PLASTERER: PanelTop,
+    TILING_SPECIALIST: Grid3X3,
+    GLAZIER: SquareStack,
+    FLOORING_SPECIALIST: LayoutGrid,
+    KITCHEN_SPECIALIST: Building2,
+    CONCRETE_SPECIALIST: Hammer,
 
-  // Added
-  WINDOW_DOOR_SPECIALIST: DoorOpen,
-  JOINER: Drill,
-  STRUCTURAL_ENGINEER: Ruler,
-  PEST_CONTROL: Bug,
-  SURVEYOR: Compass,
-  WATER_AUTHORITY: Droplets,
-  SCAFFOLDER: Construction,
-  WATERPROOFER: ShieldCheck,
-  FITOUT_CARPENTER: Hammer,
-  INTERIOR_FITOUT: Sofa,
-  GYPROCK_INSTALLER: PanelTop,
-  METAL_ROOFER: Warehouse,
-  CERTIFIER: BadgeCheck,
-};
+    // Added
+    WINDOW_DOOR_SPECIALIST: DoorOpen,
+    JOINER: Drill,
+    STRUCTURAL_ENGINEER: Ruler,
+    PEST_CONTROL: Bug,
+    SURVEYOR: Compass,
+    WATER_AUTHORITY: Droplets,
+    SCAFFOLDER: Construction,
+    WATERPROOFER: ShieldCheck,
+    FITOUT_CARPENTER: Hammer,
+    INTERIOR_FITOUT: Sofa,
+    GYPROCK_INSTALLER: PanelTop,
+    METAL_ROOFER: Warehouse,
+    CERTIFIER: BadgeCheck,
+    ARCHITECT: PencilRuler,
+    BASIX_ASSESSOR: Leaf,
+    BUSHFIRE_ASSESSOR: Flame,
+    TRAFFIC_CONTROLLER: TrafficCone,
+  };

@@ -22,9 +22,17 @@ import {
   deserializeWorkspace,
   parseWorkspaceState,
 } from "@/lib/offer/workspace-persistence";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { getGraphConfig } from "@/lib/graph/config";
 import { createGraphContext } from "@/lib/graph/client";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
+import {
+  canEmailOfferProposal,
+  PROPOSAL_STAGE_PASSED_ERROR,
+} from "@/lib/offer/offer-send-guards";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -62,7 +70,9 @@ async function recipientDomainAcceptsMail(
       ),
     ]);
     if (records === null) {
-      console.error(`[offer] MX lookup for "${domain}" timed out; allowing the send`);
+      console.error(
+        `[offer] MX lookup for "${domain}" timed out; allowing the send`,
+      );
       return { ok: true };
     }
     // A domain with no usable MX host cannot take delivery.
@@ -118,6 +128,11 @@ export async function sendOfferDocument(input: {
   if (!offer) {
     return { ok: false, error: "Offer not found." };
   }
+  // Before any recipient lookup or PDF render: past the negotiation window the
+  // proposal would quote a workspace the Tender or Contract no longer matches.
+  if (!canEmailOfferProposal(offer.offerStatus)) {
+    return { ok: false, error: PROPOSAL_STAGE_PASSED_ERROR };
+  }
   if (!offer.workspaceState) {
     return { ok: false, error: "Add and save offer content before sending." };
   }
@@ -142,6 +157,16 @@ export async function sendOfferDocument(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
+  if (totalAreaSqm <= 0) {
+    return {
+      ok: false,
+      error: "Enter floor areas in Job setup before sending the proposal.",
     };
   }
 
@@ -312,6 +337,7 @@ export async function sendOfferDocument(input: {
             fromStatus: OfferStatus.PENDING,
             toStatus: OfferStatus.SENT,
             note: `Emailed to ${deliveredEmails.join(", ")}`,
+            actorId: access.user.id,
           },
         })
         .catch((error) =>

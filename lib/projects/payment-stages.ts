@@ -81,7 +81,10 @@ export function withStagePercentage(
   percentage: number | null,
 ): string {
   if (percentage === null) {
-    return label.replace(PERCENT_TOKEN, "").replace(/\s{2,}/g, " ").trim();
+    return label
+      .replace(PERCENT_TOKEN, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
 
   if (PERCENT_TOKEN.test(label)) {

@@ -10,7 +10,7 @@ import {
   Link,
   Img,
   Tailwind,
-} from '@react-email/components';
+} from "@react-email/components";
 import {
   FONTS,
   RC_URLS,
@@ -18,13 +18,16 @@ import {
   RESPONSIVE_CSS,
   FONT_FACES_CSS,
   TAILWIND_CONFIG,
-} from './email-theme';
-import { EmailFooter } from './email-footer';
-import { EmailHeader } from './email-header';
-import { EmailCtaButton } from './email-cta-button';
-import { EmailSectionLight } from './email-section-light';
-import { EmailSectionWhite } from './email-section-white';
-import { EmailLeadContextSummary, LeadEmailContext } from './email-lead-context';
+} from "./email-theme";
+import { EmailFooter } from "./email-footer";
+import { EmailHeader } from "./email-header";
+import { EmailCtaButton } from "./email-cta-button";
+import { EmailSectionLight } from "./email-section-light";
+import { EmailSectionWhite } from "./email-section-white";
+import {
+  EmailLeadContextSummary,
+  LeadEmailContext,
+} from "./email-lead-context";
 
 // ─── Icons (Data URIs) ─────────────────────────────────────────────────────
 // Updated stroke color to match RC_COLORS.gold (#C9A84C)
@@ -50,11 +53,20 @@ function DetailRow({
   showBorder?: boolean;
 }) {
   return (
-    <Row style={{ borderBottom: showBorder ? '1px solid #E2E8F0' : undefined }}>
+    <Row style={{ borderBottom: showBorder ? "1px solid #E2E8F0" : undefined }}>
       <Column className="py-5 px-6">
         <Row>
-          <Column className="pt-[2px]" style={{ width: 36, verticalAlign: 'top' }}>
-            <Img alt="" height={20} src={icon} width={20} className="block outline-none border-none" />
+          <Column
+            className="pt-[2px]"
+            style={{ width: 36, verticalAlign: "top" }}
+          >
+            <Img
+              alt=""
+              height={20}
+              src={icon}
+              width={20}
+              className="block outline-none border-none"
+            />
           </Column>
           <Column className="pl-3">
             <Text
@@ -63,7 +75,7 @@ function DetailRow({
                 fontFamily: FONTS.body,
                 fontWeight: 500,
                 fontSize: 10,
-                letterSpacing: '0.8px',
+                letterSpacing: "0.8px",
                 color: RC_COLORS.textMutedOnLight,
               }}
             >
@@ -100,13 +112,22 @@ function ExpectItem({
   return (
     <Section
       style={{
-        padding: '1.25rem 0',
-        borderBottom: showBorder ? '1px solid #E2E8F0' : undefined,
+        padding: "1.25rem 0",
+        borderBottom: showBorder ? "1px solid #E2E8F0" : undefined,
       }}
     >
       <Row>
-        <Column className="pt-[2px]" style={{ width: 36, verticalAlign: 'top' }}>
-          <Img alt="" height={18} src={ICONS.check} width={18} className="block outline-none border-none" />
+        <Column
+          className="pt-[2px]"
+          style={{ width: 36, verticalAlign: "top" }}
+        >
+          <Img
+            alt=""
+            height={18}
+            src={ICONS.check}
+            width={18}
+            className="block outline-none border-none"
+          />
         </Column>
         <Column className="pl-3">
           <Text
@@ -128,7 +149,7 @@ function ExpectItem({
               fontWeight: 350,
               fontSize: 13,
               lineHeight: 1.5,
-              letterSpacing: '0.2px',
+              letterSpacing: "0.2px",
               color: RC_COLORS.textMutedOnLight,
             }}
           >
@@ -152,10 +173,10 @@ interface SiteVisitEmailProps {
 }
 
 export default function SiteVisitEmail({
-  name = 'Client',
-  date = 'TBD',
-  time = 'TBD',
-  location = 'TBD',
+  name = "Client",
+  date = "TBD",
+  time = "TBD",
+  location = "TBD",
   calendarUrl = RC_URLS.bookConsultation,
   leadContext,
 }: SiteVisitEmailProps) {
@@ -181,14 +202,19 @@ export default function SiteVisitEmail({
         >
           <div className="hidden overflow-hidden leading-none opacity-none max-h-0 max-w-0">
             Your site visit is confirmed — review the details and what to expect
-            <div>&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿</div>
+            <div>
+              &nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿&nbsp;‌​‍‎‏﻿
+            </div>
           </div>
 
-          <Container className="max-w-[640px] mx-auto" style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}>
+          <Container
+            className="max-w-[640px] mx-auto"
+            style={{ backgroundColor: RC_COLORS.white, maxWidth: 640 }}
+          >
             <EmailHeader showGoldBar />
 
             {/* ── Hero ── */}
-            <EmailSectionLight style={{ padding: '2.5rem 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "2.5rem 1.5rem 2rem" }}>
               <Text
                 className="m-0 mb-4 uppercase"
                 style={{
@@ -196,7 +222,7 @@ export default function SiteVisitEmail({
                   fontWeight: 500,
                   fontSize: 11,
                   lineHeight: 1,
-                  letterSpacing: '1.2px',
+                  letterSpacing: "1.2px",
                   color: RC_COLORS.gold,
                 }}
               >
@@ -209,7 +235,7 @@ export default function SiteVisitEmail({
                   fontWeight: 500,
                   fontSize: 48,
                   lineHeight: 1,
-                  letterSpacing: '-1.4px',
+                  letterSpacing: "-1.4px",
                   color: RC_COLORS.textOnLight,
                 }}
               >
@@ -220,7 +246,7 @@ export default function SiteVisitEmail({
             </EmailSectionLight>
 
             {/* ── Intro ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
                 <Column>
                   <Text
@@ -230,7 +256,7 @@ export default function SiteVisitEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                     }}
                   >
@@ -243,12 +269,14 @@ export default function SiteVisitEmail({
                       fontWeight: 350,
                       fontSize: 14,
                       lineHeight: 1.7,
-                      letterSpacing: '0.3px',
+                      letterSpacing: "0.3px",
                       color: RC_COLORS.textMutedOnLight,
                       maxWidth: 490,
                     }}
                   >
-                    This confirms your site visit has been scheduled. Please review the details below and ensure the site is accessible at the designated time.
+                    This confirms your site visit has been scheduled. Please
+                    review the details below and ensure the site is accessible
+                    at the designated time.
                   </Text>
                 </Column>
               </Row>
@@ -257,15 +285,18 @@ export default function SiteVisitEmail({
             <EmailLeadContextSummary context={leadContext} />
 
             {/* ── Event Details Card ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
               <Row>
                 <Column
                   className="rounded-md overflow-hidden"
-                  style={{ border: '1px solid #E2E8F0' }}
+                  style={{ border: "1px solid #E2E8F0" }}
                 >
                   {/* Card Header */}
                   <Row>
-                    <Column className="py-3.5 px-6" style={{ backgroundColor: RC_COLORS.gold }}>
+                    <Column
+                      className="py-3.5 px-6"
+                      style={{ backgroundColor: RC_COLORS.gold }}
+                    >
                       <Text
                         className="m-0 uppercase"
                         style={{
@@ -273,8 +304,8 @@ export default function SiteVisitEmail({
                           fontWeight: 500,
                           fontSize: 13,
                           lineHeight: 1,
-                          letterSpacing: '0.6px',
-                          color: '#FFFFFF',
+                          letterSpacing: "0.6px",
+                          color: "#FFFFFF",
                         }}
                       >
                         Appointment Details
@@ -282,21 +313,36 @@ export default function SiteVisitEmail({
                     </Column>
                   </Row>
 
-                  <DetailRow icon={ICONS.calendar} label="Date" value={date} showBorder />
-                  <DetailRow icon={ICONS.clock} label="Time" value={time} showBorder />
-                  <DetailRow icon={ICONS.pin} label="Location" value={location} showBorder={false} />
+                  <DetailRow
+                    icon={ICONS.calendar}
+                    label="Date"
+                    value={date}
+                    showBorder
+                  />
+                  <DetailRow
+                    icon={ICONS.clock}
+                    label="Time"
+                    value={time}
+                    showBorder
+                  />
+                  <DetailRow
+                    icon={ICONS.pin}
+                    label="Location"
+                    value={location}
+                    showBorder={false}
+                  />
                 </Column>
               </Row>
             </EmailSectionWhite>
 
             {/* ── What to Expect ── */}
-            <EmailSectionLight style={{ padding: '2rem 1.5rem' }}>
+            <EmailSectionLight style={{ padding: "2rem 1.5rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderRadius: 6,
-                  border: '1px solid #E2E8F0',
-                  padding: '1.5rem',
+                  border: "1px solid #E2E8F0",
+                  padding: "1.5rem",
                 }}
               >
                 <Row>
@@ -308,7 +354,7 @@ export default function SiteVisitEmail({
                         fontWeight: 500,
                         fontSize: 26,
                         lineHeight: 1,
-                        letterSpacing: '0.3px',
+                        letterSpacing: "0.3px",
                         color: RC_COLORS.textOnLight,
                       }}
                     >
@@ -341,19 +387,23 @@ export default function SiteVisitEmail({
             </EmailSectionLight>
 
             {/* ── Add to Calendar CTA ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ textAlign: 'center' }}>
-                <EmailCtaButton href={calendarUrl} label="Add to Calendar" align="center" />
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section style={{ textAlign: "center" }}>
+                <EmailCtaButton
+                  href={calendarUrl}
+                  label="Add to Calendar"
+                  align="center"
+                />
               </Section>
             </EmailSectionWhite>
 
             {/* ── Important Notice ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2rem" }}>
               <Section
                 style={{
                   backgroundColor: RC_COLORS.white,
                   borderLeft: `3px solid ${RC_COLORS.gold}`,
-                  padding: '1rem 1.25rem',
+                  padding: "1rem 1.25rem",
                 }}
               >
                 <Row>
@@ -368,11 +418,17 @@ export default function SiteVisitEmail({
                         color: RC_COLORS.textMutedOnLight,
                       }}
                     >
-                      Please ensure{' '}
-                      <span style={{ fontWeight: 600, color: RC_COLORS.textOnLight }}>
+                      Please ensure{" "}
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          color: RC_COLORS.textOnLight,
+                        }}
+                      >
                         someone is available at the site
-                      </span>{' '}
-                      during the scheduled time so our team can conduct a thorough assessment.
+                      </span>{" "}
+                      during the scheduled time so our team can conduct a
+                      thorough assessment.
                     </Text>
                   </Column>
                 </Row>
@@ -380,7 +436,7 @@ export default function SiteVisitEmail({
             </EmailSectionLight>
 
             {/* ── Need to Reschedule ── */}
-            <EmailSectionWhite style={{ padding: '0 1.5rem 2rem' }}>
+            <EmailSectionWhite style={{ padding: "0 1.5rem 2rem" }}>
               <Row>
                 <Column>
                   <Text
@@ -402,15 +458,18 @@ export default function SiteVisitEmail({
                       fontWeight: 350,
                       fontSize: 13,
                       lineHeight: 1.65,
-                      letterSpacing: '0.2px',
+                      letterSpacing: "0.2px",
                       color: RC_COLORS.textMutedOnLight,
                       maxWidth: 490,
                     }}
                   >
-                    No worries — simply reply to this email or call us at{' '}
-                    <Link href="tel:1300832355" style={{ color: RC_COLORS.gold, textDecoration: 'none' }}>
+                    No worries — simply reply to this email or call us at{" "}
+                    <Link
+                      href="tel:1300832355"
+                      style={{ color: RC_COLORS.gold, textDecoration: "none" }}
+                    >
                       1300 832 355
-                    </Link>{' '}
+                    </Link>{" "}
                     and we&apos;ll find a time that works.
                   </Text>
                 </Column>
@@ -418,8 +477,10 @@ export default function SiteVisitEmail({
             </EmailSectionWhite>
 
             {/* ── Sign-off ── */}
-            <EmailSectionLight style={{ padding: '0 1.5rem 2.5rem' }}>
-              <Section style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1.5rem' }}>
+            <EmailSectionLight style={{ padding: "0 1.5rem 2.5rem" }}>
+              <Section
+                style={{ borderTop: "1px solid #E2E8F0", paddingTop: "1.5rem" }}
+              >
                 <Row>
                   <Column>
                     <Text
@@ -434,7 +495,10 @@ export default function SiteVisitEmail({
                     >
                       We look forward to seeing you on-site.
                     </Text>
-                    <Text className="m-0 mb-1" style={{ fontSize: 14, color: RC_COLORS.textOnLight }}>
+                    <Text
+                      className="m-0 mb-1"
+                      style={{ fontSize: 14, color: RC_COLORS.textOnLight }}
+                    >
                       Kind regards,
                     </Text>
                     <Text
@@ -449,7 +513,10 @@ export default function SiteVisitEmail({
                     </Text>
                     <Text
                       className="m-0"
-                      style={{ fontSize: 13, color: RC_COLORS.textMutedOnLight }}
+                      style={{
+                        fontSize: 13,
+                        color: RC_COLORS.textMutedOnLight,
+                      }}
                     >
                       Royal Constructions Pty Ltd
                     </Text>

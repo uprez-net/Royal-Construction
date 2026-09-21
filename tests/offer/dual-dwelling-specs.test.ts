@@ -27,13 +27,16 @@ import {
   formatDwellingSpec,
   grannyDwellingSpec,
 } from "../../lib/offer/workspace-print-template";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // A dual-occupancy build carries a granny home with its own bed/bath/garage
 // counts. Both the Offer proposal and the Tender must present the two dwellings
 // as separate, labelled specifications — and must NOT print a granny section for
 // a single-dwelling build.
 
-function snapshotWithJob(job: Partial<OfferWorkspaceJob>): OfferWorkspaceSnapshot {
+function snapshotWithJob(
+  job: Partial<OfferWorkspaceJob>,
+): OfferWorkspaceSnapshot {
   return {
     job: { ...INITIAL_OFFER_JOB, ...job },
     lines: INITIAL_COST_LINES,
@@ -42,6 +45,7 @@ function snapshotWithJob(job: Partial<OfferWorkspaceJob>): OfferWorkspaceSnapsho
     draft: INITIAL_OFFER_DRAFT,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
     areaCalculator: INITIAL_AREA_CALCULATOR,
     workspacePricingSettings: DEFAULT_WORKSPACE_PRICING_SETTINGS,
     paymentSchedule: INITIAL_PAYMENT_SCHEDULE,

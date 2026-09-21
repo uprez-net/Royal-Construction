@@ -22,12 +22,24 @@ test("lotSize accepts a typed string and coerces it to a number", () => {
 
 test("lotSize treats a cleared input as null, not a crash", () => {
   const empty = createEmptyProjectExtractionData();
-  assert.equal(projectExtractionSchema.parse({ ...empty, lotSize: "" }).lotSize, null);
-  assert.equal(projectExtractionSchema.parse({ ...empty, lotSize: "abc" }).lotSize, null);
+  assert.equal(
+    projectExtractionSchema.parse({ ...empty, lotSize: "" }).lotSize,
+    null,
+  );
+  assert.equal(
+    projectExtractionSchema.parse({ ...empty, lotSize: "abc" }).lotSize,
+    null,
+  );
 });
 
 test("lotSize still accepts a real number from the extraction agent", () => {
   const empty = createEmptyProjectExtractionData();
-  assert.equal(projectExtractionSchema.parse({ ...empty, lotSize: 612.5 }).lotSize, 612.5);
-  assert.equal(projectExtractionSchema.parse({ ...empty, lotSize: null }).lotSize, null);
+  assert.equal(
+    projectExtractionSchema.parse({ ...empty, lotSize: 612.5 }).lotSize,
+    612.5,
+  );
+  assert.equal(
+    projectExtractionSchema.parse({ ...empty, lotSize: null }).lotSize,
+    null,
+  );
 });

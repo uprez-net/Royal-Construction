@@ -18,6 +18,7 @@ import {
 import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Backs the Versions timeline's price column. Offer.contractValueIncGst used to
 // be written from the OPTIONAL price override, which is 0 whenever the estimator
@@ -66,6 +67,7 @@ function makeSnapshot(
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
     ...overrides,
   };
 }
@@ -106,7 +108,10 @@ test("a positive stored value is authoritative and is never recomputed", () => {
 test("a manual override is carried through the derivation", () => {
   // Given a revision the estimator capped at $600k
   const state = storedState(
-    makeSnapshot({ selectedPriceInput: "600000", overrideReason: "Client cap" }),
+    makeSnapshot({
+      selectedPriceInput: "600000",
+      overrideReason: "Client cap",
+    }),
   );
 
   // When the stored column is the old blank-override $0

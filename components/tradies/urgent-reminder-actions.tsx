@@ -5,7 +5,11 @@ import { openModal } from "@/lib/store/slices/uiSlice";
 
 import type { TradieScheduleWithTradieMilestoneAndProject } from "@/types/project";
 
-export function UrgentReminderActions({ schedule }: { schedule: TradieScheduleWithTradieMilestoneAndProject }) {
+export function UrgentReminderActions({
+  schedule,
+}: {
+  schedule: TradieScheduleWithTradieMilestoneAndProject;
+}) {
   const dispatch = useAppDispatch();
 
   return (
@@ -13,14 +17,18 @@ export function UrgentReminderActions({ schedule }: { schedule: TradieScheduleWi
       <button
         type="button"
         className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium transition-colors hover:bg-muted"
-        onClick={() => dispatch(openModal({ type: "logCall", payload: { schedule } }))}
+        onClick={() =>
+          dispatch(openModal({ type: "logCall", payload: { schedule } }))
+        }
       >
         Log Call
       </button>
       <button
         type="button"
         className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium transition-colors hover:bg-muted"
-        onClick={() => dispatch(openModal({ type: "confirmStatus", payload: { schedule } }))}
+        onClick={() =>
+          dispatch(openModal({ type: "confirmStatus", payload: { schedule } }))
+        }
       >
         Confirm Status
       </button>

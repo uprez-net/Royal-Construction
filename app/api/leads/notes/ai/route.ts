@@ -44,7 +44,10 @@ function getGatewayErrorResponse(error: unknown) {
   }
 
   if (error.statusCode === 429) {
-    return jsonError("AI is busy right now. Please try again in a moment.", 429);
+    return jsonError(
+      "AI is busy right now. Please try again in a moment.",
+      429,
+    );
   }
 
   return null;
@@ -57,7 +60,9 @@ export async function POST(request: Request) {
     return jsonError("Unauthorized", 401);
   }
 
-  const parsed = aiNoteActionSchema.safeParse(await request.json().catch(() => null));
+  const parsed = aiNoteActionSchema.safeParse(
+    await request.json().catch(() => null),
+  );
 
   if (!parsed.success) {
     return jsonError("Send note text and a valid AI action.", 400);

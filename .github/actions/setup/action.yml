@@ -22,7 +22,7 @@ runs:
     - name: Setup Node.js
       uses: actions/setup-node@v5
       with:
-        node-version: 22
+        node-version: 24
         cache: pnpm # caches the pnpm store (~/.pnpm-store)
         cache-dependency-path: pnpm-lock.yaml
 

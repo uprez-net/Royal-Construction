@@ -13,6 +13,7 @@ import {
   parseLeadIdsParam,
   successResponse,
 } from "@/utils/validators";
+import { resolveActingUserId } from "@/lib/data/acting-user";
 
 /**
  * Open work by default; `?state=completed` for the history.
@@ -43,12 +44,16 @@ export async function GET(request: NextRequest) {
     // parameter and ignore it — which reads as working — say it is not there.
     if (state === "completed") {
       if (parsedLeadIds.leadIds !== undefined) {
-        return badRequestResponse("leadIds is not supported with state=completed");
+        return badRequestResponse(
+          "leadIds is not supported with state=completed",
+        );
       }
       return successResponse(await listCompletedTasks());
     }
 
-    return successResponse(await listOpenTasks({ leadIds: parsedLeadIds.leadIds }));
+    return successResponse(
+      await listOpenTasks({ leadIds: parsedLeadIds.leadIds }),
+    );
   } catch (error) {
     console.error("/api/leads/tasks GET error", error);
     return errorResponse("Failed to fetch tasks", {
@@ -70,6 +75,9 @@ export async function POST(request: NextRequest) {
       dueDate: new Date(dueDate),
       dueTime,
       notes,
+      // Stamped on the activity entry the task writes. lib/data/lead-tasks.ts
+      // cannot resolve this itself without breaking the eve agent bundle.
+      actingUserId: await resolveActingUserId(),
     });
     return successResponse(task, { status: 201 });
   } catch (error) {

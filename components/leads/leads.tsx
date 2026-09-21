@@ -437,119 +437,118 @@ export default function Leads() {
               active={activeMetric === "lost"}
             />
           </div>
-
         </>
       )}
 
       {/* Main card */}
       {loading ? null : (
         <Card className="border-border/70 bg-white/95 shadow-sm">
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
-          {(
-            [
-              { key: "table" as TabType, label: "Leads", Icon: Table2 },
-              { key: "followups" as TabType, label: "Tasks", Icon: Clock },
-              {
-                key: "analytics" as TabType,
-                label: "Analytics",
-                Icon: BarChart3,
-              },
-            ] as const
-          ).map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => handleTabChange(key)}
-              className={cn(
-                "group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
-                activeTab === key
-                  ? "bg-teal-50 text-teal-700 shadow-sm"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-              )}
-            >
-              <Icon className="size-4" />
-              <span>{label}</span>
-              {activeTab === key && (
-                <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
-              )}
-            </button>
-          ))}
-
-          {!loading && activeTab === "table" && (
-            <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
-              <Select
-                value={activeFilterTiming}
-                onValueChange={handleFilterTimingChange}
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-4 py-3 sm:px-5">
+            {(
+              [
+                { key: "table" as TabType, label: "Leads", Icon: Table2 },
+                { key: "followups" as TabType, label: "Tasks", Icon: Clock },
+                {
+                  key: "analytics" as TabType,
+                  label: "Analytics",
+                  Icon: BarChart3,
+                },
+              ] as const
+            ).map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => handleTabChange(key)}
+                className={cn(
+                  "group relative inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold transition-all duration-200",
+                  activeTab === key
+                    ? "bg-teal-50 text-teal-700 shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                )}
               >
-                <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
-                  <SelectValue placeholder="Select timeframe" />
-                </SelectTrigger>
-                <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="this_week">This Week</SelectItem>
-                  <SelectItem value="this_month">This Month</SelectItem>
-                  <SelectItem value="quarter">This Quarter</SelectItem>
-                  <SelectItem value="this_year">This Year</SelectItem>
-                  <SelectItem value="all">All Time</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="search-box min-w-0 flex-1">
-                <Search size={16} />
-                <input
-                  type="text"
-                  placeholder="Search leads..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <button className="btn-export" onClick={handleExport}>
-                <Download size={14} />
-                Export
+                <Icon className="size-4" />
+                <span>{label}</span>
+                {activeTab === key && (
+                  <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-teal-600" />
+                )}
               </button>
-            </div>
-          )}
-        </div>
+            ))}
 
-        <CardContent className="pt-5">
-          {activeTab === "table" && (
-            <TableView
-              loading={loadingLeads}
-              leads={leads}
-              onLeadUpdate={updateLeadInList}
-              onLeadDelete={removeLeadFromList}
-              activeMetric={activeMetric}
-              onActiveMetricChange={handleMetricClick}
-              user={{
-                clerkUserId: user?.id ?? null,
-                fullName: user?.fullName ?? null,
-              }}
-              appendEmailToLead={appendEmailToLead}
-            />
-          )}
-          {activeTab === "followups" && (
-            <FollowupsView
-              loading={loadingLeads}
-              leads={leads}
-              onLeadUpdate={updateLeadInList}
-              onLeadDelete={removeLeadFromList}
-              showToast={showToast}
-            />
-          )}
-          {activeTab === "analytics" && (
-            <AnalyticsView analytics={analyticsData} />
-          )}
-          {activeTab !== "analytics" && (
-            <LeadPagination
-              leads={{
-                items: leads,
-                page: pageInfo.page,
-                limit: pageInfo.limit,
-                totalCount: pageInfo.total,
-                totalPages: pageInfo.totalPages,
-              }}
-              onPageChange={handlePageChange}
-            />
-          )}
-        </CardContent>
+            {!loading && activeTab === "table" && (
+              <div className="flex w-full flex-wrap items-center gap-2 pt-2 sm:ml-auto sm:w-auto sm:gap-3 sm:pt-0">
+                <Select
+                  value={activeFilterTiming}
+                  onValueChange={handleFilterTimingChange}
+                >
+                  <SelectTrigger className="h-9 flex-none rounded-full border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm hover:border-gray-300 focus:ring-1 focus:ring-rc-gold">
+                    <SelectValue placeholder="Select timeframe" />
+                  </SelectTrigger>
+                  <SelectContent className="w-auto min-w-40 rounded-md border border-gray-200 bg-white shadow-lg">
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="this_week">This Week</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="quarter">This Quarter</SelectItem>
+                    <SelectItem value="this_year">This Year</SelectItem>
+                    <SelectItem value="all">All Time</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="search-box min-w-0 flex-1">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search leads..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <button className="btn-export" onClick={handleExport}>
+                  <Download size={14} />
+                  Export
+                </button>
+              </div>
+            )}
+          </div>
+
+          <CardContent className="pt-5">
+            {activeTab === "table" && (
+              <TableView
+                loading={loadingLeads}
+                leads={leads}
+                onLeadUpdate={updateLeadInList}
+                onLeadDelete={removeLeadFromList}
+                activeMetric={activeMetric}
+                onActiveMetricChange={handleMetricClick}
+                user={{
+                  clerkUserId: user?.id ?? null,
+                  fullName: user?.fullName ?? null,
+                }}
+                appendEmailToLead={appendEmailToLead}
+              />
+            )}
+            {activeTab === "followups" && (
+              <FollowupsView
+                loading={loadingLeads}
+                leads={leads}
+                onLeadUpdate={updateLeadInList}
+                onLeadDelete={removeLeadFromList}
+                showToast={showToast}
+              />
+            )}
+            {activeTab === "analytics" && (
+              <AnalyticsView analytics={analyticsData} />
+            )}
+            {activeTab !== "analytics" && (
+              <LeadPagination
+                leads={{
+                  items: leads,
+                  page: pageInfo.page,
+                  limit: pageInfo.limit,
+                  totalCount: pageInfo.total,
+                  totalPages: pageInfo.totalPages,
+                }}
+                onPageChange={handlePageChange}
+              />
+            )}
+          </CardContent>
         </Card>
       )}
 

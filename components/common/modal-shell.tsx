@@ -77,7 +77,9 @@ export function ModalShell({
             {isFullScreenable && (
               <button
                 type="button"
-                onClick={() => onToggleFullScreen?.(isFullScreen ? true : false)}
+                onClick={() =>
+                  onToggleFullScreen?.(isFullScreen ? true : false)
+                }
                 className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                 aria-label="Toggle fullscreen"
               >

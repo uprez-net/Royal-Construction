@@ -39,7 +39,7 @@ export async function POST(
   const resolvedParams = await params;
   const routeParams = parseRouteParamsWithResponse(
     resolvedParams,
-    projectParamSchema
+    projectParamSchema,
   );
   if (!routeParams.success) return routeParams.response;
 
@@ -52,7 +52,10 @@ export async function POST(
 
   try {
     if (contentType.includes("application/json")) {
-      const body = await parseBodyWithResponse(request, createProjectUpdateSchema);
+      const body = await parseBodyWithResponse(
+        request,
+        createProjectUpdateSchema,
+      );
       if (!body.success) return body.response;
 
       notes = body.data.notes;
@@ -74,12 +77,15 @@ export async function POST(
             file instanceof File &&
             file.size > 0 &&
             file.size <= MAX_IMAGE_SIZE &&
-            ALLOWED_IMAGE_TYPES.includes(file.type)
+            ALLOWED_IMAGE_TYPES.includes(file.type),
         );
 
-      if (files.length > 0 && files.length !== formData.getAll("photos").length) {
+      if (
+        files.length > 0 &&
+        files.length !== formData.getAll("photos").length
+      ) {
         return badRequestResponse(
-          "Some files were rejected: invalid type or size > 10MB"
+          "Some files were rejected: invalid type or size > 10MB",
         );
       }
 
@@ -90,14 +96,14 @@ export async function POST(
             file,
             {
               access: "public",
-            }
+            },
           );
           return blob.url;
-        })
+        }),
       );
     } else {
       return badRequestResponse(
-        "Content-Type must be application/json or multipart/form-data"
+        "Content-Type must be application/json or multipart/form-data",
       );
     }
 
@@ -112,10 +118,18 @@ export async function POST(
         })
       : null;
 
-    await createProjectUpdate({ projectId, milestoneId, authorId: user.id, notes, photoUrls });
+    await createProjectUpdate({
+      projectId,
+      milestoneId,
+      authorId: user.id,
+      notes,
+      photoUrls,
+    });
 
     if (milestone?.isPhotoRequired && milestoneId) {
-      console.log(`[NOTIFICATION] Client notified for milestone ${milestoneId}`);
+      console.log(
+        `[NOTIFICATION] Client notified for milestone ${milestoneId}`,
+      );
     }
 
     const updatedProject = await getProjectById(projectId);

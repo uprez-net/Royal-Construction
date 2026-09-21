@@ -23,8 +23,12 @@ import {
   type OfferOwner,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
   return {
@@ -45,6 +49,7 @@ function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
   };
 }
 
@@ -132,7 +137,10 @@ test("the max-signer proposal emits a page element per declared page (PR #124)",
   // Signatures are paginated onto their own page(s), and no owner is dropped.
   assert.match(html, /Acceptance &amp; signatures/);
   for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
-    assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the proposal`);
+    assert.ok(
+      html.includes(`Owner ${i}`),
+      `owner ${i} missing from the proposal`,
+    );
   }
 });
 
@@ -156,7 +164,10 @@ test("the React print path also foots its true page count at max signers (PR #12
 
   assert.match(html, /Acceptance &amp; signatures/);
   for (let i = 1; i <= MAX_OWNER_SIGNERS; i++) {
-    assert.ok(html.includes(`Owner ${i}`), `owner ${i} missing from the print view`);
+    assert.ok(
+      html.includes(`Owner ${i}`),
+      `owner ${i} missing from the print view`,
+    );
   }
 });
 
@@ -241,7 +252,42 @@ test("the Tender execution page paginates at max signers and foots truly (PR #12
     `Tender pages (${pages}) must equal the footer total (${total})`,
   );
   assert.equal(lastPage, total);
-  assert.match(html, /Acceptance &amp; Execution \(cont\.\)/);
+});
+
+// Ten individuals now fit on a single acceptance page, so the split itself needs
+// a fixture that genuinely overflows one: a company director's row carries the
+// entity name as well as the person's, on top of its 14mm of signing space.
+// The point of the assertion is unchanged — when the table DOES span sheets, the
+// continuation is labelled and the footer still tells the truth.
+test("the Tender acceptance table splits and foots truly when it overflows", () => {
+  const owners = Array.from({ length: 10 }, (_, i) => {
+    const base = createCompanyOwner(`c${i + 1}`);
+    return {
+      ...base,
+      displayName: `Kensington Grove Property No ${i + 1} Pty Ltd`,
+      abn: "12 345 678 901",
+      currentLocation: `Level ${i + 1}, 100 Somewhat Long Street, Sydney NSW 2000`,
+      signatories: [
+        {
+          ...base.signatories[0],
+          name: `Director Number ${i + 1}`,
+          email: `dir${i + 1}@example.com`,
+          capacity: "Director",
+        },
+      ],
+    };
+  });
+  const html = buildTenderHtml(buildProposalInput(snapshotWithOwners(owners)));
+
+  const pages = physicalPageCount(html);
+  const { lastPage, total } = footerPaging(html);
+  assert.equal(
+    pages,
+    total,
+    `Tender pages (${pages}) must equal the footer total (${total})`,
+  );
+  assert.equal(lastPage, total);
+  assert.match(html, /Acceptance of Tender \(cont\.\)/);
 });
 
 test("Tender signature anchors stay globally indexed across pages (PR #124)", () => {
@@ -270,8 +316,10 @@ test("Tender execution lists owner signatures before the builder", () => {
   const html = buildTenderHtml(
     buildProposalInput(snapshotWithOwners([individualOwner(1)])),
   );
-  const ownerPos = html.indexOf("The Owner —");
-  const builderPos = html.indexOf("The Builder — Royal Constructions Pty Ltd");
+  // The execution blocks became rows of the Acceptance of Tender table; the
+  // routing order they encode (every client, then the builder) is unchanged.
+  const ownerPos = html.indexOf("Client: Owner 1");
+  const builderPos = html.indexOf("Builder: ");
   assert.ok(ownerPos >= 0, "missing owner signature block");
   assert.ok(builderPos >= 0, "missing builder signature block");
   assert.ok(
@@ -287,7 +335,7 @@ test("a single-signer Tender keeps one execution page", () => {
   const { lastPage, total } = footerPaging(html);
   assert.equal(physicalPageCount(html), total);
   assert.equal(lastPage, total);
-  assert.doesNotMatch(html, /Acceptance &amp; Execution \(cont\.\)/);
+  assert.doesNotMatch(html, /Acceptance of Tender \(cont\.\)/);
 });
 
 test("the contract annexure paginates its overflow signers (PR #124)", () => {

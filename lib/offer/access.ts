@@ -1,7 +1,11 @@
 import prisma from "@/lib/prisma";
-import { Role, type User } from "@prisma/client";
+import { Role, type Prisma, type User } from "@prisma/client";
 
-const INTERNAL_ROLES = new Set<Role>([Role.ADMIN, Role.SITE_MANAGER, Role.GUEST]);
+const INTERNAL_ROLES = new Set<Role>([
+  Role.ADMIN,
+  Role.SITE_MANAGER,
+  Role.GUEST,
+]);
 
 export class LeadAccessError extends Error {
   constructor(
@@ -25,11 +29,25 @@ export function canAccessLead(
   return INTERNAL_ROLES.has(user.role) || lead.assignedId === user.id;
 }
 
+// canAccessLead's rule, expressed as a filter for list queries. A listing
+// cannot run the per-lead check on every row it returns, so it pushes the same
+// rule into the query: internal roles read every lead, anyone else only the
+// leads assigned to them. Keep the two in step, or a list shows a row whose
+// page then refuses to open.
+export type LeadListScope = { assignedId: string | null };
+
+export function leadListScope(user: Pick<User, "id" | "role">): LeadListScope {
+  return INTERNAL_ROLES.has(user.role)
+    ? { assignedId: null }
+    : { assignedId: user.id };
+}
+
 export async function assertCanAccessLead(
   user: Pick<User, "id" | "role">,
   leadId: number,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<AccessibleLead> {
-  const lead = await prisma.lead.findUnique({
+  const lead = await db.lead.findUnique({
     where: { id: leadId },
     select: { id: true, assignedId: true },
   });
@@ -44,4 +62,3 @@ export async function assertCanAccessLead(
 
   return lead;
 }
-

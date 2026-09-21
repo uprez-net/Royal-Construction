@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
-import { sendLeadEmail } from "@/lib/data/leads";
+import { sendLeadEmail } from "@/lib/actions/leads";
 import { Button } from "@/components/ui/button";
 import type { LeadEmails } from "@prisma/client";
 import { ReplyBanner } from "./reply-email";
@@ -220,7 +220,7 @@ export function EmailComposer({
         `${projectType} - ${location}`,
         body.html.trim(),
         recipient,
-        replyTo ?? undefined
+        replyTo ?? undefined,
       );
 
       appendEmailToLead(leadId, email);
@@ -267,7 +267,8 @@ export function EmailComposer({
         <div className="flex items-center justify-end border-t border-[#e7e5e4] bg-[#f8fafc] px-3 py-2">
           <Button
             size="icon"
-            className="bg-royal-gold text-white shrink-0 hover:bg-royal-gold/90"
+            variant="royal"
+            className="shrink-0"
             disabled={sending || body === undefined || !body?.html.trim()}
             onClick={() => startTransition(handleSend)}
           >

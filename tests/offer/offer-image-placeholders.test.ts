@@ -16,11 +16,15 @@ import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import {
   EMPTY_OFFER_IMAGES,
   type OfferImageMap,
 } from "../../lib/offer/workspace-images";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 const SNAPSHOT: OfferWorkspaceSnapshot = {
   job: INITIAL_OFFER_JOB,
@@ -35,6 +39,7 @@ const SNAPSHOT: OfferWorkspaceSnapshot = {
   rateCardTier: "MID",
   tenderGate: INITIAL_TENDER_GATE,
   adminContentVersion: 0,
+  calcVersion: LEGACY_CALC_VERSION,
   overrideReason: "",
   selectedPriceInput: "",
   standardPriceInput: "",

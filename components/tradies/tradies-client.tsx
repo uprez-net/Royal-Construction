@@ -81,7 +81,8 @@ const statusLabelMap: Record<TradieScheduleStatus, string> = {
   COMPLETED: "Completed",
   AWAITING_QUOTE: "Awaiting Quote",
   QUOTE_RECEIVED: "Quote Received",
-  AWAITING_ADMIN_APPROVAL: "Awaiting Admin Approval",
+  AWAITING_ADMIN_APPROVAL: "Availability Confirmed · Admin Review",
+  PENDING_FINAL_CONFIRMATION: "Pending Final Confirmation",
 };
 
 const statusToneMap: Record<
@@ -96,7 +97,8 @@ const statusToneMap: Record<
   COMPLETED: "neutral",
   AWAITING_QUOTE: "warning",
   QUOTE_RECEIVED: "warning",
-  AWAITING_ADMIN_APPROVAL: "warning"
+  AWAITING_ADMIN_APPROVAL: "warning",
+  PENDING_FINAL_CONFIRMATION: "warning",
 };
 
 function CalanderRow(scheduledData: string): ReactNode {
@@ -304,8 +306,17 @@ export function TradiesClient({
   const handleRowQuickConfirm = async (row: TradieScheduleListItem) => {
     const loading = toast.loading("Updating status...");
     try {
-      await updateScheduleStatuses([row.id], TradieScheduleStatus.CONFIRMED);
-      toast.success("Status updated to Confirmed", { id: loading });
+      const nextStatus =
+        row.status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION
+          ? TradieScheduleStatus.CONFIRMED
+          : TradieScheduleStatus.AWAITING_ADMIN_APPROVAL;
+      await updateScheduleStatuses([row.id], nextStatus);
+      toast.success(
+        nextStatus === TradieScheduleStatus.CONFIRMED
+          ? "Final confirmation recorded"
+          : "Availability sent for admin approval",
+        { id: loading },
+      );
     } catch (error) {
       toast.error("Failed to update status. Please try again.", {
         id: loading,
@@ -387,7 +398,8 @@ export function TradiesClient({
       >
         {(row.status === TradieScheduleStatus.PENDING ||
           row.status === TradieScheduleStatus.NO_RESPONSE ||
-          row.status === TradieScheduleStatus.PENDING_RESPONSE) && (
+          row.status === TradieScheduleStatus.PENDING_RESPONSE ||
+          row.status === TradieScheduleStatus.PENDING_FINAL_CONFIRMATION) && (
           <Button
             size={size}
             variant="ghost"
@@ -400,6 +412,7 @@ export function TradiesClient({
         )}
 
         {row.status !== TradieScheduleStatus.CONFIRMED &&
+          row.status !== TradieScheduleStatus.AWAITING_ADMIN_APPROVAL &&
           row.status !== TradieScheduleStatus.COMPLETED && (
             <Button
               size={size}
@@ -522,10 +535,7 @@ export function TradiesClient({
       {CalanderRow(row.scheduledDate)}
     </span>,
 
-    <StatusPill
-      key={`status-${row.id}`}
-      tone={statusToneMap[row.status]}
-    >
+    <StatusPill key={`status-${row.id}`} tone={statusToneMap[row.status]}>
       {statusLabelMap[row.status]}
     </StatusPill>,
 

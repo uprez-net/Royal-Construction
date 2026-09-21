@@ -5,10 +5,15 @@ export interface RateLimiterConfig {
   interval: "second" | "minute" | "hour" | "day";
 }
 
-const limiters = new Map<string, { limiter: RateLimiter; config: RateLimiterConfig }>();
+const limiters = new Map<
+  string,
+  { limiter: RateLimiter; config: RateLimiterConfig }
+>();
 
 function sameConfig(a: RateLimiterConfig, b: RateLimiterConfig) {
-  return a.tokensPerInterval === b.tokensPerInterval && a.interval === b.interval;
+  return (
+    a.tokensPerInterval === b.tokensPerInterval && a.interval === b.interval
+  );
 }
 
 /**
@@ -67,6 +72,9 @@ export const RATE_LIMITS = {
   },
   market: {
     api: { tokensPerInterval: 100, interval: "minute" } as RateLimiterConfig,
-    absScrape: { tokensPerInterval: 20, interval: "minute" } as RateLimiterConfig,
+    absScrape: {
+      tokensPerInterval: 20,
+      interval: "minute",
+    } as RateLimiterConfig,
   },
 } as const;

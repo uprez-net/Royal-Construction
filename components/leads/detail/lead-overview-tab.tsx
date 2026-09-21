@@ -18,6 +18,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { rebaseTrackedFields } from "@/lib/leads/lead-form-sync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -127,9 +128,21 @@ const SECTION_FIELDS: Record<
     "estimatedValueSource",
     "probabilityOverride",
     "expectedCloseDate",
+    "estimatedStartDate",
   ],
   lostReason: ["lostReason"],
 };
+
+/**
+ * Every field the sections read for dirtiness or write on save.
+ *
+ * All primitives, deliberately: `type`, `notesDoc` and `annotationsToCreate`
+ * are on LeadDetailFormData but belong to no section, so identity comparison is
+ * a sound test of "did the operator touch this" for everything listed here.
+ */
+const TRACKED_FIELDS: readonly (keyof LeadDetailFormData)[] = Array.from(
+  new Set(Object.values(SECTION_FIELDS).flat()),
+);
 
 /* ── Payload + validation ─────────────────────────────────────────────── */
 
@@ -185,6 +198,7 @@ function buildSectionPayload(
         estimatedValueSource: form.estimatedValueSource,
         probabilityOverride: parseLikelihood(form.probabilityOverride),
         expectedCloseDate: form.expectedCloseDate || null,
+        estimatedStartDate: form.estimatedStartDate || null,
       };
 
     case "lostReason":
@@ -255,6 +269,33 @@ export function LeadOverviewTab({
 
   const baseline = useMemo(() => leadToFormData(lead), [lead]);
   const [form, setForm] = useState<LeadDetailFormData>(baseline);
+
+  // The lead changes underneath this form, and the form has to follow it.
+  //
+  // The header badge writes the stage through its own updateLead call and the
+  // page hands the new lead back down, so `baseline` moves — but `form` was
+  // seeded once at mount and never did. The Source and stage section went on
+  // showing the stage the page had loaded with, flagged itself `Unsaved`, and
+  // offered a Save primed to write that stale stage back over the new one. On
+  // staging that was a QUOTED lead with a Save that would have written
+  // DISCOVERY: a silent two-stage regression for someone doing nothing worse
+  // than tidying an `Unsaved` chip they did not create.
+  //
+  // Only untouched fields are adopted. A field the operator has actually edited
+  // stays theirs, so a stage change elsewhere cannot discard half-typed work in
+  // another section — the same rule handleSectionSave already follows when it
+  // re-seeds just the fields a save wrote.
+  //
+  // Adjusted during render rather than in an effect. This is React's documented
+  // pattern for state derived from props: the component re-renders before
+  // committing, so the stale value is never painted.
+  const [syncedBaseline, setSyncedBaseline] = useState(baseline);
+  if (!Object.is(syncedBaseline, baseline)) {
+    setSyncedBaseline(baseline);
+    setForm((prev) =>
+      rebaseTrackedFields(prev, syncedBaseline, baseline, TRACKED_FIELDS),
+    );
+  }
   const [savingSection, setSavingSection] = useState<LeadSectionKey | null>(
     null,
   );
@@ -266,7 +307,9 @@ export function LeadOverviewTab({
     setForm((prev) => ({ ...prev, ...updates }));
 
   const isSectionDirty = (key: LeadSectionKey) =>
-    SECTION_FIELDS[key].some((field) => !Object.is(form[field], baseline[field]));
+    SECTION_FIELDS[key].some(
+      (field) => !Object.is(form[field], baseline[field]),
+    );
 
   const handleSectionSave = async (key: LeadSectionKey) => {
     const message = validateSection(key, form);
@@ -452,7 +495,9 @@ export function LeadOverviewTab({
                   // open its section rather than hiding the blocker.
                   if (isLostStage(next))
                     setOpenSections((prev) =>
-                      prev.includes("lostReason") ? prev : [...prev, "lostReason"],
+                      prev.includes("lostReason")
+                        ? prev
+                        : [...prev, "lostReason"],
                     );
                 }}
               >
@@ -481,7 +526,9 @@ export function LeadOverviewTab({
               <Checkbox
                 id={fieldId("urgent")}
                 checked={form.urgent}
-                onCheckedChange={(checked) => patch({ urgent: checked === true })}
+                onCheckedChange={(checked) =>
+                  patch({ urgent: checked === true })
+                }
               />
               <Label htmlFor={fieldId("urgent")} className={FIELD_LABEL_CLASS}>
                 Urgent
@@ -638,6 +685,26 @@ export function LeadOverviewTab({
               ) : null}
             </div>
 
+            <div>
+              <Field
+                label="Est. start date"
+                htmlFor={fieldId("estimated-start")}
+              >
+                <Input
+                  id={fieldId("estimated-start")}
+                  type="date"
+                  className={FIELD_CONTROL_CLASS}
+                  value={form.estimatedStartDate}
+                  onChange={(e) =>
+                    patch({ estimatedStartDate: e.target.value })
+                  }
+                />
+              </Field>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                The date from which this lead enters HBCF capacity planning.
+              </span>
+            </div>
+
             {weightedPreview ? (
               <div className="flex items-center justify-between gap-3 rounded-md bg-muted px-3 py-2.5 text-xs md:col-span-2">
                 <span>
@@ -680,7 +747,9 @@ export function LeadOverviewTab({
               onChange={(e) => patch({ lostReason: e.target.value })}
               required
               aria-invalid={lostReasonMissing}
-              aria-describedby={lostReasonMissing ? lostReasonErrorId : undefined}
+              aria-describedby={
+                lostReasonMissing ? lostReasonErrorId : undefined
+              }
             />
             {lostReasonMissing ? (
               <p
@@ -706,7 +775,10 @@ export function LeadOverviewTab({
     <section className="space-y-4">
       <Card className="border-border/70 bg-card shadow-sm">
         <CardHeader className="border-b border-border/70 pb-4">
-          <CardTitle as="h2" className="text-base font-semibold text-foreground">
+          <CardTitle
+            as="h2"
+            className="text-base font-semibold text-foreground"
+          >
             Lead information
           </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">

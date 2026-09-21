@@ -2,6 +2,10 @@ import type {
   OfferInclusionEntry,
   OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
+import {
+  offerAreaBasisFromJob,
+  rawTotalAreaSqm,
+} from "@/lib/offer/workspace-area";
 
 // Standard, reusable proposal content (welcome letter, inclusions schedule,
 // includes/excludes). This is boilerplate shared across offers — the same way
@@ -67,12 +71,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "Roof Trusses",
-    specification: "Engineered prefabricated roof trusses to suit approved plans.",
+    specification:
+      "Engineered prefabricated roof trusses to suit approved plans.",
   },
   {
     group: "Structure & Envelope",
     category: "External Walls",
-    specification: "Render to all elevations — both levels. Arched feature entry included.",
+    specification:
+      "Render to all elevations — both levels. Arched feature entry included.",
   },
   {
     group: "Structure & Envelope",
@@ -85,7 +91,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "Feature Facade",
-    specification: "Entry columns, rendered surrounds, feature cladding per 3D renders.",
+    specification:
+      "Entry columns, rendered surrounds, feature cladding per 3D renders.",
   },
   {
     group: "Structure & Envelope",
@@ -96,12 +103,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Structure & Envelope",
     category: "External Doors",
-    specification: "Feature arched front entry door. All external doors, locks and hardware.",
+    specification:
+      "Feature arched front entry door. All external doors, locks and hardware.",
   },
   {
     group: "Structure & Envelope",
     category: "Garage Door",
-    specification: "Double panel-lift garage door — remote operated — facade matched.",
+    specification:
+      "Double panel-lift garage door — remote operated — facade matched.",
   },
   {
     group: "Structure & Envelope",
@@ -125,7 +134,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Kitchen — Luxury",
     category: "Splashback",
-    specification: "Full-height tiled splashback above cooktop. Stone to match benchtops.",
+    specification:
+      "Full-height tiled splashback above cooktop. Stone to match benchtops.",
   },
   {
     group: "Kitchen — Luxury",
@@ -142,7 +152,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Bathrooms",
     category: "Vanity Benchtops",
-    specification: "Engineered stone tops to all vanities. Choice at colour selection.",
+    specification:
+      "Engineered stone tops to all vanities. Choice at colour selection.",
   },
   {
     group: "Bathrooms",
@@ -158,7 +169,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Bathrooms",
     category: "Tapware",
-    specification: "Quality tapware package — basin mixers, shower sets. All wet areas.",
+    specification:
+      "Quality tapware package — basin mixers, shower sets. All wet areas.",
   },
   {
     group: "Bathrooms",
@@ -168,7 +180,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Internal Doors",
-    specification: "Hollow core internal doors throughout. All door hardware included.",
+    specification:
+      "Hollow core internal doors throughout. All door hardware included.",
   },
   {
     group: "Internal Finishes",
@@ -202,12 +215,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Insulation",
-    specification: "R2.5 wall batts + R4.1 ceiling batts — full thermal and acoustic insulation.",
+    specification:
+      "R2.5 wall batts + R4.1 ceiling batts — full thermal and acoustic insulation.",
   },
   {
     group: "Internal Finishes",
     category: "Skirting",
-    specification: "90mm skirting and 90mm architraves throughout — timber, paint-grade.",
+    specification:
+      "90mm skirting and 90mm architraves throughout — timber, paint-grade.",
   },
   {
     group: "Internal Finishes",
@@ -218,7 +233,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Internal Finishes",
     category: "Flooring — Bedrooms",
-    specification: "Timber-look hybrid flooring all bedrooms, rumpus and office.",
+    specification:
+      "Timber-look hybrid flooring all bedrooms, rumpus and office.",
   },
   {
     group: "Electrical & HVAC",
@@ -230,7 +246,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Lighting",
-    specification: "LED downlights throughout. Feature pendant provisions to kitchen and dining.",
+    specification:
+      "LED downlights throughout. Feature pendant provisions to kitchen and dining.",
   },
   {
     group: "Electrical & HVAC",
@@ -242,12 +259,14 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
   {
     group: "Electrical & HVAC",
     category: "Hot Water",
-    specification: "2 × 31L gas continuous flow hot water systems — BASIX compliant.",
+    specification:
+      "2 × 31L gas continuous flow hot water systems — BASIX compliant.",
   },
   {
     group: "Electrical & HVAC",
     category: "Rainwater Tank",
-    specification: "2,000L rainwater tank — toilet/laundry reuse. BASIX compliance.",
+    specification:
+      "2,000L rainwater tank — toilet/laundry reuse. BASIX compliance.",
   },
   {
     group: "External & Completion",
@@ -276,7 +295,8 @@ export const STANDARD_INCLUSIONS_SCHEDULE: readonly OfferInclusionRow[] = [
     group: "External & Completion",
     category: "HBCF",
     summary: "HBCF home warranty insurance",
-    specification: "Home Building Compensation Fund warranty insurance — included. iCare registered.",
+    specification:
+      "Home Building Compensation Fund warranty insurance — included. iCare registered.",
   },
   // These two were sold on the Investment Summary page but had no schedule row
   // of their own, so collapsing the two lists would have quietly dropped them
@@ -333,21 +353,28 @@ export const OFFER_EXCLUDES_BULLETS: readonly string[] = [
 export function buildWelcomeParagraphs(
   job: OfferWorkspaceJob,
 ): readonly string[] {
-  const totalArea = Math.round(
-    job.groundFloorSqm +
-      job.firstFloorSqm +
-      job.garageSqm +
-      job.alfrescoPorchSqm +
-      job.porchSqm +
-      job.grannyFlatSqm,
-  );
+  // The same total the cover and the Tender print; this one left out balcony and
+  // void, so the letter quoted a smaller home than the page before it.
+  // Up to two decimals, like formatArea on the cover and in the Tender, so a
+  // 435.5 m² home is not quoted here as 436.
+  const totalAreaSqm = rawTotalAreaSqm(offerAreaBasisFromJob(job));
+  const totalArea =
+    totalAreaSqm > 0
+      ? new Intl.NumberFormat("en-AU", {
+          maximumFractionDigits: 2,
+        }).format(totalAreaSqm)
+      : null;
   // Only assert what we can derive from this job (client, site, area). Specific
   // design features, "photos match your home", and finish guarantees were
   // hard-coded and often wrong (e.g. "double storey" on a single-storey build),
   // so they're omitted rather than promised.
+  const reviewedLine =
+    totalArea !== null
+      ? `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`
+      : "We have reviewed your plans carefully and we're genuinely excited to build your home with the care a proper custom build deserves.";
   return [
     `Thank you for trusting Royal Constructions to build your forever home at ${shortLocation(job.siteAddress)}. We don't take that lightly.`,
-    `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`,
+    reviewedLine,
     "Every finish described in this proposal is part of your inclusions, locked into the fixed price below.",
     "We are here every step of the way.",
   ];
@@ -359,6 +386,8 @@ function shortLocation(siteAddress: string): string {
   if (parts.length < 2) {
     return siteAddress;
   }
-  const locality = parts[1].trim().replace(/\s+(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b.*$/i, "");
+  const locality = parts[1]
+    .trim()
+    .replace(/\s+(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b.*$/i, "");
   return locality || siteAddress;
 }

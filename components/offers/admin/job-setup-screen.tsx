@@ -1,6 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   buildScopeChanged,
@@ -48,7 +53,8 @@ export function JobSetupScreen() {
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveBuildScope())}
+          onSave={() => dispatch(saveBuildScope()).unwrap()}
+          successMessage="Build scope saved."
         />
       </CardFooter>
     </Card>

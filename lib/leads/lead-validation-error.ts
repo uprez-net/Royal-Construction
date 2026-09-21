@@ -20,6 +20,8 @@ export class LeadValidationError extends Error {
 }
 
 /** Type guard that survives the module boundary better than instanceof. */
-export function isLeadValidationError(error: unknown): error is LeadValidationError {
+export function isLeadValidationError(
+  error: unknown,
+): error is LeadValidationError {
   return error instanceof Error && error.name === "LeadValidationError";
 }

@@ -113,10 +113,12 @@ export function UploadButton({
         fileType: blob.contentType,
         filesize: file.size,
         url: blob.url,
+        storagePath: null,
         uploadedBy: "current_user", // Replace with actual user info if available
         createdAt: new Date(),
         updatedAt: new Date(),
         incidentId: incidentId ?? null,
+        complianceDocumentId: null,
       } satisfies DBFile;
     } catch (error) {
       console.error("Error uploading file:", error);

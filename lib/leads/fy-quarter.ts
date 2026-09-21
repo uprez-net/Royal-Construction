@@ -65,7 +65,14 @@ function wallClockAt(instant: Date): WallClock {
 /** Sydney's UTC offset, in ms, at a given instant. */
 function offsetMsAt(instant: Date): number {
   const wc = wallClockAt(instant);
-  const asIfUtc = Date.UTC(wc.year, wc.month - 1, wc.day, wc.hour, wc.minute, wc.second);
+  const asIfUtc = Date.UTC(
+    wc.year,
+    wc.month - 1,
+    wc.day,
+    wc.hour,
+    wc.minute,
+    wc.second,
+  );
   return asIfUtc - instant.getTime();
 }
 
@@ -82,12 +89,19 @@ function sydneyMidnight(year: number, month: number, day: number): Date {
 }
 
 /** Calendar year and month (1-12) on which a given FY quarter begins. */
-function quarterStartMonth(fy: number, quarter: FyQuarter): { year: number; month: number } {
+function quarterStartMonth(
+  fy: number,
+  quarter: FyQuarter,
+): { year: number; month: number } {
   switch (quarter) {
-    case 1: return { year: fy - 1, month: 7 };
-    case 2: return { year: fy - 1, month: 10 };
-    case 3: return { year: fy, month: 1 };
-    case 4: return { year: fy, month: 4 };
+    case 1:
+      return { year: fy - 1, month: 7 };
+    case 2:
+      return { year: fy - 1, month: 10 };
+    case 3:
+      return { year: fy, month: 1 };
+    case 4:
+      return { year: fy, month: 4 };
   }
 }
 
@@ -95,7 +109,10 @@ export function formatFyQuarter(fy: number, quarter: FyQuarter): string {
   return `FY${fy} Q${quarter}`;
 }
 
-export function fyQuarterBounds(fy: number, quarter: FyQuarter): FyQuarterBounds {
+export function fyQuarterBounds(
+  fy: number,
+  quarter: FyQuarter,
+): FyQuarterBounds {
   const from = quarterStartMonth(fy, quarter);
   const next =
     quarter === 4

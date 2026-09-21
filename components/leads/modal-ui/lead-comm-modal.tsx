@@ -15,7 +15,7 @@ export default function LeadCommModal({
   lead,
   isOpen,
   onClose,
-  appendEmailToLead
+  appendEmailToLead,
 }: LeadCommModalProps) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   return (
@@ -26,7 +26,9 @@ export default function LeadCommModal({
       maxWidthClass="max-w-[720px]"
       isFullScreenable
       isFullScreen={isFullScreen}
-      onToggleFullScreen={(minimize) => setIsFullScreen(minimize ? false : true)}
+      onToggleFullScreen={(minimize) =>
+        setIsFullScreen(minimize ? false : true)
+      }
     >
       {/* Emails */}
       <LeadEmailSection

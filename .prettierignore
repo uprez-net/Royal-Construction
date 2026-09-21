@@ -1,0 +1,21 @@
+# Documentation is intentionally maintained outside Prettier.
+**/*.md
+**/*.mdx
+
+# Hidden files and directories include generated output and local tooling.
+**/.*
+
+# Only GitHub automation YAML is in scope.
+**/*.yml
+**/*.yaml
+!/.github/
+!/.github/**/*.yml
+!/.github/**/*.yaml
+
+# Prettier has no project-approved parser for these formats.
+**/*.prisma
+**/*.sql
+**/*.toml
+
+# Documentation, mocks, and related assets are intentionally maintained outside Prettier.
+docs/

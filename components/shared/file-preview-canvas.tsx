@@ -129,6 +129,8 @@ interface SheetData {
 export interface FilePreviewCanvasProps {
   /** The single source of truth for content — everything is derived from this URL. */
   url: string;
+  fileName?: string | null;
+  fileType?: string | null;
   /**
    * Called once, right when the user dismisses the preview (✕ button,
    * Escape key, or clicking the blurred backdrop). This component only
@@ -144,8 +146,25 @@ export interface FilePreviewCanvasProps {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-function detectFileKind(url: string): FileKind {
-  const path = url.split("?")[0].split("#")[0];
+function detectFileKind(
+  url: string,
+  fileName?: string | null,
+  fileType?: string | null,
+): FileKind {
+  const mime = fileType?.toLowerCase() ?? "";
+  if (mime === "application/pdf") return "pdf";
+  if (
+    mime ===
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  )
+    return "docx";
+  if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "application/vnd.ms-excel.sheet.macroenabled.12"
+  )
+    return "xlsx";
+  const path = (fileName || url).split("?")[0].split("#")[0];
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "pdf") return "pdf";
   if (ext === "docx") return "docx";
@@ -155,7 +174,8 @@ function detectFileKind(url: string): FileKind {
   return "unsupported";
 }
 
-function getFileName(url: string): string {
+function getFileName(url: string, fileName?: string | null): string {
+  if (fileName) return fileName;
   try {
     const path = url.split("?")[0].split("#")[0];
     return decodeURIComponent(
@@ -415,10 +435,18 @@ function XlsxViewer({ sheet, zoom }: { sheet: SheetData; zoom: number }) {
 
 export default function FilePreviewCanvas({
   url,
+  fileName,
+  fileType,
   onClose,
 }: FilePreviewCanvasProps) {
-  const kind = React.useMemo(() => detectFileKind(url), [url]);
-  const fileName = React.useMemo(() => getFileName(url), [url]);
+  const kind = React.useMemo(
+    () => detectFileKind(url, fileName, fileType),
+    [url, fileName, fileType],
+  );
+  const displayFileName = React.useMemo(
+    () => getFileName(url, fileName),
+    [url, fileName],
+  );
   const meta = FILE_META[kind];
 
   const [open, setOpen] = React.useState(true);
@@ -521,7 +549,7 @@ export default function FilePreviewCanvas({
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;
-      a.download = fileName;
+      a.download = displayFileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -529,7 +557,7 @@ export default function FilePreviewCanvas({
     } catch {
       window.open(url, "_blank", "noopener,noreferrer");
     }
-  }, [url, fileName]);
+  }, [url, displayFileName]);
 
   const handlePrint = React.useCallback(() => {
     const iframe = document.createElement("iframe");
@@ -565,7 +593,7 @@ export default function FilePreviewCanvas({
             )}
           >
             <DialogPrimitive.Title className="sr-only">
-              {fileName} preview
+              {displayFileName} preview
             </DialogPrimitive.Title>
 
             {/* Header / toolbar */}
@@ -573,9 +601,9 @@ export default function FilePreviewCanvas({
               <meta.Icon className={cn("h-4 w-4 shrink-0", meta.accent)} />
               <span
                 className="truncate text-sm font-medium text-foreground"
-                title={fileName}
+                title={displayFileName}
               >
-                {fileName}
+                {displayFileName}
               </span>
               <Badge
                 variant="secondary"

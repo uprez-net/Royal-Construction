@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import type { LifecycleAction } from "@/lib/offer/lifecycle-busy";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   getPaymentScheduleTotalPct,
@@ -16,7 +17,10 @@ import {
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import {
+  buildOfferPrintTemplateData,
+  getVisibleExclusions,
+} from "@/lib/offer/workspace-print-template";
 import { FileText, Info, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
@@ -33,6 +37,8 @@ import {
   type OfferSignerStatus,
 } from "@/lib/offer/signing-status";
 import { EnvelopeSendConfirm, SigningTracker } from "./offer-workspace-signing";
+import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
+import { cn } from "@/lib/utils";
 
 type TenderPanelProps = {
   readonly status: OfferWorkspaceStatus;
@@ -41,6 +47,9 @@ type TenderPanelProps = {
   readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
+  // Listed on the preview, so the estimator sees the sums the documents
+  // disclose before the Tender goes to DocuSign.
+  readonly allowances: readonly OfferWorkspaceScopeItem[];
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly onPaymentScheduleChange: (
@@ -52,6 +61,9 @@ type TenderPanelProps = {
   readonly tenderSendError?: string | null;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
+  // The lifecycle action running, or null. Every lifecycle button disables
+  // while one runs, since the workspace would drop the click.
+  readonly lifecycleBusy: LifecycleAction | null;
 };
 
 export function TenderPanel({
@@ -60,6 +72,7 @@ export function TenderPanel({
   signerStatuses,
   customerPrice,
   draft,
+  allowances,
   exclusions,
   paymentSchedule,
   onPaymentScheduleChange,
@@ -69,6 +82,7 @@ export function TenderPanel({
   tenderSendError = null,
   onRecallTender,
   onMarkTenderSigned,
+  lifecycleBusy,
 }: TenderPanelProps) {
   const isAgreed = status === "agreed";
   const isDraft = status === "tender_draft";
@@ -107,7 +121,7 @@ export function TenderPanel({
             title="Tender document"
           />
         </CardHeader>
-        <CardContent className="grid gap-4 pt-4">
+        <CardContent className="grid gap-4">
           <TenderStatusBanner
             isAgreed={isAgreed}
             isDeclined={isDeclined}
@@ -118,6 +132,7 @@ export function TenderPanel({
 
           {hasTender ? (
             <TenderPreview
+              allowances={allowances}
               customerPrice={customerPrice}
               draft={draft}
               exclusions={exclusions}
@@ -133,12 +148,14 @@ export function TenderPanel({
             isDraft={isDraft}
             isSent={isSent}
             isSigned={isSigned}
-            customerName={formatOwnerNamesLine(job.owners ?? []) || job.clientNames}
+            customerName={
+              formatOwnerNamesLine(job.owners ?? []) || job.clientNames
+            }
             signers={collectOfferSigners(job.owners ?? []).map((s) => ({
-            label: offerSignerLabel(s),
-            email: s.signatory.email,
-          }))}
-          signerStatuses={signerStatuses}
+              label: offerSignerLabel(s),
+              email: s.signatory.email,
+            }))}
+            signerStatuses={signerStatuses}
             contractValueIncGst={customerPrice.selectedContractValueIncGst}
             offerReference={formatOfferReference(job.reference, job.revision)}
             scheduleBalanced={scheduleBalanced}
@@ -149,6 +166,7 @@ export function TenderPanel({
             onMarkTenderSigned={onMarkTenderSigned}
             onRecallTender={onRecallTender}
             onSendTender={onSendTender}
+            lifecycleBusy={lifecycleBusy}
           />
         </CardContent>
       </Card>
@@ -230,6 +248,7 @@ function TenderActions({
   onSendTender,
   onRecallTender,
   onMarkTenderSigned,
+  lifecycleBusy,
 }: {
   readonly isAgreed: boolean;
   readonly isDeclined: boolean;
@@ -241,7 +260,10 @@ function TenderActions({
   // DocuSign recipient set. The email is what joins a row to its persisted
   // EnvelopeSignature — labels are not unique, emails are (enforced by
   // collectOwnerIssues).
-  readonly signers: readonly { readonly label: string; readonly email: string }[];
+  readonly signers: readonly {
+    readonly label: string;
+    readonly email: string;
+  }[];
   // Per-recipient status from the Connect webhook. Empty before the envelope is
   // sent, in which case rows fall back to their routing-derived state.
   readonly signerStatuses: readonly OfferSignerStatus[];
@@ -255,6 +277,7 @@ function TenderActions({
   readonly onSendTender: () => void;
   readonly onRecallTender: () => void;
   readonly onMarkTenderSigned: () => void;
+  readonly lifecycleBusy: LifecycleAction | null;
 }) {
   const [confirming, setConfirming] = useState(false);
 
@@ -307,8 +330,8 @@ function TenderActions({
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           Sending creates a DocuSign envelope from the generated Tender PDF —
-          signature tabs auto-place onto the document&apos;s anchor strings,
-          the customer signs first, then the builder counter-signs. The Connect
+          signature tabs auto-place onto the document&apos;s anchor strings, the
+          customer signs first, then the builder counter-signs. The Connect
           webhook records each signature and files the executed PDF.
         </p>
       )}
@@ -316,9 +339,11 @@ function TenderActions({
       <div className="flex flex-wrap gap-2">
         {isAgreed ? (
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+            aria-busy={lifecycleBusy === "tender_draft" || undefined}
+            disabled={lifecycleBusy !== null}
             size="sm"
             type="button"
+            variant="royal"
             onClick={onGenerateTender}
           >
             <FileText className="size-4" aria-hidden="true" />
@@ -328,16 +353,14 @@ function TenderActions({
 
         {isDraft ? (
           <Button
-            className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
             disabled={sending || confirming || !scheduleBalanced}
             size="sm"
             type="button"
+            variant="royal"
             onClick={() => setConfirming(true)}
           >
             <Send className="size-4" aria-hidden="true" />
-            {sending
-              ? "Sending envelope…"
-              : "Send for signature via DocuSign"}
+            {sending ? "Sending envelope…" : "Send for signature via DocuSign"}
           </Button>
         ) : null}
 
@@ -349,9 +372,11 @@ function TenderActions({
                 PDF (issue #90); the server action also rejects it there. */}
             {process.env.NODE_ENV === "development" ? (
               <Button
-                className="bg-royal-gold text-primary-foreground hover:bg-royal-gold-dark"
+                aria-busy={lifecycleBusy === "tender_signed" || undefined}
+                disabled={lifecycleBusy !== null}
                 size="sm"
                 type="button"
+                variant="royal"
                 onClick={onMarkTenderSigned}
               >
                 <ShieldCheck className="size-4" aria-hidden="true" />
@@ -359,6 +384,8 @@ function TenderActions({
               </Button>
             ) : null}
             <Button
+              aria-busy={lifecycleBusy === "recall-tender" || undefined}
+              disabled={lifecycleBusy !== null}
               size="sm"
               type="button"
               variant="outline"
@@ -403,6 +430,7 @@ function TenderActions({
 }
 
 function TenderPreview({
+  allowances,
   job,
   customerPrice,
   draft,
@@ -410,6 +438,7 @@ function TenderPreview({
   paymentSchedule,
   state,
 }: {
+  readonly allowances: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
@@ -421,14 +450,33 @@ function TenderPreview({
   // Render every signer from owners[] (the exact DocuSign recipient set) — not
   // the legacy primary/secondary projection, which showed a company owner as one
   // "Customer — <company>" line and dropped its directors.
-  const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
+  const ownerNamesLine =
+    formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
   const signers = collectOfferSigners(job.owners ?? []);
   // Same resolver the tender PDF uses. This previously treated the draft
   // bullets as an OVERRIDE that suppressed the Scope items, so the on-screen
   // tender showed a shorter exclusion list than the document it represents.
   const exclusionLines = getVisibleExclusions(draft, exclusions);
+  // The allowances the signed TENDER discloses, from the builder that prints
+  // them, so this list and that page agree on which sums show and how each
+  // amount reads. Only scopeRows is read.
+  const allowanceRows = buildOfferPrintTemplateData({
+    allowances,
+    customerPrice,
+    draft,
+    exclusions,
+    job,
+    lines: [],
+    paymentSchedule,
+    priceAdjustmentLabel: "",
+    standardPriceIncGst: null,
+  }).tenderScopeRows;
   const stateLabel =
-    state === "signed" ? "Executed" : state === "sent" ? "Out for signature" : "Draft";
+    state === "signed"
+      ? "Executed"
+      : state === "sent"
+        ? "Out for signature"
+        : "Draft";
 
   return (
     <article className="grid gap-4 rounded-lg border border-border bg-background p-4">
@@ -437,9 +485,9 @@ function TenderPreview({
           <p className="font-mono text-xs text-muted-foreground">
             {formatOfferReference(job.reference, job.revision)}
           </p>
-          <h3 className="font-heading text-lg font-semibold">
+          <h4 className="font-heading text-lg font-semibold">
             Tender — fixed price building works
-          </h3>
+          </h4>
           <p className="text-sm text-muted-foreground">
             {ownerNamesLine} · {job.siteAddress}
           </p>
@@ -462,11 +510,32 @@ function TenderPreview({
           Summary bullets — this showed the bullets and so misrepresented the
           document. */}
       <TenderList
-        emptyLabel="No inclusions captured yet."
+        emptyLabel="No inclusions captured yet. Add them in the inclusion schedule on the Offer document step."
         items={draft.inclusionSchedule.map((entry) => entry.spec)}
         numbered
         title="Inclusions"
       />
+      {/* Only when there is something to disclose, as on the printed offer. */}
+      {allowanceRows.length > 0 ? (
+        <div>
+          <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Allowances</p>
+          <ul className="grid gap-1.5 text-[13px]">
+            {allowanceRows.map((row) => (
+              <li key={row.id}>
+                <span className="font-medium">{row.label}</span>
+                {" · "}
+                <span className="font-mono">{row.amountLabel}</span>
+                {row.variationRule ? (
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {row.variationRule}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <TenderList
         emptyLabel="No exclusions listed."
         items={exclusionLines}
@@ -474,9 +543,7 @@ function TenderPreview({
       />
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Payment schedule
-        </p>
+        <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Payment schedule</p>
         <div className="overflow-hidden rounded-lg border border-border/70">
           <table className="w-full text-[13px]">
             <tbody>
@@ -544,11 +611,9 @@ function TenderList({
 }) {
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </p>
+      <p className={cn("mb-2", GROUP_HEADING_CLASS)}>{title}</p>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground/80">{emptyLabel}</p>
+        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (
         <ol className="grid gap-1.5 text-[13px]">
           {items.map((item, index) => (

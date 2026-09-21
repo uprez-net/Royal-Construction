@@ -5,6 +5,7 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -17,8 +18,10 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   allowanceUpserted,
   allowanceRemoved,
+  allowanceRestored,
   exclusionUpserted,
   exclusionRemoved,
+  exclusionRestored,
   saveOfferScope,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import type {
@@ -38,6 +41,10 @@ import {
   Coins,
 } from "lucide-react";
 import { SaveChangesButton } from "./shared/save-changes-button";
+import {
+  ALLOWANCE_UNDO_TOAST_ID,
+  EXCLUSION_UNDO_TOAST_ID,
+} from "./shared/undo-toast-ids";
 
 const ALLOWANCE_CATEGORIES: AllowanceCategory[] = [
   "package",
@@ -77,6 +84,37 @@ export function OfferScopePage() {
   const dirty = useAppSelector((s) => s.adminOfferContent.dirty.offerScope);
   const saving = useAppSelector((s) => s.adminOfferContent.saving.offerScope);
   const error = useAppSelector((s) => s.adminOfferContent.error.offerScope);
+  const missingVariationRule = allowances.some(
+    (allowance) => allowance.variationRule.trim().length === 0,
+  );
+
+  const removeAllowance = (id: string) => {
+    const index = allowances.findIndex((a) => a.id === id);
+    if (index === -1) return;
+    const item = allowances[index];
+    dispatch(allowanceRemoved(id));
+    toast("Allowance removed", {
+      id: ALLOWANCE_UNDO_TOAST_ID,
+      action: {
+        label: "Undo",
+        onClick: () => dispatch(allowanceRestored({ item, index })),
+      },
+    });
+  };
+
+  const removeExclusion = (id: string) => {
+    const index = exclusions.findIndex((e) => e.id === id);
+    if (index === -1) return;
+    const item = exclusions[index];
+    dispatch(exclusionRemoved(id));
+    toast("Exclusion removed", {
+      id: EXCLUSION_UNDO_TOAST_ID,
+      action: {
+        label: "Undo",
+        onClick: () => dispatch(exclusionRestored({ item, index })),
+      },
+    });
+  };
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -99,56 +137,61 @@ export function OfferScopePage() {
             ),
             text: "These allowances appear on the Offer document. Items exceeding their allowance trigger a variation per the rule specified.",
           }}
-          singular="Allowance"
           addLabel="Add Allowance"
           emptyLabel="No allowances yet. Add prime-cost items to show on every offer."
           items={allowances}
           onAdd={() => dispatch(allowanceUpserted(newAllowance()))}
-          onRemove={(id) => dispatch(allowanceRemoved(id))}
           renderItem={(allowance) => (
             <AllowanceRow
               key={allowance.id}
               allowance={allowance}
               onChange={(next) => dispatch(allowanceUpserted(next))}
-              onRemove={() => dispatch(allowanceRemoved(allowance.id))}
+              onRemove={() => removeAllowance(allowance.id)}
             />
           )}
         />
 
         <ScopeSection
-          icon={<Ban className="size-4 text-primary" aria-hidden="true" />}
+          icon={
+            <Ban
+              className="size-4 text-royal-gold-ink-text"
+              aria-hidden="true"
+            />
+          }
           title="Exclusions"
           banner={{
             tone: "info",
             icon: <Info className="size-4 shrink-0" aria-hidden="true" />,
             text: "Items explicitly excluded from the fixed-price scope. These clarify what the client should not expect in the base contract.",
           }}
-          singular="Exclusion"
           addLabel="Add Exclusion"
           emptyLabel="No exclusions yet. Add anything outside the fixed-price building scope."
           items={exclusions}
           onAdd={() => dispatch(exclusionUpserted(newExclusion()))}
-          onRemove={(id) => dispatch(exclusionRemoved(id))}
           renderItem={(exclusion) => (
             <ExclusionRow
               key={exclusion.id}
               exclusion={exclusion}
               onChange={(next) => dispatch(exclusionUpserted(next))}
-              onRemove={() => dispatch(exclusionRemoved(exclusion.id))}
+              onRemove={() => removeExclusion(exclusion.id)}
             />
           )}
         />
       </CardContent>
-      {error && (
+      {(missingVariationRule || error) && (
         <p role="alert" className="px-6 text-sm text-destructive">
-          {error}
+          {missingVariationRule
+            ? "Every allowance needs a variation rule."
+            : error}
         </p>
       )}
       <CardFooter className="justify-end">
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
-          onSave={() => dispatch(saveOfferScope())}
+          disabled={missingVariationRule}
+          onSave={() => dispatch(saveOfferScope()).unwrap()}
+          successMessage="Allowances and exclusions saved."
         />
       </CardFooter>
     </Card>
@@ -163,12 +206,10 @@ interface ScopeSectionProps<T extends { id: string }> {
     icon: React.ReactNode;
     text: string;
   };
-  singular: string;
   addLabel: string;
   emptyLabel: string;
   items: T[];
   onAdd: () => void;
-  onRemove: (id: string) => void;
   renderItem: (item: T, index: number) => React.ReactNode;
 }
 
@@ -249,7 +290,7 @@ function DeleteButton({
   return (
     <button
       aria-label={label}
-      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+      className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
       onClick={onRemove}
       type="button"
     >
@@ -321,6 +362,8 @@ function AllowanceRow({
               onChange({ ...allowance, variationRule: e.target.value })
             }
             aria-label="Variation rule"
+            aria-required
+            required
           />
         </label>
       </div>

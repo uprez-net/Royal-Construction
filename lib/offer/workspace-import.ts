@@ -60,9 +60,13 @@ export function parseRoyalQuoteWorkbook(
   const coverRows = rawRows(workbook, "COVER");
   const settingsRows = rawRows(workbook, "SETTINGS");
   const costLines =
-    quoteRows.length > 0 ? parseV2QuoteRows(quoteRows) : parseSampleQuoteRows(sampleRows);
+    quoteRows.length > 0
+      ? parseV2QuoteRows(quoteRows)
+      : parseSampleQuoteRows(sampleRows);
   const { areaBasis, areaCalculator } =
-    coverRows.length > 0 ? parseCoverArea(coverRows) : parseAreaCalculator(areaRows);
+    coverRows.length > 0
+      ? parseCoverArea(coverRows)
+      : parseAreaCalculator(areaRows);
   const formulaErrors = [
     ...findFormulaErrors("SAMPLE QUOTE", sampleDisplayRows),
     ...findFormulaErrors("costing report", costingDisplayRows),
@@ -281,7 +285,11 @@ function inferStageCode(itemName: string): OfferWorkspaceCostLine["stageCode"] {
   if (/air conditioning|hvac/.test(lowerName)) {
     return "H";
   }
-  if (/insulation|gyprock|stair|door|lock|carpenter|wardrobe|floor/.test(lowerName)) {
+  if (
+    /insulation|gyprock|stair|door|lock|carpenter|wardrobe|floor/.test(
+      lowerName,
+    )
+  ) {
     return "I";
   }
   if (/waterproof|tile|tiling|sand|cement/.test(lowerName)) {
@@ -484,10 +492,7 @@ function parseCoverArea(rows: readonly (readonly unknown[])[]): ParsedArea {
         [getCell(rows, 20, 1)],
         EMPTY_AREA_BASIS.alfrescoSqm,
       ),
-      porchSqm: firstNumber(
-        [getCell(rows, 21, 1)],
-        EMPTY_AREA_BASIS.porchSqm,
-      ),
+      porchSqm: firstNumber([getCell(rows, 21, 1)], EMPTY_AREA_BASIS.porchSqm),
     },
     areaCalculator: INITIAL_AREA_CALCULATOR,
   };
@@ -503,15 +508,33 @@ function parseAreaCalculator(
   // schedule configuration.
   return {
     areaBasis: {
-      groundFloorSqm: firstNumber([getCell(rows, 2, 2)], EMPTY_AREA_BASIS.groundFloorSqm),
-      firstFloorSqm: firstNumber([getCell(rows, 2, 5)], EMPTY_AREA_BASIS.firstFloorSqm),
-      alfrescoSqm: firstNumber([getCell(rows, 3, 2)], EMPTY_AREA_BASIS.alfrescoSqm),
+      groundFloorSqm: firstNumber(
+        [getCell(rows, 2, 2)],
+        EMPTY_AREA_BASIS.groundFloorSqm,
+      ),
+      firstFloorSqm: firstNumber(
+        [getCell(rows, 2, 5)],
+        EMPTY_AREA_BASIS.firstFloorSqm,
+      ),
+      alfrescoSqm: firstNumber(
+        [getCell(rows, 3, 2)],
+        EMPTY_AREA_BASIS.alfrescoSqm,
+      ),
       porchSqm: firstNumber([getCell(rows, 4, 2)], EMPTY_AREA_BASIS.porchSqm),
       garageSqm: firstNumber([getCell(rows, 5, 2)], EMPTY_AREA_BASIS.garageSqm),
-      grannyFlatSqm: firstNumber([getCell(rows, 6, 2)], EMPTY_AREA_BASIS.grannyFlatSqm),
-      balconySqm: firstNumber([getCell(rows, 7, 5)], EMPTY_AREA_BASIS.balconySqm),
+      grannyFlatSqm: firstNumber(
+        [getCell(rows, 6, 2)],
+        EMPTY_AREA_BASIS.grannyFlatSqm,
+      ),
+      balconySqm: firstNumber(
+        [getCell(rows, 7, 5)],
+        EMPTY_AREA_BASIS.balconySqm,
+      ),
       voidSqm: firstNumber([getCell(rows, 8, 5)], EMPTY_AREA_BASIS.voidSqm),
-      kitchenSqm: firstNumber([getCell(rows, 9, 5)], EMPTY_AREA_BASIS.kitchenSqm)
+      kitchenSqm: firstNumber(
+        [getCell(rows, 9, 5)],
+        EMPTY_AREA_BASIS.kitchenSqm,
+      ),
     },
     areaCalculator: {
       ...INITIAL_AREA_CALCULATOR,

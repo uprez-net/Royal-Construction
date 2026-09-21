@@ -1,7 +1,19 @@
-import { generateText, NoObjectGeneratedError, Output, TypeValidationError, NoOutputGeneratedError } from "ai";
+import {
+  generateText,
+  NoObjectGeneratedError,
+  Output,
+  TypeValidationError,
+  NoOutputGeneratedError,
+} from "ai";
 import { gateway } from "@/lib/model";
-import { projectExtractionSchema, type ProjectExtractionData } from "@/types/project-extraction";
-import { buildTenderExtractionPrompt, TENDER_EXTRACTION_SYSTEM_PROMPT } from "./tender-extraction-prompts";
+import {
+  projectExtractionSchema,
+  type ProjectExtractionData,
+} from "@/types/project-extraction";
+import {
+  buildTenderExtractionPrompt,
+  TENDER_EXTRACTION_SYSTEM_PROMPT,
+} from "./tender-extraction-prompts";
 
 export type TenderExtractionChunkInput = {
   tenderMarkdown: string;
@@ -16,7 +28,6 @@ export type TenderExtractionChunkResult = {
   message: string;
   ok: boolean;
 };
-
 
 export async function handleTenderExtractionGeneration(
   input: TenderExtractionChunkInput,
@@ -37,7 +48,11 @@ export async function handleTenderExtractionGeneration(
       ok: true,
     };
   } catch (error) {
-    if (NoObjectGeneratedError.isInstance(error) || TypeValidationError.isInstance(error) || NoOutputGeneratedError.isInstance(error)) {
+    if (
+      NoObjectGeneratedError.isInstance(error) ||
+      TypeValidationError.isInstance(error) ||
+      NoOutputGeneratedError.isInstance(error)
+    ) {
       return {
         extraction: projectExtractionSchema.parse({}),
         message: `Structured extraction was incomplete: ${error.message}`,

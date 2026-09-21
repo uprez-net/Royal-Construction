@@ -64,9 +64,9 @@ function toDateInputValue(value: Date | string | null | undefined) {
 
 const statusOptions: { label: string; value: MilestoneStatus }[] = [
   { label: "Pending", value: "PENDING" },
-  { label: "In Progress", value: "ACTIVE" },
-  { label: "Completed", value: "DONE" },
-  { label: "Not Required", value: "NOT_REQUIRED" },
+  { label: "Active", value: "ACTIVE" },
+  { label: "Done", value: "DONE" },
+  { label: "Not required", value: "NOT_REQUIRED" },
 ];
 
 const STATE_MACHES: Record<MilestoneStatus, MilestoneStatus[]> = {
@@ -144,6 +144,7 @@ export default function UpdateMilestoneModal({
 
     return {
       status: currentStatus,
+      targetDate: toDateInputValue(milestone?.targetDate),
       startDate: toDateInputValue(milestone?.startDate),
       actualDate:
         toDateInputValue(milestone?.actualDate) ??
@@ -252,13 +253,13 @@ export default function UpdateMilestoneModal({
           ...validatedData.data,
         }),
       ).unwrap();
-      toast.success("Milestone updated successfully");
+      toast.success("Activity updated");
       onClose();
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Failed to update milestone. Please try again.";
+          : "Failed to update activity. Please try again.";
       setSubmitError(message);
       toast.error(message);
       console.error("Error updating milestone:", error);
@@ -270,11 +271,11 @@ export default function UpdateMilestoneModal({
       <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[18px] border border-border/80 bg-card p-0 shadow-lg sm:max-w-156">
         <DialogHeader className="border-b border-border/70 px-6 py-5">
           <DialogTitle className="text-lg font-semibold text-foreground">
-            Update milestone status
+            Update activity
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Move the milestone forward with the dates and spend required for its
-            status. Fields marked * are required.
+            Set the target date, and the dates and spend its status requires.
+            Fields marked * are required.
           </DialogDescription>
         </DialogHeader>
 
@@ -345,6 +346,75 @@ export default function UpdateMilestoneModal({
               <p id="status-hint" className="text-xs text-muted-foreground">
                 Only the statuses this milestone can move to are selectable.
               </p>
+            </div>
+
+            {/*
+              Always editable, whatever the status. Activities seeded from the
+              template carry a placeholder date — project start plus four days
+              per position — so until someone sets the real one, "overdue" on
+              the milestones tab counts against a date nobody chose.
+            */}
+            <div className="space-y-1.5">
+              <Label htmlFor="targetDate" className={labelClassName}>
+                Target date
+              </Label>
+              <Popover modal>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="targetDate"
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      inputClassName,
+                      "w-full justify-start text-left font-normal",
+                      !formState.targetDate && "text-muted-foreground",
+                    )}
+                    aria-invalid={Boolean(fieldErrors.targetDate)}
+                    aria-describedby={
+                      fieldErrors.targetDate
+                        ? "targetDate-error"
+                        : "targetDate-hint"
+                    }
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formState.targetDate ? (
+                      format(new Date(formState.targetDate), "PPP")
+                    ) : (
+                      <span>Pick a date</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={
+                      formState.targetDate
+                        ? new Date(formState.targetDate)
+                        : undefined
+                    }
+                    onSelect={(date) =>
+                      handleFormChange(
+                        "targetDate",
+                        date ? format(date, "yyyy-MM-dd") : "",
+                      )
+                    }
+                    captionLayout="dropdown"
+                  />
+                </PopoverContent>
+              </Popover>
+              {fieldErrors.targetDate ? (
+                <p id="targetDate-error" className="text-xs text-destructive">
+                  {fieldErrors.targetDate}
+                </p>
+              ) : (
+                <p
+                  id="targetDate-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  When this activity is due. Drives the due and overdue markers
+                  on the Stage schedule.
+                </p>
+              )}
             </div>
 
             {(formState.status === "ACTIVE" || formState.status === "DONE") && (
@@ -552,7 +622,7 @@ export default function UpdateMilestoneModal({
               ) : (
                 <Edit className="mr-1.5 size-4" aria-hidden="true" />
               )}
-              {isPending ? "Updating milestone…" : "Update milestone"}
+              {isPending ? "Updating activity…" : "Update activity"}
             </Button>
           </div>
         </form>

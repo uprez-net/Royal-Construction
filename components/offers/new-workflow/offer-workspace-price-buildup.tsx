@@ -14,6 +14,7 @@ import {
 import { Calculator } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
+import { FIELD_LABEL_CLASS, FieldLabel } from "./offer-workspace-fields";
 
 type PriceBuildupPanelProps = {
   readonly directTotal: number;
@@ -53,8 +54,10 @@ export function PriceBuildupPanel({
           title="Price build-up"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <CardContent className="grid gap-4">
+        {/* Sized to the step pane, not the viewport: the pane is narrower than
+            the window, so xl:grid-cols-4 squeezed four fields into it. */}
+        <div className="grid gap-3 @xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
           <PercentField
             label="Royal Construction Overhead"
             value={settings.royalConstructionOverheadPct}
@@ -85,9 +88,7 @@ export function PriceBuildupPanel({
         <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                HBCF premium
-              </p>
+              <p className={FIELD_LABEL_CLASS}>HBCF premium</p>
               <p className="text-xs text-muted-foreground">
                 Auto-calculated from Total Contract Value (H01 metro{" "}
                 {hbcfRatePercent}% + GST + stamp ≈ {hbcfEffectivePercent}%)
@@ -150,7 +151,7 @@ export function PriceBuildupPanel({
               strong
             />
             <SummaryRow
-              label="Per sqm"
+              label="Build-up per sqm"
               value={formatCurrency(pricing.perSqm, {
                 maximumFractionDigits: 2,
               })}
@@ -173,9 +174,7 @@ function PercentField({
 }) {
   return (
     <label>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label} %
-      </span>
+      <FieldLabel>{label} %</FieldLabel>
       <Input
         min="0"
         max="100"
@@ -209,9 +208,7 @@ function MoneyField({
 }) {
   return (
     <label>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+      <FieldLabel>{label}</FieldLabel>
       <Input
         min="0"
         placeholder="0"

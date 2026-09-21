@@ -28,8 +28,8 @@ export function FormulaVariablesPanel({
   onChange,
 }: RateConstantsPanelProps) {
   // Merge defaults with admin overrides, filtering out any retired keys that
-  // may still linger in the DB from a previous schema. This guarantees all
-  // 11 current constants are always visible, even before the admin saves.
+  // may still linger in the DB from a previous schema. This guarantees every
+  // key in RATE_CONSTANT_KEYS is always visible, even before the admin saves.
   const entries = RATE_CONSTANT_KEYS.map((key) => [
     key,
     variables[key] ?? DEFAULT_RATE_CONSTANTS[key],
@@ -42,8 +42,8 @@ export function FormulaVariablesPanel({
           Rate constants
         </h4>
         <span className="text-xs text-muted-foreground">
-          Referenced by{" "}
-          <code className="font-mono">priceMode: formula</code> rows
+          Referenced by <code className="font-mono">priceMode: formula</code>{" "}
+          rows
         </span>
       </div>
       {entries.length === 0 ? (

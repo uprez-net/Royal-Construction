@@ -1,14 +1,14 @@
-import type { ReactNode } from "react"
-import Image from "next/image"
+import type { ReactNode } from "react";
+import Image from "next/image";
 
 export function AuthShell({
   title,
   description,
   children,
 }: {
-  title: string
-  description: string
-  children: ReactNode
+  title: string;
+  description: string;
+  children: ReactNode;
 }) {
   return (
     <div className="flex min-h-[calc(100dvh_-_var(--sandbox-banner-height,0px))]">
@@ -31,7 +31,9 @@ export function AuthShell({
             <h1 className="font-heading text-5xl font-semibold leading-[1.1] tracking-tight">
               {title}
             </h1>
-            <p className="mt-5 max-w-sm text-sm leading-6 text-slate-300">{description}</p>
+            <p className="mt-5 max-w-sm text-sm leading-6 text-slate-300">
+              {description}
+            </p>
           </div>
 
           <div className="space-y-5 border-t border-white/15 pt-6">
@@ -43,20 +45,34 @@ export function AuthShell({
                 height={38}
                 className="object-contain invert opacity-50"
               />
-              <span className="text-xs text-slate-400">Master Builders Association NSW</span>
+              <span className="text-xs text-slate-400">
+                Master Builders Association NSW
+              </span>
             </div>
             <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
               <div>
-                <dt className="text-xs font-semibold text-slate-100">Full visibility</dt>
-                <dd className="mt-1.5 text-xs leading-5 text-slate-400">Every job, milestone, and tradie in one place.</dd>
+                <dt className="text-xs font-semibold text-slate-100">
+                  Full visibility
+                </dt>
+                <dd className="mt-1.5 text-xs leading-5 text-slate-400">
+                  Every job, milestone, and tradie in one place.
+                </dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-slate-100">Quote to close</dt>
-                <dd className="mt-1.5 text-xs leading-5 text-slate-400">Capture leads, build quotes, convert without paperwork.</dd>
+                <dt className="text-xs font-semibold text-slate-100">
+                  Quote to close
+                </dt>
+                <dd className="mt-1.5 text-xs leading-5 text-slate-400">
+                  Capture leads, build quotes, convert without paperwork.
+                </dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-slate-100">Built for builders</dt>
-                <dd className="mt-1.5 text-xs leading-5 text-slate-400">Workflows that match how construction actually runs.</dd>
+                <dt className="text-xs font-semibold text-slate-100">
+                  Built for builders
+                </dt>
+                <dd className="mt-1.5 text-xs leading-5 text-slate-400">
+                  Workflows that match how construction actually runs.
+                </dd>
               </div>
             </dl>
           </div>
@@ -77,5 +93,5 @@ export function AuthShell({
         <div className="w-full max-w-md">{children}</div>
       </main>
     </div>
-  )
+  );
 }

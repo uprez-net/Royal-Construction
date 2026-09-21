@@ -18,8 +18,26 @@ export interface ProjectStatusConfig {
 }
 
 const PROJECT_STATUS_CONFIG: Record<string, ProjectStatusConfig> = {
+  // Pre-construction statuses use the pipeline ramp so they read as a
+  // progression toward breaking ground, rather than falling back to a
+  // generic neutral badge.
+  DRAFT: {
+    badge: "bg-[var(--stage-1)] text-foreground",
+    stripe: "bg-[var(--stage-1)]",
+  },
+  COMPLIANCE_STARTED: {
+    badge: "bg-[var(--stage-2)] text-foreground",
+    stripe: "bg-[var(--stage-2)]",
+  },
+  COMPLIANCE_COMPLETED: {
+    badge: "bg-[var(--stage-3)] text-foreground",
+    stripe: "bg-[var(--stage-3)]",
+  },
   ACTIVE: { badge: "bg-info-light text-info-ink", stripe: "bg-info" },
-  ON_TRACK: { badge: "bg-success-light text-success-ink", stripe: "bg-success" },
+  ON_TRACK: {
+    badge: "bg-success-light text-success-ink",
+    stripe: "bg-success",
+  },
   COMPLETED: {
     badge: "bg-success-light text-success-ink",
     stripe: "bg-success",

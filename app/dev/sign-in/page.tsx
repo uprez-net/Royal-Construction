@@ -1,50 +1,53 @@
-"use client"
+"use client";
 
-import { useSignIn } from "@clerk/nextjs/legacy"
-import { useSearchParams } from "next/navigation"
-import { useEffect, useRef } from "react"
-import { Suspense } from "react"
+import { useSignIn } from "@clerk/nextjs/legacy";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { Suspense } from "react";
 
 function DevSignInInner() {
-  const { signIn, setActive, isLoaded } = useSignIn()
-  const params = useSearchParams()
-  const attempted = useRef(false)
+  const { signIn, setActive, isLoaded } = useSignIn();
+  const params = useSearchParams();
+  const attempted = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || attempted.current) return
-    attempted.current = true
+    if (!isLoaded || attempted.current) return;
+    attempted.current = true;
 
-    const token = params.get("token")
-    const redirectUrl = params.get("redirect_url") ?? "/dashboard"
+    const token = params.get("token");
+    const redirectUrl = params.get("redirect_url") ?? "/dashboard";
     const safeRedirectUrl = (() => {
-      const destination = new URL(redirectUrl, window.location.origin)
+      const destination = new URL(redirectUrl, window.location.origin);
       return destination.origin === window.location.origin
         ? destination.href
-        : new URL("/dashboard", window.location.origin).href
-    })()
+        : new URL("/dashboard", window.location.origin).href;
+    })();
 
     if (!token) {
-      window.location.assign(new URL("/sign-in", window.location.origin).href)
-      return
+      window.location.assign(new URL("/sign-in", window.location.origin).href);
+      return;
     }
 
     signIn
       .create({ strategy: "ticket", ticket: token })
       .then(async (attempt) => {
-        if (attempt.status !== "complete") throw new Error(attempt.status ?? "incomplete")
-        await setActive({ session: attempt.createdSessionId })
-        window.location.assign(safeRedirectUrl)
+        if (attempt.status !== "complete")
+          throw new Error(attempt.status ?? "incomplete");
+        await setActive({ session: attempt.createdSessionId });
+        window.location.assign(safeRedirectUrl);
       })
       .catch(() => {
-        window.location.assign(new URL("/sign-in", window.location.origin).href)
-      })
-  }, [isLoaded, signIn, setActive, params])
+        window.location.assign(
+          new URL("/sign-in", window.location.origin).href,
+        );
+      });
+  }, [isLoaded, signIn, setActive, params]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[oklch(0.979_0.006_248.4)]">
       <div className="size-8 animate-spin rounded-full border-2 border-border border-t-[oklch(0.584_0.118_183.6)]" />
     </div>
-  )
+  );
 }
 
 export default function DevSignInPage() {
@@ -52,5 +55,5 @@ export default function DevSignInPage() {
     <Suspense>
       <DevSignInInner />
     </Suspense>
-  )
+  );
 }

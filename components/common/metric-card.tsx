@@ -82,7 +82,9 @@ export function MetricCard({
       })()
     : value;
 
-  const toneClass = tone ? METRIC_TONES[tone] : (iconTone ?? METRIC_TONES.primary);
+  const toneClass = tone
+    ? METRIC_TONES[tone]
+    : (iconTone ?? METRIC_TONES.primary);
 
   return (
     <Card className="overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm">

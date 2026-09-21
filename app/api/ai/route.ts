@@ -12,7 +12,10 @@ import z from "zod";
 // Per-action instructions + sampling config
 // ---------------------------------------------------------------------------
 
-const ACTION_CONFIG: Record<AiAction, { instruction: string; temperature: number }> = {
+const ACTION_CONFIG: Record<
+  AiAction,
+  { instruction: string; temperature: number }
+> = {
   "fix-grammar": {
     instruction:
       "Fix grammar, spelling, and punctuation only. Do not change wording, tone, or meaning beyond what's required to correct errors.",
@@ -78,7 +81,10 @@ function buildUserPrompt(text: string) {
 /** Strips common model artifacts (wrapping quotes, stray code fences). */
 function sanitizeOutput(raw: string) {
   let out = raw.trim();
-  out = out.replace(/^```[\w-]*\n?/, "").replace(/```$/, "").trim();
+  out = out
+    .replace(/^```[\w-]*\n?/, "")
+    .replace(/```$/, "")
+    .trim();
   const isQuoted =
     (out.startsWith('"') && out.endsWith('"')) ||
     (out.startsWith("\u201C") && out.endsWith("\u201D"));
@@ -93,7 +99,10 @@ function sanitizeOutput(raw: string) {
 // ---------------------------------------------------------------------------
 
 function jsonError(message: string, status: number, details?: unknown) {
-  return Response.json({ error: message, ...(details ? { details } : {}) }, { status });
+  return Response.json(
+    { error: message, ...(details ? { details } : {}) },
+    { status },
+  );
 }
 
 function getGatewayErrorResponse(error: unknown) {
@@ -105,7 +114,10 @@ function getGatewayErrorResponse(error: unknown) {
     return jsonError("AI budget limit reached. Please try again later.", 402);
   }
   if (error.statusCode === 429) {
-    return jsonError("AI is busy right now. Please try again in a moment.", 429);
+    return jsonError(
+      "AI is busy right now. Please try again in a moment.",
+      429,
+    );
   }
   return null;
 }
@@ -153,7 +165,10 @@ export async function POST(request: Request) {
 
     const rewritten = sanitizeOutput(result.text);
     if (!rewritten) {
-      console.error("Lead notes AI action returned empty text", { userId, action });
+      console.error("Lead notes AI action returned empty text", {
+        userId,
+        action,
+      });
       return jsonError("AI returned an empty response. Please try again.", 502);
     }
 

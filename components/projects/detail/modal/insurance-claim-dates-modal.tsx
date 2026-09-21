@@ -273,7 +273,9 @@ export default function InsuranceClaimDatesModal({
                         !formState.insuranceClaimStartDate &&
                           "text-muted-foreground",
                       )}
-                      aria-invalid={Boolean(fieldErrors.insuranceClaimStartDate)}
+                      aria-invalid={Boolean(
+                        fieldErrors.insuranceClaimStartDate,
+                      )}
                       aria-describedby={
                         fieldErrors.insuranceClaimStartDate
                           ? "insuranceClaimStartDate-error"
@@ -282,7 +284,10 @@ export default function InsuranceClaimDatesModal({
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {formState.insuranceClaimStartDate ? (
-                        format(new Date(formState.insuranceClaimStartDate), "PPP")
+                        format(
+                          new Date(formState.insuranceClaimStartDate),
+                          "PPP",
+                        )
                       ) : (
                         <span>Pick a date</span>
                       )}
@@ -318,7 +323,10 @@ export default function InsuranceClaimDatesModal({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="insuranceClaimEndDate" className={labelClassName}>
+                <Label
+                  htmlFor="insuranceClaimEndDate"
+                  className={labelClassName}
+                >
                   Insurance claim end date
                   <RequiredMark />
                 </Label>

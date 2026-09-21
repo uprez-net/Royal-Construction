@@ -1,7 +1,4 @@
-import {
-    waitForRateLimit,
-  type RateLimiterConfig,
-} from "./rate-limit";
+import { waitForRateLimit, type RateLimiterConfig } from "./rate-limit";
 
 export type ScrapeDoDevice = "desktop" | "mobile" | "tablet";
 export type ScrapeDoWaitUntil = "load" | "domcontentloaded" | "networkidle";

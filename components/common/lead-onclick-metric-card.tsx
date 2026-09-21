@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import type { ComponentType } from "react"
+import type { ComponentType } from "react";
 
-import { Card, CardContent } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const toneMap = {
   primary: "bg-teal-600 text-white",
@@ -12,7 +12,7 @@ const toneMap = {
   warning: "bg-amber-500 text-white",
   danger: "bg-red-500 text-white",
   badge: "bg-[#E8730C] text-white",
-}
+};
 
 const activeRingMap = {
   primary: "ring-teal-600",
@@ -21,7 +21,7 @@ const activeRingMap = {
   warning: "ring-amber-500",
   danger: "ring-red-500",
   badge: "ring-[#E8730C]",
-}
+};
 
 export function LeadMetricCard({
   label,
@@ -32,18 +32,23 @@ export function LeadMetricCard({
   onClick,
   active = false,
 }: {
-  label: string
-  value: string
-  note: string
-  tone?: keyof typeof toneMap
-  icon?: ComponentType<{ className?: string }>
-  onClick?: () => void
-  active?: boolean
+  label: string;
+  value: string;
+  note: string;
+  tone?: keyof typeof toneMap;
+  icon?: ComponentType<{ className?: string }>;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const content = (
     <div className="grid min-h-[72px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-4 py-3">
       {Icon ? (
-        <div className={cn("grid size-9 place-items-center rounded-lg", toneMap[tone])}>
+        <div
+          className={cn(
+            "grid size-9 place-items-center rounded-lg",
+            toneMap[tone],
+          )}
+        >
           <Icon className="size-4" />
         </div>
       ) : null}
@@ -61,7 +66,7 @@ export function LeadMetricCard({
         </p>
       </div>
     </div>
-  )
+  );
 
   if (onClick) {
     return (
@@ -70,7 +75,9 @@ export function LeadMetricCard({
         className={cn(
           "group/card overflow-hidden rounded-lg border text-left text-sm text-card-foreground transition-all duration-200",
           "cursor-pointer select-none hover:border-muted-foreground/30 hover:bg-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          active ? `border-transparent bg-white ring-2 ${activeRingMap[tone]} shadow-md` : "border-border/70 bg-white/95 shadow-sm",
+          active
+            ? `border-transparent bg-white ring-2 ${activeRingMap[tone]} shadow-md`
+            : "border-border/70 bg-white/95 shadow-sm",
         )}
         onClick={onClick}
         aria-pressed={active}
@@ -78,17 +85,19 @@ export function LeadMetricCard({
       >
         {content}
       </button>
-    )
+    );
   }
 
   return (
     <Card
       className={cn(
         "overflow-hidden rounded-lg border-border/70 bg-white/95 shadow-sm transition-all duration-200",
-        active ? `border-transparent ring-2 ${activeRingMap[tone]} shadow-md` : ""
+        active
+          ? `border-transparent ring-2 ${activeRingMap[tone]} shadow-md`
+          : "",
       )}
     >
       <CardContent className="p-0">{content}</CardContent>
     </Card>
-  )
+  );
 }

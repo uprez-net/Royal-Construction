@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { toast } from "sonner";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,11 +22,15 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   costScheduleRowUpserted,
   costScheduleRowRemoved,
+  costScheduleRowRestored,
   rateConstantChanged,
   saveCostSchedule,
 } from "@/lib/store/slices/adminOfferContentSlice";
 import type { CostScheduleRow } from "@/types/admin-offer-content";
-import { AREA_MEASUREMENT_KEYS } from "@/lib/offer/formula-variables";
+import {
+  AREA_MEASUREMENT_KEYS,
+  withDefaultRateConstants,
+} from "@/lib/offer/formula-variables";
 import {
   OfferCardHeading,
   OfferSummaryBadge,
@@ -29,6 +39,7 @@ import { Calculator, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { PriceModeCell } from "./shared/price-mode-cell";
 import { FormulaVariablesPanel } from "./shared/formula-variables-panel";
 import { SaveChangesButton } from "./shared/save-changes-button";
+import { COST_SCHEDULE_UNDO_TOAST_ID } from "./shared/undo-toast-ids";
 
 function newRow(phase: string): CostScheduleRow {
   return {
@@ -53,26 +64,29 @@ export function OfferCostScheduleScreen() {
 
   const { rows, rateConstants } = costSchedule;
 
-  // The editor validates formulas against the union of admin-editable rate
-  // constants AND per-offer area measurements. Rate constants have admin-set
-  // values for the live preview; area measurements are unknown at admin time
+  // The editor validates formulas against the union of rate constants AND
+  // per-offer area measurements. Rate constants are resolved the way the offer
+  // prefill resolves them (stored overrides on top of the defaults) and supply
+  // the live-preview values; area measurements are unknown at admin time
   // (they're entered per-offer) so they only appear as valid tokens, with the
-  // editor falling back to `1` for any token missing a sample value.
+  // editor falling back to `1` for any token missing a sample value. The panel
+  // below still edits the stored overrides.
+  const resolvedRateConstants = useMemo<Record<string, number>>(
+    () => withDefaultRateConstants(rateConstants),
+    [rateConstants],
+  );
   const allFormulaVariables = useMemo(
-    () => [...Object.keys(rateConstants), ...AREA_MEASUREMENT_KEYS],
-    [rateConstants],
+    () => [...Object.keys(resolvedRateConstants), ...AREA_MEASUREMENT_KEYS],
+    [resolvedRateConstants],
   );
-  const formulaSampleValues = useMemo<Record<string, number>>(
-    () => ({ ...rateConstants }),
-    [rateConstants],
-  );
+  const formulaSampleValues = resolvedRateConstants;
 
   // Track validity per formula row so the Save button stays disabled until
   // every formula row parses cleanly and references only known variables/
   // functions. Keyed by row id; cleared when a row leaves formula mode.
-  const [formulaValidity, setFormulaValidity] = useState<
-    Map<string, boolean>
-  >(() => new Map());
+  const [formulaValidity, setFormulaValidity] = useState<Map<string, boolean>>(
+    () => new Map(),
+  );
   const handleFormulaValidation = (rowId: string, valid: boolean) => {
     setFormulaValidity((prev) => {
       const next = new Map(prev);
@@ -80,12 +94,21 @@ export function OfferCostScheduleScreen() {
       return next;
     });
   };
-  const anyFormulaInvalid = useMemo(() => {
+  const invalidFormulaCount = useMemo(() => {
+    let count = 0;
     for (const [, valid] of formulaValidity) {
-      if (!valid) return true;
+      if (!valid) count += 1;
     }
-    return false;
+    return count;
   }, [formulaValidity]);
+  const anyFormulaInvalid = invalidFormulaCount > 0;
+  const forgetFormulaValidity = (rowId: string) =>
+    setFormulaValidity((prev) => {
+      if (!prev.has(rowId)) return prev;
+      const next = new Map(prev);
+      next.delete(rowId);
+      return next;
+    });
 
   const phases = useMemo(() => {
     const order: string[] = [];
@@ -114,8 +137,26 @@ export function OfferCostScheduleScreen() {
     return { none, fixed, formula, included, total: rows.length };
   }, [rows]);
 
-  const updateRow = (row: CostScheduleRow) =>
+  const updateRow = (row: CostScheduleRow) => {
     dispatch(costScheduleRowUpserted(row));
+    // A row that leaves formula mode unmounts its editor, so its last verdict
+    // would otherwise keep Save disabled with nothing left on screen to fix.
+    if (row.priceMode !== "formula") forgetFormulaValidity(row.id);
+  };
+  const removeRow = (id: string) => {
+    const index = rows.findIndex((r) => r.id === id);
+    if (index === -1) return;
+    const row = rows[index];
+    dispatch(costScheduleRowRemoved(id));
+    forgetFormulaValidity(id);
+    toast("Task removed", {
+      id: COST_SCHEDULE_UNDO_TOAST_ID,
+      action: {
+        label: "Undo",
+        onClick: () => dispatch(costScheduleRowRestored({ row, index })),
+      },
+    });
+  };
   const renamePhase = (oldPhase: string, newPhase: string) => {
     for (const row of rows) {
       if (row.phase === oldPhase) {
@@ -200,15 +241,7 @@ export function OfferCostScheduleScreen() {
                   onFormulaValidation={handleFormulaValidation}
                   onRenamePhase={(next) => renamePhase(phase, next)}
                   onUpdateRow={updateRow}
-                  onRemoveRow={(id) => {
-                    dispatch(costScheduleRowRemoved(id));
-                    setFormulaValidity((prev) => {
-                      if (!prev.has(id)) return prev;
-                      const next = new Map(prev);
-                      next.delete(id);
-                      return next;
-                    });
-                  }}
+                  onRemoveRow={removeRow}
                   onAddTask={() =>
                     dispatch(costScheduleRowUpserted(newRow(phase)))
                   }
@@ -230,13 +263,21 @@ export function OfferCostScheduleScreen() {
             {error}
           </p>
         )}
+        {anyFormulaInvalid && (
+          <p role="alert" className="text-sm text-destructive">
+            {`Save is blocked: ${invalidFormulaCount} formula ${
+              invalidFormulaCount === 1 ? "row needs" : "rows need"
+            } a valid expression.`}
+          </p>
+        )}
       </CardContent>
       <CardFooter className="justify-end">
         <SaveChangesButton
           dirty={dirty}
           saving={saving}
           disabled={anyFormulaInvalid}
-          onSave={() => dispatch(saveCostSchedule())}
+          onSave={() => dispatch(saveCostSchedule()).unwrap()}
+          successMessage="Cost schedule saved."
         />
       </CardFooter>
     </Card>
@@ -353,7 +394,7 @@ function PhaseGroup({
                 type="button"
                 aria-label="Remove task"
                 onClick={() => onRemoveRow(row.id)}
-                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40"
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive-ink"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
               </button>

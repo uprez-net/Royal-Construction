@@ -114,9 +114,11 @@ export interface HbcfAssessment {
   usedAmount: number;
   /** Capacity free right now, before any claim expires. Never negative. */
   directAvailable: number;
+  /** Capacity free on the lead's planning date. Used for start assessment. */
+  availableAtPlanningStart: number;
   /** Null when the lead has neither a recorded value nor a readable bracket. */
   needRange: HbcfNeedRange | null;
-  /** True when `directAvailable` already covers the top of the need range. */
+  /** True when capacity on the planning date covers the top of the need range. */
   sufficient: boolean;
   /** Null when capacity is already sufficient, or never becomes sufficient. */
   decisiveClaim: HbcfFreeingClaim | null;
@@ -124,6 +126,8 @@ export interface HbcfAssessment {
   canStartFrom: string | null;
   /** The dashed projection bar on the Gantt. Null when there is nothing to project. */
   projectedWindow: { start: string; end: string } | null;
+  /** The date used as the floor for this lead's capacity planning. */
+  planningStartDate: string;
 }
 
 export interface HbcfTimelinePayload {
@@ -200,7 +204,11 @@ export function hbcfNeedRange(lead: {
   budget?: string | null;
 }): HbcfNeedRange | null {
   const recorded = Number(lead.estimatedValue);
-  if (lead.estimatedValue != null && Number.isFinite(recorded) && recorded > 0) {
+  if (
+    lead.estimatedValue != null &&
+    Number.isFinite(recorded) &&
+    recorded > 0
+  ) {
     return {
       low: Math.round(recorded * (1 - HBCF_NEED_BAND)),
       high: Math.round(recorded * (1 + HBCF_NEED_BAND)),
@@ -408,21 +416,40 @@ export function hbcfAssessment({
   needRange,
   today,
   totalSumAssured,
+  estimatedStartDate,
 }: {
   claims: readonly HbcfProjectClaim[];
   needRange: HbcfNeedRange | null;
   today: Date;
   totalSumAssured: number;
+  estimatedStartDate?: Date | null;
 }): HbcfAssessment {
+  const todayStart = startOfDay(today);
+  const requestedStart = estimatedStartDate
+    ? startOfDay(estimatedStartDate)
+    : todayStart;
+  const planningStart =
+    requestedStart.getTime() > todayStart.getTime()
+      ? requestedStart
+      : todayStart;
   const usedAmount = claims.reduce((sum, claim) => sum + claim.claimAmount, 0);
   const directAvailable = Math.max(0, totalSumAssured - usedAmount);
+  const availableAtPlanningStart = Math.max(
+    0,
+    totalSumAssured -
+      (estimatedStartDate == null
+        ? usedAmount
+        : hbcfUsedAt(claims, planningStart)),
+  );
   const projectionMonths = hbcfProjectionMonths(claims);
 
   const base = {
     totalSumAssured,
     usedAmount,
     directAvailable,
+    availableAtPlanningStart,
     needRange,
+    planningStartDate: toIso(planningStart),
   };
 
   if (!needRange) {
@@ -435,8 +462,8 @@ export function hbcfAssessment({
     };
   }
 
-  if (directAvailable >= needRange.high) {
-    const start = toIso(today);
+  if (availableAtPlanningStart >= needRange.high) {
+    const start = toIso(planningStart);
     return {
       ...base,
       sufficient: true,
@@ -444,7 +471,7 @@ export function hbcfAssessment({
       canStartFrom: start,
       projectedWindow: {
         start,
-        end: toIso(addMonths(today, projectionMonths)),
+        end: toIso(addMonths(planningStart, projectionMonths)),
       },
     };
   }
@@ -452,7 +479,9 @@ export function hbcfAssessment({
   // Only claims that have not already lapsed can free anything further.
   const upcoming = [...claims]
     .filter(
-      (claim) => hbcfParseDate(claim.insuranceClaimEndDate).getTime() >= today.getTime(),
+      (claim) =>
+        hbcfParseDate(claim.insuranceClaimEndDate).getTime() >=
+        planningStart.getTime(),
     )
     .sort(
       (a, b) =>
@@ -461,10 +490,7 @@ export function hbcfAssessment({
     );
 
   for (const claim of upcoming) {
-    const dayAfterEnd = addDays(
-      hbcfParseDate(claim.insuranceClaimEndDate),
-      1,
-    );
+    const dayAfterEnd = addDays(hbcfParseDate(claim.insuranceClaimEndDate), 1);
     if (totalSumAssured - hbcfUsedAt(claims, dayAfterEnd) >= needRange.high) {
       const start = claim.insuranceClaimEndDate;
       return {

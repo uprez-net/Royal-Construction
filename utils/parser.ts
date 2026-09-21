@@ -7,11 +7,11 @@ import { startOfDay } from "date-fns/startOfDay";
  * @returns true when the string matches UUID format
  */
 export const isUUID = (str: string): boolean => {
-    const uuidRegex =
-        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  const uuidRegex =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
-    return uuidRegex.test(str);
-}
+  return uuidRegex.test(str);
+};
 
 /**
  * Calculate the number of full calendar days from today until a target date.

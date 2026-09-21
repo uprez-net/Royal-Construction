@@ -18,3 +18,4 @@ export * from "./mcp";
 export * from "./user";
 export * from "./notification";
 export * from "./activityLog";
+export * from "./compliance";

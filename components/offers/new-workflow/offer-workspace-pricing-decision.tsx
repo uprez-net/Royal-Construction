@@ -7,7 +7,8 @@ import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { AlertTriangle, BadgeDollarSign } from "lucide-react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
-import { formatCurrency } from "./offer-workspace-format";
+import { formatCurrency, formatMoneyDelta } from "./offer-workspace-format";
+import { FIELD_LABEL_CLASS, FieldLabel } from "./offer-workspace-fields";
 
 type PricingDecisionPanelProps = {
   readonly customerPrice: OfferCustomerPrice;
@@ -48,12 +49,10 @@ export function PricingDecisionPanel({
           title="Customer Offer price"
         />
       </CardHeader>
-      <CardContent className="grid gap-4 pt-4 md:grid-cols-[minmax(0,1fr)_220px]">
+      <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
         <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Standard price inc GST
-            </span>
+            <FieldLabel>Standard price inc GST</FieldLabel>
             <Input
               className="font-mono"
               inputMode="decimal"
@@ -71,9 +70,7 @@ export function PricingDecisionPanel({
             />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Price adjustment label
-            </span>
+            <FieldLabel>Price adjustment label</FieldLabel>
             <Input
               value={priceAdjustmentLabel}
               onChange={(event) =>
@@ -83,11 +80,9 @@ export function PricingDecisionPanel({
           </label>
         </div>
         <label>
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Fixed price shown on Offer document
-          </span>
+          <FieldLabel>Fixed price shown on Offer document</FieldLabel>
           <Input
-            className="font-mono"
+            className="h-10 font-mono text-lg font-semibold tabular-nums md:text-lg"
             inputMode="decimal"
             placeholder={String(customerPrice.computedContractValueIncGst)}
             value={selectedPriceInput}
@@ -118,26 +113,21 @@ export function PricingDecisionPanel({
           ) : null}
         </label>
         <div className="rounded-lg border border-border bg-background/70 p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Computed build-up
-          </p>
-          <p className="font-mono text-lg font-semibold">
+          <p className={FIELD_LABEL_CLASS}>Computed build-up</p>
+          <p className="font-mono text-sm tabular-nums text-muted-foreground">
             {formatCurrency(customerPrice.computedContractValueIncGst)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Variance {formatCurrency(customerPrice.varianceIncGst)}
+          <p className="mt-1 font-mono text-xs tabular-nums text-muted-foreground">
+            Variance {formatMoneyDelta(customerPrice.varianceIncGst)}
           </p>
           {saving !== null && saving > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {priceAdjustmentLabel || "Adjustment"}{" "}
-              {formatCurrency(saving)}
+              {priceAdjustmentLabel || "Adjustment"} {formatCurrency(saving)}
             </p>
           ) : null}
         </div>
         <label className="md:col-span-2">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Override reason
-          </span>
+          <FieldLabel>Override reason</FieldLabel>
           <Textarea
             aria-invalid={customerPrice.needsOverrideReason}
             placeholder="Required only when the customer price differs from the computed build-up."

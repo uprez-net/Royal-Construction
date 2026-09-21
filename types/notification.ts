@@ -44,7 +44,7 @@ type NotificationTemplate = {
  */
 type NotificationTemplateFactory = {
   [K in NotificationType]: (
-    data: NotificationDataMap[K]
+    data: NotificationDataMap[K],
   ) => NotificationTemplate;
 };
 
@@ -198,6 +198,12 @@ export const notificationTemplates: NotificationTemplateFactory = {
     url: `/offers/${data.leadId}`,
   }),
 
+  unexpectedEnvelopeCompletion: (data) => ({
+    title: `Unexpected Signature: ${data.offerReference} — ${data.documentLabel}`,
+    message: `DocuSign reports ${data.customerName}'s ${data.documentLabel} envelope ${data.envelopeId} as signed, but the app had recalled or replaced it. The offer was not changed and the signed copy was filed separately. Check with the customer before going further.`,
+    url: `/offers/${data.leadId}`,
+  }),
+
   milestoneStatusChanged: (data) => ({
     title: `Milestone Status Changed: ${data.milestoneName}`,
     message: `The status of milestone ${data.milestoneName} has been changed to ${data.newStatus}`,
@@ -214,6 +220,124 @@ export const notificationTemplates: NotificationTemplateFactory = {
     title: `New Photos Uploaded for Milestone: ${data.milestoneName}`,
     message: `${data.fileCount} photos uploaded for milestone ${data.milestoneName} in project ${data.projectName}`,
     url: `/projects/${data.projectId}?activeTab=milestones`,
+  }),
+
+  // --- Compliance and certification ---------------------------------------
+
+  certifierOutreachSent: (data) => ({
+    title: `Documents Sent to Certifier: ${data.projectName}`,
+    message: `${data.documentCount} document${data.documentCount === 1 ? "" : "s"} sent to ${data.certifierEmail}. The next move is theirs.`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  certifierResponseReceived: (data) => ({
+    title: `Certifier Replied: ${data.projectName}`,
+    message: data.checklistDocumentId
+      ? `${data.attachmentCount} document${data.attachmentCount === 1 ? "" : "s"} received, including a checklist ready to extract`
+      : `${data.attachmentCount} document${data.attachmentCount === 1 ? "" : "s"} received from the certifier`,
+    // The extraction popup is only offered when there is actually a checklist
+    // to run it against; every id it needs rides the query string, because
+    // triggerNotification carries no structured payload of its own.
+    url: data.checklistDocumentId
+      ? `/projects/${data.projectId}?activeTab=compliance&action=certifierExtract&engagementId=${data.engagementId}&documentId=${data.checklistDocumentId}`
+      : `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceOutreachSent: (data) => ({
+    title: `${data.party} Engaged: ${data.projectName}`,
+    message: `Sent to ${data.contactEmail} with ${data.attachmentCount} attachment${data.attachmentCount === 1 ? "" : "s"}. The next move is theirs.`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceOutreachResponseReceived: (data) => ({
+    title: `${data.party} Replied: ${data.projectName}`,
+    message: `${data.attachmentCount} document${data.attachmentCount === 1 ? "" : "s"} received from the ${data.party.toLowerCase()}`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceAlertRaised: (data) => ({
+    title: `Compliance Alert: ${data.projectName}`,
+    // The detail is the raiser's own sentence, which is the whole value of the
+    // notification: "this needs a DA" is actionable, "an alert was raised" is
+    // only a reason to go and look.
+    message: data.detail
+      ? `${data.alertTitle}. ${data.detail}`
+      : data.alertTitle,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceChecklistExtracted: (data) => ({
+    title: `Checklist Ready: ${data.projectName}`,
+    message: `The certifier's checklist came to ${data.itemCount} item${data.itemCount === 1 ? "" : "s"}, each now waiting on a document`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDocumentRejected: (data) => ({
+    title: `Document Sent Back: ${data.projectName}`,
+    message: `${data.resolvedBy} rejected ${data.documentLabel}: ${data.rejectionReason}`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceReviewSent: (data) => ({
+    title: `Compliance File Sent for Review: ${data.projectName}`,
+    message: `${data.documentCount} document${data.documentCount === 1 ? "" : "s"} are with the certifier for review`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceApproved: (data) => ({
+    title: `Compliance Approved: ${data.projectName}`,
+    message: `Every compliance document has been approved. The section is now closed.`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDeveloperDecision: (data) => ({
+    title:
+      data.decision === "APPROVED"
+        ? `Developer Approved: ${data.projectName}`
+        : `Developer Rejected: ${data.projectName}`,
+    message:
+      data.decision === "APPROVED"
+        ? `${data.estate || "The estate developer"} approved the bushfire report`
+        : // The reasons, in the notification itself. They are what the
+          // consultant has already been sent, and somebody reading this on a
+          // phone wants to know whether it is a wording change or a redesign.
+          `${data.estate || "The estate developer"} rejected the bushfire report: ${data.reason}`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDeveloperResent: (data) => ({
+    title: `Sent Back to the Developer: ${data.projectName}`,
+    message: `The revised ${data.documentLabel.toLowerCase()} has gone back to the ${data.party.toLowerCase()} for approval`,
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceCertificateIssued: (data) => ({
+    title: `Construction Certificate Issued: ${data.projectName}`,
+    message:
+      "The certifier has issued the construction certificate. Upload the HBCF certificate to finish the compliance file.",
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceCompleted: (data) => ({
+    title: `Compliance Complete: ${data.projectName}`,
+    message:
+      "The construction certificate and the HBCF cover are both on the file. The build can start.",
+    url: `/projects/${data.projectId}?activeTab=compliance`,
+  }),
+
+  complianceDaItemsRequested: (data) => ({
+    title: `Council Came Back: ${data.projectName}`,
+    message:
+      [
+        data.requestedCount > 0
+          ? `${data.requestedCount} more document${data.requestedCount === 1 ? "" : "s"} requested`
+          : null,
+        data.rejectedCount > 0 ? `${data.rejectedCount} sent back` : null,
+      ]
+        .filter(Boolean)
+        .join(", ") ||
+      "The council has come back on the development application",
+    url: `/projects/${data.projectId}?activeTab=compliance`,
   }),
 };
 
@@ -238,9 +362,11 @@ export const notificationTemplates: NotificationTemplateFactory = {
  */
 export function createNotification<T extends NotificationType>(
   type: T,
-  payload: NotificationDataMap[T]
+  payload: NotificationDataMap[T],
 ) {
   const validatedPayload = notificationSchemas[type].parse(payload);
 
-  return notificationTemplates[type](validatedPayload as NotificationDataMap[T]);
+  return notificationTemplates[type](
+    validatedPayload as NotificationDataMap[T],
+  );
 }

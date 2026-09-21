@@ -12,10 +12,7 @@ import { z } from "zod";
  * File upload metadata validation
  */
 export const fileUploadMetadataSchema = z.object({
-  fileId: z
-    .string()
-    .trim()
-    .optional(),
+  fileId: z.string().trim().optional(),
 
   fileName: z
     .string()
@@ -23,16 +20,9 @@ export const fileUploadMetadataSchema = z.object({
     .min(1, "File name is required")
     .max(255, "File name is too long"),
 
-  projectId: z
-    .string()
-    .trim()
-    .min(1, "Project ID is required"),
+  projectId: z.string().trim().min(1, "Project ID is required"),
 
-  milestoneId: z
-    .string()
-    .trim()
-    .optional()
-    .nullable(),
+  milestoneId: z.string().trim().optional().nullable(),
 });
 
 export type FileUploadMetadata = z.infer<typeof fileUploadMetadataSchema>;
@@ -73,10 +63,7 @@ export type UploadMimeType = z.infer<typeof uploadMimeTypeSchema>;
  * Upload token payload (server-side verification)
  */
 export const uploadTokenPayloadSchema = fileUploadMetadataSchema.extend({
-  userId: z
-    .string()
-    .trim()
-    .min(1, "User ID is required"),
+  userId: z.string().trim().min(1, "User ID is required"),
 });
 
 export type UploadTokenPayload = z.infer<typeof uploadTokenPayloadSchema>;
@@ -104,12 +91,7 @@ export const addressSearchQuerySchema = z.object({
     .min(2, "Search query must be at least 2 characters")
     .max(255, "Search query is too long"),
 
-  limit: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(20)
-    .default(8),
+  limit: z.coerce.number().int().positive().max(20).default(8),
 
   country: z
     .string()
@@ -142,21 +124,28 @@ export const addressSuggestionsResponseSchema = z.object({
   count: z.number(),
 });
 
-export type AddressSuggestionsResponse = z.infer<typeof addressSuggestionsResponseSchema>;
+export type AddressSuggestionsResponse = z.infer<
+  typeof addressSuggestionsResponseSchema
+>;
 
 /**
  * Client payload schema - validated before token generation
  */
 export const clientPayloadSchema = z.object({
-    fileId: z.string().optional(),
-    fileName: z.string().trim().min(1, 'File name is required').max(255),
-    fileSize: z.number().max(UPLOAD_CONSTRAINTS.maxFileSizeBytes, `File size must be less than ${UPLOAD_CONSTRAINTS.maxFileSizeBytes} bytes`),
-    projectId: z.string().trim().min(1, 'Project ID is required').optional(),
-    milestoneId: z.string().trim().optional().nullable(),
-    leadId: z.coerce.string().trim().optional(),
-    tradieId: z.coerce.string().trim().optional(),
-    isOfferFile: z.boolean().optional().default(false),
-    uploadType: z.enum(["email-template", "email-attachment"]).optional()
+  fileId: z.string().optional(),
+  fileName: z.string().trim().min(1, "File name is required").max(255),
+  fileSize: z
+    .number()
+    .max(
+      UPLOAD_CONSTRAINTS.maxFileSizeBytes,
+      `File size must be less than ${UPLOAD_CONSTRAINTS.maxFileSizeBytes} bytes`,
+    ),
+  projectId: z.string().trim().min(1, "Project ID is required").optional(),
+  milestoneId: z.string().trim().optional().nullable(),
+  leadId: z.coerce.string().trim().optional(),
+  tradieId: z.coerce.string().trim().optional(),
+  isOfferFile: z.boolean().optional().default(false),
+  uploadType: z.enum(["email-template", "email-attachment"]).optional(),
 });
 
 export type ClientPayload = z.infer<typeof clientPayloadSchema>;
@@ -165,7 +154,7 @@ export type ClientPayload = z.infer<typeof clientPayloadSchema>;
  * Token payload schema - validated on completion
  */
 export const tokenPayloadSchema = clientPayloadSchema.extend({
-    userId: z.string().min(1, 'User ID is required'),
+  userId: z.string().min(1, "User ID is required"),
 });
 
 export type TokenPayload = z.infer<typeof tokenPayloadSchema>;

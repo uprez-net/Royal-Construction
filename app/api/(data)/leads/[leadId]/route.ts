@@ -1,8 +1,17 @@
-import { badRequestResponse, errorResponse, notFoundResponse, successResponse, updateLeadSchema } from "@/utils/validators";
+import {
+  badRequestResponse,
+  errorResponse,
+  notFoundResponse,
+  successResponse,
+  updateLeadSchema,
+} from "@/utils/validators";
 import { findLeadById, updateLead, deleteLead } from "@/lib/data/leads";
 import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 
-export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: string }> }) {
+export async function PATCH(
+  request: Request,
+  ctx: { params: Promise<{ leadId: string }> },
+) {
   try {
     const { leadId } = await ctx.params;
     const id = Number(leadId);
@@ -51,7 +60,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ leadId: s
   }
 }
 
-export async function DELETE(_request: Request, ctx: { params: Promise<{ leadId: string }> }) {
+export async function DELETE(
+  _request: Request,
+  ctx: { params: Promise<{ leadId: string }> },
+) {
   try {
     const { leadId } = await ctx.params;
     const id = Number(leadId);
@@ -65,7 +77,10 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ leadId:
 
     await deleteLead(id);
 
-    return successResponse({ success: true, message: "Lead deleted successfully" });
+    return successResponse({
+      success: true,
+      message: "Lead deleted successfully",
+    });
   } catch (error) {
     console.error("/api/leads DELETE error", error);
     return errorResponse("Failed to delete lead", {

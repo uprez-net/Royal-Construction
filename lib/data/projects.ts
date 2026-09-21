@@ -1,16 +1,35 @@
-"use server";
+import "server-only";
 
 import { Prisma, ProjectStatus } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 import prisma from "@/lib/prisma";
-import { ProjectDetail, ProjectKPIs, ProjectWithStats } from "@/types/project";
+import { serializeInvoice, serializeListInvoice } from "@/lib/data/invoice";
+import { summarizeInvoices } from "@/lib/projects/invoice-totals";
+import {
+  PRE_CONSTRUCTION_FILTER,
+  PRE_CONSTRUCTION_STATUSES,
+  ProjectDetail,
+  ProjectKPIs,
+  ProjectWithStats,
+} from "@/types/project";
 import { CACHE_PROFILES } from "@/types/cache";
 import { ProjectRequirementsPayload } from "@/types/project-flow";
+import { certifierEngagementInclude } from "@/types/compliance";
 
-export type ProjectListSortBy = "name" | "progress" | "budget" | "startDate" | "spent";
+export type ProjectListSortBy =
+  | "name"
+  | "progress"
+  | "budget"
+  | "startDate"
+  | "spent";
 
 export type ProjectListQuery = {
-  status?: ProjectStatus | null;
+  /**
+   * One status, or `PRE_CONSTRUCTION_FILTER` for the three that precede a
+   * build. Widened from `ProjectStatus` for that one value rather than for
+   * arbitrary strings, so a typo is still a compile error at every call site.
+   */
+  status?: ProjectStatus | typeof PRE_CONSTRUCTION_FILTER | null;
   page?: number;
   limit?: number;
   search?: string;
@@ -44,6 +63,23 @@ const projectInclude = {
   customer: true,
   siteManager: true,
   variations: true,
+  // A summary row per claim — enough for the quick-view's claims table and the
+  // cleared-money roll-up, without the PDF link and tax breakdown the detail
+  // payload carries. Bounded at one per contract stage by the unique index.
+  invoices: {
+    select: {
+      id: true,
+      invoiceNumber: true,
+      projectStage: true,
+      status: true,
+      total: true,
+      amountPaid: true,
+      amountDue: true,
+      issuedDate: true,
+      dueDate: true,
+    },
+    orderBy: { issuedDate: "desc" },
+  },
   milestones: {
     select: {
       id: true,
@@ -57,7 +93,7 @@ const projectInclude = {
           name: true,
           trade: true,
         },
-      }
+      },
     },
   },
 } as const;
@@ -65,6 +101,9 @@ const projectInclude = {
 const projectDetailInclude = {
   customer: true,
   siteManager: true,
+  // Newest first: the Payments tab reads as a claim history, most recent at the
+  // top, and the stage order is already carried on each row.
+  invoices: { orderBy: { issuedDate: "desc" } },
   Lead: {
     select: {
       id: true,
@@ -117,6 +156,19 @@ const projectDetailInclude = {
   },
   files: true,
   materials: true,
+  // Carried on the detail payload rather than fetched by the tab, so the tab
+  // badge, the tab body and the compliance alert all read one consistent
+  // snapshot instead of three that can disagree mid-render.
+  // The canonical shape, not a copy of it.
+  //
+  // This used to restate every relation on the engagement, with a comment on
+  // each saying it mirrored `certifierEngagementInclude`. It did not: the two
+  // sorted alerts differently, and every relation added to the canonical include
+  // had to be found and added here too, or the payload stopped being assignable
+  // to `ProjectDetail` — which is how the drift announced itself, several
+  // relations later. Reusing it means "the compliance tab needs this on the
+  // read" is stated once.
+  certifierEngagement: { include: certifierEngagementInclude },
 } as const;
 
 const defaultPageSize = 12;
@@ -147,12 +199,16 @@ function normalizeSearch(search?: string) {
  * @param query - Optional project list query parameters.
  * @returns A Prisma `ProjectWhereInput` object, or `undefined` when no filters are applied.
  */
-function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput | undefined {
+function buildProjectWhere(
+  query?: ProjectListQuery,
+): Prisma.ProjectWhereInput | undefined {
   const search = normalizeSearch(query?.search);
 
   const filters: Prisma.ProjectWhereInput[] = [];
 
-  if (query?.status) {
+  if (query?.status === PRE_CONSTRUCTION_FILTER) {
+    filters.push({ status: { in: [...PRE_CONSTRUCTION_STATUSES] } });
+  } else if (query?.status) {
     filters.push({ status: query.status });
   }
 
@@ -161,8 +217,16 @@ function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput |
       OR: [
         { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
         { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        { customer: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
-        { siteManager: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
+        {
+          customer: {
+            name: { contains: search, mode: Prisma.QueryMode.insensitive },
+          },
+        },
+        {
+          siteManager: {
+            name: { contains: search, mode: Prisma.QueryMode.insensitive },
+          },
+        },
       ],
     });
   }
@@ -191,7 +255,10 @@ function buildProjectWhere(query?: ProjectListQuery): Prisma.ProjectWhereInput |
  * @param sortOrder - Sort direction.
  * @returns Prisma orderBy configuration.
  */
-function buildProjectOrderBy(sortBy?: ProjectListSortBy, sortOrder: "asc" | "desc" = "asc"): Prisma.ProjectOrderByWithRelationInput[] {
+function buildProjectOrderBy(
+  sortBy?: ProjectListSortBy,
+  sortOrder: "asc" | "desc" = "asc",
+): Prisma.ProjectOrderByWithRelationInput[] {
   const direction = sortOrder === "asc" ? "asc" : "desc";
 
   switch (sortBy) {
@@ -222,11 +289,18 @@ function buildProjectOrderBy(sortBy?: ProjectListSortBy, sortOrder: "asc" | "des
  * @param query - Pagination, filtering and sorting options.
  * @returns A paginated collection of projects with computed statistics.
  */
-async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProjectsResult> {
-  const safePage = Number.isFinite(query?.page ?? 1) && (query?.page ?? 1) > 0 ? Math.floor(query?.page ?? 1) : 1;
-  const safeLimit = Number.isFinite(query?.limit ?? defaultPageSize) && (query?.limit ?? defaultPageSize) > 0
-    ? Math.min(Math.floor(query?.limit ?? defaultPageSize), 100)
-    : defaultPageSize;
+async function getProjectsPage(
+  query?: ProjectListQuery,
+): Promise<PaginatedProjectsResult> {
+  const safePage =
+    Number.isFinite(query?.page ?? 1) && (query?.page ?? 1) > 0
+      ? Math.floor(query?.page ?? 1)
+      : 1;
+  const safeLimit =
+    Number.isFinite(query?.limit ?? defaultPageSize) &&
+    (query?.limit ?? defaultPageSize) > 0
+      ? Math.min(Math.floor(query?.limit ?? defaultPageSize), 100)
+      : defaultPageSize;
   const where = buildProjectWhere(query);
   const orderBy = buildProjectOrderBy(query?.sortBy, query?.sortOrder);
 
@@ -241,17 +315,23 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
     prisma.project.count({ where }),
   ]);
 
-  const mapped = projects.map(({ variations, ...project }) => {
+  const mapped = projects.map(({ variations, invoices, ...project }) => {
     const milestoneCount = project.milestones.length;
-    const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
-    const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+    const completedMilestoneCount = project.milestones.filter((milestone) =>
+      ["DONE", "NOT_REQUIRED"].includes(milestone.status),
+    ).length;
+    const progressPercent =
+      milestoneCount === 0
+        ? 0
+        : Math.round((completedMilestoneCount / milestoneCount) * 100);
     const approvedVariationSpend = variations
       .filter((variation) => variation.status === "APPROVED")
       .reduce((sum, variation) => sum + Number(variation.cost), 0);
 
     return {
       ...project,
-      requirements: project.requirements as unknown as ProjectRequirementsPayload,
+      requirements:
+        project.requirements as unknown as ProjectRequirementsPayload,
       milestones: project.milestones.map((milestone) => ({
         ...milestone,
         tradies: milestone.tradies.map((tradie) => ({
@@ -266,6 +346,8 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
       completedMilestoneCount,
       progressPercent,
       approvedVariationSpend: approvedVariationSpend.toString(),
+      invoiceTotals: summarizeInvoices(invoices),
+      invoices: invoices.map(serializeListInvoice),
     };
   });
 
@@ -290,7 +372,9 @@ async function getProjectsPage(query?: ProjectListQuery): Promise<PaginatedProje
  * @param query - Pagination, search, filtering and sorting options.
  * @returns Paginated project list.
  */
-export async function getProjects(query?: ProjectListQuery): Promise<PaginatedProjectsResult> {
+export async function getProjects(
+  query?: ProjectListQuery,
+): Promise<PaginatedProjectsResult> {
   try {
     return await getProjectsPage(query);
   } catch (error) {
@@ -316,20 +400,35 @@ export async function getProjects(query?: ProjectListQuery): Promise<PaginatedPr
  * @param query - Optional search query matching project name or location.
  * @returns Paginated lookup result.
  */
-export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSize, query?: string): Promise<PaginatedProjectLookupResult> {
+export async function getProjectsForLookup(
+  page = 1,
+  limit = defaultLookupPageSize,
+  query?: string,
+): Promise<PaginatedProjectLookupResult> {
   try {
     const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultLookupPageSize;
+    const safeLimit =
+      Number.isFinite(limit) && limit > 0
+        ? Math.min(Math.floor(limit), 50)
+        : defaultLookupPageSize;
     const search = normalizeSearch(query);
 
-    const where: Prisma.ProjectWhereInput | undefined = search.length > 0
-      ? {
-        OR: [
-          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { location: { contains: search, mode: Prisma.QueryMode.insensitive } },
-        ],
-      }
-      : undefined;
+    const where: Prisma.ProjectWhereInput | undefined =
+      search.length > 0
+        ? {
+            OR: [
+              {
+                name: { contains: search, mode: Prisma.QueryMode.insensitive },
+              },
+              {
+                location: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : undefined;
 
     const [items, totalCount] = await prisma.$transaction([
       prisma.project.findMany({
@@ -387,7 +486,9 @@ export async function getProjectsForLookup(page = 1, limit = defaultLookupPageSi
  *
  * @throws Re-throws any unexpected database errors.
  */
-export async function getProjectById(projectId: string): Promise<ProjectDetail | null> {
+export async function getProjectById(
+  projectId: string,
+): Promise<ProjectDetail | null> {
   try {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -407,7 +508,8 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
         location: project.Lead.location,
         emails: project.Lead.emails,
       },
-      requirements: project.requirements as unknown as ProjectRequirementsPayload,
+      requirements:
+        project.requirements as unknown as ProjectRequirementsPayload,
       materials: project.materials.map((material) => ({
         ...material,
         unitCost: material.unitCost.toString(),
@@ -416,6 +518,7 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
       lotSize: project.lotSize?.toString() ?? undefined,
       totalBudget: project.totalBudget.toString(),
       spent: project.spent.toString(),
+      invoices: project.invoices.map(serializeInvoice),
       siteUpdates: project.siteUpdates
         .filter((siteUpdate) => siteUpdate.milestone !== null)
         .map((siteUpdate) => ({
@@ -450,11 +553,13 @@ export async function getProjectById(projectId: string): Promise<ProjectDetail |
           lastQuotedPrice: schedule.tradie.lastQuotedPrice?.toString(),
           rating: schedule.tradie.rating?.toString(),
         },
-        milestone: schedule.milestone ? {
-          ...schedule.milestone,
-          budget: schedule.milestone.budget.toString(),
-          spend: schedule.milestone.spend?.toString(),
-        } : undefined,
+        milestone: schedule.milestone
+          ? {
+              ...schedule.milestone,
+              budget: schedule.milestone.budget.toString(),
+              spend: schedule.milestone.spend?.toString(),
+            }
+          : undefined,
       })),
     };
   } catch (error) {
@@ -483,17 +588,23 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
       include: projectInclude,
     });
 
-    const mapped = projects.map(({ variations, ...project }) => {
+    const mapped = projects.map(({ variations, invoices, ...project }) => {
       const milestoneCount = project.milestones.length;
-      const completedMilestoneCount = project.milestones.filter((milestone) => ["DONE", "NOT_REQUIRED"].includes(milestone.status)).length;
-      const progressPercent = milestoneCount === 0 ? 0 : Math.round((completedMilestoneCount / milestoneCount) * 100);
+      const completedMilestoneCount = project.milestones.filter((milestone) =>
+        ["DONE", "NOT_REQUIRED"].includes(milestone.status),
+      ).length;
+      const progressPercent =
+        milestoneCount === 0
+          ? 0
+          : Math.round((completedMilestoneCount / milestoneCount) * 100);
       const approvedVariationSpend = variations
         .filter((variation) => variation.status === "APPROVED")
         .reduce((sum, variation) => sum + Number(variation.cost), 0);
 
-    return {
-      ...project,
-      requirements: project.requirements as unknown as ProjectRequirementsPayload,
+      return {
+        ...project,
+        requirements:
+          project.requirements as unknown as ProjectRequirementsPayload,
         milestones: project.milestones.map((milestone) => ({
           ...milestone,
           tradies: milestone.tradies.map((tradie) => ({
@@ -508,6 +619,8 @@ export async function getAllProjectsForExport(): Promise<ProjectWithStats[]> {
         completedMilestoneCount,
         progressPercent,
         approvedVariationSpend: approvedVariationSpend.toString(),
+        invoiceTotals: summarizeInvoices(invoices),
+        invoices: invoices.map(serializeListInvoice),
       };
     });
 
@@ -525,6 +638,7 @@ type ProjectKPIResult = {
   needs_attention: bigint;
   delayed: bigint;
   completed: bigint;
+  pre_construction: bigint;
 };
 
 /**
@@ -568,7 +682,14 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
 
                 COUNT(*) FILTER (
                     WHERE status = 'COMPLETED'
-                ) AS completed
+                ) AS completed,
+
+                -- The pipeline: created, in compliance, or through compliance
+                -- and waiting to start. Counted together because that is the
+                -- question the chip asks -- how many jobs have not begun.
+                COUNT(*) FILTER (
+                    WHERE status IN ('DRAFT', 'COMPLIANCE_STARTED', 'COMPLIANCE_COMPLETED')
+                ) AS pre_construction
             FROM "Project"
         `;
 
@@ -579,6 +700,7 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
       needsAttention: Number(result.needs_attention),
       delayed: Number(result.delayed),
       completed: Number(result.completed),
+      preConstruction: Number(result.pre_construction),
     };
   } catch (error) {
     console.error("Error fetching project KPIs:", error);
@@ -590,6 +712,7 @@ export async function getProjectKPIs(): Promise<ProjectKPIs> {
       needsAttention: 0,
       delayed: 0,
       completed: 0,
+      preConstruction: 0,
     };
   }
 }

@@ -1,10 +1,5 @@
-"use client"
-import {
-  CheckCircle2,
-  Hourglass,
-  Receipt,
-  Send,
-} from "lucide-react";
+"use client";
+import { CheckCircle2, Hourglass, Receipt, Send } from "lucide-react";
 import { DataPoint, KPIListItem, MetricCard } from "../common/metric-card";
 
 interface OfferKPIProps {
@@ -37,8 +32,18 @@ export function OfferKPI({
           ? `${totalVersions} versions across all offers`
           : undefined,
     },
-    { title: "Approved Offers", dataPoint: approvedOffers, Icon: CheckCircle2, tone: "success" },
-    { title: "Pending Offers", dataPoint: pendingOffers, Icon: Hourglass, tone: "warning" },
+    {
+      title: "Approved Offers",
+      dataPoint: approvedOffers,
+      Icon: CheckCircle2,
+      tone: "success",
+    },
+    {
+      title: "Pending Offers",
+      dataPoint: pendingOffers,
+      Icon: Hourglass,
+      tone: "warning",
+    },
     { title: "Sent Offers", dataPoint: sentOffers, Icon: Send, tone: "info" },
   ];
   return (

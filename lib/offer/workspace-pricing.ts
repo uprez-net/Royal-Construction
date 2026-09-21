@@ -11,7 +11,9 @@ export type {
 export type MarginStatus =
   | "at_target"
   | "acceptable_below_target"
-  | "below_minimum";
+  | "below_minimum"
+  // No cost to measure against yet, so there is no margin to judge.
+  | "not_priced";
 
 // Default HBCF *base* rate (ex GST & stamp duty) for H01 New Dwelling,
 // metro — matches icare rates effective 1 Nov 2025. The premium helper below
@@ -201,6 +203,9 @@ export type OfferWorkspacePricing = {
   readonly gstAmount: number;
   readonly contractValueIncGst: number;
   readonly perSqm: number | null;
+  // Echoed from the settings so a figure derived on another price (the summary
+  // strip's GST on an overridden offer) splits at the rate this build-up used.
+  readonly gstRate: number;
 };
 
 // The full markup applied to costBeforeFee (overhead + fee). The margin badge's
@@ -212,7 +217,9 @@ export function resolveTargetMarkupPct(
     "royalConstructionOverheadPct" | "royalConstructionFeePct"
   >,
 ): number {
-  return settings.royalConstructionOverheadPct + settings.royalConstructionFeePct;
+  return (
+    settings.royalConstructionOverheadPct + settings.royalConstructionFeePct
+  );
 }
 
 // The margin the builder ACTUALLY earns at the price being charged. Kept
@@ -356,7 +363,9 @@ export function calculateOfferWorkspacePricing({
   const totalIncludingConstruction = roundCurrency(
     costBeforeFee + royalConstructionOverhead + royalConstructionFee,
   );
-  const gstAmount = roundCurrency(totalIncludingConstruction * settings.gstRate);
+  const gstAmount = roundCurrency(
+    totalIncludingConstruction * settings.gstRate,
+  );
   const contractValueIncGst = roundCurrency(
     totalIncludingConstruction + gstAmount,
   );
@@ -373,6 +382,7 @@ export function calculateOfferWorkspacePricing({
     gstAmount,
     contractValueIncGst,
     perSqm,
+    gstRate: settings.gstRate,
   };
 }
 
@@ -393,18 +403,29 @@ export function calculateEffectiveMargin({
   readonly gstRate: number;
   readonly targetFeePct: number;
 }): EffectiveMargin {
-  const sellingExGst = roundCurrency(sellingContractValueIncGst / (1 + gstRate));
-  const effectiveMarkupPct =
-    costBeforeFee > 0
-      ? roundRate((sellingExGst - costBeforeFee) / costBeforeFee)
-      : 0;
+  // A blank offer, and every offer for the moment before it hydrates, has no
+  // cost yet. Reading that as a 0% markup painted a red "Below minimum" badge on
+  // something nobody had priced.
+  if (!(costBeforeFee > 0)) {
+    return { effectiveMarkupPct: 0, marginStatus: "not_priced" };
+  }
+  const sellingExGst = roundCurrency(
+    sellingContractValueIncGst / (1 + gstRate),
+  );
+  const effectiveMarkupPct = roundRate(
+    (sellingExGst - costBeforeFee) / costBeforeFee,
+  );
 
   // Green at/above the target fee, amber while still profitable below it, red
   // once the selling price is at or below cost. The minimum is a strictly
   // positive epsilon so a break-even (0%) markup is a loss (red), not amber.
   return {
     effectiveMarkupPct,
-    marginStatus: getMarginStatus(effectiveMarkupPct, targetFeePct, Number.EPSILON),
+    marginStatus: getMarginStatus(
+      effectiveMarkupPct,
+      targetFeePct,
+      Number.EPSILON,
+    ),
   };
 }
 

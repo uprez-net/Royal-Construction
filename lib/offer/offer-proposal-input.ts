@@ -6,10 +6,7 @@ import {
   calculateOfferWorkspacePricing,
   resolveOptionalPriceInput,
 } from "./workspace-pricing";
-import {
-  getAreaBasisTotalSqm,
-  offerAreaBasisFromJob,
-} from "./workspace-area";
+import { getAreaBasisTotalSqm, offerAreaBasisFromJob } from "./workspace-area";
 
 // Reconstruct the print-template input (prices, totals, etc.) from a persisted
 // workspace snapshot — the same derivations the live container computes, so a

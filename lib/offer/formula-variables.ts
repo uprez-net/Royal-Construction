@@ -28,7 +28,7 @@ export const RATE_CONSTANT_KEYS = [
   "FRAME_INSTALLER_RATE_PER_SQM",
   "PRICE_OF_EACH_SHOWER",
   "PRICE_OF_EACH_WARDROBE",
-  "PRICE_OF_EACH_LINEN"
+  "PRICE_OF_EACH_LINEN",
 ] as const;
 
 // Phase 1 calculated values (from the Area Calculator) that are available as
@@ -44,6 +44,7 @@ export const AREA_MEASUREMENT_KEYS = [
   "TOTAL_FLOORING_AREA",
   "TOTAL_GROUND_FLOOR_FRAME_COST",
   "TOTAL_FIRST_FLOOR_FRAME_COST",
+  "FIRST_FLOOR_AREA",
   "TOTAL_GROUND_FLOOR_AREA",
   "STEEL",
   "INSTALLER",
@@ -87,6 +88,16 @@ export const DEFAULT_RATE_CONSTANTS: Record<RateConstantKey, number> = {
   PRICE_OF_EACH_WARDROBE: 500,
   PRICE_OF_EACH_LINEN: 500,
 };
+
+// The rate constants a formula is actually priced with: stored admin overrides
+// on top of the defaults, exactly as the offer prefill merges them. The admin
+// editor used to validate against the stored keys alone, so a formula using a
+// constant the admin had never overridden was flagged unknown and blocked Save.
+export function withDefaultRateConstants(
+  stored: Partial<Record<RateConstantKey, number>>,
+): Record<RateConstantKey, number> {
+  return { ...DEFAULT_RATE_CONSTANTS, ...stored };
+}
 
 // ─── Phase 2 line-item formulas ───
 //

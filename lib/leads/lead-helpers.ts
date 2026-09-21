@@ -9,8 +9,11 @@ import {
   LeadRichTextDocument,
 } from "@/lib/leads/types";
 // import { FollowupCalendarCreation } from "@/lib/leads/leads-service";
+import type { LeadStage as DBLeadStage } from "@prisma/client";
 import { coerceLeadNotesDocument } from "@/lib/rich-text/lead-notes";
+import { stageDef } from "@/lib/leads/pipeline-stages";
 import { sydneyDateOnly, sydneyTimeOnly } from "@/lib/dates/sydney";
+import { resolveLeadNotesTextOr } from "@/lib/leads/notes-text";
 
 /* ── Constants ────────────────────────────────────────── */
 
@@ -56,7 +59,17 @@ export const LEAD_SOURCE_OPTIONS: LeadSource[] = [
  * apart from Converted and Lost.
  */
 export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
-  { label: "Active", stages: ["New", "Contacted", "Discovery", "Qualified", "Quoted", "Negotiating"] },
+  {
+    label: "Active",
+    stages: [
+      "New",
+      "Contacted",
+      "Discovery",
+      "Qualified",
+      "Quoted",
+      "Negotiating",
+    ],
+  },
   { label: "Won", stages: ["Converted"] },
   // No Response has its own group because it does not behave like the two
   // below it. Its outcome is STALLED, not LOST: it counts in nothing, and
@@ -70,7 +83,9 @@ export const LEAD_STAGE_GROUPS: { label: string; stages: LeadStage[] }[] = [
 ];
 
 /** Flat order, for the filter chips and anything that wants one list. */
-export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap((g) => g.stages);
+export const LEAD_STAGE_OPTIONS: LeadStage[] = LEAD_STAGE_GROUPS.flatMap(
+  (g) => g.stages,
+);
 
 export const HISTORY_TYPE_OPTIONS: HistoryItem["type"][] = [
   "system",
@@ -200,6 +215,7 @@ export interface LeadDetailFormData {
   /** Empty string means "inherit the stage default". */
   probabilityOverride: string;
   expectedCloseDate: string;
+  estimatedStartDate: string;
   type: ProjectType[];
   notes: string;
   notesDoc: LeadRichTextDocument;
@@ -213,11 +229,24 @@ export interface LeadDetailFormData {
 /* ── Formatting ───────────────────────────────────────── */
 
 const MONTHS_SHORT = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
-export function formatFollowup(date: string | null, time?: string | null): string {
+export function formatFollowup(
+  date: string | null,
+  time?: string | null,
+): string {
   if (!date) return "";
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return "";
@@ -237,9 +266,9 @@ export function formatLeadTaskDue(
   return dueTime ? `${label} · ${dueTime}` : label;
 }
 
-export function sortLeadOpenTasks<T extends { id: number; dueDate: string | null; dueTime: string | null }>(
-  tasks: T[],
-): T[] {
+export function sortLeadOpenTasks<
+  T extends { id: number; dueDate: string | null; dueTime: string | null },
+>(tasks: T[]): T[] {
   return [...tasks].sort((a, b) => {
     if (a.dueDate === b.dueDate) {
       return (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.id - b.id;
@@ -278,14 +307,78 @@ export function dialablePhone(phone: string) {
 
 const PLACEHOLDER_PATTERN = /\{([^}]+)\}/g;
 
+/**
+ * Placeholders that are a date or a time, and so can legitimately have no
+ * value. Everything else in `values` carries its own sensible fallback.
+ */
+const DATE_PLACEHOLDERS = ["followup", "meeting", "time"] as const;
+
+/**
+ * Remove a placeholder that resolved to nothing, along with the word holding
+ * it to the sentence.
+ *
+ * Substituting a filler string was the old approach and it read as a mistake
+ * to the client: `{followup}` became the literal "next step", so the Meeting
+ * subject went out as "Site visit for Jane - Kellyville on next step". Leaving
+ * it empty instead is no better on its own — that ships "... Kellyville on "
+ * with a dangling preposition.
+ *
+ * So the connector goes with it. Only the separators the shipped templates
+ * actually use are recognised; anything else is left alone rather than guessed
+ * at, which at worst leaves the sentence exactly as it reads today.
+ */
+export function dropEmptyPlaceholders(
+  text: string,
+  emptyKeys: readonly string[],
+): string {
+  return emptyKeys
+    .reduce(
+      (out, key) =>
+        out.replace(
+          new RegExp(
+            `[ \\t]*(?:[-,:;]|\\b(?:on|at|by|for)\\b)?[ \\t]*\\{${key}\\}`,
+            "gi",
+          ),
+          "",
+        ),
+      text,
+    )
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]*[-,:;]$/, "")
+    .trim();
+}
+
+/**
+ * Replace `{placeholder}` tokens in a subject or body with this lead's values.
+ *
+ * Every value carries a sensible fallback except the dates, which can
+ * legitimately be absent — a lead with no upcoming follow-up is the normal
+ * state once the work is done, and a lead with no booked consultation is the
+ * normal state before one. Those are removed along with the word holding them
+ * to the sentence rather than filled with a stand-in; see
+ * `dropEmptyPlaceholders`.
+ *
+ * An unknown key is left as-is (`{foo}` stays `{foo}`) so a typo in a template
+ * is visible rather than silently blank.
+ *
+ * @param text - The template text, typically a subject line or rendered body.
+ * @param lead - The lead whose values fill the placeholders.
+ * @returns The text with placeholders resolved.
+ */
 export function hydrateVariable(text: string, lead: Lead): string {
   const typeStr = Array.isArray(lead.type)
     ? (lead.type[0] ?? "New Home Build")
     : lead.type;
-  const followup = lead.followupDate
-    ? formatFollowup(lead.followupDate, lead.followupTime)
-    : "next step";
-  const source = lead.sourceDetail || lead.source || "Royal Constructions enquiry";
+  // Empty, not "next step". A lead with no upcoming follow-up is the normal
+  // state once the work is done — see resolveFollowup — so this is a case to
+  // render honestly, not to paper over.
+  const followup = formatFollowup(lead.followupDate, lead.followupTime);
+  // The booked consultation, which is a different appointment from the
+  // follow-up. The Meeting subject quoted {followup} while its body confirmed
+  // the site visit, so the two halves of one email disagreed.
+  const meeting = formatFollowup(lead.meetingDate ?? null, lead.meetingTime);
+  const source =
+    lead.sourceDetail || lead.source || "Royal Constructions enquiry";
   const location = lead.location || "NSW";
 
   const values: Record<string, string> = {
@@ -294,16 +387,19 @@ export function hydrateVariable(text: string, lead: Lead): string {
     type: typeStr,
     phone: lead.phone,
     project: `${typeStr} at ${location}`,
-    notes: lead.notes || "Previous discussion details",
+    notes: resolveLeadNotesTextOr(lead, "Previous discussion details"),
     amount: lead.budget !== "Not Discussed" ? lead.budget : "TBD",
     budget: lead.budget || "Not Discussed",
     source,
     stage: lead.stage,
     followup,
+    meeting,
     assignee: lead.assignedUser?.name || "Royal Constructions team",
     duration: "6-8 months",
     date: formatShortDate(new Date()),
-    time: lead.followupTime || "10:00 AM",
+    // Not "10:00 AM". Inventing a time is how the Meeting email came to tell
+    // clients a site visit was booked for a time nobody had agreed.
+    time: lead.followupTime ?? "",
     milestone: "Foundation Complete",
     nextMilestone: "Frame Stage",
     originalAmount: "$480,000",
@@ -311,7 +407,12 @@ export function hydrateVariable(text: string, lead: Lead): string {
     revisedAmount: "$484,500",
   };
 
-  return text.replace(
+  // Strip the date placeholders that have no value BEFORE substituting, so the
+  // connector holding them to the sentence goes too. Substituting first would
+  // leave "on " with nothing after it.
+  const emptied = DATE_PLACEHOLDERS.filter((key) => values[key] === "");
+
+  return dropEmptyPlaceholders(text, emptied).replace(
     PLACEHOLDER_PATTERN,
     (_, key) => values[key] ?? `{${key}}`,
   );
@@ -367,12 +468,16 @@ export function leadToFormData(lead: Lead): LeadDetailFormData {
     estimatedValue: lead.estimatedValue ?? "",
     estimatedValueSource: lead.estimatedValueSource ?? null,
     probabilityOverride:
-      lead.probabilityOverride === null || lead.probabilityOverride === undefined
+      lead.probabilityOverride === null ||
+      lead.probabilityOverride === undefined
         ? ""
         : String(lead.probabilityOverride),
     // <input type="date"> wants YYYY-MM-DD, not a full ISO timestamp.
     expectedCloseDate: lead.expectedCloseDate
       ? lead.expectedCloseDate.slice(0, 10)
+      : "",
+    estimatedStartDate: lead.estimatedStartDate
+      ? lead.estimatedStartDate.slice(0, 10)
       : "",
     type: normalizeTypes(lead.type),
     notes: lead.notes || "",
@@ -422,8 +527,7 @@ export function shouldSetFollowupStage(
   formData: LeadDetailFormData,
 ): boolean {
   const isNewlyMovingToFollowup =
-    originalLead.stage !== formData.stage &&
-    formData.stage === "In Follow-up";
+    originalLead.stage !== formData.stage && formData.stage === "In Follow-up";
 
   const isReschedulingFollowup =
     (formData.followupDate !== originalLead.followupDate ||
@@ -431,12 +535,15 @@ export function shouldSetFollowupStage(
     formData.stage === "In Follow-up" &&
     originalLead.stage === "In Follow-up";
 
-const isFollowupDateTimeAdded =
-    !!((!originalLead.followupDate || !originalLead.followupTime) &&
+  const isFollowupDateTimeAdded = !!(
+    (!originalLead.followupDate || !originalLead.followupTime) &&
     formData.followupDate &&
-    formData.followupTime);
+    formData.followupTime
+  );
 
-  return isNewlyMovingToFollowup || isReschedulingFollowup || isFollowupDateTimeAdded;
+  return (
+    isNewlyMovingToFollowup || isReschedulingFollowup || isFollowupDateTimeAdded
+  );
 }
 
 export function buildFollowupHistoryEntry(
@@ -452,6 +559,52 @@ export function buildFollowupHistoryEntry(
   };
 }
 
+/**
+ * The entry a stage transition writes. Records where the lead came from, which
+ * the stage column alone cannot say once it has been overwritten.
+ */
+export function buildStageChangedHistoryEntry(
+  from: DBLeadStage,
+  to: DBLeadStage,
+  at: Date = new Date(),
+): HistoryItem {
+  return {
+    action: "Stage changed",
+    detail: `${stageDef(from).label} → ${stageDef(to).label}`,
+    type: "system",
+    date: sydneyDateOnly(at),
+    time: sydneyTimeOnly(at),
+  };
+}
+
+/** The entry a task writes when it is booked. */
+export function buildTaskAddedHistoryEntry(
+  summary: string,
+  at: Date = new Date(),
+): HistoryItem {
+  return {
+    action: "Task added",
+    detail: summary,
+    type: "system",
+    date: sydneyDateOnly(at),
+    time: sydneyTimeOnly(at),
+  };
+}
+
+/** The entry a task writes when it is closed out. */
+export function buildTaskCompletedHistoryEntry(
+  summary: string,
+  at: Date = new Date(),
+): HistoryItem {
+  return {
+    action: "Task completed",
+    detail: summary,
+    type: "system",
+    date: sydneyDateOnly(at),
+    time: sydneyTimeOnly(at),
+  };
+}
+
 export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
   const now = new Date();
   return {
@@ -463,7 +616,11 @@ export function buildFollowupConfirmedHistoryEntry(): HistoryItem {
   };
 }
 
-export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime: string, note?: string): HistoryItem {
+export function buildFollowupRescheduledHistoryEntry(
+  nextDate: string,
+  nextTime: string,
+  note?: string,
+): HistoryItem {
   return {
     action: "Follow-up rescheduled",
     detail: `Follow-up moved to ${nextDate} ${nextTime}${note ? ` \nNOTE: (${note})` : ""}`,
@@ -473,7 +630,9 @@ export function buildFollowupRescheduledHistoryEntry(nextDate: string, nextTime:
   };
 }
 
-export function buildFollowupNotRequiredHistoryEntry(note?: string): HistoryItem {
+export function buildFollowupNotRequiredHistoryEntry(
+  note?: string,
+): HistoryItem {
   const now = new Date();
   return {
     action: "Follow-up not required",
@@ -495,7 +654,9 @@ export function buildFollowupCompletedHistoryEntry(note?: string): HistoryItem {
   };
 }
 
-export function buildMeetingDidNotTakePlaceHistoryEntry(reason?: string): HistoryItem {
+export function buildMeetingDidNotTakePlaceHistoryEntry(
+  reason?: string,
+): HistoryItem {
   const now = new Date();
   return {
     action: "Meeting did not take place",
@@ -568,7 +729,9 @@ export function isQuotingStage(stage: LeadStage): boolean {
  */
 const KPI_COHORT_METRICS = ["total", "converted", "pendingFollowup", "lost"];
 
-export function isKpiCohortMetric(activeMetric: string | null | undefined): boolean {
+export function isKpiCohortMetric(
+  activeMetric: string | null | undefined,
+): boolean {
   if (!activeMetric) return false;
   return KPI_COHORT_METRICS.some((metric) => activeMetric.includes(metric));
 }

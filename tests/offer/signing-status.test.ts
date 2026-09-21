@@ -6,7 +6,9 @@ import {
   builderSignerState,
   findBuilderStatus,
   findSignerStatus,
+  shouldApplySignerStatus,
   signerStateFromStatus,
+  signerStatusesBelow,
   type OfferSignerStatus,
 } from "../../lib/offer/signing-status";
 
@@ -72,7 +74,10 @@ test("does not cross documents — a signed tender leaves the contract awaiting"
   // Same person signs both documents; the tender being signed must not make the
   // contract row show as signed.
   const statuses = [customer("a@example.com", "SIGNED", "TENDER")];
-  assert.equal(findSignerStatus(statuses, "CONTRACT", "a@example.com"), undefined);
+  assert.equal(
+    findSignerStatus(statuses, "CONTRACT", "a@example.com"),
+    undefined,
+  );
 });
 
 test("never matches the builder row when looking up a customer", () => {
@@ -174,4 +179,43 @@ test("two-customer tender: one signed, one not (the reported screenshot)", () =>
   assert.equal(signerStateFromStatus(nishaal!.status), "signed");
   assert.equal(signerStateFromStatus(dhrub!.status), "awaiting");
   assert.equal(builderSignerState(statuses, "TENDER"), "waiting_for_prior");
+});
+
+// ─── forward-only recipient status ───
+
+// The Connect webhook wrote whatever status each delivery carried. DocuSign
+// sends events out of order and redelivers after a failure, so a late
+// "delivered" landing after "completed" put a signed customer back to awaiting.
+
+test("a late delivered event never undoes a signature", () => {
+  assert.equal(shouldApplySignerStatus("SIGNED", "DELIVERED"), false);
+});
+
+test("a declined recipient is not moved back to sent", () => {
+  assert.equal(shouldApplySignerStatus("DECLINED", "SENT"), false);
+});
+
+test("a recipient moves forward into signed and declined", () => {
+  assert.equal(shouldApplySignerStatus("SENT", "SIGNED"), true);
+  assert.equal(shouldApplySignerStatus("DELIVERED", "DECLINED"), true);
+});
+
+test("a replayed signature is not applied twice", () => {
+  // Applying it again would overwrite signedAt with the replay's time.
+  assert.equal(shouldApplySignerStatus("SIGNED", "SIGNED"), false);
+});
+
+test("signed and declined are both terminal, so neither replaces the other", () => {
+  assert.equal(shouldApplySignerStatus("SIGNED", "DECLINED"), false);
+  assert.equal(shouldApplySignerStatus("DECLINED", "SIGNED"), false);
+});
+
+test("the webhook's where clause lists exactly the statuses below the next one", () => {
+  assert.deepEqual(signerStatusesBelow("SIGNED"), [
+    "CREATED",
+    "SENT",
+    "DELIVERED",
+  ]);
+  assert.deepEqual(signerStatusesBelow("DELIVERED"), ["CREATED", "SENT"]);
+  assert.deepEqual(signerStatusesBelow("CREATED"), []);
 });

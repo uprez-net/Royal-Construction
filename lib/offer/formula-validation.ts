@@ -6,19 +6,56 @@ import { parse, evaluate } from "mathjs";
 // other function with surprising side effects. Anything in this list must
 // correspond to a real MathJS function (verified — see lib/offer/formula-variables).
 export const SUPPORTED_FORMULA_FUNCTIONS: ReadonlySet<string> = new Set([
-  "min", "max", "round", "ceil", "floor", "fix", "sqrt", "abs", "pow",
-  "log", "log10", "log2", "exp", "sign",
-  "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
-  "sinh", "cosh", "tanh",
-  "gcd", "lcm", "mod", "hypot",
-  "mean", "median", "sum", "std", "variance",
+  "min",
+  "max",
+  "round",
+  "ceil",
+  "floor",
+  "fix",
+  "sqrt",
+  "abs",
+  "pow",
+  "log",
+  "log10",
+  "log2",
+  "exp",
+  "sign",
+  "sin",
+  "cos",
+  "tan",
+  "asin",
+  "acos",
+  "atan",
+  "atan2",
+  "sinh",
+  "cosh",
+  "tanh",
+  "gcd",
+  "lcm",
+  "mod",
+  "hypot",
+  "mean",
+  "median",
+  "sum",
+  "std",
+  "variance",
 ]);
 
 // MathJS parses these as bare SymbolNodes but resolves them to constant values
 // at evaluate time — they are NOT variables and must not be flagged unknown.
 export const MATH_CONSTANT_NAMES: ReadonlySet<string> = new Set([
-  "pi", "e", "tau", "phi", "E", "PI", "i", "NaN", "Infinity",
-  "true", "false", "null",
+  "pi",
+  "e",
+  "tau",
+  "phi",
+  "E",
+  "PI",
+  "i",
+  "NaN",
+  "Infinity",
+  "true",
+  "false",
+  "null",
 ]);
 
 export type FormulaValidation = {
@@ -78,7 +115,9 @@ export function validateFormula(
     name?: string;
     fn?: { name: string };
     args?: readonly MathNode[];
-    forEach?: (cb: (child: MathNode, path: string, parent: MathNode) => void) => void;
+    forEach?: (
+      cb: (child: MathNode, path: string, parent: MathNode) => void,
+    ) => void;
   };
   const root = node as unknown as MathNode;
 

@@ -27,6 +27,11 @@ type OfferWorkspaceImagesProps = {
   // Per-slot visual descriptors of this build's façade/finishes; woven into
   // the AI image prompt so concepts reflect the actual selections.
   readonly finishContexts?: Partial<Record<OfferImageSlotKey, string>>;
+  // Which slots have an AI render in flight. Owned by the screen so the spinner
+  // survives a trip to another step; only the active step is mounted now, and
+  // a lost spinner invites a second click on a render that is still running.
+  readonly aiBusy: Partial<Record<OfferImageSlotKey, boolean>>;
+  readonly onAiBusyChange: (key: OfferImageSlotKey, busy: boolean) => void;
 };
 
 export function OfferWorkspaceImages({
@@ -35,21 +40,23 @@ export function OfferWorkspaceImages({
   leadId,
   buildType,
   finishContexts,
+  aiBusy,
+  onAiBusyChange,
 }: OfferWorkspaceImagesProps) {
   const [uploading, setUploading] = useState<
     Partial<Record<OfferImageSlotKey, boolean>>
   >({});
   const [error, setError] = useState<string | null>(null);
   const [dropboxBusy, setDropboxBusy] = useState(false);
-  const [aiBusy, setAiBusy] = useState<
-    Partial<Record<OfferImageSlotKey, boolean>>
-  >({});
-  const { configured: dropboxConfigured, ready: dropboxReady, choose } =
-    useDropboxChooser();
+  const {
+    configured: dropboxConfigured,
+    ready: dropboxReady,
+    choose,
+  } = useDropboxChooser();
 
   async function handleGenerate(key: OfferImageSlotKey) {
     setError(null);
-    setAiBusy((current) => ({ ...current, [key]: true }));
+    onAiBusyChange(key, true);
     try {
       const result = await generateOfferInspirationImage({
         slotKey: key,
@@ -62,7 +69,7 @@ export function OfferWorkspaceImages({
         setError(result.error);
       }
     } finally {
-      setAiBusy((current) => ({ ...current, [key]: false }));
+      onAiBusyChange(key, false);
     }
   }
 
@@ -181,8 +188,12 @@ export function OfferWorkspaceImages({
                     src={url}
                   />
                 ) : (
-                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center font-mono text-[10px] uppercase tracking-wide text-royal-gold-dark">
-                    {busy ? "Uploading…" : aiPending ? "Generating…" : "No image"}
+                  <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                    {busy
+                      ? "Uploading…"
+                      : aiPending
+                        ? "Generating…"
+                        : "No image yet"}
                   </span>
                 )}
                 {isAi ? (
@@ -195,7 +206,11 @@ export function OfferWorkspaceImages({
                 {slot.label}
               </p>
               <div className="mt-auto flex flex-wrap items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-dark">
+                {/* The input is sr-only, so its own focus ring is invisible and
+                    the label is what a keyboard user sees. has-[:focus-visible]
+                    puts the ring on the label when the hidden input takes focus;
+                    without it, tabbing to Upload showed nothing at all. */}
+                <label className="inline-flex cursor-pointer items-center rounded-md bg-royal-gold-ink px-2.5 py-1 text-xs font-semibold text-white hover:bg-royal-gold-ink-hover has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-royal-gold-ink">
                   {url ? "Replace" : "Upload"}
                   <input
                     accept="image/png,image/jpeg,image/webp"

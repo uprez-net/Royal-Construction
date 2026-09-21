@@ -104,7 +104,8 @@ export function FollowupPromptModal({
       // that list is capped — so on a lead whose follow-up sorted past the cap
       // the loop below closed nothing and the dialog still reported success.
       const open = (await fetchOpenTasks({ leadIds: [lead.id] })).filter(
-        (t) => t.type !== "MEETING" && (taskId === undefined || t.id === taskId),
+        (t) =>
+          t.type !== "MEETING" && (taskId === undefined || t.id === taskId),
       );
       for (const task of open) {
         await completeTask(task.id);

@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  emailSchema,
-  paginationSchema,
-  phoneSchema,
-} from "./common";
+import { emailSchema, paginationSchema, phoneSchema } from "./common";
 
 /**
  * Customer and Site Manager query validators
@@ -21,15 +17,9 @@ export const customerLookupQuerySchema = z
   .object({
     ...paginationSchema.shape,
 
-    q: z
-      .string()
-      .trim()
-      .default(""),
+    q: z.string().trim().default(""),
 
-    search: z
-      .string()
-      .trim()
-      .default(""),
+    search: z.string().trim().default(""),
   })
   .strict();
 
@@ -55,19 +45,15 @@ export const siteManagerLookupQuerySchema = z
   .object({
     ...paginationSchema.shape,
 
-    q: z
-      .string()
-      .trim()
-      .default(""),
+    q: z.string().trim().default(""),
 
-    search: z
-      .string()
-      .trim()
-      .default(""),
+    search: z.string().trim().default(""),
   })
   .strict();
 
-export type SiteManagerLookupQuery = z.infer<typeof siteManagerLookupQuerySchema>;
+export type SiteManagerLookupQuery = z.infer<
+  typeof siteManagerLookupQuerySchema
+>;
 
 /**
  * Site Manager route params

@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import { ProjectStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -36,9 +36,9 @@ function readClaimWindow(requirements: unknown) {
 }
 
 /**
- * Cover is written against the contract price, so that is the claim amount.
- * The extracted contract figures are preferred over `totalBudget`, which is the
- * builder's internal number and drifts from the insured value.
+ * Cover is written against the total contract sum, so that is the claim amount.
+ * The extracted contract sum is preferred over `totalBudget`, which is the
+ * builder's internal number and can drift from the insured value.
  */
 function readClaimAmount(
   requirements: unknown,
@@ -47,11 +47,7 @@ function readClaimAmount(
   const commercials = (requirements as ProjectRequirementsPayload | null)
     ?.commercialsAndClaims;
 
-  const candidates = [
-    commercials?.contractPrice,
-    commercials?.totalContractSum,
-    Number(totalBudget),
-  ];
+  const candidates = [commercials?.totalContractSum, Number(totalBudget)];
 
   for (const candidate of candidates) {
     const value = Number(candidate);
@@ -118,10 +114,15 @@ export async function getHbcfTimelineForLead(
   const [lead, claims, adminContent] = await Promise.all([
     prisma.lead.findUnique({
       where: { id: leadId },
-      select: { id: true, budget: true, estimatedValue: true },
+      select: {
+        id: true,
+        budget: true,
+        estimatedValue: true,
+        estimatedStartDate: true,
+      },
     }),
     getActiveHbcfClaims(),
-    getAdminOfferContent()
+    getAdminOfferContent(),
   ]);
 
   if (!lead) return null;
@@ -138,7 +139,8 @@ export async function getHbcfTimelineForLead(
         budget: lead.budget,
       }),
       today,
-      totalSumAssured: adminContent.hbfcClaim.claimAmount,
+      estimatedStartDate: lead.estimatedStartDate,
+      totalSumAssured: adminContent.hbcfClaim.claimAmount,
     }),
     generatedAt: format(today, "yyyy-MM-dd"),
   };
@@ -168,6 +170,6 @@ export async function getHbcfBreachForProject(
   return hbcfProjectBreach({
     claims,
     projectId,
-    totalSumAssured: adminContent.hbfcClaim.claimAmount,
+    totalSumAssured: adminContent.hbcfClaim.claimAmount,
   });
 }

@@ -20,8 +20,14 @@ test("the token survives the prefixes Exchange puts on machine mail", () => {
 
 test("lowercase hex is normalised, and unrelated mail yields nothing", () => {
   // Only the hex digits are case-insensitive; the "RCOFR-" prefix is a literal.
-  assert.equal(extractOfferReplyToken("Re: proposal [RCOFR-a1b2c3d4e5f6]"), TOKEN);
-  assert.equal(extractOfferReplyToken("Re: proposal [rcofr-a1b2c3d4e5f6]"), null);
+  assert.equal(
+    extractOfferReplyToken("Re: proposal [RCOFR-a1b2c3d4e5f6]"),
+    TOKEN,
+  );
+  assert.equal(
+    extractOfferReplyToken("Re: proposal [rcofr-a1b2c3d4e5f6]"),
+    null,
+  );
   assert.equal(extractOfferReplyToken("Re: your quote"), null);
   assert.equal(extractOfferReplyToken(""), null);
   assert.equal(extractOfferReplyToken(undefined), null);

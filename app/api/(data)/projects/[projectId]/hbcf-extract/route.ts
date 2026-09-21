@@ -43,7 +43,9 @@ function normalizePageMarkdown(page: OCRPageObject, index: number) {
       .join("") ?? "";
   pageInfo +=
     page.images
-      ?.map((image) => `\n\n--- IMAGE ---\n\n${image.imageAnnotation ?? ""}\n\n`)
+      ?.map(
+        (image) => `\n\n--- IMAGE ---\n\n${image.imageAnnotation ?? ""}\n\n`,
+      )
       .join("") ?? "";
 
   return pageInfo;
@@ -118,7 +120,9 @@ export async function POST(
       (user.role === Role.CUSTOMER && user.customerId === project.customerId);
 
     if (!canEditProject) {
-      return forbiddenResponse("You do not have access to update this project.");
+      return forbiddenResponse(
+        "You do not have access to update this project.",
+      );
     }
 
     const pages = await processPDFWithMistral(body.data.url);

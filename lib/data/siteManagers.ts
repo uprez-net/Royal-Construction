@@ -6,102 +6,112 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 
-export type SiteManagerDropdownItem = Pick<User, "id" | "name" | "email" | "phone" | "createdAt" | "role">;
+export type SiteManagerDropdownItem = Pick<
+  User,
+  "id" | "name" | "email" | "phone" | "createdAt" | "role"
+>;
 
 export type PaginatedLookupResult<T> = {
-    items: T[];
-    page: number;
-    limit: number;
-    totalCount: number;
-    totalPages: number;
+  items: T[];
+  page: number;
+  limit: number;
+  totalCount: number;
+  totalPages: number;
 };
 
 const defaultPageSize = 10;
 
 function normalizeQuery(query?: string) {
-    return query?.trim() ?? "";
+  return query?.trim() ?? "";
 }
 
 async function getSiteManagersDropdownPage(
-    page: number,
-    limit: number,
-    query?: string,
+  page: number,
+  limit: number,
+  query?: string,
 ): Promise<PaginatedLookupResult<SiteManagerDropdownItem>> {
-    const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
-    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 50) : defaultPageSize;
-    const search = normalizeQuery(query);
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const safeLimit =
+    Number.isFinite(limit) && limit > 0
+      ? Math.min(Math.floor(limit), 50)
+      : defaultPageSize;
+  const search = normalizeQuery(query);
 
-    const where = {
-        role: {
-            not: {
-                in: [Role.GUEST, Role.CUSTOMER],
-            }
-        },
-        ...(search
-            ? {
-                OR: [
-                    { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                    { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                    { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
-                ],
-            }
-            : {}),
-    };
+  const where = {
+    role: {
+      not: {
+        in: [Role.GUEST, Role.CUSTOMER],
+      },
+    },
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { email: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { phone: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          ],
+        }
+      : {}),
+  };
 
-    const [items, totalCount] = await prisma.$transaction([
-        prisma.user.findMany({
-            where,
-            orderBy: { createdAt: "desc" },
-            skip: (safePage - 1) * safeLimit,
-            take: safeLimit,
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true,
-                createdAt: true,
-                role: true,
-            },
-        }),
-        prisma.user.count({ where }),
-    ]);
+  const [items, totalCount] = await prisma.$transaction([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        createdAt: true,
+        role: true,
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
 
-    return {
-        items,
-        page: safePage,
-        limit: safeLimit,
-        totalCount,
-        totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
-    };
+  return {
+    items,
+    page: safePage,
+    limit: safeLimit,
+    totalCount,
+    totalPages: Math.max(1, Math.ceil(totalCount / safeLimit)),
+  };
 }
 
 export async function getCachedSiteManagersForDropdown(
-    page = 1,
-    limit = defaultPageSize,
-    query?: string,
+  page = 1,
+  limit = defaultPageSize,
+  query?: string,
 ) {
-    "use cache";
+  "use cache";
 
-    cacheTag("site-managers");
+  cacheTag("site-managers");
 
-    cacheLife(CACHE_PROFILES.MEDIUM);
+  cacheLife(CACHE_PROFILES.MEDIUM);
 
-    return getSiteManagersDropdownPage(page, limit, query);
+  return getSiteManagersDropdownPage(page, limit, query);
 }
 
-export async function getSiteManagersForDropdown(page = 1, limit = defaultPageSize, query?: string) {
-    return getSiteManagersDropdownPage(page, limit, query);
+export async function getSiteManagersForDropdown(
+  page = 1,
+  limit = defaultPageSize,
+  query?: string,
+) {
+  return getSiteManagersDropdownPage(page, limit, query);
 }
 
 export async function getSiteManagerById(siteManagerId: string) {
-    return prisma.user.findFirst({
-        where: {
-            id: siteManagerId,
-            role: {
-                not: {
-                    in: [Role.GUEST, Role.CUSTOMER],
-                }
-            },
+  return prisma.user.findFirst({
+    where: {
+      id: siteManagerId,
+      role: {
+        not: {
+          in: [Role.GUEST, Role.CUSTOMER],
         },
-    });
+      },
+    },
+  });
 }

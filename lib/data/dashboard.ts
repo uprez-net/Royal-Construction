@@ -1,42 +1,68 @@
-"use server";
+// Server-only, not "use server": only the dashboard page, a Server Component,
+// calls these, and as Server Actions the KPI and graph totals across every
+// lead and project were an endpoint any signed-in user could post to.
+import "server-only";
 import type { DashboardKPI } from "@/types/dashboard";
 import prisma from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
 import {
-    startOfMonth,
-    subMonths,
-    startOfQuarter,
-    subQuarters,
-    isPast,
-    isToday
-} from "date-fns";
+  LEAD_NOTES_HISTORY_INCLUDE,
+  resolveLeadNotesTextOr,
+} from "@/lib/leads/notes-text";
+import { auth } from "@clerk/nextjs/server";
+import { startOfMonth, subMonths, startOfQuarter, subQuarters } from "date-fns";
 import type { FollowUpItem } from "@/components/dashboard/dashboard-follow-ups";
 import { calculateTrend } from "@/utils/formatters";
+import { dueFollowUpTaskWhere } from "@/lib/leads/followup-due";
+import { sydneyDateOnly, sydneyWallClockToInstant } from "@/lib/dates/sydney";
 import { getUserByClerkId } from "@/lib/data/user";
+import { leadListScope, type LeadListScope } from "@/lib/offer/access";
 
 type DashboardKPIQueryResult = {
-    follow_ups_count: bigint;
+  current_month_projects: bigint;
 
-    current_month_projects: bigint;
+  current_month_leads: bigint;
+  previous_month_leads: bigint;
 
-    current_month_leads: bigint;
-    previous_month_leads: bigint;
+  current_month_converted_leads: bigint;
+  previous_month_converted_leads: bigint;
 
-    current_month_converted_leads: bigint;
-    previous_month_converted_leads: bigint;
+  active_projects: bigint;
+  active_site_managers: bigint;
 
-    active_projects: bigint;
-    active_site_managers: bigint;
+  current_quarter_revenue: number | null;
+  previous_quarter_revenue: number | null;
 
-    current_quarter_revenue: number | null;
-    previous_quarter_revenue: number | null;
+  current_quarter_estimated_spend: number | null;
+  previous_quarter_estimated_spend: number | null;
 
-    current_quarter_estimated_spend: number | null;
-    previous_quarter_estimated_spend: number | null;
-
-    current_quarter_actual_spend: number | null;
-    previous_quarter_actual_spend: number | null;
+  current_quarter_actual_spend: number | null;
+  previous_quarter_actual_spend: number | null;
 };
+
+/**
+ * Which leads this caller is allowed to read, as a filter.
+ *
+ * Resolves the Clerk id to the application `User` first, because the two are
+ * different identifier spaces — comparing one to the other is what made the
+ * follow-up KPI read zero for everyone (#308). `leadListScope` then answers
+ * with `{ assignedId: null }` for internal roles, meaning no restriction, or
+ * the user's own uuid for anyone else.
+ *
+ * Throws rather than falling back to an unscoped read: a signed-in Clerk user
+ * with no application row is a broken state, and the safe reading of it is "no
+ * access", never "all leads".
+ *
+ * @param clerkId - The Clerk user id from `auth()`.
+ * @returns The lead-access scope to apply to every query in this request.
+ * @throws Error if the Clerk user has no corresponding application user.
+ */
+async function resolveLeadScope(clerkId: string): Promise<LeadListScope> {
+  const user = await getUserByClerkId(clerkId);
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+  return leadListScope(user);
+}
 
 /**
  * Gets key performance indicator data for the dashboard, including trends compared to previous periods. Requires user authentication and aggregates data across leads, projects, and milestones to provide insights on follow-ups, new leads, conversions, revenue, and spending.
@@ -44,31 +70,40 @@ type DashboardKPIQueryResult = {
  * @throws Error if user is not authenticated or if database queries fail
  */
 export async function getDashboardKPIData(): Promise<DashboardKPI> {
-    try {
-        const { userId } = await auth();
+  try {
+    const { userId } = await auth();
 
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
 
-        const now = new Date();
+    const scope = await resolveLeadScope(userId);
 
-        const currentMonthStart = startOfMonth(now);
-        const previousMonthStart = startOfMonth(subMonths(now, 1));
+    const now = new Date();
 
-        const currentQuarterStart = startOfQuarter(now);
-        const previousQuarterStart = startOfQuarter(subQuarters(now, 1));
+    const currentMonthStart = startOfMonth(now);
+    const previousMonthStart = startOfMonth(subMonths(now, 1));
 
-        const [result] = await prisma.$queryRaw<DashboardKPIQueryResult[]>`
+    const currentQuarterStart = startOfQuarter(now);
+    const previousQuarterStart = startOfQuarter(subQuarters(now, 1));
+
+    // The follow-up count is deliberately NOT part of this query. It used to
+    // be, and it read zero for every user on every load: the CTE compared
+    // `Lead.assignedId` — a `User.id` uuid — against the Clerk id `auth()`
+    // returns, two identifier spaces that never match. Nothing failed; the KPI
+    // just sat at 0 beside a card listing fifteen outstanding items.
+    //
+    // Counting through the same predicate the list below uses is the fix for
+    // the class, not only the instance: the header number and the card cannot
+    // now disagree, because there is one query behind both — including the
+    // access scope, so the number never counts rows the card may not show.
+    const [followUpsCount, [result]] = await Promise.all([
+      prisma.leadTask.count({
+        where: dueFollowUpTaskWhere({ now, assignedId: scope.assignedId }),
+      }),
+      prisma.$queryRaw<DashboardKPIQueryResult[]>`
             WITH lead_stats AS (
                 SELECT
-                    COUNT(*) FILTER (
-                        WHERE
-                            "assignedId" = ${userId}
-                            AND "followupDate" <= ${now}
-                            AND "followupCompletedAt" IS NULL
-                    ) AS follow_ups_count,
-
                     COUNT(*) FILTER (
                         WHERE "createdAt" >= ${currentMonthStart}
                     ) AS current_month_leads,
@@ -162,135 +197,173 @@ export async function getDashboardKPIData(): Promise<DashboardKPI> {
             FROM lead_stats
             CROSS JOIN project_stats
             CROSS JOIN milestone_stats;
-            `;
+            `,
+    ]);
 
-        const currentRevenue = Number(result.current_quarter_revenue);
-        const previousRevenue = Number(result.previous_quarter_revenue);
+    const currentRevenue = Number(result.current_quarter_revenue);
+    const previousRevenue = Number(result.previous_quarter_revenue);
 
-        const currentEstimatedSpend = Number(
-            result.current_quarter_estimated_spend
-        );
+    const currentEstimatedSpend = Number(
+      result.current_quarter_estimated_spend,
+    );
 
-        const previousEstimatedSpend = Number(
-            result.previous_quarter_estimated_spend
-        );
+    const previousEstimatedSpend = Number(
+      result.previous_quarter_estimated_spend,
+    );
 
-        const currentActualSpend = Number(
-            result.current_quarter_actual_spend
-        );
+    const currentActualSpend = Number(result.current_quarter_actual_spend);
 
-        const previousActualSpend = Number(
-            result.previous_quarter_actual_spend
-        );
+    const previousActualSpend = Number(result.previous_quarter_actual_spend);
 
-        const currentProfit = currentRevenue - currentActualSpend;
-        const previousProfit = previousRevenue - previousActualSpend;
+    const currentProfit = currentRevenue - currentActualSpend;
+    const previousProfit = previousRevenue - previousActualSpend;
 
-        return {
-            followUpsCount: Number(result.follow_ups_count),
+    return {
+      followUpsCount,
 
-            newProjectsCount: Number(result.current_month_projects),
+      newProjectsCount: Number(result.current_month_projects),
 
-            newLeadsThisMonth: calculateTrend(
-                Number(result.current_month_leads),
-                Number(result.previous_month_leads)
-            ),
+      newLeadsThisMonth: calculateTrend(
+        Number(result.current_month_leads),
+        Number(result.previous_month_leads),
+      ),
 
-            newLeadsConvertedThisMonth: calculateTrend(
-                Number(result.current_month_converted_leads),
-                Number(result.previous_month_converted_leads)
-            ),
+      newLeadsConvertedThisMonth: calculateTrend(
+        Number(result.current_month_converted_leads),
+        Number(result.previous_month_converted_leads),
+      ),
 
-            revenueThisQuarter: calculateTrend(
-                currentRevenue,
-                previousRevenue
-            ),
+      revenueThisQuarter: calculateTrend(currentRevenue, previousRevenue),
 
-            netProfitThisQuarter: calculateTrend(
-                currentProfit,
-                previousProfit
-            ),
+      netProfitThisQuarter: calculateTrend(currentProfit, previousProfit),
 
-            activeProjects: {
-                total: Number(result.active_projects),
-                trendDelta: 0,
-            },
+      activeProjects: {
+        total: Number(result.active_projects),
+        trendDelta: 0,
+      },
 
-            activeSiteManagers: {
-                total: Number(result.active_site_managers),
-                trendDelta: 0,
-            },
+      activeSiteManagers: {
+        total: Number(result.active_site_managers),
+        trendDelta: 0,
+      },
 
-            estimateProjectSpendingThisQuarter: calculateTrend(
-                currentEstimatedSpend,
-                previousEstimatedSpend
-            ),
+      estimateProjectSpendingThisQuarter: calculateTrend(
+        currentEstimatedSpend,
+        previousEstimatedSpend,
+      ),
 
-            actualProjectSpendingThisQuarter: calculateTrend(
-                currentActualSpend,
-                previousActualSpend
-            ),
-        };
-    } catch (error) {
-        console.error("Error fetching dashboard KPI data:", error);
-        throw new Error("Failed to fetch dashboard KPI data");
-    }
+      actualProjectSpendingThisQuarter: calculateTrend(
+        currentActualSpend,
+        previousActualSpend,
+      ),
+    };
+  } catch (error) {
+    console.error("Error fetching dashboard KPI data:", error);
+    throw new Error("Failed to fetch dashboard KPI data");
+  }
 }
 /**
- * Gets follow-up items for the dashboard, showing leads that are either in the follow-up stage or have a follow-up date that is due. Requires user authentication and returns items with status indicators based on due dates.
- * @returns Array of FollowUpItem objects containing lead information and follow-up status
- * @throws Error if user is not authenticated or if database queries fail
+ * The outstanding follow-ups behind the dashboard card, oldest first.
+ *
+ * Reads `LeadTask`. The old version read `Lead.followupDate` and
+ * `Lead.followupCompletedAt`, which is a list no operator could ever clear —
+ * see `dueFollowUpTaskWhere` for why. On staging it showed fifteen leads, all
+ * of them overdue since April to June, fourteen of which had their follow-up
+ * task completed; the one genuinely open task belonged to a lead marked Lost.
+ *
+ * The blanket assignee filter is gone with it. It was never doing the job it
+ * looked like it was doing: 47 of 66 leads carry no `assignedId` at all,
+ * including every one of those fifteen, so scoping every caller to their own
+ * leads hid the work rather than focusing it. Nothing else on this dashboard
+ * is per-user — new leads, new projects and revenue are all business-wide —
+ * and neither is the Follow-ups tab this card sends you to.
+ *
+ * What replaces it is the access boundary rather than nothing. `leadListScope`
+ * gives internal roles the whole business and holds everyone else to their own
+ * leads, which is the same rule `canAccessLead` applies one lead at a time.
+ * Dropping the filter outright would have widened row-level access: `proxy.ts`
+ * only turns away unauthenticated and GUEST users, so a CUSTOMER can reach
+ * this page, and these rows carry lead names, locations and notes.
  */
 export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
-    try {
-        const { userId } = await auth();
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
-        const user = await getUserByClerkId(userId);
-        if (!user) {
-            throw new Error("Unauthorized");
-        }
-
-        const now = new Date();
-
-        const followUps = await prisma.lead.findMany({
-            where: {
-                OR: [
-                    {
-                        assignedId: user.id,
-                        followupCompletedAt: null,
-                        followupDate: {
-                            lte: now,
-                        },
-                    }
-                ]
-            },
-            orderBy: {
-                followupDate: "desc",
-            },
-        });
-
-        return followUps.map((lead) => ({
-            id: lead.id,
-            customerName: lead.name,
-            projectName: lead.location,
-            description: lead.notes ?? "No additional details",
-            dueAt: lead.followupDate ?? now,
-            status:
-                lead.followupDate
-                    ?
-                    isToday(new Date(lead.followupDate))
-                        ? "negative"
-                        : isPast(new Date(lead.followupDate))
-                            ? "negative"
-                            : "positive"
-                    : "neutral", // if follow-up is overdue, set to "negative", if due today, set to "negative", if due in the future, set to "positive"
-        }));
-    } catch (error) {
-        console.error("Error fetching follow-up items:", error);
-        throw new Error("Failed to fetch follow-up items");
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
     }
+
+    const scope = await resolveLeadScope(userId);
+
+    const tasks = await prisma.leadTask.findMany({
+      where: dueFollowUpTaskWhere({ assignedId: scope.assignedId }),
+      select: {
+        id: true,
+        dueDate: true,
+        // Needed to render a time at all. `dueDate` is always Sydney midnight
+        // — `sydneyStartOfDay` of the chosen day — and the clock face lives in
+        // `dueTime` beside it. Reading the date alone puts "12:00 AM" on the
+        // card next to every call and site meeting.
+        dueTime: true,
+        notes: true,
+        lead: {
+          select: {
+            name: true,
+            location: true,
+            notes: true,
+            notesDoc: true,
+            // The note fallback is only as good as what the query loaded. The
+            // Notes composer clears `notes` AND `notesDoc` and stores the text
+            // as history, so without these rows every composed note reads "No
+            // additional details" here — the resolver cannot invent what was
+            // never selected.
+            history: LEAD_NOTES_HISTORY_INCLUDE,
+          },
+        },
+      },
+      // Longest overdue first, which is the order the card's "N days overdue"
+      // badge makes sense in. Ties broken by id so the list is stable across
+      // loads rather than reshuffling under whatever order the planner picks.
+      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+    });
+
+    // flatMap rather than map so the "dated only" contract is enforced by the
+    // code and not merely asserted with a `!`. The predicate already excludes
+    // undated tasks; this is what keeps that true if it ever stops being.
+    return tasks.flatMap<FollowUpItem>((task) =>
+      task.dueDate === null
+        ? []
+        : [
+            {
+              // The task, not the lead: one lead can have several pieces of
+              // open work, and this id is the React key for the row.
+              id: task.id,
+              customerName: task.lead.name,
+              projectName: task.lead.location,
+              // What this particular follow-up is about, falling back to the
+              // lead's notes when the task carries none.
+              description:
+                task.notes?.trim() ||
+                resolveLeadNotesTextOr(task.lead, "No additional details"),
+              // The instant the work is actually due, rebuilt from the Sydney
+              // wall clock the two columns store between them. Handing the
+              // card `dueDate` on its own would date every row correctly and
+              // time every one of them at midnight.
+              dueAt: sydneyWallClockToInstant(
+                sydneyDateOnly(task.dueDate),
+                task.dueTime ?? undefined,
+              ),
+              // Everything here is due today or already past it, so there is
+              // no "positive" case left to express. The badge still
+              // distinguishes "Due today" from "N days overdue"; the colour
+              // does not.
+              status: "negative",
+            },
+          ],
+    );
+  } catch (error) {
+    console.error("Error fetching follow-up items:", error);
+    throw new Error("Failed to fetch follow-up items");
+  }
 }
 
 /**
@@ -299,19 +372,24 @@ export async function getDashboardFollowUps(): Promise<FollowUpItem[]> {
  * @throws Error if user is not authenticated or if database queries fail
  */
 export async function getDashboardGraphData() {
-    try {
-        const { userId } = await auth();
-        if (!userId) {
-            throw new Error("Unauthorized");
-        }
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
 
-        const [nonConversionData, leadAndRevenueDataUptoPastYear, conversionBreakdownData, estVsSpendProjectData] = await Promise.all([
-            prisma.$queryRaw<
-                {
-                    name: string | null;
-                    value: bigint;
-                }[]
-            >`
+    const [
+      nonConversionData,
+      leadAndRevenueDataUptoPastYear,
+      conversionBreakdownData,
+      estVsSpendProjectData,
+    ] = await Promise.all([
+      prisma.$queryRaw<
+        {
+          name: string | null;
+          value: bigint;
+        }[]
+      >`
                 SELECT
                   COALESCE("lostReason", 'Unknown') AS name,
                   COUNT(*) AS value
@@ -321,14 +399,14 @@ export async function getDashboardGraphData() {
                 ORDER BY value DESC
               `,
 
-            prisma.$queryRaw<
-                {
-                    month: Date;
-                    leads: bigint;
-                    converted: bigint;
-                    revenue: bigint;
-                }[]
-            >`
+      prisma.$queryRaw<
+        {
+          month: Date;
+          leads: bigint;
+          converted: bigint;
+          revenue: bigint;
+        }[]
+      >`
                 WITH months AS (
                     SELECT generate_series(
                         DATE_TRUNC('month', NOW() - INTERVAL '11 months'),
@@ -363,12 +441,12 @@ export async function getDashboardGraphData() {
                 LEFT JOIN project_revenue pr ON pr.month = m.month
                 ORDER BY m.month;
                   `,
-            prisma.$queryRaw<
-                {
-                    stage: "converted" | "pending" | "lost" | "nurture";
-                    value: bigint;
-                }[]
-            >`
+      prisma.$queryRaw<
+        {
+          stage: "converted" | "pending" | "lost" | "nurture";
+          value: bigint;
+        }[]
+      >`
             SELECT
                 CASE
                 WHEN stage IN ('WON', 'CONVERTED')
@@ -399,13 +477,13 @@ export async function getDashboardGraphData() {
             WHERE "isArchived" = false
             GROUP BY 1
             `,
-            prisma.$queryRaw<
-                {
-                    month: Date;
-                    estimateSpend: number;
-                    actualSpend: number;
-                }[]
-            >`
+      prisma.$queryRaw<
+        {
+          month: Date;
+          estimateSpend: number;
+          actualSpend: number;
+        }[]
+      >`
                 SELECT
                     DATE_TRUNC('month', "targetDate") AS month,
                     COALESCE(SUM("budget"), 0) AS "estimateSpend",
@@ -414,42 +492,50 @@ export async function getDashboardGraphData() {
                 WHERE "targetDate" >= ${startOfMonth(subMonths(new Date(), 11))}
                 GROUP BY 1
                 ORDER BY 1;
-                `
-        ]);
+                `,
+    ]);
 
-        const formattedNonConversionData = nonConversionData.map((item) => ({
-            name: item.name ?? "Unknown",
-            value: Number(item.value),
-        }));
+    const formattedNonConversionData = nonConversionData.map((item) => ({
+      name: item.name ?? "Unknown",
+      value: Number(item.value),
+    }));
 
-        const formattedLeadAndRevenueData = leadAndRevenueDataUptoPastYear.map((item) => ({
-            month: item.month,
-            leads: Number(item.leads),
-            converted: Number(item.converted),
-            revenue: Number(item.revenue),
-        }));
+    const formattedLeadAndRevenueData = leadAndRevenueDataUptoPastYear.map(
+      (item) => ({
+        month: item.month,
+        leads: Number(item.leads),
+        converted: Number(item.converted),
+        revenue: Number(item.revenue),
+      }),
+    );
 
-        const formattedConversionBreakdownData = conversionBreakdownData.map((item) => ({
-            stage: item.stage,
-            value: Number(item.value),
-        }));
+    const formattedConversionBreakdownData = conversionBreakdownData.map(
+      (item) => ({
+        stage: item.stage,
+        value: Number(item.value),
+      }),
+    );
 
-        const formattedEstVsSpendProjectData = estVsSpendProjectData.map((item) => ({
-            month: item.month,
-            estimateSpend: Number(item.estimateSpend),
-            actualSpend: Number(item.actualSpend),
-        }));
+    const formattedEstVsSpendProjectData = estVsSpendProjectData.map(
+      (item) => ({
+        month: item.month,
+        estimateSpend: Number(item.estimateSpend),
+        actualSpend: Number(item.actualSpend),
+      }),
+    );
 
-        return {
-            nonConversionData: formattedNonConversionData,
-            leadAndRevenueData: formattedLeadAndRevenueData,
-            conversionBreakdownData: formattedConversionBreakdownData,
-            estVsSpendProjectData: formattedEstVsSpendProjectData,
-        };
-    } catch (error) {
-        console.error("Error fetching dashboard graph data:", error);
-        throw new Error("Failed to fetch dashboard graph data");
-    }
+    return {
+      nonConversionData: formattedNonConversionData,
+      leadAndRevenueData: formattedLeadAndRevenueData,
+      conversionBreakdownData: formattedConversionBreakdownData,
+      estVsSpendProjectData: formattedEstVsSpendProjectData,
+    };
+  } catch (error) {
+    console.error("Error fetching dashboard graph data:", error);
+    throw new Error("Failed to fetch dashboard graph data");
+  }
 }
 
-export type DashboardGraphData = Awaited<ReturnType<typeof getDashboardGraphData>>;
+export type DashboardGraphData = Awaited<
+  ReturnType<typeof getDashboardGraphData>
+>;

@@ -14,11 +14,23 @@ import {
 import { parseNonNegativeNumberInput } from "@/lib/offer/workspace-pricing";
 import { Info, Layers } from "lucide-react";
 import type { PropsWithChildren } from "react";
+import { isSupportedCalcVersion } from "@/lib/offer/calc-version";
+import {
+  CountField,
+  Field,
+  FieldLabel,
+  GROUP_HEADING_CLASS,
+} from "./offer-workspace-fields";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
 import { formatCurrency, numberInputValue } from "./offer-workspace-format";
 import { OfferWorkspaceJob } from "@/lib/offer/workspace-model";
+import { cn } from "@/lib/utils";
 
 type AreaCalculatorPanelProps = {
+  // The offer's own calculation rules. Without this the on-screen frame figures
+  // of an already-issued offer would silently change under the corrected maths,
+  // which is the exact gap the pin exists to close.
+  readonly calcVersion: number;
   readonly job: OfferWorkspaceJob;
   readonly basis: OfferAreaBasis;
   readonly area: OfferAreaCalculator;
@@ -26,21 +38,6 @@ type AreaCalculatorPanelProps = {
   readonly onJobChange: (patch: Partial<OfferWorkspaceJob>) => void;
   readonly onAreaChange: (patch: Partial<OfferAreaCalculator>) => void;
 };
-
-function Field({
-  children,
-  className,
-  label,
-}: PropsWithChildren<{ readonly className?: string; readonly label: string }>) {
-  return (
-    <label className={className}>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
 
 function AreaField({
   label,
@@ -70,6 +67,7 @@ function AreaField({
 }
 
 export function AreaCalculatorPanel({
+  calcVersion,
   job,
   basis,
   area,
@@ -77,7 +75,32 @@ export function AreaCalculatorPanel({
   onAreaChange,
   onJobChange,
 }: AreaCalculatorPanelProps) {
-  const calc = calculateOfferArea(basis, area, rateConstants);
+  // An offer minted by a newer build names calculation rules this one does not
+  // carry. Recomputing under ours would show figures the offer was never priced
+  // on, so say so instead. The offer's own stored numbers are untouched.
+  if (!isSupportedCalcVersion(calcVersion)) {
+    return (
+      <Card className="border-border/70 bg-white/95 shadow-sm">
+        <CardHeader className="border-b border-border/70">
+          <OfferCardHeading
+            description="This offer was priced under newer calculation rules than this version of the app carries, so the estimating aid is unavailable. The offer's own figures are unaffected."
+            icon={<Info className="size-4" aria-hidden="true" />}
+            title="Estimating aid unavailable"
+          />
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const totalBathrooms =
+    job.bathrooms + (job.hasGrannyHome ? job.grannyBathrooms : 0);
+  const calc = calculateOfferArea(
+    basis,
+    area,
+    rateConstants,
+    calcVersion,
+    totalBathrooms,
+  );
 
   return (
     <Card className="border-border/70 bg-white/95 shadow-sm">
@@ -95,12 +118,12 @@ export function AreaCalculatorPanel({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-5 pt-4">
+      <CardContent className="grid gap-5">
         <section className="grid gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <h4 className={GROUP_HEADING_CLASS}>
               Floor areas · from Job setup
-            </h3>
+            </h4>
             <span className="text-sm font-medium">
               {getAreaBasisTotalSqm(basis)} sqm total
             </span>
@@ -118,40 +141,33 @@ export function AreaCalculatorPanel({
           </dl>
         </section>
         <section className="grid grid-cols-3 gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground col-span-3">
+          <h4 className={cn("col-span-3", GROUP_HEADING_CLASS)}>
             Kitchen & linens & Showers
-          </h3>
+          </h4>
           <AreaField
             label="Kitchen sqm"
             value={job.kitchenSqm}
             onChange={(kitchenSqm) => onJobChange({ kitchenSqm })}
           />
+          {/* Whole-build counts. Same parse rule as the room counts in Job
+              setup: parseFloat(...) || 0 accepted a negative, and a stored 0
+              rendered as a literal "0" the caret collided with. */}
           <Field label="Total Linens">
-            <Input
-              min="0"
-              type="number"
-              placeholder="Auto-filled from lead requirements"
+            <CountField
               value={job.linenCount}
-              onChange={(event) =>
-                onJobChange({ linenCount: parseFloat(event.target.value) || 0 })
-              }
+              onChange={(linenCount) => onJobChange({ linenCount })}
             />
           </Field>
           <Field label="Total Number of Showers">
-            <Input
-              min="0"
-              type="number"
-              placeholder="Auto-filled from lead requirements"
+            <CountField
               value={job.showerCount}
-              onChange={(event) =>
-                onJobChange({ showerCount: parseFloat(event.target.value) || 0 })
-              }
+              onChange={(showerCount) => onJobChange({ showerCount })}
             />
           </Field>
         </section>
-        <div className="grid gap-4 xl:grid-cols-4">
+        <div className="grid gap-4 @3xl/pane:grid-cols-2 @5xl/pane:grid-cols-4">
           <HelperSection title="Slab">
-            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+            <div className="flex flex-col gap-2 mb-auto">
               <NumberField
                 label="Drop edge beam surface area"
                 value={area.dropEdgeBeamSurfaceArea}
@@ -181,7 +197,7 @@ export function AreaCalculatorPanel({
           </HelperSection>
 
           <HelperSection title="Frame">
-            <div className="flex flex-col gap-2 space-x-3 mb-auto">
+            <div className="flex flex-col gap-2 mb-auto">
               <NumberField
                 label="Steel Cost"
                 value={area.steel}
@@ -291,32 +307,27 @@ export function AreaCalculatorPanel({
           </HelperSection>
 
           <HelperSection title="Tiles">
-            <div className="flex flex-col gap-2 space-x-3 mb-auto">
-              <NumberField
-                label="Tiles required for Ground floor"
-                value={area.tilesGroundFloor}
-                onChange={(value) => onAreaChange({ tilesGroundFloor: value })}
+            <div className="flex flex-col gap-2 mb-auto">
+              <CalculatedSqmField
+                label="Ground floor tiles required (sqm)"
+                value={calc.groundFloorTilesSqm}
+                helperText="Ground floor + alfresco + balcony + granny flat + porch"
               />
-              <NumberField
-                label="Tiles required for all bathroom"
-                value={area.tilesBathroom}
-                onChange={(value) => onAreaChange({ tilesBathroom: value })}
-              />
-              <NumberField
-                label="Tiles required for steps"
-                value={area.tilesSteps}
-                onChange={(value) => onAreaChange({ tilesSteps: value })}
+              <CalculatedSqmField
+                label="Bathroom tiles required (sqm)"
+                value={calc.bathroomTilesSqm}
+                helperText={`${totalBathrooms} bathroom${totalBathrooms === 1 ? "" : "s"} × 35 sqm`}
               />
             </div>
             <ResultRows
               rows={[
                 [
-                  "Additional Tiles for Waste (10%)",
-                  String(Math.round(calc.tilesWasted)),
+                  "Additional tiles for waste (10%)",
+                  `${calc.tilesWasted.toFixed(2)} sqm`,
                 ],
                 [
-                  "Total tiles required",
-                  String(Math.round(calc.totalTilesRequired)),
+                  "Total tiles required (sqm)",
+                  `${calc.totalTilesRequired.toFixed(2)} sqm`,
                 ],
               ]}
             />
@@ -348,7 +359,7 @@ function HelperSection({
 }: PropsWithChildren<{ readonly title: string }>) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-background/70 p-3">
-      <h3 className="text-sm font-semibold">{title}</h3>
+      <h4 className="text-sm font-semibold">{title}</h4>
       {children}
     </section>
   );
@@ -365,9 +376,7 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
+      <FieldLabel>{label}</FieldLabel>
       <Input
         min="0"
         placeholder="0"
@@ -380,6 +389,37 @@ function NumberField({
           }
         }}
       />
+    </label>
+  );
+}
+
+function CalculatedSqmField({
+  helperText,
+  label,
+  value,
+}: {
+  readonly helperText: string;
+  readonly label: string;
+  readonly value: number;
+}) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
+      <div className="relative mt-1">
+        <Input
+          aria-readonly="true"
+          className="bg-muted/50 pr-14 font-mono tabular-nums text-muted-foreground"
+          readOnly
+          type="text"
+          value={value.toFixed(2)}
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          sqm
+        </span>
+      </div>
+      <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+        {helperText}
+      </span>
     </label>
   );
 }

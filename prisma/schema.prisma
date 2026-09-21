@@ -13,12 +13,40 @@ enum Role {
   SITE_MANAGER
 }
 
+/// Where a project is up to, as the list filters and the header chip read it.
+///
+/// Append-only, and deliberately not two enums. The three values at the bottom
+/// are the compliance ladder and the rest are the build -- but a project is
+/// only ever on one of them, because the build does not start until compliance
+/// is finished, and a second column would be a second thing to keep in step
+/// with the first.
+///
+/// DRAFT -> COMPLIANCE_STARTED -> COMPLIANCE_COMPLETED -> ACTIVE -> COMPLETED
+/// is the whole path. NEEDS_ATTENTION and DELAYED sit outside it: either can be
+/// set at any point and neither says anything about which stage the job is on,
+/// which is why the ladder is not modelled as an ordering.
 enum ProjectStatus {
   ACTIVE
   ON_TRACK
   NEEDS_ATTENTION
   DELAYED
   COMPLETED
+
+  /// Created, and nobody has started on it. The status a project is born on.
+  ///
+  /// It replaced ACTIVE as the default, which was never true on the day it was
+  /// set: a project with no certifier, no compliance file and no milestone
+  /// underway is not active in any sense a site manager would recognise, and a
+  /// list opening on "Active" showed every job ever created as in flight.
+  DRAFT
+  /// The certifier has been engaged. Set once and never unset -- the compliance
+  /// file exists from that moment, and a job does not go back to DRAFT because
+  /// somebody is slow answering.
+  COMPLIANCE_STARTED
+  /// The construction certificate is on the file and the HBCF cover with it.
+  /// Everything the build is not allowed to start without is done, and nothing
+  /// on site has begun.
+  COMPLIANCE_COMPLETED
 }
 
 enum MilestoneStatus {
@@ -41,6 +69,7 @@ enum TradieScheduleStatus {
   QUOTE_RECEIVED
   AWAITING_ADMIN_APPROVAL
   CONFIRMED
+  PENDING_FINAL_CONFIRMATION
   NO_RESPONSE
   DECLINED
   COMPLETED
@@ -220,6 +249,247 @@ enum ProjectStage {
   Final
 }
 
+/// The certifier engagement's position in the compliance and certification
+/// flow. Append-only: a retired value keeps its slot with a comment rather than
+/// being deleted, so historical rows stay readable.
+enum CertifierEngagementStatus {
+  NOT_STARTED
+  COLLECTING_DOCS
+  OUTREACH_SENT
+  AWAITING_RESPONSE
+  RESPONSE_RECEIVED
+  SIGNING
+  CHECKLIST_EXTRACTING
+  CHECKLIST_TRACKING
+  INSURANCE
+  IN_REVIEW
+  APPROVED
+
+  /// The certifier has issued the construction certificate.
+  ///
+  /// After APPROVED rather than instead of it: APPROVED is every checklist line
+  /// passing, which is what the certifier needs before they will issue
+  /// anything, and this is the document that follows. The gap between the two
+  /// is days, and it is entirely the certifier's, so it is a stage of its own
+  /// rather than a flag on the last one.
+  CERTIFICATE_ISSUED
+  /// The certificate is on the file and so is the HBCF cover. Nothing on the
+  /// compliance file is outstanding and the build can start.
+  COMPLETED
+}
+
+/// What a ComplianceDocument row holds. The first six are the documents the
+/// certifier must be sent up front; the next block is what comes back from
+/// them; CHECKLIST_ITEM is one line of the returned checklist, tracked as its
+/// own row so each can be uploaded and approved independently.
+///
+/// UNKNOWN is the classifier's fallback. An inbound attachment it cannot place
+/// lands here rather than being guessed at — a mislabelled document is worse
+/// than an unlabelled one, because only the second is visibly incomplete.
+enum ComplianceDocumentType {
+  DEPOSITED_PLAN
+  TITLE_SEARCH_DETAIL_AND_LEVEL
+  SURVEY
+  PRELIMINARY_ARCHITECTURAL_PLANS
+  PLANNING_CERTIFICATE_10_7
+  FULL_ARCHITECTURAL_DESIGN
+  /// What the builder holds and the surveyor is sent to start work: the deed
+  /// proving who owns the land. It is an input to the required pack rather
+  /// than part of it, which is why it is not in REQUIRED_COMPLIANCE_DOCUMENTS
+  /// -- the certifier is never sent one.
+  LAND_DEED
+  INVOICE
+  FEE_PROPOSAL
+  CDC_FORM
+  CHECKLIST
+  SIGNED_FEE_PROPOSAL
+  SIGNED_CDC_FORM
+  CHECKLIST_ITEM
+  HOME_INSURANCE
+  /// A BASIX certificate, and a bushfire attack level assessment.
+  ///
+  /// Neither is part of the required pack and neither comes back from the
+  /// certifier -- they are what a checklist line asks for, produced by a
+  /// consultant nobody has engaged yet. They exist as types so an extracted
+  /// line can say which consultant it needs (ChecklistItemDetail.mapsToType),
+  /// which is what puts a "Connect with…" control on that row rather than
+  /// leaving an admin to work out who to ring.
+  ///
+  /// A certifier routinely words the second as a "BAL Risk Assessment
+  /// Certificate" or a "Bushfire Certificate" rather than a report; the
+  /// extraction is told to read all three wordings onto this one type.
+  BASIX_CERTIFICATE
+  BUSHFIRE_REPORT
+
+  // -------------------------------------------------------------------
+  // What the rest of a certifier's checklist asks for, and what a
+  // development application needs on top of the pack.
+  //
+  // Every one of these is obtained the same three ways the two above are:
+  // commissioned from a consultant, bought from a portal, or produced by the
+  // builder. They are types rather than free-text checklist labels for the
+  // same reason BASIX_CERTIFICATE is -- naming the type is what lets a row
+  // offer the control that actually gets the document, instead of an Upload
+  // button beside a line nobody knows who to ring about.
+  // -------------------------------------------------------------------
+
+  /// From the structural engineer. Three separate deliverables, because a
+  /// checklist asks for them as three separate lines and one can land months
+  /// before another.
+  STRUCTURAL_DRAWINGS
+  HYDRAULIC_STORMWATER_DRAWINGS
+  GEOTECH_REPORT
+
+  /// From the water servicing coordinator. The tap-in approval is the
+  /// connection itself; the section 73 notice is Sydney Water's statement of
+  /// what the development has to do before they will issue a compliance
+  /// certificate.
+  WATER_SERVICING_APPROVAL
+  SECTION_73_NOTICE
+
+  /// Bought from a portal rather than asked of anybody -- see
+  /// ComplianceExternalApplication, which is what tracks the wait on each.
+  ROAD_OPENING_PERMIT
+  LONG_SERVICE_LEVY
+  MINE_SUBSIDENCE_APPROVAL
+
+  /// From the architect who drew the plans, and from a traffic control
+  /// consultant respectively.
+  WASTE_MANAGEMENT_PLAN
+  TRAFFIC_CONTROL_PLAN
+
+  /// The two the development application needs that nobody outside produces.
+  /// The cost summary is the builder's own; the consent form is a fixed NSW
+  /// template the owners sign and the builder uploads back.
+  BUILD_COST_SUMMARY
+  OWNER_CONSENT_FORM
+
+  /// What the council sends back when it approves the development application:
+  /// the notice of determination, carrying the consent and its conditions.
+  ///
+  /// The one document on this file that unblocks another stage rather than
+  /// satisfying a line. A certifier who has said the job needs a DA cannot
+  /// assess anything until this exists, so the checklist is frozen until it
+  /// lands -- and it then answers the checklist line asking for it, like any
+  /// other document the file already holds.
+  DEVELOPMENT_CONSENT
+
+  /// One thing the consent authority asked for after the application was
+  /// lodged, tracked as its own row the way CHECKLIST_ITEM is.
+  ///
+  /// A development application is not assessed off the pack alone. The council
+  /// comes back asking for a shadow diagram, a revised waste plan, a survey of
+  /// the neighbouring wall -- named in an email, in their own words, weeks
+  /// after lodgement. Before this there was nowhere to put one: the DA list is
+  /// a fixed set of types, so a request for anything outside it had to be
+  /// remembered by whoever read the email.
+  ///
+  /// Its own type rather than CHECKLIST_ITEM because the two answer different
+  /// bodies at different stages and are counted separately. A job can be
+  /// waiting on four DA items while its checklist reads complete, and folding
+  /// them together made the checklist look unfinished for a reason the
+  /// certifier had never raised.
+  DA_ITEM
+
+  /// The certificate that ends a job which went through development approval.
+  ///
+  /// Not issued on the certifier's thread, which is what this type was built
+  /// believing. The certifier passing every checklist line is what makes them
+  /// willing to certify; the certificate itself is applied for on the NSW
+  /// Planning Portal, determined there, and comes back as a download. What
+  /// arrives in the mailbox is a notification saying it is ready -- see
+  /// ComplianceExternalApplication.approvalNotifiedAt -- and the document only
+  /// reaches the file when somebody fetches it from the portal and uploads it.
+  ///
+  /// Like DEVELOPMENT_CONSENT it unblocks a stage rather than satisfying a
+  /// line: the HBCF block opens when this lands, and the project is
+  /// compliance-complete once both are on the file.
+  CONSTRUCTION_CERTIFICATE
+
+  UNKNOWN
+
+  /// The certificate that ends a job which went through complying development.
+  ///
+  /// The CDC's counterpart to CONSTRUCTION_CERTIFICATE, and the reason there
+  /// are two: the two paths do not converge on one document. A CDC carries
+  /// planning and building approval together and is what a complying
+  /// development job is built under; a construction certificate is what follows
+  /// a council's development consent. A file holds one or the other, never
+  /// both, and which one is decided by `certificateKindFor` rather than by this
+  /// enum -- see lib/compliance/portal-certificates.ts.
+  ///
+  /// Appended after UNKNOWN rather than filed beside the certificate it is a
+  /// sibling of, because this enum is append-only: the reading order of a
+  /// Prisma enum is the order its values were added, and inserting one in the
+  /// middle rewrites every position after it.
+  COMPLYING_DEVELOPMENT_CERTIFICATE
+}
+
+/// PENDING is "we know we need this and do not have it"; UPLOADED is an admin
+/// putting it there; RECEIVED is one that arrived on an email from the
+/// certifier. The two are kept apart because only the first is something the
+/// admin can be asked to redo.
+///
+/// NOT_REQUIRED is the admin saying this line does not apply to this job -- the
+/// certifier struck it through, or already holds the document, or it is a
+/// category that does not arise here. It is set by hand and only on a checklist
+/// item: nothing infers it. It is deliberately a status rather than a flag,
+/// because it is an answer to "where is this document up to" and everything
+/// that counts outstanding work already reads status. A NOT_REQUIRED row is
+/// never chased, never counted, and never blocks the review send or the
+/// engagement closing.
+enum ComplianceDocumentStatus {
+  PENDING
+  UPLOADED
+  RECEIVED
+  APPROVED
+  REJECTED
+  NOT_REQUIRED
+}
+
+/// LeadEmails infers this by comparing emailFrom against the business mailbox,
+/// which breaks the moment mail is sent from an alias. Stored explicitly here:
+/// the thread view renders each bubble's side from it.
+enum CertifierEmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum AgentSessionStatus {
+  ACTIVE
+  WAITING
+  ARCHIVED
+  COMPLETED
+  FAILED
+}
+
+enum AgentActionStatus {
+  PENDING
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AgentOperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AgentMemoryProvenance {
+  USER_CONFIRMED
+  MODEL_SUMMARY
+}
+
+enum GraphMailbox {
+  BUSINESS
+  ADMIN
+}
+
 model Project {
   id               String   @id @default(uuid())
   leadId           Int      @unique
@@ -242,21 +512,27 @@ model Project {
   // this JSON preserves the co-owners the single Customer can't hold.
   parties          Json?
 
-  status    ProjectStatus @default(ACTIVE)
+  /// Defaults to DRAFT rather than ACTIVE. A project is created by the handoff
+  /// from a won offer, which writes the row, the milestones and the
+  /// requirements -- none of which is work anybody has started. See
+  /// ProjectStatus for the ladder from here.
+  status    ProjectStatus @default(DRAFT)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  customer        Customer         @relation("CustomerProjects", fields: [customerId], references: [id])
-  siteManager     User?            @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
-  Lead            Lead             @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
-  milestones      Milestone[]
-  siteUpdates     SiteUpdate[]
-  variations      Variation[]
-  tradieSchedules TradieSchedule[]
-  files           File[]           @relation("ProjectFiles")
-  activityLogs    ActivityLog[]
-  materials       Material[]
-  tradies         Tradie[]         @relation("ProjectTradies")
+  customer            Customer             @relation("CustomerProjects", fields: [customerId], references: [id])
+  siteManager         User?                @relation("SiteManagerProjects", fields: [siteManagerId], references: [id])
+  Lead                Lead                 @relation("LeadProject", fields: [leadId], references: [id], onDelete: Cascade)
+  milestones          Milestone[]
+  siteUpdates         SiteUpdate[]
+  variations          Variation[]
+  tradieSchedules     TradieSchedule[]
+  files               File[]               @relation("ProjectFiles")
+  activityLogs        ActivityLog[]
+  materials           Material[]
+  tradies             Tradie[]             @relation("ProjectTradies")
+  certifierEngagement CertifierEngagement? @relation("ProjectCertifierEngagement")
+  invoices            Invoice[]
 
   @@index([name])
   @@index([customerId])
@@ -267,7 +543,6 @@ model Project {
 model Milestone {
   id              String          @id @default(uuid())
   projectId       String
-  invoiceId       String?
   name            String
   order           Int
   description     String?
@@ -345,6 +620,8 @@ model Tradie {
   approvals  TradieApproval[]
   ratings    TradieRating[]
 
+  complianceOutreaches ComplianceOutreach[] @relation("TradieComplianceOutreaches")
+
   @@index([name])
   @@index([trade])
   @@index([email])
@@ -378,6 +655,7 @@ model TradieApproval {
   reason          String                   @db.Text
   updationData    Json?
   rejectionReason String?                  @db.Text
+  pendingDeletionKey String?                @unique
   requestedBy     String
 
   createdAt DateTime @default(now())
@@ -407,28 +685,32 @@ model TradieRating {
 }
 
 model File {
-  id          String   @id @default(uuid())
-  projectId   String?
-  milestoneId String?
-  leadId      Int?
-  incidentId  String?
-  filename    String
-  fileType    String
-  filesize    Int
-  url         String
-  uploadedBy  String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  projectId            String?
+  milestoneId          String?
+  leadId               Int?
+  incidentId           String?
+  complianceDocumentId String?
+  filename             String
+  fileType             String
+  filesize             Int
+  url                  String
+  storagePath          String?
+  uploadedBy           String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  project   Project?        @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone?      @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
-  lead      Lead?           @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
-  incident  TradieIncident? @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
-  User      User            @relation("UserFiles", fields: [uploadedBy], references: [id])
+  project            Project?            @relation("ProjectFiles", fields: [projectId], references: [id], onDelete: Cascade)
+  milestone          Milestone?          @relation("MilestoneFiles", fields: [milestoneId], references: [id], onDelete: Cascade)
+  lead               Lead?               @relation("LeadFiles", fields: [leadId], references: [id], onDelete: Cascade)
+  incident           TradieIncident?     @relation("TradieIncidentFiles", fields: [incidentId], references: [id], onDelete: Cascade)
+  complianceDocument ComplianceDocument? @relation("ComplianceDocumentFiles", fields: [complianceDocumentId], references: [id], onDelete: Cascade)
+  User               User                @relation("UserFiles", fields: [uploadedBy], references: [id])
 
   @@index([projectId])
   @@index([milestoneId])
   @@index([incidentId])
+  @@index([complianceDocumentId])
   @@index([leadId])
   @@index([uploadedBy])
 }
@@ -514,14 +796,18 @@ model ActivityLog {
 }
 
 model Customer {
-  id      String  @id @default(uuid())
-  name    String
-  email   String  @unique
-  phone   String  @unique
+  id            String  @id @default(uuid())
+  name          String
+  email         String  @unique
+  phone         String  @unique
   // Primary owner's Current Location (residential/postal address). Populated at
   // project handoff from the offer's owners[] (ADR 0003). Nullable — legacy
   // customers have none.
-  address String?
+  address       String?
+  /// The Xero ContactID this customer is billed under. Resolved lazily the
+  /// first time a progress claim is raised (match on email, else create), so
+  /// legacy customers carry null until their first invoice.
+  xeroContactId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -544,21 +830,168 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]           @relation("UserFiles")
-  siteManagerProjects Project[]        @relation("SiteManagerProjects")
+  files               File[]             @relation("UserFiles")
+  siteManagerProjects Project[]          @relation("SiteManagerProjects")
   siteUpdates         SiteUpdate[]
   activityLogs        ActivityLog[]
-  assignedLeads       Lead[]           @relation("LeadAssignee")
-  leadHistories       LeadHistory[]    @relation("LeadHistoryAuthor")
-  leadTasks           LeadTask[]       @relation("LeadTaskAssignee")
+  assignedLeads       Lead[]             @relation("LeadAssignee")
+  leadHistories       LeadHistory[]      @relation("LeadHistoryAuthor")
+  leadTasks           LeadTask[]         @relation("LeadTaskAssignee")
   reviews             TradieRating[]
   approvalRequests    TradieApproval[]
-  createdOffers       Offer[]          @relation("OfferCreatedBy")
+  createdOffers       Offer[]            @relation("OfferCreatedBy")
+  xeroConnections     XeroConnection[]   @relation("XeroConnections")
+  agentSessions       AgentSession[]
+  agentActionAudits   AgentActionAudit[]
+  agentOperations     AgentOperation[]
+  agentMemories       AgentMemory[]
+
+  resolvedComplianceAlerts   ComplianceAlert[]    @relation("UserResolvedComplianceAlerts")
+  decidedComplianceApprovals ComplianceOutreach[] @relation("UserDecidedComplianceApprovals")
+
+  /// The per-document developer verdicts this user recorded by hand.
+  ///
+  /// Beside `decidedComplianceApprovals` rather than replacing it, because the
+  /// outreach columns that relation points at are kept as the fallback for
+  /// verdicts recorded before ComplianceDeveloperApproval existed.
+  decidedDeveloperApprovals ComplianceDeveloperApproval[] @relation("UserDecidedDeveloperApprovals")
+
+  /// Engagements where this user answered who the estate developer is.
+  answeredEstateDevelopers     CertifierEngagement[] @relation("UserAnsweredEstateDeveloper")
+  /// Engagements where this user recorded the principal certifier appointment.
+  appointedPrincipalCertifiers CertifierEngagement[] @relation("UserAppointedPrincipalCertifier")
 
   @@index([email])
   @@index([phone])
   @@index([role])
   @@index([clerkId])
+}
+
+/// Owner-only registry for durable Eve conversations. The Eve session ID is
+/// never sufficient authority by itself; every continuation is checked against
+/// ownerUserId at the channel boundary.
+model AgentSession {
+  id                 String             @id @default(uuid())
+  eveSessionId       String             @unique
+  ownerUserId        String
+  agentName          String
+  parentEveSessionId String?
+  rootEveSessionId   String
+  title              String?
+  summary            String?            @db.Text
+  selectedContext    Json?
+  status             AgentSessionStatus @default(ACTIVE)
+  lastEventAt        DateTime?
+  archivedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  owner      User                @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  events     AgentSessionEvent[]
+  actions    AgentActionAudit[]
+  operations AgentOperation[]
+
+  @@index([ownerUserId, updatedAt])
+  @@index([ownerUserId, archivedAt])
+  @@index([ownerUserId, parentEveSessionId, updatedAt])
+}
+
+/// Application-owned copy of Eve's durable event stream for the session list,
+/// replay diagnostics, and audit correlation. Eve meta.id is the dedupe key.
+model AgentSessionEvent {
+  id             String   @id @default(uuid())
+  agentSessionId String
+  eveEventId     String
+  eventType      String
+  payload        Json
+  occurredAt     DateTime
+  createdAt      DateTime @default(now())
+
+  agentSession AgentSession @relation(fields: [agentSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([agentSessionId, eveEventId])
+  @@index([agentSessionId, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
+/// Sanitized, application-level audit record for agent mutations and external
+/// side effects. Raw prompts, credentials, and document bytes do not belong here.
+model AgentActionAudit {
+  id              String            @id @default(uuid())
+  ownerUserId     String?
+  agentSessionId  String?
+  eveSessionId    String
+  eveTurnId       String?
+  eveCallId       String?
+  toolName        String
+  action          String
+  targetType      String?
+  targetId        String?
+  approvalOutcome String?
+  operationKey    String?
+  status          AgentActionStatus @default(PENDING)
+  inputSummary    Json?
+  outputSummary   Json?
+  beforeSummary   Json?
+  afterSummary    Json?
+  failureReason   String?           @db.Text
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  owner        User?         @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  agentSession AgentSession? @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId, createdAt])
+  @@index([eveSessionId, createdAt])
+  @@index([targetType, targetId])
+  @@index([operationKey])
+}
+
+/// Durable idempotency gate for persistent and external side effects. Redis may
+/// accelerate lookups, but this row remains authoritative.
+model AgentOperation {
+  id             String               @id @default(uuid())
+  ownerUserId    String
+  agentSessionId String?
+  operationKey   String
+  action         String
+  status         AgentOperationStatus @default(PENDING)
+  result         Json?
+  failureReason  String?              @db.Text
+  expiresAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  owner        User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  agentSession AgentSession? @relation(fields: [agentSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([ownerUserId, operationKey])
+  @@index([agentSessionId, createdAt])
+  @@index([status, updatedAt])
+}
+
+/// Bounded durable memory document. Live CRM facts never belong in this table;
+/// the opaque scope is derived by Eve from the authenticated internal user.
+model AgentMemory {
+  id              String                @id @default(uuid())
+  ownerUserId     String
+  scope           String
+  content         Json
+  version         Int                   @default(1)
+  provenance      AgentMemoryProvenance
+  lastOperationId String?
+  expiresAt       DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, scope])
+  @@index([ownerUserId, deletedAt])
+  @@index([expiresAt])
 }
 
 model Lead {
@@ -623,6 +1056,9 @@ model Lead {
   /// Never default this to 0 — that would read as 0% for every existing lead.
   probabilityOverride  Int?
   expectedCloseDate    DateTime?
+  /// The date from which this lead should be considered for HBCF capacity.
+  /// Null means the lead is ready to be considered immediately.
+  estimatedStartDate    DateTime?
   /// Stamped by closeDatePatch() on stage transitions. Weighted pipeline and
   /// win rate depend on these; updatedAt is not a usable substitute.
   wonAt                DateTime?
@@ -647,6 +1083,7 @@ model Lead {
   @@index([assignedId])
   @@index([createdAt])
   @@index([expectedCloseDate])
+  @@index([estimatedStartDate])
   @@index([wonAt])
   @@index([lostAt])
 }
@@ -697,11 +1134,11 @@ model LeadTask {
   notes String? @db.Text
 
   assignedId String?
-  assignedTo User?  @relation("LeadTaskAssignee", fields: [assignedId], references: [id])
+  assignedTo User?   @relation("LeadTaskAssignee", fields: [assignedId], references: [id])
 
   /// Set when the task is closed out. Nothing recorded this before; the stage
   /// flipping to CONTACTED was the only signal a follow-up had finished.
-  completedAt DateTime?
+  completedAt    DateTime?
   /// Guards against re-notifying. Mirrors followupReminderSentAt on Lead.
   reminderSentAt DateTime?
 
@@ -1020,7 +1457,7 @@ model AdminOfferContent {
   costSchedule Json
   offerScope   Json
   offerContent Json
-  hbfcClaim    Json     @default("{\"claimAmount\": 800000}")
+  hbcfClaim    Json     @default("{\"claimAmount\": 800000}")
   // Bumped by every per-section save. Each Offer stamps the version it was
   // built from into Offer.workspaceState, so opening a still-editable offer can
   // detect that admin content moved on and re-apply the current defaults, while
@@ -1028,4 +1465,1301 @@ model AdminOfferContent {
   version      Int      @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+/// One project's dealings with its principal certifier, from the first document
+/// pack through to every checklist item being approved.
+///
+/// One per project, mirroring Project.leadId: the owning side holds the unique
+/// scalar FK and Project carries only the back-reference.
+///
+/// refToken is what makes the mail loop work. It is minted here, carried in the
+/// outreach subject as "[RCCERT-…]", and quoted back by every reply, which is
+/// how an inbound message is correlated to this row without trusting the
+/// sender's address. Same mechanism as OfferDocumentSend.trackedLinkToken.
+model CertifierEngagement {
+  id             String  @id @default(uuid())
+  projectId      String  @unique
+  refToken       String  @unique
+  /// The site address, appended to refToken to make a subject a human can read.
+  subjectAddress String
+  /// Denormalised snapshots rather than a relation, as EnvelopeSignature does
+  /// for signers: the certifier is a third party with no account here, and the
+  /// engagement should still read correctly if they are later replaced.
+  certifierName  String?
+  certifierEmail String?
+  certifierPhone String?
+
+  /// The Graph mailbox that owns this compliance thread. Existing rows are
+  /// business-mailbox rows; new compliance engagements use the admin mailbox.
+  graphMailbox GraphMailbox @default(BUSINESS)
+
+  /// The Graph id of the most recent inbound message on this thread.
+  ///
+  /// Replies are built with Graph's createReply against it, which is the only
+  /// way to get real In-Reply-To and References headers — Graph refuses to set
+  /// either through internetMessageHeaders, so a plain send threads on subject
+  /// alone and comes apart the moment a client normalises it. Null until the
+  /// certifier has answered once, and replies fall back to a subject-threaded
+  /// send until then.
+  lastInboundMessageId String?
+
+  status CertifierEngagementStatus @default(NOT_STARTED)
+
+  /// Whether the compliance file needs a development application.
+  ///
+  /// Null means nobody has answered the question shown at the top of the
+  /// compliance tab. Both true and false are recorded answers; true also opens
+  /// the DA branch by raising a DA_APPROVAL_REQUIRED alert.
+  developmentApplicationRequired Boolean?
+
+  /// Whether the lot sits in an estate whose developer has to approve the
+  /// bushfire report before it is lodged.
+  ///
+  /// Null means nobody has been asked yet, which is what holds the development
+  /// application shut: a pack lodged without a covenanted approval comes
+  /// straight back, and there is nothing on a title search or a 10.7 that says
+  /// reliably whether the covenant exists. Somebody who knows the estate has to
+  /// answer it, once.
+  ///
+  /// A column rather than an alert, because it is a standing fact about the
+  /// land rather than a condition anybody closes out, and because the answer is
+  /// needed while it is still false -- "no developer approval needed here" is
+  /// an answer the gate has to be able to read, and a resolved alert would be
+  /// indistinguishable from one that was never raised.
+  ///
+  /// Only ever consulted where a bushfire report is actually required. A job
+  /// whose bushfire row is NOT_REQUIRED is never asked.
+  developerApprovalRequired Boolean?
+
+  /// Who the developer is, where there is one.
+  ///
+  /// `developerApprovalRequired` above answers whether a covenant exists;
+  /// these three answer who it is with. They were missing, and the gap was
+  /// filled by constants/complianceDevelopers.ts -- a checked-in list of the
+  /// estates in the growth corridors, picked from a combobox. That list is
+  /// still there and is still the fast path, because picking "Elara" is quicker
+  /// and less error-prone than typing an address nobody has to hand.
+  ///
+  /// What it could not do is hold an estate that is not on it. A few dozen
+  /// releases are listed; there are hundreds, new ones every quarter, and an
+  /// estate missing from the list left a job with a covenant it could not
+  /// record -- so the answer to "is this land under a developer" was yes, and
+  /// the next screen offered nothing to do about it.
+  ///
+  /// So the name, the address and the phone are held on the file directly, and
+  /// `ComplianceOutreach.developerKey` stays as the provenance of a row that was
+  /// opened from the list. A job answered from the list copies the list's values
+  /// in here too, which is what makes these three the single thing every reader
+  /// consults.
+  estateDeveloperName  String?
+  estateDeveloperEmail String?
+  estateDeveloperPhone String?
+
+  /// Where those three came from, which decides whether to go looking again.
+  ///
+  /// The load-bearing half, and the reason this is an enum rather than a
+  /// boolean. The land deed is parsed for the developer's details when it is
+  /// uploaded -- it is the document that names whoever released the land, and
+  /// parsing it is free because the file is already being sent to the surveyor.
+  /// But a person's answer outranks a parse: somebody who typed the estate's
+  /// approvals address in, or who said there is no developer on this lot, has
+  /// told us something the deed cannot contradict.
+  ///
+  /// So the parse runs only on a file this is null on. `MANUAL` means a person
+  /// answered -- including answering "no", which is why the source is recorded
+  /// even when the three fields above stay null -- and `LAND_DEED` means the
+  /// parse filled them, which a person can still overwrite afterwards.
+  estateDeveloperSource       EstateDeveloperSource?
+  estateDeveloperRecordedAt   DateTime?
+  /// The admin who answered, where a person did. Null on a parse.
+  estateDeveloperRecordedById String?
+
+  /// When the certifier was appointed principal certifier on the portal.
+  ///
+  /// A separate fact from engaging them, and a later one. Engaging a certifier
+  /// is a fee proposal and a checklist; appointing them principal certifier is
+  /// a form on the NSW Planning Portal that names them as the person who will
+  /// inspect the build and issue the occupation certificate. A CDC cannot be
+  /// determined without it -- the application and the appointment go in
+  /// together -- so this is a gate on the lodgement rather than a note beside
+  /// it.
+  ///
+  /// On the file rather than on the certificate application, because it is one
+  /// appointment per job and not one per application: a job that lodges a CDC
+  /// and later has to relodge appoints nobody a second time.
+  principalCertifierAppointedAt    DateTime?
+  /// The portal's own reference for the appointment, for chasing it.
+  principalCertifierAppointmentRef String?
+  /// The admin who recorded it. Always set -- there is no inbound route.
+  principalCertifierAppointedById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project                       Project                         @relation("ProjectCertifierEngagement", fields: [projectId], references: [id], onDelete: Cascade)
+  estateDeveloperRecordedBy     User?                           @relation("UserAnsweredEstateDeveloper", fields: [estateDeveloperRecordedById], references: [id], onDelete: SetNull)
+  principalCertifierAppointedBy User?                           @relation("UserAppointedPrincipalCertifier", fields: [principalCertifierAppointedById], references: [id], onDelete: SetNull)
+  documents                     ComplianceDocument[]
+  emails                        CertifierEmail[]
+  outreaches                    ComplianceOutreach[]
+  alerts                        ComplianceAlert[]
+  /// Everything being bought or lodged with an outside body on this file --
+  /// the 10.7 certificate, the road opening permit, the long service levy, the
+  /// mine subsidence approval, and the development application itself.
+  externalApplications          ComplianceExternalApplication[]
+
+  @@index([status])
+}
+
+/// One tracked document on the engagement — a required document, something the
+/// certifier sent back, a signed copy, or a single checklist line.
+///
+/// order is deliberately NOT unique per engagement. Milestone pays for
+/// @@unique([projectId, order]) with a descending row-shift on every insert
+/// (lib/data/milestones.ts); checklist items are written once as a batch and
+/// never reordered, so the constraint would buy nothing and cost that.
+model ComplianceDocument {
+  id              String                   @id @default(uuid())
+  engagementId    String
+  documentType    ComplianceDocumentType
+  status          ComplianceDocumentStatus @default(PENDING)
+  /// The checklist line as the certifier worded it. Null for the fixed types,
+  /// whose label comes from constants/complianceDocuments.ts.
+  label           String?
+  order           Int                      @default(0)
+  rejectionReason String?
+
+  /// Who sent this row back, where somebody did.
+  ///
+  /// The reason alone was enough while the certifier was the only body that
+  /// ever rejected anything, and the row said so in as many words. A
+  /// development application is assessed by the council, who reject individual
+  /// drawings by name in an email -- so a row can now carry a refusal from
+  /// either, and "Sent back by the certifier" on a council's objection is
+  /// wrong in the one place a reader is relying on it.
+  ///
+  /// Null on a row nobody has rejected, and on the rejections recorded before
+  /// this column existed, which are all the certifier's by definition -- the
+  /// UI falls back to that reading rather than backfilling a guess.
+  rejectedBySource ComplianceAlertSource?
+  /// What the extraction read about this line beyond its name -- the clarifying
+  /// description, the conditions the file has to satisfy, the standards and
+  /// instruments it cites. Display-only and optional everywhere: null on every
+  /// row written before the richer extraction, and on every fixed type, whose
+  /// name comes from constants/complianceDocuments.ts.
+  ///
+  /// Shape depends on documentType and is parsed defensively at the boundary
+  /// (types/compliance.ts), the way CertifierEmail.attachments already is.
+  detail           Json?
+
+  /// The document already on the file that this row was answered from.
+  ///
+  /// A certifier's checklist routinely asks for six things the pack already
+  /// holds -- the deposited plan, the title search, the survey, the full
+  /// architectural set, the 10.7 certificate, the HBCF warranty. Before this
+  /// an admin had to find each one and upload it a second time, against a row
+  /// sitting inches below the row that already had it.
+  ///
+  /// The file itself is copied rather than moved: a File belongs to exactly
+  /// one ComplianceDocument, so the checklist line gets its own File row
+  /// pointing at the same blob. That is what keeps every count, every send and
+  /// every replacement path working unchanged on a mapped row. This column is
+  /// the provenance that copy would otherwise lose -- it is what lets the row
+  /// say where the document came from, and what stops a re-extraction copying
+  /// the same document onto the same line twice.
+  ///
+  /// Display and idempotency only. Nothing gates on it, and SetNull rather
+  /// than Cascade because a mapped row keeps its file when the pack row it was
+  /// taken from goes; the copy is the checklist's own from the moment it is
+  /// made.
+  mappedFromDocumentId String?
+
+  /// Whether this row was answered from a document the project holds rather
+  /// than from one on the compliance file.
+  ///
+  /// One case, and it needs a column of its own because the column above cannot
+  /// describe it. HBCF cover is raised on the Overview tab, often before a
+  /// certifier is engaged, and lands in the project's own requirements -- so a
+  /// checklist line asking for the warranty is answered from a File with no
+  /// ComplianceDocument behind it, and `mappedFromDocumentId` has nothing to
+  /// point at. It was left null, which is indistinguishable from a line
+  /// somebody filled in by hand.
+  ///
+  /// That is what the mapper's guards read to decide whether a line is theirs
+  /// to refresh, so an HBCF line read as manual on every pass after the first.
+  /// Replacing the certificate on the project then left the old copy on the
+  /// checklist for good -- and the old certificate is what went to the
+  /// certifier in the review pack.
+  ///
+  /// A boolean rather than a nullable project-file id, because nothing needs to
+  /// know which File it was: the guards ask "is this copy ours", and the
+  /// provenance line says "from the project's HBCF cover" off the document
+  /// type. The copied File ids stay the replacement detector -- they are
+  /// derived from the source file id, so a replaced certificate produces
+  /// different ids and `copyOntoChecklistLine` sees the difference on its own.
+  mappedFromProject Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement   CertifierEngagement             @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  files        File[]                          @relation("ComplianceDocumentFiles")
+  /// The consultants engaged off this line, where it is a checklist item that
+  /// asked for one. Zero or one in practice -- the unique index on
+  /// [engagementId, party] is what actually holds that.
+  outreaches   ComplianceOutreach[]            @relation("ChecklistDocumentOutreaches")
+  /// The deliverables pointed at this line, where a consultant was engaged
+  /// against it. Zero or one, for the same reason as above.
+  deliverables ComplianceOutreachDeliverable[] @relation("DeliverableChecklistDocument")
+
+  mappedFrom ComplianceDocument?  @relation("ComplianceDocumentMapping", fields: [mappedFromDocumentId], references: [id], onDelete: SetNull)
+  mappedOnto ComplianceDocument[] @relation("ComplianceDocumentMapping")
+
+  @@index([engagementId])
+  @@index([engagementId, order])
+  @@index([status])
+  @@index([mappedFromDocumentId])
+}
+
+/// The mail trail with the certifier, in and out.
+///
+/// checksum is the dedup key, following LeadEmails: Graph re-notifies, a
+/// workflow step retries, and a thread quotes its own history, so the same
+/// message reaches this table more than once. The unique index is what makes
+/// createMany({ skipDuplicates: true }) safe to call blindly.
+model CertifierEmail {
+  id           String                  @id @default(uuid())
+  engagementId String
+  emailFrom    String
+  emailTo      String
+  subject      String
+  body         String                  @db.Text
+  checksum     String                  @unique @db.Text
+  direction    CertifierEmailDirection
+  /// [{ name, url }] — blob-backed copies of the message's attachments, so a
+  /// bubble can link them without a second query.
+  attachments  Json                    @default("[]")
+  sentAt       DateTime
+
+  /// Which thread this message belongs to. Null is the certifier's own thread,
+  /// which is the only one that existed when this table was written and the
+  /// only one every existing row can be. A set value files the message under
+  /// one of the other parties -- surveyor, architect, council -- whose threads
+  /// are the same shape and are read by the same components, so they share the
+  /// table rather than growing a near-identical one per party.
+  outreachId String?
+
+  /// The mailbox in which this message was received or sent.
+  graphMailbox GraphMailbox @default(BUSINESS)
+
+  createdAt DateTime @default(now())
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  outreach   ComplianceOutreach? @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId])
+  @@index([engagementId, sentAt(sort: Desc)])
+  @@index([outreachId, sentAt(sort: Desc)])
+}
+
+/// The third parties a compliance file talks to besides the certifier.
+///
+/// The certifier is deliberately absent. It is not a party in this sense -- it
+/// owns the engagement row itself, holds the document set, and every existing
+/// certifier read and write goes through CertifierEngagement. Adding it here
+/// would mean two places claiming to know who the certifier is.
+enum CompliancePartyType {
+  SURVEYOR
+  ARCHITECT
+  /// The NSW Planning Portal, for the 10.7(2) & (5) certificate. Never sent to
+  /// from here today -- the row is written when the certificate application is
+  /// recorded, so the certificate has a thread to be filed against when one
+  /// arrives at the watched address.
+  COUNCIL
+  /// The two consultants a certifier's checklist routinely calls for.
+  ///
+  /// Unlike the three above they are not part of the required pack and are not
+  /// known when the file opens: they are engaged mid-checklist, off a line that
+  /// asks for a BASIX certificate or a bushfire assessment. Same outreach, same
+  /// thread, same inbound correlation -- what differs is only when they enter.
+  BASIX_CONSULTANT
+  BUSHFIRE_CONSULTANT
+
+  /// The three engaged the same way, added when the checklist and the
+  /// development application turned out to call for far more than two.
+  ///
+  /// The structural engineer is the reason ComplianceOutreachDeliverable
+  /// exists: they answer three checklist lines off one engagement, where a
+  /// BASIX consultant answers one. The water servicing coordinator answers
+  /// two. Nothing else about them differs from the two above.
+  STRUCTURAL_ENGINEER
+  WATER_AUTHORITY
+  TRAFFIC_CONSULTANT
+
+  /// The developer of the estate the lot sits in, where it sits in one.
+  ///
+  /// The one party here who is not asked to produce anything. Land released by
+  /// a developer routinely carries a covenant that their own consultant signs
+  /// off the bushfire assessment before it goes anywhere near a council -- so
+  /// the report is commissioned from the bushfire consultant as normal, and
+  /// then has to be put in front of the developer and come back approved.
+  ///
+  /// Same outreach, same token, same thread and same inbound correlation as
+  /// everybody above. What differs is that the reply is a verdict rather than a
+  /// document, which is what `approvalDecision` on the row records, and that
+  /// they are picked from a fixed list per area rather than from the tradie
+  /// directory -- see AREA_DEVELOPERS in constants/complianceDevelopers.ts.
+  DEVELOPER
+}
+
+/// A yes or a no from a party who was asked to approve somebody else's work.
+///
+/// The developer, and only the developer. Every other party on a compliance
+/// file is asked to produce a document, and "have they answered" is settled by
+/// the document being there -- there is nothing to record beyond the file
+/// itself. A developer sends back a verdict on a report that is already on the
+/// file, so the verdict has to be the thing that is stored.
+enum ComplianceApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+/// How an approval decision reached us.
+///
+/// Recorded because the two are trusted differently and the screen has to be
+/// able to say which it was. INBOUND_EMAIL is a model reading a verdict out of
+/// a reply, and is right nearly always; ADMIN is a person who read the same
+/// email and pressed the button. An admin decision overwrites a parsed one and
+/// never the other way round -- see `recordDeveloperDecision`.
+enum ComplianceApprovalChannel {
+  INBOUND_EMAIL
+  ADMIN
+}
+
+/// Where the estate developer's details on a file came from.
+///
+/// The same "trusted differently" distinction ComplianceApprovalChannel makes,
+/// and it is read for one decision: whether to parse the land deed. MANUAL is a
+/// person who answered the question on the tab -- including answering that there
+/// is no developer -- and it stops the parse for good. LAND_DEED is the parse
+/// itself, and does not: a person can still correct what it found.
+///
+/// There is no UNANSWERED member. The absence of a source *is* unanswered, and a
+/// third value meaning the same thing as null is a second way to spell it.
+enum EstateDeveloperSource {
+  MANUAL
+  LAND_DEED
+}
+
+/// How a party's documents are being obtained.
+///
+/// SELF_SUPPLIED is the client turning up with their own surveyor's plans or
+/// their architect's drawings, which happens often enough that treating it as
+/// an absence stranded the whole file: the section stayed locked, and with it
+/// everything gated behind that party. It is a row rather than a null so it
+/// still answers "is this stage settled" for the sections downstream, and so
+/// the tab can say the documents came from the client rather than from us.
+enum ComplianceOutreachMode {
+  OUTREACH
+  SELF_SUPPLIED
+}
+
+/// Where one party's outreach has got to.
+///
+/// Deliberately coarser than CertifierEngagementStatus. The certifier drives a
+/// multi-stage flow of its own -- fee proposal, signing, checklist, review --
+/// while a surveyor or an architect is asked once for a fixed set of documents
+/// and either has sent them or has not.
+enum ComplianceOutreachStatus {
+  /// A SELF_SUPPLIED row, or one created before its mail went out.
+  NOT_SENT
+  SENT
+  RESPONSE_RECEIVED
+  COMPLETE
+}
+
+/// Something that has come back from a party that changes what the rest of the
+/// file needs, and that a person has to close out.
+///
+/// Append-only, like CertifierEngagementStatus: a retired value keeps its slot.
+enum ComplianceAlertType {
+  /// The surveyor's title search predates the transfer, so it still shows the
+  /// previous owner. Resolved only when a replacement search naming the current
+  /// owners has been supplied and checked.
+  STALE_TITLE_SEARCH
+  /// The architect says the proposal cannot go through as a CDC and needs
+  /// development approval. While this is open the 10.7 certificate stops being
+  /// required and the DA section opens; it closes when the DA is granted.
+  DA_APPROVAL_REQUIRED
+
+  // ---------------------------------------------------------------------
+  // Overdue conditions.
+  //
+  // Every one of these is raised by the daily sweep in
+  // /api/cron/compliance-alerts rather than by anything a party sends, which
+  // is what makes them a different kind of alert from the two above: nothing
+  // arrives to raise them, so the absence has to be looked for. Each one has a
+  // clock, a threshold and a chase, and each closes itself the moment the
+  // thing it is waiting for lands.
+  //
+  // Deliberately one type per party rather than a single PARTY_RESPONSE_OVERDUE
+  // carrying the party in raisedBySource. At most one alert of a type is open
+  // per file, so a shared type would mean a job waiting on both the surveyor
+  // and a BASIX consultant could only ever say one of those out loud.
+  // ---------------------------------------------------------------------
+
+  /// The planning certificate application has been lodged and the portal has
+  /// not answered inside its own quoted turnaround.
+  PLANNING_CERTIFICATE_DELAYED
+  /// The surveyor was written to and has sent nothing back.
+  SURVEYOR_RESPONSE_OVERDUE
+  /// The client and architect met, and no preliminary plans have followed.
+  ARCHITECT_PLANS_OVERDUE
+  /// The client asked for revisions and the architect has not re-issued.
+  ARCHITECT_REVISION_OVERDUE
+  /// The BASIX consultant was engaged and has sent no certificate back.
+  BASIX_RESPONSE_OVERDUE
+  /// The bushfire consultant was engaged and has sent no assessment back.
+  BUSHFIRE_RESPONSE_OVERDUE
+  /// The structural engineer was engaged and owes at least one of their three.
+  STRUCTURAL_RESPONSE_OVERDUE
+  /// The water servicing coordinator was engaged and has sent nothing back.
+  WATER_AUTHORITY_RESPONSE_OVERDUE
+  /// The traffic control consultant was engaged and has sent no plan back.
+  TRAFFIC_RESPONSE_OVERDUE
+  /// The bushfire report is with the estate's developer for approval and they
+  /// have not answered.
+  DEVELOPER_RESPONSE_OVERDUE
+  /// The developer rejected the report and the bushfire consultant has not
+  /// re-issued it.
+  ///
+  /// Its own type beside BUSHFIRE_RESPONSE_OVERDUE for the reason every pair
+  /// here is separate: at most one alert of a type is open per file, and a job
+  /// waiting on a first assessment is not the same job as one waiting on a
+  /// rework the developer asked for.
+  BUSHFIRE_REVISION_OVERDUE
+  /// The architect was asked for a waste management plan and has not sent one.
+  ///
+  /// Its own type rather than ARCHITECT_PLANS_OVERDUE, because at most one
+  /// alert of a type is open per file: a job waiting on both a redraw and a
+  /// waste management plan could otherwise only ever say one of them out loud.
+  WASTE_MANAGEMENT_PLAN_OVERDUE
+
+  // ---------------------------------------------------------------------
+  // The portal waits.
+  //
+  // One type per application rather than a shared EXTERNAL_APPLICATION_DELAYED
+  // carrying the kind, for the reason above: a job can be waiting on the road
+  // opening permit and the long service levy receipt at the same time, and a
+  // shared type would collapse the two into one line on the panel.
+  //
+  // PLANNING_CERTIFICATE_DELAYED above is the fourth of these and keeps its
+  // name; it predates the generalisation and is what every existing row says.
+  // ---------------------------------------------------------------------
+
+  /// The road opening and vehicle crossing application is past the council's
+  /// own quoted turnaround.
+  ROAD_OPENING_DELAYED
+  /// The long service levy payment has been lodged and no receipt has come
+  /// back.
+  LONG_SERVICE_LEVY_DELAYED
+  /// Subsidence Advisory has had the application past their quoted turnaround.
+  MINE_SUBSIDENCE_DELAYED
+  /// The development application is with the council past the working days a
+  /// residential DA normally takes. A long threshold deliberately -- see
+  /// DA_DETERMINATION_BUSINESS_DAYS.
+  DA_DETERMINATION_OVERDUE
+
+  // ---------------------------------------------------------------------
+  // The portal has said yes, and the document is still not on the file.
+  //
+  // A third kind of alert, and the first that is not a problem. Everything
+  // above is either something that arrived and broke an assumption or
+  // something that failed to arrive at all; these three are raised by good
+  // news -- and they exist because the good news does not carry the document
+  // with it.
+  //
+  // The NSW Planning Portal determines an application and emails to say so.
+  // The mail is a notification: it names the application, says it has been
+  // approved, and tells the applicant to log in and download the certificate.
+  // Nothing is attached. So the arrival of that mail leaves the file in a state
+  // no other event produces -- approved, and holding nothing -- and without a
+  // record of it the tab showed a job still waiting on a determination that had
+  // already been made.
+  //
+  // Rendered green rather than amber, and excluded from the overdue reading of
+  // a stage: nobody is late. See COMPLIANCE_ALERT_TONE and isPortalDownloadAlert.
+  // ---------------------------------------------------------------------
+
+  /// The CDC has been determined and is waiting to be downloaded and uploaded.
+  CDC_DOWNLOAD_READY
+  /// The construction certificate has been determined and is waiting likewise.
+  CC_DOWNLOAD_READY
+  /// Development consent has been granted and the notice is waiting likewise.
+  ///
+  /// Its own type rather than resolving DA_DETERMINATION_OVERDUE and leaving it
+  /// at that, because the two say different things and the file needs both: the
+  /// council has answered, and the certifier still cannot assess anything until
+  /// the notice itself is on the file. See checklistBlockedReason, which reads
+  /// the document rather than the determination.
+  DA_DOWNLOAD_READY
+
+  // ---------------------------------------------------------------------
+  // The two certificate applications, waiting.
+  //
+  // Separate from the five portal waits above for the reason each of those is
+  // separate from the others, and separate from each other because a file is
+  // never on both paths -- which makes the pair cheap and the distinction
+  // free to the reader, who sees the certificate they are actually waiting on
+  // named.
+  // ---------------------------------------------------------------------
+
+  /// The CDC application is with the certifier past the working days a
+  /// determination takes. See CDC_DETERMINATION_BUSINESS_DAYS.
+  CDC_DETERMINATION_OVERDUE
+  /// The construction certificate application is likewise past its own.
+  CC_DETERMINATION_OVERDUE
+
+  /// The full architectural design is with the estate's developer and they have
+  /// not answered.
+  ///
+  /// Its own type beside DEVELOPER_RESPONSE_OVERDUE, which is the same wait on
+  /// the bushfire report. At most one alert of a type is open per file, and the
+  /// two approvals are independent -- a developer can be sitting on the plans
+  /// while the report came back approved a month ago.
+  DEVELOPER_PLANS_OVERDUE
+}
+
+enum ComplianceAlertStatus {
+  OPEN
+  RESOLVED
+}
+
+/// Who an alert came from.
+///
+/// A superset of CompliancePartyType, and a separate enum rather than an
+/// extension of it, because the certifier belongs in exactly one of the two.
+/// They can tell us a job needs a DA -- often catching what the architect
+/// missed, which is the whole reason this exists -- but they are not an
+/// outreach party: they own the engagement row, and a CERTIFIER value on
+/// ComplianceOutreach.party would be a row nothing in the flow can render or
+/// gate on.
+enum ComplianceAlertSource {
+  SURVEYOR
+  ARCHITECT
+  COUNCIL
+  CERTIFIER
+  BASIX_CONSULTANT
+  BUSHFIRE_CONSULTANT
+  STRUCTURAL_ENGINEER
+  WATER_AUTHORITY
+  TRAFFIC_CONSULTANT
+  DEVELOPER
+}
+
+/// One party's engagement on a compliance file.
+///
+/// The same shape as CertifierEngagement's own correlation fields -- a minted
+/// refToken carried in the subject, a denormalised contact snapshot, and the
+/// Graph id of the last inbound message to reply against -- because the mail
+/// loop is identical. What differs is that there can be several of these per
+/// file and the certifier is only ever one, which is why the certifier keeps
+/// its columns on the engagement rather than moving here.
+///
+/// tradieId is a soft link. The party is picked from the tradie directory, but
+/// the name and address are snapshotted the way EnvelopeSignature does: a
+/// tradie who is later deleted or has their email corrected must not silently
+/// change who a finished thread was addressed to.
+model ComplianceOutreach {
+  id           String              @id @default(uuid())
+  engagementId String
+  party        CompliancePartyType
+
+  /// Minted here and carried in every subject on this thread -- "[RCSURV-...]",
+  /// "[RCARCH-...]". Unique across parties, so one lookup resolves any of them.
+  refToken String @unique
+
+  mode   ComplianceOutreachMode   @default(OUTREACH)
+  status ComplianceOutreachStatus @default(NOT_SENT)
+
+  tradieId     String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+
+  /// The Graph mailbox that owns this outreach thread. Existing rows remain on
+  /// business so their stored message ids continue to resolve there.
+  graphMailbox GraphMailbox @default(BUSINESS)
+
+  /// See CertifierEngagement.lastInboundMessageId -- Graph will not set
+  /// In-Reply-To through internetMessageHeaders, so a reply has to be built
+  /// with createReply against the message it answers.
+  lastInboundMessageId String?
+
+  /// When the opening mail actually went out.
+  ///
+  /// The clock every overdue alert on this party is measured from, and
+  /// deliberately not updatedAt: that moves on a follow-up, on a reply landing,
+  /// on a meeting being booked, and an SLA measured from it would reset itself
+  /// every time somebody touched the row. Null on a SELF_SUPPLIED row and on
+  /// one whose send never completed -- neither of which is waiting on anybody.
+  sentAt DateTime?
+
+  /// When this party was last chased, from the alert panel or by the sweep.
+  ///
+  /// Read only to keep the daily sweep from re-raising a condition somebody has
+  /// already acted on. It is not a resolution: chasing is not answering, and
+  /// the alert closes when the documents arrive.
+  lastFollowUpAt DateTime?
+
+  /// When the client signed off on the preliminary plans. Architect rows only.
+  ///
+  /// The gate on sending the pack to the certifier. Held here rather than as a
+  /// status because it is one irreversible fact about one party's work, and
+  /// because the revision rounds that precede it are their own rows below.
+  clientPlansApprovedAt DateTime?
+
+  /// The checklist line this outreach was raised off, for the consultants.
+  ///
+  /// A BASIX or bushfire consultant is engaged mid-checklist against one item,
+  /// and what they send back satisfies that item rather than becoming a
+  /// document of its own -- so the row that asked has to be recorded when the
+  /// outreach opens, not guessed at when the reply arrives. Null for the three
+  /// parties that are engaged off the required pack instead.
+  ///
+  /// Superseded by `deliverables` below and kept for the consultants that
+  /// produce exactly one thing, which is every row written before the join
+  /// table existed. Still written when a party has a single deliverable, so
+  /// the column is never stale; read only as a fallback, because a structural
+  /// engineer answers three lines and one column can only name one of them.
+  checklistDocumentId String?
+
+  /// Which entry of the area developer list this row was opened against.
+  ///
+  /// DEVELOPER rows only, and a snapshot in the same sense `contactName` is:
+  /// the list is a constant in the codebase and an estate changing hands, or a
+  /// contact address being corrected, must not silently rewrite who a finished
+  /// approval was sought from. The name and address on the row stay the record
+  /// of who was actually written to; this is only what was picked, so the tab
+  /// can show the estate beside the thread.
+  developerKey String?
+
+  /// The developer's verdict on the bushfire report. DEVELOPER rows only.
+  ///
+  /// Null while the report is with them, which is the state the overdue clock
+  /// runs against. It is a decision rather than a status because the outreach
+  /// status already says whether they have replied at all, and the two are
+  /// genuinely different facts: a developer who writes back asking a question
+  /// has responded and has not decided.
+  ///
+  /// REJECTED is not terminal. The report goes back to the bushfire consultant
+  /// with `approvalReason` attached, and the replacement is put to the same
+  /// developer on the same thread -- which clears these four columns rather
+  /// than writing a second row, because it is the same approval being sought
+  /// again and the rounds are recorded as CompliancePlanRevision entries.
+  ///
+  /// Superseded by `developerApprovals` below, in the same way and for the same
+  /// reason `checklistDocumentId` is superseded by `deliverables`: the covenant
+  /// covers the full architectural design as well as the bushfire report, and
+  /// one set of columns can hold one verdict. Nothing writes these after the
+  /// migration that copied them across; they are read only as the fallback for
+  /// a bushfire verdict recorded before the table existed, and they are kept
+  /// rather than dropped because a drop belongs in its own migration behind the
+  /// deploy that stops reading it.
+  approvalDecision  ComplianceApprovalDecision?
+  approvalDecidedAt DateTime?
+  approvalChannel   ComplianceApprovalChannel?
+
+  /// Why they rejected it, in their words where the reply carried them.
+  ///
+  /// Load-bearing rather than display-only, which is what separates it from
+  /// `ComplianceAlert.detail`: this is quoted verbatim into the mail that goes
+  /// back to the bushfire consultant, because "the developer said no" is not
+  /// something anybody can act on. Null on an approval.
+  approvalReason String? @db.Text
+
+  /// The admin who recorded the decision by hand. Null when it was read off an
+  /// inbound reply -- see `approvalChannel`.
+  approvalDecidedById String?
+
+  /// When the architect was asked for a waste management plan.
+  ///
+  /// Architect rows only, and a column rather than a deliverable timestamp
+  /// because it is a second clock on a party that already has three. The plan
+  /// is asked for long after the plans themselves, off a checklist line or the
+  /// development application, and WASTE_MANAGEMENT_PLAN_OVERDUE is measured
+  /// from here rather than from the outreach that engaged them months earlier.
+  wasteManagementRequestedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement         CertifierEngagement             @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  tradie             Tradie?                         @relation("TradieComplianceOutreaches", fields: [tradieId], references: [id], onDelete: SetNull)
+  approvalDecidedBy  User?                           @relation("UserDecidedComplianceApprovals", fields: [approvalDecidedById], references: [id], onDelete: SetNull)
+  emails             CertifierEmail[]
+  checklistDocument  ComplianceDocument?             @relation("ChecklistDocumentOutreaches", fields: [checklistDocumentId], references: [id], onDelete: SetNull)
+  meetings           ComplianceMeeting[]
+  revisions          CompliancePlanRevision[]
+  deliverables       ComplianceOutreachDeliverable[]
+  /// What the estate developer has been asked to approve, and what they said.
+  /// DEVELOPER rows only; empty on every other party.
+  developerApprovals ComplianceDeveloperApproval[]
+
+  /// One outreach per party per file. A second "Connect with Surveyor" on a
+  /// file that already has one is the same act repeated, not a new thread.
+  @@unique([engagementId, party])
+  @@index([engagementId])
+  @@index([status])
+  @@index([checklistDocumentId])
+}
+
+/// One thing a party was asked for, and the checklist line that asked.
+///
+/// A join table because the one-to-one assumption underneath
+/// `ComplianceOutreach.checklistDocumentId` stopped being true. A BASIX
+/// consultant is engaged against item 7 and sends back one certificate; a
+/// structural engineer is engaged once and answers three separate lines --
+/// structural drawings, hydraulic and stormwater drawings, and a geotechnical
+/// report -- each of which can land months apart and each of which the
+/// certifier ticks separately. One column could only ever name one of them, so
+/// two of the three came back and landed as documents beside a checklist still
+/// reading "Not supplied yet".
+///
+/// `documentType` is what makes the inbound side work. A reply carrying two
+/// PDFs is classified per attachment, and the type it comes back as is what
+/// picks the line that attachment answers -- which is why the type is stored
+/// here rather than inferred from the party.
+///
+/// `checklistDocumentId` is nullable because the same table records what a
+/// party was asked for on the development application path, where there is no
+/// certifier checklist to hang the request off. The document then lands under
+/// its own type, which is the right answer when nothing asked for it by name.
+model ComplianceOutreachDeliverable {
+  id           String                 @id @default(uuid())
+  outreachId   String
+  /// What this party was asked to produce. One row per document.
+  documentType ComplianceDocumentType
+
+  /// The checklist line this answers, where the request came off one.
+  checklistDocumentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreach          ComplianceOutreach  @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+  checklistDocument ComplianceDocument? @relation("DeliverableChecklistDocument", fields: [checklistDocumentId], references: [id], onDelete: SetNull)
+
+  /// A party is asked for a given document once. Re-engaging them against a
+  /// second line asking for the same thing is the same request, not a new one.
+  @@unique([outreachId, documentType])
+  @@index([outreachId])
+  @@index([checklistDocumentId])
+}
+
+/// Where one client/architect meeting got to.
+///
+/// RESCHEDULED is terminal on the row it is set on rather than pending:
+/// rescheduling closes this row and writes a new SCHEDULED one for the new
+/// time, so the trail says what moved and when. HELD is what starts the clock
+/// on the preliminary plans.
+enum ComplianceMeetingStatus {
+  SCHEDULED
+  HELD
+  RESCHEDULED
+}
+
+/// One meeting between the client and the architect.
+///
+/// A table rather than a pair of columns on the outreach, because the whole
+/// point of the resolution step is that a meeting can move: a job routinely
+/// books one, moves it, and then holds it, and two columns would remember only
+/// the last of those. What is being tracked is the date the plans clock starts
+/// from, and it has to be defensible against the two reschedules before it.
+model ComplianceMeeting {
+  id         String @id @default(uuid())
+  outreachId String
+
+  /// The time it is booked for. Stored as an instant and rendered in Sydney.
+  scheduledFor DateTime
+
+  status ComplianceMeetingStatus @default(SCHEDULED)
+
+  /// When it actually happened. Taken from scheduledFor when somebody records
+  /// that it took place, so the plans clock runs off the meeting rather than
+  /// off the click that reported it days later.
+  heldAt DateTime?
+
+  /// Anything the admin added -- for a reschedule, why it moved.
+  note String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreach ComplianceOutreach @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+
+  @@index([outreachId])
+  @@index([outreachId, status])
+}
+
+/// One round of somebody being asked to redo work they had already sent.
+///
+/// Written when the answer is no, closed when a replacement arrives. The gap
+/// between the two is what the revision alerts measure, which is why
+/// respondedAt is a column rather than being inferred from the document's own
+/// upload time -- a file replaced for an unrelated reason must not silently
+/// answer a revision nobody addressed.
+///
+/// Two parties use it and the shape is identical for both. The architect is
+/// asked to redraw preliminary plans the client did not approve
+/// (ARCHITECT_REVISION_OVERDUE); the bushfire consultant is asked to re-issue
+/// an assessment the estate's developer rejected
+/// (BUSHFIRE_REVISION_OVERDUE). In both cases somebody outside said no in
+/// their own words, those words are what the party is sent, and the round is
+/// open until they answer it.
+model CompliancePlanRevision {
+  id         String @id @default(uuid())
+  outreachId String
+
+  /// The rejecting party's words, sent on to whoever has to act on them
+  /// verbatim -- the client's for a redraw, the developer's for a re-issued
+  /// bushfire assessment. Never paraphrased: a consultant redoing a report
+  /// needs the objection as it was written, not a summary of it.
+  feedback String @db.Text
+
+  /// Who objected, where it was not the client.
+  ///
+  /// Null means the client, which is what every row written before this column
+  /// existed is: the table began as the architect's redraw loop, and the client
+  /// was the only party in it. The developer's refusal of a bushfire report was
+  /// the second, and it collided with nothing because it is written against the
+  /// bushfire consultant's outreach -- a row nobody else writes rounds on.
+  ///
+  /// The developer refusing the architectural design is what forces the column.
+  /// That round goes against the architect's outreach, which is the same row the
+  /// client's own revision rounds live on -- so without a way to tell them apart
+  /// a developer's objection read as the client asking for changes, counted
+  /// towards the rounds the card reports, and was measured by
+  /// ARCHITECT_REVISION_OVERDUE against a clock that belongs to a different
+  /// wait.
+  ///
+  /// Read by `outstandingRevision`, which filters to the client's, and by
+  /// `outstandingDeveloperRevision`, which takes these.
+  requestedBySource ComplianceAlertSource?
+
+  requestedAt DateTime  @default(now())
+  /// When revised plans landed against this round. Null while outstanding.
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreach ComplianceOutreach @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+
+  @@index([outreachId])
+  @@index([outreachId, respondedAt])
+}
+
+/// One document put to the estate's developer, and what they said about it.
+///
+/// This is the five `approval*` columns on ComplianceOutreach made into rows,
+/// and it exists because the covenant turns out to cover two documents rather
+/// than one. The developer approves the bushfire assessment, which is what those
+/// columns were written for -- and they also approve the full architectural
+/// design, because what the covenant actually protects is the look and the
+/// siting of the house as much as its bushfire rating.
+///
+/// Five columns cannot hold two answers. A developer sitting on the plans while
+/// the report came back approved a month ago is the ordinary case, not an edge
+/// one: the two documents are produced by different people at different times
+/// and go over in whatever order they are finished. Reusing the columns meant
+/// the second request overwrote the first verdict, and the block showed one
+/// decision for whichever document had most recently been sent.
+///
+/// The old columns are kept rather than dropped, exactly as
+/// `ComplianceOutreach.checklistDocumentId` was kept when `deliverables`
+/// arrived, and for the same two reasons: a drop has to be its own migration
+/// behind the deploy that stops reading it -- see the note on
+/// `20260909000000`, which did not -- and they are still the cheapest way to
+/// read the bushfire verdict a file recorded before this table existed. The
+/// migration copies them across; nothing writes them after it.
+///
+/// One row per document per developer outreach. The row is written when the
+/// request goes out rather than when the verdict comes back, so "with the
+/// developer since Tuesday" is a fact the file holds rather than one inferred
+/// from an absence.
+model ComplianceDeveloperApproval {
+  id         String @id @default(uuid())
+  outreachId String
+
+  /// Which document was put to them.
+  ///
+  /// BUSHFIRE_REPORT or FULL_ARCHITECTURAL_DESIGN today -- see
+  /// DEVELOPER_APPROVAL_DOCUMENTS, which is the list this is constrained to in
+  /// code rather than in the schema. Not constrained here because the column is
+  /// the existing document-type enum and narrowing it would mean a third enum
+  /// whose only job is to be a subset of the second.
+  documentType ComplianceDocumentType
+
+  /// When it went to them. The start of the clock the sweep measures.
+  requestedAt DateTime @default(now())
+
+  /// Their verdict, or null while it is with them.
+  ///
+  /// Null is the state the overdue clock runs against, and it is a decision
+  /// rather than a status for the reason it was on the outreach: the outreach
+  /// status already says whether they have replied at all, and a developer who
+  /// writes back asking a question has replied and has not decided.
+  ///
+  /// REJECTED is not terminal. The document goes back to whoever produced it
+  /// with `reason` quoted, and the replacement is put to the same developer --
+  /// which clears this row's verdict and bumps `round` rather than writing a
+  /// second row, because it is the same approval being sought again.
+  decision  ComplianceApprovalDecision?
+  decidedAt DateTime?
+  channel   ComplianceApprovalChannel?
+
+  /// Why they rejected it, in their words.
+  ///
+  /// Load-bearing rather than display-only: it is quoted verbatim into the mail
+  /// that goes back to the architect or the bushfire consultant, because "the
+  /// developer said no" is not something anybody can act on. Null on an
+  /// approval.
+  reason String? @db.Text
+
+  /// Which time of asking this is. 1-based, bumped when a replacement goes over.
+  round Int @default(1)
+
+  /// The admin who recorded the decision by hand. Null when it was read off a
+  /// reply -- `channel` is what says which.
+  recordedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  outreach   ComplianceOutreach @relation(fields: [outreachId], references: [id], onDelete: Cascade)
+  recordedBy User?              @relation("UserDecidedDeveloperApprovals", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([outreachId, documentType])
+  @@index([outreachId])
+}
+
+/// Which thing is being applied for.
+///
+/// PLANNING_CERTIFICATE_10_7 is the original and the reason the shape is what
+/// it is; the other four turned out to want exactly the same five fields. A
+/// road opening permit, a long service levy receipt and a mine subsidence
+/// approval are all bought from a website, take days to weeks, and are chased
+/// with a reference number -- none of which any thread on the file can see.
+///
+/// DEVELOPMENT_APPLICATION is the odd one and is here anyway, because it too
+/// is a lodgement date, a reference number, a body it went to, and a date it
+/// came back. What differs is only the clock: a DA is measured in months, so
+/// its threshold is its own (DA_DETERMINATION_BUSINESS_DAYS) and `alreadyHeld`
+/// never applies to it.
+///
+/// The last two are the certificates themselves, and they are the correction
+/// this enum was missing. The file was built believing a certifier issues the
+/// construction certificate off their own checklist, so there was no lodgement
+/// anywhere between the checklist passing and the document arriving. There is
+/// one, it is on the NSW Planning Portal, and it has every field the other five
+/// have -- a date it went in, a reference to chase it with, a determination,
+/// and a document that follows. `alreadyHeld` never applies to either, for the
+/// same reason it never applies to a DA: nobody turns up holding the
+/// certificate for the house they have not built.
+enum ComplianceExternalApplicationKind {
+  PLANNING_CERTIFICATE_10_7
+  ROAD_OPENING
+  LONG_SERVICE_LEVY
+  MINE_SUBSIDENCE
+  DEVELOPMENT_APPLICATION
+
+  /// The complying development certificate, lodged once the certifier has
+  /// passed every checklist line and been appointed principal certifier.
+  COMPLYING_DEVELOPMENT_CERTIFICATE
+  /// The construction certificate, lodged once consent has been granted and the
+  /// certifier has passed every checklist line.
+  CONSTRUCTION_CERTIFICATE
+}
+
+/// Something bought or lodged with an outside body, as a thing being obtained
+/// rather than a file.
+///
+/// This began as PlanningCertificateApplication, for the 10.7(2) & (5)
+/// certificate alone. The council block used to ask "do you already have the
+/// planning certificate?" and hold the answer in component state, which was
+/// honest while the only two outcomes were "upload it" and "go and buy one" --
+/// but buying one takes the portal three to five days, and nothing on the file
+/// recorded that an application existed at all, so a job could sit for a
+/// fortnight with an unanswered question on screen and nobody able to tell
+/// whether anybody had acted on it.
+///
+/// Four more of exactly that shape arrived with the development application
+/// work: a road opening and vehicle crossing permit from the council, a long
+/// service levy receipt, a mine subsidence approval, and the DA itself. Each
+/// is a website somebody goes to, a date, a reference number and a wait. So
+/// the table is keyed by kind rather than copied four times -- one component
+/// renders all five, one sweep measures all five, and a fifth application is a
+/// row in an enum rather than a table, a route and a card.
+///
+/// One row per engagement per kind, created the moment the question is
+/// answered. Every field after alreadyHeld is null until the step that fills
+/// it, and the block renders whichever step that leaves it on.
+model ComplianceExternalApplication {
+  id           String                            @id @default(uuid())
+  engagementId String
+  kind         ComplianceExternalApplicationKind
+
+  /// The answer to "do you already have this?".
+  ///
+  /// Null means nobody has been asked yet. Never true for a development
+  /// application: a DA is not something a builder turns up holding.
+  alreadyHeld Boolean?
+
+  /// When the application was lodged, as the admin reports it -- not when they
+  /// typed it in. Every turnaround here is measured from lodgement.
+  appliedAt      DateTime?
+  /// The body's own application number, for chasing it by phone.
+  applicationRef String?
+  /// Which council, portal or authority it went to. Deliberately not prefilled
+  /// from the project's council: the two are usually the same and occasionally
+  /// are not, and a wrong prefilled answer is worse than an empty one.
+  lodgedWith     String?
+
+  /// When it came back. Set by hand from the block, and by the upload that
+  /// supplies the document if nobody ticked it first.
+  receivedAt DateTime?
+
+  /// When the portal said it had been determined, which is not when we got it.
+  ///
+  /// The distinction this column exists to hold, and it is not a pedantic one.
+  /// The NSW Planning Portal determines a CDC, a construction certificate or a
+  /// development application and sends an email saying so. The email carries no
+  /// document: it names the application, says it has been approved, and tells
+  /// the applicant to log in and download the certificate. So there is a real
+  /// and sometimes week-long state in which the application is decided and the
+  /// file holds nothing -- and `receivedAt` cannot express it, because every
+  /// reader of `receivedAt` treats it as "the wait is over, the document is
+  /// here or is about to be".
+  ///
+  /// What it is actually for is stopping the overdue clock without claiming the
+  /// document. The determination has happened, so chasing the portal is wrong;
+  /// the certificate is not on the file, so the stage is not finished. Set from
+  /// the inbound notification where the correlation finds one, and by hand from
+  /// the lodgement block otherwise -- nothing has been exercised against a live
+  /// mailbox, so the manual route is the one that must always work.
+  approvalNotifiedAt DateTime?
+
+  /// The notification's Graph message id, so a second copy is not a second
+  /// event.
+  ///
+  /// A portal that sends the same approval twice -- a resend, a cc, a mailbox
+  /// replaying a webhook -- must not re-raise the download alert somebody has
+  /// already resolved by uploading the certificate. Null when the date was
+  /// recorded by hand.
+  approvalNotificationMessageId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement  CertifierEngagement               @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  submissions ComplianceApplicationSubmission[]
+
+  @@unique([engagementId, kind])
+  @@index([engagementId])
+}
+
+/// One time an application was put in front of the body assessing it.
+///
+/// `appliedAt` above records that an application exists and when the clock
+/// started. It cannot record that it was sent back and lodged again, and a
+/// development application routinely is: the council asks for a shadow diagram
+/// and rejects two of the drawings, the builder revises them off-system and
+/// resubmits, and that is round two of an application that may run to four.
+/// Overwriting `appliedAt` each time was the alternative, and it loses the only
+/// thing anybody actually wants to know afterwards -- how many rounds it took
+/// and what each one carried.
+///
+/// The submission is reported rather than performed. Lodging with the portal
+/// happens outside this system entirely; what is tracked here is the date, the
+/// reference the body gave it and what the round covered, which is everything
+/// needed to chase it by phone and everything the overdue clock reads.
+///
+/// The clock runs off the latest round rather than the first, which is the
+/// whole reason this is a table: a DA resubmitted in April is not sixty working
+/// days late because it was first lodged in March.
+model ComplianceApplicationSubmission {
+  id            String @id @default(uuid())
+  applicationId String
+
+  /// 1-based and gapless, assigned on write from the rounds already recorded.
+  /// Stored rather than derived so the number in an activity log entry, in a
+  /// notification and on the screen is the same number for good, even if an
+  /// earlier round is later corrected.
+  round Int
+
+  /// When it was lodged, as the admin reports it -- not when they typed it in.
+  submittedAt DateTime
+
+  /// The body's own reference for this round.
+  ///
+  /// Usually the same on every round and occasionally not: a council that
+  /// closes an application and asks for it to be relodged issues a new number,
+  /// and chasing round three by quoting round one's reference gets nowhere. It
+  /// is carried forward from the previous round when nobody supplies one.
+  applicationRef String?
+
+  /// What this round carried, as the admin describes it -- "revised drawings
+  /// A03 and A04, shadow diagram added". Display only; nothing keys on it.
+  note String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application ComplianceExternalApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// One row per round. A double-submitted form is the same round reported
+  /// twice, not a second lodgement.
+  @@unique([applicationId, round])
+  @@index([applicationId])
+  @@index([applicationId, submittedAt(sort: Desc)])
+}
+
+/// A condition raised on a compliance file that blocks or reshapes what comes
+/// after it, held open until someone closes it.
+///
+/// A table rather than a flag on the engagement because these arrive from
+/// outside, arrive more than once, and each carries its own resolution --
+/// a replacement document, a granted approval. A flag would record that
+/// something was wrong without recording what, when, or whether it was fixed.
+model ComplianceAlert {
+  id           String                @id @default(uuid())
+  engagementId String
+  type         ComplianceAlertType
+  status       ComplianceAlertStatus @default(OPEN)
+
+  /// Whose message raised it, where one did. Null for an alert an admin raised
+  /// by hand, and for one the system found on its own -- a title search whose
+  /// proprietors do not match the owners we hold is nobody's report.
+  raisedBySource ComplianceAlertSource?
+
+  /// The alert in the raiser's own words where there are any -- the sentence
+  /// from the architect's email, the note on the surveyor's covering letter.
+  /// Display only; nothing keys on it.
+  detail String? @db.Text
+
+  /// Who closed it and when. Null while open.
+  resolvedById   String?
+  resolvedAt     DateTime?
+  /// What closing it was justified by -- "replacement title search verified".
+  resolutionNote String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement CertifierEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  resolvedBy User?               @relation("UserResolvedComplianceAlerts", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  /// At most one open alert of a type per file. The architect saying "this
+  /// needs a DA" twice is one condition, not two, and the partial index is
+  /// what keeps a resolved one from blocking a genuine recurrence later.
+  @@index([engagementId])
+  @@index([engagementId, status])
+}
+
+/// Lifecycle of a progress claim, mirroring Xero's own invoice status codes so
+/// the webhook can map one to one without inventing intermediate states.
+enum InvoiceStatus {
+  DRAFT
+  SUBMITTED
+  AUTHORISED
+  PAID
+  VOIDED
+  DELETED
+}
+
+/// The organisation's Xero OAuth2 connection.
+///
+/// A table rather than env vars because the refresh token ROTATES on every
+/// refresh — Xero issues a new one and invalidates the old — so it has to be
+/// written back somewhere durable. It also expires after 60 days without use,
+/// which is why `refreshedAt` is tracked and surfaced on /admin/xero: a silent
+/// expiry would stop every progress claim with no other symptom.
+///
+/// One active row in practice. `isActive` rather than a delete so a disconnect
+/// leaves an audit trail of who connected what and when.
+model XeroConnection {
+  id            String   @id @default(uuid())
+  tenantId      String   @unique
+  tenantName    String?
+  accessToken   String
+  refreshToken  String
+  /// Access token expiry (Xero issues 30-minute tokens).
+  expiresAt     DateTime
+  /// Last successful token refresh — the 60-day refresh-token clock restarts here.
+  refreshedAt   DateTime @default(now())
+  scopes        String[]
+  connectedById String?
+  isActive      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connectedBy User? @relation("XeroConnections", fields: [connectedById], references: [id])
+
+  @@index([isActive])
+  @@index([connectedById])
+}
+
+/// A progress claim raised in Xero against a completed ProjectStage.
+///
+/// `ProjectStage` is an enum, not a table, so a stage has no row to hang this
+/// off — the claim keys on the (project, stage) pair instead, and that pair is
+/// unique: a stage is claimed exactly once. That uniqueness IS the idempotency
+/// guard for generation, which fires from a post-response hook that can run
+/// more than once for the same stage.
+///
+/// Amounts are mirrored from Xero rather than computed here. Xero owns the
+/// ledger; this table exists so the project page can show an invoice history
+/// without a per-render API call, and so payment state has somewhere to land
+/// when the webhook arrives.
+model Invoice {
+  id            String        @id @default(uuid())
+  projectId     String
+  projectStage  ProjectStage
+  xeroInvoiceId String        @unique
+  invoiceNumber String?
+  reference     String?
+  status        InvoiceStatus @default(AUTHORISED)
+  currencyCode  String        @default("AUD")
+
+  subTotal       Decimal @db.Decimal(12, 2)
+  totalTax       Decimal @db.Decimal(12, 2)
+  total          Decimal @db.Decimal(12, 2)
+  amountDue      Decimal @db.Decimal(12, 2)
+  amountPaid     Decimal @default(0) @db.Decimal(12, 2)
+  amountCredited Decimal @default(0) @db.Decimal(12, 2)
+
+  issuedDate      DateTime
+  dueDate         DateTime
+  fullyPaidOnDate DateTime?
+
+  /// Vercel Blob URL of the PDF Xero rendered, archived at creation so the
+  /// invoice opens in our own file viewer instead of sending anyone to Xero.
+  pdfUrl String?
+
+  /// Xero's `updatedDateUTC` for the version this row reflects. The webhook
+  /// refuses to apply an event older than this, so a replayed or out-of-order
+  /// delivery cannot drag a PAID claim back to AUTHORISED.
+  xeroUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, projectStage])
+  @@index([projectId])
+  @@index([status])
 }

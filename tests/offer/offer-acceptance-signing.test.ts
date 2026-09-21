@@ -15,13 +15,20 @@ import {
   type OfferOwner,
 } from "../../lib/offer/workspace-model";
 import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { INITIAL_TENDER_GATE, type OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+import {
+  INITIAL_TENDER_GATE,
+  type OfferWorkspaceSnapshot,
+} from "../../lib/offer/workspace-persistence";
 import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
-import { activeOfferPhase, isOfferPhaseUnlocked } from "../../lib/offer/workflow";
+import {
+  activeOfferPhase,
+  isOfferPhaseUnlocked,
+} from "../../lib/offer/workflow";
 import {
   findSignerStatus,
   type OfferSignerStatus,
 } from "../../lib/offer/signing-status";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // ─── fixtures ───
 
@@ -61,6 +68,7 @@ function snapshot(owners: OfferOwner[]): OfferWorkspaceSnapshot {
     images: EMPTY_OFFER_IMAGES,
     tenderGate: INITIAL_TENDER_GATE,
     adminContentVersion: 0,
+    calcVersion: LEGACY_CALC_VERSION,
   };
 }
 
@@ -118,8 +126,16 @@ test("signature sections list client acceptance before the builder credit", () =
 
 test("the emailed copy carries NO DocuSign anchors (wet-sign rules stay)", () => {
   const html = emailHtml([owner(1, "Alice Owner")]);
-  assert.doesNotMatch(html, /\\sigOwner1\\/, "email copy must not carry anchors");
-  assert.match(html, /Signature: _+/, "email copy should keep the wet-sign rule");
+  assert.doesNotMatch(
+    html,
+    /\\sigOwner1\\/,
+    "email copy must not carry anchors",
+  );
+  assert.match(
+    html,
+    /Signature: _+/,
+    "email copy should keep the wet-sign rule",
+  );
 });
 
 test("esc strips backslashes so an owner name can't smuggle an extra anchor", () => {

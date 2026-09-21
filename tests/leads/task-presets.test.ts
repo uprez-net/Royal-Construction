@@ -62,8 +62,12 @@ const SYDNEY = "Australia/Sydney";
 const sydneyOf = (d: Date) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: SYDNEY,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   })
     .formatToParts(d)
     .reduce<Record<string, string>>((acc, p) => {
@@ -77,13 +81,19 @@ test("a preset lands on Sydney midnight, whatever zone the machine is in", () =>
   // answers for the same correct instant.
   const due = dueDateFromPreset(1, new Date("2026-08-21T06:30:00.000Z"));
   const p = sydneyOf(due);
-  assert.equal(`${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`, "2026-08-22 00:00");
+  assert.equal(
+    `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`,
+    "2026-08-22 00:00",
+  );
 });
 
 test("a preset advances by whole days across a month boundary", () => {
   const due = dueDateFromPreset(7, new Date("2026-08-28T09:00:00.000Z"));
   const p = sydneyOf(due);
-  assert.equal(`${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`, "2026-09-04 00:00");
+  assert.equal(
+    `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`,
+    "2026-09-04 00:00",
+  );
 });
 
 test("every type has a label and a verb", () => {
@@ -100,18 +110,33 @@ test("the due time schema rejects what max(10) used to accept", () => {
   const ok = ["00:00", "09:30", "23:59"];
   const bad = ["banana", "99:99", "9:30", "24:00", "12:60", ""];
   for (const t of ok) {
-    assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(t).success, true, t);
+    assert.equal(
+      createLeadTaskSchema.shape.dueTime.safeParse(t).success,
+      true,
+      t,
+    );
   }
   for (const t of bad) {
-    assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(t).success, false, t);
+    assert.equal(
+      createLeadTaskSchema.shape.dueTime.safeParse(t).success,
+      false,
+      t,
+    );
   }
-  assert.equal(createLeadTaskSchema.shape.dueTime.safeParse(null).success, true);
+  assert.equal(
+    createLeadTaskSchema.shape.dueTime.safeParse(null).success,
+    true,
+  );
 });
 
 test("a new task must have a due date", () => {
-  assert.equal(createLeadTaskSchema.shape.dueDate.safeParse(null).success, false);
   assert.equal(
-    createLeadTaskSchema.shape.dueDate.safeParse("2026-08-26T00:00:00.000Z").success,
+    createLeadTaskSchema.shape.dueDate.safeParse(null).success,
+    false,
+  );
+  assert.equal(
+    createLeadTaskSchema.shape.dueDate.safeParse("2026-08-26T00:00:00.000Z")
+      .success,
     true,
   );
 
@@ -121,8 +146,10 @@ test("a new task must have a due date", () => {
   const task = { leadId: 1, type: "CALL" as const, dueTime: null, notes: null };
   assert.equal(createLeadTaskSchema.safeParse(task).success, false);
   assert.equal(
-    createLeadTaskSchema.safeParse({ ...task, dueDate: "2026-08-26T00:00:00.000Z" })
-      .success,
+    createLeadTaskSchema.safeParse({
+      ...task,
+      dueDate: "2026-08-26T00:00:00.000Z",
+    }).success,
     true,
   );
 });
@@ -154,14 +181,26 @@ test("leadIds absent means every live lead, and empty is a caller mistake", () =
 });
 
 test("leadIds rejects anything that is not a positive id", () => {
-  for (const raw of ["abc", "1,abc", "-1", "0", "1.5", "1e3", " ", "9999999999999999999999"]) {
+  for (const raw of [
+    "abc",
+    "1,abc",
+    "-1",
+    "0",
+    "1.5",
+    "1e3",
+    " ",
+    "9999999999999999999999",
+  ]) {
     assert.equal(parseLeadIdsParam(raw).ok, false, `accepted ${raw}`);
   }
 });
 
 test("leadIds parses, trims and de-duplicates", () => {
   assert.deepEqual(parseLeadIdsParam("3"), { ok: true, leadIds: [3] });
-  assert.deepEqual(parseLeadIdsParam(" 3 , 1 ,3 "), { ok: true, leadIds: [3, 1] });
+  assert.deepEqual(parseLeadIdsParam(" 3 , 1 ,3 "), {
+    ok: true,
+    leadIds: [3, 1],
+  });
 });
 
 test("leadIds rejects rather than trims past the cap", () => {
@@ -169,7 +208,10 @@ test("leadIds rejects rather than trims past the cap", () => {
   // no way to tell the rest were missing rather than idle.
   const atCap = Array.from({ length: MAX_TASK_LEAD_IDS }, (_, i) => i + 1);
   assert.equal(parseLeadIdsParam(atCap.join(",")).ok, true);
-  assert.equal(parseLeadIdsParam([...atCap, MAX_TASK_LEAD_IDS + 1].join(",")).ok, false);
+  assert.equal(
+    parseLeadIdsParam([...atCap, MAX_TASK_LEAD_IDS + 1].join(",")).ok,
+    false,
+  );
 
   // Duplicates are collapsed before the length check, so repetition cannot
   // push a legitimate request over the limit.
@@ -200,7 +242,8 @@ test("what the client sends, the route accepts", () => {
   // The two halves are written in different files and only meet at runtime.
   const request = openTasksRequest([3, 1]);
   assert.equal(request.skip, false);
-  const raw = new URL(`https://x.test${(request as { url: string }).url}`)
-    .searchParams.get("leadIds");
+  const raw = new URL(
+    `https://x.test${(request as { url: string }).url}`,
+  ).searchParams.get("leadIds");
   assert.deepEqual(parseLeadIdsParam(raw), { ok: true, leadIds: [3, 1] });
 });

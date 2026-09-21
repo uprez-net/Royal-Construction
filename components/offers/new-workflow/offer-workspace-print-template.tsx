@@ -1,5 +1,6 @@
 import {
   CHARS_PER_LINE_SIGNATURE,
+  chunkAllowanceRows,
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
@@ -16,11 +17,16 @@ import {
 } from "@/lib/offer/workspace-model";
 import type { OfferPaymentScheduleRow } from "@/lib/offer/workspace-payment-schedule";
 import {
+  buildAreaBreakdown,
   buildOfferPrintTemplateData,
   formatArea,
+  formatRoomCount,
   formatSiteParticulars,
   getPrintFooterText,
+  grannyDwellingSpec,
   PROPOSAL_TAGLINE,
+  type OfferDwellingSpec,
+  type OfferPrintScopeRow,
 } from "@/lib/offer/workspace-print-template";
 import {
   buildWelcomeParagraphs,
@@ -207,7 +213,11 @@ export function OfferWorkspacePrintTemplate(
       />
     ),
     (n, total) => (
-      <PrintWelcomePage key="welcome" job={props.job} footer={foot(data, n, total)} />
+      <PrintWelcomePage
+        key="welcome"
+        job={props.job}
+        footer={foot(data, n, total)}
+      />
     ),
     ...(galleryImages.length > 0
       ? [
@@ -221,7 +231,12 @@ export function OfferWorkspacePrintTemplate(
         ]
       : []),
     (n, total) => (
-      <PrintSnapshotPage key="snapshot" data={data} job={props.job} footer={foot(data, n, total)} />
+      <PrintSnapshotPage
+        key="snapshot"
+        data={data}
+        job={props.job}
+        footer={foot(data, n, total)}
+      />
     ),
     (n, total) => (
       <PrintInvestmentPage
@@ -232,19 +247,28 @@ export function OfferWorkspacePrintTemplate(
         footer={foot(data, n, total)}
       />
     ),
-    ...inclusionPages.map(
-      (rows, i) =>
-        // eslint-disable-next-line react/display-name -- page factory, not a component
-        (n: number, total: number) =>
-          (
-            <PrintInclusionsPage
-              key={`inclusions-${i}`}
-              specifications={rows}
-              startIndex={inclusionStartIndexes[i]}
-              continued={i > 0}
-              footer={foot(data, n, total)}
-            />
-          ),
+    ...inclusionPages.map((rows, i) =>
+      // eslint-disable-next-line react/display-name -- page factory, not a component
+      (n: number, total: number) => (
+        <PrintInclusionsPage
+          key={`inclusions-${i}`}
+          specifications={rows}
+          startIndex={inclusionStartIndexes[i]}
+          continued={i > 0}
+          footer={foot(data, n, total)}
+        />
+      ),
+    ),
+    ...chunkAllowanceRows(data.scopeRows).map((rows, i) =>
+      // eslint-disable-next-line react/display-name -- page factory, not a component
+      (n: number, total: number) => (
+        <PrintAllowancesPage
+          key={`allowances-${i}`}
+          rows={rows}
+          continued={i > 0}
+          footer={foot(data, n, total)}
+        />
+      ),
     ),
     (n, total) => (
       <PrintTermsPage
@@ -256,20 +280,18 @@ export function OfferWorkspacePrintTemplate(
         last={signatureChunks.length === 0}
       />
     ),
-    ...signatureChunks.map(
-      (blocks, i) =>
-        // eslint-disable-next-line react/display-name -- page factory, not a component
-        (n: number, total: number) =>
-          (
-            <PrintSignaturePage
-              key={`signatures-${i}`}
-              job={props.job}
-              blocks={blocks}
-              continued={i > 0}
-              footer={foot(data, n, total)}
-              last={i === signatureChunks.length - 1}
-            />
-          ),
+    ...signatureChunks.map((blocks, i) =>
+      // eslint-disable-next-line react/display-name -- page factory, not a component
+      (n: number, total: number) => (
+        <PrintSignaturePage
+          key={`signatures-${i}`}
+          job={props.job}
+          blocks={blocks}
+          continued={i > 0}
+          footer={foot(data, n, total)}
+          last={i === signatureChunks.length - 1}
+        />
+      ),
     ),
   ];
 
@@ -313,7 +335,8 @@ function PrintCoverPage({
   // Render every owner from owners[] (companies annotated with ABN/ACN), not the
   // primary/secondary projection — otherwise window.print() dropped owners 3+
   // while the emailed HTML listed them all (codex #8).
-  const ownerNamesLine = formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
+  const ownerNamesLine =
+    formatOwnerNamesLine(job.owners ?? []) || job.clientNames;
   const ownerLabel = (job.owners?.length ?? 0) > 1 ? "Owners" : "Client";
   return (
     <PrintPage footerText={footer}>
@@ -344,7 +367,9 @@ function PrintCoverPage({
           ) : null}
           <CoverRow label="Site Location" value={job.siteAddress} />
           <CoverRow label="Build Type" value={job.buildType} />
-          <CoverRow label="Total Build Area" value={data.areaLabel} />
+          {data.areaLabel ? (
+            <CoverRow label="Total Build Area" value={data.areaLabel} />
+          ) : null}
           <CoverRow emphasis label="Contract Price" value={data.priceLine} />
           <CoverRow
             label="Quote Reference"
@@ -384,7 +409,10 @@ function PrintWelcomePage({
   return (
     <PrintPage footerText={footer}>
       <ProposalMasthead />
-      <PrintSection eyebrow="A personal welcome" title={`Dear ${greetingName},`}>
+      <PrintSection
+        eyebrow="A personal welcome"
+        title={`Dear ${greetingName},`}
+      >
         <div className="max-w-[155mm] space-y-4 text-base leading-7">
           {paragraphs.map((paragraph, index) => (
             <p key={index}>{paragraph}</p>
@@ -419,8 +447,8 @@ function PrintGalleryPage({
           The images below are from a recently completed home — built to a
           similar size and finish level. Full render to all elevations, luxury
           shaker kitchen, {OFFER_SPEC_FACTS.stoneBenchtopThickness} stone
-          benchtops and floor-to-ceiling tiles to the wet areas. Finishes on your
-          home are as per the inclusions schedule.
+          benchtops and floor-to-ceiling tiles to the wet areas. Finishes on
+          your home are as per the inclusions schedule.
         </p>
       </PrintSection>
       <div className="mt-6 grid grid-cols-2 gap-4">
@@ -447,27 +475,25 @@ function PrintSnapshotPage({
   readonly job: OfferWorkspaceJob;
   readonly footer: string;
 }) {
-  const gfGarage = job.groundFloorSqm + job.garageSqm;
-  const alfrescoBalcony = job.alfrescoPorchSqm + job.balconySqm;
-  const totalArea =
-    gfGarage + 
-    job.firstFloorSqm + 
-    alfrescoBalcony + 
-    job.porchSqm + 
-    job.grannyFlatSqm
-  const areaCells = [
-    { label: "Ground Floor + Garage", value: formatArea(gfGarage) },
-    { label: "First Floor", value: formatArea(job.firstFloorSqm) },
-    { label: "Alfresco + Balcony", value: formatArea(alfrescoBalcony) },
-    { label: "Porch", value: formatArea(job.porchSqm) },
-    { label: "Kitchen", value: formatArea(job.kitchenSqm) },
-    // Granny flat is part of Total Area; show it as its own cell when present so
-    // the breakdown reconciles with the emphasized total.
-    ...(job.grannyFlatSqm > 0
-      ? [{ label: "Granny Flat", value: formatArea(job.grannyFlatSqm) }]
-      : []),
-    { label: "Total Area", value: formatArea(totalArea), emphasis: true },
-  ];
+  // The same cells and total as snapshotPage() in offer-proposal-html.ts, so the
+  // grid adds up and matches the cover, the letter and the Tender.
+  const area = buildAreaBreakdown(job);
+  const areaCells =
+    area.totalSqm > 0
+      ? [
+          ...area.cells.map((cell) => ({
+            label: cell.label,
+            value: formatArea(cell.sqm),
+            emphasis: false,
+          })),
+          {
+            label: "Total Area",
+            value: formatArea(area.totalSqm),
+            emphasis: true,
+          },
+        ]
+      : [];
+  const granny = grannyDwellingSpec(job);
   const siteParticulars = formatSiteParticulars(job);
   return (
     <PrintPage footerText={footer}>
@@ -502,27 +528,86 @@ function PrintSnapshotPage({
           </div>
         </div>
       </PrintSection>
-      <div className="mt-8 grid grid-cols-5 border border-border text-center text-sm">
-        {areaCells.map((cell) => (
+      {areaCells.length > 0 ? (
+        <div className="mt-8 grid grid-flow-col auto-cols-fr border border-border text-center text-sm">
+          {areaCells.map((cell) => (
+            <div
+              key={cell.label}
+              className={
+                cell.emphasis
+                  ? "bg-sidebar px-2 py-4 text-white"
+                  : "border-r border-border px-2 py-4 last:border-r-0"
+              }
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
+                {cell.label}
+              </p>
+              {/* With void and granny flat both showing, seven cells leave ~77px
+                for a value and "187.35 m²" is ~76px of monospace: it broke at
+                the space and printed the unit on a line of its own. */}
+              <p className="mt-2 whitespace-nowrap font-mono font-semibold">
+                {cell.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {data.areaLabel ? (
+        <p className="mt-6 text-xs text-muted-foreground">
+          Total build area {data.areaLabel}.
+        </p>
+      ) : null}
+      <PrintDwellingSpec
+        title="Major House Specifications"
+        spec={{
+          bathrooms: job.bathrooms,
+          bedrooms: job.bedrooms,
+          garageSpaces: job.garageSpaces,
+        }}
+      />
+      {granny ? (
+        <PrintDwellingSpec title="Granny Home Specifications" spec={granny} />
+      ) : null}
+    </PrintPage>
+  );
+}
+
+// Room counts per dwelling, as the emailed snapshot page prints them: the major
+// house always, the granny home only when the build includes one. The printed
+// copy carried neither, so it lost the bedroom counts the emailed PDF showed.
+function PrintDwellingSpec({
+  title,
+  spec,
+}: {
+  readonly title: string;
+  readonly spec: OfferDwellingSpec;
+}) {
+  const cells = [
+    { label: "Bedrooms", value: spec.bedrooms },
+    { label: "Bathrooms", value: spec.bathrooms },
+    { label: "Garage Spaces", value: spec.garageSpaces },
+  ];
+  return (
+    <div className="mt-6">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sidebar">
+        {title}
+      </p>
+      <div className="mt-2 grid grid-cols-3 border border-border text-center text-sm">
+        {cells.map((cell) => (
           <div
             key={cell.label}
-            className={
-              cell.emphasis
-                ? "bg-sidebar p-4 text-white"
-                : "border-r border-border p-4 last:border-r-0"
-            }
+            className="border-r border-border p-3 last:border-r-0"
           >
             <p className="text-xs font-semibold uppercase tracking-wide opacity-80">
               {cell.label}
             </p>
-            <p className="mt-2 font-mono font-semibold">{cell.value}</p>
+            <p className="mt-2 font-mono font-semibold">
+              {formatRoomCount(cell.value)}
+            </p>
           </div>
         ))}
       </div>
-      <p className="mt-6 text-xs text-muted-foreground">
-        Total build area {data.areaLabel}.
-      </p>
-    </PrintPage>
+    </div>
   );
 }
 
@@ -563,8 +648,14 @@ function PrintInvestmentPage({
         </p>
       </div>
       <div className="mt-8 grid grid-cols-2 gap-8">
-        <PrintBulletList items={data.summaryInclusions} title="This price includes" />
-        <PrintBulletList items={data.exclusionBullets} title="This price excludes" />
+        <PrintBulletList
+          items={data.summaryInclusions}
+          title="This price includes"
+        />
+        <PrintBulletList
+          items={data.exclusionBullets}
+          title="This price excludes"
+        />
       </div>
     </PrintPage>
   );
@@ -586,13 +677,17 @@ function PrintInclusionsPage({
       <ProposalMasthead />
       <PrintSection
         eyebrow="Inclusions"
-        title={continued ? "Full inclusions schedule (cont.)" : "Full inclusions schedule"}
+        title={
+          continued
+            ? "Full inclusions schedule (cont.)"
+            : "Full inclusions schedule"
+        }
       >
         {continued ? null : (
           <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
-            All items below are fixed within your contract price. Design provided
-            by owner/architect — all costs fixed as per approved plans, confirmed
-            at colour selection.
+            All items below are fixed within your contract price. Design
+            provided by owner/architect — all costs fixed as per approved plans,
+            confirmed at colour selection.
           </p>
         )}
       </PrintSection>
@@ -605,12 +700,92 @@ function PrintInclusionsPage({
         </thead>
         <tbody>
           {specifications.map((entry, index) => (
-            <tr className="border-b border-border" key={`${startIndex + index}`}>
+            <tr
+              className="border-b border-border"
+              key={`${startIndex + index}`}
+            >
               <td className="py-3 pr-4 align-top font-semibold text-sidebar">
                 {entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL}
               </td>
               <td className="px-4 py-3 align-top text-muted-foreground">
                 {entry.spec}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </PrintPage>
+  );
+}
+
+// The prime-cost and provisional sums the estimator ticked "Show on Offer
+// document" on the Scope step.
+//
+// buildOfferPrintTemplateData has always computed `scopeRows`, and until now
+// nothing rendered them: a fixed-price proposal went out with no statement of
+// which sums were allowances, what they were worth, or what happens when the
+// real cost differs — while the estimator saw a ticked checkbox saying it would.
+//
+// Its own page(s), and only when there is something to disclose, so an offer with
+// no allowances keeps exactly the page count it had before. A continued page
+// drops the intro, mirroring allowancesPage() in offer-proposal-html.ts.
+function PrintAllowancesPage({
+  rows,
+  continued,
+  footer,
+}: {
+  readonly rows: readonly OfferPrintScopeRow[];
+  readonly continued: boolean;
+  readonly footer: string;
+}) {
+  return (
+    <PrintPage footerText={footer}>
+      <ProposalMasthead />
+      <PrintSection
+        eyebrow="Allowances"
+        title={
+          continued
+            ? "Prime cost & provisional sums (cont.)"
+            : "Prime cost & provisional sums"
+        }
+      >
+        {continued ? null : (
+          <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
+            The amounts below are allowances held within your fixed contract
+            price, not fixed costs. Where your final selection costs more or
+            less than the allowance, the difference is adjusted by written
+            variation as set out against each item.
+          </p>
+        )}
+      </PrintSection>
+      <table className="mt-6 w-full border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-y border-border bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="py-3 pr-4 font-semibold">Item</th>
+            <th className="w-[30mm] px-4 py-3 text-right font-semibold">
+              Allowance
+            </th>
+            <th className="w-[70mm] px-4 py-3 font-semibold">
+              If the actual cost differs
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr className="border-b border-border" key={row.id}>
+              <td className="py-3 pr-4 align-top">
+                <span className="font-semibold text-sidebar">{row.label}</span>
+                {row.description ? (
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    {row.description}
+                  </span>
+                ) : null}
+              </td>
+              <td className="px-4 py-3 text-right align-top font-mono tabular-nums">
+                {row.amountLabel}
+              </td>
+              <td className="px-4 py-3 align-top text-muted-foreground">
+                {row.variationRule || "\u2014"}
               </td>
             </tr>
           ))}
@@ -677,7 +852,11 @@ function PrintTermsPage({
       {inlineBlocks ? (
         <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
           {inlineBlocks.map((block) => (
-            <SignatureBlock key={block.key} label={block.label} name={block.name} />
+            <SignatureBlock
+              key={block.key}
+              label={block.label}
+              name={block.name}
+            />
           ))}
         </div>
       ) : (
@@ -711,7 +890,11 @@ function PrintSignaturePage({
       <ProposalMasthead />
       <PrintSection
         eyebrow="Acceptance"
-        title={continued ? "Acceptance & signatures (cont.)" : "Acceptance & signatures"}
+        title={
+          continued
+            ? "Acceptance & signatures (cont.)"
+            : "Acceptance & signatures"
+        }
       >
         {continued ? null : (
           <p className="max-w-[155mm] text-sm leading-6 text-muted-foreground">
@@ -721,7 +904,11 @@ function PrintSignaturePage({
       </PrintSection>
       <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
         {blocks.map((block) => (
-          <SignatureBlock key={block.key} label={block.label} name={block.name} />
+          <SignatureBlock
+            key={block.key}
+            label={block.label}
+            name={block.name}
+          />
         ))}
       </div>
     </PrintPage>

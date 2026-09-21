@@ -114,11 +114,18 @@ export function ReminderModal({
   const handleSend = async () => {
     try {
       if (tab === "email") {
-        await sendTradieScheduleReminder({
-          to: tradie.email,
+        // The action sends to the schedule's own tradie; the address above is
+        // only shown. A refusal comes back as data, since Next hides a thrown
+        // message in production.
+        const result = await sendTradieScheduleReminder({
+          scheduleId: schedule.id,
           subject: emailSubject,
           body: emailBody,
         });
+        if (!result.success) {
+          toast.error(result.message);
+          return;
+        }
         toast.success("Email reminder sent successfully.");
         onSend();
       } else if (tab === "sms") {

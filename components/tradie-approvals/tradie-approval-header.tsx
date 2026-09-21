@@ -52,32 +52,32 @@ export function TradieApprovalKPI() {
       iconTone: "bg-amber-600",
     },
     {
-        title: "Scheduling",
-        dataPoint: {
-          total: kpiData.scheduleCount,
-          trendDelta: 0, // Placeholder for trend delta calculation
-        },
-        Icon: CalendarDays,
-        iconTone: "bg-purple-600",
+      title: "Scheduling",
+      dataPoint: {
+        total: kpiData.scheduleCount,
+        trendDelta: 0, // Placeholder for trend delta calculation
+      },
+      Icon: CalendarDays,
+      iconTone: "bg-purple-600",
     },
     {
-        title: "Schedule Removals",
-        dataPoint: {
-          total: kpiData.scheduleDeletionCount,
-          trendDelta: 0, // Placeholder for trend delta calculation
-        },
-        Icon: CalendarX,
-        iconTone: "bg-rose-600",
+      title: "Schedule Removals",
+      dataPoint: {
+        total: kpiData.scheduleDeletionCount,
+        trendDelta: 0, // Placeholder for trend delta calculation
+      },
+      Icon: CalendarX,
+      iconTone: "bg-rose-600",
     },
     {
-        title: "Resolved Approvals",
-        dataPoint: {
-          total: kpiData.resolvedCount.accepted + kpiData.resolvedCount.rejected,
-          trendDelta: 0, // Placeholder for trend delta calculation
-        },
-        Icon: CheckCircle,
-        iconTone: "bg-green-600",
-    }
+      title: "Resolved Approvals",
+      dataPoint: {
+        total: kpiData.resolvedCount.accepted + kpiData.resolvedCount.rejected,
+        trendDelta: 0, // Placeholder for trend delta calculation
+      },
+      Icon: CheckCircle,
+      iconTone: "bg-green-600",
+    },
   ];
 
   return (

@@ -56,6 +56,7 @@ import {
   pollOfferSigningStatus,
   saveOfferWorkspace,
   transitionOfferStatus,
+  recallOfferEnvelope,
   createOfferRevision,
 } from "@/lib/data/offer-workspace";
 import { sendOfferDocument } from "@/lib/data/offer-send";
@@ -81,7 +82,7 @@ import {
   type OfferPrefillResult,
 } from "@/lib/data/offer-prefill";
 import {
-  reevaluateFormulaCostLines,
+  reevaluateFormulaCostLinesForStatus,
   resolveAreaRateConstants,
   type AdminOfferPrefill,
 } from "@/lib/offer/admin-offer-prefill";
@@ -91,11 +92,29 @@ import type {
   TenderGateState,
 } from "@/lib/offer/workspace-persistence";
 import { INITIAL_TENDER_GATE } from "@/lib/offer/workspace-persistence";
+import {
+  CURRENT_CALC_VERSION,
+  isSupportedCalcVersion,
+} from "@/lib/offer/calc-version";
 import type { OfferSignerStatus } from "@/lib/offer/signing-status";
+import type { ContractPreviewTerms } from "@/lib/offer/contract-terms";
+import { hasContractTerms } from "@/lib/offer/contract-terms-status";
+import {
+  lifecycleActionFor,
+  type LifecycleAction,
+} from "@/lib/offer/lifecycle-busy";
+import {
+  isUnsafeToLeave,
+  type OfferSaveState,
+} from "@/lib/offer/workspace-save-state";
 import {
   collectOfferSendBlockers,
   describeOfferExpiry,
 } from "@/lib/offer/offer-readiness";
+import {
+  buildIncludesGrannyFlat,
+  withoutGrannyOutOfScopeLines,
+} from "@/lib/offer/granny-exclusion";
 import {
   EMPTY_OFFER_IMAGES,
   setOfferImage,
@@ -104,7 +123,14 @@ import {
   type OfferImageSlotKey,
 } from "@/lib/offer/workspace-images";
 import { OfferWorkspacePrintTemplate } from "./offer-workspace-print-template";
-import { OfferWorkspaceScreen } from "./offer-workspace-screen";
+import {
+  canCreateRevision,
+  isWorkspaceSaveStatus,
+} from "@/lib/offer/offer-editability";
+import {
+  OfferWorkspaceScreen,
+  type OfferPendingConfirm,
+} from "./offer-workspace-screen";
 
 function contractDefaultsFromWorkspace(
   job: OfferWorkspaceJob,
@@ -233,6 +259,10 @@ export function NewOfferWorkspace({
   const [standardPriceInput, setStandardPriceInput] = useState("");
   const [priceAdjustmentLabel, setPriceAdjustmentLabel] = useState("");
   const [status, setStatus] = useState<OfferWorkspaceStatus>("pending");
+  // Flips once the server has told us what this offer actually is. The screen
+  // seeds "pending" until then, so anything derived from status at first render
+  // (which step to open on) is a guess that has to be corrected exactly once.
+  const [hydrated, setHydrated] = useState(false);
   const [areaCalculator, setAreaCalculator] = useState<OfferAreaCalculator>(
     adminPrefill?.areaCalculator ?? INITIAL_AREA_CALCULATOR,
   );
@@ -259,11 +289,19 @@ export function NewOfferWorkspace({
   const [adminContentVersion, setAdminContentVersion] = useState(
     adminPrefill?.adminVersion ?? 0,
   );
+  // The calculation rules this offer prices under. A fresh offer seeds at the
+  // current version; a saved offer overwrites this from its stored pin in
+  // hydrateSnapshot. The SERVER stamp is authoritative — this seed only matters
+  // for the window before the first save.
+  const [calcVersion, setCalcVersion] = useState<number>(CURRENT_CALC_VERSION);
   // Admin content changed after this offer was frozen (agreed/sent), so the
   // server left the snapshot alone. Surfaced as an advisory send blocker.
   const [adminContentStale, setAdminContentStale] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revisionNotice, setRevisionNotice] = useState<string | null>(null);
+  // A recall or revision the estimator has clicked but not yet confirmed.
+  const [pendingConfirm, setPendingConfirm] =
+    useState<OfferPendingConfirm | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<string | null>(null);
@@ -274,6 +312,16 @@ export function NewOfferWorkspace({
   // because the pre-transition save reconciled to another tab or failed — without
   // it the button looked like a silent no-op (codex #4).
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  // The status change, recall or revision running, or null. Double-clicking a
+  // lifecycle button used to fire its server action twice: the ref blocks
+  // re-entry synchronously, and the state drives the screen's busy line and
+  // disables every lifecycle button, marking the one that started.
+  const [lifecycleBusy, setLifecycleBusy] = useState<LifecycleAction | null>(
+    null,
+  );
+  const transitioningRef = useRef(false);
+  // The mount load failed, so there is no offer to show or save.
+  const [loadFailed, setLoadFailed] = useState(false);
   // Per-recipient DocuSign status, loaded with the offer and refreshed whenever
   // we reload it. The Connect webhook writes these rows; before #121/#123 the
   // signing tracker ignored them and hard-coded every customer to "awaiting".
@@ -295,6 +343,13 @@ export function NewOfferWorkspace({
   const [projectCreating, setProjectCreating] = useState(false);
   const [projectResult, setProjectResult] =
     useState<ProjectHandoffResult | null>(null);
+  // The handed-off project, from the handoff or from the loader after a reload.
+  const [projectId, setProjectId] = useState<string | null>(null);
+  // What the BC4 carries, from the loader, so the Contract preview shows the
+  // signed Tender's terms (or the sent Contract's) rather than this tab's
+  // payment schedule.
+  const [contractTerms, setContractTerms] =
+    useState<ContractPreviewTerms | null>(null);
   const [prefilling, setPrefilling] = useState(false);
   const [checking, setChecking] = useState(false);
   const [draftingHighlights, setDraftingHighlights] = useState(false);
@@ -306,9 +361,7 @@ export function NewOfferWorkspace({
   );
   // Autosave chrome: makes the debounced persistence visible and surfaces a
   // failure instead of swallowing it. "idle" until the first save is attempted.
-  const [saveState, setSaveState] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [saveState, setSaveState] = useState<OfferSaveState>("idle");
   // Clock for offer-expiry rendering. Lazily seeded (same calendar day on the
   // server pass and hydration, so the chip label matches), then ticked each
   // minute so "expires in N days" stays honest without a reload.
@@ -333,19 +386,29 @@ export function NewOfferWorkspace({
     ) {
       return;
     }
+    // An offer minted by a newer build names rules we do not have. Recomputing
+    // it under ours would reprice a quote the customer already holds, so leave
+    // its stored lines exactly as they are.
+    if (!isSupportedCalcVersion(calcVersion)) {
+      return;
+    }
     setLines((prev) => {
       if (!prev.some((l) => l.formula)) return prev;
-      return reevaluateFormulaCostLines(
+      // Only while the cost schedule is editable: an issued offer's lines are
+      // the price the customer was quoted, and admin rates may have moved.
+      return reevaluateFormulaCostLinesForStatus(
+        status,
         prev,
         rateConstantsRef.current,
         job,
         areaCalculator,
+        calcVersion,
       );
     });
-  }, [job, areaCalculator, leadId]);
+  }, [job, areaCalculator, leadId, calcVersion, status]);
 
   useEffect(() => {
-    if (saveState !== "saving") return;
+    if (!isUnsafeToLeave(saveState)) return;
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -433,6 +496,7 @@ export function NewOfferWorkspace({
     () =>
       collectOfferSendBlockers({
         hasLead: leadId !== undefined,
+        hasKnownFloorArea: totalAreaSqm > 0,
         needsOverrideReason: customerPrice.needsOverrideReason,
         expiryState: offerExpiry?.state ?? "none",
         ownerIssues,
@@ -441,15 +505,59 @@ export function NewOfferWorkspace({
     [
       adminContentStale,
       leadId,
+      totalAreaSqm,
       customerPrice.needsOverrideReason,
       offerExpiry,
       ownerIssues,
     ],
   );
 
+  // Derived from the blockers rather than restated, because the two had already
+  // drifted: the list gained a block-severity "floor-area" entry and the Send
+  // button carried its own hand-written copy of the rule that did not, so the
+  // workspace showed "Enter floor areas before sending a proposal" above a Send
+  // button that was still enabled. The four block-severity ids — no-lead,
+  // override-reason, owner-*, floor-area — are exactly what this used to spell
+  // out by hand, so a new one now gates the button by existing.
+  const canSend = useMemo(
+    () => !sendBlockers.some((blocker) => blocker.severity === "block"),
+    [sendBlockers],
+  );
+
+  // A build that includes a granny flat must not also say the granny flat is
+  // out of scope. The estimator used to have to find and delete that line
+  // before any send would go through; it is now removed as soon as the build
+  // says there is one. Job setup is editable only while the offer is pending,
+  // and Scope and the offer document are editable then too, so this only ever
+  // runs on lists the estimator can still change. The documents filter the same
+  // lines at build time, which covers a locked offer and the admin defaults.
+  function dropGrannyExclusionsFor(nextJob: OfferWorkspaceJob) {
+    if (!buildIncludesGrannyFlat(nextJob)) {
+      return;
+    }
+    setExclusions((current) => [
+      ...withoutGrannyOutOfScopeLines(true, current, (item) => [
+        item.label,
+        item.description,
+        item.variationRule,
+      ]),
+    ]);
+    setDraft((current) => {
+      const bullets = withoutGrannyOutOfScopeLines(
+        true,
+        current.exclusionBullets,
+        (line) => line,
+      );
+      return bullets.length === current.exclusionBullets.length
+        ? current
+        : { ...current, exclusionBullets: [...bullets] };
+    });
+  }
+
   function updateJob(patch: Partial<OfferWorkspaceJob>) {
     const nextJob = { ...job, ...patch };
     setJob(nextJob);
+    dropGrannyExclusionsFor(nextJob);
     if (status === "contract_draft") {
       setContractParticulars((current) =>
         reconcileContractParticularDefaults(
@@ -681,7 +789,21 @@ export function NewOfferWorkspace({
       alfrescoPorchSqm: result.areaBasis.alfrescoSqm,
       porchSqm: result.areaBasis.porchSqm,
       grannyFlatSqm: result.areaBasis.grannyFlatSqm,
+      // The toggle travels with the area. Without this a v2 offer could import
+      // granny square metres that still reach the slab basis and every printed
+      // total while the field itself is hidden — the exact divergence v2 exists
+      // to close, only harder to see.
+      hasGrannyHome:
+        result.areaBasis.grannyFlatSqm > 0 ? true : current.hasGrannyHome,
     }));
+    // Imported areas can introduce the granny flat, so the same removal applies.
+    if (result.areaBasis.grannyFlatSqm > 0) {
+      dropGrannyExclusionsFor({
+        ...job,
+        grannyFlatSqm: result.areaBasis.grannyFlatSqm,
+        hasGrannyHome: true,
+      });
+    }
   }
 
   function addLine() {
@@ -738,9 +860,14 @@ export function NewOfferWorkspace({
       images,
       tenderGate,
       adminContentVersion,
+      // LAST, matching serializeWorkspace. The autosave dirty check compares
+      // JSON.stringify of this against the loaded snapshot; a different key
+      // order would make every offer look dirty on open and save itself.
+      calcVersion,
     }),
     [
       adminContentVersion,
+      calcVersion,
       job,
       lines,
       allowances,
@@ -800,6 +927,11 @@ export function NewOfferWorkspace({
   }, []);
   const stateVersionRef = useRef(0);
   const lastSavedRef = useRef<string | null>(null);
+  // Set when a save refused as "locked" reloaded the live copy, cleared by the
+  // next save that lands. A second refusal while it is set means the reload did
+  // not settle it, so autosave halts rather than reload in a loop.
+  const lockedReloadRef = useRef(false);
+  const autosaveHaltedRef = useRef(false);
   // Tracks the last-persisted particulars JSON so the contract-draft save effect
   // fires only on a real change (and never re-saves what we just hydrated).
   const lastSavedParticularsRef = useRef<string | null>(null);
@@ -872,6 +1004,10 @@ export function NewOfferWorkspace({
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   const hydrateSnapshot = useCallback(
     (s: OfferWorkspaceSnapshot, status: OfferWorkspaceStatus) => {
@@ -911,8 +1047,26 @@ export function NewOfferWorkspace({
       setImages(s.images);
       setTenderGate(s.tenderGate);
       setAdminContentVersion(s.adminContentVersion);
+      setCalcVersion(s.calcVersion);
     },
     [adminPrefill?.costLines, adminPrefill?.loadingChargePercentage],
+  );
+
+  // A reload hands back the job as last saved, whose label can belong to the
+  // revision it was forked from. Show the loaded revision's own, as the mount
+  // load does.
+  const stampRevisionLabel = useCallback(
+    (loaded: {
+      readonly reference: string;
+      readonly revisionNumber: number;
+    }) => {
+      setJob((current) => ({
+        ...current,
+        reference: loaded.reference.replace(/-R\d+$/, ""),
+        revision: `R${loaded.revisionNumber}`,
+      }));
+    },
+    [],
   );
 
   // Single-flight workspace autosave (fixes the overlapping-save clobber).
@@ -941,6 +1095,12 @@ export function NewOfferWorkspace({
           if (leadId === undefined) {
             return "clean";
           }
+          // The autosave gate, for explicit flushes too. Nothing is editable at
+          // any other status and the server refuses the save, so a flush there
+          // reloaded the tab and failed the recall or send that asked for it.
+          if (!isWorkspaceSaveStatus(statusRef.current)) {
+            return "clean";
+          }
           // Loop until the persisted state matches the latest snapshot, so edits
           // made while a save is in flight are saved next (never dropped).
           for (;;) {
@@ -965,25 +1125,47 @@ export function NewOfferWorkspace({
             if (result.ok) {
               stateVersionRef.current = result.stateVersion;
               lastSavedRef.current = currentJson;
+              lockedReloadRef.current = false;
               setSaveState("saved");
               continue; // re-check: capture edits made during the save
             }
-            if (result.reason === "stale" || result.reason === "superseded") {
+            if (result.reason === "locked" && lockedReloadRef.current) {
+              console.error(
+                "[offer] autosave refused again after reloading; autosave stopped",
+              );
+              autosaveHaltedRef.current = true;
+              setSaveState("error");
+              return "error";
+            }
+            if (
+              result.reason === "stale" ||
+              result.reason === "superseded" ||
+              result.reason === "locked"
+            ) {
               // A different tab moved on (single-flight rules out our own
               // overlap) — reconcile to the live copy rather than clobber it.
               // "superseded" means another tab forked a new revision; the same
               // reload lands us on the live one. See ADR 0002 (no field merge).
+              // "locked" means the offer was issued meanwhile, so this tab's
+              // edits to now-frozen steps were refused; the reload shows the
+              // offer at its real status.
+              if (result.reason === "locked") {
+                lockedReloadRef.current = true;
+              }
               try {
                 const loaded = await loadActiveOfferWorkspace(leadId);
                 adoptOffer(loaded.offerId);
                 stateVersionRef.current = loaded.stateVersion;
                 setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+                setHydrated(true);
                 setSignerStatuses(loaded.signerStatuses ?? []);
+                setContractTerms(loaded.contractTerms ?? null);
                 if (loaded.snapshot) {
                   hydrateSnapshot(
                     loaded.snapshot,
                     loaded.status.toLowerCase() as OfferWorkspaceStatus,
                   );
+                  stampRevisionLabel(loaded);
                   lastSavedRef.current = JSON.stringify(loaded.snapshot);
                 }
               } catch (error) {
@@ -996,9 +1178,13 @@ export function NewOfferWorkspace({
                 setSaveState("error");
                 return "error";
               }
-              setSaveState("error");
+              // Not "error": nothing is left unsaved, the tab now shows the
+              // live copy. It still needs saying, since an edit may be gone.
+              setSaveState("reconciled");
               return "reconciled";
             }
+            // "invalid": the server refused the snapshot's shape, and saving
+            // the same snapshot again would be refused the same way.
             setSaveState("error");
             return "error";
           }
@@ -1006,7 +1192,7 @@ export function NewOfferWorkspace({
       workspaceSaveChainRef.current = run;
       return run;
     },
-    [leadId, hydrateSnapshot, adoptOffer],
+    [leadId, hydrateSnapshot, adoptOffer, stampRevisionLabel],
   );
 
   // Load the active offer for the lead on mount.
@@ -1023,9 +1209,12 @@ export function NewOfferWorkspace({
         // Previously unguarded: a failed load left offerIdRef null, which
         // silently disables autosave — the estimator keeps editing a workspace
         // that can never persist, and only finds out when the tab is closed.
+        // The pane now shows the failure in place of the steps, so nothing can
+        // be edited. It is not a failed save: that state offered a Retry with no
+        // offer behind it and prompted on the very reload the pane asks for.
         console.error("[offer] failed to load the workspace:", error);
         if (!cancelled) {
-          setSaveState("error");
+          setLoadFailed(true);
         }
         return;
       }
@@ -1034,13 +1223,18 @@ export function NewOfferWorkspace({
       }
       adoptOffer(loaded.offerId);
       stateVersionRef.current = loaded.stateVersion;
+      lockedReloadRef.current = false;
+      autosaveHaltedRef.current = false;
       setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
+      setHydrated(true);
       // The loader already re-applied the current admin defaults if this offer
       // was still editable (hydrateSnapshot below picks them up). It only flags
       // `adminContentStale` when the offer is frozen and was deliberately left
       // untouched — that is the case worth telling the operator about.
       setAdminContentStale(loaded.adminContentStale === true);
       setSignerStatuses(loaded.signerStatuses ?? []);
+      setContractTerms(loaded.contractTerms ?? null);
+      setProjectId(loaded.projectId ?? null);
       // The customer declined the last envelope — tell the operator why (the
       // reason comes straight from DocuSign) and point them at a new revision.
       if (loaded.declineReason) {
@@ -1120,6 +1314,46 @@ export function NewOfferWorkspace({
       cancelled = true;
     };
   }, [leadId, hydrateSnapshot, adoptOffer]);
+
+  // Every load brings the Contract step's terms. A status reached without one,
+  // a signing poll that saw the Tender signed or a lifecycle click, asks once:
+  // the preview otherwise sat on "reload the page", and the signing ticks do
+  // not re-read the terms.
+  useEffect(() => {
+    if (
+      leadId === undefined ||
+      contractTerms !== null ||
+      !hasContractTerms(status)
+    ) {
+      return;
+    }
+    const offerId = offerIdRef.current;
+    if (offerId === null) {
+      return;
+    }
+    let cancelled = false;
+    void pollOfferSigningStatus({ offerId, needsContractTerms: true })
+      .then((result) => {
+        // The same identity check as the signing poll: a revision forked
+        // meanwhile must not take this offer's terms.
+        if (
+          !cancelled &&
+          offerIdRef.current === offerId &&
+          result.ok &&
+          result.contractTerms
+        ) {
+          setContractTerms(result.contractTerms);
+        }
+      })
+      .catch((error) => {
+        // Best effort: the preview says the terms can't be shown, and the send
+        // resolves them again itself.
+        console.error("[offer] loading the contract terms failed:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId, status, contractTerms]);
 
   // Live signing updates. While an envelope is out for signature, the DocuSign
   // Connect webhook updates the database in the background, but an already-open
@@ -1212,13 +1446,13 @@ export function NewOfferWorkspace({
     // silently drop those edits on reload. The agreed basis is preserved
     // separately in agreedSnapshot; workspaceState stays live until the Tender
     // envelope is sent.
-    if (
-      status !== "pending" &&
-      status !== "sent" &&
-      status !== "agreed" &&
-      status !== "tender_draft"
-    ) {
+    if (!isWorkspaceSaveStatus(status)) {
       return; // frozen once the Tender is sent
+    }
+    // The server kept refusing this snapshot even after a reload (see
+    // flushWorkspace). Explicit actions still try; the timer does not.
+    if (autosaveHaltedRef.current) {
+      return;
     }
     const currentJson = JSON.stringify(snapshot);
     if (currentJson === lastSavedRef.current) {
@@ -1265,14 +1499,53 @@ export function NewOfferWorkspace({
     flushContractParticulars,
   ]);
 
+  // The "Not saved" chip's Retry. Before it, the only way to retry a failed save
+  // was to make another edit. It also lifts an autosave halt and allows one more
+  // reload on a "locked" refusal, because the estimator asked for this attempt.
+  const retrySave = useCallback(() => {
+    const offerId = offerIdRef.current;
+    if (leadId === undefined || offerId === null) {
+      return;
+    }
+    autosaveHaltedRef.current = false;
+    lockedReloadRef.current = false;
+    // Before the await, not after: the chip otherwise kept saying "Not saved"
+    // for the whole retry, so nothing showed the click had registered and the
+    // estimator could fire several retries at once.
+    setSaveState("saving");
+    void (async () => {
+      const workspace = await flushWorkspace(offerId);
+      const particulars =
+        status === "contract_draft"
+          ? await flushContractParticulars(offerId)
+          : { ok: true as const };
+      if (workspace === "clean" && particulars.ok) {
+        setSaveState("saved");
+      }
+    })();
+  }, [leadId, status, flushWorkspace, flushContractParticulars]);
+
   // Persist a lifecycle transition (flushing the latest state first so AGREED
   // freezes the correct snapshot), then update the UI.
+  // `recallScope` turns a status step into a genuine recall: the live DocuSign
+  // envelope for that document is voided BEFORE the status moves, so an
+  // estimator who sees "Draft" can trust that the customer's signing link is
+  // dead. Without it these controls only ever flipped our own status while the
+  // superseded document stayed signable.
   const transition = useCallback(
-    (next: OfferWorkspaceStatus) => {
+    (
+      next: OfferWorkspaceStatus,
+      recallScope?: "offer" | "tender" | "contract",
+    ) => {
       const offerId = offerIdRef.current;
       if (leadId === undefined || offerId === null) {
         return;
       }
+      if (transitioningRef.current) {
+        return;
+      }
+      transitioningRef.current = true;
+      setLifecycleBusy(lifecycleActionFor(next, recallScope));
       setTransitionError(null);
       void (async () => {
         try {
@@ -1291,10 +1564,28 @@ export function NewOfferWorkspace({
             );
             return;
           }
-          await transitionOfferStatus({
-            offerId,
-            toStatus: next.toUpperCase() as OfferStatus,
-          });
+          if (recallScope) {
+            const recalled = await recallOfferEnvelope({
+              offerId,
+              scope: recallScope,
+              toStatus: next.toUpperCase() as OfferStatus,
+            });
+            // A refused recall (DocuSign did not confirm the void) leaves the
+            // status unchanged and comes back as data, because a thrown server
+            // message is hidden in production. Rethrow it so the catch below
+            // shows why and resyncs. voidWarnings is empty in practice.
+            if (!recalled.ok) {
+              throw new Error(recalled.error);
+            }
+            if (recalled.voidWarnings.length > 0) {
+              setTransitionError(recalled.voidWarnings.join(" "));
+            }
+          } else {
+            await transitionOfferStatus({
+              offerId,
+              toStatus: next.toUpperCase() as OfferStatus,
+            });
+          }
           if (next === "contract_draft") {
             setContractParticulars((current) =>
               reconcileContractParticularDefaults(
@@ -1319,6 +1610,7 @@ export function NewOfferWorkspace({
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
+            setContractTerms(loaded.contractTerms ?? null);
             if (loaded.snapshot) {
               hydrateSnapshot(
                 loaded.snapshot,
@@ -1329,6 +1621,9 @@ export function NewOfferWorkspace({
           } catch {
             // Reload failed too — leave the UI as-is.
           }
+        } finally {
+          transitioningRef.current = false;
+          setLifecycleBusy(null);
         }
       })();
     },
@@ -1349,6 +1644,13 @@ export function NewOfferWorkspace({
     if (leadId === undefined || offerId === null) {
       return;
     }
+    // Shares the transition guard: a revision racing a recall or status change
+    // on the same offer is the double-submit this exists to stop.
+    if (transitioningRef.current) {
+      return;
+    }
+    transitioningRef.current = true;
+    setLifecycleBusy("revision");
     setRevising(true);
     setRevisionNotice(null);
     void (async () => {
@@ -1370,15 +1672,21 @@ export function NewOfferWorkspace({
         const result = await createOfferRevision({ offerId });
         if (!result.ok) {
           setRevisionNotice(
-            "This offer is locked — changes need a contract variation, not a new offer revision.",
+            result.reason === "refused"
+              ? result.error
+              : "This offer is locked — changes need a contract variation, not a new offer revision.",
           );
           return;
         }
         const loaded = await loadActiveOfferWorkspace(leadId);
         adoptOffer(loaded.offerId);
         stateVersionRef.current = loaded.stateVersion;
+        lockedReloadRef.current = false;
+        autosaveHaltedRef.current = false;
         setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
         setSignerStatuses(loaded.signerStatuses ?? []);
+        setContractTerms(loaded.contractTerms ?? null);
+        setProjectId(loaded.projectId ?? null);
         // A forked revision starts with no contract — clear any in-memory
         // particulars so they can't be saved onto the new revision's contract.
         const revisionParticulars =
@@ -1396,6 +1704,7 @@ export function NewOfferWorkspace({
             loaded.snapshot,
             loaded.status.toLowerCase() as OfferWorkspaceStatus,
           );
+          stampRevisionLabel(loaded);
           lastSavedRef.current = JSON.stringify(loaded.snapshot);
         } else {
           lastSavedRef.current = JSON.stringify(snapshotRef.current);
@@ -1414,9 +1723,28 @@ export function NewOfferWorkspace({
         );
       } finally {
         setRevising(false);
+        transitioningRef.current = false;
+        setLifecycleBusy(null);
       }
     })();
-  }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer]);
+  }, [leadId, hydrateSnapshot, flushWorkspace, adoptOffer, stampRevisionLabel]);
+
+  // Recall and Create revision void live DocuSign envelopes, which can't be
+  // undone, and a revision supersedes the offer. Their buttons acted on the
+  // first click; now they only open the confirmation, and this runs whichever
+  // action was confirmed.
+  const confirmPending = useCallback(() => {
+    const confirmed = pendingConfirm;
+    setPendingConfirm(null);
+    if (confirmed === null) {
+      return;
+    }
+    if (confirmed.kind === "recall") {
+      transition(confirmed.next, confirmed.scope);
+    } else {
+      createRevision();
+    }
+  }, [pendingConfirm, transition, createRevision]);
 
   // Email the proposal PDF to the client. Flushes the latest edits first so the
   // generated PDF matches the workspace, then routes through sendOfferDocument.
@@ -1470,6 +1798,7 @@ export function NewOfferWorkspace({
               stateVersionRef.current = loaded.stateVersion;
               setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
               setSignerStatuses(loaded.signerStatuses ?? []);
+              setContractTerms(loaded.contractTerms ?? null);
             } catch {
               // Reload failed — leave the UI as-is; the error message still shows.
             }
@@ -1488,6 +1817,7 @@ export function NewOfferWorkspace({
             stateVersionRef.current = loaded.stateVersion;
             setStatus(loaded.status.toLowerCase() as OfferWorkspaceStatus);
             setSignerStatuses(loaded.signerStatuses ?? []);
+            setContractTerms(loaded.contractTerms ?? null);
           } catch {
             // Reload failed too — leave the UI as-is.
           }
@@ -1608,6 +1938,11 @@ export function NewOfferWorkspace({
         }
         const result = await sendContractForSignature({ offerId });
         if (result.ok) {
+          // The send returns no replacement terms, and the loader effect exits
+          // on contractTerms !== null, so without this the preview keeps the
+          // pre-send Tender terms until a reload. Cleared so the effect reloads
+          // the terms the Contract actually went out with.
+          setContractTerms(null);
           setStatus("contract_sent");
         } else {
           setContractSendError(result.error);
@@ -1640,6 +1975,7 @@ export function NewOfferWorkspace({
         setProjectResult(result);
         if (result.ok) {
           setStatus("project");
+          setProjectId(result.projectId);
         }
       } catch (error) {
         console.error("[offer] project handoff failed:", error);
@@ -1691,6 +2027,10 @@ export function NewOfferWorkspace({
       <OfferWorkspaceScreen
         allowances={allowances}
         areaCalculator={areaCalculator}
+        calcVersion={calcVersion}
+        hydrated={hydrated}
+        loadFailed={loadFailed}
+        lifecycleBusy={lifecycleBusy}
         rateConstants={resolvedRateConstants}
         customerPrice={customerPrice}
         directTotal={directTotal}
@@ -1713,6 +2053,7 @@ export function NewOfferWorkspace({
         status={status}
         offerExpiry={offerExpiry}
         saveState={saveState}
+        onRetrySave={retrySave}
         sendBlockers={sendBlockers}
         tenderGate={tenderGate}
         onTenderGateChange={updateTenderGate}
@@ -1750,30 +2091,29 @@ export function NewOfferWorkspace({
         // rejects an incomplete party set, so don't leave the button actionable.
         canMarkAgreed={ownersComplete}
         onMarkRejected={() => transition("rejected")}
-        onCreateRevision={createRevision}
-        canRevise={
-          leadId !== undefined &&
-          status !== "contract_signed" &&
-          status !== "project"
-        }
+        onCreateRevision={() => setPendingConfirm({ kind: "revision" })}
+        // The server's locked statuses, not a hand-kept subset of them.
+        canRevise={leadId !== undefined && canCreateRevision(status)}
+        pendingConfirm={pendingConfirm}
+        onConfirmPending={confirmPending}
+        onCancelPending={() => setPendingConfirm(null)}
         revising={revising}
         revisionNotice={revisionNotice}
         revisionExecuted={status === "contract_signed" || status === "project"}
         onSendOffer={sendOffer}
-        canSend={
-          leadId !== undefined &&
-          !customerPrice.needsOverrideReason &&
-          ownersComplete
-        }
+        canSend={canSend}
         sending={sending}
         sendError={sendError}
         sentInfo={sentInfo}
         transitionError={transitionError}
         signerStatuses={signerStatuses}
+        contractTerms={contractTerms}
         onSendOfferForSignature={sendOfferAccept}
         offerSignSending={offerSignSending}
         offerSignError={offerSignError}
-        onRecallOffer={() => transition("sent")}
+        onRecallOffer={() =>
+          setPendingConfirm({ kind: "recall", scope: "offer", next: "sent" })
+        }
         // Dev-only simulate (guarded server-side): the real OFFER_SIGNED comes
         // from the DocuSign completion webhook.
         onMarkOfferSigned={() => transition("offer_signed")}
@@ -1781,7 +2121,13 @@ export function NewOfferWorkspace({
         onSendTender={sendTender}
         tenderSending={tenderSending}
         tenderSendError={tenderSendError}
-        onRecallTender={() => transition("tender_draft")}
+        onRecallTender={() =>
+          setPendingConfirm({
+            kind: "recall",
+            scope: "tender",
+            next: "tender_draft",
+          })
+        }
         onMarkTenderSigned={() => transition("tender_signed")}
         onGenerateContract={() => transition("contract_draft")}
         onSendContract={sendContract}
@@ -1789,11 +2135,18 @@ export function NewOfferWorkspace({
         contractSendError={contractSendError}
         contractParticulars={contractParticulars}
         onContractParticularsChange={updateContractParticulars}
-        onRecallContract={() => transition("contract_draft")}
+        onRecallContract={() =>
+          setPendingConfirm({
+            kind: "recall",
+            scope: "contract",
+            next: "contract_draft",
+          })
+        }
         onMarkContractSigned={() => transition("contract_signed")}
         onCreateProject={createProject}
         projectCreating={projectCreating}
         projectResult={projectResult}
+        projectId={projectId}
         onOverrideReasonChange={setOverrideReason}
         onPaymentScheduleChange={setPaymentSchedule}
         onPriceAdjustmentLabelChange={setPriceAdjustmentLabel}

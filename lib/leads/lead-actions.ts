@@ -97,6 +97,7 @@ export function offerWorkspaceHref(lead: Lead): string {
 export function bookConsultationHref(
   lead: Lead,
   teammateName: string | null | undefined,
+  bookingToken?: string | null,
 ): string {
   const params = new URLSearchParams({
     TeammateName: teammateName ?? "",
@@ -104,6 +105,9 @@ export function bookConsultationHref(
     email: lead.email,
     id: String(lead.id),
   });
+  if (bookingToken) {
+    params.set("bookingToken", bookingToken);
+  }
 
   return `/book-consultation?${params.toString()}`;
 }

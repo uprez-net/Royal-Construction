@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
   buildFormulaScope,
   evaluateCostFormula,
 } from "../../lib/offer/formula-evaluator";
+import { validateFormula } from "../../lib/offer/formula-validation";
 import {
+  AREA_MEASUREMENT_KEYS,
   LINE_ITEM_FORMULAS,
   DEFAULT_RATE_CONSTANTS,
+  RATE_CONSTANT_KEYS,
+  withDefaultRateConstants,
   type AreaMeasurementKey,
   type RateConstantKey,
 } from "../../lib/offer/formula-variables";
@@ -18,6 +23,7 @@ const measurements: Partial<Record<AreaMeasurementKey, number>> = {
   TOTAL_TRUCK_PRICE: 1500,
   TOTAL_GROUND_FLOOR_FRAME_COST: 19387.5,
   TOTAL_FIRST_FLOOR_FRAME_COST: 13365,
+  FIRST_FLOOR_AREA: 90,
   TOTAL_GROUND_FLOOR_AREA: 141,
   STEEL: 10000,
   INSTALLER: 15000,
@@ -43,40 +49,22 @@ function formulaFor(taskName: string): string {
 }
 
 // ─── SLAB: Total slab cost − Total Drop edge beam cost ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Slab"), scope),
-  31500,
-);
+assert.equal(evaluateCostFormula(formulaFor("Slab"), scope), 31500);
 
 // ─── DROP EDGE BEAM: Total Drop edge beam cost ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Drop edge beam"), scope),
-  900,
-);
+assert.equal(evaluateCostFormula(formulaFor("Drop edge beam"), scope), 900);
 
 // ─── FRAME: Total GF Frame cost + Total FF Frame cost ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Frame"), scope),
-  32752.5,
-);
+assert.equal(evaluateCostFormula(formulaFor("Frame"), scope), 32752.5);
 
 // ─── STEEL: pass-through ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Steel"), scope),
-  10000,
-);
+assert.equal(evaluateCostFormula(formulaFor("Steel"), scope), 10000);
 
 // ─── INSTALLER: pass-through ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Installer"), scope),
-  15000,
-);
+assert.equal(evaluateCostFormula(formulaFor("Installer"), scope), 15000);
 
 // ─── EAVES: pass-through ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Eaves"), scope),
-  5000,
-);
+assert.equal(evaluateCostFormula(formulaFor("Eaves"), scope), 5000);
 
 // ─── BRICK LAYER MATERIAL WITH BARS: (sand + cement + tie) × 1.3 ───
 assert.equal(
@@ -91,10 +79,7 @@ assert.equal(
 );
 
 // ─── BRICK LAYER: Total bricks × BRICK_LAYING_PRICE_PER_BRICK ───
-assert.equal(
-  evaluateCostFormula(formulaFor("Brick layer"), scope),
-  15500 * 50,
-);
+assert.equal(evaluateCostFormula(formulaFor("Brick layer"), scope), 15500 * 50);
 
 // ─── TILES: Total tiles × TILE_PRICE_PER_TILE ───
 assert.equal(
@@ -121,6 +106,7 @@ const zeroMeasurements: Partial<Record<AreaMeasurementKey, number>> = {
   TOTAL_TRUCK_PRICE: 0,
   TOTAL_GROUND_FLOOR_FRAME_COST: 0,
   TOTAL_FIRST_FLOOR_FRAME_COST: 0,
+  FIRST_FLOOR_AREA: 0,
   TOTAL_GROUND_FLOOR_AREA: 0,
   STEEL: 0,
   INSTALLER: 0,
@@ -149,3 +135,34 @@ assert.equal(evaluateCostFormula("UNKNOWN_VAR * 10", scope), 0);
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+// ─── Admin editor validates against the rate constants the runtime uses ───
+// The cost schedule editor built its variable list from the stored overrides
+// only, while the offer prefill prices with those overrides merged over
+// DEFAULT_RATE_CONSTANTS. A formula using a constant the admin never overrode
+// was reported as an unknown variable and kept Save disabled.
+
+test("withDefaultRateConstants fills every rate constant, and an override wins", () => {
+  const merged = withDefaultRateConstants({});
+  for (const key of RATE_CONSTANT_KEYS) {
+    assert.equal(merged[key], DEFAULT_RATE_CONSTANTS[key], `missing ${key}`);
+  }
+
+  assert.equal(
+    withDefaultRateConstants({ KITCHEN_COST_PER_SQM: 900 })
+      .KITCHEN_COST_PER_SQM,
+    900,
+  );
+});
+
+test("a formula using a default-only constant validates against the merged keys", () => {
+  const formula = "KITCHEN_AREA * KITCHEN_COST_PER_SQM";
+  const merged = [
+    ...Object.keys(withDefaultRateConstants({})),
+    ...AREA_MEASUREMENT_KEYS,
+  ];
+  const storedOnly = [...Object.keys({}), ...AREA_MEASUREMENT_KEYS];
+
+  assert.equal(validateFormula(formula, merged).valid, true);
+  assert.equal(validateFormula(formula, storedOnly).valid, false);
+});

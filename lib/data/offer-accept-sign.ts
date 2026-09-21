@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import {
+  getAreaBasisTotalSqm,
+  offerAreaBasisFromJob,
+} from "@/lib/offer/workspace-area";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
 import {
@@ -25,8 +29,14 @@ import {
 } from "@/lib/offer/workspace-persistence";
 import { getDocusignConfig } from "@/lib/docusign/config";
 import { createDocusignContext } from "@/lib/docusign/client";
-import { createOfferAcceptanceEnvelope } from "@/lib/docusign/offer-envelope";
+import {
+  buildOfferAcceptanceRecipientRecords,
+  createOfferAcceptanceEnvelope,
+} from "@/lib/docusign/offer-envelope";
+import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
+import { randomUUID } from "node:crypto";
 import { describeAcceptanceSendBlock } from "@/lib/offer/offer-acceptance-guard";
+import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
@@ -102,6 +112,19 @@ export async function sendOfferForSignature(input: {
     return {
       ok: false,
       error: `Complete the owner details before sending for signature: ${ownerIssues.join(" ")}`,
+    };
+  }
+
+  // Same gate as the proposal and the Tender. A document that tells the client
+  // their home is 0 m2 must not reach them, and this is the last place that can
+  // refuse before the envelope is created.
+  const totalAreaSqm = getAreaBasisTotalSqm(
+    offerAreaBasisFromJob(snapshot.job),
+  );
+  if (totalAreaSqm <= 0) {
+    return {
+      ok: false,
+      error: "Enter floor areas in Job setup before sending for signature.",
     };
   }
 
@@ -224,30 +247,92 @@ export async function sendOfferForSignature(input: {
     };
   }
 
+  const sendAttemptId = `${offer.id}.${randomUUID()}`;
+  const attemptStarted = new Date();
   let envelope;
+  let docusignContext: Awaited<
+    ReturnType<typeof createDocusignContext>
+  > | null = null;
   try {
-    const context = await createDocusignContext(config);
+    docusignContext = await createDocusignContext(config);
     envelope = await createOfferAcceptanceEnvelope({
-      context,
+      context: docusignContext,
       config,
       pdfBase64,
       documentName: `Offer-Acceptance-${reference}.pdf`,
       emailSubject: `Offer acceptance — Royal Constructions ${reference}`,
       owners,
+      sendAttemptId,
     });
   } catch (error) {
-    // Release the claim so the estimator can retry.
-    await prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
-      data: { offerStatus: offer.offerStatus },
+    const recovery = await resolveEnvelopeCreateError({
+      error,
+      context: docusignContext,
+      sendAttemptId,
+      attemptStarted,
     });
-    return {
-      ok: false,
-      error: `DocuSign envelope failed: ${describeDocusignError(error)}`,
-    };
+    if (recovery.kind === "reconciled") {
+      envelope = {
+        envelopeId: recovery.envelopeId,
+        recipients: buildOfferAcceptanceRecipientRecords(owners),
+      };
+    } else if (recovery.kind === "outcome-unknown") {
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: OfferStatus.SENT,
+            toStatus: OfferStatus.OFFER_SENT,
+            note: `DocuSign did not respond in time — checking whether the acceptance envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the unknown acceptance envelope outcome failed:",
+            eventError,
+          ),
+        );
+      return {
+        ok: false,
+        error:
+          "DocuSign did not confirm whether the acceptance envelope was sent. Do not resend — wait for reconciliation or check DocuSign before trying again.",
+      };
+    } else {
+      const reason = recovery.reason;
+      console.error(
+        `[offer] acceptance envelope creation failed for offer ${offer.id}; claim released:`,
+        reason,
+        error,
+      );
+      await prisma.offerStatusEvent
+        .create({
+          data: {
+            offerId: offer.id,
+            fromStatus: offer.offerStatus,
+            toStatus: offer.offerStatus,
+            note: `DocuSign rejected the offer acceptance envelope: ${reason}`,
+            actorId: access.user.id,
+          },
+        })
+        .catch((eventError) =>
+          console.error(
+            "[offer] recording the rejected acceptance envelope failed:",
+            eventError,
+          ),
+        );
+      await prisma.offer.updateMany({
+        where: { id: offer.id, offerStatus: OfferStatus.OFFER_SENT },
+        data: { offerStatus: offer.offerStatus },
+      });
+      return {
+        ok: false,
+        error: `DocuSign envelope failed: ${reason}`,
+      };
+    }
   }
 
-  await prisma
+  const stillClaimed = await prisma
     .$transaction(async (tx) => {
       await tx.envelope.create({
         data: {
@@ -274,20 +359,38 @@ export async function sendOfferForSignature(input: {
           },
         },
       });
-      await tx.offer.update({
-        where: { id: offer.id },
-        data: { offerStatus: OfferStatus.OFFER_SENT },
+      // Only over the status this send claimed, on the live revision: a recall
+      // or revision during envelope creation must not be overwritten with
+      // OFFER_SENT. The envelope row above is still written so it can be
+      // cancelled and stays on the audit trail.
+      const stillSent = await tx.offer.updateMany({
+        where: {
+          id: offer.id,
+          offerStatus: OfferStatus.OFFER_SENT,
+          isActive: true,
+        },
+        data: {
+          offerStatus: OfferStatus.OFFER_SENT,
+          // A new envelope replaces the acceptance, so the last envelope's
+          // executed PDF no longer describes it. The webhook files this one's.
+          executedPdfUrl: null,
+        },
       });
+      if (stillSent.count === 0) {
+        return false;
+      }
       await tx.offerStatusEvent.create({
         data: {
           offerId: offer.id,
           fromStatus: offer.offerStatus,
           toStatus: OfferStatus.OFFER_SENT,
+          actorId: access.user.id,
           note: `DocuSign acceptance envelope ${envelope.envelopeId} sent to ${owners
             .map((owner) => owner.email)
             .join(", ")}`,
         },
       });
+      return true;
     })
     .catch((error) => {
       // The envelope is ALREADY with the client and cannot be un-sent, so this
@@ -299,10 +402,25 @@ export async function sendOfferForSignature(input: {
         `[offer] acceptance envelope ${envelope.envelopeId} sent but persisting it failed:`,
         error,
       );
-      throw new Error(
-        `The offer was sent for signature (DocuSign envelope ${envelope.envelopeId}) but recording it failed: ${(error as Error).message}. Do not resend — reconcile this envelope before continuing.`,
-      );
+      return { unrecorded: (error as Error).message } as const;
     });
+
+  // Returned rather than raised: Next replaces a Server Action's thrown
+  // message with a generic one in production, and the estimator needs the
+  // envelope id and the instruction not to resend.
+  if (typeof stillClaimed === "object") {
+    return {
+      ok: false,
+      error: `The offer was sent for signature (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
+    };
+  }
+
+  // No *_SENT event and no lead sync: the offer is wherever the recall or
+  // revision left it.
+  if (!stillClaimed) {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    return cancelRacedSend(envelope.envelopeId);
+  }
 
   revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
   // The status moved to *_SENT above; bring the lead with it. Best effort
@@ -312,13 +430,3 @@ export async function sendOfferForSignature(input: {
 }
 
 // DocuSign SDK errors bury the useful message in response.body.
-function describeDocusignError(error: unknown): string {
-  const response = (error as { response?: { body?: unknown } }).response;
-  if (response?.body) {
-    const body = response.body as { errorCode?: string; message?: string };
-    if (body.message) {
-      return body.errorCode ? `${body.errorCode}: ${body.message}` : body.message;
-    }
-  }
-  return (error as Error).message ?? "Unknown error";
-}

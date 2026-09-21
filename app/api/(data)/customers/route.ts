@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const result = await getCachedCustomersForDropdown(
     params.data.page,
     params.data.limit,
-    params.data.q || params.data.search
+    params.data.q || params.data.search,
   );
   return successResponse(result);
 }
