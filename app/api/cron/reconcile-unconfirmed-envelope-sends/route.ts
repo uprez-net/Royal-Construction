@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { successResponse, errorResponse } from "@/utils/validators";
 import { createDocusignContext } from "@/lib/docusign/client";
 import { getDocusignConfig } from "@/lib/docusign/config";
-import { findEnvelopeIdBySendAttempt } from "@/lib/docusign/envelope-send-attempt";
+import { findEnvelopeBySendAttempt } from "@/lib/docusign/envelope-send-attempt";
 
 /**
  * The backstop for a DocuSign send whose outcome the original request could
@@ -121,16 +121,19 @@ export async function GET(request: Request) {
 
     let resolvedNotFound = 0;
     let found = 0;
+    let incomplete = 0;
+    let failed = 0;
 
     for (const row of pending) {
-      let envelopeId: string | null;
+      let search: Awaited<ReturnType<typeof findEnvelopeBySendAttempt>>;
       try {
-        envelopeId = await findEnvelopeIdBySendAttempt(
+        search = await findEnvelopeBySendAttempt(
           context,
           row.sendAttemptId,
           row.attemptStartedAt,
         );
       } catch (error) {
+        failed += 1;
         console.error(
           `[cron] reconcile-unconfirmed-envelope-sends failed to search for offer ${row.offerId}, attempt ${row.sendAttemptId}:`,
           error,
@@ -138,7 +141,19 @@ export async function GET(request: Request) {
         continue;
       }
 
-      if (envelopeId === null) {
+      if (search.kind === "incomplete") {
+        // The search could not reach the end of DocuSign's result set, so
+        // "no match yet" is not the same as "no envelope". Resolving on that
+        // would unblock a recall for an envelope sitting on a page we never
+        // read. Left for the next run.
+        incomplete += 1;
+        console.warn(
+          `[cron] reconcile-unconfirmed-envelope-sends could not complete the search for offer ${row.offerId}: ${search.reason}`,
+        );
+        continue;
+      }
+
+      if (search.kind === "not-found") {
         // updateMany with the full guard rather than update by id: the row was
         // read at the top of this run, and a concurrent run (or a person) may
         // have recorded a found envelope on it since. Resolving it then would
@@ -162,6 +177,8 @@ export async function GET(request: Request) {
           );
         continue;
       }
+
+      const envelopeId = search.envelopeId;
 
       // One transaction, because the mark and the alert are the same fact. Done
       // as two writes, a failed note would leave the row marked found — and the
@@ -217,10 +234,22 @@ export async function GET(request: Request) {
       }
     }
 
+    // Per-row failures are reported, not swallowed into a clean 200. A run
+    // that searched nothing successfully should not read as a healthy run.
+    if (failed > 0) {
+      return errorResponse(
+        "Some unconfirmed envelope sends could not be reconciled",
+        {
+          status: 500,
+          details: `checked=${pending.length} resolvedNotFound=${resolvedNotFound} found=${found} incomplete=${incomplete} failed=${failed}`,
+        },
+      );
+    }
     return successResponse({
       checked: pending.length,
       resolvedNotFound,
       found,
+      incomplete,
     });
   } catch (error) {
     console.error("[cron] reconcile-unconfirmed-envelope-sends failed:", error);

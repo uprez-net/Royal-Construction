@@ -324,7 +324,7 @@ test("the reconcile cron resolves a genuinely not-found row", () => {
   const source = code(CRON);
   assert.match(
     source,
-    /envelopeId === null[\s\S]{0,300}resolvedAt:\s*new Date\(\)/,
+    /search\.kind === "not-found"[\s\S]{0,600}resolvedAt:\s*new Date\(\)/,
     "a row that DocuSign has no record of is never marked resolved, so it blocks forever",
   );
 });
@@ -345,4 +345,59 @@ test("a migration creates the table the schema declares", () => {
   assert.match(schema, /model UnconfirmedEnvelopeSend \{/);
   assert.match(schema, /sendAttemptId String @unique/);
   assert.match(schema, /resolvedAt\s+DateTime\?/);
+});
+
+// ── A partial search must never read as "no envelope" ──
+
+test("an incomplete search never resolves the row", () => {
+  // listStatusChanges is paginated. Reading one page and reporting nothing
+  // found is a false negative — and the not-found branch is the only path
+  // that resolves a row without a human, so a false negative there unblocks a
+  // recall for an envelope sitting on a page nobody read.
+  const source = code(CRON);
+  const incomplete = source.indexOf('search.kind === "incomplete"');
+  assert.ok(incomplete > 0, "the cron does not handle an incomplete search");
+
+  const notFound = source.indexOf('search.kind === "not-found"');
+  assert.ok(
+    notFound > incomplete,
+    "the incomplete case must be handled before the not-found case",
+  );
+  // The incomplete branch must bail out, not fall through to the resolve.
+  assert.match(
+    source.slice(incomplete, notFound),
+    /continue;/,
+    "an incomplete search falls through to the not-found resolve",
+  );
+});
+
+test("the search reports incomplete rather than guessing when it cannot finish", () => {
+  const source = code("lib/docusign/envelope-send-attempt.ts");
+  assert.match(
+    source,
+    /kind:\s*"incomplete"/,
+    "the search cannot express an unfinished result, so a partial read looks like an empty one",
+  );
+  // Every stop must be at a proven end of the result set.
+  assert.match(
+    source,
+    /startPosition >= total/,
+    "the search does not compare its position against totalSetSize",
+  );
+  assert.match(
+    source,
+    /returned < SEARCH_PAGE_SIZE/,
+    "with no totalSetSize a full page would be treated as the last page",
+  );
+});
+
+test("a run with failed rows does not report success", () => {
+  // A cron that searched nothing successfully must not read as healthy.
+  const source = code(CRON);
+  assert.match(source, /failed \+= 1/, "per-row failures are not counted");
+  assert.match(
+    source,
+    /if \(failed > 0\)[\s\S]{0,400}errorResponse\(/,
+    "a run with failures still returns a success response",
+  );
 });
