@@ -40,7 +40,6 @@ import {
   nonEmptyConnectText,
   parseConnectPayload,
   type ConnectPayload,
-  type ConnectRecipient,
 } from "@/lib/docusign/connect-payload";
 
 // DocuSign Connect (JSON SIM) webhook: keeps Envelope + EnvelopeSignature in
