@@ -4,7 +4,13 @@ This document describes the current conventions for new code in this repository.
 
 ## Non-Negotiables
 
-1. Keep server-side data access in `lib/data` or route handlers, not in React components.
+1. Business rules — authorization, state transitions, persistence mutations and
+   external-side-effect decisions — have **one** implementation, in `lib/domain`.
+   Read [`lib/domain/GUIDE.md`](../lib/domain/GUIDE.md) before writing one.
+   `lib/data` and route handlers are adapters over it: they authenticate,
+   validate, format and call a domain command. Neither they nor React
+   components decide anything. (Issue #301 — before this, the app and the Eve
+   agent each had their own copy of several rules, and they had drifted.)
 2. Keep client components focused on rendering and interaction.
 3. Return serializable payloads across the client boundary.
 4. Preserve auth checks at the request boundary, not only in the UI.
@@ -168,7 +174,8 @@ Shared validation helpers already exist in the repository, including `utils/vali
 
 - Shared primitive in `components/common` or `components/ui`
 - Feature-specific composition in `components/<feature>`
-- Shared query logic in `lib/data`
+- Business rules and their authorization in `lib/domain`
+- Cached/Next-bound reads and the adapters over those rules in `lib/data`
 - Shared state coordination in `lib/store`
 
 If a helper is only used once, keep it local. If it becomes reused, extract it deliberately.
@@ -221,7 +228,9 @@ If a helper is only used once, keep it local. If it becomes reused, extract it d
 
 1. Add or reuse a validator in `utils/validators`.
 2. Validate input in the route handler.
-3. Query or mutate through `lib/data` helpers when the logic is reusable.
+3. Call the `lib/domain` command that owns the rule, or add one there if it
+   does not exist yet — never a second copy. `lib/data` holds the cached
+   read or the Next-bound adapter around it.
 4. Return a shared response helper shape.
 5. Revalidate tags or refresh Redux state if the UI depends on the result.
 6. Keep feature UI thin and move orchestration into helpers, slices, or context.
