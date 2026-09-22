@@ -8,6 +8,7 @@ import {
   getCertifierEngagement,
   startCertifierEngagement,
 } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -38,6 +39,8 @@ export async function GET(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to read the certifier engagement", error);
     return errorResponse("Failed to load the compliance file.");
   }
@@ -75,6 +78,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to start the certifier engagement", error);
     return errorResponse("Failed to start the certifier engagement.");
   }

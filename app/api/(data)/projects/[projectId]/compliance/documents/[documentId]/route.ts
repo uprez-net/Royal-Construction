@@ -5,6 +5,7 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { classifyReceivedDocument } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -52,6 +53,8 @@ export async function PATCH(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to identify a compliance document", error);
     return errorResponse(
       error instanceof Error

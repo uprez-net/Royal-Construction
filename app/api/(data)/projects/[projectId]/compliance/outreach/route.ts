@@ -5,6 +5,7 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { sendCertifierOutreach } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseRouteParamsWithResponse,
@@ -42,6 +43,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to send certifier outreach", error);
     return errorResponse(
       error instanceof Error

@@ -5,6 +5,7 @@ import {
   requireComplianceAdmin,
 } from "@/lib/compliance/access";
 import { setComplianceDocumentNotRequired } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -70,6 +71,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to set a compliance document as not required", error);
     return errorResponse(
       error instanceof Error ? error.message : "Failed to update the document.",

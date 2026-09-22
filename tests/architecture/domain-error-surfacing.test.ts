@@ -108,15 +108,12 @@ function catchesAndAnswers(file: string): boolean {
  * Adapters that reach a domain command, catch its refusal, and answer with
  * something of their own — each with why it has not been mapped yet.
  *
- * Every entry is a real gap. Phase 4 of issue #301 fixed the project surface
- * and left the rest recorded rather than silently unaudited, because the work
- * belongs with the phase that migrates each one: an adapter that still wraps a
- * `lib/data` module which throws bare `Error`s has nothing typed to map, and
- * bolting a mapper on before the command underneath it is migrated would be a
- * mapper for refusals that never arrive.
+ * Every entry is a real gap, but none of them is a route waiting on a
+ * migration any more — the compliance surface that made up the bulk of this
+ * list now calls `domainErrorResponse` before its own generic answer. What is
+ * left answers something other than a browser, or answers a browser in a shape
+ * of its own that already carries the refusal. Each says which.
  */
-const COMPLIANCE_PHASE_5 =
-  "phase 5 moved this route's rules into lib/domain/compliance, so it now has real typed refusals to surface and this entry is a to-do, not a justification: it still catches and answers with its own message. The sibling routes that were converted (parties, parties/reply, alerts, alerts/[alertId]/follow-up, development-application/requirement, documents/[documentId]/not-required) show the shape — call domainErrorResponse before the generic 500";
 const LEADS_RESULT_SHAPE =
   "answers with its own {ok,error} result the lead screens already read; the refusal reaches the operator, just not through the shared mapper (worth reconciling when the lead routes are revisited)";
 const MACHINE_CALLER =
@@ -135,45 +132,6 @@ const ADMIN_CONTENT =
   "returns its own {ok,error} result that the admin editor renders; worth reconciling with domainActionFailure when the admin surface is revisited";
 
 const UNMAPPED: Record<string, string> = {
-  "app/api/(data)/projects/[projectId]/compliance/applications/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/architect/meeting/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/architect/plan-review/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/architect/waste-management/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/developer/decision/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/developer/estate/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/developer/requirement/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/developer/resend/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/discover/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/documents/[documentId]/not-required/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/documents/[documentId]/resolve/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/documents/[documentId]/review/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/documents/[documentId]/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/documents/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/outreach/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/principal-certifier/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/reply/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/review/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/route.ts": COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/signed-copies/route.ts":
-    COMPLIANCE_PHASE_5,
   "app/api/(data)/leads/[leadId]/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(data)/leads/route.ts": LEADS_RESULT_SHAPE,
   "app/api/(data)/leads/tasks/route.ts": LEADS_RESULT_SHAPE,
