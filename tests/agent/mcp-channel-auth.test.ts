@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import { routeAuth } from "eve/channels/auth";
 
@@ -11,7 +11,7 @@ import {
   clerkIssuerFromPublishableKey,
   createMcpUserAuth,
   mcpResourceConfig,
-} from "../../agent/lib/mcp-auth-policy";
+} from "@/agent/lib/mcp-auth-policy";
 
 // The MCP endpoint is the one Eve surface an outside client reaches, and it is
 // on the open internet, so its refusals are worth pinning: which credential is
