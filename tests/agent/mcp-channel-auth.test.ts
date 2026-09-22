@@ -179,24 +179,65 @@ test("the metadata path stays inside the prefix that reaches the agent", () => {
   );
 });
 
-test("the resource identifier is left to the request unless a gateway rewrites it", () => {
-  const key = `pk_test_${Buffer.from("clerk.royal.example$").toString("base64")}`;
-  const derived = mcpResourceConfig({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key });
+const KEY = `pk_test_${Buffer.from("clerk.royal.example$").toString("base64")}`;
 
-  assert.deepEqual(derived, {
-    issuer: "https://clerk.royal.example",
-    metadataPath: MCP_METADATA_PATH,
-    scopes: MCP_SCOPES,
-  });
+test("the resource identifier comes from the app's public URL", () => {
+  // Not from the request: withEve proxies to a separate server, so under
+  // `next dev` the request URL is http://127.0.0.1:<port>/... and Eve would
+  // publish that as the resource every client keys its OAuth exchange on.
+  assert.deepEqual(
+    mcpResourceConfig({
+      NEXT_PUBLIC_APP_URL: "https://royal.example",
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY,
+    }),
+    {
+      issuer: "https://clerk.royal.example",
+      metadataPath: MCP_METADATA_PATH,
+      resource: "https://royal.example/eve/v1/mcp",
+      scopes: MCP_SCOPES,
+    },
+  );
+});
 
+test("a path or port on the app URL does not leak into the resource", () => {
+  assert.equal(
+    mcpResourceConfig({
+      NEXT_PUBLIC_APP_URL: "https://royal.example/dashboard?tab=leads",
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY,
+    })?.resource,
+    "https://royal.example/eve/v1/mcp",
+  );
+  assert.equal(
+    mcpResourceConfig({
+      NEXT_PUBLIC_APP_URL: "http://localhost:3111",
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY,
+    })?.resource,
+    "http://localhost:3111/eve/v1/mcp",
+  );
+});
+
+test("an explicit resource wins, for a gateway that rewrites the origin", () => {
   const overridden = mcpResourceConfig({
     EVE_MCP_ISSUER: "https://auth.royal.example",
-    EVE_MCP_RESOURCE: "https://royal.example/eve/v1/mcp",
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key,
+    EVE_MCP_RESOURCE: "https://mcp.royal.example/eve/v1/mcp",
+    NEXT_PUBLIC_APP_URL: "https://royal.example",
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY,
   });
 
   assert.equal(overridden?.issuer, "https://auth.royal.example");
-  assert.equal(overridden?.resource, "https://royal.example/eve/v1/mcp");
+  assert.equal(overridden?.resource, "https://mcp.royal.example/eve/v1/mcp");
+});
+
+test("an unusable app URL falls back rather than publishing rubbish", () => {
+  // new URL() throws on these; a resource of "undefined/eve/v1/mcp" would be
+  // worse than letting Eve read the request.
+  for (const appUrl of [undefined, "", "   ", "royal.example", "not a url"]) {
+    const config = mcpResourceConfig({
+      NEXT_PUBLIC_APP_URL: appUrl,
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: KEY,
+    });
+    assert.equal(config?.resource, undefined, `accepted ${String(appUrl)}`);
+  }
 });
 
 test("no Clerk instance means no advertised authorization server", () => {

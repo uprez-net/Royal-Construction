@@ -79,7 +79,7 @@ export function clerkIssuerFromPublishableKey(
 export interface McpResourceConfig {
   readonly issuer: string;
   readonly metadataPath: string;
-  /** Omitted when Eve should derive it from the request origin. */
+  /** Omitted only when nothing configured one; Eve then reads the request. */
   readonly resource?: string;
   readonly scopes: readonly string[];
 }
@@ -89,10 +89,16 @@ export interface McpResourceConfig {
  * no Clerk instance is configured — in which case nothing could authenticate
  * anyway, and advertising an authorization server would be a lie.
  *
- * `resource` is left unset so Eve reads the public identifier off the request,
- * which is correct behind Vercel. Set `EVE_MCP_RESOURCE` when a gateway
- * rewrites the client-facing origin or path, because then the request no
- * longer carries the identifier the client used.
+ * `resource` is configured rather than read off the request, because the
+ * request does not carry the client-facing origin here. `withEve` reaches the
+ * agent by proxying to a separate server, so under `next dev` the request URL
+ * is the internal one and Eve advertises `http://127.0.0.1:<port>/eve/v1/mcp`
+ * — an identifier no client can use, in the one field the whole OAuth
+ * exchange is keyed on.
+ *
+ * So: `EVE_MCP_RESOURCE` when a gateway needs it stated outright, otherwise
+ * the app's own public URL, which is already configured and already means
+ * exactly this. Only with neither does it fall back to the request.
  */
 export function mcpResourceConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -102,7 +108,9 @@ export function mcpResourceConfig(
     || clerkIssuerFromPublishableKey(env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   if (!issuer) return null;
 
-  const resource = env.EVE_MCP_RESOURCE?.trim();
+  const resource =
+    env.EVE_MCP_RESOURCE?.trim()
+    || mcpResourceFromAppUrl(env.NEXT_PUBLIC_APP_URL);
 
   return {
     issuer,
@@ -110,6 +118,18 @@ export function mcpResourceConfig(
     ...(resource ? { resource } : {}),
     scopes: MCP_SCOPES,
   };
+}
+
+/** `<app origin>/eve/v1/mcp`, or null when the app URL is unset or unusable. */
+function mcpResourceFromAppUrl(appUrl: string | undefined): string | null {
+  const configured = appUrl?.trim();
+  if (!configured) return null;
+
+  try {
+    return new URL(MCP_ROUTE, new URL(configured).origin).toString();
+  } catch {
+    return null;
+  }
 }
 
 export interface McpAuthPrincipal {

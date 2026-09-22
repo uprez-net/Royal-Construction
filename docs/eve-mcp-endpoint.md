@@ -186,7 +186,15 @@ route, which is the state this change removes.
 | `EVE_OPERATIONS_AGENT_ENABLED` | `"true"` enables the endpoint. Anything else refuses every request with `agent_disabled` |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | The Clerk instance. The advertised authorization server is derived from it, so it cannot drift from the one the app signs in against |
 | `EVE_MCP_ISSUER` | Overrides that derived issuer |
-| `EVE_MCP_RESOURCE` | The public resource identifier. Set it only when a gateway rewrites the client-facing origin or path, because otherwise Eve reads it off the request |
+| `NEXT_PUBLIC_APP_URL` | The app's public origin. The advertised resource identifier is this plus `/eve/v1/mcp` |
+| `EVE_MCP_RESOURCE` | Overrides that, for a gateway that serves MCP on a different origin or path |
+
+The resource identifier is taken from configuration rather than from the
+request on purpose. `withEve` reaches the agent by proxying to a separate
+server, so the request arrives carrying an internal origin; left to derive it,
+Eve would advertise `http://127.0.0.1:<port>/eve/v1/mcp` as the resource the
+whole OAuth exchange is keyed on. If `NEXT_PUBLIC_APP_URL` is wrong for an
+environment, the sign-in flow is what breaks.
 
 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (or `EVE_MCP_ISSUER`) has to be present
 when `eve build` runs, not just at runtime: whether the OAuth discovery routes
