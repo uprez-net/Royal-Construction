@@ -3,16 +3,24 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { AgentWorkspace } from "@/components/agent/agent-workspace";
 import { AgentWorkspaceSkeleton } from "@/components/agent/agent-workspace-skeleton";
-import { getAgentWorkspaceData } from "@/lib/data/agent-sessions";
+import {
+  getAgentSessionEvents,
+  getAgentWorkspaceData,
+} from "@/lib/data/agent-sessions";
 
 async function ExistingAgentWorkspace({ sessionId }: { sessionId: string }) {
   await connection();
   const data = await getAgentWorkspaceData(sessionId);
   if (data.selectedSessionUnavailable) notFound();
+  // The persisted stream paints the conversation before Eve's catch-up runs.
+  const events = data.selectedSessionId
+    ? await getAgentSessionEvents(data.selectedSessionId)
+    : [];
   return (
     <AgentWorkspace
       initialSessions={data.sessions}
       initialAnnotationsByTurn={data.selectedAnnotationsByTurn}
+      initialEvents={events}
       selectedSessionId={data.selectedSessionId}
     />
   );

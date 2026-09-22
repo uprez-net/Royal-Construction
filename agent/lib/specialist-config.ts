@@ -1,5 +1,6 @@
 import { defineAgent, defineDynamic } from "eve";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { SPECIALIST_SESSION_LIMITS } from "@/lib/agent/session-limits";
 
 const model = "zai/glm-5.3-flash";
 
@@ -9,8 +10,8 @@ export function defineRCSpecialist(description: string) {
       "session.started": (_event, ctx) => {
         const caller = ctx.session.auth.current;
         if (
-          process.env.EVE_OPERATIONS_SPECIALISTS_ENABLED !== "true" ||
-          caller?.principalType !== "user"
+          process.env.EVE_OPERATIONS_SPECIALISTS_ENABLED !== "true"
+          || caller?.principalType !== "user"
         ) {
           return null;
         }
@@ -21,12 +22,7 @@ export function defineRCSpecialist(description: string) {
           modelContextWindowTokens: 1_000_000,
           reasoning: "low",
           outputSchema: agentResultEnvelopeSchema,
-          limits: {
-            maxInputTokensPerSession: 40_000,
-            maxOutputTokensPerSession: 4_000,
-            maxTokenCostUsdPerSession: 0.25,
-            sessionTimeoutMs: 24 * 60 * 60 * 1_000,
-          },
+          limits: SPECIALIST_SESSION_LIMITS,
         });
       },
     },

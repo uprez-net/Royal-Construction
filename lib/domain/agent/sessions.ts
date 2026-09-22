@@ -138,3 +138,92 @@ async function waitForOwnedSession(
   }
   return false;
 }
+
+/**
+ * Hydration cap for a session's persisted stream.
+ *
+ * `initialEvents` must be an ordered *prefix*, so a long conversation cannot be
+ * trimmed from the front. Past this size the workspace mounts without it and
+ * replays from the live stream instead of shipping megabytes of JSON.
+ */
+const MAX_HYDRATED_EVENTS = 1_500;
+
+/**
+ * The persisted prefix of one owned session's Eve stream.
+ *
+ * Every event is already mirrored into `AgentSessionEvent` by the agent's `*`
+ * hook. Handing that prefix to the client means a reload paints the whole
+ * conversation — including which specialists ran and which approvals are still
+ * open — instead of showing an empty shell until catch-up finishes. Eve drops
+ * any event whose `meta.id` it has already applied, so the overlapping replay
+ * renders once.
+ */
+export async function getAgentSessionEvents(
+  principal: DomainPrincipal,
+  eveSessionId: string,
+  db: DomainDb,
+): Promise<readonly unknown[]> {
+  const actor = requireUserPrincipal(principal);
+  const session = await db.agentSession.findFirst({
+    select: { id: true },
+    where: {
+      archivedAt: null,
+      eveSessionId,
+      ownerUserId: actor.userId,
+      parentEveSessionId: null,
+    },
+  });
+  if (!session) return [];
+
+  const rows = await db.agentSessionEvent.findMany({
+    orderBy: [{ occurredAt: "asc" }, { eveEventId: "asc" }],
+    select: { payload: true },
+    take: MAX_HYDRATED_EVENTS + 1,
+    where: { agentSessionId: session.id },
+  });
+  if (rows.length > MAX_HYDRATED_EVENTS) return [];
+
+  const events: unknown[] = [];
+  for (const row of rows) {
+    // Stop rather than skip. `initialEvents` is a contiguous prefix, so
+    // dropping a bad row from the middle would hand Eve a gapped stream.
+    if (!isHydratableEvent(row.payload)) break;
+    events.push(row.payload);
+  }
+  return events;
+}
+
+/**
+ * Whether one persisted row is safe to replay into the client projection.
+ *
+ * The wildcard hook writes typed Eve events, but that says nothing about rows
+ * already in the table from an older shape. The reducer reads `data.turnId` and
+ * Eve deduplicates on `meta.id`, so a row missing either would either throw
+ * during hydration — taking out the operator's only view of the conversation —
+ * or replay twice.
+ */
+function isHydratableEvent(payload: unknown): boolean {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload))
+    return false;
+  const event = payload as Record<string, unknown>;
+  if (typeof event.type !== "string" || event.type.length === 0) return false;
+  // `session.completed` is the one protocol event with no payload; every other
+  // type is dereferenced by the reducer, so a missing `data` would throw.
+  if (event.type !== "session.completed") {
+    if (
+      event.data === null
+      || typeof event.data !== "object"
+      || Array.isArray(event.data)
+    )
+      return false;
+  }
+  const meta = event.meta;
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta))
+    return false;
+  const stamped = meta as Record<string, unknown>;
+  return (
+    typeof stamped.id === "string"
+    && stamped.id.length > 0
+    && typeof stamped.at === "string"
+  );
+}
