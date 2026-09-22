@@ -1,5 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
-
 /**
  * The staging evaluator bootstrap.
  *
@@ -65,64 +63,14 @@ export function stagingEvalConfig(
   };
 }
 
-/**
- * Compare secrets without exposing a length-dependent early return.
- *
- * Hashing first is what makes `timingSafeEqual` usable here at all: it throws
- * on differing lengths, and calling it on the raw strings would leak the
- * secret's length through that throw.
- */
-export function constantTimeSecretMatches(
-  provided: string | null | undefined,
-  expected: string | null | undefined,
-): boolean {
-  if (!provided || !expected) return false;
-
-  const providedDigest = createHash("sha256").update(provided).digest();
-  const expectedDigest = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(providedDigest, expectedDigest);
-}
-
-export function requestAddress(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0];
-  return forwarded?.trim() || request.headers.get("x-real-ip") || "unknown";
-}
-
-/**
- * A fixed-window limiter held in module scope.
- *
- * Per-instance, so it is a brake rather than a quota: a serverless deployment
- * can hold several instances and a determined caller gets a multiple of the
- * limit. That is the right trade here — the secret is the access control, and
- * this exists so a misconfigured loop or a scripted guess costs something.
- * A shared counter would mean a Redis round trip on the one route that has to
- * work when everything else is being debugged.
- */
-export function createFixedWindowRateLimiter(options: {
-  readonly limit: number;
-  readonly windowMs: number;
-  readonly now?: () => number;
-}) {
-  const buckets = new Map<string, { count: number; startedAt: number }>();
-  const now = options.now ?? Date.now;
-
-  return {
-    allow(key: string): boolean {
-      const current = now();
-      const bucket = buckets.get(key);
-      if (!bucket || current - bucket.startedAt >= options.windowMs) {
-        buckets.set(key, { count: 1, startedAt: current });
-        return true;
-      }
-      if (bucket.count >= options.limit) return false;
-      bucket.count += 1;
-      return true;
-    },
-    clear(): void {
-      buckets.clear();
-    },
-  };
-}
+// The secret compare, the address helper and the limiter are shared with the
+// WhatsApp webhook and live in lib/http. Re-exported so the eval routes and
+// their tests keep one import.
+export { constantTimeSecretMatches } from "@/lib/http/secret-compare";
+export {
+  createFixedWindowRateLimiter,
+  requestAddress,
+} from "@/lib/http/rate-limit";
 
 /**
  * Read only the Clerk session id claim, for revocation.
