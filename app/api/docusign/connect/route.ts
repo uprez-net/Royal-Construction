@@ -36,6 +36,11 @@ import {
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 import { signerStatusesBelow } from "@/lib/offer/signing-status";
+import {
+  nonEmptyConnectText,
+  parseConnectPayload,
+  type ConnectPayload,
+} from "@/lib/docusign/connect-payload";
 
 // DocuSign Connect (JSON SIM) webhook: keeps Envelope + EnvelopeSignature in
 // step with signing progress, and on completion archives the executed PDF and
@@ -65,11 +70,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "HMAC not configured" }, { status: 401 });
   }
 
-  let payload: ConnectPayload;
+  let payload: ConnectPayload | null;
   try {
-    payload = JSON.parse(raw) as ConnectPayload;
+    payload = parseConnectPayload(JSON.parse(raw));
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  if (!payload) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   const event = payload.event;
@@ -124,25 +132,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true });
 }
-
-type ConnectRecipient = {
-  recipientId?: string;
-  email?: string;
-  routingOrder?: string;
-  status?: string;
-  signedDateTime?: string;
-  declinedReason?: string;
-};
-
-type ConnectPayload = {
-  event?: string;
-  data?: {
-    envelopeId?: string;
-    envelopeSummary?: {
-      recipients?: { signers?: ConnectRecipient[] };
-    };
-  };
-};
 
 const RECIPIENT_STATUS: Record<string, SignerStatus> = {
   sent: SignerStatus.SENT,
@@ -238,6 +227,7 @@ type EnvelopeTarget = {
   documentLabel: string;
   signedStatus: OfferStatus;
   declinedStatus: OfferStatus;
+  voidedStatus: OfferStatus;
   expectedFromStatus: OfferStatus;
   // Only a fully-executed Contract nudges the admins to create the project.
   notifyContractSigned: boolean;
@@ -262,6 +252,7 @@ function resolveEnvelopeTarget(
         documentLabel: "Tender",
         signedStatus: OfferStatus.TENDER_SIGNED,
         declinedStatus: OfferStatus.TENDER_DECLINED,
+        voidedStatus: OfferStatus.TENDER_DRAFT,
         expectedFromStatus: OfferStatus.TENDER_SENT,
         notifyContractSigned: false,
         siblingEnvelopeWhere: { tenderId: envelope.tender.id },
@@ -275,6 +266,7 @@ function resolveEnvelopeTarget(
         documentLabel: "Contract",
         signedStatus: OfferStatus.CONTRACT_SIGNED,
         declinedStatus: OfferStatus.CONTRACT_DECLINED,
+        voidedStatus: OfferStatus.CONTRACT_DRAFT,
         expectedFromStatus: OfferStatus.CONTRACT_SENT,
         notifyContractSigned: true,
         siblingEnvelopeWhere: { contractId: envelope.contract.id },
@@ -292,6 +284,7 @@ function resolveEnvelopeTarget(
         documentLabel: "Offer acceptance",
         signedStatus: OfferStatus.OFFER_SIGNED,
         declinedStatus: OfferStatus.OFFER_DECLINED,
+        voidedStatus: OfferStatus.SENT,
         expectedFromStatus: OfferStatus.OFFER_SENT,
         notifyContractSigned: false,
         siblingEnvelopeWhere: { offerId: envelope.offer.id },
@@ -332,6 +325,11 @@ async function syncEnvelopeStatus(
   // advances to the signed state, so branch off before the completion path.
   if (nextStatus === EnvelopeStatus.DECLINED) {
     await advanceOfferOnDecline(envelope, payload);
+    return;
+  }
+
+  if (nextStatus === EnvelopeStatus.VOIDED) {
+    await returnOfferToDraftOnVoid(envelope, payload);
     return;
   }
 
@@ -705,6 +703,62 @@ async function recordUnexpectedEvent(
     });
     return true;
   });
+}
+
+// A void from the DocuSign console is the same business event as an in-app
+// recall: the document is no longer out for signature, so return the offer to
+// its matching draft state. The current-status claim prevents a late or
+// duplicate callback from moving a later workflow stage backwards.
+async function returnOfferToDraftOnVoid(
+  envelope: ConnectEnvelope,
+  payload: ConnectPayload,
+): Promise<void> {
+  const target = resolveEnvelopeTarget(envelope);
+  const docusignId = envelope.docusignId;
+  if (!target || !docusignId) {
+    return;
+  }
+
+  const voidReason =
+    nonEmptyConnectText(payload.data?.envelopeSummary?.voidedReason) ??
+    nonEmptyConnectText(payload.data?.voidedReason);
+  let voided = false;
+  await prisma.$transaction(async (tx) => {
+    const latest = await tx.envelope.findFirst({
+      where: target.siblingEnvelopeWhere,
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    if (!latest || latest.id !== envelope.id) {
+      return;
+    }
+    const claim = await tx.offer.updateMany({
+      where: {
+        id: target.offerId,
+        isActive: true,
+        offerStatus: target.expectedFromStatus,
+      },
+      data: { offerStatus: target.voidedStatus },
+    });
+    if (claim.count === 0) {
+      return;
+    }
+    await tx.offerStatusEvent.create({
+      data: {
+        offerId: target.offerId,
+        fromStatus: target.expectedFromStatus,
+        toStatus: target.voidedStatus,
+        note: voidReason
+          ? `DocuSign voided envelope ${docusignId}: ${voidReason}`
+          : `DocuSign voided envelope ${docusignId}.`,
+      },
+    });
+    voided = true;
+  });
+
+  if (voided) {
+    await syncLeadStageForOffer(target.offerId);
+  }
 }
 
 // A decline (envelope-declined) moves the offer to a revise-ready stage —

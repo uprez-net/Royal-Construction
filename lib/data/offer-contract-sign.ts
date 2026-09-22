@@ -57,7 +57,7 @@ import type { EnvelopeSendPort } from "@/lib/domain/ports/envelope-send";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: "CONTRACT_SENT" };
 
 const contractEnvelopePort: EnvelopeSendPort<
   Parameters<typeof createContractEnvelope>[0],
@@ -82,8 +82,8 @@ export async function sendContractForSignature(input: {
 
   const offer = await readContractOfferForSend(prisma, input.offerId);
   if (
-    offer.offerStatus !== OfferStatus.TENDER_SIGNED &&
-    offer.offerStatus !== OfferStatus.CONTRACT_DRAFT
+    offer.offerStatus !== OfferStatus.TENDER_SIGNED
+    && offer.offerStatus !== OfferStatus.CONTRACT_DRAFT
   ) {
     return {
       ok: false,
@@ -104,9 +104,9 @@ export async function sendContractForSignature(input: {
     return { ok: false, error: (error as Error).message };
   }
   if (
-    !config.contractTemplateId ||
-    !config.contractDefaultTemplateId ||
-    !config.contractMultipleOwnersTemplateId
+    !config.contractTemplateId
+    || !config.contractDefaultTemplateId
+    || !config.contractMultipleOwnersTemplateId
   ) {
     return {
       ok: false,
@@ -591,8 +591,16 @@ export async function sendContractForSignature(input: {
   // message with a generic one in production, and the estimator needs the
   // envelope id and the instruction not to resend.
   if (persisted.kind === "unrecorded") {
+    // The claim moved the offer to CONTRACT_SENT in its own transaction
+    // before DocuSign was called, and only the envelope transaction rolled
+    // back. So the stored status did change: revalidate and bring the lead
+    // with it, or the screen shows a stale status and the lead sits a stage
+    // behind while the client already has the document.
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    await syncLeadStageForOffer(offer.id);
     return {
       ok: false,
+      status: OfferStatus.CONTRACT_SENT,
       error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }

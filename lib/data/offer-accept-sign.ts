@@ -46,7 +46,7 @@ import type { EnvelopeSendPort } from "@/lib/domain/ports/envelope-send";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: "OFFER_SENT" };
 
 const acceptanceEnvelopePort: EnvelopeSendPort<
   Parameters<typeof createOfferAcceptanceEnvelope>[0],
@@ -231,10 +231,10 @@ export async function sendOfferForSignature(input: {
     return {
       ok: false,
       error:
-        describeAcceptanceSendBlock(claim.currentStatus) ??
+        describeAcceptanceSendBlock(claim.currentStatus)
         // Back at SENT already: the other send failed and released its claim
         // between our attempt and this read.
-        "Someone else was sending this offer for signature just now. Try again.",
+        ?? "Someone else was sending this offer for signature just now. Try again.",
     };
   }
 
@@ -372,8 +372,16 @@ export async function sendOfferForSignature(input: {
   // envelope id and the instruction not to resend. The claim is deliberately
   // NOT released — the envelope is already with the client.
   if (persisted.kind === "unrecorded") {
+    // The claim moved the offer to OFFER_SENT in its own transaction before
+    // DocuSign was called, and only the envelope transaction rolled back. So
+    // the stored status did change: revalidate and bring the lead with it, or
+    // the screen shows a stale SENT and the lead sits a stage behind while the
+    // client already has the document.
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    await syncLeadStageForOffer(offer.id);
     return {
       ok: false,
+      status: OfferStatus.OFFER_SENT,
       error: `The offer was sent for signature (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }
