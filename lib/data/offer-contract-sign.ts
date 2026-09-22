@@ -58,7 +58,7 @@ import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type ContractSendResult =
   | { ok: true; reference: string; envelopeId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: "CONTRACT_SENT" };
 
 // Send the MBA BC4 building Contract for signature from the DocuSign template
 // (DOCUSIGN_CONTRACT_TEMPLATE_ID; roles + tab labels in
@@ -698,8 +698,11 @@ export async function sendContractForSignature(input: {
   // message with a generic one in production, and the estimator needs the
   // envelope id and the instruction not to resend.
   if (typeof stillClaimed === "object") {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    await syncLeadStageForOffer(offer.id);
     return {
       ok: false,
+      status: OfferStatus.CONTRACT_SENT,
       error: `The Contract was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }

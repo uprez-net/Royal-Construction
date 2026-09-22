@@ -1855,6 +1855,9 @@ export function NewOfferWorkspace({
         if (result.ok) {
           setStatus("offer_sent");
         } else {
+          if (result.status === OfferStatus.OFFER_SENT) {
+            setStatus("offer_sent");
+          }
           setOfferSignError(result.error);
         }
       } catch (error) {
@@ -1897,6 +1900,9 @@ export function NewOfferWorkspace({
         if (result.ok) {
           setStatus("tender_sent");
         } else {
+          if (result.status === OfferStatus.TENDER_SENT) {
+            setStatus("tender_sent");
+          }
           setTenderSendError(result.error);
         }
       } catch (error) {
@@ -1945,6 +1951,9 @@ export function NewOfferWorkspace({
           setContractTerms(null);
           setStatus("contract_sent");
         } else {
+          if (result.status === OfferStatus.CONTRACT_SENT) {
+            setStatus("contract_sent");
+          }
           setContractSendError(result.error);
         }
       } catch (error) {

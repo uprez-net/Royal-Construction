@@ -18,18 +18,21 @@ const SENDS = [
     envelope: "envelope = await createOfferAcceptanceEnvelope(",
     action: "sendOfferForSignature({ offerId })",
     showsError: "setOfferSignError(result.error)",
+    sentStatus: "OfferStatus.OFFER_SENT",
   },
   {
     file: "lib/data/offer-tender-sign.ts",
     envelope: "envelope = await createTenderEnvelope(",
     action: "sendTenderForSignature({ offerId })",
     showsError: "setTenderSendError(result.error)",
+    sentStatus: "OfferStatus.TENDER_SENT",
   },
   {
     file: "lib/data/offer-contract-sign.ts",
     envelope: "envelope = await createContractEnvelope(",
     action: "sendContractForSignature({ offerId })",
     showsError: "setContractSendError(result.error)",
+    sentStatus: "OfferStatus.CONTRACT_SENT",
   },
 ] as const;
 
@@ -56,6 +59,9 @@ for (const send of SENDS) {
 
     assert.doesNotMatch(body, /\bthrow\s/);
     assert.match(body, /error: `[^`]*Do not resend/);
+    assert.match(body, new RegExp(`status: ${send.sentStatus}`));
+    assert.match(body, /revalidateTag\(`offer-\$\{offer\.id\}`/);
+    assert.match(body, /await syncLeadStageForOffer\(offer\.id\)/);
     // The operator log line stays.
     assert.match(body, /sent but persisting it failed:/);
   });
@@ -74,6 +80,13 @@ for (const send of SENDS) {
     assert.ok(
       handling.includes(send.showsError),
       `${send.action} does not show result.error: ${handling}`,
+    );
+    assert.match(
+      handling,
+      new RegExp(
+        `if \\(result\\.status === ${send.sentStatus}\\) \\{\\s*setStatus\\(\\"${send.sentStatus.slice("OfferStatus.".length).toLowerCase()}\\"\\);\\s*\\}`,
+      ),
+      `${send.action} does not show its committed status`,
     );
   });
 }
