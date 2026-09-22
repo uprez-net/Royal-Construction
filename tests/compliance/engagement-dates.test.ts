@@ -3,8 +3,8 @@ import test from "node:test";
 
 import { ComplianceDocumentType } from "@prisma/client";
 
-import { reviveComplianceEngagementDates } from "../../lib/compliance/engagement-dates";
-import { complianceStageFlow } from "../../lib/compliance/stage-flow";
+import { reviveComplianceEngagementDates } from "../../lib/domain/compliance/engagement-dates";
+import { complianceStageFlow } from "../../lib/domain/compliance/stage-flow";
 import type { CertifierEngagementDetail } from "../../types/compliance";
 
 const apiEngagement = () =>

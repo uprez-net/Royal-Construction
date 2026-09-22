@@ -1,3 +1,4 @@
+// Shared compliance value normalization; adapters only transport the result.
 import type { CertifierEngagementDetail } from "@/types/compliance";
 
 /**

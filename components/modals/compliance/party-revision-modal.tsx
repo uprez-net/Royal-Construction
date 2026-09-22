@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PARTY_LABEL } from "@/constants/complianceDocuments";
-import { buildPartyRevisionBody } from "@/lib/compliance/party-outreach-email";
+import { buildPartyRevisionBody } from "@/lib/domain/compliance/party-outreach-email";
 import { emailHtmlToLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 import type { LeadRichTextDocument } from "@/lib/leads/types";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";

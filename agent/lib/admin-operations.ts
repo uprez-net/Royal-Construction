@@ -7,14 +7,22 @@ import {
 import { createClerkClient } from "@clerk/backend";
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
-import prisma from "@/lib/prisma";
+import { agentDb } from "@/agent/lib/db";
 import {
   changeTeamMemberRole,
   inviteTeamMember,
   revokeTeamInvitation,
 } from "@/lib/domain/identity/team";
 import { userPrincipal } from "@/lib/domain/principal";
-import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
+import {
+  getTradieApproval,
+  listTradieApprovals,
+  resolveTradieApproval,
+} from "@/lib/domain/tradies/approvals";
+import {
+  findUserByClerkId,
+  findUserById,
+} from "@/lib/domain/identity/users";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
@@ -108,30 +116,11 @@ export async function listAuthorizedApprovals(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const query = input.query.trim();
-  const approvals = await prisma.tradieApproval.findMany({
-    where: {
-      status: input.status,
-      actionType: input.actionType,
-      ...(query
-        ? {
-            tradie: {
-              OR: [
-                { name: { contains: query, mode: "insensitive" } },
-                { trade: { contains: query, mode: "insensitive" } },
-                { email: { contains: query, mode: "insensitive" } },
-              ],
-            },
-          }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: input.limit,
-    include: {
-      tradie: { select: { id: true, name: true, trade: true } },
-      user: { select: { name: true } },
-    },
-  });
+  const approvals = await listTradieApprovals(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
   return result(
     "admin-summary",
     "Admin approvals",
@@ -158,14 +147,11 @@ export async function getAuthorizedApproval(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const approval = await prisma.tradieApproval.findUnique({
-    where: { id: input.approvalId },
-    include: {
-      tradie: { select: { id: true, name: true, trade: true, email: true } },
-      user: { select: { name: true } },
-    },
-  });
-  if (!approval) throw new Error("Approval request not found.");
+  const approval = await getTradieApproval(
+    userPrincipal(actor),
+    input.approvalId,
+    agentDb,
+  );
   return result(
     "admin-summary",
     "Approval request",
@@ -212,7 +198,7 @@ export async function resolveAuthorizedApproval(
       rejectionReason: input.rejectionReason,
       resolution: input.resolution,
     },
-    transaction ?? prisma,
+    transaction ?? agentDb,
   );
   return result(
     "confirmation",
@@ -237,7 +223,7 @@ export async function resolveAuthorizedApproval(
 export async function getAuthorizedAdminContent(ctx: SessionContext) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const content = await getAdminOfferContent(userPrincipal(actor), prisma);
+  const content = await getAdminOfferContent(userPrincipal(actor), agentDb);
   return result(
     "admin-summary",
     "Offer defaults",
@@ -261,7 +247,7 @@ export async function updateAuthorizedAdminContent(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const current = await getAdminOfferContent(userPrincipal(actor), prisma);
+  const current = await getAdminOfferContent(userPrincipal(actor), agentDb);
   if (current.version !== input.expectedVersion)
     throw new Error(
       `Admin offer content changed since review (expected ${input.expectedVersion}, current ${current.version}).`,
@@ -296,7 +282,7 @@ export async function updateAuthorizedAdminContent(
       data: updateData,
       expectedVersion: input.expectedVersion,
     },
-    prisma,
+    agentDb,
   );
   return result(
     "confirmation",
@@ -355,7 +341,7 @@ export async function inviteAuthorizedTeamMember(
   const invitation = await inviteTeamMember(
     userPrincipal(actor),
     { ...input, idempotencyKey: ctx.callId },
-    prisma,
+    agentDb,
     (request) => clerkClient.invitations.createInvitation(request),
   );
   return result(
@@ -372,10 +358,7 @@ export async function updateAuthorizedTeamRole(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const target = await prisma.user.findUnique({
-    where: { clerkId: input.userId },
-    select: { id: true, clerkId: true, role: true, name: true },
-  });
+  const target = await findUserByClerkId(input.userId, agentDb);
   if (!target) throw new Error("Team member not found.");
   if (target.id === actor.id && input.newRole !== Role.ADMIN)
     throw new Error(
@@ -406,7 +389,7 @@ export async function updateAuthorizedTeamRole(
         newRole: input.newRole,
         userId: target.id,
       },
-      prisma,
+      agentDb,
     );
     return result(
       "confirmation",
@@ -416,10 +399,7 @@ export async function updateAuthorizedTeamRole(
     );
   } catch (error) {
     try {
-      const current = await prisma.user.findUnique({
-        where: { id: target.id },
-        select: { role: true },
-      });
+      const current = await findUserById(target.id, agentDb);
       await clerkClient.users.updateUser(target.clerkId, {
         publicMetadata: { role: current?.role ?? target.role },
       });
@@ -446,7 +426,7 @@ export async function revokeAuthorizedTeamInvitation(
   const revoked = await revokeTeamInvitation(
     userPrincipal(actor),
     input.invitationId,
-    prisma,
+    agentDb,
     (invitationId) => clerkClient.invitations.revokeInvitation(invitationId),
     ctx.callId,
   );
@@ -492,7 +472,7 @@ export async function disconnectAuthorizedXero(
   const context = await getXeroContext();
   const disconnected = await disconnectXero(
     userPrincipal(actor),
-    prisma,
+    agentDb,
     async () => context.xero.revokeToken(),
   );
   if (!disconnected.disconnected)

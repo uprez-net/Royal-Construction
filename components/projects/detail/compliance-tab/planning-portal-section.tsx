@@ -20,7 +20,7 @@ import {
   CERTIFICATE_DOCUMENT_TYPE,
   PLANNING_PORTAL_URL,
   type CertificateApplicationKind,
-} from "@/lib/compliance/portal-certificates";
+} from "@/lib/domain/compliance/portal-certificates";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,

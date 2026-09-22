@@ -25,7 +25,7 @@ import {
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
-import { reviveComplianceEngagementDates } from "@/lib/compliance/engagement-dates";
+import { reviveComplianceEngagementDates } from "@/lib/domain/compliance/engagement-dates";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.

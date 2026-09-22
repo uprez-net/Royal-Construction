@@ -16,11 +16,11 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { ComplianceStageActor } from "@/lib/compliance/stage-actors";
+import type { ComplianceStageActor } from "@/lib/domain/compliance/stage-actors";
 import type {
   ComplianceStage,
   ComplianceStageId,
-} from "@/lib/compliance/stage-flow";
+} from "@/lib/domain/compliance/stage-flow";
 
 /**
  * One node on the compliance stage flow, and the words and colours behind it.

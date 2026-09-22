@@ -1,3 +1,4 @@
+// Shared SLA and overdue policy for every compliance adapter.
 import {
   ComplianceAlertSource,
   ComplianceAlertType,
@@ -20,8 +21,8 @@ import {
   WASTE_MANAGEMENT_BUSINESS_DAYS,
 } from "@/constants/complianceDocuments";
 import { businessDaysSince } from "@/lib/dates/business-days";
-import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
-import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
+import { PORTAL_DOWNLOAD_ALERT } from "./portal-certificates";
+import { applicableRequiredDocuments } from "./required-pack";
 import {
   developerApprovalFor,
   externalApplication,

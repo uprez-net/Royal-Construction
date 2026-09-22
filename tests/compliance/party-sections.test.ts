@@ -29,7 +29,7 @@ import {
 import {
   applicableRequiredDocuments,
   outreachRequiredDocuments,
-} from "../../lib/compliance/required-pack";
+} from "../../lib/domain/compliance/required-pack";
 import {
   extractPartyRefToken,
   generatePartyRefToken,

@@ -22,7 +22,7 @@ import {
   ALERT_SOURCE_LABEL,
   COMPLIANCE_ALERT_COPY,
 } from "@/constants/complianceAlerts";
-import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
+import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {

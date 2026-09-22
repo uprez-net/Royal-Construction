@@ -11,7 +11,7 @@ import type { ProjectRequirementsPayload } from "@/types/project-flow";
 import {
   compareTitleSearchOwners,
   describeOwnerMismatch,
-} from "./title-search-owners";
+} from "@/lib/domain/compliance/title-search-owners";
 
 /**
  * Checks a title search names the people we think own the land.

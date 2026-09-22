@@ -63,7 +63,12 @@ test("tradie operations enforce overlap checks and never expose the MCP adapter"
   // reach that command instead of writing a booking of its own.
   assert.match(source, /createTradieSchedule as createTradieScheduleDomain/);
   assert.doesNotMatch(source, /ensureNoScheduleConflict/);
-  assert.match(source, /siteManagerId/);
+  // The site-manager scope moved to lib/domain/access/ with the same rule, so
+  // this file no longer names the column. Asserting the delegation instead of
+  // the string keeps the gate pinned without pinning it to the old location.
+  assert.match(source, /authorizeProject/);
+  assert.match(source, /authorizeTradie/);
+  assert.doesNotMatch(source, /siteManagerId/);
   assert.match(source, /runAuditedAgentOperation/);
   assert.doesNotMatch(source, /app\/\(mcp\)/);
 });

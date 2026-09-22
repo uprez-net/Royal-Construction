@@ -1,5 +1,5 @@
 /**
- * Deciding which row an assessing body's objection is about.
+ * Domain decision: which row an assessing body's objection is about.
  *
  * A council rejects "the stormwater drawings"; the row on our file is called
  * "Hydraulic/stormwater drawings & design certificate". A certifier rejects

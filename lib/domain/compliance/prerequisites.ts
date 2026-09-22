@@ -1,3 +1,4 @@
+// Shared party and pack prerequisite policy.
 import {
   ComplianceAlertType,
   ComplianceDocumentType,
@@ -14,7 +15,7 @@ import {
   PARTY_LABEL,
   PARTY_PREREQUISITES,
 } from "@/constants/complianceDocuments";
-import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
+import { applicableRequiredDocuments } from "./required-pack";
 import {
   hasOpenAlert,
   isPartyEngaged,
@@ -159,7 +160,7 @@ export function developerBlockedReason(
   // finds none, and other paths add their own -- so a seeded empty row sitting
   // in front of the one that actually carries the report had this reporting a
   // block over a document that was on the file, with the developer approval
-  // step locked behind it. `isSettled` in lib/compliance/overdue.ts reads it
+  // step locked behind it. `isSettled` in lib/domain/compliance/overdue.ts reads it
   // this way for the same reason, and these two gates must not disagree.
   const hasReport = engagement.documents.some(
     (document) =>

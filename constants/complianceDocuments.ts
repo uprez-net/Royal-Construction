@@ -180,7 +180,7 @@ export function partyDeliverables(
  * The council's own row is the exception to how this table is read. There is
  * nobody to engage there and no mail to send, so "has the council been dealt
  * with" is answered by the certificate being on the file rather than by an
- * outreach existing -- see `lib/compliance/prerequisites.ts`, which is the one
+ * outreach existing -- see `lib/domain/compliance/prerequisites.ts`, which is the one
  * place that reads this.
  *
  * The consultants have no prerequisites of their own. They are not part of the
@@ -207,7 +207,7 @@ export const PARTY_PREREQUISITES: Readonly<
   // bushfire assessment that does not exist yet, but the assessment can arrive
   // from a consultant we engaged, from a consultant the client engaged, or on
   // the client's own paperwork -- and only the first of those is a party. The
-  // gate is `developerBlockedReason` in lib/compliance/prerequisites.ts, which
+  // gate is `developerBlockedReason` in lib/domain/compliance/prerequisites.ts, which
   // reads the document.
   [CompliancePartyType.DEVELOPER]: [],
 };

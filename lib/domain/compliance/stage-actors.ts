@@ -1,8 +1,9 @@
+// Shared compliance-stage actor and readiness policy.
 import {
   certificateApplication,
   certifierHasPassedChecklist,
   hasCertificate,
-} from "@/lib/compliance/portal-certificates";
+} from "./portal-certificates";
 import {
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
@@ -19,7 +20,7 @@ import {
   isNotRequired,
   WASTE_MANAGEMENT_PLAN_PARTY,
 } from "@/constants/complianceDocuments";
-import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
+import { applicableRequiredDocuments } from "./required-pack";
 import {
   checklistItemDetail,
   externalApplication,

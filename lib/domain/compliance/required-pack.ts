@@ -1,3 +1,4 @@
+// Shared required-pack selection and sent-state policy.
 import {
   CertifierEmailDirection,
   CertifierEngagementStatus,

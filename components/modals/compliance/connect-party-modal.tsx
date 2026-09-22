@@ -43,7 +43,7 @@ import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import {
   buildPartyOutreachBody,
   type OutreachClientDetails,
-} from "@/lib/compliance/party-outreach-email";
+} from "@/lib/domain/compliance/party-outreach-email";
 import { emailHtmlToLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 import type { LeadRichTextDocument } from "@/lib/leads/types";
 import type { VaultAttachmentOption } from "@/types/compliance";

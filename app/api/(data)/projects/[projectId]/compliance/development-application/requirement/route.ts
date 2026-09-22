@@ -5,6 +5,7 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { setDevelopmentApplicationRequired } from "@/lib/data/compliance-development-application";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -44,6 +45,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceErrorResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error(
       "Failed to record the Development Application requirement",
       error,

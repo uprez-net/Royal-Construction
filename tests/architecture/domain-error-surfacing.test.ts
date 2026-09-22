@@ -135,12 +135,6 @@ const ADMIN_CONTENT =
   "returns its own {ok,error} result that the admin editor renders; worth reconciling with domainActionFailure when the admin surface is revisited";
 
 const UNMAPPED: Record<string, string> = {
-  "app/api/(data)/projects/[projectId]/compliance/alerts/[alertId]/follow-up/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/alerts/[alertId]/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/alerts/route.ts":
-    COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/applications/route.ts":
     COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/architect/meeting/route.ts":
@@ -157,8 +151,6 @@ const UNMAPPED: Record<string, string> = {
     COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/developer/resend/route.ts":
     COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/development-application/requirement/route.ts":
-    COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/discover/route.ts":
     COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/documents/[documentId]/not-required/route.ts":
@@ -172,10 +164,6 @@ const UNMAPPED: Record<string, string> = {
   "app/api/(data)/projects/[projectId]/compliance/documents/route.ts":
     COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/outreach/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/parties/reply/route.ts":
-    COMPLIANCE_PHASE_5,
-  "app/api/(data)/projects/[projectId]/compliance/parties/route.ts":
     COMPLIANCE_PHASE_5,
   "app/api/(data)/projects/[projectId]/compliance/principal-certifier/route.ts":
     COMPLIANCE_PHASE_5,

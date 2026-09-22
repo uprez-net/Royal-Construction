@@ -69,19 +69,19 @@ import {
   isRequiredPackComplete,
   sentToCertifierUrls,
   unsentRequiredDocuments,
-} from "@/lib/compliance/required-pack";
+} from "@/lib/domain/compliance/required-pack";
 import {
   packSendBlockedReason,
   partyBlockedReason,
-} from "@/lib/compliance/prerequisites";
+} from "@/lib/domain/compliance/prerequisites";
 import {
   isDocumentOverdue,
   overdueComplianceDocuments,
-} from "@/lib/compliance/overdue-documents";
+} from "@/lib/domain/compliance/overdue-documents";
 import {
   complianceStageFlow,
   type ComplianceStageId,
-} from "@/lib/compliance/stage-flow";
+} from "@/lib/domain/compliance/stage-flow";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -1654,7 +1654,7 @@ export function ProjectComplianceTab({
   /**
    * Why a section cannot be opened yet, in the reader's terms, or null.
    *
-   * Read out of `lib/compliance/prerequisites.ts`, which is the same function
+   * Read out of `lib/domain/compliance/prerequisites.ts`, which is the same function
    * the server refuses the send with. This used to be its own near-copy of that
    * logic, and the two drifted the moment the architect grew a second
    * prerequisite: the section unlocked, the send was refused, and the two

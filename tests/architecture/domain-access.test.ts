@@ -379,8 +379,11 @@ test("Eve's project and tradie tools call the shared project rule", () => {
   assert.doesNotMatch(project, /project\.siteManagerId !== actor\.id/);
 
   const tradie = read("agent/lib/tradie-operations.ts");
-  assert.match(tradie, /tradieScheduleListScope/);
-  assert.match(tradie, /projectManageScope/);
+  assert.match(tradie, /listTradieSchedules/);
+  const tradieQueries = read("lib/domain/tradies/queries.ts");
+  assert.match(tradieQueries, /tradieScheduleListScope/);
+  const tradieAccess = read("lib/domain/access/tradies.ts");
+  assert.match(tradieAccess, /projectManageScope/);
   // Five inline spellings of the same filter.
   assert.doesNotMatch(tradie, /\{ siteManagerId: actor\.id \}/);
 });

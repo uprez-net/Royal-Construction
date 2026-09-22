@@ -5,6 +5,8 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { sendComplianceFollowUp } from "@/lib/data/compliance-follow-up";
+import { userPrincipal } from "@/lib/domain/principal";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseRouteParamsWithResponse,
@@ -30,7 +32,7 @@ const alertParamSchema = projectParamSchema.extend({
  * The alert stays open either way, until the thing it is waiting for arrives.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string; alertId: string }> },
 ) {
   const routeParams = parseRouteParamsWithResponse(
@@ -46,12 +48,16 @@ export async function POST(
     const engagement = await sendComplianceFollowUp(
       projectId,
       alertId,
+      userPrincipal(user),
       user.name,
+      request.headers.get("idempotency-key") ?? undefined,
     );
     return successResponse(engagement);
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to send a compliance follow-up", error);
     // The data layer refuses with the reason — nobody engaged, alert already
     // closed, no thread behind this condition — so it reaches the user as the

@@ -15,6 +15,7 @@ import {
   complianceDocumentParamSchema,
   setComplianceDocumentNotRequiredSchema,
 } from "@/utils/validators/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
 
 /**
  * Marks one DA or checklist line as not applying to this job, or puts it back.
@@ -56,6 +57,7 @@ export async function POST(
     const admin = await requireComplianceAdmin(projectId);
 
     const result = await setComplianceDocumentNotRequired({
+      principal: userPrincipal(admin),
       projectId,
       documentId,
       notRequired: body.data.notRequired,

@@ -12,6 +12,60 @@ import {
 } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 
+export async function listTradieApprovals(
+  principal: DomainPrincipal,
+  input: {
+    status?: TradieApprovalStatus;
+    actionType?: TradieApprovalActionType;
+    query: string;
+    limit: number;
+  },
+  db: DomainDb,
+) {
+  requireAdminPrincipal(principal);
+  const query = input.query.trim();
+  return db.tradieApproval.findMany({
+    where: {
+      status: input.status,
+      actionType: input.actionType,
+      ...(query
+        ? {
+            tradie: {
+              OR: [
+                { name: { contains: query, mode: "insensitive" as const } },
+                { trade: { contains: query, mode: "insensitive" as const } },
+                { email: { contains: query, mode: "insensitive" as const } },
+              ],
+            },
+          }
+        : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: input.limit,
+    include: {
+      tradie: { select: { id: true, name: true, trade: true } },
+      user: { select: { name: true } },
+    },
+  });
+}
+
+export async function getTradieApproval(
+  principal: DomainPrincipal,
+  approvalId: string,
+  db: DomainDb,
+) {
+  requireAdminPrincipal(principal);
+  const approval = await db.tradieApproval.findUnique({
+    where: { id: approvalId },
+    include: {
+      tradie: { select: { id: true, name: true, trade: true, email: true } },
+      user: { select: { name: true } },
+    },
+  });
+  if (!approval) throw new DomainNotFoundError("Approval request not found.");
+  return approval;
+}
+
 /**
  * Resolve one tradie approval and its requested change as one transaction.
  *

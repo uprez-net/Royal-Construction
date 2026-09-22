@@ -1,5 +1,5 @@
 /**
- * Comparing the names on a title search against the owners we hold.
+ * Domain decision: comparing title-search names against the owners we hold.
  *
  * The land registry lags settlement. A surveyor orders a title search in good
  * faith, the register has not been updated yet, and what comes back names the

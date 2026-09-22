@@ -1,3 +1,4 @@
+// Shared portal-certificate classification policy.
 import {
   CertifierEngagementStatus,
   ComplianceAlertType,

@@ -9,9 +9,10 @@ import { DomainNotFoundError, DomainTransitionError } from "../errors";
 import { requireAdminPrincipal, type DomainPrincipal } from "../principal";
 import {
   complianceDocumentLabel,
+  DA_DOCUMENTS,
   isApprovableDocumentType,
 } from "@/constants/complianceDocuments";
-import { hasSentCurrentDocument } from "@/lib/compliance/required-pack";
+import { hasSentCurrentDocument } from "./required-pack";
 import { certifierEngagementInclude } from "@/types/compliance";
 
 // The certifier's decision on one piece of compliance evidence.
@@ -235,4 +236,119 @@ export async function advanceEngagementStatus(
     where: { id: engagementId, status: { in: [...from] } },
   });
   return claim.count === 1;
+}
+
+/** Seed the fixed Development Application rows exactly once. */
+export async function ensureDevelopmentApplicationDocuments(
+  engagementId: string,
+  db: DomainDb,
+): Promise<boolean> {
+  const daTypes = DA_DOCUMENTS.map((document) => document.type);
+  const existing = await db.complianceDocument.findMany({
+    where: { engagementId, documentType: { in: daTypes } },
+    select: { documentType: true },
+  });
+  const existingTypes = new Set(
+    existing.map((document) => document.documentType),
+  );
+  const missing = DA_DOCUMENTS.filter(
+    (document) => !existingTypes.has(document.type),
+  );
+  if (missing.length === 0) return false;
+
+  const nextOrder = await db.complianceDocument.count({
+    where: { engagementId },
+  });
+  await db.complianceDocument.createMany({
+    data: missing.map((document, index) => ({
+      engagementId,
+      documentType: document.type,
+      status: ComplianceDocumentStatus.PENDING,
+      order: nextOrder + index,
+    })),
+    skipDuplicates: true,
+  });
+  return true;
+}
+
+/** Mark a conditional checklist/DA row unnecessary, or restore its real state. */
+export async function setComplianceDocumentNotRequired(
+  principal: DomainPrincipal,
+  params: {
+    projectId: string;
+    documentId: string;
+    notRequired: boolean;
+  },
+  db: DomainDb,
+) {
+  requireAdminPrincipal(principal);
+  const document = await db.complianceDocument.findFirst({
+    where: {
+      id: params.documentId,
+      engagement: { projectId: params.projectId },
+    },
+    select: {
+      id: true,
+      engagementId: true,
+      documentType: true,
+      label: true,
+      status: true,
+      _count: { select: { files: true } },
+    },
+  });
+  if (!document) {
+    throw new DomainNotFoundError(
+      "Compliance document not found on this project.",
+    );
+  }
+
+  const isDaDocument =
+    document.documentType === ComplianceDocumentType.DA_ITEM
+    || DA_DOCUMENTS.some((entry) => entry.type === document.documentType);
+  const label = complianceDocumentLabel(document.documentType, document.label);
+  if (
+    document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM
+    && !isDaDocument
+  ) {
+    throw new DomainTransitionError(
+      `${label} cannot be marked not required here.`,
+    );
+  }
+  if (document.status === ComplianceDocumentStatus.APPROVED) {
+    throw new DomainTransitionError(`${label} has already been approved.`);
+  }
+
+  const status = params.notRequired
+    ? ComplianceDocumentStatus.NOT_REQUIRED
+    : document._count.files > 0
+      ? ComplianceDocumentStatus.UPLOADED
+      : ComplianceDocumentStatus.PENDING;
+  if (status === document.status) {
+    return {
+      changed: false as const,
+      documentId: document.id,
+      documentLabel: label,
+      engagementId: document.engagementId,
+      status,
+    };
+  }
+
+  const changed = await db.complianceDocument.updateMany({
+    where: { id: document.id, status: document.status },
+    data: { status },
+  });
+  if (changed.count !== 1) {
+    throw new DomainTransitionError(
+      "The compliance row changed while it was being updated; refresh and retry.",
+      document.status,
+      status,
+    );
+  }
+  return {
+    changed: true as const,
+    documentId: document.id,
+    documentLabel: label,
+    engagementId: document.engagementId,
+    status,
+  };
 }

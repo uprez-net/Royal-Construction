@@ -20,7 +20,7 @@ import {
   certificateKindFor,
   certificateLodgementBlockedReason,
   hasCertificate,
-} from "../../lib/compliance/portal-certificates";
+} from "../../lib/domain/compliance/portal-certificates";
 import {
   developerPlansBlockedReason,
   externalApplicationStep,

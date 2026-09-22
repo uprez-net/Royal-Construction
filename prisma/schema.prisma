@@ -416,7 +416,7 @@ enum ComplianceDocumentType {
   /// development job is built under; a construction certificate is what follows
   /// a council's development consent. A file holds one or the other, never
   /// both, and which one is decided by `certificateKindFor` rather than by this
-  /// enum -- see lib/compliance/portal-certificates.ts.
+  /// enum -- see lib/domain/compliance/portal-certificates.ts.
   ///
   /// Appended after UNKNOWN rather than filed beside the certificate it is a
   /// sibling of, because this enum is append-only: the reading order of a
@@ -507,6 +507,7 @@ enum OutboxEventKind {
   LEAD_EMAIL_SEND
   OFFER_DOCUMENT_SEND
   OFFER_IMAGE_GENERATE
+  COMPLIANCE_EMAIL_SEND
 }
 
 enum AgentMemoryProvenance {

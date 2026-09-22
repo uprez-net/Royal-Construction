@@ -18,12 +18,9 @@ import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
-import prisma from "@/lib/prisma";
-import {
-  assertCanReadTradieDirectory,
-  tradieScheduleListScope,
-} from "@/lib/domain/access/tradies";
-import { projectManageScope } from "@/lib/domain/access/projects";
+import { authorizeTradie } from "@/lib/domain/access/tradies";
+import { authorizeProject } from "@/lib/domain/access/projects";
+import { agentDb } from "@/agent/lib/db";
 import {
   createTradieSchedule as createTradieScheduleDomain,
   requestTradieScheduleDeletion,
@@ -38,6 +35,13 @@ import {
   requestTradieRemoval,
   updateTradie as updateTradieDomain,
 } from "@/lib/domain/tradies/directory";
+import {
+  getCreatedScheduleSummary,
+  getTradieDetail,
+  getTradieScheduleDetail,
+  listTradieSchedules,
+  searchTradies,
+} from "@/lib/domain/tradies/queries";
 
 /**
  * Run a domain command and translate its refusals into Eve's own.
@@ -153,52 +157,24 @@ function requireAdmin(actor: User) {
   if (!isAdmin(actor)) throw new AgentAuthorizationError();
 }
 
-// Directory lookup is an internal coordination surface. Site managers may
-// select any registered tradie for a booking; project scope is enforced on the
-// schedule/project mutation itself. The rule is
-// lib/domain/access/tradies.ts#canReadTradieDirectory; this keeps the
-// "match nothing" spelling the directory queries are built around, so a
-// refusal reads as an empty directory rather than an error mid-listing.
-function scopeForTradie(actor: User): Prisma.TradieWhereInput {
-  try {
-    assertCanReadTradieDirectory(userPrincipal(actor));
-    return {};
-  } catch (error) {
-    if (!isDomainError(error)) throw error;
-    return { id: "__unreachable__" };
-  }
-}
-
 async function getVisibleTradie(
   actor: User,
   tradieId: string,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
+  db: Prisma.TransactionClient | typeof agentDb = agentDb,
 ) {
-  const tradie = await db.tradie.findFirst({
-    where: { id: tradieId, ...scopeForTradie(actor) },
-  });
-  if (!tradie) throw new AgentAuthorizationError();
-  return tradie;
+  return runTradieDomain(() =>
+    authorizeTradie(userPrincipal(actor), tradieId, db),
+  );
 }
 
 async function getVisibleSchedule(
   actor: User,
   scheduleId: string,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
+  db: Prisma.TransactionClient | typeof agentDb = agentDb,
 ) {
-  const schedule = await db.tradieSchedule.findFirst({
-    where: {
-      id: scheduleId,
-      ...tradieScheduleListScope(userPrincipal(actor)),
-    },
-    include: {
-      tradie: true,
-      project: { select: { id: true, name: true, siteManagerId: true } },
-      milestone: true,
-    },
-  });
-  if (!schedule) throw new AgentAuthorizationError();
-  return schedule;
+  return runTradieDomain(() =>
+    getTradieScheduleDetail(userPrincipal(actor), scheduleId, db),
+  );
 }
 
 function serializeTradie(tradie: Record<string, unknown>) {
@@ -223,40 +199,7 @@ export async function searchAuthorizedTradies(
   const actor = await requireCurrentAgentActor(ctx);
   if (actor.role !== Role.ADMIN && actor.role !== Role.SITE_MANAGER)
     throw new AgentAuthorizationError();
-  const query = input.query.trim();
-  const tradies = await prisma.tradie.findMany({
-    where: {
-      ...scopeForTradie(actor),
-      trade: input.trade
-        ? { equals: input.trade, mode: "insensitive" }
-        : undefined,
-      isFavourite: input.favouriteOnly ? true : undefined,
-      ...(query
-        ? {
-            OR: [
-              { name: { contains: query, mode: "insensitive" } },
-              { trade: { contains: query, mode: "insensitive" } },
-              { abn: { contains: query, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ isFavourite: "desc" }, { name: "asc" }],
-    take: input.limit,
-    select: {
-      id: true,
-      name: true,
-      trade: true,
-      abn: true,
-      email: true,
-      phone: true,
-      isFavourite: true,
-      lastQuotedPrice: true,
-      lastQuotedPriceUnit: true,
-      rating: true,
-      note: true,
-    },
-  });
+  const tradies = await searchTradies(userPrincipal(actor), input, agentDb);
   return envelope(
     "tradie-summary",
     "Tradie directory",
@@ -276,31 +219,9 @@ export async function getAuthorizedTradie(
   input: { tradieId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const tradie = await getVisibleTradie(actor, input.tradieId);
-  const details = await prisma.tradie.findUnique({
-    where: { id: tradie.id },
-    include: {
-      ratings: {
-        orderBy: { createdAt: "desc" },
-        take: 25,
-        include: { user: { select: { name: true } } },
-      },
-      incidents:
-        actor.role === Role.ADMIN
-          ? { orderBy: { createdAt: "desc" }, take: 25 }
-          : false,
-      schedules: {
-        where: tradieScheduleListScope(userPrincipal(actor)),
-        orderBy: { scheduledDate: "desc" },
-        take: 50,
-        include: {
-          project: { select: { id: true, name: true } },
-          milestone: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
-  if (!details) throw new AgentAuthorizationError();
+  const details = await runTradieDomain(() =>
+    getTradieDetail(userPrincipal(actor), input.tradieId, agentDb),
+  );
   const incidents = details.incidents ?? [];
   const incidentSummary = isAdmin(actor)
     ? `${incidents.filter((i) => i.status === TradieIncidentStatus.OPEN).length} open incident(s)`
@@ -345,7 +266,7 @@ export async function createAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   // lib/domain/tradies/directory.ts owns the rule and its ADMIN guard; the
   // app's createTradie had no guard at all.
   const tradie = await runTradieDomain(() =>
@@ -371,7 +292,7 @@ export async function updateAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   // The allowlist stays here: it is this tool's contract with the model, not
   // a business rule. The ADMIN guard and the write are the domain's.
   const allowed = [
@@ -415,7 +336,7 @@ export async function requestAuthorizedTradiePriceChange(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   const requested = await runTradieDomain(() =>
     requestTradiePriceChange(userPrincipal(actor), input, db),
   );
@@ -445,7 +366,7 @@ export async function requestAuthorizedTradieRemoval(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   const requested = await runTradieDomain(() =>
     requestTradieRemoval(userPrincipal(actor), input, db),
   );
@@ -476,7 +397,7 @@ export async function reportAuthorizedTradieIncident(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   // lib/domain/tradies/incidents.ts owns this, shared with the app's report
   // modal. This copy matched attachable files on `uploadedBy` alone, so it
   // could move a file already on a project or a lead onto the incident — and
@@ -514,7 +435,7 @@ export async function rateAuthorizedTradie(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   const rated = await runTradieDomain(() =>
     rateTradieDomain(userPrincipal(actor), input, db),
   );
@@ -533,53 +454,6 @@ export async function rateAuthorizedTradie(
   );
 }
 
-function scheduleWhere(
-  actor: User,
-  input: {
-    tradieId?: string;
-    projectId?: string;
-    status?: TradieScheduleStatus;
-    query: string;
-    from?: string;
-    to?: string;
-  },
-): Prisma.TradieScheduleWhereInput {
-  return {
-    tradieId: input.tradieId,
-    projectId: input.projectId,
-    status: input.status,
-    ...tradieScheduleListScope(userPrincipal(actor)),
-    ...(input.from || input.to
-      ? {
-          scheduledDate: {
-            gte: input.from ? new Date(input.from) : undefined,
-            lt: input.to ? new Date(input.to) : undefined,
-          },
-        }
-      : {}),
-    ...(input.query
-      ? {
-          OR: [
-            {
-              tradie: { name: { contains: input.query, mode: "insensitive" } },
-            },
-            {
-              tradie: { trade: { contains: input.query, mode: "insensitive" } },
-            },
-            {
-              project: { name: { contains: input.query, mode: "insensitive" } },
-            },
-            {
-              milestone: {
-                name: { contains: input.query, mode: "insensitive" },
-              },
-            },
-          ],
-        }
-      : {}),
-  };
-}
-
 export async function listAuthorizedTradieSchedules(
   ctx: SessionContext,
   input: {
@@ -595,16 +469,11 @@ export async function listAuthorizedTradieSchedules(
   const actor = await requireCurrentAgentActor(ctx);
   if (actor.role !== Role.ADMIN && actor.role !== Role.SITE_MANAGER)
     throw new AgentAuthorizationError();
-  const schedules = await prisma.tradieSchedule.findMany({
-    where: scheduleWhere(actor, input),
-    orderBy: { scheduledDate: "asc" },
-    take: input.limit,
-    include: {
-      tradie: { select: { id: true, name: true, trade: true, email: true } },
-      project: { select: { id: true, name: true, siteManagerId: true } },
-      milestone: { select: { id: true, name: true } },
-    },
-  });
+  const schedules = await listTradieSchedules(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
   return envelope(
     "schedule-list",
     "Tradie schedule",
@@ -646,7 +515,7 @@ export async function createAuthorizedTradieSchedule(
   transaction?: Prisma.TransactionClient,
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const db = transaction ?? prisma;
+  const db = transaction ?? agentDb;
   // Project scope, the milestone-belongs-to-project check and the overlap
   // refusal are all lib/domain/tradies/schedules.ts now, shared with the app.
   let created;
@@ -674,13 +543,11 @@ export async function createAuthorizedTradieSchedule(
     throw new Error(error.message);
   }
 
-  const schedule = await db.tradieSchedule.findUniqueOrThrow({
-    where: { id: created.id },
-    include: {
-      tradie: { select: { id: true, name: true, trade: true } },
-      project: { select: { id: true, name: true } },
-    },
-  });
+  const schedule = await getCreatedScheduleSummary(
+    userPrincipal(actor),
+    created.id,
+    db,
+  );
   const tradie = schedule.tradie;
   const project = schedule.project;
   const scheduledDate = schedule.scheduledDate;
@@ -722,7 +589,7 @@ export async function transitionAuthorizedTradieSchedule(
     transitionTradieSchedule(
       userPrincipal(actor),
       input,
-      transaction ?? prisma,
+      transaction ?? agentDb,
     ),
   );
   return envelope(
@@ -764,7 +631,7 @@ export async function rescheduleAuthorizedTradie(
     rescheduleTradieSchedule(
       userPrincipal(actor),
       { ...input, scheduledDate: new Date(input.scheduledDate) },
-      transaction ?? prisma,
+      transaction ?? agentDb,
     ),
   );
   return envelope(
@@ -800,7 +667,7 @@ export async function requestAuthorizedScheduleDeletion(
     requestTradieScheduleDeletion(
       userPrincipal(actor),
       input,
-      transaction ?? prisma,
+      transaction ?? agentDb,
     ),
   );
   return envelope(
@@ -863,13 +730,9 @@ export async function authorizeTradieWrite(
       (Array.isArray(input.fileIds) ? input.fileIds.length : 0)
     )
       throw new AgentAuthorizationError();
-    if (fileIds.length > 0) {
-      const files = await transaction.file.findMany({
-        where: { id: { in: fileIds }, uploadedBy: String(actor.id) },
-        select: { id: true },
-      });
-      if (files.length !== fileIds.length) throw new AgentAuthorizationError();
-    }
+    // File ownership and attachment state are checked atomically by the
+    // incident command. The audit preflight only establishes actor/tradie
+    // scope; repeating a weaker file query here was the divergence #301 fixed.
     return;
   }
   if (action === "tradie.rating.create") {
@@ -882,14 +745,13 @@ export async function authorizeTradieWrite(
     if (!isAdmin(actor) && actor.role !== Role.SITE_MANAGER)
       throw new AgentAuthorizationError();
     await getVisibleTradie(actor, inputString(input, "tradieId"), transaction);
-    const project = await transaction.project.findFirst({
-      where: {
-        id: inputString(input, "projectId"),
-        ...projectManageScope(userPrincipal(actor)),
-      },
-      select: { id: true },
-    });
-    if (!project) throw new AgentAuthorizationError();
+    await runTradieDomain(() =>
+      authorizeProject(
+        userPrincipal(actor),
+        inputString(input, "projectId"),
+        transaction,
+      ),
+    );
     return;
   }
   if (

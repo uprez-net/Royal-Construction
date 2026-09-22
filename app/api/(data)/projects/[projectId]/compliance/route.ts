@@ -16,6 +16,7 @@ import {
   successResponse,
 } from "@/utils/validators";
 import { startEngagementSchema } from "@/utils/validators/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
 
 /** The engagement for this project, or null when none has been started. */
 export async function GET(
@@ -62,10 +63,11 @@ export async function POST(
   if (!body.success) return body.response;
 
   try {
-    await requireComplianceAccess(routeParams.data.projectId, {
+    const { user } = await requireComplianceAccess(routeParams.data.projectId, {
       requireEngagement: false,
     });
     const engagement = await startCertifierEngagement(
+      userPrincipal(user),
       routeParams.data.projectId,
       body.data,
     );

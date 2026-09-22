@@ -1,3 +1,4 @@
+// Shared compliance stage state machine.
 import {
   CertifierEngagementStatus,
   ComplianceAlertStatus,
@@ -23,13 +24,13 @@ import {
   certificateKindFor,
   hasCertificate,
   isPortalDownloadAlert,
-} from "@/lib/compliance/portal-certificates";
+} from "./portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
-import { applicableRequiredDocuments } from "@/lib/compliance/required-pack";
+import { applicableRequiredDocuments } from "./required-pack";
 import {
   STAGE_ACTORS,
   type ComplianceStageActor,
-} from "@/lib/compliance/stage-actors";
+} from "./stage-actors";
 import {
   checklistBlockedReason,
   externalApplication,

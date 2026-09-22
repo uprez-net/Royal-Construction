@@ -3,7 +3,7 @@ import { ComplianceAlertType, CompliancePartyType } from "@prisma/client";
 /**
  * Which party each alert is chased with, or null where none can be.
  *
- * A plain module because both ends need it and neither can import the other.
+ * A domain module because every adapter needs the same answer.
  * The tab decides whether to offer the chase button; the data layer decides
  * which thread to send it down and refuses when there is nobody there. A button
  * that offers a chase the server then refuses is the same bug read from two

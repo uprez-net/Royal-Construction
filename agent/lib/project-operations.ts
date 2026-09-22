@@ -1,18 +1,11 @@
 import {
-  CertifierEngagementStatus,
-  ComplianceAlertStatus,
-  ComplianceDocumentStatus,
   ComplianceDocumentType,
-  ComplianceOutreachMode,
-  ComplianceOutreachStatus,
   CompliancePartyType,
-  GraphMailbox,
   Prisma,
   type User,
 } from "@prisma/client";
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
-import prisma from "@/lib/prisma";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
@@ -22,21 +15,8 @@ import {
   agentResultEnvelopeSchema,
   type AgentResultEnvelope,
 } from "@/agent/lib/result-contracts";
-import { certifierEngagementInclude } from "@/types/compliance";
-import {
-  REQUIRED_COMPLIANCE_DOCUMENTS,
-  DA_DOCUMENTS,
-  PARTY_LABEL,
-  PARTY_OUTREACH_ATTACHMENTS,
-} from "@/constants/complianceDocuments";
-import { generateCertifierRefToken } from "@/lib/graph/certifier-subject";
-import { generatePartyRefToken } from "@/lib/graph/party-subject";
-import { partyBlockedReason } from "@/lib/compliance/prerequisites";
-import {
-  resolveExtraAttachments,
-  sendOnPartyThread,
-} from "@/lib/compliance/party-mail";
-import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
+import { PARTY_LABEL, PARTY_OUTREACH_ATTACHMENTS } from "@/constants/complianceDocuments";
+import { sendOnPartyThread } from "@/lib/compliance/party-mail";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import {
   authorizeMilestone,
@@ -44,6 +24,16 @@ import {
 } from "@/lib/domain/access/projects";
 import { agentDb } from "@/agent/lib/db";
 import { resolveComplianceDocument as resolveComplianceDocumentDomain } from "@/lib/domain/compliance/documents";
+import { setComplianceDocumentNotRequired } from "@/lib/domain/compliance/documents";
+import {
+  getComplianceEngagement,
+  startComplianceEngagement,
+} from "@/lib/domain/compliance/engagements";
+import {
+  prepareComplianceOutreach,
+  sendComplianceFollowUp,
+  sendComplianceOutreach,
+} from "@/lib/domain/compliance/outreach";
 import { isDomainError } from "@/lib/domain/errors";
 import {
   createMilestone as createMilestoneCommand,
@@ -58,7 +48,7 @@ import {
 import { userPrincipal } from "@/lib/domain/principal";
 
 type ProjectActor = Pick<User, "id" | "role">;
-type ProjectDb = Prisma.TransactionClient | typeof prisma;
+type ProjectDb = Prisma.TransactionClient | typeof agentDb;
 
 function projectReference(project: {
   id: string;
@@ -83,7 +73,7 @@ function projectReference(project: {
 async function assertProjectAccess(
   actor: ProjectActor,
   projectId: string,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
+  db: Prisma.TransactionClient | typeof agentDb = agentDb,
 ) {
   try {
     return await authorizeProject(userPrincipal(actor), projectId, db);
@@ -98,7 +88,7 @@ async function assertMilestoneAccess(actor: ProjectActor, milestoneId: string) {
     const { project } = await authorizeMilestone(
       userPrincipal(actor),
       milestoneId,
-      prisma,
+      agentDb,
     );
     return { projectId: project.id };
   } catch (error) {
@@ -403,10 +393,11 @@ export async function getAuthorizedCompliance(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertProjectAccess(actor, input.projectId);
-  const engagement = await prisma.certifierEngagement.findUnique({
-    where: { projectId: input.projectId },
-    include: certifierEngagementInclude,
-  });
+  const engagement = await getComplianceEngagement(
+    userPrincipal(actor),
+    input.projectId,
+    agentDb,
+  );
   if (!engagement)
     return actionEnvelope({
       kind: "entity-summary",
@@ -425,77 +416,29 @@ export async function getAuthorizedCompliance(
   });
 }
 
-function outreachDraftBody(
-  subjectAddress: string,
-  party: CompliancePartyType,
-  alertDetail?: string | null,
-) {
-  const label = PARTY_LABEL[party];
-  const escapedAddress = escapeHtml(subjectAddress);
-  const detail = alertDetail
-    ? `<p>${escapeHtml(alertDetail)}</p>`
-    : "<p>Could you please provide an update and let us know when we can expect the outstanding information?</p>";
-  return `<p>Hi,</p><p>We are following up regarding the ${label.toLowerCase()} requirements for <strong>${escapedAddress}</strong>.</p>${detail}<p>Please keep the project reference in the subject line on any reply.</p><p>Kind regards,<br/>Royal Constructions</p>`;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-async function loadComplianceEngagement(projectId: string) {
-  return prisma.certifierEngagement.findUnique({
-    where: { projectId },
-    include: certifierEngagementInclude,
-  });
-}
-
 export async function prepareAuthorizedComplianceOutreach(
   ctx: SessionContext,
   input: { alertId?: string; party?: CompliancePartyType; projectId: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   await assertProjectAccess(actor, input.projectId);
-  const engagement = await loadComplianceEngagement(input.projectId);
-  if (!engagement)
-    throw new Error("This project has no compliance engagement yet.");
-  const alert = input.alertId
-    ? engagement.alerts.find((candidate) => candidate.id === input.alertId)
-    : undefined;
-  if (input.alertId && !alert)
-    throw new Error("That SLA alert is not on this project.");
-  if (alert && alert.status !== ComplianceAlertStatus.OPEN)
-    throw new Error("That SLA alert has already been resolved.");
-  const party =
-    input.party ?? (alert ? COMPLIANCE_ALERT_PARTY[alert.type] : undefined);
-  if (!party)
+  const prepared = await prepareComplianceOutreach(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
+  if (!prepared.available)
     return actionEnvelope({
       kind: "follow-up-status",
       title: "No email follow-up available",
       summary:
         "This alert is handled through a portal or internal decision rather than a party email.",
       data: {
-        alert: alert ? jsonSafe(alert) : null,
+        alert: prepared.alert ? jsonSafe(prepared.alert) : null,
         projectId: input.projectId,
       },
     });
-  const outreach = engagement.outreaches.find(
-    (candidate) => candidate.party === party,
-  );
-  const blocked = await partyBlockedReason(engagement, party);
-  const body = outreachDraftBody(
-    engagement.subjectAddress,
-    party,
-    alert?.detail,
-  );
-  const canSend =
-    Boolean(outreach?.contactEmail)
-    && outreach?.mode !== ComplianceOutreachMode.SELF_SUPPLIED
-    && !blocked;
+  const { alert, blocked, body, canSend, outreach, party } = prepared;
   return actionEnvelope({
     kind: "follow-up-status",
     title: `${PARTY_LABEL[party]} outreach`,
@@ -512,14 +455,11 @@ export async function prepareAuthorizedComplianceOutreach(
         contactEmail: outreach?.contactEmail ?? null,
         contactName: outreach?.contactName ?? null,
         daysOpen: alert
-          ? Math.max(
-              0,
-              Math.floor((Date.now() - alert.createdAt.getTime()) / 86_400_000),
-            )
+          ? prepared.daysOpen
           : null,
         lastFollowUpAt: outreach?.lastFollowUpAt?.toISOString() ?? null,
         party,
-        subject: `[${outreach?.refToken ?? "pending"}] ${engagement.subjectAddress}`,
+        subject: `[${outreach?.refToken ?? "pending"}] ${prepared.subjectAddress}`,
         slaStatus: alert ? "OPEN" : "READY",
       },
       projectId: input.projectId,
@@ -554,128 +494,17 @@ async function sendComplianceOutreachDirect(input: {
   extraAttachmentIds: string[];
   party: CompliancePartyType;
   projectId: string;
-}) {
-  const engagement = await loadComplianceEngagement(input.projectId);
-  if (!engagement)
-    throw new Error("This project has no compliance engagement yet.");
-  const blocked = await partyBlockedReason(engagement, input.party);
-  if (blocked) throw new Error(blocked);
-  const existing = engagement.outreaches.find(
-    (candidate) => candidate.party === input.party,
-  );
-  if (existing?.mode === ComplianceOutreachMode.SELF_SUPPLIED)
-    throw new Error(
-      "This party's documents were marked self-supplied; there is no outreach thread to send on.",
-    );
-  if (existing && existing.status !== ComplianceOutreachStatus.NOT_SENT)
-    throw new Error(
-      "This party has already been contacted. Use a follow-up reply instead.",
-    );
-  const ownDocumentIds = new Set(
-    engagement.documents.map((document) => document.id),
-  );
-  const deliverables = input.deliverables.filter(
-    (deliverable) =>
-      !deliverable.checklistDocumentId
-      || ownDocumentIds.has(deliverable.checklistDocumentId),
-  );
-  if (
-    input.deliverables.some(
-      (deliverable) =>
-        deliverable.checklistDocumentId
-        && !ownDocumentIds.has(deliverable.checklistDocumentId),
-    )
-  )
-    throw new Error(
-      "Every checklist deliverable must belong to this compliance engagement.",
-    );
-  const outreach =
-    existing
-    ?? (await prisma.complianceOutreach.create({
-      data: {
-        engagementId: engagement.id,
-        party: input.party,
-        refToken: generatePartyRefToken(input.party),
-        mode: ComplianceOutreachMode.OUTREACH,
-        status: ComplianceOutreachStatus.NOT_SENT,
-        graphMailbox: GraphMailbox.ADMIN,
-        contactName: input.contactName ?? null,
-        contactEmail: input.contactEmail,
-        contactPhone: input.contactPhone ?? null,
-      },
-      select: {
-        id: true,
-        refToken: true,
-        contactEmail: true,
-        lastInboundMessageId: true,
-        graphMailbox: true,
-      },
-    }));
-  if (!outreach.contactEmail) throw new Error("A recipient email is required.");
-  await prisma.$transaction([
-    prisma.complianceOutreachDeliverable.deleteMany({
-      where: { outreachId: outreach.id },
-    }),
-    ...(deliverables.length > 0
-      ? [
-          prisma.complianceOutreachDeliverable.createMany({
-            data: deliverables.map((deliverable) => ({
-              outreachId: outreach.id,
-              documentType: deliverable.documentType,
-              checklistDocumentId: deliverable.checklistDocumentId ?? null,
-            })),
-            skipDuplicates: true,
-          }),
-        ]
-      : []),
-  ]);
-  await prisma.complianceOutreach.update({
-    where: { id: outreach.id },
-    data: {
-      contactName: input.contactName ?? undefined,
-      contactEmail: input.contactEmail,
-      contactPhone: input.contactPhone ?? undefined,
+}, actor: ProjectActor, idempotencyKey: string) {
+  return sendComplianceOutreach(
+    userPrincipal(actor),
+    {
+      ...input,
+      body: sanitizeLeadNotesHtml(input.body),
+      idempotencyKey,
     },
-  });
-  const reviewedOutreach = {
-    ...outreach,
-    contactName: input.contactName ?? null,
-    contactEmail: input.contactEmail,
-    contactPhone: input.contactPhone ?? null,
-  };
-  const attachmentTypes = new Set(
-    PARTY_OUTREACH_ATTACHMENTS[input.party] ?? [],
+    agentDb,
+    (message) => sendOnPartyThread(message),
   );
-  const packFiles = engagement.documents
-    .filter((document) => attachmentTypes.has(document.documentType))
-    .flatMap((document) => document.files);
-  const extras = await resolveExtraAttachments(
-    input.projectId,
-    input.extraAttachmentIds,
-  );
-  const packIds = new Set(packFiles.map((file) => file.id));
-  const attachments = [
-    ...packFiles,
-    ...extras.filter((file) => !packIds.has(file.id)),
-  ].map((file) => ({ name: file.filename, url: file.url }));
-  await sendOnPartyThread({
-    engagement: {
-      id: engagement.id,
-      subjectAddress: engagement.subjectAddress,
-    },
-    outreach: reviewedOutreach,
-    body: sanitizeLeadNotesHtml(input.body),
-    attachments,
-  });
-  await prisma.complianceOutreach.update({
-    where: { id: outreach.id },
-    data: { status: ComplianceOutreachStatus.SENT, sentAt: new Date() },
-  });
-  return {
-    outreachId: outreach.id,
-    recipient: input.contactEmail,
-    attachmentCount: attachments.length,
-  };
 }
 
 export async function sendAuthorizedComplianceOutreach(
@@ -712,7 +541,7 @@ export async function sendAuthorizedComplianceOutreach(
       deliverableCount: input.deliverables.length,
     },
     execute: async () => {
-      const result = await sendComplianceOutreachDirect(input);
+      const result = await sendComplianceOutreachDirect(input, actor, ctx.callId);
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -727,40 +556,17 @@ async function sendComplianceFollowUpDirect(input: {
   alertId: string;
   body: string;
   projectId: string;
-}) {
-  const engagement = await loadComplianceEngagement(input.projectId);
-  if (!engagement)
-    throw new Error("This project has no compliance engagement yet.");
-  const alert = engagement.alerts.find(
-    (candidate) => candidate.id === input.alertId,
-  );
-  if (!alert || alert.status !== ComplianceAlertStatus.OPEN)
-    throw new Error("That SLA alert is not open on this project.");
-  const party = COMPLIANCE_ALERT_PARTY[alert.type];
-  if (!party) throw new Error("This SLA alert has no party email follow-up.");
-  const outreach = engagement.outreaches.find(
-    (candidate) => candidate.party === party,
-  );
-  if (
-    !outreach?.contactEmail
-    || outreach.mode === ComplianceOutreachMode.SELF_SUPPLIED
-  )
-    throw new Error(
-      `No sendable ${PARTY_LABEL[party].toLowerCase()} thread is available.`,
-    );
-  await sendOnPartyThread({
-    engagement: {
-      id: engagement.id,
-      subjectAddress: engagement.subjectAddress,
+}, actor: ProjectActor, idempotencyKey: string) {
+  return sendComplianceFollowUp(
+    userPrincipal(actor),
+    {
+      ...input,
+      body: sanitizeLeadNotesHtml(input.body),
+      idempotencyKey,
     },
-    outreach,
-    body: sanitizeLeadNotesHtml(input.body),
-  });
-  await prisma.complianceOutreach.update({
-    where: { id: outreach.id },
-    data: { lastFollowUpAt: new Date() },
-  });
-  return { alertId: alert.id, party, recipient: outreach.contactEmail };
+    agentDb,
+    (message) => sendOnPartyThread(message),
+  );
 }
 
 export async function sendAuthorizedComplianceFollowUp(
@@ -779,7 +585,7 @@ export async function sendAuthorizedComplianceFollowUp(
     transactional: false,
     inputSummary: { projectId: input.projectId, alertId: input.alertId },
     execute: async () => {
-      const result = await sendComplianceFollowUpDirect(input);
+      const result = await sendComplianceFollowUpDirect(input, actor, ctx.callId);
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -798,58 +604,18 @@ async function startComplianceDirect(
     projectId: string;
     subjectAddress: string;
   },
-  db: ProjectDb = prisma,
+  actor: ProjectActor,
 ) {
-  const existing = await db.certifierEngagement.findUnique({
-    where: { projectId: input.projectId },
-    select: { id: true, status: true },
-  });
-  if (existing)
-    return {
-      ok: true as const,
-      engagementId: existing.id,
-      status: existing.status,
-      alreadyStarted: true as const,
-    };
-  const create = async (tx: ProjectDb) => {
-    const created = await tx.certifierEngagement.upsert({
-      where: { projectId: input.projectId },
-      update: {},
-      create: {
-        projectId: input.projectId,
-        refToken: generateCertifierRefToken(),
-        subjectAddress: input.subjectAddress,
-        certifierName: input.certifierName ?? null,
-        certifierEmail: input.certifierEmail,
-        certifierPhone: input.certifierPhone ?? null,
-        graphMailbox: GraphMailbox.ADMIN,
-        status: CertifierEngagementStatus.COLLECTING_DOCS,
-        documents: {
-          create: REQUIRED_COMPLIANCE_DOCUMENTS.map((document, order) => ({
-            documentType: document.type,
-            status: ComplianceDocumentStatus.PENDING,
-            order,
-          })),
-        },
-      },
-      select: { id: true, status: true },
-    });
-    await tx.project.updateMany({
-      where: {
-        id: input.projectId,
-        status: { in: ["DRAFT", "NEEDS_ATTENTION"] },
-      },
-      data: { status: "COMPLIANCE_STARTED" },
-    });
-    return created;
-  };
-  const engagement =
-    db === prisma ? await prisma.$transaction(create) : await create(db);
+  const { engagement, alreadyStarted } = await startComplianceEngagement(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
   return {
     ok: true as const,
     engagementId: engagement.id,
     status: engagement.status,
-    alreadyStarted: false as const,
+    alreadyStarted,
   };
 }
 
@@ -876,8 +642,9 @@ export async function startAuthorizedCompliance(
       projectId: input.projectId,
       certifierEmail: input.certifierEmail,
     },
-    execute: async (tx) => {
-      const result = await startComplianceDirect(input, tx);
+    transactional: false,
+    execute: async () => {
+      const result = await startComplianceDirect(input, actor);
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,
@@ -907,7 +674,7 @@ async function resolveComplianceDocumentDirect(
     rejectionReason?: string;
   },
   actor: ProjectActor,
-  db: ProjectDb = prisma,
+  db: ProjectDb = agentDb,
 ) {
   try {
     const outcome = await resolveComplianceDocumentDomain(
@@ -968,41 +735,14 @@ export async function resolveAuthorizedComplianceDocument(
 
 async function setComplianceDocumentRequiredDirect(
   input: { documentId: string; notRequired: boolean; projectId: string },
-  db: ProjectDb = prisma,
+  actor: ProjectActor,
+  db: ProjectDb = agentDb,
 ) {
-  const document = await db.complianceDocument.findFirst({
-    where: { id: input.documentId, engagement: { projectId: input.projectId } },
-    select: {
-      id: true,
-      documentType: true,
-      status: true,
-      _count: { select: { files: true } },
-    },
-  });
-  if (!document)
-    throw new Error("Compliance document not found on this project.");
-  const isDa =
-    document.documentType === ComplianceDocumentType.DA_ITEM
-    || DA_DOCUMENTS.some((item) => item.type === document.documentType);
-  if (document.documentType !== ComplianceDocumentType.CHECKLIST_ITEM && !isDa)
-    throw new Error(
-      "Only checklist and conditional DA rows can be marked not required.",
-    );
-  if (document.status === ComplianceDocumentStatus.APPROVED)
-    throw new Error("An approved compliance row cannot be reopened.");
-  const status = input.notRequired
-    ? ComplianceDocumentStatus.NOT_REQUIRED
-    : document._count.files > 0
-      ? ComplianceDocumentStatus.UPLOADED
-      : ComplianceDocumentStatus.PENDING;
-  const updated = await db.complianceDocument.updateMany({
-    where: {
-      id: document.id,
-      status: { not: ComplianceDocumentStatus.APPROVED },
-    },
-    data: { status },
-  });
-  return { ok: true as const, changed: updated.count === 1, status };
+  return setComplianceDocumentNotRequired(
+    userPrincipal(actor),
+    input,
+    db,
+  );
 }
 
 export async function setAuthorizedComplianceDocumentRequired(
@@ -1020,7 +760,11 @@ export async function setAuthorizedComplianceDocumentRequired(
     targetId: input.documentId,
     inputSummary: input as unknown as Prisma.InputJsonValue,
     execute: async (tx) => {
-      const result = await setComplianceDocumentRequiredDirect(input, tx);
+      const result = await setComplianceDocumentRequiredDirect(
+        input,
+        actor,
+        tx ?? agentDb,
+      );
       return actionEnvelope({
         entityRef: projectReference(project),
         data: result,

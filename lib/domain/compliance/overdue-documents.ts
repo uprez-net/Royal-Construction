@@ -1,3 +1,4 @@
+// Shared overdue-document decisions for UI, cron, and agent callers.
 import {
   ComplianceAlertStatus,
   ComplianceAlertType,
@@ -10,7 +11,7 @@ import {
   EXTERNAL_APPLICATION_DOCUMENT_TYPE,
   isNotRequired,
 } from "@/constants/complianceDocuments";
-import { COMPLIANCE_ALERT_PARTY } from "@/lib/compliance/alert-parties";
+import { COMPLIANCE_ALERT_PARTY } from "./alert-parties";
 import {
   outreachForParty,
   type CertifierEngagementDetail,
