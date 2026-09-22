@@ -32,7 +32,7 @@ import type { AgentSubagentRun } from "@/components/agent/agent-reducer";
 import type { AgentResultAction } from "@/components/agent/agent-result";
 import { AgentSubagentPanel } from "@/components/agent/agent-subagent-panel";
 import { AgentToolCall } from "@/components/agent/agent-tool-call";
-import type { AgentAnnotation } from "./agent-annotations";
+import type { AgentAnnotation } from "@/components/agent/agent-mentions";
 
 export type { AgentInputResponse };
 

@@ -1,17 +1,7 @@
 "use client";
 
 import type { EveMessage, UseEveAgentStatus } from "eve/react";
-import {
-  ArrowDown,
-  Bot,
-  CircleStop,
-  GitFork,
-  Layers,
-  LoaderCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Sparkles,
-} from "lucide-react";
+import { ArrowDown, Layers, LoaderCircle, Sparkles } from "lucide-react";
 import type { RefObject } from "react";
 import { useMemo } from "react";
 import { AgentApprovalBar } from "@/components/agent/agent-approval-bar";
@@ -24,10 +14,8 @@ import type {
   AgentTurn,
 } from "@/components/agent/agent-reducer";
 import type { AgentResultAction } from "@/components/agent/agent-result";
-import { AgentSessionMeter } from "@/components/agent/agent-session-meter";
-import type { AgentAnnotation } from "@/components/agent/agent-annotations";
+import type { AgentAnnotation } from "@/components/agent/agent-mentions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -37,7 +25,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
   "Find the latest offer for a client",
@@ -51,22 +38,18 @@ export function AgentTranscript({
   archiveError,
   busy,
   data,
-  forkConversation,
   handleMessageScroll,
-  historyOpen,
   messageAnnotations,
   onAction,
-  onCancel,
   onEditMessage,
   onRespond,
   onRetry,
   onSuggestion,
-  onToggleHistory,
   pendingMessageAnnotations,
   scrollToBottom,
   sendError,
+  showApprovalBar,
   showScrollToBottom,
-  statusLabel,
   viewportRef,
 }: {
   agentError: Error | null;
@@ -74,22 +57,18 @@ export function AgentTranscript({
   archiveError: string | null;
   busy: boolean;
   data: AgentTranscriptData;
-  forkConversation: () => void;
   handleMessageScroll: (event: React.UIEvent<HTMLDivElement>) => void;
-  historyOpen: boolean;
   messageAnnotations: Record<string, AgentAnnotation[]>;
   onAction: (action: AgentResultAction) => Promise<void>;
-  onCancel: () => void;
   onEditMessage: (messageId: string, text: string) => void;
   onRespond: (responses: readonly AgentInputResponse[]) => Promise<void>;
   onRetry: () => void;
   onSuggestion: (suggestion: string) => void;
-  onToggleHistory: () => void;
   pendingMessageAnnotations: AgentAnnotation[] | null;
   scrollToBottom: () => void;
   sendError: string | null;
+  showApprovalBar: boolean;
   showScrollToBottom: boolean;
-  statusLabel: string;
   viewportRef: RefObject<HTMLDivElement | null>;
 }) {
   const turnsById = useMemo(
@@ -108,224 +87,155 @@ export function AgentTranscript({
   }, [data.subagents]);
 
   return (
-    <div className="order-1 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:order-2">
-      <header className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3 sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            aria-controls="agent-conversation-history"
-            aria-expanded={historyOpen}
-            aria-label={
-              historyOpen
-                ? "Collapse conversation history"
-                : "Expand conversation history"
-            }
-            onClick={onToggleHistory}
-            size="icon-sm"
-            type="button"
-            variant="outline"
-          >
-            {historyOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-          </Button>
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-royal-gold-light text-royal-gold-ink">
-            <Bot aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="font-heading truncate text-base font-semibold text-foreground sm:text-lg">
-              Operations desk
-            </h1>
-            <p className="truncate text-xs text-muted-foreground">
-              Leads, offers and controlled business actions
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <AgentSessionMeter usage={data.usage} />
-          <Badge variant="outline">
-            <span
-              className={cn(
-                "size-1.5 rounded-full",
-                busy
-                  ? "animate-pulse bg-royal-gold"
-                  : agentStatus === "error"
-                    ? "bg-destructive"
-                    : "bg-emerald-600",
-              )}
-            />
-            {statusLabel}
-          </Badge>
-          {busy ? (
-            <Button
-              onClick={onCancel}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <CircleStop data-icon="inline-start" />
-              <span className="hidden sm:inline">Stop</span>
-            </Button>
-          ) : null}
-          {data.messages.length > 0 ? (
-            <Button
-              aria-label="Fork conversation"
-              onClick={forkConversation}
-              size="icon-sm"
-              type="button"
-              variant="outline"
-            >
-              <GitFork />
-            </Button>
-          ) : null}
-        </div>
-      </header>
-
-      <div className="relative min-h-0 overflow-hidden">
-        <div
-          className="absolute inset-0 overflow-y-auto overscroll-contain"
-          onScroll={handleMessageScroll}
-          ref={viewportRef}
-        >
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
-            {data.messages.length === 0 && agentStatus !== "resuming" ? (
-              <Empty className="min-h-96 border-0">
-                <EmptyHeader>
-                  <EmptyMedia
-                    className="size-12 rounded-xl bg-royal-gold-light text-royal-gold-ink"
-                    variant="icon"
-                  >
-                    <Sparkles aria-hidden="true" />
-                  </EmptyMedia>
-                  <EmptyTitle className="text-xl">
-                    What needs moving today?
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    Ask for a live business lookup. The agent will show the
-                    exact target and ask before any controlled action.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent className="max-w-xl sm:grid sm:grid-cols-3">
-                  {SUGGESTIONS.map((suggestion) => (
-                    <Button
-                      className="h-auto min-h-16 w-full justify-start whitespace-normal px-3 py-2 text-left"
-                      key={suggestion}
-                      onClick={() => onSuggestion(suggestion)}
-                      type="button"
-                      variant="outline"
-                    >
-                      {suggestion}
-                    </Button>
-                  ))}
-                </EmptyContent>
-              </Empty>
-            ) : null}
-
-            {agentStatus === "resuming" ? (
-              <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
-                <span className="size-2 animate-pulse rounded-full bg-royal-gold" />
-                Restoring conversation…
-              </div>
-            ) : null}
-
-            {data.messages.map((message) => {
-              const turnId = message.metadata?.turnId;
-              const turn = turnId ? turnsById.get(turnId) : undefined;
-              return (
-                <div className="flex flex-col gap-3" key={message.id}>
-                  <AgentMessage
-                    annotations={
-                      messageAnnotations[message.id]
-                      ?? (message.metadata?.optimistic
-                        ? (pendingMessageAnnotations ?? undefined)
-                        : undefined)
-                    }
-                    canRespond={!busy}
-                    isStreaming={agentStatus === "streaming"}
-                    labels={data.labels}
-                    message={message}
-                    onAction={onAction}
-                    onEditMessage={onEditMessage}
-                    onInputResponses={onRespond}
-                    subagents={
-                      message.role === "assistant" && turnId
-                        ? (subagentsByTurn.get(turnId) ?? [])
-                        : []
-                    }
-                    timestamp={messageTime(message, turn)}
-                    toolTimes={toolTimes(turn)}
-                  />
-                  {message.role === "assistant" ? (
-                    <TurnOutcome turn={turn} />
-                  ) : null}
-                </div>
-              );
-            })}
-
-            {data.compaction?.status === "requested" ? (
-              <p className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                <Layers aria-hidden="true" className="size-3.5" />
-                Summarising earlier messages to make room — nothing is lost from
-                the record.
-              </p>
-            ) : null}
-
-            {agentStatus === "streaming" ? (
-              <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                <LoaderCircle className="size-3.5 animate-spin" />
-                Live response · assembling the next operation step…
-              </div>
-            ) : null}
-
-            {agentError ? (
-              <Alert variant="destructive">
-                <AlertTitle>The agent could not continue</AlertTitle>
-                <AlertDescription className="flex flex-wrap items-center gap-3">
-                  <span>{agentError.message}</span>
+    <div className="relative min-h-0 overflow-hidden">
+      <div
+        className="absolute inset-0 overflow-y-auto overscroll-contain"
+        onScroll={handleMessageScroll}
+        ref={viewportRef}
+      >
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
+          {data.messages.length === 0 && agentStatus !== "resuming" ? (
+            <Empty className="min-h-96 border-0">
+              <EmptyHeader>
+                <EmptyMedia
+                  className="size-12 rounded-xl bg-royal-gold-light text-royal-gold-ink"
+                  variant="icon"
+                >
+                  <Sparkles aria-hidden="true" />
+                </EmptyMedia>
+                <EmptyTitle className="text-xl">
+                  What needs moving today?
+                </EmptyTitle>
+                <EmptyDescription>
+                  Ask for a live business lookup. The agent will show the exact
+                  target and ask before any controlled action.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent className="max-w-xl sm:grid sm:grid-cols-3">
+                {SUGGESTIONS.map((suggestion) => (
                   <Button
-                    onClick={onRetry}
-                    size="sm"
+                    className="h-auto min-h-16 w-full justify-start whitespace-normal px-3 py-2 text-left"
+                    key={suggestion}
+                    onClick={() => onSuggestion(suggestion)}
                     type="button"
                     variant="outline"
                   >
-                    Reconnect
+                    {suggestion}
                   </Button>
-                </AlertDescription>
-              </Alert>
-            ) : null}
+                ))}
+              </EmptyContent>
+            </Empty>
+          ) : null}
 
-            {sendError ? (
-              <Alert variant="destructive">
-                <AlertTitle>The message could not be sent</AlertTitle>
-                <AlertDescription>{sendError}</AlertDescription>
-              </Alert>
-            ) : null}
+          {agentStatus === "resuming" ? (
+            <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
+              <span className="size-2 animate-pulse rounded-full bg-royal-gold" />
+              Restoring conversation…
+            </div>
+          ) : null}
 
-            {archiveError ? (
-              <Alert variant="destructive">
-                <AlertTitle>The conversation could not be archived</AlertTitle>
-                <AlertDescription>{archiveError}</AlertDescription>
-              </Alert>
-            ) : null}
-          </div>
+          {data.messages.map((message) => {
+            const turnId = message.metadata?.turnId;
+            const turn = turnId ? turnsById.get(turnId) : undefined;
+            return (
+              <div className="flex flex-col gap-3" key={message.id}>
+                <AgentMessage
+                  annotations={
+                    messageAnnotations[message.id]
+                    ?? (message.metadata?.optimistic
+                      ? (pendingMessageAnnotations ?? undefined)
+                      : undefined)
+                  }
+                  canRespond={!busy}
+                  isStreaming={agentStatus === "streaming"}
+                  labels={data.labels}
+                  message={message}
+                  onAction={onAction}
+                  onEditMessage={onEditMessage}
+                  onInputResponses={onRespond}
+                  subagents={
+                    message.role === "assistant" && turnId
+                      ? (subagentsByTurn.get(turnId) ?? [])
+                      : []
+                  }
+                  timestamp={messageTime(message, turn)}
+                  toolTimes={toolTimes(turn)}
+                />
+                {message.role === "assistant" ? (
+                  <TurnOutcome turn={turn} />
+                ) : null}
+              </div>
+            );
+          })}
+
+          {data.compaction?.status === "requested" ? (
+            <p className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <Layers aria-hidden="true" className="size-3.5" />
+              Summarising earlier messages to make room — nothing is lost from
+              the record.
+            </p>
+          ) : null}
+
+          {agentStatus === "streaming" ? (
+            <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <LoaderCircle className="size-3.5 animate-spin" />
+              Live response · assembling the next operation step…
+            </div>
+          ) : null}
+
+          {agentError ? (
+            <Alert variant="destructive">
+              <AlertTitle>The agent could not continue</AlertTitle>
+              <AlertDescription className="flex flex-wrap items-center gap-3">
+                <span>{agentError.message}</span>
+                <Button
+                  onClick={onRetry}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Reconnect
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {sendError ? (
+            <Alert variant="destructive">
+              <AlertTitle>The message could not be sent</AlertTitle>
+              <AlertDescription>{sendError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {archiveError ? (
+            <Alert variant="destructive">
+              <AlertTitle>The conversation could not be archived</AlertTitle>
+              <AlertDescription>{archiveError}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
+      </div>
 
+      {showApprovalBar ? (
         <AgentApprovalBar
           approvals={data.pendingApprovals}
           viewportRef={viewportRef}
         />
+      ) : null}
 
-        {showScrollToBottom ? (
-          <Button
-            aria-label="Scroll to the latest message"
-            className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border-border/80 bg-white/95 text-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:bg-royal-gold-light"
-            onClick={scrollToBottom}
-            size="icon-sm"
-            title="Scroll to latest message"
-            type="button"
-            variant="outline"
-          >
-            <ArrowDown aria-hidden="true" />
-          </Button>
-        ) : null}
-      </div>
+      {showScrollToBottom ? (
+        <Button
+          aria-label="Scroll to the latest message"
+          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border-border/80 bg-white/95 text-foreground shadow-lg backdrop-blur transition hover:-translate-y-0.5 hover:bg-royal-gold-light"
+          onClick={scrollToBottom}
+          size="icon-sm"
+          title="Scroll to latest message"
+          type="button"
+          variant="outline"
+        >
+          <ArrowDown aria-hidden="true" />
+        </Button>
+      ) : null}
     </div>
   );
 }

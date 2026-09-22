@@ -4,16 +4,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEveAgent } from "eve/react";
 import type { MessageStreamEvent } from "eve/client";
-import type { AgentAnnotation } from "@/components/agent/agent-annotations";
 import type { AgentInputResponse } from "@/components/agent/agent-approval";
 import { AgentComposer } from "@/components/agent/agent-composer";
+import { AgentHeader } from "@/components/agent/agent-header";
 import { AgentHistory } from "@/components/agent/agent-history";
+import { AgentInspector } from "@/components/agent/agent-inspector";
+import type { AgentAnnotation } from "@/components/agent/agent-mentions";
 import {
   agentTranscriptReducer,
   type AgentTranscriptData,
 } from "@/components/agent/agent-reducer";
 import type { AgentResultAction } from "@/components/agent/agent-result";
 import { AgentTranscript } from "@/components/agent/agent-transcript";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import type {
   AgentSessionListItem,
   AgentWorkspaceData,
@@ -44,9 +54,6 @@ export function AgentWorkspace({
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [annotations, setAnnotations] = useState<AgentAnnotation[]>([]);
-  const [annotationResults, setAnnotationResults] = useState<AgentAnnotation[]>(
-    [],
-  );
   const [messageAnnotations, setMessageAnnotations] = useState<
     Record<string, AgentAnnotation[]>
   >(() => hydrateAnnotations(initialAnnotationsByTurn));
@@ -59,7 +66,10 @@ export function AgentWorkspace({
       : sessionStorage.getItem("rc-agent-fork-context"),
   );
   const [sessions, setSessions] = useState(initialSessions);
-  const [historyOpen, setHistoryOpen] = useState(true);
+  // Rails are the wide-screen panes; `sheet` is the narrow-screen drawer. Kept
+  // apart so a phone never mounts a drawer just because a rail defaults open.
+  const [rails, setRails] = useState({ history: true, inspector: true });
+  const [sheet, setSheet] = useState<"history" | "inspector" | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -168,10 +178,6 @@ export function AgentWorkspace({
     !busy
     && !uploading
     && (composer.trim().length > 0 || attachments.length > 0);
-  const annotationQuery = useMemo(
-    () => composer.match(/(?:^|\s)@([^\s@]*)$/)?.[1] ?? "",
-    [composer],
-  );
   const statusLabel = useMemo(
     () => agentStatusLabel(agent.status),
     [agent.status],
@@ -205,28 +211,6 @@ export function AgentWorkspace({
     );
     return () => window.cancelAnimationFrame(frame);
   }, [agent.data, agent.status]);
-
-  useEffect(() => {
-    if (annotationQuery.length < 2) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void fetch(
-        `/api/agent/annotations?q=${encodeURIComponent(annotationQuery)}`,
-        { signal: controller.signal },
-      )
-        .then((response) =>
-          response.ok ? response.json() : { annotations: [] },
-        )
-        .then((payload: { annotations?: AgentAnnotation[] }) =>
-          setAnnotationResults(payload.annotations ?? []),
-        )
-        .catch(() => undefined);
-    }, 180);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [annotationQuery]);
 
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";
@@ -321,18 +305,6 @@ export function AgentWorkspace({
     );
   }
 
-  function selectAnnotation(annotation: AgentAnnotation) {
-    setAnnotations((current) =>
-      current.some(
-        (item) => item.id === annotation.id && item.type === annotation.type,
-      )
-        ? current
-        : [...current, annotation],
-    );
-    setComposer((current) => current.replace(/(?:^|\s)@[^\s@]*$/, " "));
-    setAnnotationResults([]);
-  }
-
   function forkConversation() {
     const transcript = agent.data.messages
       .flatMap((message) =>
@@ -389,63 +361,144 @@ export function AgentWorkspace({
     }
   }
 
+  const wideEnoughForHistory = useMediaQuery("(min-width: 768px)");
+  const wideEnoughForInspector = useMediaQuery("(min-width: 1280px)");
+  const historyRailOpen = wideEnoughForHistory && rails.history;
+  const inspectorRailOpen = wideEnoughForInspector && rails.inspector;
+
+  function togglePane(pane: "history" | "inspector") {
+    const docked =
+      pane === "history" ? wideEnoughForHistory : wideEnoughForInspector;
+    if (docked) setRails((current) => ({ ...current, [pane]: !current[pane] }));
+    else setSheet((current) => (current === pane ? null : pane));
+  }
+
+  const history = (
+    <AgentHistory
+      activeSessionId={activeSessionId}
+      activeSessionTitle={activeSessionTitle}
+      initialSessions={initialSessions}
+      onArchive={archiveSession}
+      onNavigate={() => setSheet(null)}
+      sessions={sessions}
+    />
+  );
+
+  const inspector = (
+    <AgentInspector
+      data={agent.data}
+      onClose={() =>
+        wideEnoughForInspector
+          ? setRails((current) => ({ ...current, inspector: false }))
+          : setSheet(null)
+      }
+      viewportRef={viewportRef}
+    />
+  );
+
   return (
-    <section
-      className={`grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 ${historyOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[0_minmax(0,1fr)]"}`}
-    >
-      <AgentHistory
-        activeSessionId={activeSessionId}
-        activeSessionTitle={activeSessionTitle}
-        historyOpen={historyOpen}
-        initialSessions={initialSessions}
-        onArchive={archiveSession}
-        sessions={sessions}
-      />
-      <AgentTranscript
-        agentError={agent.error ?? null}
+    <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+      <AgentHeader
         agentStatus={agent.status}
-        archiveError={archiveError}
         busy={busy}
-        data={agent.data}
-        forkConversation={forkConversation}
-        handleMessageScroll={handleMessageScroll}
-        historyOpen={historyOpen}
-        messageAnnotations={messageAnnotations}
-        onAction={runAction}
+        canFork={agent.data.messages.length > 0}
+        historyOpen={historyRailOpen || sheet === "history"}
+        inspectorOpen={inspectorRailOpen || sheet === "inspector"}
         onCancel={() => void agent.cancel()}
-        onEditMessage={editMessage}
-        onRespond={respond}
-        onRetry={() => void agent.resume()}
-        onSuggestion={(suggestion) => void sendMessage(suggestion)}
-        onToggleHistory={() => setHistoryOpen((open) => !open)}
-        pendingMessageAnnotations={pendingMessageAnnotations}
-        scrollToBottom={scrollToBottom}
-        sendError={sendError}
-        showScrollToBottom={showScrollToBottom}
+        onFork={forkConversation}
+        onToggleHistory={() => togglePane("history")}
+        onToggleInspector={() => togglePane("inspector")}
+        pendingCount={agent.data.pendingApprovals.length}
+        sessionTitle={activeSessionTitle}
         statusLabel={statusLabel}
-        viewportRef={viewportRef}
+        usage={agent.data.usage}
       />
-      <AgentComposer
-        annotations={annotations}
-        annotationQuery={annotationQuery}
-        annotationResults={annotationResults}
-        attachments={attachments}
-        canSend={canSend}
-        composer={composer}
-        composerRef={composerRef}
-        disabled={agent.status === "resuming"}
-        editingMessageId={editingMessageId}
-        onCancelEdit={() => {
-          setEditingMessageId(null);
-          setComposer("");
-        }}
-        onChange={setComposer}
-        onSend={() => void sendMessage(composer)}
-        selectAnnotation={selectAnnotation}
-        setAnnotations={setAnnotations}
-        setAttachments={setAttachments}
-        uploading={uploading}
-      />
+
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {historyRailOpen ? (
+          <div className="w-72 shrink-0 border-r border-border/70">
+            {history}
+          </div>
+        ) : null}
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <AgentTranscript
+            agentError={agent.error ?? null}
+            agentStatus={agent.status}
+            archiveError={archiveError}
+            busy={busy}
+            data={agent.data}
+            handleMessageScroll={handleMessageScroll}
+            messageAnnotations={messageAnnotations}
+            onAction={runAction}
+            onEditMessage={editMessage}
+            onRespond={respond}
+            onRetry={() => void agent.resume()}
+            onSuggestion={(suggestion) => void sendMessage(suggestion)}
+            pendingMessageAnnotations={pendingMessageAnnotations}
+            scrollToBottom={scrollToBottom}
+            sendError={sendError}
+            // The inspector already shows what is waiting, so the floating bar
+            // is only needed when the inspector is not on screen.
+            showApprovalBar={!inspectorRailOpen}
+            showScrollToBottom={showScrollToBottom}
+            viewportRef={viewportRef}
+          />
+          <AgentComposer
+            annotations={annotations}
+            attachments={attachments}
+            canSend={canSend}
+            composer={composer}
+            composerRef={composerRef}
+            disabled={agent.status === "resuming"}
+            editingMessageId={editingMessageId}
+            onCancelEdit={() => {
+              setEditingMessageId(null);
+              setComposer("");
+            }}
+            onChange={setComposer}
+            onSend={() => void sendMessage(composer)}
+            setAnnotations={setAnnotations}
+            setAttachments={setAttachments}
+            uploading={uploading}
+          />
+        </div>
+
+        {inspectorRailOpen ? (
+          <div className="w-80 shrink-0">{inspector}</div>
+        ) : null}
+      </div>
+
+      <Sheet
+        onOpenChange={(open) => setSheet(open ? "history" : null)}
+        open={sheet === "history"}
+      >
+        <SheetContent className="w-76 p-0" side="left">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Conversations</SheetTitle>
+            <SheetDescription>
+              Switch between your agent conversations.
+            </SheetDescription>
+          </SheetHeader>
+          {history}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        onOpenChange={(open) => setSheet(open ? "inspector" : null)}
+        open={sheet === "inspector"}
+      >
+        <SheetContent className="w-84 p-0" side="right">
+          <SheetHeader className="sr-only">
+            <SheetTitle>This session</SheetTitle>
+            <SheetDescription>
+              What the agent needs from you, what it has delegated, and what it
+              has spent.
+            </SheetDescription>
+          </SheetHeader>
+          {inspector}
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }
