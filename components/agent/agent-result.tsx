@@ -7,6 +7,19 @@ import {
   AgentOutreach,
   type AgentOutreachDetails,
 } from "@/components/agent/agent-outreach";
+import {
+  AgentWhatsAppDraftView,
+  AgentWhatsAppMessageView,
+  AgentWhatsAppThreadView,
+} from "@/components/agent/agent-whatsapp";
+import {
+  readWhatsAppDraft,
+  readWhatsAppMessage,
+  readWhatsAppThread,
+  type AgentWhatsAppDraft,
+  type AgentWhatsAppMessage,
+  type AgentWhatsAppThread,
+} from "@/components/agent/agent-whatsapp-format";
 import { isInternalHref } from "@/utils/safe-links";
 
 export type AgentResultAction = {
@@ -21,6 +34,12 @@ export type AgentResultEnvelope = {
   actions: AgentResultAction[];
   links: { href: string; label: string }[];
   outreach: AgentOutreachDetails | null;
+  /** A lead's WhatsApp conversation (`get_lead_whatsapp`). */
+  whatsapp: AgentWhatsAppThread | null;
+  /** A WhatsApp message previewed but not sent. */
+  whatsappDraft: AgentWhatsAppDraft | null;
+  /** The message a WhatsApp send stored, sent or replayed. */
+  whatsappMessage: AgentWhatsAppMessage | null;
   summary: string;
   title: string;
   warnings: string[];
@@ -109,6 +128,9 @@ export function resultEnvelope(value: unknown): AgentResultEnvelope | null {
       typeof candidate.kind === "string" ? candidate.kind : "entity-summary",
     links,
     outreach: readOutreach(data.outreach),
+    whatsapp: readWhatsAppThread(data.whatsapp),
+    whatsappDraft: readWhatsAppDraft(data.whatsappDraft),
+    whatsappMessage: readWhatsAppMessage(data.message),
     requiresApproval: candidate.requiresApproval === true,
     summary: candidate.summary,
     title: candidate.title,
@@ -221,6 +243,16 @@ export function AgentResult({
       ) : null}
 
       {result.outreach ? <AgentOutreach outreach={result.outreach} /> : null}
+
+      {result.whatsappDraft ? (
+        <AgentWhatsAppDraftView draft={result.whatsappDraft} />
+      ) : result.whatsapp ? (
+        <AgentWhatsAppThreadView thread={result.whatsapp} />
+      ) : null}
+
+      {result.whatsappMessage ? (
+        <AgentWhatsAppMessageView message={result.whatsappMessage} />
+      ) : null}
 
       {result.warnings.length > 0 ? (
         <div className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950">
