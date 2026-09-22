@@ -116,7 +116,7 @@ function catchesAndAnswers(file: string): boolean {
  * mapper for refusals that never arrive.
  */
 const COMPLIANCE_PHASE_5 =
-  "compliance is phase 5 and still throws bare Errors from lib/data/compliance*; a mapper here would catch refusals that do not exist yet";
+  "phase 5 moved this route's rules into lib/domain/compliance, so it now has real typed refusals to surface and this entry is a to-do, not a justification: it still catches and answers with its own message. The sibling routes that were converted (parties, parties/reply, alerts, alerts/[alertId]/follow-up, development-application/requirement, documents/[documentId]/not-required) show the shape — call domainErrorResponse before the generic 500";
 const LEADS_RESULT_SHAPE =
   "answers with its own {ok,error} result the lead screens already read; the refusal reaches the operator, just not through the shared mapper (worth reconciling when the lead routes are revisited)";
 const MACHINE_CALLER =
