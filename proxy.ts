@@ -44,6 +44,7 @@ const isPublicRoute = createRouteMatcher([
   "/eve/v1(.*)",
 ]);
 const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
+const isEvalAuthRoute = createRouteMatcher(["/api/eval/auth(.*)"]);
 const isDevAuthRoute = createRouteMatcher([
   "/dev/sign-in(.*)",
   "/api/dev/(.*)",
@@ -55,6 +56,11 @@ const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 // mod.default`, so exporting the handler as `proxy` is the non-deprecated
 // form — keep it the only handler export, multiple are not supported.
 export const proxy = clerkMiddleware(async (auth, request) => {
+  // The staging evaluator authenticates with its own header and secret. It
+  // must reach the route before Clerk's browser/session protection, which
+  // would turn its structured 401/404 response into an auth redirect.
+  if (isEvalAuthRoute(request)) return;
+
   // Dev auth routes always pass through — they create the session
   if (isDevAuthRoute(request)) return;
 
