@@ -44,7 +44,7 @@ import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type OfferAcceptanceSendResult =
   | { ok: true; reference: string; envelopeId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: "OFFER_SENT" };
 
 const isValidEmail = (value: string): boolean =>
   /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
@@ -452,8 +452,11 @@ export async function sendOfferForSignature(input: {
   // message with a generic one in production, and the estimator needs the
   // envelope id and the instruction not to resend.
   if (typeof stillClaimed === "object") {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    await syncLeadStageForOffer(offer.id);
     return {
       ok: false,
+      status: OfferStatus.OFFER_SENT,
       error: `The offer was sent for signature (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }

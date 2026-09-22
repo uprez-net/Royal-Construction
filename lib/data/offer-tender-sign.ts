@@ -45,7 +45,7 @@ import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; status?: "TENDER_SENT" };
 
 // Generate the Tender PDF from the frozen workspace snapshot and send it as a
 // runtime DocuSign envelope (no template): signature tabs AutoPlace onto the
@@ -466,8 +466,11 @@ export async function sendTenderForSignature(input: {
   // message with a generic one in production, and the estimator needs the
   // envelope id and the instruction not to resend.
   if (typeof stillClaimed === "object") {
+    revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
+    await syncLeadStageForOffer(offer.id);
     return {
       ok: false,
+      status: OfferStatus.TENDER_SENT,
       error: `The Tender was sent (DocuSign envelope ${envelope.envelopeId}) but recording it failed. Do not resend — reconcile this envelope before continuing.`,
     };
   }
