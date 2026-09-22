@@ -29,9 +29,26 @@ function setOutput(name, value) {
   }
 }
 
+/**
+ * Whether the Next.js build must run.
+ *
+ * A merged-PR push deliberately skips the quality suite but still deploys. If
+ * the build is skipped with it, that commit produces no `.next/cache` entry and
+ * the deployment's `vercel build` starts cold with nothing to warm it — the
+ * second gap in issue #327. The build is therefore tied to deployability rather
+ * than to the quality gate.
+ *
+ * @param {Decision} decision
+ */
+function shouldRunNextBuild(decision) {
+  return decision.runChecks || decision.deploy;
+}
+
 /** @param {Decision} decision */
 function publish(decision) {
+  const runNextBuild = shouldRunNextBuild(decision);
   setOutput("run_checks", String(decision.runChecks));
+  setOutput("run_next_build", String(runNextBuild));
   setOutput("deploy", String(decision.deploy));
   setOutput("reason", decision.reason);
   setOutput("changed_files", String(decision.changedFiles));
@@ -42,6 +59,7 @@ function publish(decision) {
       `${JSON.stringify(
         {
           runChecks: decision.runChecks,
+          runNextBuild,
           deploy: decision.deploy,
           reason: decision.reason,
           changedFiles: decision.changedFiles,
@@ -55,6 +73,7 @@ function publish(decision) {
   console.log(
     `CI decision: ${decision.reason}; ${decision.changedFiles} changed file(s); ` +
       `${decision.runChecks ? "run" : "skip"} quality checks; ` +
+      `${runNextBuild ? "run" : "skip"} the Next.js build; ` +
       `${decision.deploy ? "allow" : "skip"} deployment.`,
   );
 }
