@@ -24,9 +24,6 @@ import {
  * run against. Nothing else is worth handing to whoever is holding the secret.
  */
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 const limiter = createFixedWindowRateLimiter({
   limit: EVAL_AUTH_REQUEST_LIMIT,
   windowMs: EVAL_AUTH_WINDOW_MS,

@@ -23,9 +23,6 @@ import {
  * revoke-any-session primitive by whoever holds the secret.
  */
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 const limiter = createFixedWindowRateLimiter({
   limit: EVAL_AUTH_REQUEST_LIMIT,
   windowMs: EVAL_AUTH_WINDOW_MS,
