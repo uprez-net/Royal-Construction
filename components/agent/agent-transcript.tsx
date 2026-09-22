@@ -87,7 +87,7 @@ export function AgentTranscript({
   }, [data.subagents]);
 
   return (
-    <div className="relative min-h-0 overflow-hidden">
+    <div className="relative h-[60vh] overflow-hidden">
       <div
         className="absolute inset-0 overflow-y-auto overscroll-contain"
         onScroll={handleMessageScroll}

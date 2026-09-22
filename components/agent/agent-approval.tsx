@@ -48,6 +48,8 @@ export function AgentApproval({
     null,
   );
   const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [respondError, setRespondError] = useState<string | null>(null);
   const isApproval = request.kind === "tool-approval";
   const isLimit = request.kind === "session-limit";
   const outreach = isApproval ? approvalOutreach(input) : null;
@@ -64,12 +66,37 @@ export function AgentApproval({
       ? CircleAlert
       : MessageCircleQuestion;
 
+  /**
+   * Submits one response, once.
+   *
+   * Eve rejects a second response while a turn is in flight, and the double
+   * click that causes it is entirely reachable for one person: the buttons stay
+   * enabled until `canRespond` re-renders. A dropped rejection here would leave
+   * the operator believing they had approved something they had not — so the
+   * attempt is guarded locally and any refusal is shown beside the buttons
+   * rather than swallowed.
+   */
   async function respond(response: AgentInputResponse) {
-    await onRespond([response]);
-    setDecliningOptionId(null);
-    setReason("");
-    setAnswer("");
+    if (submitting) return;
+    setSubmitting(true);
+    setRespondError(null);
+    try {
+      await onRespond([response]);
+      setDecliningOptionId(null);
+      setReason("");
+      setAnswer("");
+    } catch (error) {
+      setRespondError(
+        error instanceof Error && error.message
+          ? error.message
+          : "The response could not be sent. Try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
+
+  const busy = !canRespond || submitting;
 
   return (
     <section
@@ -164,7 +191,7 @@ export function AgentApproval({
             <div className="flex flex-wrap gap-2">
               {request.options?.map((option) => (
                 <Button
-                  disabled={!canRespond}
+                  disabled={busy}
                   key={option.id}
                   onClick={() =>
                     option.style === "danger"
@@ -207,14 +234,14 @@ export function AgentApproval({
                 aria-label="Why are you declining?"
                 className="min-h-16 text-sm"
                 autoFocus
-                disabled={!canRespond}
+                disabled={busy}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Why not? The agent reads this before it tries again (optional)."
                 value={reason}
               />
               <div className="flex gap-2">
                 <Button
-                  disabled={!canRespond}
+                  disabled={busy}
                   size="sm"
                   type="submit"
                   variant="destructive"
@@ -236,6 +263,15 @@ export function AgentApproval({
             </form>
           ) : null}
 
+          {respondError ? (
+            <p
+              className="rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive"
+              role="alert"
+            >
+              {respondError}
+            </p>
+          ) : null}
+
           {acceptsText && decliningOptionId === null ? (
             <form
               className="flex gap-2"
@@ -248,16 +284,12 @@ export function AgentApproval({
             >
               <Input
                 aria-label="Your response"
-                disabled={!canRespond}
+                disabled={busy}
                 onChange={(event) => setAnswer(event.target.value)}
                 placeholder="Type your response"
                 value={answer}
               />
-              <Button
-                disabled={!canRespond || !answer.trim()}
-                size="sm"
-                type="submit"
-              >
+              <Button disabled={busy || !answer.trim()} size="sm" type="submit">
                 Send
               </Button>
             </form>

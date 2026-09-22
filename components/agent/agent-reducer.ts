@@ -259,7 +259,10 @@ function reduceTranscript(
           ...run,
           childSessionId: event.data.childSessionId,
           name: run.name || event.data.name,
-          remote: event.data.remote !== undefined,
+          // `actions.requested` may already have classified this call from its
+          // `remote-agent-call` kind. This event omits `remote` for a local
+          // child, so it must not be allowed to clear that.
+          remote: event.data.remote !== undefined || run.remote,
           startedAt: run.startedAt ?? at,
           status: isTerminalSubagent(run.status) ? run.status : "delegating",
           toolName: event.data.toolName,

@@ -15,6 +15,7 @@ import {
   FileText,
   KeyRound,
   Pencil,
+  XCircle,
 } from "lucide-react";
 import {
   Message,
@@ -251,13 +252,12 @@ function AgentMessagePart({
 
 function AuthorizationPrompt({ part }: { part: EveAuthorizationPart }) {
   const complete = part.state === "completed";
+  const refused = complete && part.outcome !== "authorized";
   return (
-    <Alert
-      variant={
-        complete && part.outcome !== "authorized" ? "destructive" : "default"
-      }
-    >
-      {complete ? (
+    <Alert variant={refused ? "destructive" : "default"}>
+      {refused ? (
+        <XCircle aria-hidden="true" />
+      ) : complete ? (
         <CheckCircle2 aria-hidden="true" />
       ) : (
         <KeyRound aria-hidden="true" />

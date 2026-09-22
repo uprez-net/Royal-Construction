@@ -183,13 +183,47 @@ export async function getAgentSessionEvents(
   });
   if (rows.length > MAX_HYDRATED_EVENTS) return [];
 
-  return rows
-    .map((row) => row.payload as unknown)
-    .filter(
-      (payload) =>
-        payload !== null
-        && typeof payload === "object"
-        && !Array.isArray(payload)
-        && typeof (payload as Record<string, unknown>).type === "string",
-    );
+  const events: unknown[] = [];
+  for (const row of rows) {
+    // Stop rather than skip. `initialEvents` is a contiguous prefix, so
+    // dropping a bad row from the middle would hand Eve a gapped stream.
+    if (!isHydratableEvent(row.payload)) break;
+    events.push(row.payload);
+  }
+  return events;
+}
+
+/**
+ * Whether one persisted row is safe to replay into the client projection.
+ *
+ * The wildcard hook writes typed Eve events, but that says nothing about rows
+ * already in the table from an older shape. The reducer reads `data.turnId` and
+ * Eve deduplicates on `meta.id`, so a row missing either would either throw
+ * during hydration — taking out the operator's only view of the conversation —
+ * or replay twice.
+ */
+function isHydratableEvent(payload: unknown): boolean {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload))
+    return false;
+  const event = payload as Record<string, unknown>;
+  if (typeof event.type !== "string" || event.type.length === 0) return false;
+  // `session.completed` is the one protocol event with no payload; every other
+  // type is dereferenced by the reducer, so a missing `data` would throw.
+  if (event.type !== "session.completed") {
+    if (
+      event.data === null
+      || typeof event.data !== "object"
+      || Array.isArray(event.data)
+    )
+      return false;
+  }
+  const meta = event.meta;
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta))
+    return false;
+  const stamped = meta as Record<string, unknown>;
+  return (
+    typeof stamped.id === "string"
+    && stamped.id.length > 0
+    && typeof stamped.at === "string"
+  );
 }

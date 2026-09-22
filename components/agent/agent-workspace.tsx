@@ -216,12 +216,18 @@ export function AgentWorkspace({
     const text = message.trim() || "Please review the attached file(s).";
     if ((!message.trim() && attachments.length === 0) || busy || uploading)
       return;
+    // The turn carries this exact snapshot. Uploading a 10MB attachment takes
+    // long enough for someone to keep typing or drop another file, and clearing
+    // the composer wholesale afterwards would throw that away without sending
+    // it, so only what went out is removed.
+    const sentAnnotations = annotations;
+    const sentAttachments = attachments;
     stickToBottomRef.current = true;
     setShowScrollToBottom(false);
     setSendError(null);
-    setUploading(attachments.length > 0);
+    setUploading(sentAttachments.length > 0);
     try {
-      const uploaded = await Promise.all(attachments.map(uploadAttachment));
+      const uploaded = await Promise.all(sentAttachments.map(uploadAttachment));
       const unreachable = uploaded.filter((file) => file.agentUrl === null);
       if (unreachable.length > 0) {
         throw new Error(
@@ -239,23 +245,27 @@ export function AgentWorkspace({
           mediaType: file.fileType,
         })),
       ];
-      pendingMessageAnnotationsRef.current = annotations;
-      setPendingMessageAnnotations(annotations);
+      pendingMessageAnnotationsRef.current = sentAnnotations;
+      setPendingMessageAnnotations(sentAnnotations);
       pendingUserMessagesRef.current += 1;
       await agent.send(content, {
         clientContext: {
           route: window.location.pathname,
           forkContext,
-          annotations: annotations.map(({ type, id, label }) => ({
+          annotations: sentAnnotations.map(({ type, id, label }) => ({
             type,
             id,
             label,
           })),
         },
       });
-      setComposer("");
-      setAttachments([]);
-      setAnnotations([]);
+      setComposer((current) => (current === message ? "" : current));
+      setAttachments((current) =>
+        current.filter((file) => !sentAttachments.includes(file)),
+      );
+      setAnnotations((current) =>
+        current.filter((item) => !sentAnnotations.includes(item)),
+      );
       setForkContext(null);
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");

@@ -1,8 +1,13 @@
 /** Presentation helpers shared by the operations transcript components. */
 
+/**
+ * Session cost is billed in USD (`maxTokenCostUsdPerSession`), so it is
+ * rendered as "USD 0.42" rather than with a bare dollar symbol an Australian
+ * office would read as AUD.
+ */
 const currency = new Intl.NumberFormat("en-AU", {
-  currency: "AUD",
-  currencyDisplay: "narrowSymbol",
+  currency: "USD",
+  currencyDisplay: "symbol",
   style: "currency",
 });
 
@@ -112,7 +117,7 @@ export function formatDuration(
 }
 
 export function formatCost(value: number) {
-  return value < 0.01 && value > 0 ? "<$0.01" : currency.format(value);
+  return value < 0.01 && value > 0 ? "<USD 0.01" : currency.format(value);
 }
 
 export function formatTokens(value: number) {

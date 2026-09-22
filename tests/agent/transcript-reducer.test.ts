@@ -93,6 +93,55 @@ test("delegation state survives a full replay of the same stream", () => {
   assert.deepEqual(replayed.labels, live.labels);
 });
 
+test("a remote classification is not cleared by the delegation event", () => {
+  // `actions.requested` classifies from the action kind; `subagent.called`
+  // omits `remote` for a local child and must not overwrite that verdict.
+  const data = reduceAll([
+    stamped({ data: { sequence: 0, turnId }, type: "turn.started" }),
+    stamped({
+      data: {
+        actions: [
+          {
+            callId: "call_r",
+            description: "Remote specialist",
+            input: {},
+            kind: "remote-agent-call",
+            name: "remote-ops",
+            nodeId: "node_r",
+            remoteAgentName: "remote-ops",
+          },
+        ],
+        sequence: 1,
+        stepIndex: 0,
+        turnId,
+      },
+      type: "actions.requested",
+    }),
+    stamped({
+      data: {
+        callId: "call_r",
+        childSessionId: "wrun_remote",
+        childStreamPath: "/stream",
+        name: "remote-ops",
+        sequence: 2,
+        sessionId: "wrun_root",
+        toolName: "remote_ops",
+        turnId,
+        workflowId: "wf_r",
+      },
+      type: "subagent.called",
+    }),
+  ]);
+
+  assert.equal(data.subagents[0]?.remote, true);
+});
+
+test("a local delegation stays local", () => {
+  const data = reduceAll(delegationEvents);
+
+  assert.equal(data.subagents[0]?.remote, false);
+});
+
 test("a background-task receipt keeps the specialist running", () => {
   const data = reduceAll([
     ...delegationEvents,
