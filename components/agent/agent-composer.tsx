@@ -1,7 +1,7 @@
 "use client";
 
-import type { RefObject } from "react";
-import { Send } from "lucide-react";
+import { useState, type RefObject } from "react";
+import { LoaderCircle, Send, Upload } from "lucide-react";
 import { AgentAnnotations } from "@/components/agent/agent-annotations";
 import type { AgentAnnotation } from "@/components/agent/agent-annotations";
 import { AgentAttachments } from "@/components/agent/agent-attachments";
@@ -29,6 +29,7 @@ export function AgentComposer({
   selectAnnotation,
   setAnnotations,
   setAttachments,
+  uploading,
 }: {
   annotations: AgentAnnotation[];
   annotationQuery: string;
@@ -45,9 +46,34 @@ export function AgentComposer({
   selectAnnotation: (annotation: AgentAnnotation) => void;
   setAnnotations: React.Dispatch<React.SetStateAction<AgentAnnotation[]>>;
   setAttachments: React.Dispatch<React.SetStateAction<File[]>>;
+  uploading: boolean;
 }) {
+  const [draggingOver, setDraggingOver] = useState(false);
+
+  function addFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setAttachments((items) => [...items, ...Array.from(files)].slice(0, 5));
+  }
+
   return (
-    <footer className="relative z-10 order-3 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4 md:col-start-2">
+    <footer
+      className="relative z-10 order-3 shrink-0 border-t border-border/70 bg-white p-3 sm:p-4 md:col-start-2"
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        setDraggingOver(false);
+      }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDraggingOver(true);
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDraggingOver(false);
+        addFiles(event.dataTransfer.files);
+      }}
+    >
       <form
         className="relative mx-auto max-w-4xl"
         onSubmit={(event) => {
@@ -55,6 +81,12 @@ export function AgentComposer({
           onSend();
         }}
       >
+        {draggingOver ? (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-royal-gold bg-royal-gold-light/85 text-sm font-medium text-royal-gold-ink">
+            <Upload aria-hidden="true" className="size-4" />
+            Drop to attach
+          </div>
+        ) : null}
         {editingMessageId ? (
           <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-royal-gold/30 bg-royal-gold-light/35 px-3 py-2 text-xs text-muted-foreground">
             <span>
@@ -92,6 +124,12 @@ export function AgentComposer({
                 if (canSend) onSend();
               }
             }}
+            onPaste={(event) => {
+              const files = Array.from(event.clipboardData.files);
+              if (files.length === 0) return;
+              event.preventDefault();
+              setAttachments((items) => [...items, ...files].slice(0, 5));
+            }}
             placeholder="Ask about a lead, offer, task or project…"
             ref={composerRef}
             value={composer}
@@ -103,16 +141,25 @@ export function AgentComposer({
                 setAttachments={setAttachments}
               />
               <span className="hidden shrink-0 sm:inline">
-                Enter to send · Shift+Enter for a new line · @ to reference
+                {uploading
+                  ? "Uploading attachments…"
+                  : "Enter to send · Shift+Enter for a new line · @ to reference · drop or paste a file"}
               </span>
             </span>
             <Button
-              aria-label="Send message"
+              aria-label={uploading ? "Uploading attachments" : "Send message"}
               disabled={!canSend}
               size="icon-sm"
               type="submit"
             >
-              <Send data-icon="inline-start" />
+              {uploading ? (
+                <LoaderCircle
+                  className="animate-spin"
+                  data-icon="inline-start"
+                />
+              ) : (
+                <Send data-icon="inline-start" />
+              )}
             </Button>
           </InputGroupAddon>
         </InputGroup>

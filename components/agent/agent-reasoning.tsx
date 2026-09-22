@@ -24,20 +24,11 @@ export function AgentReasoning({
   text: string;
 }) {
   const streaming = state === "streaming";
-  const [open, setOpen] = useState(streaming);
-  const openedByStream = useRef(streaming);
+  // Derived, not synchronised: open while the model is thinking, closed once it
+  // is done, and whatever the reader last chose from then on.
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const open = choice ?? streaming;
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (streaming) {
-      openedByStream.current = true;
-      setOpen(true);
-      return;
-    }
-    if (!openedByStream.current) return;
-    openedByStream.current = false;
-    setOpen(false);
-  }, [streaming]);
 
   useEffect(() => {
     if (!streaming) return;
@@ -50,7 +41,7 @@ export function AgentReasoning({
   return (
     <Collapsible
       className="rounded-lg border border-border/60 bg-muted/25"
-      onOpenChange={setOpen}
+      onOpenChange={setChoice}
       open={open}
     >
       <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">

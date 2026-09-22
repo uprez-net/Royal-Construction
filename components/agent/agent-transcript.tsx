@@ -6,20 +6,25 @@ import {
   Bot,
   CircleStop,
   GitFork,
+  Layers,
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
 } from "lucide-react";
 import type { RefObject } from "react";
-import {
-  AgentSubagentActivity,
-  type AgentSubagentActivityRecord,
-} from "@/components/agent/agent-subagent-activity";
-import {
-  AgentMessage,
-  type AgentInputResponse,
-} from "@/components/agent/agent-message";
+import { useMemo } from "react";
+import { AgentApprovalBar } from "@/components/agent/agent-approval-bar";
+import type { AgentInputResponse } from "@/components/agent/agent-approval";
+import { AgentMessage } from "@/components/agent/agent-message";
+import type {
+  AgentPendingApproval,
+  AgentSubagentRun,
+  AgentTranscriptData,
+  AgentTurn,
+} from "@/components/agent/agent-reducer";
+import type { AgentResultAction } from "@/components/agent/agent-result";
+import { AgentSessionMeter } from "@/components/agent/agent-session-meter";
 import type { AgentAnnotation } from "@/components/agent/agent-annotations";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -45,12 +50,11 @@ export function AgentTranscript({
   agentStatus,
   archiveError,
   busy,
+  data,
   forkConversation,
   handleMessageScroll,
-  hiddenMessageIds,
   historyOpen,
   messageAnnotations,
-  messages,
   onAction,
   onCancel,
   onEditMessage,
@@ -63,24 +67,18 @@ export function AgentTranscript({
   sendError,
   showScrollToBottom,
   statusLabel,
-  subagentActivities,
   viewportRef,
 }: {
   agentError: Error | null;
   agentStatus: UseEveAgentStatus;
   archiveError: string | null;
   busy: boolean;
+  data: AgentTranscriptData;
   forkConversation: () => void;
   handleMessageScroll: (event: React.UIEvent<HTMLDivElement>) => void;
-  hiddenMessageIds: Record<string, true>;
   historyOpen: boolean;
   messageAnnotations: Record<string, AgentAnnotation[]>;
-  messages: readonly EveMessage[];
-  onAction: (action: {
-    id: string;
-    label: string;
-    operation: string;
-  }) => Promise<void>;
+  onAction: (action: AgentResultAction) => Promise<void>;
   onCancel: () => void;
   onEditMessage: (messageId: string, text: string) => void;
   onRespond: (responses: readonly AgentInputResponse[]) => Promise<void>;
@@ -92,12 +90,26 @@ export function AgentTranscript({
   sendError: string | null;
   showScrollToBottom: boolean;
   statusLabel: string;
-  subagentActivities: readonly AgentSubagentActivityRecord[];
   viewportRef: RefObject<HTMLDivElement | null>;
 }) {
+  const turnsById = useMemo(
+    () => new Map(data.turns.map((turn) => [turn.turnId, turn])),
+    [data.turns],
+  );
+  const subagentsByTurn = useMemo(() => {
+    const map = new Map<string, AgentSubagentRun[]>();
+    for (const run of data.subagents) {
+      if (!run.turnId) continue;
+      const runs = map.get(run.turnId);
+      if (runs) runs.push(run);
+      else map.set(run.turnId, [run]);
+    }
+    return map;
+  }, [data.subagents]);
+
   return (
-    <div className="order-1 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden md:order-2">
-      <header className="flex items-center justify-between gap-4 border-b border-border/70 px-4 py-3 sm:px-5">
+    <div className="order-1 grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:order-2">
+      <header className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             aria-controls="agent-conversation-history"
@@ -127,6 +139,7 @@ export function AgentTranscript({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <AgentSessionMeter usage={data.usage} />
           <Badge variant="outline">
             <span
               className={cn(
@@ -151,7 +164,7 @@ export function AgentTranscript({
               <span className="hidden sm:inline">Stop</span>
             </Button>
           ) : null}
-          {messages.length > 0 ? (
+          {data.messages.length > 0 ? (
             <Button
               aria-label="Fork conversation"
               onClick={forkConversation}
@@ -165,14 +178,14 @@ export function AgentTranscript({
         </div>
       </header>
 
-      <div className="relative h-[60vh] overflow-hidden">
+      <div className="relative min-h-0 overflow-hidden">
         <div
           className="absolute inset-0 overflow-y-auto overscroll-contain"
           onScroll={handleMessageScroll}
           ref={viewportRef}
         >
           <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
-            {messages.length === 0 && agentStatus !== "resuming" ? (
+            {data.messages.length === 0 && agentStatus !== "resuming" ? (
               <Empty className="min-h-96 border-0">
                 <EmptyHeader>
                   <EmptyMedia
@@ -204,50 +217,63 @@ export function AgentTranscript({
                 </EmptyContent>
               </Empty>
             ) : null}
+
             {agentStatus === "resuming" ? (
               <div className="flex min-h-64 items-center justify-center gap-3 text-sm text-muted-foreground">
                 <span className="size-2 animate-pulse rounded-full bg-royal-gold" />
                 Restoring conversation…
               </div>
             ) : null}
-            {messages
-              .filter((message) => !hiddenMessageIds[message.id])
-              .map((message) => (
-                <AgentMessage
-                  canRespond={!busy}
-                  isStreaming={agentStatus === "streaming"}
-                  key={message.id}
-                  annotations={
-                    messageAnnotations[message.id]
-                    ?? (message.metadata?.optimistic
-                      ? (pendingMessageAnnotations ?? undefined)
-                      : undefined)
-                  }
-                  onAction={onAction}
-                  onEditMessage={onEditMessage}
-                  message={message}
-                  onInputResponses={onRespond}
-                />
-              ))}
-            {subagentActivities.length > 0 ? (
-              <section
-                aria-label="Delegated specialist work"
-                className="flex flex-col gap-2"
-              >
-                {subagentActivities.map((activity) => (
-                  <AgentSubagentActivity
-                    activity={activity}
-                    key={activity.callId}
+
+            {data.messages.map((message) => {
+              const turnId = message.metadata?.turnId;
+              const turn = turnId ? turnsById.get(turnId) : undefined;
+              return (
+                <div className="flex flex-col gap-3" key={message.id}>
+                  <AgentMessage
+                    annotations={
+                      messageAnnotations[message.id]
+                      ?? (message.metadata?.optimistic
+                        ? (pendingMessageAnnotations ?? undefined)
+                        : undefined)
+                    }
+                    canRespond={!busy}
+                    isStreaming={agentStatus === "streaming"}
+                    labels={data.labels}
+                    message={message}
+                    onAction={onAction}
+                    onEditMessage={onEditMessage}
+                    onInputResponses={onRespond}
+                    subagents={
+                      message.role === "assistant" && turnId
+                        ? (subagentsByTurn.get(turnId) ?? [])
+                        : []
+                    }
+                    timestamp={messageTime(message, turn)}
+                    toolTimes={toolTimes(turn)}
                   />
-                ))}
-              </section>
+                  {message.role === "assistant" ? (
+                    <TurnOutcome turn={turn} />
+                  ) : null}
+                </div>
+              );
+            })}
+
+            {data.compaction?.status === "requested" ? (
+              <p className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <Layers aria-hidden="true" className="size-3.5" />
+                Summarising earlier messages to make room — nothing is lost from
+                the record.
+              </p>
             ) : null}
+
             {agentStatus === "streaming" ? (
               <div className="flex items-center gap-2 self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                 <LoaderCircle className="size-3.5 animate-spin" />
                 Live response · assembling the next operation step…
               </div>
             ) : null}
+
             {agentError ? (
               <Alert variant="destructive">
                 <AlertTitle>The agent could not continue</AlertTitle>
@@ -259,17 +285,19 @@ export function AgentTranscript({
                     type="button"
                     variant="outline"
                   >
-                    Retry stream
+                    Reconnect
                   </Button>
                 </AlertDescription>
               </Alert>
             ) : null}
+
             {sendError ? (
               <Alert variant="destructive">
                 <AlertTitle>The message could not be sent</AlertTitle>
                 <AlertDescription>{sendError}</AlertDescription>
               </Alert>
             ) : null}
+
             {archiveError ? (
               <Alert variant="destructive">
                 <AlertTitle>The conversation could not be archived</AlertTitle>
@@ -278,6 +306,12 @@ export function AgentTranscript({
             ) : null}
           </div>
         </div>
+
+        <AgentApprovalBar
+          approvals={data.pendingApprovals}
+          viewportRef={viewportRef}
+        />
+
         {showScrollToBottom ? (
           <Button
             aria-label="Scroll to the latest message"
@@ -295,3 +329,57 @@ export function AgentTranscript({
     </div>
   );
 }
+
+/**
+ * A turn that ended without an answer.
+ *
+ * A cancelled turn is not a failure and is labelled as such, so an operator who
+ * pressed Stop is not left wondering whether something broke.
+ */
+function TurnOutcome({ turn }: { turn: AgentTurn | undefined }) {
+  if (!turn || turn.status === "running" || turn.status === "completed")
+    return null;
+  if (turn.status === "cancelled") {
+    return (
+      <p className="self-start rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+        You stopped this response. The conversation is ready to continue.
+      </p>
+    );
+  }
+  return (
+    <Alert variant="destructive">
+      <AlertTitle>This request did not finish</AlertTitle>
+      <AlertDescription>
+        {turn.failure?.message ?? "The turn ended before it produced a result."}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function messageTime(message: EveMessage, turn: AgentTurn | undefined) {
+  if (!turn) return null;
+  return message.role === "user" ? turn.startedAt : (turn.endedAt ?? null);
+}
+
+/**
+ * The window each step's tool calls ran in.
+ *
+ * Tools execute between one model step finishing and the next one starting, so
+ * that gap — not the step itself — is the duration worth showing.
+ */
+function toolTimes(turn: AgentTurn | undefined) {
+  if (!turn) return {};
+  const times: Record<
+    number,
+    { startedAt: string | null; endedAt: string | null }
+  > = {};
+  turn.steps.forEach((step, index) => {
+    times[step.stepIndex] = {
+      endedAt: turn.steps[index + 1]?.startedAt ?? turn.endedAt,
+      startedAt: step.endedAt,
+    };
+  });
+  return times;
+}
+
+export type { AgentPendingApproval };

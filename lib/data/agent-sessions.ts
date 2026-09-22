@@ -2,7 +2,10 @@ import "server-only";
 
 import { auth } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
-import { getAgentWorkspaceData as getAgentWorkspaceDataDomain } from "@/lib/domain/agent/sessions";
+import {
+  getAgentSessionEvents as getAgentSessionEventsDomain,
+  getAgentWorkspaceData as getAgentWorkspaceDataDomain,
+} from "@/lib/domain/agent/sessions";
 import { principalForClerkId } from "@/lib/domain/identity/users";
 import {
   getAgentSessionTitle,
@@ -15,9 +18,7 @@ export type {
   AgentWorkspaceData,
 } from "@/lib/domain/agent/sessions";
 
-const emptyWorkspace = (
-  selectedSessionId: string | undefined,
-) => ({
+const emptyWorkspace = (selectedSessionId: string | undefined) => ({
   selectedAnnotationsByTurn: {},
   selectedSessionId: null,
   selectedSessionUnavailable: selectedSessionId !== undefined,
@@ -33,4 +34,15 @@ export async function getAgentWorkspaceData(selectedSessionId?: string) {
   if (!principal) return emptyWorkspace(selectedSessionId);
 
   return getAgentWorkspaceDataDomain(principal, selectedSessionId, prisma);
+}
+
+/** Next adapter: the persisted Eve stream prefix for one owned session. */
+export async function getAgentSessionEvents(eveSessionId: string) {
+  const { userId } = await auth();
+  if (!userId) return [];
+
+  const principal = await principalForClerkId(userId, prisma);
+  if (!principal) return [];
+
+  return getAgentSessionEventsDomain(principal, eveSessionId, prisma);
 }

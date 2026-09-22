@@ -3,23 +3,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEveAgent } from "eve/react";
+import type { MessageStreamEvent } from "eve/client";
 import type { AgentAnnotation } from "@/components/agent/agent-annotations";
-import type { AgentInputResponse } from "@/components/agent/agent-message";
+import type { AgentInputResponse } from "@/components/agent/agent-approval";
 import { AgentComposer } from "@/components/agent/agent-composer";
 import { AgentHistory } from "@/components/agent/agent-history";
-import type { AgentSubagentActivityRecord } from "@/components/agent/agent-subagent-activity";
+import {
+  agentTranscriptReducer,
+  type AgentTranscriptData,
+} from "@/components/agent/agent-reducer";
+import type { AgentResultAction } from "@/components/agent/agent-result";
 import { AgentTranscript } from "@/components/agent/agent-transcript";
 import type {
   AgentSessionListItem,
   AgentWorkspaceData,
 } from "@/lib/data/agent-sessions";
 
+export type AgentUploadedFile = {
+  agentUrl: string | null;
+  filename: string;
+  fileType: string;
+  url: string;
+};
+
 export function AgentWorkspace({
   initialAnnotationsByTurn,
+  initialEvents,
   initialSessions,
   selectedSessionId,
 }: {
   initialAnnotationsByTurn: AgentWorkspaceData["selectedAnnotationsByTurn"];
+  initialEvents: readonly unknown[];
   initialSessions: AgentSessionListItem[];
   selectedSessionId: string | null;
 }) {
@@ -28,22 +42,17 @@ export function AgentWorkspace({
   const [sendError, setSendError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [annotations, setAnnotations] = useState<AgentAnnotation[]>([]);
   const [annotationResults, setAnnotationResults] = useState<AgentAnnotation[]>(
     [],
   );
   const [messageAnnotations, setMessageAnnotations] = useState<
     Record<string, AgentAnnotation[]>
-  >({});
+  >(() => hydrateAnnotations(initialAnnotationsByTurn));
   const [pendingMessageAnnotations, setPendingMessageAnnotations] = useState<
     AgentAnnotation[] | null
   >(null);
-  const [subagentActivities, setSubagentActivities] = useState<
-    Record<string, AgentSubagentActivityRecord>
-  >({});
-  const [hiddenMessageIds, setHiddenMessageIds] = useState<
-    Record<string, true>
-  >({});
   const [forkContext, setForkContext] = useState<string | null>(() =>
     typeof window === "undefined"
       ? null
@@ -57,12 +66,15 @@ export function AgentWorkspace({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pendingMessageAnnotationsRef = useRef<AgentAnnotation[] | null>(null);
   const pendingUserMessagesRef = useRef(0);
-  const subagentActivitiesRef = useRef<
-    Record<string, AgentSubagentActivityRecord>
-  >({});
   const activeSessionIdRef = useRef(selectedSessionId);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
   const stickToBottomRef = useRef(true);
+  const [reducer] = useState(agentTranscriptReducer);
+  // Read once, when the hook builds its store. Keeping the identity stable
+  // stops a re-render from discarding the projection mid-turn.
+  const [hydratedEvents] = useState(
+    () => initialEvents as readonly MessageStreamEvent[],
+  );
 
   const onSessionChange = useCallback(
     (session: { sessionId: string; streamIndex: number } | undefined) => {
@@ -88,7 +100,8 @@ export function AgentWorkspace({
       });
       if (!sessionPathUpdated.current) {
         sessionPathUpdated.current = true;
-        // The session is returned before its first hook write. Change only the address bar so the active Eve store is not remounted into a 404.
+        // The session is returned before its first hook write. Change only the
+        // address bar so the active Eve store is not remounted into a 404.
         window.history.replaceState(
           null,
           "",
@@ -99,121 +112,37 @@ export function AgentWorkspace({
     [],
   );
 
-  const updateSubagentActivities = useCallback(
-    (
-      update: (
-        current: Record<string, AgentSubagentActivityRecord>,
-      ) => Record<string, AgentSubagentActivityRecord>,
-    ) => {
-      setSubagentActivities((current) => {
-        const next = update(current);
-        subagentActivitiesRef.current = next;
-        return next;
-      });
-    },
-    [],
-  );
-
-  const agent = useEveAgent({
+  const agent = useEveAgent<AgentTranscriptData>({
+    // Hydrated events are a prefix of this session's stream, and the cursor is
+    // deliberately left at 0. The persisted copy can trail the durable stream by
+    // an event or two, and claiming a cursor past that would skip whatever is
+    // missing. Eve drops any event whose `meta.id` it has already applied, so
+    // the overlapping catch-up costs bandwidth, not correctness.
+    initialEvents: hydratedEvents,
     initialSession: selectedSessionId
       ? { sessionId: selectedSessionId, streamIndex: 0 }
       : undefined,
     onEvent: (event) => {
-      if (event.type === "subagent.called") {
-        updateSubagentActivities((current) => ({
-          ...current,
-          [event.data.callId]: {
-            callId: event.data.callId,
-            childSessionId: event.data.childSessionId,
-            name: event.data.name,
-            status: "delegating",
-            toolName: event.data.toolName,
-            remote: event.data.remote !== undefined,
-          },
-        }));
-        return;
-      }
-      if (event.type === "subagent.started") {
-        updateSubagentActivities((current) => {
-          const activity = current[event.data.callId];
-          return activity
-            ? {
-                ...current,
-                [event.data.callId]: { ...activity, status: "working" },
-              }
-            : current;
-        });
-        return;
-      }
-      if (event.type === "subagent.completed") {
-        updateSubagentActivities((current) => {
-          const activity = current[event.data.callId];
-          if (!activity) return current;
-          const backgroundTask = event.data.backgroundTask;
-          return {
-            ...current,
-            [event.data.callId]: {
-              ...activity,
-              status: backgroundTask ? "working" : "completed",
-              summary: backgroundTask ? undefined : event.data.output,
-              taskId: backgroundTask?.taskId,
-            },
-          };
-        });
-        return;
-      }
       if (event.type !== "message.received") return;
       const isOwnMessage = pendingUserMessagesRef.current > 0;
       if (isOwnMessage) pendingUserMessagesRef.current -= 1;
-      const persistedAnnotations = initialAnnotationsByTurn[event.data.turnId];
-      if (persistedAnnotations?.length)
-        setMessageAnnotations((current) => ({
-          ...current,
-          [`${event.data.turnId}:user`]: persistedAnnotations,
-        }));
       const pending = pendingMessageAnnotationsRef.current;
-      if (isOwnMessage && pending !== null) {
-        setMessageAnnotations((current) => ({
-          ...current,
-          [`${event.data.turnId}:user`]: pending,
-        }));
-        void persistTurnAnnotations(
-          activeSessionIdRef.current,
-          event.data.turnId,
-          pending,
-        ).catch(() =>
-          setSendError(
-            "The message was sent, but its references could not be saved.",
-          ),
-        );
-        pendingMessageAnnotationsRef.current = null;
-        setPendingMessageAnnotations(null);
-      }
-      if (!isOwnMessage) {
-        const running = Object.values(subagentActivitiesRef.current).filter(
-          (activity) =>
-            activity.status === "delegating" || activity.status === "working",
-        );
-        if (running.length > 0) {
-          setHiddenMessageIds((current) => ({
-            ...current,
-            [`${event.data.turnId}:user`]: true,
-          }));
-          updateSubagentActivities((current) => {
-            const next = { ...current };
-            for (const activity of running) {
-              const currentActivity = next[activity.callId];
-              if (currentActivity)
-                next[activity.callId] = {
-                  ...currentActivity,
-                  status: "completed",
-                  summary: event.data.message,
-                };
-            }
-            return next;
-          });
-        }
-      }
+      if (!isOwnMessage || pending === null) return;
+      setMessageAnnotations((current) => ({
+        ...current,
+        [`${event.data.turnId}:user`]: pending,
+      }));
+      void persistTurnAnnotations(
+        activeSessionIdRef.current,
+        event.data.turnId,
+        pending,
+      ).catch(() =>
+        setSendError(
+          "The message was sent, but its references could not be saved.",
+        ),
+      );
+      pendingMessageAnnotationsRef.current = null;
+      setPendingMessageAnnotations(null);
     },
     onSessionChange,
     prepareSend: (payload) => ({
@@ -227,6 +156,7 @@ export function AgentWorkspace({
         route: window.location.pathname,
       },
     }),
+    reducer,
     resume: Boolean(selectedSessionId),
   });
 
@@ -235,7 +165,9 @@ export function AgentWorkspace({
     || agent.status === "submitted"
     || agent.status === "streaming";
   const canSend =
-    !busy && (composer.trim().length > 0 || attachments.length > 0);
+    !busy
+    && !uploading
+    && (composer.trim().length > 0 || attachments.length > 0);
   const annotationQuery = useMemo(
     () => composer.match(/(?:^|\s)@([^\s@]*)$/)?.[1] ?? "",
     [composer],
@@ -272,7 +204,7 @@ export function AgentWorkspace({
       viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" }),
     );
     return () => window.cancelAnimationFrame(frame);
-  }, [agent.data.messages, agent.status, subagentActivities]);
+  }, [agent.data, agent.status]);
 
   useEffect(() => {
     if (annotationQuery.length < 2) return;
@@ -298,32 +230,27 @@ export function AgentWorkspace({
 
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";
-    if ((!message.trim() && attachments.length === 0) || busy) return;
+    if ((!message.trim() && attachments.length === 0) || busy || uploading)
+      return;
     stickToBottomRef.current = true;
     setShowScrollToBottom(false);
     setSendError(null);
+    setUploading(attachments.length > 0);
     try {
-      const uploaded = await Promise.all(
-        attachments.map(async (file) => {
-          const form = new FormData();
-          form.append("file", file);
-          const response = await fetch("/api/agent/upload", {
-            method: "POST",
-            body: form,
-          });
-          if (!response.ok) throw new Error("Attachment upload failed");
-          return (
-            (await response.json()) as {
-              file: { url: string; filename: string; fileType: string };
-            }
-          ).file;
-        }),
-      );
+      const uploaded = await Promise.all(attachments.map(uploadAttachment));
+      const unreachable = uploaded.filter((file) => file.agentUrl === null);
+      if (unreachable.length > 0) {
+        throw new Error(
+          `The agent cannot read ${unreachable
+            .map((file) => file.filename)
+            .join(", ")}. Nothing was sent — try attaching the file again.`,
+        );
+      }
       const content = [
         { type: "text" as const, text },
         ...uploaded.map((file) => ({
           type: "file" as const,
-          data: new URL(file.url),
+          data: new URL(file.agentUrl as string),
           filename: file.filename,
           mediaType: file.fileType,
         })),
@@ -360,6 +287,8 @@ export function AgentWorkspace({
           ? error.message
           : "The message could not be sent.",
       );
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -386,11 +315,7 @@ export function AgentWorkspace({
     await agent.respond(responses);
   }
 
-  async function runAction(action: {
-    id: string;
-    label: string;
-    operation: string;
-  }) {
+  async function runAction(action: AgentResultAction) {
     await sendMessage(
       `Please execute the approved UI action "${action.label}" (${action.operation}, action id ${action.id}) after I review the prepared details.`,
     );
@@ -481,12 +406,11 @@ export function AgentWorkspace({
         agentStatus={agent.status}
         archiveError={archiveError}
         busy={busy}
+        data={agent.data}
         forkConversation={forkConversation}
         handleMessageScroll={handleMessageScroll}
-        hiddenMessageIds={hiddenMessageIds}
         historyOpen={historyOpen}
         messageAnnotations={messageAnnotations}
-        messages={agent.data.messages}
         onAction={runAction}
         onCancel={() => void agent.cancel()}
         onEditMessage={editMessage}
@@ -499,7 +423,6 @@ export function AgentWorkspace({
         sendError={sendError}
         showScrollToBottom={showScrollToBottom}
         statusLabel={statusLabel}
-        subagentActivities={Object.values(subagentActivities)}
         viewportRef={viewportRef}
       />
       <AgentComposer
@@ -521,8 +444,37 @@ export function AgentWorkspace({
         selectAnnotation={selectAnnotation}
         setAnnotations={setAnnotations}
         setAttachments={setAttachments}
+        uploading={uploading}
       />
     </section>
+  );
+}
+
+async function uploadAttachment(file: File): Promise<AgentUploadedFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/agent/upload", {
+    body: form,
+    method: "POST",
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(payload?.error ?? `Could not upload ${file.name}.`);
+  }
+  return ((await response.json()) as { file: AgentUploadedFile }).file;
+}
+
+/** Annotations persisted per turn render straight away on a reload. */
+function hydrateAnnotations(
+  byTurn: AgentWorkspaceData["selectedAnnotationsByTurn"],
+) {
+  return Object.fromEntries(
+    Object.entries(byTurn).map(([turnId, turnAnnotations]) => [
+      `${turnId}:user`,
+      turnAnnotations,
+    ]),
   );
 }
 

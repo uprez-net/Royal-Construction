@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import DOMPurify from "dompurify";
 import {
   AlertTriangle,
@@ -56,14 +56,14 @@ export function AgentOutreach({
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const plainText = useMemo(() => stripHtml(outreach.body), [outreach.body]);
-  // DOMPurify needs a DOM, so the sanitized document is built after mount. The
-  // server and the first client render agree on an empty frame, then it fills.
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  // DOMPurify needs a DOM, so the sanitized document is built on the client.
+  // The server and the first hydration render agree on an empty frame.
+  const onClient = useSyncExternalStore(subscribeNever, onTrue, onFalse);
+  const previewHtml = useMemo(
+    () => (onClient ? previewDocument(outreach.body) : ""),
+    [onClient, outreach.body],
+  );
   const missingRecipient = !outreach.contactEmail;
-
-  useEffect(() => {
-    setPreviewHtml(previewDocument(outreach.body));
-  }, [outreach.body]);
 
   useEffect(() => {
     if (!copied) return;
@@ -203,7 +203,7 @@ export function AgentOutreach({
           // No scripts, no same-origin, no forms, no navigation: an empty
           // sandbox is the strongest setting, and the preview needs none of it.
           sandbox=""
-          srcDoc={previewHtml ?? ""}
+          srcDoc={previewHtml}
           title="Outreach email preview"
         />
       ) : (
@@ -226,6 +226,10 @@ export function AgentOutreach({
     </section>
   );
 }
+
+const subscribeNever = () => () => {};
+const onTrue = () => true;
+const onFalse = () => false;
 
 function Row({
   children,
