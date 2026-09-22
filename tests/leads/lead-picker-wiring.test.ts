@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // The lead picker's rules are tested in lead-search-paging.test.ts, but these
 // bugs lived in the files that use them: a client hook and client components

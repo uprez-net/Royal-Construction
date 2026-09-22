@@ -1,13 +1,13 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { readFileSync } from "node:fs";
+import { test } from "vitest";
 
 import {
   filtersForRequest,
   isDefaultOfferFilters,
   shouldAdoptServerOffers,
-} from "../../lib/offer/offer-listing-view";
+} from "@/lib/offer/offer-listing-view";
 
 // The offers table fell back to the server's unfiltered first page whenever
 // the store held no rows, so a search or tab with no matches showed every

@@ -12,10 +12,12 @@
     "build": "pnpm eve:build && next build",
     "build:webpack": "pnpm eve:build && next build --webpack",
     "start": "next start",
-    "test:offer": "tsx --test tests/offer/*.test.ts",
-    "test:graph": "tsx --test tests/graph/*.test.ts",
-    "test": "tsx --test tests/*/*.test.ts",
-    "test:unit": "tsx --test $(ls tests/*/*.test.ts | grep -v offer-document-print-pages | grep -v offer-tender-print-parity)",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:print": "vitest run --project print",
+    "test:offer": "vitest run tests/offer",
+    "test:graph": "vitest run tests/graph",
+    "test:watch": "vitest",
     "lint": "eslint --cache --cache-strategy content",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -124,7 +126,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/docusign-esign": "^5.19.9",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -136,7 +138,8 @@
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.0.1"
   },
   "pnpm": {
     "overrides": {

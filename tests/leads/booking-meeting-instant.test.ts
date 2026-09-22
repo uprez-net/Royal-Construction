@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 
 import { fromZonedTime } from "date-fns-tz";
+import { test } from "vitest";
 
-import {
-  sydneyTimeOnly,
-  sydneyTimeZoneAbbreviation,
-} from "../../lib/dates/sydney";
+import { sydneyTimeOnly, sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 
 // A consultation booked for Tuesday 22 September at 3:00 PM AEST reached the
 // client correctly — the email and the .ics both said 3pm — while the lead's

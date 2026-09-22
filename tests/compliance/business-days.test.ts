@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "vitest";
 
 import {
   businessDaysBetween,
   isNswBusinessDay,
-} from "../../lib/dates/business-days";
+} from "@/lib/dates/business-days";
 
 /**
  * The clock every overdue alert on the compliance file is measured on.

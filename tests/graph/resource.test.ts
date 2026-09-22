@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 
-import { graphResourceBelongsToMailbox } from "../../lib/graph/resource";
+import { graphResourceBelongsToMailbox } from "@/lib/graph/resource";
 
 describe("graphResourceBelongsToMailbox", () => {
   it("accepts the normal notification resource below the subscription", () => {

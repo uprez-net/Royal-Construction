@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   compareTitleSearchOwners,
   describeOwnerMismatch,
   isSameOwnerName,
   nameTokens,
-} from "../../lib/domain/compliance/title-search-owners";
+} from "@/lib/domain/compliance/title-search-owners";
 
 // ---------------------------------------------------------------------------
 // Normalisation

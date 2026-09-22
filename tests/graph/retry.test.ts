@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { GraphRequestError } from "../../lib/graph/client";
-import { isRetryableGraphError, withGraphRetry } from "../../lib/graph/retry";
+import { GraphRequestError } from "@/lib/graph/client";
+import { isRetryableGraphError, withGraphRetry } from "@/lib/graph/retry";
 
 // Every case below runs with baseDelayMs: 0 — the policy under test is which
 // failures repeat and how often, not how long the process sleeps.
@@ -106,8 +106,8 @@ test("shouldRetry can widen the policy for Graph's indexing lag", async () => {
     {
       ...NO_WAIT,
       shouldRetry: (error) =>
-        isRetryableGraphError(error) ||
-        (error as { status?: number })?.status === 404,
+        isRetryableGraphError(error)
+        || (error as { status?: number })?.status === 404,
     },
   );
 

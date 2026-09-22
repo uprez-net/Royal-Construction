@@ -1,24 +1,24 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 
 import { OutboxEventStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   bookConsultation,
   consultationBookingKey,
-} from "../../lib/domain/leads/booking";
+} from "@/lib/domain/leads/booking";
 import {
   allowedLeadRecipients,
   authorizeLeadEmail,
   sendLeadEmailOnce,
-} from "../../lib/domain/leads/email";
+} from "@/lib/domain/leads/email";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
   DomainValidationError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import { ROOT } from "./module-graph";
 import {
   adminPrincipal,
@@ -246,7 +246,11 @@ test("a lead with no addresses can be emailed nowhere", () => {
 });
 
 test("pressing Send twice on the same message sends it once", async () => {
-  const authorized = { leadId: 7, leadName: "Ann Lee", to: "client@example.com" };
+  const authorized = {
+    leadId: 7,
+    leadName: "Ann Lee",
+    to: "client@example.com",
+  };
   let sends = 0;
   const first = await sendLeadEmailOnce(
     authorized,
@@ -308,7 +312,11 @@ test("a genuinely new message still goes out", async () => {
       };
     },
   };
-  const authorized = { leadId: 7, leadName: "Ann Lee", to: "client@example.com" };
+  const authorized = {
+    leadId: 7,
+    leadName: "Ann Lee",
+    to: "client@example.com",
+  };
   for (const bodyFingerprint of ["abc", "def"]) {
     await sendLeadEmailOnce(
       authorized,
@@ -335,5 +343,8 @@ test("the composer action reaches the shared rules", () => {
   assert.match(adapter, /sendLeadEmailOnce\(/);
   // Its own "is the caller signed in" check, which said nothing about the
   // lead or the recipient, is gone.
-  assert.doesNotMatch(adapter, /throw new Error\("Authenticated user not found"\)/);
+  assert.doesNotMatch(
+    adapter,
+    /throw new Error\("Authenticated user not found"\)/,
+  );
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { taskTypeFromNote } from "../../lib/leads/task-presets";
+import { taskTypeFromNote } from "@/lib/leads/task-presets";
 
 /**
  * The bucketing rules the Follow-ups tab applies, asserted as pure logic.

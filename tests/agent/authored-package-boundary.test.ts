@@ -3,8 +3,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, extname, join, relative, resolve } from "node:path";
-import { test } from "node:test";
 import ts from "typescript";
+import { test } from "vitest";
+
+import { REPO_ROOT } from "../support/repo-root";
 
 // `eve build` compiles authored code -- everything under agent/, plus the
 // application modules it imports -- into one bundle, but leaves installed
@@ -39,7 +41,7 @@ import ts from "typescript";
 // in under a second, locally and on stacked branches that get no CI, and to
 // name the import chain that caused it.
 
-const ROOT = join(__dirname, "..", "..");
+const ROOT = REPO_ROOT;
 const AGENT_DIR = join(ROOT, "agent");
 
 const CODE_EXTENSIONS = [

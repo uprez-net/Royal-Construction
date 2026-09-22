@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { verifyXeroSignature } from "../../lib/xero/webhook-signature";
+import { verifyXeroSignature } from "@/lib/xero/webhook-signature";
 
 const KEY = "xero-webhook-signing-key";
 const OTHER_KEY = "a-different-signing-key";

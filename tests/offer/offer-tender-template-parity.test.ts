@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { buildContractSignatureAnnexureHtml } from "../../lib/offer/contract-annexure-html";
-import { amountInWords, money } from "../../lib/offer/offer-tender-html";
-import { collectOfferSigners } from "../../lib/offer/workspace-model";
+import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
+import { amountInWords, money } from "@/lib/offer/offer-tender-html";
+import { collectOfferSigners } from "@/lib/offer/workspace-model";
 import { companyOwner, individualOwner, tenderFor } from "./tender-fixtures";
 
 // Parity harness for the Royal Constructions Word tender template. Every number

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { getAgentSessionEvents } from "../../lib/domain/agent/sessions";
+import { getAgentSessionEvents } from "@/lib/domain/agent/sessions";
 import { adminPrincipal, recordingDb } from "../architecture/domain-harness";
 
 let eventId = 0;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // reportTradieIncident connected whatever file ids the browser sent to the new
 // incident. That moved another project's or lead's File row onto the incident,

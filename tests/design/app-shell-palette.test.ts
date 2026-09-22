@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // The app shell painted its own palette in hex and slate: a #C6923A wordmark and
 // active nav item that fall below 4.5:1 on white and on their own 10% tint,

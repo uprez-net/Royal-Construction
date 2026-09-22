@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { dropAlreadyRecorded } from "../../lib/leads/lead-history";
-import { sydneyWallClockToInstant } from "../../lib/dates/sydney";
-import { buildStageChangedHistoryEntry } from "../../lib/leads/lead-helpers";
+import { dropAlreadyRecorded } from "@/lib/leads/lead-history";
+import { sydneyWallClockToInstant } from "@/lib/dates/sydney";
+import { buildStageChangedHistoryEntry } from "@/lib/leads/lead-helpers";
 
 // One booking took lead #105 from four activity entries to nine. Two callers
 // handed `updateLead` the lead's whole history back, every row was inserted a

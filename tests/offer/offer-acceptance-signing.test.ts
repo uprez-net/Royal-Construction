@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   createIndividualOwner,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
@@ -13,21 +13,18 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferOwner,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
-import {
-  activeOfferPhase,
-  isOfferPhaseUnlocked,
-} from "../../lib/offer/workflow";
+} from "@/lib/offer/workspace-persistence";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
+import { activeOfferPhase, isOfferPhaseUnlocked } from "@/lib/offer/workflow";
 import {
   findSignerStatus,
   type OfferSignerStatus,
-} from "../../lib/offer/signing-status";
+} from "@/lib/offer/signing-status";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // ─── fixtures ───

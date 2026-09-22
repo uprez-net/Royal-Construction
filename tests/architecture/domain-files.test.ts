@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { Role } from "@prisma/client";
-import { test } from "node:test";
+import { test } from "vitest";
 
+import { authorizeLeadFileDeletion, saveFile } from "@/lib/domain/files";
 import {
-  authorizeLeadFileDeletion,
-  saveFile,
-} from "../../lib/domain/files";
-import { DomainAuthorizationError, DomainNotFoundError } from "../../lib/domain/errors";
+  DomainAuthorizationError,
+  DomainNotFoundError,
+} from "@/lib/domain/errors";
 import { recordingDb } from "./domain-harness";
 
 const admin = { kind: "user" as const, role: Role.ADMIN, userId: "u_1" };

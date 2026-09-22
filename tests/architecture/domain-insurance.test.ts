@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { getActiveHbcfClaims } from "../../lib/domain/insurance/hbcf";
+import { getActiveHbcfClaims } from "@/lib/domain/insurance/hbcf";
 import { recordingDb } from "./domain-harness";
 
 test("active HBCF claims are read through the explicit domain database", async () => {

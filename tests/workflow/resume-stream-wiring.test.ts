@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // run-capability.test.ts proves the verifier refuses a bare run id, but the hole
 // was in the routes: resume-stream handed its path segment straight to getRun,

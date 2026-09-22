@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { LeadStage, OfferStatus, OutboxEventStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   OfferProposalSendError,
   sendOfferProposal,
-} from "../../lib/domain/offers/proposal-send";
+} from "@/lib/domain/offers/proposal-send";
 import { adminPrincipal, recordingDb } from "./domain-harness";
 
 const MESSAGE = {

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
-import { canEmailOfferProposal } from "../../lib/offer/offer-send-guards";
+import { canEmailOfferProposal } from "@/lib/offer/offer-send-guards";
 
 // sendOfferDocument emailed the proposal from any status. An AGREED offer, one
 // out for signature, or a superseded revision could be emailed again, quoting a

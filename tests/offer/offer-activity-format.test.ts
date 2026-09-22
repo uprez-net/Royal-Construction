@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "vitest";
 
 import {
   completedEventNote,
   legacyCompletedEventNote,
   unexpectedCompletionNote,
   unexpectedDeclineNote,
-} from "../../lib/docusign/completion-classifier";
+} from "@/lib/docusign/completion-classifier";
 import {
   formatActivityNote,
   formatActivityWhen,
-} from "../../lib/offer/activity-format";
+} from "@/lib/offer/activity-format";
 
 // Pins the negotiation timeline's timestamps. They never carried a year, so a
 // send or reply from last year read as this year's. Mid-year instants keep the

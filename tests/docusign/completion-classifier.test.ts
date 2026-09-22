@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { EnvelopeStatus, OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   classifyCompletion,
@@ -11,7 +11,7 @@ import {
   isArchivedForEnvelope,
   isDeclinableEnvelopeStatus,
   type CompletionFacts,
-} from "../../lib/docusign/completion-classifier";
+} from "@/lib/docusign/completion-classifier";
 
 // The Connect webhook archived a completed envelope onto its parent whenever the
 // envelope was the latest for the document, before asking whether the offer was

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   canCreateRevision,
   isOfferBuildStepEditable,
   isOfferIssued,
   offerDocumentStillEditableWhileIssued,
   type OfferBuildStep,
-} from "../../lib/offer/offer-editability";
-import type { OfferWorkspaceStatus } from "../../lib/offer/workspace-model";
+} from "@/lib/offer/offer-editability";
+import type { OfferWorkspaceStatus } from "@/lib/offer/workspace-model";
 
 // Every offer status the lifecycle can be in. Keyed as a Record over
 // OfferWorkspaceStatus so a new status added to the union without a decision

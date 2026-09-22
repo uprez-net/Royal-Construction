@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   applyMention,
   composerKeyAction,
   findMentionTrigger,
-} from "../../components/agent/agent-mentions";
+} from "@/components/agent/agent-mentions";
 
 test("the token under the caret is found, not the one at the end", () => {
   const value = "Check @smi and then @lot";

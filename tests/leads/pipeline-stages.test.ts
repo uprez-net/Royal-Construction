@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   CLOSE_DATE_TRACKING_START,
@@ -8,7 +8,7 @@ import {
   closeDatePatch,
   isOpenStage,
   stageDef,
-} from "../../lib/leads/pipeline-stages";
+} from "@/lib/leads/pipeline-stages";
 
 const ALL_STAGES = [
   // Live ladder.

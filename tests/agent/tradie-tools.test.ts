@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   createTradieScheduleInputSchema,
   reportTradieIncidentInputSchema,
   transitionTradieScheduleInputSchema,
-} from "../../agent/lib/tradie-contracts";
+} from "@/agent/lib/tradie-contracts";
 
 const id = "123e4567-e89b-42d3-a456-426614174000";
 

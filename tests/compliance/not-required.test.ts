@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { ComplianceDocumentStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   isNotRequired,
   isOutstandingEvidence,
   MAPPABLE_DOCUMENT_TYPES,
-} from "../../constants/complianceDocuments";
+} from "@/constants/complianceDocuments";
 
 const row = (status: ComplianceDocumentStatus, fileCount = 0) => ({
   status,

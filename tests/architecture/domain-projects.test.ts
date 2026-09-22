@@ -1,40 +1,37 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 
 import { MilestoneStatus, ProjectStatus, Role } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   canEditProject,
   canManageProject,
   projectManageScope,
   projectReadScope,
-} from "../../lib/domain/access/projects";
+} from "@/lib/domain/access/projects";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
   DomainStaleVersionError,
   DomainTransitionError,
   DomainValidationError,
-} from "../../lib/domain/errors";
-import { resolveDueStageClaim } from "../../lib/domain/invoices/stage-claim";
+} from "@/lib/domain/errors";
+import { resolveDueStageClaim } from "@/lib/domain/invoices/stage-claim";
 import {
   createMilestone,
   updateMilestone,
-} from "../../lib/domain/projects/milestones";
-import { getProjectKPIs } from "../../lib/domain/projects/queries";
+} from "@/lib/domain/projects/milestones";
+import { getProjectKPIs } from "@/lib/domain/projects/queries";
 import {
   isCompleteProjectRequirements,
   mergeProjectRequirementsPatch,
   updateProjectRequirements,
-} from "../../lib/domain/projects/requirements";
-import { decideVariation } from "../../lib/domain/projects/variations";
-import { createProjectUpdate } from "../../lib/domain/projects/resources";
-import {
-  anonymousPrincipal,
-  systemPrincipal,
-} from "../../lib/domain/principal";
+} from "@/lib/domain/projects/requirements";
+import { decideVariation } from "@/lib/domain/projects/variations";
+import { createProjectUpdate } from "@/lib/domain/projects/resources";
+import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 
 import {
   adminPrincipal,

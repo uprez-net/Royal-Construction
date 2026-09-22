@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { lifecycleActionFor } from "../../lib/offer/lifecycle-busy";
+import { lifecycleActionFor } from "@/lib/offer/lifecycle-busy";
 
 // While a status change, recall or revision ran, the workspace's guard dropped
 // any other lifecycle click, yet every lifecycle button stayed enabled, so the

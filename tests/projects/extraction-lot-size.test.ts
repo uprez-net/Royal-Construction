@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   createEmptyProjectExtractionData,
   projectExtractionSchema,
-} from "../../types/project-extraction";
+} from "@/types/project-extraction";
 
 // The Create Project review step re-parses the whole extraction object on
 // every keystroke (`updateExtractionField` → `projectExtractionSchema.parse`).

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   HBCF_DEFAULT_PROJECTION_MONTHS,
@@ -14,7 +14,7 @@ import {
   hbcfProjectionMonths,
   hbcfUsedAt,
   type HbcfProjectClaim,
-} from "../../lib/insurance/hbcf";
+} from "@/lib/insurance/hbcf";
 
 const TODAY = new Date(2026, 7, 18); // 18 Aug 2026, local.
 

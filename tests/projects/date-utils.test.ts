@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   normalizeDateString,
   formatDisplayDate,
   compareSignedAndStartDates,
   SIGNED_START_TOLERANCE_DAYS,
-} from "../../utils/date";
+} from "@/utils/date";
 
 // ---------------------------------------------------------------------------
 // normalizeDateString — OCR formats

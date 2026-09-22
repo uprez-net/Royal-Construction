@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   ROYAL_BLOB_HOST,
   allowedOfferImageHost,
   isAllowedOfferImageUrl,
-} from "../../lib/offer/offer-image-url";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+} from "@/lib/offer/offer-image-url";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -14,8 +14,8 @@ import {
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   LEGACY_CALC_VERSION,
@@ -23,7 +23,7 @@ import {
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 
 // The customer PDF renderers fetch every offer image URL from inside our
 // network, and the URL arrives in a client-supplied snapshot. Any URL used to be

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   ROOT,
@@ -82,9 +82,9 @@ test("lib/domain reaches no Next-only, Clerk-Next, React or Eve package", () => 
   const { violations } = walkGraph({
     entryFiles: collectSourceFiles(DOMAIN_DIR),
     forbiddenPackage: (specifier) =>
-      isForbiddenPackage(specifier) ||
-      specifier === "eve" ||
-      specifier.startsWith("eve/"),
+      isForbiddenPackage(specifier)
+      || specifier === "eve"
+      || specifier.startsWith("eve/"),
     forbiddenPath: isForbiddenPath,
   });
 

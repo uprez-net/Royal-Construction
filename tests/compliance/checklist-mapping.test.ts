@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { ComplianceDocumentType } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   CHECKLIST_MAPPABLE_TYPES,
   isChecklistMappableType,
   mappedDocumentSource,
-} from "../../constants/complianceDocuments";
+} from "@/constants/complianceDocuments";
 import {
   checklistDocumentType,
   isMappedCopy,
   planChecklistCopy,
-} from "../../lib/compliance/checklist-mapping";
+} from "@/lib/compliance/checklist-mapping";
 
 /**
  * Reading a certifier's checklist line and saying what it asks for.

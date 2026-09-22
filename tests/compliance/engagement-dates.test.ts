@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 
 import {
   ComplianceDocumentType,
@@ -7,10 +6,11 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
-import { reviveComplianceEngagementDates } from "../../lib/domain/compliance/engagement-dates";
-import { complianceStageFlow } from "../../lib/domain/compliance/stage-flow";
-import type { CertifierEngagementDetail } from "../../types/compliance";
+import { reviveComplianceEngagementDates } from "@/lib/domain/compliance/engagement-dates";
+import { complianceStageFlow } from "@/lib/domain/compliance/stage-flow";
+import type { CertifierEngagementDetail } from "@/types/compliance";
 
 const apiEngagement = () =>
   ({

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // /offers streams its skeleton first, then swaps in PageHeroCard. The skeleton's
 // hero was a flat tint with p-6 while the real hero is a gradient Card with

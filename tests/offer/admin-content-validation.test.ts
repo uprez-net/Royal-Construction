@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   hbcfClaimDataSchema,
   offerScopeDataSchema,
   offerScopeWriteSchema,
-} from "../../lib/validations/admin-offer-content";
+} from "@/lib/validations/admin-offer-content";
 
 const read = (path: string) =>
   readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");

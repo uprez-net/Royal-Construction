@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { readFileSync } from "node:fs";
+import { test } from "vitest";
 
-import * as ids from "../../components/offers/admin/shared/undo-toast-ids";
+import * as ids from "@/components/offers/admin/shared/undo-toast-ids";
 
 // Two pending Undo toasts in one list restored their rows against a list that
 // had already changed, so the rows came back in the wrong order. Each list now

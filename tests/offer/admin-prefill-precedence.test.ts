@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   resolveAllowances,
   resolveDraft,
-} from "../../lib/offer/admin-offer-prefill";
+} from "@/lib/offer/admin-offer-prefill";
 import {
   EMPTY_ADMIN_OFFER_CONTENT,
   type AdminOfferContent,
-} from "../../types/admin-offer-content";
+} from "@/types/admin-offer-content";
 import {
   OFFER_EXCLUDES_BULLETS,
   STANDARD_INCLUSION_ENTRIES,
   STANDARD_INCLUSION_HIGHLIGHTS,
-} from "../../lib/offer/workspace-proposal-content";
+} from "@/lib/offer/workspace-proposal-content";
 
 // resolveDraft used to spread the hardcoded constants FIRST and then append only
 // those admin lines that did not already match one. Because the seed writes
