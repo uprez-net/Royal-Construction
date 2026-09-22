@@ -22,6 +22,7 @@ import {
   ALERT_SOURCE_LABEL,
   COMPLIANCE_ALERT_COPY,
 } from "@/constants/complianceAlerts";
+import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
@@ -71,6 +72,7 @@ function ComplianceAlertRow({
   isBusy: boolean;
 }) {
   const dispatch = useAppDispatch();
+  const followUpKey = useIdempotencyKey();
   const copy = COMPLIANCE_ALERT_COPY[alert.type];
   const isOpen = alert.status === ComplianceAlertStatus.OPEN;
 
@@ -94,8 +96,17 @@ function ComplianceAlertRow({
   const handleFollowUp = async () => {
     try {
       await dispatch(
-        sendComplianceFollowUp({ projectId, alertId: alert.id }),
+        sendComplianceFollowUp({
+          projectId,
+          alertId: alert.id,
+          // Held until this send succeeds, so a second click lands on the same
+          // key and the consultant is chased once. Rotating on success is what
+          // lets the office chase them again later the same day, which the
+          // derived day-bucket key used to report as sent and swallow.
+          idempotencyKey: followUpKey.current(),
+        }),
       ).unwrap();
+      followUpKey.rotate();
       toast.success("Follow-up sent.");
     } catch (error) {
       toast.error(
@@ -328,17 +339,17 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
       // every one of those pushed a genuinely upcoming trade further down a
       // list that shows four.
       const isConfirmedAndAhead =
-        (schedule.status === "CONFIRMED" ||
-          schedule.status === "PENDING_FINAL_CONFIRMATION") &&
-        new Date(schedule.scheduledDate) >= today;
+        (schedule.status === "CONFIRMED"
+          || schedule.status === "PENDING_FINAL_CONFIRMATION")
+        && new Date(schedule.scheduledDate) >= today;
 
       // Kept as it was, and deliberately not bounded the same way: this arm is
       // about a milestone falling due within the week, which is actionable
       // whatever state the booking behind it is in.
       const targetDate = schedule.milestone?.targetDate;
       const isMilestoneDueSoon =
-        targetDate &&
-        isWithinInterval(new Date(targetDate), {
+        targetDate
+        && isWithinInterval(new Date(targetDate), {
           start: now,
           end: nextWeek,
         });
@@ -389,8 +400,8 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
     if (!party) return false;
     const outreach = outreachForParty(engagement, party);
     return Boolean(
-      outreach?.contactEmail &&
-      outreach.mode === ComplianceOutreachMode.OUTREACH,
+      outreach?.contactEmail
+      && outreach.mode === ComplianceOutreachMode.OUTREACH,
     );
   };
 
@@ -433,8 +444,8 @@ export function ProjectAlerts({ project }: { project: ProjectDetail }) {
                 projectId={project.id}
                 canFollowUp={canChaseAlert(alert)}
                 isBusy={
-                  complianceMutations[complianceScope.alert(alert.id)]
-                    ?.status === "pending"
+                  complianceMutations[complianceScope.alert(alert.id)]?.status
+                  === "pending"
                 }
               />
             ))}

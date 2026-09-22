@@ -83,6 +83,7 @@ import {
   type ComplianceStageId,
 } from "@/lib/domain/compliance/stage-flow";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
+import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { openModal } from "@/lib/store/slices/uiSlice";
 import {
@@ -278,6 +279,7 @@ export function ProjectComplianceTab({
   isAdmin,
 }: ProjectComplianceTabProps) {
   const dispatch = useAppDispatch();
+  const partyReplyKey = useIdempotencyKey();
   const complianceMutations = useAppSelector(selectComplianceMutations);
   const developerPendingDocument = useAppSelector(
     selectDeveloperPendingDocument,
@@ -347,8 +349,8 @@ export function ProjectComplianceTab({
    * so every row gets the same not-required control, including empty rows.
    */
   const missingDaRows =
-    hasDa &&
-    DA_DOCUMENTS.some((document) => !documentsByType.has(document.type));
+    hasDa
+    && DA_DOCUMENTS.some((document) => !documentsByType.has(document.type));
 
   useEffect(() => {
     if (!missingDaRows) return;
@@ -409,8 +411,8 @@ export function ProjectComplianceTab({
     () =>
       (engagement?.documents ?? []).filter(
         (document) =>
-          document.documentType === ComplianceDocumentType.UNKNOWN &&
-          document.files.length > 0,
+          document.documentType === ComplianceDocumentType.UNKNOWN
+          && document.files.length > 0,
       ),
     [engagement],
   );
@@ -428,8 +430,8 @@ export function ProjectComplianceTab({
     [engagement],
   );
   const isSentForReview = (document: ComplianceDocumentWithFiles) =>
-    document.files.length > 0 &&
-    document.files.every((file) => certifierSentUrls.has(file.url));
+    document.files.length > 0
+    && document.files.every((file) => certifierSentUrls.has(file.url));
   const unsentSubmissionDocuments = submissionDocuments.filter(
     (document) => !isNotRequired(document.status) && !isSentForReview(document),
   );
@@ -460,8 +462,8 @@ export function ProjectComplianceTab({
     // documents the DA itself needs are still collected, on the DA list, and
     // those of them the certifier also asked for fill these rows as they land.
     if (
-      checklistBlocked &&
-      document?.documentType === ComplianceDocumentType.CHECKLIST_ITEM
+      checklistBlocked
+      && document?.documentType === ComplianceDocumentType.CHECKLIST_ITEM
     ) {
       return "frozen";
     }
@@ -477,11 +479,11 @@ export function ProjectComplianceTab({
     // working from with no way to put it back. Corrections to a document they
     // already hold go out on the thread, as one message about one file.
     if (
-      document &&
-      engagement &&
-      !canSendRequiredPack(engagement) &&
-      (isRequiredDocumentType(document.documentType) ||
-        isSignedCopyType(document.documentType))
+      document
+      && engagement
+      && !canSendRequiredPack(engagement)
+      && (isRequiredDocumentType(document.documentType)
+        || isSignedCopyType(document.documentType))
     ) {
       return "frozen";
     }
@@ -708,8 +710,16 @@ export function ProjectComplianceTab({
     input: { body: string; attachments: CertifierReplyAttachment[] },
   ) => {
     await dispatch(
-      sendPartyReply({ projectId: project.id, outreachId, ...input }),
+      sendPartyReply({
+        projectId: project.id,
+        outreachId,
+        ...input,
+        // Held until the send lands, so a retry cannot put the same
+        // message on the party thread twice.
+        idempotencyKey: partyReplyKey.current(),
+      }),
     ).unwrap();
+    partyReplyKey.rotate();
     toast.success("Message sent.");
   };
 
@@ -855,9 +865,9 @@ export function ProjectComplianceTab({
       document,
       approval,
       hasRevised: Boolean(
-        approval?.decision === ComplianceApprovalDecision.REJECTED &&
-        document?.files.length &&
-        !outstanding,
+        approval?.decision === ComplianceApprovalDecision.REJECTED
+        && document?.files.length
+        && !outstanding,
       ),
     } satisfies DeveloperApprovalItem;
   });
@@ -982,12 +992,12 @@ export function ProjectComplianceTab({
       return {
         documentType,
         checklistDocumentId:
-          line?.id ??
+          line?.id
           // Only for the party's single deliverable, and only where the button
           // was pressed on a row: attaching an unlabelled line to all three of a
           // structural engineer's documents would file whichever arrived first
           // onto a line asking for something else.
-          (produces.length === 1 ? pressedOn : undefined),
+          ?? (produces.length === 1 ? pressedOn : undefined),
       };
     });
   };
@@ -1011,8 +1021,8 @@ export function ProjectComplianceTab({
 
     const direct = engagement.outreaches.find(
       (outreach) =>
-        outreach.checklistDocumentId === item.id ||
-        outreach.deliverables.some(
+        outreach.checklistDocumentId === item.id
+        || outreach.deliverables.some(
           (deliverable) => deliverable.checklistDocumentId === item.id,
         ),
     );
@@ -1022,8 +1032,8 @@ export function ProjectComplianceTab({
     const party =
       documentType === ComplianceDocumentType.WASTE_MANAGEMENT_PLAN
         ? WASTE_MANAGEMENT_PLAN_PARTY
-        : (consultantForDocumentType(documentType) ??
-          (documentType ? partyForDocumentType(documentType) : null));
+        : (consultantForDocumentType(documentType)
+          ?? (documentType ? partyForDocumentType(documentType) : null));
     if (!party) return null;
 
     const outreach = outreachForParty(engagement, party);
@@ -1481,14 +1491,14 @@ export function ProjectComplianceTab({
   }
 
   const collecting =
-    engagement.status === CertifierEngagementStatus.NOT_STARTED ||
-    engagement.status === CertifierEngagementStatus.COLLECTING_DOCS;
+    engagement.status === CertifierEngagementStatus.NOT_STARTED
+    || engagement.status === CertifierEngagementStatus.COLLECTING_DOCS;
 
   // Every conversation on the file, not just the certifier's. The badge is a
   // count of what is behind the button, and the button now opens four threads.
   const threadMessageCount =
-    engagement.emails.length +
-    engagement.outreaches.reduce(
+    engagement.emails.length
+    + engagement.outreaches.reduce(
       (total, outreach) => total + outreach.emails.length,
       0,
     );
@@ -1501,11 +1511,11 @@ export function ProjectComplianceTab({
   // has not been placed yet. Without this the blocks stayed hidden and the
   // engagement stranded whenever the classifier was unsure.
   const hasResponse =
-    unidentified.length > 0 ||
-    engagement.documents.some(
+    unidentified.length > 0
+    || engagement.documents.some(
       (document) =>
-        document.status === ComplianceDocumentStatus.RECEIVED &&
-        CERTIFIER_RESPONSE_DOCUMENTS.some(
+        document.status === ComplianceDocumentStatus.RECEIVED
+        && CERTIFIER_RESPONSE_DOCUMENTS.some(
           (response) => response.type === document.documentType,
         ),
     );
@@ -1738,8 +1748,8 @@ export function ProjectComplianceTab({
    * card that unlocks and the card the tab opens on cannot disagree.
    */
   const checklistPassed =
-    engagement.status === CertifierEngagementStatus.APPROVED ||
-    engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED;
+    engagement.status === CertifierEngagementStatus.APPROVED
+    || engagement.status === CertifierEngagementStatus.CERTIFICATE_ISSUED;
 
   /**
    * Which certificate this file closes on, and the application behind it.
@@ -1798,8 +1808,8 @@ export function ProjectComplianceTab({
                 // owes something. Falls back to the surveyor, which is where a
                 // file with nothing outstanding began and where a finished one
                 // reads fine.
-                (partySections.find((section) => !section.isComplete)?.party ??
-                CompliancePartyType.SURVEYOR);
+                (partySections.find((section) => !section.isComplete)?.party
+                ?? CompliancePartyType.SURVEYOR);
 
   const isOpen = (key: SectionKey) => sections[key] ?? key === activeSection;
   const toggleSection = (key: SectionKey) => (open: boolean) =>
@@ -1864,8 +1874,8 @@ export function ProjectComplianceTab({
   ) =>
     documents.filter(
       (document) =>
-        document &&
-        (document.files.length > 0 || isNotRequired(document.status)),
+        document
+        && (document.files.length > 0 || isNotRequired(document.status)),
     ).length;
 
   /**
@@ -2216,9 +2226,9 @@ export function ProjectComplianceTab({
                     type="button"
                     className="w-full"
                     disabled={
-                      !signedCopiesSent ||
-                      !checklistDocument ||
-                      checklistRequestBusy
+                      !signedCopiesSent
+                      || !checklistDocument
+                      || checklistRequestBusy
                     }
                     onClick={() =>
                       dispatch(
@@ -2272,8 +2282,8 @@ export function ProjectComplianceTab({
                   // to the certifier as one act, so neither row is editable
                   // while that is happening.
                   isBusy={
-                    isScopeBusy(scopeOf(signed.document, signed.type)) ||
-                    isScopeBusy(complianceScope.signedCopies)
+                    isScopeBusy(scopeOf(signed.document, signed.type))
+                    || isScopeBusy(complianceScope.signedCopies)
                   }
                   onUpload={(file) =>
                     void attachSignedCopy(
@@ -2397,9 +2407,9 @@ export function ProjectComplianceTab({
                   // has already settled.
                   items={activeDeveloperItems.filter(
                     (item) =>
-                      item.documentType !==
-                        ComplianceDocumentType.BUSHFIRE_REPORT ||
-                      needsBushfireReport,
+                      item.documentType
+                        !== ComplianceDocumentType.BUSHFIRE_REPORT
+                      || needsBushfireReport,
                   )}
                   isBusy={isScopeBusy(complianceScope.developer)}
                   pendingDocumentType={developerPendingDocument}
@@ -2446,8 +2456,8 @@ export function ProjectComplianceTab({
                 />
               }
               blockedReason={
-                developerPlansBlockedReason(engagement) ??
-                bushfireDeveloperBlockedReason
+                developerPlansBlockedReason(engagement)
+                ?? bushfireDeveloperBlockedReason
               }
             />
           ) : null}
@@ -2520,10 +2530,10 @@ export function ProjectComplianceTab({
                     onReject={() => handleReject(item)}
                     sentForReview={sentForReview}
                     onSendForReview={
-                      item.files.length > 0 &&
-                      !sentForReview &&
-                      !item.rejectionReason &&
-                      !checklistBlocked
+                      item.files.length > 0
+                      && !sentForReview
+                      && !item.rejectionReason
+                      && !checklistBlocked
                         ? () => void handleSendDocumentForReview(item)
                         : undefined
                     }
@@ -2533,10 +2543,10 @@ export function ProjectComplianceTab({
                     // approval or a rejection rather than as a row nobody has
                     // to fill in any more.
                     onSetNotRequired={
-                      isAdmin &&
-                      !inReview &&
-                      !sentForReview &&
-                      !checklistBlocked
+                      isAdmin
+                      && !inReview
+                      && !sentForReview
+                      && !checklistBlocked
                         ? (notRequired) =>
                             void handleSetNotRequired(item, notRequired)
                         : undefined

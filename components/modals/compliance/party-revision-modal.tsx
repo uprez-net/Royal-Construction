@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PARTY_LABEL } from "@/constants/complianceDocuments";
+import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import { buildPartyRevisionBody } from "@/lib/domain/compliance/party-outreach-email";
 import { emailHtmlToLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 import type { LeadRichTextDocument } from "@/lib/leads/types";
@@ -66,6 +67,7 @@ export function PartyRevisionModal({
   onOpenChange,
 }: PartyRevisionModalProps) {
   const dispatch = useAppDispatch();
+  const replyKey = useIdempotencyKey();
   const mutation = useAppSelector(
     selectComplianceMutation(complianceScope.partyReply(outreachId)),
   );
@@ -98,8 +100,12 @@ export function PartyRevisionModal({
           bodyFormat: "html",
           attachments,
           extraAttachmentIds: extraAttachmentIds(extras),
+          // One key per attempt: a resend of the same revision request
+          // must not put two of them on the consultant's thread.
+          idempotencyKey: replyKey.current(),
         }),
       ).unwrap();
+      replyKey.rotate();
       toast.success(`Revision requested from the ${label.toLowerCase()}.`);
       onOpenChange(false);
     } catch (error) {
@@ -238,10 +244,10 @@ export function PartyRevisionModal({
           <Button
             type="button"
             disabled={
-              isSending ||
-              isAttachingExtras ||
-              !emailBody.html.trim() ||
-              attachments.length === 0
+              isSending
+              || isAttachingExtras
+              || !emailBody.html.trim()
+              || attachments.length === 0
             }
             onClick={() => void handleSend()}
           >

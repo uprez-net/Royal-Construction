@@ -40,6 +40,7 @@ import {
   partyDeliverables,
 } from "@/constants/complianceDocuments";
 import { useComplianceUpload } from "@/hooks/use-compliance-upload";
+import { useIdempotencyKey } from "@/hooks/use-idempotency-key";
 import {
   buildPartyOutreachBody,
   type OutreachClientDetails,
@@ -152,6 +153,7 @@ export function ConnectPartyModal({
   onOpenChange,
 }: ConnectPartyModalProps) {
   const dispatch = useAppDispatch();
+  const outreachKey = useIdempotencyKey();
   const mutation = useAppSelector(
     selectComplianceMutation(complianceScope.party(party)),
   );
@@ -200,9 +202,9 @@ export function ConnectPartyModal({
   // to the same document from somewhere else, which is the case the scope key
   // exists to serialise.
   const isDeedBusy =
-    isAttachingDeed ||
-    isUploading(deedScope) ||
-    deedMutation.status === "pending";
+    isAttachingDeed
+    || isUploading(deedScope)
+    || deedMutation.status === "pending";
 
   const label = PARTY_LABEL[party];
   const trade = PARTY_TRADE_LABEL[party];
@@ -328,8 +330,12 @@ export function ConnectPartyModal({
           deliverables,
           extraAttachmentIds: extraAttachmentIds(extras),
           developerKey: developer?.key,
+          // The opening email carries the pack. One key per attempt, so a
+          // resubmit of this form cannot send a consultant two copies.
+          idempotencyKey: outreachKey.current(),
         }),
       ).unwrap();
+      outreachKey.rotate();
       toast.success(`${label} engaged.`);
       onOpenChange(false);
     } catch (error) {
@@ -343,12 +349,12 @@ export function ConnectPartyModal({
 
   const attachments = needsDeed ? (deed ? [deed] : []) : prefilled;
   const canSubmit =
-    Boolean(resolvedContact) &&
-    Boolean(emailBody.html.trim()) &&
-    !isPending &&
-    !isDeedBusy &&
-    !isAttachingExtras &&
-    (!needsDeed || Boolean(deed));
+    Boolean(resolvedContact)
+    && Boolean(emailBody.html.trim())
+    && !isPending
+    && !isDeedBusy
+    && !isAttachingExtras
+    && (!needsDeed || Boolean(deed));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
