@@ -27,6 +27,8 @@
     "prisma:migrate-deploy": "prisma migrate deploy",
     "eve:build": "eve build",
     "eve:eval": "eve eval --strict --junit .eve/junit.xml",
+    "eve:eval:staging": "tsx scripts/eve-eval-staging.ts",
+    "eve:eval:fixtures": "tsx scripts/eve-eval-fixtures.ts",
     "seed:projects": "tsx prisma/seed-projects.ts",
     "seed:tradies": "tsx prisma/seed-tradie.ts",
     "seed:admin-offer-content": "tsx scripts/seed-admin-offer-content.ts",
