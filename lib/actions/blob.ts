@@ -1,9 +1,11 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { del } from "@vercel/blob";
 import { getUserByClerkIdCached } from "@/lib/data/user";
-import { assertCanAccessLead } from "@/lib/offer/access";
+import prisma from "@/lib/prisma";
+import { vercelBlobDelete } from "@/lib/blob-port";
+import { deleteLeadFile } from "@/lib/domain/files";
+import { userPrincipal } from "@/lib/domain/principal";
 
 export async function deleteLeadBlob(blobUrl: string, leadId: string) {
   const { userId } = await auth();
@@ -16,17 +18,12 @@ export async function deleteLeadBlob(blobUrl: string, leadId: string) {
     throw new Error("Unauthorized");
   }
 
-  const parsedLeadId = Number(leadId);
-  if (!Number.isInteger(parsedLeadId)) {
-    throw new Error("Invalid lead ID");
-  }
-
-  await assertCanAccessLead(user, parsedLeadId);
-
-  const pathname = decodeURIComponent(new URL(blobUrl).pathname);
-  if (!pathname.includes(`/leads/${leadId}/`)) {
-    throw new Error("Blob does not belong to this lead");
-  }
-
-  await del(blobUrl);
+  // The lead check, the path check and the delete are one command now. This
+  // action supplies the identity and the storage capability, nothing else.
+  await deleteLeadFile(
+    userPrincipal(user),
+    { blobUrl, leadId },
+    prisma,
+    vercelBlobDelete,
+  );
 }

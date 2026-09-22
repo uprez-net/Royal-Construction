@@ -2,7 +2,7 @@
 
 import { upload } from "@vercel/blob/client";
 import Image from "next/image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { buildBlobPath } from "@/utils/formatters";
 import type { ClientPayload } from "@/utils/validators/files";
@@ -48,6 +48,7 @@ export function OfferWorkspaceImages({
   >({});
   const [error, setError] = useState<string | null>(null);
   const [dropboxBusy, setDropboxBusy] = useState(false);
+  const aiInFlightRef = useRef(new Set<OfferImageSlotKey>());
   const {
     configured: dropboxConfigured,
     ready: dropboxReady,
@@ -55,10 +56,13 @@ export function OfferWorkspaceImages({
   } = useDropboxChooser();
 
   async function handleGenerate(key: OfferImageSlotKey) {
+    if (aiInFlightRef.current.has(key)) return;
+    aiInFlightRef.current.add(key);
     setError(null);
     onAiBusyChange(key, true);
     try {
       const result = await generateOfferInspirationImage({
+        attemptId: uuidv4(),
         slotKey: key,
         buildType,
         finishContext: finishContexts?.[key],
@@ -69,6 +73,7 @@ export function OfferWorkspaceImages({
         setError(result.error);
       }
     } finally {
+      aiInFlightRef.current.delete(key);
       onAiBusyChange(key, false);
     }
   }

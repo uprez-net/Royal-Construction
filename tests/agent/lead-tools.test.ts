@@ -45,9 +45,14 @@ test("task creation requires an offset timestamp and known task type", () => {
 test("lead operations resolve the current actor and shared record scope", async () => {
   const source = await readFile("agent/lib/lead-operations.ts", "utf8");
   assert.match(source, /requireCurrentAgentActor/);
-  assert.match(source, /assertCanAccessLead/);
-  assert.match(source, /leadListScope/);
+  // The scope rule and the reads that apply it now live in lib/domain, shared
+  // with the app (issue #301); the specialist calls them and maps the result.
+  assert.match(source, /@\/lib\/domain\/access\/leads/);
+  assert.match(source, /@\/lib\/domain\/leads\/queries/);
+  assert.match(source, /searchLeads/);
   assert.doesNotMatch(source, /clerkId\s*:/);
+  // No client of its own: it takes the handle from the named agent seam.
+  assert.doesNotMatch(source, /from "@\/lib\/prisma"/);
 });
 
 test("every lead mutation is owner-approved and uses the audit/idempotency gate", async () => {

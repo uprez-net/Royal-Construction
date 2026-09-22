@@ -3,12 +3,7 @@
 import { revalidateTag } from "next/cache";
 import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { authorizeOfferAccess } from "@/lib/data/offer-access";
-import {
-  EnvelopeDocType,
-  EnvelopeStatus,
-  OfferStatus,
-  SignerRole,
-} from "@prisma/client";
+import { EnvelopeDocType, OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
@@ -30,11 +25,7 @@ import {
   buildTenderEnvelopeRecipientRecords,
   createTenderEnvelope,
 } from "@/lib/docusign/tender-envelope";
-import {
-  beginEnvelopeSendAttempt,
-  resolveEnvelopeCreateError,
-  resolveEnvelopeSendAttempt,
-} from "@/lib/docusign/envelope-send-attempt";
+import { resolveEnvelopeCreateError } from "@/lib/docusign/envelope-send-attempt";
 import { randomUUID } from "node:crypto";
 import { withTenderPaymentTerms } from "@/lib/offer/contract-payment-source";
 import {
@@ -42,10 +33,27 @@ import {
   offerAreaBasisFromJob,
 } from "@/lib/offer/workspace-area";
 import { cancelRacedSend } from "@/lib/docusign/cancel-raced-send";
+import {
+  beginEnvelopeSendAttempt,
+  claimEnvelopeSend,
+  persistSentEnvelope,
+  readOfferForSend,
+  recordEnvelopeSendEvent,
+  releaseEnvelopeSendClaim,
+  resolveEnvelopeSendAttempt,
+  writeTenderEnvelopeDocument,
+} from "@/lib/domain/offers/envelope-send";
+import { userPrincipal } from "@/lib/domain/principal";
+import type { EnvelopeSendPort } from "@/lib/domain/ports/envelope-send";
 
 type TenderSendResult =
   | { ok: true; reference: string; envelopeId: string }
   | { ok: false; error: string; status?: "TENDER_SENT" };
+
+const tenderEnvelopePort: EnvelopeSendPort<
+  Parameters<typeof createTenderEnvelope>[0],
+  Awaited<ReturnType<typeof createTenderEnvelope>>
+> = { send: createTenderEnvelope };
 
 // Generate the Tender PDF from the frozen workspace snapshot and send it as a
 // runtime DocuSign envelope (no template): signature tabs AutoPlace onto the
@@ -60,26 +68,13 @@ export async function sendTenderForSignature(input: {
     return { ok: false, error: access.error };
   }
 
-  const offer = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      id: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      workspaceState: true,
-      lead: true,
-    },
-  });
-  if (!offer) {
-    return { ok: false, error: "Offer not found." };
-  }
+  const offer = await readOfferForSend(prisma, input.offerId);
   if (!offer.workspaceState) {
     return { ok: false, error: "Save the offer before sending the Tender." };
   }
   if (
-    offer.offerStatus !== OfferStatus.TENDER_DRAFT &&
-    offer.offerStatus !== OfferStatus.AGREED
+    offer.offerStatus !== OfferStatus.TENDER_DRAFT
+    && offer.offerStatus !== OfferStatus.AGREED
   ) {
     return {
       ok: false,
@@ -207,38 +202,43 @@ export async function sendTenderForSignature(input: {
   // Atomically claim the send so two concurrent calls can't both create a
   // DocuSign envelope (double-send). Only the caller that flips the status off
   // TENDER_DRAFT/AGREED proceeds; the claim is released on envelope failure.
-  const claim = await prisma.offer.updateMany({
-    where: {
-      id: offer.id,
-      offerStatus: { in: [OfferStatus.TENDER_DRAFT, OfferStatus.AGREED] },
-    },
-    data: { offerStatus: OfferStatus.TENDER_SENT },
+  const claim = await claimEnvelopeSend(prisma, {
+    fromStatuses: [OfferStatus.TENDER_DRAFT, OfferStatus.AGREED],
+    offerId: offer.id,
+    previousStatus: offer.offerStatus,
+    toStatus: OfferStatus.TENDER_SENT,
   });
-  if (claim.count === 0) {
+  if (claim.kind === "refused") {
     return {
       ok: false,
-      error: "The Tender is already being sent or has been sent.",
+      error:
+        claim.currentStatus === null
+          ? "This offer no longer exists."
+          : `The Tender cannot be sent from ${claim.currentStatus}; reload the live offer revision.`,
     };
   }
 
   const sendAttemptId = `${offer.id}.${randomUUID()}`;
   const attemptStarted = new Date();
-  // Before the send, not after it goes wrong. See beginEnvelopeSendAttempt:
-  // written in the catch instead, a failed write left nothing blocking a
-  // recall, so a resend could put a second live document in front of the
-  // customer — the exact thing this record exists to prevent.
-  const sendAttemptRecordId = await beginEnvelopeSendAttempt({
-    offerId: offer.id,
-    docType: EnvelopeDocType.TENDER,
-    sendAttemptId,
+  // Before the send, not after it goes wrong (issue #321). Written in the
+  // catch instead, a failed write left nothing blocking a recall, so a resend
+  // could put a second live document in front of the customer — the exact
+  // thing this record exists to prevent. Writing it first also covers the case
+  // no catch can reach: the process dying mid-send.
+  const sendAttemptRecordId = await beginEnvelopeSendAttempt(prisma, {
     attemptStarted,
+    docType: EnvelopeDocType.TENDER,
+    offerId: offer.id,
+    sendAttemptId,
   });
   if (sendAttemptRecordId === null) {
-    // Give the claim back, exactly as the rejection path does — nothing
-    // was sent, so the offer must not sit at *_SENT.
-    await prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
-      data: { offerStatus: offer.offerStatus },
+    // Give the claim back, exactly as the rejection path does — nothing was
+    // sent, so the offer must not sit at *_SENT. Refusing a send is
+    // recoverable; sending with nothing to block a later recall is not.
+    await releaseEnvelopeSendClaim(prisma, {
+      claimedStatus: OfferStatus.TENDER_SENT,
+      offerId: offer.id,
+      previousStatus: offer.offerStatus,
     });
     return {
       ok: false,
@@ -252,7 +252,7 @@ export async function sendTenderForSignature(input: {
   > | null = null;
   try {
     docusignContext = await createDocusignContext(config);
-    envelope = await createTenderEnvelope({
+    envelope = await tenderEnvelopePort.send({
       context: docusignContext,
       config,
       pdfBase64,
@@ -297,27 +297,12 @@ export async function sendTenderForSignature(input: {
         recovery.reason,
         error,
       );
-      await prisma.offerStatusEvent
-        .create({
-          data: {
-            // offer.offerStatus, not a literal: the claim above accepts
-            // TENDER_DRAFT *or* AGREED, so a direct send from AGREED was
-            // recording a transition that never happened.
-            offerId: offer.id,
-            fromStatus: offer.offerStatus,
-            toStatus: OfferStatus.TENDER_SENT,
-            note: `DocuSign did not respond in time — checking whether the Tender envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
-            actorId: access.user.id,
-          },
-        })
-        .catch((eventError) =>
-          console.error(
-            "[offer] recording the unknown tender envelope outcome failed:",
-            eventError,
-          ),
-        );
-      // The record written before the send stays unresolved, which is what
-      // makes a recall or revision refuse until this is reconciled.
+      await recordEnvelopeSendEvent(userPrincipal(access.user), prisma, {
+        fromStatus: offer.offerStatus,
+        note: `DocuSign did not respond in time — checking whether the Tender envelope was sent (${recovery.reason}). Do not resend until this is reconciled.`,
+        offerId: offer.id,
+        toStatus: OfferStatus.TENDER_SENT,
+      });
       return {
         ok: false,
         error:
@@ -330,28 +315,19 @@ export async function sendTenderForSignature(input: {
         reason,
         error,
       );
-      await prisma.offerStatusEvent
-        .create({
-          data: {
-            offerId: offer.id,
-            fromStatus: offer.offerStatus,
-            toStatus: offer.offerStatus,
-            note: `DocuSign rejected the Tender envelope: ${reason}`,
-            actorId: access.user.id,
-          },
-        })
-        .catch((eventError) =>
-          console.error(
-            "[offer] recording the rejected tender envelope failed:",
-            eventError,
-          ),
-        );
-      // Definitively refused, so nothing is out for signature and the
-      // attempt must stop blocking recall.
-      await resolveEnvelopeSendAttempt(sendAttemptRecordId);
-      await prisma.offer.updateMany({
-        where: { id: offer.id, offerStatus: OfferStatus.TENDER_SENT },
-        data: { offerStatus: offer.offerStatus },
+      await recordEnvelopeSendEvent(userPrincipal(access.user), prisma, {
+        fromStatus: offer.offerStatus,
+        note: `DocuSign rejected the Tender envelope: ${reason}`,
+        offerId: offer.id,
+        toStatus: offer.offerStatus,
+      });
+      // Definitively refused, so nothing is out for signature and the attempt
+      // must stop blocking a recall.
+      await resolveEnvelopeSendAttempt(prisma, sendAttemptRecordId);
+      await releaseEnvelopeSendClaim(prisma, {
+        claimedStatus: OfferStatus.TENDER_SENT,
+        offerId: offer.id,
+        previousStatus: offer.offerStatus,
       });
       return {
         ok: false,
@@ -366,106 +342,40 @@ export async function sendTenderForSignature(input: {
     JSON.stringify(withTenderPaymentTerms(proposalInput)),
   );
 
-  const stillClaimed = await prisma
-    .$transaction(async (tx) => {
-      // Claim first, then write. Returning from a transaction callback COMMITS
-      // it (only a throw rolls back), so a recall or Create revision that ran
-      // while DocuSign was creating the envelope used to have the writes below
-      // land anyway: the stored document was replaced and executedPdfUrl cleared
-      // on a document that may already be executed, even though the raced
-      // envelope is voided straight after. The envelope row is still written, so
-      // the raced envelope stays on the audit trail and can be cancelled.
-      const stillSent = await tx.offer.updateMany({
-        where: {
-          id: offer.id,
-          offerStatus: OfferStatus.TENDER_SENT,
-          isActive: true,
-        },
-        data: { offerStatus: OfferStatus.TENDER_SENT },
-      });
-      const claimed = stillSent.count > 0;
-      const tender = await tx.tender.upsert({
-        where: { offerId: offer.id },
-        // A new envelope replaces the document, so the last envelope's executed
-        // PDF no longer describes it. The webhook files this one's on completion.
-        // A raced send owns nothing, so it leaves the stored document alone.
-        update: claimed
-          ? {
-              version: offer.revisionNumber,
-              documentData,
-              executedPdfUrl: null,
-            }
-          : {},
-        create: {
+  const persisted = await persistSentEnvelope(
+    userPrincipal(access.user),
+    prisma,
+    {
+      claimedStatus: OfferStatus.TENDER_SENT,
+      docType: EnvelopeDocType.TENDER,
+      sendAttemptRecordId,
+      documentVersion: offer.revisionNumber,
+      envelopeId: envelope.envelopeId,
+      note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners
+        .map((owner) => owner.email)
+        .join(", ")}`,
+      offerId: offer.id,
+      previousStatus: offer.offerStatus,
+      recipients: envelope.recipients,
+      writeDocument: (tx, { claimed }) =>
+        writeTenderEnvelopeDocument(tx, {
+          claimed,
+          documentData,
           offerId: offer.id,
           version: offer.revisionNumber,
-          documentData,
-        },
-      });
-      // In the same transaction as the Envelope row that replaces it: the
-      // attempt must not stop blocking a recall unless the row that takes
-      // over that job actually commits.
-      await resolveEnvelopeSendAttempt(sendAttemptRecordId, tx);
-      await tx.envelope.create({
-        data: {
-          docType: EnvelopeDocType.TENDER,
-          tenderId: tender.id,
-          docusignId: envelope.envelopeId,
-          status: EnvelopeStatus.SENT,
-          documentVersion: offer.revisionNumber,
-          sentAt: new Date(),
-          signatures: {
-            create: envelope.recipients.map((recipient) => ({
-              recipientRole:
-                recipient.role === "BUILDER"
-                  ? SignerRole.BUILDER
-                  : SignerRole.CUSTOMER,
-              name: recipient.name,
-              email: recipient.email,
-              routingOrder: recipient.routingOrder,
-              docusignRecipientId: recipient.recipientId,
-              capacity: recipient.capacity ?? null,
-              entityName: recipient.entityName ?? null,
-              entityAbn: recipient.entityAbn ?? null,
-            })),
-          },
-        },
-      });
-      if (!claimed) {
-        return false;
-      }
-      await tx.offerStatusEvent.create({
-        data: {
-          offerId: offer.id,
-          fromStatus: offer.offerStatus,
-          toStatus: OfferStatus.TENDER_SENT,
-          actorId: access.user.id,
-          // Record the ACTUAL customer recipients (every owner/director the envelope
-          // routed to), not just the resolved customerEmail — which may not even be
-          // the primary signer's address (PR #124 review).
-          note: `DocuSign envelope ${envelope.envelopeId} sent to ${owners.map((owner) => owner.email).join(", ")}`,
-        },
-      });
-      return true;
-    })
-    .catch((error) => {
-      // The envelope is ALREADY with the client and cannot be un-sent, so this
-      // must never release the claim (that would let a retry double-send a
-      // contract-grade document). Surface the envelope id so the send is
-      // recoverable: the offer stays TENDER_SENT but has no Tender/recipient
-      // rows, which the completion webhook needs to correlate (PR #124 sweep —
-      // this write was previously unguarded, mirroring the handoff finding).
-      console.error(
-        `[offer] tender envelope ${envelope.envelopeId} sent but persisting it failed:`,
-        error,
-      );
-      return { unrecorded: (error as Error).message } as const;
-    });
+        }),
+    },
+  );
 
   // Returned rather than raised: Next replaces a Server Action's thrown
   // message with a generic one in production, and the estimator needs the
   // envelope id and the instruction not to resend.
-  if (typeof stillClaimed === "object") {
+  if (persisted.kind === "unrecorded") {
+    // The claim moved the offer to TENDER_SENT in its own transaction
+    // before DocuSign was called, and only the envelope transaction rolled
+    // back. So the stored status did change: revalidate and bring the lead
+    // with it, or the screen shows a stale status and the lead sits a stage
+    // behind while the client already has the document.
     revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
     await syncLeadStageForOffer(offer.id);
     return {
@@ -477,7 +387,7 @@ export async function sendTenderForSignature(input: {
 
   // No *_SENT event and no lead sync: the offer is wherever the recall or
   // revision left it.
-  if (!stillClaimed) {
+  if (persisted.kind === "raced") {
     revalidateTag(`offer-${offer.id}`, CACHE_PROFILES.SHORT);
     return cancelRacedSend(envelope.envelopeId);
   }

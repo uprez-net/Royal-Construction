@@ -5,6 +5,7 @@ import {
   requireComplianceAdmin,
 } from "@/lib/compliance/access";
 import { resolveComplianceDocument } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -63,6 +64,9 @@ export async function POST(
       decision: body.data.decision,
       rejectionReason: body.data.rejectionReason,
       resolvedBy: admin.name || admin.email,
+      // The domain command re-checks admin itself — this is the decision that
+      // freezes a document, so it does not take the route's word for it.
+      actor: admin,
     });
 
     if (!result.resolved) {
@@ -80,6 +84,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to resolve a compliance document", error);
     return errorResponse(
       error instanceof Error

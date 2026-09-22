@@ -127,7 +127,7 @@ test("a malformed notesDoc does not throw", () => {
 
 test("every Lead.notes reader goes through the resolver", () => {
   const readers: [string, string][] = [
-    ["lib/data/offer-prefill.ts", "resolveLeadNotesText(lead)"],
+    ["lib/domain/offers/prefill.ts", "resolveLeadNotesText(lead)"],
     // The dashboard follow-up card reads tasks now, so the lead it resolves
     // notes for arrives through the task it belongs to.
     ["lib/data/dashboard.ts", "resolveLeadNotesTextOr(task.lead,"],

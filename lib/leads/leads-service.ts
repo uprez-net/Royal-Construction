@@ -223,9 +223,14 @@ export async function sendEmailToLead(
   to: string,
   subject: string,
   body: string,
+  /**
+   * One press of Send. Pass it from a campaign so a retried batch or a second
+   * click does not email the same lead twice; omit it for a one-off send,
+   * where there is no run to be a duplicate of.
+   */
+  runId?: string,
 ): Promise<boolean> {
   // Delegate to the server action which calls the Graph client directly,
   // bypassing the /api/graph/send route and its admin-token requirement.
-  // const { sendCampaignEmail } = await import('@/lib/data/email-ad-hock');
-  return sendCampaignEmail(to, subject, body);
+  return sendCampaignEmail(to, subject, body, runId);
 }

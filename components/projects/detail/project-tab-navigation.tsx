@@ -11,7 +11,7 @@ import {
   isOutstandingEvidence,
   SIGNED_COPY_DOCUMENTS,
 } from "@/constants/complianceDocuments";
-import { outreachRequiredDocuments } from "@/lib/compliance/required-pack";
+import { outreachRequiredDocuments } from "@/lib/domain/compliance/required-pack";
 import { cn } from "@/lib/utils";
 import { countPendingInvoices } from "@/lib/projects/invoice-display";
 import { calcStageProgress } from "@/lib/projects/stage-progress";

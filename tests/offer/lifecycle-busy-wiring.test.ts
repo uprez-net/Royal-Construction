@@ -12,7 +12,8 @@ import { lifecycleActionFor } from "../../lib/offer/lifecycle-busy";
 // pinned in source.
 
 const W = "components/offers/new-workflow";
-const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const read = (path: string) =>
+  readFileSync(join(process.cwd(), path), "utf8").replace(/\r\n/g, "\n");
 
 test("a recall is named by its document, a transition by its target", () => {
   assert.equal(lifecycleActionFor("agreed"), "agreed");

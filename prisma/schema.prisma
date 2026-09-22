@@ -416,7 +416,7 @@ enum ComplianceDocumentType {
   /// development job is built under; a construction certificate is what follows
   /// a council's development consent. A file holds one or the other, never
   /// both, and which one is decided by `certificateKindFor` rather than by this
-  /// enum -- see lib/compliance/portal-certificates.ts.
+  /// enum -- see lib/domain/compliance/portal-certificates.ts.
   ///
   /// Appended after UNKNOWN rather than filed beside the certificate it is a
   /// sibling of, because this enum is append-only: the reading order of a
@@ -478,6 +478,36 @@ enum AgentOperationStatus {
   RUNNING
   SUCCEEDED
   FAILED
+}
+
+/// Durable intent for an external side effect. The key is the application
+/// idempotency key, not a provider request id: a provider may be unavailable
+/// when the intent is recorded and the worker must still know whether this
+/// exact effect has already been attempted.
+enum OutboxEventStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+/// Supported external effects. Adding a kind is an explicit schema change so
+/// every new worker has to define its payload, idempotency key, and recovery
+/// behaviour before it can enqueue work.
+enum OutboxEventKind {
+  TRADIE_SCHEDULE_REMINDER
+  TRADIE_SCHEDULE_MANUAL_REMINDER
+  EMAIL_CAMPAIGN_SEND
+  INVOICE_STAGE_ISSUE
+  INVOICE_PDF_ARCHIVE
+  TEAM_INVITATION_CREATE
+  TEAM_INVITATION_REVOKE
+  TEAM_ROLE_RECONCILIATION
+  CONSULTATION_BOOKING
+  LEAD_EMAIL_SEND
+  OFFER_DOCUMENT_SEND
+  OFFER_IMAGE_GENERATE
+  COMPLIANCE_EMAIL_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -970,6 +1000,31 @@ model AgentOperation {
   @@unique([ownerUserId, operationKey])
   @@index([agentSessionId, createdAt])
   @@index([status, updatedAt])
+}
+
+/// Provider-neutral post-commit work queue. Business writes and this intent
+/// are committed together; a worker claims the intent before calling Graph,
+/// Xero, Blob, Clerk, or another provider and records an unambiguous outcome.
+/// RUNNING is deliberately not auto-retried after a worker crash: an external
+/// provider may have accepted the request, so reconciliation must happen before
+/// another customer-visible send is attempted.
+model OutboxEvent {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  kind        OutboxEventKind
+  payload     Json
+  status      OutboxEventStatus @default(PENDING)
+  attempts    Int              @default(0)
+  availableAt DateTime         @default(now())
+  lockedAt    DateTime?
+  completedAt DateTime?
+  result      Json?
+  lastError   String?          @db.Text
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([status, availableAt])
+  @@index([kind, status])
 }
 
 /// Bounded durable memory document. Live CRM facts never belong in this table;

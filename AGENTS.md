@@ -47,6 +47,73 @@ are worth solving now:
 When an issue's severity depends on which of these it is, say so explicitly
 instead of assigning a generic priority.
 
+## Business rules live in `lib/domain`, and the guide is the standard
+
+**Before writing or changing any business rule, authorization check, state
+transition, persistence mutation or external-side-effect decision, read
+[`lib/domain/GUIDE.md`](./lib/domain/GUIDE.md) and follow it.**
+[`lib/domain/README.md`](./lib/domain/README.md) says what a domain module is;
+the guide says what to do when you have a change to make — which folder owns
+what, what to call instead of writing it again, the command signature, the
+error taxonomy, and the order to move one rule in.
+
+App routes, Server Actions, Eve tools, cron jobs, webhooks, Graph and Workflow
+steps and the public routes are **adapters**. They authenticate, validate,
+format and call a domain command. They do not decide anything.
+
+### Why this is a rule and not a preference
+
+Because the same business rule used to be written twice — once for the screen
+and once for Eve — and the two copies did not agree. Every one of these was
+found by putting them side by side, and each was live:
+
+- A compliance document could be **approved before the certifier had ever been
+  sent it**. The app checked the outbound mail trail first; Eve had no
+  equivalent check, so an agent could close an engagement on a review that
+  never happened.
+- The app's `createTradieSchedule` wrote the booking **with no overlap check
+  and no check that the milestone belonged to the project** — the same tradie
+  could be booked onto two sites for the same week. Eve had both checks.
+- The **last-admin guard** existed only in Eve's team tool. Everyone here is an
+  ADMIN on a shared login, so demoting the last one locks the business out with
+  nobody left who can undo it.
+- Five send routes read an `Idempotency-Key` header that **no caller sent**, so
+  every send fell back to a derived key bucketed by day or by body checksum. A
+  second follow-up the office meant to send was reported as sent and emailed
+  nobody.
+
+Note what these have in common: they are not abstract layering problems. They
+are a wrong decision in front of a client, an access check that quietly stopped
+checking, a lockout, and a silent failure — the four things the section above
+says are worth more than they look here. One copy of a rule is how you stop
+writing them.
+
+So: a second copy of a rule is a defect in this repo, not a style question. If
+you find a rule that already exists, call it. If you find two that disagree,
+resolve them into one — the stricter one — and say in the change which
+behaviour you kept and which you dropped, because one of the two callers is
+about to start behaving differently.
+
+### The guards, and what they do not catch
+
+- `tests/architecture/domain-boundary.test.ts` — `lib/domain/**` may not reach
+  Next, Clerk's Next bindings, React, Eve, `app/`, `agent/` or `components/`.
+  Transitive, value edges only, prints the import chain.
+- `tests/architecture/agent-operations-prisma.test.ts` — a per-file **ratchet**
+  on direct business Prisma in `agent/lib/*-operations.ts`. The number may only
+  go down. A new specialist file starts at 0.
+- `tests/architecture/domain-error-surfacing.test.ts` — an adapter that catches
+  a domain refusal must surface it (`lib/http/domain-response.ts`) or be listed
+  with a reason, so an operator never reads a generic 500 for a refusal the
+  domain can name.
+- `tests/architecture/idempotency-keys.test.ts` — every route that reads an
+  `Idempotency-Key` must have a caller that sends one.
+- `tests/agent/authored-package-boundary.test.ts` — see the Eve section below.
+
+These catch new duplication at the boundaries. **They cannot tell you that two
+rules in two places mean the same thing** — that is the part that needs you to
+search first, which is what section 1 of the guide is for.
+
 ## Royal Construction Eve operations agent
 
 The authenticated orchestrator in `agent/agent.ts` routes requests to the

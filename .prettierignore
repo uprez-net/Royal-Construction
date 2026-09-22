@@ -1,21 +1,118 @@
-# Documentation is intentionally maintained outside Prettier.
-**/*.md
-**/*.mdx
+# ---------------------------------------------------------------------------
+# .prettierignore
+#
+# Syntax is .gitignore syntax: later lines win, and `!` re-includes a path
+# that an earlier line excluded. Prettier already skips `node_modules` and
+# anything unparseable, so everything below is either (a) a file Prettier
+# *could* parse but shouldn't, or (b) an explicit statement of intent so the
+# next person doesn't have to guess.
+#
+# Run `pnpm format:check` after editing this file — an over-broad pattern
+# fails silently by simply formatting nothing.
+# ---------------------------------------------------------------------------
 
-# Hidden files and directories include generated output and local tooling.
+
+# --- Dependencies and package manager state --------------------------------
+# Prettier skips node_modules by default; stated here so the intent survives
+# anyone passing --with-node-modules.
+node_modules/
+**/node_modules/
+.pnp
+.pnp.*
+.yarn/
+
+# Lockfiles are machine-owned. Reformatting one produces a five-figure diff
+# and can defeat the resolver's own ordering.
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+skills-lock.json
+
+
+# --- Build output and caches -----------------------------------------------
+.next/
+.output/
+out/
+build/
+dist/
+.swc/
+.vercel/
+.turbo/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+
+# --- Generated code --------------------------------------------------------
+# Written by a generator on every build; formatting it only creates churn
+# that the next `prisma generate` throws away.
+lib/generated/
+prisma/generated/
+next-env.d.ts
+.eve/
+
+
+# --- Formats Prettier has no parser for ------------------------------------
+# Listed so `--check` failures stay meaningful rather than "unknown parser".
+*.prisma
+*.sql
+*.toml
+*.csv
+
+
+# --- Binary and asset files ------------------------------------------------
+# Prettier ignores these by extension already, but a stray `--write public/`
+# should never be able to touch them.
+public/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.webp
+*.avif
+*.pdf
+*.docx
+*.xlsx
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.zip
+*.dump
+
+
+# --- Prose ------------------------------------------------------------------
+# Documentation is intentionally maintained outside Prettier: reflowing
+# Markdown rewrites tables, numbered lists and line-anchored review comments
+# for no readability gain.
+*.md
+*.mdx
+docs/
+audits/
+spec/
+
+
+# --- Scratch, logs and local tooling ----------------------------------------
+tmp/
+logs/
+backup/
+backups/
+*.log
+
+
+# --- Hidden files ------------------------------------------------------------
+# Dot-directories in this repo are tooling state, vendored skills or secrets
+# (.agents, .clerk, .claude, .omo, .gstack, .vscode, .env*). Default them all
+# out, then opt the few real source files back in below.
 **/.*
 
-# Only GitHub automation YAML is in scope.
-**/*.yml
-**/*.yaml
-!/.github/
-!/.github/**/*.yml
-!/.github/**/*.yaml
 
-# Prettier has no project-approved parser for these formats.
-**/*.prisma
-**/*.sql
-**/*.toml
-
-# Documentation, mocks, and related assets are intentionally maintained outside Prettier.
-docs/
+# --- Explicit opt-ins --------------------------------------------------------
+# Hidden paths that ARE hand-written source and should be formatted.
+!.github/
+!.github/**/*.yml
+!.github/**/*.yaml
+!.coderabbit.yaml
+!.prettierrc.json

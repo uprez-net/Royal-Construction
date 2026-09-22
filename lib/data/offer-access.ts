@@ -2,12 +2,23 @@ import { auth } from "@clerk/nextjs/server";
 import type { User } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getUserByClerkId } from "@/lib/data/user";
-import { assertCanAccessLead } from "@/lib/offer/access";
+import {
+  OfferSupersededError,
+  authorizeOffer,
+} from "@/lib/domain/access/offers";
+import { authorizeLead } from "@/lib/domain/access/leads";
+import { isDomainError } from "@/lib/domain/errors";
+import { userPrincipal } from "@/lib/domain/principal";
 
 // Shared authorization for the offer server actions. Every offer action is
 // client-callable, so an offerId/leadId in the argument is NOT authorization —
 // the caller must be authenticated AND permitted to access the lead behind the
 // offer, or a user could act on someone else's offer (IDOR).
+//
+// The rule itself is lib/domain/access/offers.ts, which Eve calls too. What is
+// left here is the Next half: resolving Clerk identity, and returning a
+// `{ ok }` result rather than throwing, because a Server Action's rejection
+// has to serialize back to the client.
 
 export type OfferAccess =
   | { ok: true; user: User; leadId: number; isActive: boolean }
@@ -15,7 +26,7 @@ export type OfferAccess =
 
 // `allowInactive` opts a caller into superseded revisions. Only read paths may
 // set it: every write must land on the lead's one live revision, or an edit
-// would rewrite history (see the superseded-revision guard below).
+// would rewrite history.
 export async function authorizeOfferAccess(
   offerId: string,
   options?: { allowInactive?: boolean },
@@ -28,30 +39,29 @@ export async function authorizeOfferAccess(
   if (!user) {
     return { ok: false, error: "No internal user for the signed-in account." };
   }
-  const offer = await prisma.offer.findUnique({
-    where: { id: offerId },
-    select: { leadId: true, isActive: true },
-  });
-  if (!offer) {
-    return { ok: false, error: "Offer not found." };
-  }
+
   try {
-    await assertCanAccessLead(user, offer.leadId);
-  } catch {
+    const access = await authorizeOffer(userPrincipal(user), offerId, prisma, {
+      allowInactive: options?.allowInactive,
+    });
+    return {
+      ok: true,
+      user,
+      leadId: access.leadId,
+      isActive: access.isActive,
+    };
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    // Mapped rather than passed through, so the exact strings these actions
+    // have always returned stay byte-identical for the screens that show them.
+    if (error.code === "domain_not_found") {
+      return { ok: false, error: "Offer not found." };
+    }
+    if (error instanceof OfferSupersededError) {
+      return { ok: false, error: error.message };
+    }
     return { ok: false, error: "You do not have access to this offer." };
   }
-  // Superseded revisions are history: readable, never writable. This is keyed on
-  // isActive rather than offerStatus === SUPERSEDED because isActive is what the
-  // one-active-per-lead partial unique index enforces; the status is a label set
-  // alongside it. Revision ids reach the client via listOfferRevisions, so this
-  // is the boundary that stops one being replayed into a mutation.
-  if (!offer.isActive && options?.allowInactive !== true) {
-    return {
-      ok: false,
-      error: "This offer revision has been superseded and is read-only.",
-    };
-  }
-  return { ok: true, user, leadId: offer.leadId, isActive: offer.isActive };
 }
 
 export type LeadAccess =
@@ -68,8 +78,9 @@ export async function authorizeLeadAccess(leadId: number): Promise<LeadAccess> {
     return { ok: false, error: "No internal user for the signed-in account." };
   }
   try {
-    await assertCanAccessLead(user, leadId);
-  } catch {
+    await authorizeLead(userPrincipal(user), leadId, prisma);
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
     return { ok: false, error: "You do not have access to this lead." };
   }
   return { ok: true, user };

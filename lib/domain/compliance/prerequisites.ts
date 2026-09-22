@@ -1,0 +1,243 @@
+// Shared party and pack prerequisite policy.
+import {
+  ComplianceAlertType,
+  ComplianceDocumentType,
+  ComplianceOutreachMode,
+  CompliancePartyType,
+} from "@prisma/client";
+
+import {
+  complianceDocumentLabel,
+  DEVELOPER_APPROVAL_DOCUMENT,
+  documentTypesForParty,
+  isApprovalParty,
+  isConsultantParty,
+  PARTY_LABEL,
+  PARTY_PREREQUISITES,
+} from "@/constants/complianceDocuments";
+import { applicableRequiredDocuments } from "./required-pack";
+import {
+  hasOpenAlert,
+  isPartyEngaged,
+  outreachForParty,
+  type CertifierEngagementDetail,
+} from "@/types/compliance";
+
+/**
+ * Why a party cannot be engaged yet, in the reader's own terms, or null.
+ *
+ * One module, imported by the tab and by the data layer both. The two used to
+ * hold near-identical copies of this — `blockedReason` in
+ * project-compliance-tab.tsx and `partyPrerequisiteFailure` in
+ * lib/data/compliance-outreach.ts — and near-identical is the problem: a button
+ * that offers a send the server then refuses, and a section the server would
+ * unlock that the tab keeps shut, are the same bug read from two ends. It is a
+ * plain module with no `"use server"` so both sides can genuinely share it.
+ *
+ * A sentence rather than a boolean because the reasons are different moves.
+ * "Nobody has engaged the surveyor" is something to go and do; "the surveyor
+ * still owes us two documents" is something to wait for or chase on the thread;
+ * "order the planning certificate" is a third thing again, and the reader has
+ * to be told which.
+ */
+
+/**
+ * Whether the council side of the file is settled.
+ *
+ * The council is the one party with nobody to engage and no mail to send, so
+ * "have we dealt with them" cannot be `isPartyEngaged` — an outreach row is
+ * written when an application is lodged, but a builder who already held a
+ * current certificate never lodges one, and gating on the row would block them
+ * over a step they had correctly skipped. What settles it is the certificate
+ * being on the file, which is the same thing either route arrives at.
+ *
+ * An open DA alert settles it too, and for a reason worth stating: on a job
+ * that needs development approval the 10.7 certificate is not merely late, it
+ * is not wanted. Blocking the architect on a document the rest of the tab has
+ * written off would strand the file exactly when it most needs redrawing.
+ */
+export function isCouncilSettled(
+  engagement: Pick<CertifierEngagementDetail, "documents" | "alerts">,
+): boolean {
+  if (hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED)) {
+    return true;
+  }
+  return engagement.documents.some(
+    (document) =>
+      document.documentType ===
+        ComplianceDocumentType.PLANNING_CERTIFICATE_10_7 &&
+      document.files.length > 0,
+  );
+}
+
+/** The required documents one party still owes, ignoring ones this file has written off. */
+function outstandingFor(
+  engagement: CertifierEngagementDetail,
+  party: CompliancePartyType,
+): ComplianceDocumentType[] {
+  // Filtered through the applicable set rather than the party's whole list: a
+  // DA takes the 10.7 certificate out of the pack, and a prerequisite that
+  // still demanded it would hold the architect behind a document nobody is
+  // going to supply.
+  const inPlay = new Set(
+    applicableRequiredDocuments(engagement).map((required) => required.type),
+  );
+
+  return documentTypesForParty(party).filter(
+    (type) =>
+      inPlay.has(type) &&
+      !engagement.documents.some(
+        (document) =>
+          document.documentType === type && document.files.length > 0,
+      ),
+  );
+}
+
+export function partyBlockedReason(
+  engagement: CertifierEngagementDetail,
+  party: CompliancePartyType,
+): string | null {
+  // A consultant is not gated on another party at all — it is gated on a
+  // checklist line existing that asks for what they produce, which the row
+  // offering the control has already established by being on screen.
+  if (isConsultantParty(party)) {
+    return null;
+  }
+
+  // The developer is gated on a document rather than on a party, which is why
+  // their PARTY_PREREQUISITES entry is empty and this is a branch instead.
+  if (isApprovalParty(party)) {
+    return developerBlockedReason(engagement);
+  }
+
+  for (const prerequisite of PARTY_PREREQUISITES[party]) {
+    const upstreamLabel = PARTY_LABEL[prerequisite].toLowerCase();
+
+    if (prerequisite === CompliancePartyType.COUNCIL) {
+      // Said as an instruction rather than as a wait. Nobody is coming with
+      // this one: somebody has to go to the portal and buy it, and "waiting on
+      // the planning certificate" reads as though that is already happening.
+      if (!isCouncilSettled(engagement)) {
+        return "Order the 10.7(2) & (5) planning certificate first — the architect needs it to know what the lot can carry.";
+      }
+      continue;
+    }
+
+    if (!isPartyEngaged(engagement, prerequisite)) {
+      return `Engage the ${upstreamLabel} first — this unlocks once their documents are in.`;
+    }
+
+    const outstanding = outstandingFor(engagement, prerequisite);
+    if (outstanding.length > 0) {
+      return `Waiting on ${outstanding
+        .map((type) => complianceDocumentLabel(type))
+        .join(" and ")} from the ${upstreamLabel}.`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Why the estate developer cannot be asked yet, or null.
+ *
+ * One condition, and it is a document rather than a party: there is nothing to
+ * approve until the bushfire assessment exists. That is deliberately not
+ * expressed as "engage the bushfire consultant first", because the report can
+ * arrive three ways — commissioned from a consultant we engaged, produced by a
+ * consultant the client engaged, or handed over with the client's own paperwork
+ * — and only the first of those is an outreach. Gating on the outreach would
+ * block the two jobs in ten that turn up holding the report already.
+ *
+ * Read from the same place the DA gate reads it, so the two cannot disagree
+ * about whether the file holds an assessment.
+ */
+export function developerBlockedReason(
+  engagement: Pick<CertifierEngagementDetail, "documents">,
+): string | null {
+  // `some` over any row of the type, not the first one found. `documents` is
+  // not unique per type -- `attachComplianceDocumentFile` creates a row when it
+  // finds none, and other paths add their own -- so a seeded empty row sitting
+  // in front of the one that actually carries the report had this reporting a
+  // block over a document that was on the file, with the developer approval
+  // step locked behind it. `isSettled` in lib/domain/compliance/overdue.ts reads it
+  // this way for the same reason, and these two gates must not disagree.
+  const hasReport = engagement.documents.some(
+    (document) =>
+      document.documentType === DEVELOPER_APPROVAL_DOCUMENT &&
+      document.files.length > 0,
+  );
+
+  if (!hasReport) {
+    return `Upload or commission the ${complianceDocumentLabel(
+      DEVELOPER_APPROVAL_DOCUMENT,
+    ).toLowerCase()} first — there is nothing for the developer to approve yet.`;
+  }
+
+  return null;
+}
+
+/**
+ * Whether the client has signed off on the architect's preliminary plans.
+ *
+ * The gate on sending anything to the certifier — where there is anybody to ask.
+ * A pack built on plans the client has not seen is a pack that comes back: the
+ * certifier assesses it, the client then asks for a change, and the assessment
+ * was of a design that no longer exists.
+ *
+ * Two cases answer it without anybody clicking anything, and they are the same
+ * case twice over. A file with no architect outreach, and one where the outreach
+ * is SELF_SUPPLIED, are both the client having arrived with their own drawings —
+ * their own architect's, or their own. They are the client; supplying the plans
+ * is approving them, and there is nobody left to ask. Gating on those held the
+ * send shut behind a button the tab does not even offer, because the approval
+ * control lives on an architect card that a self-supplied file has no thread
+ * for.
+ */
+export function clientHasApprovedPlans(
+  engagement: CertifierEngagementDetail,
+): boolean {
+  const architect = outreachForParty(engagement, CompliancePartyType.ARCHITECT);
+  if (!architect) return true;
+  if (architect.mode === ComplianceOutreachMode.SELF_SUPPLIED) return true;
+  return architect.clientPlansApprovedAt !== null;
+}
+
+/**
+ * Why the required pack cannot go to the certifier, or null.
+ *
+ * Three conditions, and they are all about the pack being wrong rather than
+ * incomplete — what is missing is already said by the rows themselves and by
+ * `missingOutreachDocuments`. These are the cases where every row is full and
+ * the pack still must not go.
+ *
+ * Read by the send button and by `sendCertifierOutreach`, so the button and the
+ * server cannot disagree about whether the send is allowed.
+ */
+export function packSendBlockedReason(
+  engagement: CertifierEngagementDetail,
+): string | null {
+  if (hasOpenAlert(engagement, ComplianceAlertType.DA_APPROVAL_REQUIRED)) {
+    // First, because it is the one that says the send is not merely premature
+    // but pointless. The pack asks a certifier to assess the job as complying
+    // development; an open DA alert is somebody who has looked at the proposal
+    // saying it cannot go through that way. Sending it anyway buys an
+    // assessment whose answer is already known and delays the path the job is
+    // actually on.
+    return "The architect says this job needs development approval, so it cannot go to the certifier as a CDC. Close that alert if a CDC turns out to be viable after all.";
+  }
+
+  if (hasOpenAlert(engagement, ComplianceAlertType.STALE_TITLE_SEARCH)) {
+    // The strongest of the three. A title search naming the previous owners is
+    // not a document with a problem, it is the wrong document: sending it opens
+    // the engagement on a certifier's assessment of somebody else's land, and
+    // every hour that assessment runs is an hour wasted.
+    return "The title search does not name the current owners. Send it once a replacement has been supplied and checked.";
+  }
+
+  if (!clientHasApprovedPlans(engagement)) {
+    return "The client has not approved the preliminary plans yet. Record their answer on the architect block first.";
+  }
+
+  return null;
+}

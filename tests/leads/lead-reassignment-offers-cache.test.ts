@@ -17,18 +17,34 @@ import {
 // updateTag would be the wrong fix: updateLead also runs from Route Handlers
 // (the lead PATCH, MCP and booking routes), where updateTag throws.
 
+// Issue #301 split this across two files, deliberately. Deciding that a listed
+// column changed is a rule every caller needs, so it lives in the domain
+// command; expiring a Next cache tag is something only a request can do, so it
+// stays in the adapter. Both halves are checked.
 const text = readFileSync(join(process.cwd(), "lib/data/leads.ts"), "utf8");
+const command = readFileSync(
+  join(process.cwd(), "lib/domain/leads/commands.ts"),
+  "utf8",
+);
 const listing = readFileSync(
-  join(process.cwd(), "lib/data/offer-listing.ts"),
+  join(process.cwd(), "lib/domain/offers/listing.ts"),
   "utf8",
 );
 
-function functionBody(name: string): string {
-  const start = text.indexOf(`async function ${name}(`);
-  assert.ok(start >= 0, `${name} not found in leads.ts`);
-  const end = text.indexOf("\n}\n", start);
+function bodyOf(source: string, name: string, where: string): string {
+  const start = source.indexOf(`async function ${name}(`);
+  assert.ok(start >= 0, `${name} not found in ${where}`);
+  const end = source.indexOf("\n}\n", start);
   assert.ok(end > start, `${name} has no end`);
-  return text.slice(start, end);
+  return source.slice(start, end);
+}
+
+const adapterBody = () => bodyOf(text, "updateLead", "lib/data/leads.ts");
+const commandBody = () =>
+  bodyOf(command, "updateLead", "lib/domain/leads/commands.ts");
+
+function functionBody(name: string): string {
+  return bodyOf(command, name, "lib/domain/leads/commands.ts");
 }
 
 test("updateLead expires the offers listing once the write is committed", () => {
@@ -36,15 +52,16 @@ test("updateLead expires the offers listing once the write is committed", () => 
     text,
     /import \{[^}]*\brevalidateTag\b[^}]*\} from "next\/cache"/,
   );
-  const body = functionBody("updateLead");
+  const body = adapterBody();
 
   const invalidation = body.search(/revalidateTag\(\s*"offers"/);
   assert.ok(
     invalidation >= 0,
     "updateLead never invalidates the offers listing",
   );
+  // The command owns the transaction, so the expiry lands after it returns.
   assert.ok(
-    body.indexOf("prisma.$transaction(") < invalidation,
+    body.indexOf("updateLeadDomain(") < invalidation,
     "the listing is expired before the lead is written",
   );
   // Union of both triggers: the assignee side is unconditional on being SET
@@ -52,12 +69,12 @@ test("updateLead expires the offers listing once the write is committed", () => 
   // side compares what is about to be stored.
   assert.match(
     body,
-    /if \(input\.assignedId !== undefined \|\| listedFieldsChanged\) \{/,
+    /if \(input\.assignedId !== undefined \|\| outcome\.listedFieldsChanged\) \{/,
   );
 });
 
 test("and off a real change to a lead column the listing shows", () => {
-  const body = functionBody("updateLead");
+  const body = commandBody();
   assert.match(
     body,
     /const listedFieldsChanged = offerListingLeadChanged\(existingLead, updateData\);/,
@@ -71,13 +88,13 @@ test("and off a real change to a lead column the listing shows", () => {
 });
 
 test("the fields checked are exactly the lead columns the listing selects", () => {
-  const query = listing.indexOf("prisma.lead.findMany({");
+  const query = listing.indexOf("db.lead.findMany({");
   assert.ok(query >= 0, "the listing's lead query was not found");
   const select = listing.slice(
     listing.indexOf("select: {", query),
-    listing.indexOf("offers: {", query),
+    listing.indexOf("skip:", query),
   );
-  const selected = [...select.matchAll(/(\w+): true/g)]
+  const selected = [...select.matchAll(/^        (\w+): true,$/gm)]
     .map((match) => match[1])
     .filter((field) => field !== "id");
   assert.deepEqual([...selected].sort(), [...OFFER_LISTING_LEAD_FIELDS].sort());
@@ -120,7 +137,7 @@ test("a write changes the listing only when a listed value differs", () => {
 });
 
 test("the expiry cannot fail the save", () => {
-  const body = functionBody("updateLead");
+  const body = adapterBody();
   const at = body.search(/revalidateTag\(\s*"offers"/);
   assert.ok(at >= 0, "updateLead never expires the offers listing");
   assert.match(
@@ -138,7 +155,7 @@ test("updateLead does not use updateTag, which throws outside a Server Action", 
 });
 
 test("the expiry cannot fail the save", () => {
-  const body = functionBody("updateLead");
+  const body = adapterBody();
   const at = body.search(/revalidateTag\(\s*"offers"/);
   assert.ok(at >= 0, "updateLead never expires the offers listing");
   assert.match(

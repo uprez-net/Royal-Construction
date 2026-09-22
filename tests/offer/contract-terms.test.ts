@@ -477,7 +477,7 @@ test("the loader reads the send's rows and the sent Contract through the shared 
   // Only a caller holding no terms asks; the signing ticks do not re-read them.
   assert.match(
     loader,
-    /input\.needsContractTerms === true\s*\?\s*loadContractTerms\(/,
+    /input\.needsContractTerms === true\s*\?\s*await loadContractTerms\(/,
   );
   // The Tender's documentData is read on the server and not returned.
   assert.doesNotMatch(loader, /contractTerms:[^\n]*documentData/);

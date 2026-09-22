@@ -1,24 +1,44 @@
-"use server";
+import "server-only";
+
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { Role } from "@prisma/client";
 import { cacheTag, cacheLife } from "next/cache";
 
+import {
+  createUser as createUserDomain,
+  deleteUserByClerkId,
+  findAdminUserIds,
+  findUserByClerkId,
+  listAllClerkIds,
+  resolveClerkIds,
+  updateUserByClerkId,
+} from "@/lib/domain/identity/users";
+
+// Deliberately NOT "use server" any more.
+//
+// In a "use server" module every exported async function is its own Server
+// Action: a POST endpoint that runs with whatever arguments the sender
+// chooses, whether or not a screen calls it
+// (node_modules/next/dist/docs/01-app/02-guides/data-security.md). That made
+// `updateUser(clerkId, { role: "ADMIN" })` reachable by any signed-in caller
+// — a privilege escalation with no guard in front of it. It was on
+// tests/security/use-server-auth.test.ts's allowlist as a known follow-up.
+//
+// Nothing here was ever called from a client component: every importer is a
+// page, a route handler, proxy.ts or another server module. Dropping the
+// directive closes the endpoint surface and changes nothing else.
+//
+// The middleware lookup lives in the Node-safe domain module now, so this
+// adapter can be marked server-only without pulling the marker into proxy.ts.
+//
+// The reads and writes themselves live in lib/domain/identity/users.ts, where
+// Eve, a cron and a script can reach them too. Only the cached read below
+// needs Next.
+
 /**
- * Creates a new application user.
- *
- * If the assigned role is `CUSTOMER`, a corresponding customer record is also
- * created and linked to the newly created user.
- *
- * @param name - User's full name.
- * @param email - User's email address.
- * @param clerkId - Unique Clerk user identifier.
- * @param phone - User's phone number.
- * @param role - User role. Defaults to `GUEST`.
- * @returns An object containing the operation result, created user ID,
- * optional customer ID and assigned role.
- *
- * @throws Re-throws any database errors encountered during creation.
+ * Creates a new application user, and a linked customer record when the role
+ * is CUSTOMER.
  */
 export async function createUser(
   name: string,
@@ -27,241 +47,63 @@ export async function createUser(
   phone: string,
   role: Role = Role.GUEST,
 ) {
-  try {
-    let customerId: string | null = null;
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        clerkId,
-        role,
-        phone,
-      },
-    });
-
-    if (role === Role.CUSTOMER) {
-      const customer = await prisma.customer.create({
-        data: {
-          email,
-          name,
-          phone,
-        },
-      });
-
-      await prisma.user.update({
-        where: { id: newUser.id },
-        data: { customerId: customer.id },
-      });
-      customerId = customer.id;
-    }
-
-    return {
-      success: true,
-      message: "User created successfully",
-      userId: newUser.id,
-      customerId,
-      role: newUser.role,
-    };
-  } catch (error) {
-    console.error("Error creating user:", error);
-    throw error;
-  }
+  return createUserDomain({ clerkId, email, name, phone, role }, prisma);
 }
 
-/**
- * Retrieves a user by their Clerk identifier.
- *
- * @param clerkId - Clerk user identifier.
- * @returns The matching user, or `null` if no user exists.
- *
- * @throws Re-throws any database errors encountered during retrieval.
- */
+/** Retrieves a user by their Clerk identifier, or null. */
 export async function getUserByClerkId(clerkId: string) {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { clerkId },
-    });
-    return user;
-  } catch (error) {
-    console.error("Error fetching user by Clerk ID:", error);
-    throw error;
-  }
+  return findUserByClerkId(clerkId, prisma);
 }
 
 /**
  * Updates an existing application user.
  *
- * Only fields with defined values are updated. Undefined properties are
- * automatically ignored.
- *
- * If the user's role is changed to `CUSTOMER`, a corresponding customer
- * record is created and linked to the user.
- *
- * @param clerkId - Clerk user identifier.
- * @param updates - Partial collection of user properties to update.
- * @returns An object containing the operation result, updated user ID,
- * assigned role and optional customer ID.
- *
- * @throws Re-throws any database errors encountered during the update.
+ * No last-admin guard, deliberately: the only caller is the Clerk webhook,
+ * which syncs whatever Clerk says. A role change made in the app goes through
+ * lib/domain/identity/team.ts#changeTeamMemberRole, which does guard it.
+ * Routing the webhook through that guard would leave Clerk and the
+ * application disagreeing whenever it refused, so that needs a decision rather
+ * than a quiet change (issue #301, phase 6).
  */
 export async function updateUser(
   clerkId: string,
   updates: Partial<{ name: string; email: string; phone: string; role: Role }>,
 ) {
-  try {
-    // Remove undefined fields
-    let customerId: string | null = null;
-    const filteredUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, value]) => value !== undefined),
-    );
-
-    const user = await prisma.user.update({
-      where: { clerkId },
-      data: filteredUpdates,
-    });
-
-    if (updates.role === Role.CUSTOMER) {
-      const customer = await prisma.customer.create({
-        data: {
-          email: user.email,
-          name: user.name,
-          phone: user.phone,
-        },
-      });
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { customerId: customer.id },
-      });
-      customerId = customer.id;
-    }
-
-    return {
-      success: true,
-      message: "User updated successfully",
-      userId: user.id,
-      role: user.role,
-      customerId,
-    };
-  } catch (error) {
-    console.error("Error updating user:", error);
-    throw error;
-  }
+  return updateUserByClerkId(clerkId, updates, prisma);
 }
 
-/**
- * Deletes a user by their Clerk identifier.
- *
- * @param clerkId - Clerk user identifier.
- * @returns An object indicating whether the deletion succeeded.
- *
- * @throws Re-throws any database errors encountered during deletion.
- */
+/** Deletes a user by their Clerk identifier. */
 export async function deleteUser(clerkId: string) {
-  try {
-    await prisma.user.delete({
-      where: { clerkId },
-    });
-    return {
-      success: true,
-      message: "User deleted successfully",
-    };
-  } catch (error) {
-    console.error("Error deleting user:", error);
-    throw error;
-  }
+  return deleteUserByClerkId(clerkId, prisma);
 }
 
 /**
  * Retrieves a cached user by their Clerk identifier.
  *
- * The cached result is tagged using the user's Clerk ID, allowing
- * selective cache invalidation after profile updates.
- *
- * @param clerkId - Clerk user identifier.
- * @returns The cached user, or `null` if no user exists.
+ * Tagged with the user's Clerk ID so a profile update can invalidate just this
+ * one. The only export here that genuinely needs Next.
  */
 export async function getUserByClerkIdCached(clerkId: string) {
   "use cache";
   cacheTag(`user-${clerkId}`);
   cacheLife(CACHE_PROFILES.MEDIUM);
 
-  return getUserByClerkId(clerkId);
+  return findUserByClerkId(clerkId, prisma);
 }
 
-/**
- * Retrieves the Clerk identifiers for every application user.
- *
- * Primarily used by the notification system when broadcasting
- * notifications to all users.
- *
- * @returns An array of Clerk user identifiers.
- *
- * @throws Re-throws any database errors encountered during retrieval.
- */
+/** Clerk identifiers for every application user, for broadcast notifications. */
 export async function getAllUserClerkIds() {
-  try {
-    const users = await prisma.user.findMany({
-      select: { clerkId: true },
-    });
-    return users.map((user) => user.clerkId);
-  } catch (error) {
-    console.error("Error fetching all user Clerk IDs:", error);
-    throw error;
-  }
+  return listAllClerkIds(prisma);
 }
 
-/**
- * Resolves internal application user IDs into their corresponding
- * Clerk user identifiers.
- *
- * Invalid, empty and duplicate user IDs are automatically removed
- * before querying the database.
- *
- * This helper is primarily used by the notification system before
- * dispatching notifications through Novu.
- *
- * @param userIds - Collection of internal user IDs.
- * @returns An array of matching Clerk user identifiers.
- *
- * @throws Re-throws any database errors encountered during resolution.
- */
+/** Resolves internal user IDs into Clerk identifiers, for Novu dispatch. */
 export async function resolveUserIdsToClerkIds(
   userIds: Array<string | null | undefined>,
 ): Promise<string[]> {
-  try {
-    const validUserIds = [
-      ...new Set(
-        userIds
-          .map((id) => id?.trim())
-          .filter((id): id is string => Boolean(id)),
-      ),
-    ];
-
-    if (validUserIds.length === 0) {
-      return [];
-    }
-
-    const users = await prisma.user.findMany({
-      where: { id: { in: validUserIds } },
-      select: { clerkId: true },
-    });
-    return users.map((user) => user.clerkId);
-  } catch (error) {
-    console.error("Error resolving user IDs to Clerk IDs:", error);
-    throw error;
-  }
+  return resolveClerkIds(userIds, prisma);
 }
 
+/** Every ADMIN's application id — who an approval request has to reach. */
 export async function getAllAdminUsersIds(): Promise<string[]> {
-  try {
-    const adminUsers = await prisma.user.findMany({
-      where: { role: Role.ADMIN },
-      select: { id: true },
-    });
-    return adminUsers.map((user) => user.id);
-  } catch (error) {
-    console.error("Error fetching all admin user Clerk IDs:", error);
-    throw error;
-  }
+  return findAdminUserIds(prisma);
 }

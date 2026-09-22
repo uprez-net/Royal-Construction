@@ -10,8 +10,24 @@ import { test } from "node:test";
 // and that the query reading it back cannot silently miss one.
 //
 // These are source-contract tests, not integration tests — this repo has no
-// DB test infrastructure (pure-function tests only), and writing to a real
-// UnconfirmedEnvelopeSend row from a test would need one.
+// DB test infrastructure, and writing to a real UnconfirmedEnvelopeSend row
+// from a test would need one.
+//
+// They arrived with PR #325 reading the three `lib/data` send paths and the
+// cron handler. Issue #301 moved the rules they protect into `lib/domain`, so
+// the anchors moved with them — the guarantees are unchanged, and several are
+// now asserted somewhere a `recordingDb` test could also reach:
+//
+//   the send-attempt lifecycle   -> lib/domain/offers/envelope-send.ts
+//   the recall/revision gate     -> lib/domain/offers/envelope-control.ts
+//   every reconcile decision     -> lib/domain/offers/send-reconciliation.ts
+//
+// The one real change is the success path. Settling the attempt used to be
+// written out in each of the three send files, next to their own
+// `tx.envelope.create`. It now happens once inside `persistSentEnvelope`,
+// which is the only thing that writes an Envelope row — so the settle cannot
+// be forgotten on a fourth send path, and the test asserts it there plus that
+// each path hands its record id over.
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
@@ -22,10 +38,15 @@ const code = (path: string) =>
 
 // ── Every send path records the attempt BEFORE it sends ──
 
+// The third entry is the call that actually reaches DocuSign. Issue #301 put
+// each provider behind an injected port, so the create function itself is only
+// named where the port is defined — at the top of the file, BEFORE the record
+// is written. Anchoring on that name would compare the wrong two positions and
+// pass while the ordering was wrong.
 const SEND_PATHS: [string, string, string][] = [
-  ["lib/data/offer-tender-sign.ts", "TENDER", "createTenderEnvelope"],
-  ["lib/data/offer-contract-sign.ts", "CONTRACT", "createContractEnvelope"],
-  ["lib/data/offer-accept-sign.ts", "OFFER", "createOfferAcceptanceEnvelope"],
+  ["lib/data/offer-tender-sign.ts", "TENDER", "tenderEnvelopePort.send("],
+  ["lib/data/offer-contract-sign.ts", "CONTRACT", "contractEnvelopePort.send("],
+  ["lib/data/offer-accept-sign.ts", "OFFER", "acceptanceEnvelopePort.send("],
 ];
 
 test("all three send paths record the attempt before calling DocuSign", () => {
@@ -34,13 +55,13 @@ test("all three send paths record the attempt before calling DocuSign", () => {
   // a recall, so a resend could put a second live document in front of the
   // customer. Writing first also covers what no catch block can: the process
   // dying mid-send.
-  for (const [file, docType, createFn] of SEND_PATHS) {
+  for (const [file, docType, sendCall] of SEND_PATHS) {
     const source = code(file);
-    const begin = source.indexOf("beginEnvelopeSendAttempt({");
-    const send = source.indexOf(`${createFn}(`);
+    const begin = source.indexOf("beginEnvelopeSendAttempt(prisma, {");
+    const send = source.indexOf(sendCall);
 
     assert.ok(begin > 0, `${file} does not record the send attempt at all`);
-    assert.ok(send > 0, `${file}: ${createFn} moved or was renamed`);
+    assert.ok(send > 0, `${file}: ${sendCall} moved or was renamed`);
     assert.ok(
       begin < send,
       `${file} records the attempt after calling DocuSign — the protection can fail open`,
@@ -64,10 +85,11 @@ test("a send is refused outright when the attempt cannot be recorded", () => {
       `${file} sends anyway when the attempt could not be recorded`,
     );
     // And it must hand the claim back, or the offer sits at *_SENT forever
-    // having never sent anything.
+    // having never sent anything. Through the shared command now, which is the
+    // same thing the rejection path calls.
     assert.match(
       source,
-      /if \(sendAttemptRecordId === null\) \{[\s\S]{0,400}prisma\.offer\.updateMany\(/,
+      /if \(sendAttemptRecordId === null\) \{[\s\S]{0,500}releaseEnvelopeSendClaim\(/,
       `${file} leaves the offer claimed after refusing to send`,
     );
   }
@@ -106,17 +128,40 @@ test("every definitive outcome resolves the attempt, and only the unknown one do
     // rejected: DocuSign refused, nothing is out there.
     assert.match(
       source.slice(unknownEnd),
-      /resolveEnvelopeSendAttempt\(sendAttemptRecordId\)/,
+      /resolveEnvelopeSendAttempt\(prisma, sendAttemptRecordId\)/,
       `${file} leaves a rejected send blocking a recall forever`,
     );
 
-    // success: resolved in the same transaction as the Envelope row.
+    // success: the record is handed to the one thing that writes an Envelope
+    // row, which settles it in the same transaction. See the test below.
     assert.match(
       source,
-      /resolveEnvelopeSendAttempt\(sendAttemptRecordId,\s*tx\);\s*await tx\.envelope\.create\(/,
-      `${file} does not settle the attempt in the same transaction that writes the Envelope row`,
+      /persistSentEnvelope\([\s\S]{0,1200}sendAttemptRecordId,/,
+      `${file} does not hand its send-attempt record to persistSentEnvelope, so a successful send never settles it`,
     );
   }
+});
+
+test("a successful send settles the attempt with the Envelope row that replaces it", () => {
+  // The whole reason the reconciled branch does NOT settle. If the attempt
+  // were cleared before the row taking over its job committed, a failed
+  // transaction would leave a real, live envelope with nothing blocking a
+  // recall — the exact fail-open the record exists to close.
+  //
+  // One place now (`persistSentEnvelope`) rather than three, so a fourth send
+  // path cannot forget it.
+  const source = code("lib/domain/offers/envelope-send.ts");
+  assert.match(
+    source,
+    /tx\.envelope\.create\(\{[\s\S]{0,600}\}\);\s*if \(input\.sendAttemptRecordId\) \{\s*await resolveEnvelopeSendAttempt\(tx, input\.sendAttemptRecordId\);/,
+    "the attempt is not settled inside the transaction that writes the Envelope row",
+  );
+  // It must be the transaction client, never the ambient one: settling on a
+  // separate connection would commit even when the envelope write rolls back.
+  assert.ok(
+    !/resolveEnvelopeSendAttempt\(prisma,/.test(source),
+    "persistSentEnvelope settles the attempt outside its own transaction",
+  );
 });
 
 // ── The audit event uses the offer's real status ──
@@ -141,16 +186,16 @@ test("the outcome-unknown audit event reads fromStatus off the offer, not a lite
 // ── voidLiveOfferEnvelopes reads the rows back ──
 
 test("voidLiveOfferEnvelopes queries unconfirmedEnvelopeSend and blocks on any unresolved row", () => {
-  const source = code("lib/data/offer-workspace.ts");
+  const source = code("lib/domain/offers/envelope-control.ts");
 
   assert.match(
     source,
-    /prisma\.unconfirmedEnvelopeSend\.findMany\(/,
+    /db\.unconfirmedEnvelopeSend\.findMany\(/,
     "the recall/revision path no longer reads the unconfirmed-send table",
   );
   assert.match(
     source,
-    /docType:\s*\{\s*in:\s*unconfirmedSendDocTypesForScope\(scope\)\s*\}/,
+    /docType:\s*\{\s*in:\s*unconfirmedSendDocTypesForScope\(input\.scope\)\s*\}/,
     "the query is not scoped the same way envelopeScopeFilter scopes Envelope",
   );
   assert.match(
@@ -170,9 +215,9 @@ test("the dead Envelope-null-and-sentAt check is gone, not left beside the real 
   // docusignId already known, in the same create call, so a live row with
   // docusignId null and sentAt set never occurred. Leaving both in place
   // would read as two mechanisms when only one is real.
-  const source = code("lib/data/offer-workspace.ts");
+  const source = code("lib/domain/offers/envelope-control.ts");
   assert.ok(
-    !/env\.docusignId === null && env\.sentAt !== null/.test(source),
+    !/docusignId === null && envelope\.sentAt !== null/.test(source),
     "the unreachable Envelope-based check is back",
   );
 });
@@ -181,16 +226,23 @@ test("the dead Envelope-null-and-sentAt check is gone, not left beside the real 
 
 const CRON = "app/api/cron/reconcile-unconfirmed-envelope-sends/route.ts";
 
+// Every decision the job makes moved to the domain in issue #301 — which rows
+// are eligible, what a not-found may do, why a found row stays unresolved.
+// They are rules about a customer-facing document, not scheduling. The handler
+// keeps the cron secret, the DocuSign context and the response shape, and the
+// assertions below follow each guarantee to wherever it now lives.
+const RECONCILER = "lib/domain/offers/send-reconciliation.ts";
+
 /**
  * The found-envelope branch of the cron, delimited rather than taken as a
  * fixed number of characters from a nearby line. Anchoring on a counter meant
  * that moving the counter silently moved the window off the code under test.
  */
 const foundBranchOf = (source: string): string => {
-  const start = source.indexOf("const recorded = await prisma.$transaction(");
-  const end = source.indexOf("} catch (recordError)", start);
-  assert.ok(start > 0, "the found-envelope transaction moved or was renamed");
-  assert.ok(end > start, "could not delimit the found-envelope branch");
+  const start = source.indexOf("export async function recordFoundOrphanEnvelope(");
+  const end = source.indexOf("export type ReconcileTally", start);
+  assert.ok(start > 0, "the found-envelope command moved or was renamed");
+  assert.ok(end > start, "could not delimit the found-envelope command");
   return source.slice(start, end);
 };
 
@@ -203,8 +255,7 @@ test("the reconcile cron checks the CRON_SECRET in production", () => {
 test("the reconcile cron never sets resolvedAt for a row it found", () => {
   // This is the whole safety property: a found orphan must keep blocking
   // recall until a human deals with it. Only the not-found branch may resolve.
-  const source = code(CRON);
-  const foundBranch = foundBranchOf(source);
+  const foundBranch = foundBranchOf(code(RECONCILER));
 
   // It may only ever write `resolvedAt: null` — clearing it. Stamping a date
   // there would mark a live orphan resolved and stop blocking recall.
@@ -214,7 +265,7 @@ test("the reconcile cron never sets resolvedAt for a row it found", () => {
   );
   assert.match(
     foundBranch,
-    /foundDocusignId:\s*envelopeId/,
+    /foundDocusignId:\s*input\.envelopeId/,
     "a found envelope is not recorded for a human to see",
   );
 });
@@ -226,12 +277,11 @@ test("a found envelope overrides a concurrent run that found nothing", () => {
   // required resolvedAt to be null, the answer that matters would be dropped
   // and a live orphan left unblocked. So the found write is guarded only on
   // foundDocusignId (which keeps it idempotent) and clears resolvedAt.
-  const source = code(CRON);
-  const foundBranch = foundBranchOf(source);
+  const foundBranch = foundBranchOf(code(RECONCILER));
 
   assert.match(
     foundBranch,
-    /where:\s*\{\s*id:\s*row\.id,\s*foundDocusignId:\s*null\s*\}/,
+    /where:\s*\{\s*foundDocusignId:\s*null,\s*id:\s*input\.recordId\s*\}/,
     "the found write is guarded on resolvedAt, so a concurrent not-found resolve would silently win",
   );
   assert.match(
@@ -247,7 +297,7 @@ test("the reconcile cron never re-searches a row it already found an envelope fo
   // paginated response, a transient blank — would drop the row into the
   // not-found branch and resolve it, unblocking a recall on an offer that
   // really does have a live orphan envelope.
-  const source = code(CRON);
+  const source = code(RECONCILER);
   const queryStart = source.indexOf("unconfirmedEnvelopeSend.findMany(");
   assert.ok(queryStart > 0, "the pending query moved or was renamed");
   const query = source.slice(queryStart, source.indexOf("});", queryStart));
@@ -260,10 +310,10 @@ test("the reconcile cron never re-searches a row it already found an envelope fo
 });
 
 test("the reconcile cron bounds its batch and takes the oldest first", () => {
-  const source = code(CRON);
+  const source = code(RECONCILER);
   assert.match(
     source,
-    /take:\s*RECONCILE_BATCH_LIMIT/,
+    /take:\s*options\.limit \?\? RECONCILE_BATCH_LIMIT/,
     "the batch is unbounded",
   );
   assert.match(
@@ -277,10 +327,10 @@ test("marking a row found and alerting a human are one transaction", () => {
   // Two separate writes would let the mark succeed and the note fail — and
   // since the query skips found rows, the alert would never be retried. The
   // row would block a recall with nothing anywhere saying why.
-  const source = code(CRON);
+  const source = code(RECONCILER);
   assert.match(
     source,
-    /prisma\.\$transaction\(async \(tx\) => \{[\s\S]*?tx\.unconfirmedEnvelopeSend\.updateMany\([\s\S]*?tx\.offerStatusEvent\.create\(/,
+    /db\.\$transaction\(async \(tx\) => \{[\s\S]*?tx\.unconfirmedEnvelopeSend\.updateMany\([\s\S]*?tx\.offerStatusEvent\.create\(/,
     "the found-envelope mark and its activity note are not atomic",
   );
 });
@@ -290,10 +340,10 @@ test("the not-found resolve cannot clobber a row a concurrent run found", () => 
   // may have changed the row in between. The not-found path is the dangerous
   // direction, so it carries the full guard — resolving a row that has since
   // been found would unblock a recall on a live orphan.
-  const source = code(CRON);
+  const source = code(RECONCILER);
   assert.match(
     source,
-    /where:\s*\{\s*id:\s*row\.id,\s*resolvedAt:\s*null,\s*foundDocusignId:\s*null\s*\}/,
+    /where:\s*\{\s*foundDocusignId:\s*null,\s*id:\s*recordId,\s*resolvedAt:\s*null\s*\}/,
     "the not-found resolve is not guarded against a concurrent find",
   );
   assert.match(
@@ -310,8 +360,8 @@ test("a failure anywhere in the run returns a named error, not a bare 500", () =
   const source = code(CRON);
   assert.match(
     source,
-    /try \{[\s\S]*prisma\.unconfirmedEnvelopeSend\.findMany\(/,
-    "the pending-row read is outside the error boundary",
+    /try \{[\s\S]*reconcileUnconfirmedSends\(/,
+    "the run is outside the error boundary",
   );
   assert.match(
     source,
@@ -321,11 +371,16 @@ test("a failure anywhere in the run returns a named error, not a bare 500", () =
 });
 
 test("the reconcile cron resolves a genuinely not-found row", () => {
-  const source = code(CRON);
+  const source = code(RECONCILER);
   assert.match(
     source,
-    /search\.kind === "not-found"[\s\S]{0,600}resolvedAt:\s*new Date\(\)/,
+    /result\.kind === "not-found"[\s\S]{0,400}resolveSendAsNotFound\(/,
     "a row that DocuSign has no record of is never marked resolved, so it blocks forever",
+  );
+  assert.match(
+    source,
+    /export async function resolveSendAsNotFound\([\s\S]{0,400}resolvedAt:\s*new Date\(\)/,
+    "the not-found command does not actually stamp resolvedAt",
   );
 });
 
@@ -354,11 +409,11 @@ test("an incomplete search never resolves the row", () => {
   // found is a false negative — and the not-found branch is the only path
   // that resolves a row without a human, so a false negative there unblocks a
   // recall for an envelope sitting on a page nobody read.
-  const source = code(CRON);
-  const incomplete = source.indexOf('search.kind === "incomplete"');
-  assert.ok(incomplete > 0, "the cron does not handle an incomplete search");
+  const source = code(RECONCILER);
+  const incomplete = source.indexOf('result.kind === "incomplete"');
+  assert.ok(incomplete > 0, "the run does not handle an incomplete search");
 
-  const notFound = source.indexOf('search.kind === "not-found"');
+  const notFound = source.indexOf('result.kind === "not-found"');
   assert.ok(
     notFound > incomplete,
     "the incomplete case must be handled before the not-found case",
@@ -393,11 +448,14 @@ test("the search reports incomplete rather than guessing when it cannot finish",
 
 test("a run with failed rows does not report success", () => {
   // A cron that searched nothing successfully must not read as healthy.
-  const source = code(CRON);
-  assert.match(source, /failed \+= 1/, "per-row failures are not counted");
   assert.match(
-    source,
-    /if \(failed > 0\)[\s\S]{0,400}errorResponse\(/,
+    code(RECONCILER),
+    /failed \+= 1/,
+    "per-row failures are not counted",
+  );
+  assert.match(
+    code(CRON),
+    /if \(tally\.failed > 0\)[\s\S]{0,400}errorResponse\(/,
     "a run with failures still returns a success response",
   );
 });
@@ -417,7 +475,7 @@ test("an empty page is only the end when the metadata says so", () => {
 test("a database failure counts as a failed row, not a quiet log line", () => {
   // The row is still unresolved either way, so a run that could not persist
   // its decisions must not report success.
-  const source = code(CRON);
+  const source = code(RECONCILER);
   const failedIncrements = (source.match(/failed \+= 1/g) ?? []).length;
   assert.equal(
     failedIncrements,

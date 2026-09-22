@@ -16,7 +16,6 @@ import {
   getCachedProjects,
   getCachedProjectsForLookup,
 } from "@/lib/data/projects";
-import { createProject } from "@/lib/data/projectsWrite";
 import { getCachedSiteManagersForDropdown } from "@/lib/data/siteManagers";
 import {
   createTradieSchedule,
@@ -32,7 +31,6 @@ import { getUserByClerkIdCached } from "@/lib/data/user";
 import {
   addMaterialSchema,
   createLeadSchema,
-  createProjectSchema,
   createProjectUpdateSchema,
   createTradieScheduleSchema,
   customerLookupQuerySchema,
@@ -88,7 +86,6 @@ const emptyInputSchema = z.object({}).strict();
 const projectUpdateToolSchema = projectParamSchema.extend(
   createProjectUpdateSchema.shape,
 );
-const projectCreateToolSchema = createProjectSchema;
 const leadUpdateToolSchema = leadParamSchema.extend(updateLeadSchema.shape);
 const leadDeleteToolSchema = leadParamSchema;
 const milestoneCreateToolSchema = projectParamSchema.extend(
@@ -522,40 +519,15 @@ const handler = createMcpHandler(
       },
     );
 
-    server.registerTool(
-      "create_project",
-      {
-        description: "Create a new project",
-        inputSchema: projectCreateToolSchema,
-        outputSchema: projectDetailResponseSchema,
-      },
-      async (params) => {
-        try {
-          const projectId = await createProject(params);
-          const res = removeAllNestedDateObjects(
-            await getCachedProjectById(projectId),
-          );
-          const validated = projectDetailResponseSchema.safeParse(res);
-          if (!validated.success) {
-            console.error(
-              "Invalid project detail response",
-              z.treeifyError(validated.error),
-            );
-            throw new Error("Invalid project detail response");
-          }
-          return toToolResult(validated.data);
-        } catch (error) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Error creating project ${error instanceof Error ? error.message : String(error)}`,
-              },
-            ],
-          };
-        }
-      },
-    );
+    // `create_project` was removed in phase 4 of issue #301.
+    //
+    // It called `lib/data/projectsWrite.ts#createProject`, which wrote
+    // `leadId: 0` with the comment "To make this function fail" —
+    // `Project.leadId` is a required unique foreign key, so every call this
+    // tool ever made died on a constraint violation and came back as
+    // "Error creating project". A project exists only as a converted lead;
+    // the supported path is the create-project wizard, which runs
+    // `lib/domain/projects/creation.ts#createProjectFromLead`.
 
     server.registerTool(
       "create_project_update",
@@ -575,7 +547,7 @@ const handler = createMcpHandler(
           if (!user) {
             throw new Error("User not found");
           }
-          await createProjectUpdate({ ...params, authorId: user.id });
+          await createProjectUpdate(params);
           const res = removeAllNestedDateObjects(
             await getCachedProjectById(params.projectId),
           );
@@ -645,7 +617,11 @@ const handler = createMcpHandler(
       async (params) => {
         try {
           const res = removeAllNestedDateObjects(
-            await updateVariationStatus(params.variationId, params.status),
+            await updateVariationStatus(
+              params.projectId,
+              params.variationId,
+              params.status,
+            ),
           );
           const validated = variationResponseSchema.safeParse(res);
           if (!validated.success) {

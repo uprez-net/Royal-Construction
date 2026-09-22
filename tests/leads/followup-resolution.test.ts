@@ -106,14 +106,31 @@ test("open work sorts ahead of closed work, so take:1 finds it", () => {
 // ── Every query site loads it ──
 
 test("no query feeding mapLead omits the task", () => {
-  const source = code("lib/data/leads.ts");
-  const mapLeadCalls = (source.match(/mapLead\(/g) ?? []).length;
-  const includes = (source.match(/tasks: NEXT_FOLLOWUP_TASK/g) ?? []).length;
+  // The lead writes moved to lib/domain/leads/commands.ts (issue #301) and
+  // share one LEAD_WRITE_INCLUDE there; the reads stayed in the adapter with
+  // the include written out. Counting only the adapter would have let a moved
+  // query drop the task silently, so both are counted.
+  const adapter = code("lib/data/leads.ts");
+  const command = code("lib/domain/leads/commands.ts");
 
-  // 7 mapLead call sites, 6 distinct queries — two create paths share one
-  // include constant.
+  const mapLeadCalls = (adapter.match(/mapLead\(/g) ?? []).length;
   assert.ok(mapLeadCalls >= 7, `only ${mapLeadCalls} mapLead call sites found`);
-  assert.equal(includes, 6, `expected 6 include sites, found ${includes}`);
+
+  const adapterIncludes = (adapter.match(/tasks: NEXT_FOLLOWUP_TASK/g) ?? [])
+    .length;
+  assert.equal(
+    adapterIncludes,
+    4,
+    `expected 4 adapter include sites, found ${adapterIncludes}`,
+  );
+
+  // One shared constant, used by every query the commands run.
+  assert.match(command, /tasks: NEXT_FOLLOWUP_TASK/);
+  assert.equal(
+    (command.match(/include: LEAD_WRITE_INCLUDE/g) ?? []).length,
+    3,
+    "a lead write is reading relations without the task include",
+  );
 });
 
 test("the tasks field is required, which is what forces the include", () => {

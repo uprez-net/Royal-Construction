@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { updateVariationStatus } from "@/lib/data/variations";
 import {
   parseRouteParamsWithResponse,
@@ -36,15 +37,23 @@ export async function PATCH(
     return badRequestResponse("Invalid request body");
   }
 
-  const { variationId } = routeParams.data;
+  const { projectId, variationId } = routeParams.data;
   try {
     const variation = await updateVariationStatus(
+      projectId,
       variationId,
       body.data.status,
     );
 
     return successResponse(variation);
   } catch (error) {
+    // A domain refusal answers with its own status and its own message.
+    // "This variation was already approved." is the entire point of the guard
+    // and is useless to the one person who can act on it as a bare 500 —
+    // whose usual next move is to press Approve again.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+
     console.error("Error updating variation status:", error);
     return errorResponse("Failed to update variation status", {
       status: 500,

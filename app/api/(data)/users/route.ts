@@ -1,4 +1,19 @@
 import { clerkClient } from "@/lib/auth";
+import { Role } from "@prisma/client";
+import { requireAdminUser } from "@/lib/auth/require-admin";
+import prisma from "@/lib/prisma";
+import {
+  findUserByClerkId,
+  findUserById,
+} from "@/lib/domain/identity/users";
+import {
+  changeTeamMemberRole,
+  inviteTeamMember,
+  recordRoleReconciliation,
+  revokeTeamInvitation,
+} from "@/lib/domain/identity/team";
+import { userPrincipal } from "@/lib/domain/principal";
+import { isDomainError } from "@/lib/domain/errors";
 import {
   createUserInvitationSchema,
   errorResponse,
@@ -11,8 +26,36 @@ import {
 } from "@/utils/validators";
 import { NextRequest } from "next/server";
 
+/**
+ * A refused request is not a server fault. The domain errors carry the status
+ * and the sentence to show — "The last admin cannot be demoted." is the whole
+ * point of the guard, and it is useless to the one person who can act on it if
+ * the route answers a bare 500.
+ */
+function domainErrorResponse(error: unknown) {
+  if (!isDomainError(error)) return null;
+  return errorResponse(error.message, {
+    status: error.status,
+    code: error.code.toUpperCase(),
+  });
+}
+
+async function currentAdmin() {
+  const access = await requireAdminUser();
+  if (!access.ok) return null;
+  const user = await findUserById(access.userId, prisma);
+  return user && user.role === Role.ADMIN ? userPrincipal(user) : null;
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const url = new URL(request.url);
     const params = parseSearchParamsWithResponse(url, userSearchQuerySchema);
     if (!params.success) {
@@ -48,6 +91,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const body = await parseBodyWithResponse(
       request,
       createUserInvitationSchema,
@@ -57,18 +107,27 @@ export async function POST(request: NextRequest) {
     }
     const { email, role } = body.data;
 
-    const invitation = await clerkClient.invitations.createInvitation({
-      emailAddress: email,
-      expiresInDays: 7,
-      publicMetadata: { role },
-    });
+    const invitation = await inviteTeamMember(
+      principal,
+      {
+        email,
+        idempotencyKey: request.headers.get("Idempotency-Key") ?? undefined,
+        role,
+      },
+      prisma,
+      (input) => clerkClient.invitations.createInvitation(input),
+    );
 
     return successResponse({
-      message: "Invitation sent successfully",
+      message: invitation.alreadyInvited
+        ? "This invitation was already sent today; nothing was sent again"
+        : "Invitation sent successfully",
       success: true,
       invitation,
     });
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/users POST error", error);
     return errorResponse("Failed to create user invitation", {
       status: 500,
@@ -79,21 +138,96 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const body = await parseBodyWithResponse(request, updateUserRoleSchema);
     if (!body.success) {
       return body.response;
     }
     const { userId, newRole } = body.data;
+    const target = await findUserByClerkId(userId, prisma);
+    if (!target) {
+      return errorResponse("Team member not found", {
+        status: 404,
+        code: "NOT_FOUND",
+      });
+    }
+    if (target.role === newRole) {
+      const updatedUser = await clerkClient.users.getUser(userId);
+      return successResponse({
+        message: "User role is already up to date",
+        success: true,
+        user: updatedUser,
+      });
+    }
 
     const updatedUser = await clerkClient.users.updateUser(userId, {
       publicMetadata: { role: newRole },
     });
-    return successResponse({
-      message: "User role updated successfully",
-      success: true,
-      user: updatedUser,
-    });
+    try {
+      await changeTeamMemberRole(
+        principal,
+        {
+          expectedRole: target.role,
+          newRole,
+          userId: target.id,
+        },
+        prisma,
+      );
+      return successResponse({
+        message: "User role updated successfully",
+        success: true,
+        user: updatedUser,
+      });
+    } catch (error) {
+      try {
+        await clerkClient.users.updateUser(userId, {
+          publicMetadata: { role: target.role },
+        });
+      } catch (compensationError) {
+        console.error(
+          "Could not compensate Clerk after the local role transition failed",
+          compensationError,
+        );
+        // Clerk now says one role and the database says another, and nothing
+        // here can decide which is right. Leave a durable row rather than only
+        // a log line and a 500 — with nobody watching logs, the next sign of
+        // this is somebody reaching a screen they should not.
+        const recorded = await recordRoleReconciliation(prisma, {
+          clerkRole: newRole,
+          clerkUserId: userId,
+          localRole: target.role,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "The local role transition failed.",
+          userId: target.id,
+        }).catch((recordError) => {
+          console.error(
+            "Could not record the role reconciliation",
+            recordError,
+          );
+          return null;
+        });
+        return errorResponse(
+          "Role update needs manual reconciliation between Clerk and the local team record",
+          {
+            status: 500,
+            code: "RECONCILIATION_REQUIRED",
+            ...(recorded ? { details: recorded.key } : {}),
+          },
+        );
+      }
+      throw error;
+    }
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/users PATCH error", error);
     return errorResponse("Failed to update user", {
       status: 500,
@@ -104,6 +238,13 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const principal = await currentAdmin();
+    if (!principal) {
+      return errorResponse("Unauthorized", {
+        status: 401,
+        code: "UNAUTHORIZED",
+      });
+    }
     const body = await parseBodyWithResponse(
       request,
       revokeUserInvitationSchema,
@@ -113,13 +254,22 @@ export async function DELETE(request: NextRequest) {
     }
     const { invitationId } = body.data;
 
-    await clerkClient.invitations.revokeInvitation(invitationId);
+    const revoked = await revokeTeamInvitation(
+      principal,
+      invitationId,
+      prisma,
+      (id) => clerkClient.invitations.revokeInvitation(id),
+      request.headers.get("Idempotency-Key") ?? undefined,
+    );
 
     return successResponse({
       message: "Invitation revoked successfully",
       success: true,
+      invitationId: revoked.invitationId,
     });
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
     console.error("/api/users DELETE error", error);
     return errorResponse("Failed to delete user", {
       status: 500,

@@ -5,6 +5,8 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { sendPartyReply } from "@/lib/data/compliance-outreach";
+import { userPrincipal } from "@/lib/domain/principal";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -40,12 +42,20 @@ export async function POST(
   const { outreachId, ...input } = body.data;
 
   try {
-    await requireComplianceAccess(projectId);
-    const engagement = await sendPartyReply(projectId, outreachId, input);
+    const { user } = await requireComplianceAccess(projectId);
+    const engagement = await sendPartyReply(
+      userPrincipal(user),
+      projectId,
+      outreachId,
+      input,
+      request.headers.get("idempotency-key") ?? undefined,
+    );
     return successResponse(engagement);
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to send a compliance party reply", error);
     return errorResponse(
       error instanceof Error ? error.message : "Failed to send the message.",

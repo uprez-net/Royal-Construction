@@ -5,7 +5,13 @@ import { getGraphConfig } from "@/lib/graph/config";
 import { createLead, findLeadById, updateLead } from "@/lib/data/leads";
 import { authorizeLeadAccess } from "@/lib/data/offer-access";
 import { verifyBookConsultationToken } from "@/lib/leads/book-consultation-token";
-import { createLeadTask } from "@/lib/data/lead-tasks";
+import prisma from "@/lib/prisma";
+import { createLeadTask } from "@/lib/domain/leads/tasks";
+import {
+  bookConsultation,
+  consultationBookingKey,
+} from "@/lib/domain/leads/booking";
+import { anonymousPrincipal } from "@/lib/domain/principal";
 import {
   sydneyDateOnly,
   sydneyTimeOnly,
@@ -19,6 +25,18 @@ const NOTE_ACTION = "NOTE";
 const NOTE_SOURCE_DETAIL = "Book consultation form";
 
 const BOOKING_TIMEZONE = "Australia/Sydney";
+
+// This route is open. Anonymous is the honest value for its caller: a lead id
+// arriving here is a claim to be proved, which resolveLeadClaim does, not an
+// identity to be trusted.
+const ANONYMOUS_BOOKING = anonymousPrincipal("public booking form");
+
+// Graph wants a naive local string, "YYYY-MM-DDTHH:mm:ss", alongside a
+// separate timeZone field. Module scope because the idempotency key is built
+// from the same reading, before the event payload is assembled.
+const pad = (n: number) => n.toString().padStart(2, "0");
+const formatToGraphDateTime = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 const SLOT_DURATION_MS = 60 * 60 * 1000;
 
 // calendarView's boundary behaviour is not documented, so the window is padded
@@ -199,7 +217,7 @@ async function upsertBookingNotes({
   notes: string;
   noteDetail: string;
   meetingAt: Date;
-}) {
+}): Promise<number | null> {
   const now = new Date();
   const noteEntry: HistoryItem = {
     date: toDateOnly(now),
@@ -237,20 +255,23 @@ async function upsertBookingNotes({
     // fail the booking: the customer has the invitation either way. Log loudly
     // and let the lead keep the meetingDate that was just written.
     try {
-      await createLeadTask({
-        leadId: existingLead.id,
-        type: "MEETING",
-        dueDate: meetingAt,
-        dueTime: toTimeOnly(meetingAt),
-        notes: "Consultation booked from the website",
-      });
+      await createLeadTask(
+        {
+          leadId: existingLead.id,
+          type: "MEETING",
+          dueDate: meetingAt,
+          dueTime: toTimeOnly(meetingAt),
+          notes: "Consultation booked from the website",
+        },
+        prisma,
+      );
     } catch (taskError) {
       console.error(
         "Booking saved but the meeting task was not created",
         taskError,
       );
     }
-    return;
+    return existingLead.id;
   }
 
   const created = await createLead(
@@ -287,17 +308,26 @@ async function upsertBookingNotes({
   // rather than a lead when the email already exists, hence the id check.
   if (created && typeof created === "object" && "id" in created) {
     try {
-      await createLeadTask({
-        leadId: Number(created.id),
-        type: "MEETING",
-        dueDate: meetingAt,
-        dueTime: toTimeOnly(meetingAt),
-        notes: "Consultation booked from the website",
-      });
+      await createLeadTask(
+        {
+          leadId: Number(created.id),
+          type: "MEETING",
+          dueDate: meetingAt,
+          dueTime: toTimeOnly(meetingAt),
+          notes: "Consultation booked from the website",
+        },
+        prisma,
+      );
     } catch (taskError) {
       console.error("Lead created but the meeting task was not", taskError);
     }
+    return Number(created.id);
   }
+
+  // createLead answers with a conflict object rather than a lead when the
+  // email already belongs to one. The booking still happened, so the intent
+  // records it with no lead id rather than failing.
+  return null;
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -340,6 +370,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       );
     }
 
+    const senderUpn = config.senderUpn;
     const credential = new ClientSecretCredential(
       config.tenantId,
       config.clientId,
@@ -357,11 +388,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Calculate end time locally (adds 1 hour, automatically handles day rollovers like 23:30 -> 00:30)
     const endDateTimeObj = new Date(start.getTime() + 60 * 60 * 1000);
 
-    // Helper: Format Date object to Graph API accepted Local String "YYYY-MM-DDTHH:mm:ss"
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    const formatToGraphDateTime = (d: Date) =>
-      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-
     const graphStartStr = formatToGraphDateTime(start);
     const graphEndStr = formatToGraphDateTime(endDateTimeObj);
 
@@ -370,6 +396,34 @@ export async function POST(req: NextRequest): Promise<Response> {
     // reading of the incoming string.
     const slotStart = fromZonedTime(graphStartStr, BOOKING_TIMEZONE);
     const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MS);
+
+    // Idempotency key for this exact slot and client, resolved before the
+    // calendar is touched. Two submissions of the same form — a double-click,
+    // or a retry after a timeout — used to race past the conflict check below
+    // and create two Teams meetings and two invitations.
+    // Pre-flight only: the command builds the real key. Doing it here means a
+    // malformed time or a missing email is a 400 before the calendar is even
+    // queried, rather than a 500 from inside the effect.
+    try {
+      consultationBookingKey({
+        email,
+        name,
+        startsAt: fromZonedTime(
+          formatToGraphDateTime(new Date(startDateTime)),
+          BOOKING_TIMEZONE,
+        ),
+      });
+    } catch (keyError) {
+      return NextResponse.json(
+        {
+          error:
+            keyError instanceof Error
+              ? keyError.message
+              : "That appointment could not be read.",
+        },
+        { status: 400 },
+      );
+    }
 
     // The booking UI is not a reliable guard: it can only reflect what it was
     // able to load. This is the check that actually prevents a double booking,
@@ -467,39 +521,6 @@ export async function POST(req: NextRequest): Promise<Response> {
       onlineMeetingProvider: "teamsForBusiness",
     };
 
-    // ═══════════════════════════════════════════════════════
-    // ADDED 'Prefer' HEADER TO FORCE GRAPH TO RETURN JOIN URL
-    // ═══════════════════════════════════════════════════════
-    const response = await fetch(
-      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.senderUpn)}/events`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          Prefer: 'outlook.timezone="Australia/Sydney"', // <--- THIS IS THE KEY
-        },
-        body: JSON.stringify(event),
-      },
-    );
-
-    if (!response.ok) {
-      const detail = await response.text();
-      console.error("Graph event create failed:", detail);
-      return NextResponse.json(
-        { error: "Failed to create event" },
-        { status: 500 },
-      );
-    }
-
-    const eventData = await response.json();
-    //console.log('---------Event created:', eventData);
-    // ═══════════════════════════════════════════════════════
-    // EXTRACT THE TEAMS MEETING LINK
-    // ═══════════════════════════════════════════════════════
-    const joinUrl = eventData?.onlineMeeting?.joinUrl || null;
-    //console.log('Graph event created successfully. Join URL:', joinUrl);
-
     const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
     const appointmentLabel = `${displayDate} at ${displayTime}`;
     const noteDetail =
@@ -507,31 +528,73 @@ export async function POST(req: NextRequest): Promise<Response> {
         ? `${trimmedNotes}\n\nAppointment: ${appointmentLabel}`
         : `Appointment: ${appointmentLabel}`;
 
+    // The meeting and the record of it are one effect now. Creating the event
+    // and then failing to save the lead used to answer 500 while the client
+    // kept an invitation nobody in the office could see.
+    let booked: Awaited<ReturnType<typeof bookConsultation>>;
     try {
-      await upsertBookingNotes({
-        existingLeadId: leadClaim.kind === "lead" ? leadClaim.leadId : null,
-        name,
-        email,
-        notes: trimmedNotes,
-        noteDetail,
-        // slotStart, not `start`. `start` is the Sydney wall clock carried as
-        // UTC, which is exactly what the Graph payload needs and exactly wrong
-        // for a stored instant: a 3:00 PM booking was saved as 15:00Z and read
-        // back as 1:00 AM the next day, so the client's invitation and the
-        // builder's own task list disagreed by ten hours. slotStart is the same
-        // moment the conflict check already uses.
-        meetingAt: slotStart,
-      });
-    } catch (leadError) {
-      console.error("Failed to save booking notes to lead", leadError);
+      booked = await bookConsultation(
+        ANONYMOUS_BOOKING,
+        { email, name, startsAt: slotStart },
+        prisma,
+        async () => {
+          const response = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderUpn)}/events`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+                // Forces Graph to return the join URL.
+                Prefer: 'outlook.timezone="Australia/Sydney"',
+              },
+              body: JSON.stringify(event),
+            },
+          );
+          if (!response.ok) {
+            const detail = await response.text();
+            console.error("Graph event create failed:", detail);
+            throw new Error("Failed to create event");
+          }
+          const eventData = await response.json();
+          const leadId = await upsertBookingNotes({
+            existingLeadId: leadClaim.kind === "lead" ? leadClaim.leadId : null,
+            name,
+            email,
+            notes: trimmedNotes,
+            noteDetail,
+            // slotStart, not `start`. `start` is the Sydney wall clock carried
+            // as UTC, which is what the Graph payload needs and exactly wrong
+            // for a stored instant: a 3:00 PM booking was saved as 15:00Z and
+            // read back as 1:00 AM the next day, so the client's invitation and
+            // the builder's own task list disagreed by ten hours. slotStart is
+            // the same moment the conflict check already uses.
+            meetingAt: slotStart,
+          });
+          return {
+            joinUrl: eventData?.onlineMeeting?.joinUrl || null,
+            leadId,
+          };
+        },
+      );
+    } catch (bookingError) {
+      console.error("Booking failed", bookingError);
       return NextResponse.json(
-        { error: "Failed to save booking notes" },
+        {
+          error:
+            "We could not complete that booking. Please try again, or call us.",
+        },
         { status: 500 },
       );
     }
 
-    // Return the joinUrl to your frontend
-    return NextResponse.json({ success: true, joinUrl });
+    // A replay answers with the first attempt's meeting rather than making a
+    // second one, and says so, so the page does not claim a fresh booking.
+    return NextResponse.json({
+      success: true,
+      joinUrl: booked.joinUrl,
+      alreadyBooked: booked.alreadyBooked,
+    });
   } catch (error) {
     console.error("Book consultant failed", error);
     return NextResponse.json(

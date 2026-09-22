@@ -6,7 +6,7 @@ import {
   describeOwnerMismatch,
   isSameOwnerName,
   nameTokens,
-} from "../../lib/compliance/title-search-owners";
+} from "../../lib/domain/compliance/title-search-owners";
 
 // ---------------------------------------------------------------------------
 // Normalisation

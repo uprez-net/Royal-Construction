@@ -2,15 +2,23 @@
 
 import { generateText } from "ai";
 import { gateway } from "@/lib/model";
-import { del } from "@vercel/blob";
 import { getGraphConfig } from "../graph/config";
 import { createGraphContext } from "../graph/client";
-import {
-  EMAIL_FOOTER_HTML,
-  EMAIL_HEADER_HTML,
-} from "@/constants/email-artifacts";
 import { requireInternalUser } from "@/lib/auth/require-internal-user";
-import { isBlobStorageUrl } from "@/lib/blob-url";
+import {
+  deleteEmailAttachment,
+  sendCampaignEmail as sendCampaignEmailDomain,
+} from "@/lib/domain/email/operations";
+import { isDomainError } from "@/lib/domain/errors";
+import { vercelBlobDelete } from "@/lib/blob-port";
+import prisma from "@/lib/prisma";
+import {
+  generateEmailTemplate as generateEmailTemplateDocument,
+  type GeneratedEmailResult,
+} from "@/lib/domain/email/template";
+import { userPrincipal } from "@/lib/domain/principal";
+
+export type { GeneratedEmailResult } from "@/lib/domain/email/template";
 
 // The lead email screens call every export here from the browser, so each is a
 // Server Action anyone can post to: one spends model tokens, one deletes a
@@ -165,21 +173,6 @@ Do NOT output a full HTML document — only the inner content that sits between 
 `;
 // ─── Types & Schemas ───────────────────────────────────────────────────────
 
-export interface GeneratedEmailResult {
-  html: string;
-  subject: string;
-  name: string;
-}
-
-function isSafePromptUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 // ─── Main Server Action ────────────────────────────────────────────────────
 
 export async function generateEmailTemplate(
@@ -192,90 +185,16 @@ export async function generateEmailTemplate(
     throw new Error(access.error);
   }
 
-  const model = gateway("google/gemini-2.5-flash");
-  const safeLinks = links.filter((link) => isSafePromptUrl(link.url));
-  const safeAttachments = attachments.filter((attachment) =>
-    isSafePromptUrl(attachment.url),
-  );
-
-  const linksContext =
-    safeLinks.length > 0
-      ? `LINKS TO INCLUDE (Render these as Gold CTA Buttons inside an Action Card):\n${safeLinks.map((l) => `- Label: "${l.label}", URL: ${l.url}`).join("\n")}`
-      : "";
-
-  const attachmentsContext =
-    safeAttachments.length > 0
-      ? `ATTACHMENTS TO INCLUDE (Render these as secondary text links with &nbsp;→):\n${safeAttachments.map((a) => `- File Name: "${a.label}", URL: ${a.url}`).join("\n")}`
-      : "";
-
-  const userPrompt = `
-Please write the HTML email body based on this description:
-
-DESCRIPTION:
- ${description}
-
- ${linksContext}
-
- ${attachmentsContext}
-
-The Text content Should be at left position always, and the design should be clean and minimalistic, following the brand theme provided. 
-Remember, follow the brand theme strictly, do not add unrequested sections, and format your response exactly as requested. 
-  `.trim();
-
   try {
-    // Use generateText instead of ToolLoopAgent to save tokens and avoid rate limits
-    const { text } = await generateText({
-      model,
-      system: SYSTEM_INSTRUCTION,
-      prompt: userPrompt,
-    });
-
-    // Parse the structured response
-    let subjectContent = "Royal Constructions Update";
-    let nameContent = "Custom AI Email";
-    let htmlContent = text;
-
-    // Extract Subject
-    const subjectMatch = text.match(/---SUBJECT---\s*([\s\S]*?)\s*---NAME---/);
-    if (subjectMatch) subjectContent = subjectMatch[1].trim();
-
-    // Extract Name
-    const nameMatch = text.match(/---NAME---\s*([\s\S]*?)\s*---HTML---/);
-    if (nameMatch) nameContent = nameMatch[1].trim();
-
-    // Extract HTML
-    const htmlMatch = text.match(/---HTML---\s*([\s\S]*)/);
-    if (htmlMatch) htmlContent = htmlMatch[1].trim();
-
-    // Clean up potential markdown block wrappers if the AI added them
-    let cleanBody = htmlContent.trim();
-    if (cleanBody.startsWith("```html")) cleanBody = cleanBody.slice(7);
-    else if (cleanBody.startsWith("```")) cleanBody = cleanBody.slice(3);
-    if (cleanBody.endsWith("```")) cleanBody = cleanBody.slice(0, -3);
-    cleanBody = cleanBody.trim();
-
-    // Assemble the final email
-    const finalHtml = `
-<div style="background-color:#f7f6f2;margin:0;padding:0">
-  <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="max-width:640px;margin-right:auto;margin-left:auto;background-color:#ffffff">
-    <tbody>
-      <tr style="width:100%">
-        <td style="margin:0;padding:0">
-          ${EMAIL_HEADER_HTML}
-          ${cleanBody}
-          ${EMAIL_FOOTER_HTML}
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-    `.trim();
-
-    return {
-      html: finalHtml,
-      subject: subjectContent,
-      name: nameContent,
-    };
+    const model = gateway("google/gemini-2.5-flash");
+    return await generateEmailTemplateDocument(
+      userPrincipal(access.user),
+      { attachments, description, links, systemInstruction: SYSTEM_INSTRUCTION },
+      async ({ prompt, system }) => {
+        const { text } = await generateText({ model, prompt, system });
+        return text;
+      },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Failed to generate email template:", message, error);
@@ -457,31 +376,22 @@ Remember, follow the brand theme strictly, do not add unrequested sections, and 
 // Where the composer uploads attachments (hooks/use-email-ad-hock.ts). Anything
 // else in the store (lead documents, offer PDFs, signed contracts) is not this
 // action's to delete.
-const EMAIL_ATTACHMENT_PREFIX = "/email-ad-hock-attachment-upload/";
-
-function isEmailAttachmentBlobUrl(url: string): boolean {
-  return (
-    isBlobStorageUrl(url) &&
-    new URL(url).pathname.startsWith(EMAIL_ATTACHMENT_PREFIX)
-  );
-}
-
 export async function RemoveUrlFromBlob(blobUrl: string) {
   const access = await requireInternalUser();
   if (!access.ok) {
     return { success: false, error: access.error };
   }
-  if (!isEmailAttachmentBlobUrl(blobUrl)) {
-    return {
-      success: false,
-      error: "Only an uploaded email attachment can be removed here.",
-    };
-  }
-
   try {
-    await del(blobUrl);
+    await deleteEmailAttachment(
+      userPrincipal(access.user),
+      blobUrl,
+      vercelBlobDelete,
+    );
     return { success: true };
   } catch (error) {
+    if (isDomainError(error)) {
+      return { success: false, error: error.message };
+    }
     console.error("Failed to delete blob at URL:", blobUrl, error);
     return { success: false, error: "Failed to delete blob." };
   }
@@ -495,6 +405,12 @@ export async function sendCampaignEmail(
   to: string,
   subject: string,
   body: string,
+  /**
+   * Identifies one press of Send. Passing it makes the send idempotent per
+   * recipient for that campaign run, so a double-click or a retried batch does
+   * not email the whole list twice from Royal's mailbox.
+   */
+  runId?: string,
 ): Promise<boolean> {
   // false is what every caller already reads as "not sent".
   const access = await requireInternalUser();
@@ -505,8 +421,15 @@ export async function sendCampaignEmail(
   try {
     const config = getGraphConfig();
     const client = await createGraphContext(config);
-    await client.sendMail({ to, subject, body, cc: config.cc });
-    return true;
+    const result = await sendCampaignEmailDomain(
+      userPrincipal(access.user),
+      { body, runId, subject, to },
+      async (input) => {
+        await client.sendMail({ ...input, cc: config.cc });
+      },
+      prisma,
+    );
+    return result.sent;
   } catch (error) {
     console.error(`[Campaign] Failed to send email to ${to}:`, error);
     return false;

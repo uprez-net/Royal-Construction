@@ -19,7 +19,7 @@ import {
   closeComplianceIfComplete,
   recordCertificateIssued,
 } from "@/lib/data/compliance-certificate";
-import { isCertificateDocument } from "@/lib/compliance/portal-certificates";
+import { isCertificateDocument } from "@/lib/domain/compliance/portal-certificates";
 import { classifyDocumentAtUrl } from "@/lib/agent/documentClassifierAgent";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
 import {

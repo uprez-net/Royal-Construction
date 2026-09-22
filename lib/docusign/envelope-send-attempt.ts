@@ -1,73 +1,21 @@
 import docusign from "docusign-esign";
-import type { EnvelopeDocType, Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import type { DocusignContext } from "./client";
+import type { EnvelopeSearchResult } from "@/lib/domain/ports/envelope-search";
 
 export const DOCUSIGN_SEND_ATTEMPT_FIELD = "rcSendAttempt";
 
-/**
- * Record that a send is about to happen, BEFORE calling DocuSign.
- *
- * The blocking record has to exist before the envelope can, or the protection
- * fails open. Written afterwards — in the catch, once the outcome is already
- * unknown — a failed write left no record at all: the operator was told not to
- * resend, but nothing stopped a recall from proceeding and a resend from
- * putting a second live document in front of the customer, which is the whole
- * thing this guards.
- *
- * Writing it first also covers the case no catch block can: the process dying
- * mid-send. The row simply stays unresolved and the reconcile cron picks it up.
- *
- * Returns null when the row could not be written, and the caller must then NOT
- * send. Refusing a send is recoverable; sending without the record is not.
- */
-export async function beginEnvelopeSendAttempt(args: {
-  readonly offerId: string;
-  readonly docType: EnvelopeDocType;
-  readonly sendAttemptId: string;
-  readonly attemptStarted: Date;
-}): Promise<string | null> {
-  try {
-    const { id } = await prisma.unconfirmedEnvelopeSend.create({
-      data: {
-        offerId: args.offerId,
-        docType: args.docType,
-        sendAttemptId: args.sendAttemptId,
-        attemptStartedAt: args.attemptStarted,
-      },
-      select: { id: true },
-    });
-    return id;
-  } catch (error) {
-    console.error(
-      `[offer] could not record a send attempt for offer ${args.offerId}; refusing to send without it:`,
-      error,
-    );
-    return null;
-  }
-}
-
-/**
- * Close a send attempt whose outcome is now known — the envelope was created
- * (so a real `Envelope` row blocks recall instead), or DocuSign definitively
- * rejected it (so nothing is out there).
- *
- * Only an outcome that stays unknown leaves the row unresolved, which is what
- * makes a recall refuse.
- *
- * Takes an optional transaction client so the success path can resolve the
- * attempt in the same transaction that writes the Envelope row: the record
- * must not be cleared unless the row that replaces it commits.
- */
-export async function resolveEnvelopeSendAttempt(
-  recordId: string,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
-): Promise<void> {
-  await db.unconfirmedEnvelopeSend.updateMany({
-    where: { id: recordId, resolvedAt: null },
-    data: { resolvedAt: new Date() },
-  });
-}
+// `beginEnvelopeSendAttempt` and `resolveEnvelopeSendAttempt` live in
+// `lib/domain/offers/envelope-send.ts`. They arrived here in PR #325 reaching
+// for the ambient Prisma client, but the unconfirmed-send record is a
+// durable-intent rule, not a DocuSign concern: it decides whether a recall may
+// proceed. In the domain it takes its database explicitly, which is what lets
+// the success path settle the attempt inside the same transaction that writes
+// the Envelope row, and what makes it reachable from the reconcile cron and
+// from a test.
+//
+// What stays here is genuinely about the provider: the custom field the send
+// stamps, classifying a create failure, and the paginated search that looks an
+// orphan up afterwards.
 
 export function attachSendAttemptCustomField(
   envelopeDefinition: docusign.EnvelopeDefinition,
@@ -135,19 +83,11 @@ export function isDocusignTransportFailure(error: unknown): boolean {
   );
 }
 
-/**
- * The outcome of looking for an envelope by its send-attempt marker.
- *
- * "not-found" and "incomplete" have to be different answers. `listStatusChanges`
- * is paginated, and reading only the first page and reporting null is a false
- * negative — which the reconcile cron would act on by resolving the attempt and
- * unblocking a recall, on an offer whose envelope is simply on page two. Only a
- * search that reached the end of the result set may say "not-found".
- */
-export type EnvelopeSearchResult =
-  | { readonly kind: "found"; readonly envelopeId: string }
-  | { readonly kind: "not-found" }
-  | { readonly kind: "incomplete"; readonly reason: string };
+// The three-shaped answer lives with the port the domain is handed
+// (`lib/domain/ports/envelope-search.ts`), because the reason it has three
+// shapes is a domain rule: only a search that reached a proven end of the
+// result set may say "not-found", since the reconcile job acts on that without
+// a human. This module is the DocuSign implementation of it.
 
 // DocuSign caps a page well below this; the cap is here so a very wide window
 // cannot spin forever, and hitting it reports "incomplete" rather than lying.

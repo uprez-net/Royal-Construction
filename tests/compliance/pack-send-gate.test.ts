@@ -12,7 +12,7 @@ import {
 import {
   clientHasApprovedPlans,
   packSendBlockedReason,
-} from "../../lib/compliance/prerequisites";
+} from "../../lib/domain/compliance/prerequisites";
 import type { CertifierEngagementDetail } from "../../types/compliance";
 
 /**

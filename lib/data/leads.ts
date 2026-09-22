@@ -1,33 +1,19 @@
 import "server-only";
 import { signBookConsultationToken } from "@/lib/leads/book-consultation-token";
 
+import { createHash } from "node:crypto";
+
 import prisma from "@/lib/prisma";
 import {
-  sydneyDateOnly,
-  sydneyTimeOnly,
-  sydneyWallClockToInstant,
-} from "@/lib/dates/sydney";
-import {
   mapLead,
-  stageToPrismaMap,
-  historyTypeToPrisma,
   LeadAnalyticsData,
 } from "@/types/lead";
 import type { LeadStage } from "@prisma/client";
 import type { CreateLeadInput, UpdateLeadInput } from "@/utils/validators";
-import { requiredLeadEmail } from "@/utils/validators";
 import type { LeadsStats, Lead as UiLead } from "@/lib/leads/types";
-import {
-  closeDatePatch,
-  isClosedUnsuccessful,
-  stageDef,
-} from "@/lib/leads/pipeline-stages";
-import { resolveLeadStage } from "@/lib/leads/resolve-stage";
-import { LeadValidationError } from "@/lib/leads/lead-validation-error";
 import { fyQuarterOf, type FyQuarter } from "@/lib/leads/fy-quarter";
 import { NEXT_FOLLOWUP_TASK } from "@/lib/leads/followup-resolution";
 import {
-  coerceMoney,
   computeForecast,
   computePipelineMetrics,
   type ForecastResult,
@@ -61,7 +47,6 @@ import { generateEmailSubject } from "@/utils/generate-email-subject";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import { auth } from "@clerk/nextjs/server";
 import { revalidateTag } from "next/cache";
-import { offerListingLeadChanged } from "@/lib/offer/offer-listing-query";
 import { getUserByClerkIdCached } from "./user";
 import { sanitizeLeadNotesHtml } from "@/lib/rich-text/lead-notes";
 import { getAllEmailThreads } from "@/utils/email-parser";
@@ -70,15 +55,15 @@ import {
   EMAIL_HEADER_HTML,
 } from "@/constants/email-artifacts";
 import {
-  buildFollowupConfirmedHistoryEntry,
-  buildFollowupNotRequiredHistoryEntry,
-  buildFollowupRescheduledHistoryEntry,
-  buildMeetingDidNotTakePlaceHistoryEntry,
-  buildMeetingReviewedHistoryEntry,
-  buildStageChangedHistoryEntry,
-} from "@/lib/leads/lead-helpers";
-import { dropAlreadyRecorded } from "@/lib/leads/lead-history";
-import { resolveActingUserId } from "@/lib/data/acting-user";
+  archiveLead as archiveLeadDomain,
+  createLead as createLeadDomain,
+  updateLead as updateLeadDomain,
+} from "@/lib/domain/leads/commands";
+import { currentLeadPrincipal } from "@/lib/data/current-principal";
+import {
+  authorizeLeadEmail,
+  sendLeadEmailOnce,
+} from "@/lib/domain/leads/email";
 
 const defaultLookupPageSize = 10; // Set to Infinity to fetch all leads without pagination
 
@@ -153,34 +138,6 @@ function escapeEmailHtml(value: string) {
  * @param phone - Lead phone number.
  * @returns Sorted advisory lock keys.
  */
-function getLeadDedupeLockKeys(email: string, phone: string) {
-  return [
-    email === "" ? null : `lead:email:${email.toLowerCase()}`,
-    phone === "" ? null : `lead:phone:${phone}`,
-  ]
-    .filter((key): key is string => key !== null)
-    .sort();
-}
-
-/**
- * Acquires PostgreSQL transaction-scoped advisory locks for the provided
- * deduplication keys.
- *
- * Locks remain held until the surrounding transaction completes, ensuring
- * only one transaction can create a lead with the same identifying values.
- *
- * @param tx - Prisma transaction client.
- * @param keys - Advisory lock keys to acquire.
- */
-async function lockLeadDedupeKeys(
-  tx: Prisma.TransactionClient,
-  keys: string[],
-) {
-  for (const key of keys) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
-  }
-}
-
 /**
  * Sends email notifications to users mentioned in a lead annotation.
  *
@@ -778,174 +735,25 @@ export async function createLead(
   input: CreateLeadInput,
   options?: CreateLeadOptions,
 ): Promise<UiLead | { message: string; existingLead: UiLead }> {
-  const stageValue = input.stage;
-  const mappedStage = stageValue ? stageToPrismaMap[stageValue] : "NEW";
-  const createdValue = coerceMoney(input.estimatedValue);
-  const actingUserId = await resolveActingUserId();
+  const outcome = await createLeadDomain(
+    await currentLeadPrincipal(),
+    input,
+    prisma,
+  );
 
-  // Same rule updateLead enforces: a lead cannot sit in LOST/CANCELLED/
-  // DISQUALIFIED without a recorded reason. Enforced here too because a lead
-  // can be created directly in a closed stage — the add-lead modal does not
-  // offer one, but the API and the MCP create tool both accept it.
-  if (isClosedUnsuccessful(mappedStage) && !input.lostReason?.trim()) {
-    throw new LeadValidationError(
-      `Add a reason before creating a lead in ${stageDef(mappedStage).label}.`,
-    );
-  }
-
-  const historyInput = input.history ?? [];
-  const historyCreate = historyInput.map((entry) => {
-    const action = entry.action;
-    const detail = entry.detail ?? "";
-    const typeKey = entry.type;
-    const type = historyTypeToPrisma[typeKey];
-    const actionDate = entry.actionDate ?? new Date();
-    return {
-      action,
-      detail,
-      type,
-      actionDate,
-      ...(actingUserId ? { authorId: actingUserId } : {}),
-    };
-  });
-
-  if (historyCreate.length === 0) {
-    if (input.stage !== "In Follow-up") {
-      historyCreate.push({
-        action: "Lead created",
-        detail: "Lead manually created",
-        type: "SYSTEM",
-        actionDate: new Date(),
-        ...(actingUserId ? { authorId: actingUserId } : {}),
-      });
-    } else {
-      historyCreate.push({
-        action: "Lead created with Follow-up set",
-        detail: "Lead manually created and Also Assign the Follow-up Stage",
-        type: "SYSTEM",
-        actionDate: new Date(),
-        ...(actingUserId ? { authorId: actingUserId } : {}),
-      });
-    }
-  }
-
-  // Every lead needs a valid primary email (#110). createLeadSchema enforces it
-  // for callers that parse it, but direct data-layer callers (the
-  // consultation-booking route) only null-checked truthiness — a non-empty but
-  // malformed address slipped straight through. Re-validate at the DB boundary
-  // so EVERY path is covered, not just the schema-parsed ones.
-  const emailCheck = requiredLeadEmail.safeParse(input.email);
-  if (!emailCheck.success) {
-    throw new Error(
-      emailCheck.error.issues[0]?.message ?? "Enter a valid client email",
-    );
-  }
-  const normalizedEmail = emailCheck.data;
-  const normalizedPhone = (input.phone ?? "").trim();
-
-  const orConditions: Prisma.LeadWhereInput[] = [];
-  if (normalizedEmail !== "") {
-    orConditions.push({
-      email: {
-        equals: normalizedEmail,
-        mode: Prisma.QueryMode.insensitive,
-      },
-    });
-  }
-  if (normalizedPhone !== "") {
-    orConditions.push({ phone: normalizedPhone });
-  }
-
-  const duplicateLeadInclude = {
-    history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-    chatSessions: true,
-    assignedUser: { select: { id: true, name: true, email: true } },
-    noteAnnotations: { orderBy: { createdAt: "desc" } },
-    emails: { orderBy: { createdAt: "desc" } },
-    files: true,
-    // Reused by BOTH create paths, and the dedupe branch returns an EXISTING
-    // lead that may already carry open work — without this it was mapped to
-    // its retired column.
-    tasks: NEXT_FOLLOWUP_TASK,
-  } satisfies Prisma.LeadInclude;
-
-  const leadCreateResult = await prisma.$transaction(async (tx) => {
-    const lockKeys = getLeadDedupeLockKeys(normalizedEmail, normalizedPhone);
-    if (lockKeys.length > 0) {
-      await lockLeadDedupeKeys(tx, lockKeys);
-
-      const existingLead = await tx.lead.findFirst({
-        where: { OR: orConditions },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        include: duplicateLeadInclude,
-      });
-
-      if (existingLead) {
-        return { createdLead: null, existingLead };
-      }
-    }
-
-    const createdLead = await tx.lead.create({
-      data: {
-        name: input.name,
-        phone: normalizedPhone,
-        email: normalizedEmail,
-        location: input.location ?? "",
-        secondaryName: input.secondaryName,
-        secondaryEmail: input.secondaryEmail,
-        secondaryPhone: input.secondaryPhone,
-        source: input.source,
-        sourceDetail: input.sourceDetail,
-        stage: mappedStage,
-        ...(input.assignedId
-          ? { assignedUser: { connect: { id: input.assignedId } } }
-          : {}),
-        budget: input.budget,
-        // A lead created with a value is manually owned until an offer exists;
-        // the offer sync then takes over only if the source is not MANUAL.
-        // Both fields derive from ONE parse so they cannot disagree — keying
-        // the source off the raw input instead would make a typed 0 set a
-        // value while leaving the source null.
-        estimatedValue: createdValue,
-        estimatedValueSource: createdValue === null ? null : "MANUAL",
-        expectedCloseDate: input.expectedCloseDate ?? null,
-        estimatedStartDate: input.estimatedStartDate ?? null,
-        // A lead created directly in a closed stage needs its close date
-        // stamped, exactly as the two update paths do.
-        ...closeDatePatch(null, mappedStage, new Date()),
-        type: input.type ?? [],
-        notes: input.notes,
-        meetingDate: input.meetingDate,
-        meetingTime: input.meetingTime,
-        meetingMode: input.meetingMode,
-        followupDate: input.followupDate,
-        followupTime: input.followupTime,
-        followupNotes: input.followupNotes,
-        followupReminderSentAt: input.followupReminderSentAt,
-        meetingReminderSentAt: input.meetingReminderSentAt,
-        lostReason: input.lostReason,
-        urgent: input.urgent ?? false,
-        history: { create: historyCreate },
-      },
-      include: duplicateLeadInclude,
-    });
-
-    return { createdLead, existingLead: null };
-  });
-
-  if (leadCreateResult.existingLead) {
+  if (outcome.kind === "duplicate") {
     return {
       message: "A lead with the same email or phone number already exists.",
-      existingLead: mapLead(leadCreateResult.existingLead),
+      existingLead: mapLead(outcome.existing),
     };
   }
 
-  const created = leadCreateResult.createdLead;
+  const created = outcome.lead;
   const res = mapLead(created);
 
-  // ═══════════════════════════════════════════════════════
-  // SEND NOTIFICATION TO NOVU ABOUT NEW LEAD
-  // ═══════════════════════════════════════════════════════
+  // Post-commit announcements. Neither is a business rule and neither may fail
+  // the create: the lead exists either way, and a Novu or Graph outage must not
+  // turn a captured enquiry into a 500 for a member of the public.
   const notificationPayload = createNotification("leadCreated", {
     leadId: res.id.toString(),
     leadType: res.type,
@@ -960,74 +768,84 @@ export async function createLead(
     customerPhone: res.phone ?? "Not specified",
   });
   await triggerNotification([], notificationPayload);
-  // ═══════════════════════════════════════════════════════
-  // SEND WELCOME EMAIL TO MANUALLY CREATED LEADS
-  // ═══════════════════════════════════════════════════════
+
   if (
     !options?.skipWelcomeEmail &&
     created.email &&
     created.name &&
     input.stage !== "In Follow-up"
   ) {
-    console.log(
-      `[Lead ${created.id}] Sending welcome email to newly created lead...`,
-    );
-    try {
-      // 1. Map Prisma Lead to LeadPreview shape (converting null to undefined)
-      const leadPreview = {
-        id: created.id,
-        name: created.name,
-        email: created.email,
-        type: created.type,
-        location: created.location,
-        notes: created.notes ?? undefined,
-        budget: created.budget ?? undefined,
-      };
-
-      // 2. Generate the HTML body using your React Email template
-      // Same reason as the inbound-lead workflow: createLead runs from the
-      // public booking route and the lead webhook, neither of which has a
-      // Clerk session, so renderEmailHtml would authorise and strip the token.
-      const htmlBody = await renderEmailHtml(
-        "Welcome",
-        leadPreview,
-        signBookConsultationToken(created.id),
-      );
-
-      if (htmlBody) {
-        // 3. Initialize Graph Client
-        const config = getGraphConfig();
-        const graphClient = await createGraphContext(config);
-
-        // 4. Define the subject line
-        const emailSubject =
-          "Welcome to Royal Constructions — Your Home Building Journey Starts Here";
-
-        // 5. Send the email directly using the Graph Client
-        await graphClient.sendMail({
-          to: created.email,
-          subject: emailSubject,
-          body: htmlBody,
-          cc: config.cc,
-        });
-
-        console.log(
-          `[Lead ${created.id}] ✅ Welcome email successfully sent to ${created.email}`,
-        );
-      } else {
-        console.warn(
-          `[Lead ${created.id}] ⚠️ Failed to render welcome email HTML. No email sent.`,
-        );
-      }
-    } catch (emailError) {
-      console.error(
-        `[Lead ${created.id}] ❌ Failed to send welcome email:`,
-        emailError,
-      );
-    }
+    await sendLeadWelcomeEmail(created);
   }
 
   return res;
+}
+
+/**
+ * The welcome email a manually created lead receives.
+ *
+ * Adapter work end to end: rendering React Email, resolving Graph config, and
+ * signing the booking token the template links to. It never throws — the lead
+ * is already committed, and a mail failure is not a reason to report the
+ * capture as failed.
+ */
+async function sendLeadWelcomeEmail(created: {
+  id: number;
+  name: string;
+  email: string;
+  type: string[];
+  location: string | null;
+  notes: string | null;
+  budget: string | null;
+}): Promise<void> {
+  console.log(
+    `[Lead ${created.id}] Sending welcome email to newly created lead...`,
+  );
+  try {
+    const leadPreview = {
+      id: created.id,
+      name: created.name,
+      email: created.email,
+      type: created.type,
+      location: created.location ?? undefined,
+      notes: created.notes ?? undefined,
+      budget: created.budget ?? undefined,
+    };
+
+    // Same reason as the inbound-lead workflow: createLead runs from the public
+    // booking route and the lead webhook, neither of which has a Clerk session,
+    // so renderEmailHtml would authorise and strip the token.
+    const htmlBody = await renderEmailHtml(
+      "Welcome",
+      leadPreview,
+      signBookConsultationToken(created.id),
+    );
+
+    if (!htmlBody) {
+      console.warn(
+        `[Lead ${created.id}] Failed to render welcome email HTML. No email sent.`,
+      );
+      return;
+    }
+
+    const config = getGraphConfig();
+    const graphClient = await createGraphContext(config);
+    await graphClient.sendMail({
+      to: created.email,
+      subject:
+        "Welcome to Royal Constructions — Your Home Building Journey Starts Here",
+      body: htmlBody,
+      cc: config.cc,
+    });
+    console.log(
+      `[Lead ${created.id}] Welcome email successfully sent to ${created.email}`,
+    );
+  } catch (emailError) {
+    console.error(
+      `[Lead ${created.id}] Failed to send welcome email:`,
+      emailError,
+    );
+  }
 }
 
 /**
@@ -1052,381 +870,26 @@ export async function updateLead(
   id: number,
   input: UpdateLeadInput,
 ): Promise<UiLead> {
-  const mappedStage = input.stage ? stageToPrismaMap[input.stage] : undefined;
-  const updateData: Prisma.LeadUpdateInput = {};
-  const actingUserId = await resolveActingUserId();
-
-  // Read once, up front. Both the stage resolution below and the follow-up /
-  // meeting branches need the current row, and this used to be two separate
-  // findUnique calls that could disagree.
-  //
-  // History comes with it so the write below can tell a new entry from one the
-  // caller has merely echoed back — see dropAlreadyRecorded.
-  const existingLead = await prisma.lead.findUnique({
-    where: { id },
-    include: {
-      history: { select: { action: true, detail: true, actionDate: true } },
-    },
-  });
-
-  if (input.name !== undefined) updateData.name = String(input.name);
-  if (input.phone !== undefined) updateData.phone = input.phone ?? "";
-  if (input.email !== undefined) updateData.email = input.email ?? "";
-  if (input.location !== undefined) updateData.location = input.location ?? "";
-  if (input.secondaryName !== undefined)
-    updateData.secondaryName = input.secondaryName;
-  if (input.secondaryEmail !== undefined)
-    updateData.secondaryEmail = input.secondaryEmail;
-  if (input.secondaryPhone !== undefined)
-    updateData.secondaryPhone = input.secondaryPhone;
-  if (input.source !== undefined) updateData.source = input.source;
-  if (input.sourceDetail !== undefined)
-    updateData.sourceDetail = input.sourceDetail;
-  // NOTE: `stage` is deliberately NOT written here. The follow-up branches
-  // further down can also set it, so both inputs are resolved together after
-  // them and stamped once — see the resolveLeadStage call below.
-  if (input.assignedId !== undefined) {
-    const nextAssignedId = input.assignedId?.trim();
-    updateData.assignedUser = nextAssignedId
-      ? { connect: { id: nextAssignedId } }
-      : { disconnect: true };
-  }
-  if (input.budget !== undefined) updateData.budget = input.budget;
-  // Deal economics. updateData is an explicit whitelist — new columns do not
-  // flow through on their own.
-  if (input.estimatedValue !== undefined) {
-    // coerceMoney, not `new Prisma.Decimal(...)` — Decimal THROWS on a
-    // non-numeric or whitespace-only string, which would reject the entire
-    // lead update (name, stage, notes and all) with a 500 rather than a
-    // field-level error. Zod rejects bad money at the API boundary; this is
-    // defence in depth for the paths that do not go through it.
-    updateData.estimatedValue = coerceMoney(input.estimatedValue);
-  }
-  if (input.estimatedValueSource !== undefined) {
-    updateData.estimatedValueSource = input.estimatedValueSource;
-  }
-  if (input.probabilityOverride !== undefined) {
-    updateData.probabilityOverride = input.probabilityOverride;
-  }
-  if (input.expectedCloseDate !== undefined) {
-    updateData.expectedCloseDate = input.expectedCloseDate;
-  }
-  if (input.estimatedStartDate !== undefined) {
-    updateData.estimatedStartDate = input.estimatedStartDate;
-  }
-  if (input.type !== undefined) updateData.type = input.type;
-  if (input.notes !== undefined) updateData.notes = input.notes;
-  if (input.notesDoc !== undefined)
-    updateData.notesDoc = input.notesDoc as Prisma.InputJsonValue;
-  // Setting a date reopens the task: a lead carries one meeting and one
-  // follow-up at a time, so a fresh date must not inherit the last one's
-  // completion stamp and show up already done.
-  if (input.meetingDate !== undefined) {
-    updateData.meetingDate = input.meetingDate;
-    if (input.meetingDate !== null) updateData.meetingCompletedAt = null;
-  }
-  if (input.meetingTime !== undefined)
-    updateData.meetingTime = input.meetingTime;
-  if (input.meetingMode !== undefined)
-    updateData.meetingMode = input.meetingMode;
-  if (input.followupDate !== undefined) {
-    updateData.followupDate = input.followupDate;
-    if (input.followupDate !== null) updateData.followupCompletedAt = null;
-  }
-  if (input.followupTime !== undefined)
-    updateData.followupTime = input.followupTime;
-  if (input.followupNotes !== undefined)
-    updateData.followupNotes = input.followupNotes;
-  if (input.followupReminderSentAt !== undefined)
-    updateData.followupReminderSentAt = input.followupReminderSentAt;
-  if (input.meetingReminderSentAt !== undefined)
-    updateData.meetingReminderSentAt = input.meetingReminderSentAt;
-  if (input.lostReason !== undefined) updateData.lostReason = input.lostReason;
-  if (input.urgent !== undefined) updateData.urgent = Boolean(input.urgent);
-
-  const annotationInputs = input.annotationsToCreate ?? [];
-  if (annotationInputs.length > 0) {
-    updateData.noteAnnotations = {
-      create: annotationInputs.map((annotation) => ({
-        selectedText: annotation.selectedText,
-        comment: annotation.comment,
-        mentionedUserIds: annotation.mentionedUserIds,
-      })),
-    };
-  }
-
-  // Answering a follow-up closes the task. It used to null the date and write
-  // stage CONTACTED, and that stage write was the only record the software had
-  // that a follow-up had finished. It also cost a lead in negotiation 50 points
-  // for a call being answered. followupCompletedAt carries the fact now, and
-  // the date is kept so the tab can still show what was scheduled.
-  if (
-    input.followupResponseOutcome === "yes" ||
-    input.followupResponseOutcome === "notRequired"
-  ) {
-    updateData.followupCompletedAt = new Date();
-    updateData.followupReminderSentAt = new Date();
-  } else if (input.followupResponseOutcome === "reschedule") {
-    const nextFollowupDate = new Date();
-    nextFollowupDate.setDate(nextFollowupDate.getDate() + 1);
-    updateData.followupDate = nextFollowupDate;
-    updateData.followupTime =
-      input.followupTime ?? existingLead?.followupTime ?? null;
-    updateData.followupReminderSentAt = null;
-    updateData.followupCompletedAt = null;
-  }
-
-  // Single stage write. `stage` and `followupResponseOutcome` are independently
-  // optional on updateLeadSchema and both are exposed on the MCP surface, so
-  // they can arrive together; resolveLeadStage decides which wins. The
-  // close-date stamp is derived from the RESOLVED stage, never from the
-  // requested one, so the stage column and wonAt/lostAt can never describe two
-  // different transitions.
-  // Scheduling work advances an early lead into Discovery and does nothing
-  // else. Answering or clearing a task never moves the stage: that is the whole
-  // point of the split, and it is why "yes" is absent from this condition.
-  const taskScheduled =
-    input.followupResponseOutcome === "reschedule" ||
-    (input.followupDate !== undefined && input.followupDate !== null) ||
-    (input.meetingDate !== undefined && input.meetingDate !== null);
-
-  const resolvedStage = resolveLeadStage({
-    currentStage: existingLead?.stage ?? null,
-    requestedStage: mappedStage,
-    taskScheduled,
-  });
-  if (resolvedStage !== undefined) {
-    updateData.stage = resolvedStage;
-    Object.assign(
-      updateData,
-      closeDatePatch(existingLead?.stage ?? null, resolvedStage, new Date()),
-    );
-  }
-
-  // Pipeline movement is the most reportable thing a lead does and it was the
-  // one operator action that left no trace: notes, emails, annotations and
-  // follow-up outcomes all wrote history, a stage change wrote only the column
-  // and a close date. Nothing could answer "when did this reach Quoted, and who
-  // moved it" — including when a stale form silently moved it back.
-  const stageHistory =
-    resolvedStage !== undefined &&
-    existingLead &&
-    resolvedStage !== existingLead.stage
-      ? [buildStageChangedHistoryEntry(existingLead.stage, resolvedStage)]
-      : [];
-
-  // Reason enforcement. This mirrors the modal's check, which was the ONLY
-  // enforcement: the Zod schemas mark lostReason optional and nullable, so a
-  // direct PATCH, the MCP tool or any server-side caller could strand a lead in
-  // LOST/CANCELLED/DISQUALIFIED with no reason. Those rows land in the
-  // "Unknown" slice of the non-conversion charts, invisible to anyone auditing
-  // why work was lost.
-  //
-  // It fires on the two things this request can actually be blamed for:
-  //   1. moving a lead INTO a closed-unsuccessful stage, and
-  //   2. clearing the reason on a lead that is already in one.
-  //
-  // It deliberately does NOT fire on an unrelated edit to a lead that is
-  // already closed with no reason. Those rows predate the rule — staging has
-  // one today — and blocking every edit to them would make them permanently
-  // uneditable, including the edit that would supply the missing reason.
-  const effectiveStage = resolvedStage ?? existingLead?.stage;
-  if (effectiveStage && isClosedUnsuccessful(effectiveStage)) {
-    const enteringClosedStage =
-      resolvedStage !== undefined &&
-      !(existingLead && isClosedUnsuccessful(existingLead.stage));
-    const clearingReason =
-      input.lostReason !== undefined && !input.lostReason?.trim();
-
-    if (enteringClosedStage || clearingReason) {
-      const reason =
-        input.lostReason !== undefined
-          ? input.lostReason
-          : existingLead?.lostReason;
-      if (!reason?.trim()) {
-        throw new LeadValidationError(
-          `Add a reason before moving this lead to ${stageDef(effectiveStage).label}.`,
-        );
-      }
-    }
-  }
-
-  if (input.meetingReviewOutcome === "no") {
-    updateData.meetingReminderSentAt = new Date();
-  } else if (input.meetingReviewOutcome === "yes") {
-    updateData.meetingMode =
-      input.meetingMode ?? existingLead?.meetingMode ?? null;
-    updateData.meetingReminderSentAt = new Date();
-  }
-
-  if (
-    (input.history?.length ?? 0) > 0 ||
-    annotationInputs.length > 0 ||
-    stageHistory.length > 0 ||
-    input.followupResponseOutcome ||
-    input.meetingReviewOutcome
-  ) {
-    const responseHistory =
-      input.followupResponseOutcome === "yes"
-        ? [buildFollowupConfirmedHistoryEntry()]
-        : input.followupResponseOutcome === "notRequired"
-          ? [buildFollowupNotRequiredHistoryEntry()]
-          : input.followupResponseOutcome === "reschedule"
-            ? [
-                buildFollowupRescheduledHistoryEntry(
-                  // Sydney, so the history line agrees with the date the operator
-                  // picked rather than reading a day earlier all afternoon.
-                  sydneyDateOnly(
-                    (updateData.followupDate as Date | null | undefined) ??
-                      existingLead?.followupDate ??
-                      new Date(),
-                  ),
-                  String(
-                    updateData.followupTime ?? existingLead?.followupTime ?? "",
-                  ),
-                ),
-              ]
-            : [];
-
-    const meetingHistory =
-      input.meetingReviewOutcome === "no"
-        ? [buildMeetingDidNotTakePlaceHistoryEntry()]
-        : input.meetingReviewOutcome === "yes"
-          ? [
-              buildMeetingReviewedHistoryEntry({
-                meetingMode: String(
-                  updateData.meetingMode ??
-                    existingLead?.meetingMode ??
-                    input.meetingMode ??
-                    "Unknown",
-                ),
-                discussionNotes: String(input.discussionNotes ?? ""),
-                buildScope: String(input.buildScope ?? ""),
-              }),
-            ]
-          : [];
-
-    const annotationHistory = annotationInputs.map((annotation) => {
-      const now = new Date();
-      return {
-        action: "Lead note mention added",
-        detail:
-          annotation.comment || `Selected text: ${annotation.selectedText}`,
-        type: "system" as const,
-        date: sydneyDateOnly(now),
-        time: sydneyTimeOnly(now),
-      };
-    });
-
-    const toRow = (h: {
-      action: string;
-      detail?: string;
-      type?: string;
-      date: string;
-      time?: string;
-    }) => ({
-      action: h.action,
-      detail: h.detail || "",
-      type: h.type
-        ? (h.type.toUpperCase() as "SYSTEM" | "CALL" | "EMAIL" | "REFERRAL")
-        : "SYSTEM",
-      // Sydney, not the server's zone. The pair was produced by
-      // sydneyDateOnly/sydneyTimeOnly, and reading it back as UTC put every
-      // entry ten hours in the future.
-      actionDate: sydneyWallClockToInstant(h.date, h.time),
-      ...(actingUserId ? { authorId: actingUserId } : {}),
-    });
-
-    // The echo guard applies to CALLER-SUPPLIED history only.
-    //
-    // That is the only input that can contain rows the lead already has: the
-    // email modal and the booking route both handed the whole list back, so
-    // every row was inserted a second time — one booking took a lead from four
-    // activity entries to nine, and it compounded on the next. Those callers now
-    // send only what is new; this keeps a caller that has not been updated from
-    // duplicating it again.
-    //
-    // The entries built below it are generated fresh by this function and can
-    // never be an echo, so they are NOT filtered — and must not be. Their
-    // identity is action + detail + minute, and several of them are constant by
-    // construction: every mention reads "Lead note mention added" /
-    // "Mentioned in lead note", and a stage move repeated inside one minute
-    // (Quoted → Negotiating, undone, redone) produces the same pair twice.
-    // Filtering them dropped the later, real entry and left the feed asserting
-    // the opposite of where the lead actually sits.
-    const created = [
-      ...dropAlreadyRecorded(
-        (input.history ?? []).map(toRow),
-        existingLead?.history ?? [],
-      ),
-      ...responseHistory.map(toRow),
-      ...meetingHistory.map(toRow),
-      ...annotationHistory.map(toRow),
-      ...stageHistory.map(toRow),
-    ];
-
-    if (created.length > 0) {
-      updateData.history = { create: created };
-    }
-  }
-  // console.log('checking the Input Data', input);
-  // console.log('222Updating lead with data:', updateData);
-  // Hand the lead's outstanding work over IN THE SAME TRANSACTION as the lead
-  // write. Split across two round trips, a failure on the second left the lead
-  // showing a new owner while its open tasks still pointed at the old one and
-  // still emailed them — which is the exact bug this reassignment exists to
-  // fix, reintroduced in a narrower window.
-  //
-  // Only open tasks move: a completed task records who actually did the work.
-  const reassignOpenTasks =
-    input.assignedId !== undefined
-      ? [
-          prisma.leadTask.updateMany({
-            where: { leadId: id, completedAt: null },
-            data: { assignedId: input.assignedId?.trim() || null },
-          }),
-        ]
-      : [];
-  const listedFieldsChanged = offerListingLeadChanged(existingLead, updateData);
-
-  const [updated] = await prisma.$transaction([
-    prisma.lead.update({
-      where: { id },
-      data: updateData,
-      include: {
-        history: { orderBy: { actionDate: "asc" }, include: { author: true } },
-        chatSessions: true,
-        assignedUser: { select: { id: true, name: true, email: true } },
-        noteAnnotations: { orderBy: { createdAt: "desc" } },
-        emails: { orderBy: { createdAt: "desc" } },
-        files: true,
-        // This result is the PATCH response body, and the detail page re-seeds
-        // its edit form from it. Without the include every save handed the UI
-        // back the retired column.
-        tasks: NEXT_FOLLOWUP_TASK,
-      },
-    }),
-    ...reassignOpenTasks,
-  ]);
+  const outcome = await updateLeadDomain(
+    await currentLeadPrincipal(),
+    id,
+    input,
+    prisma,
+  );
 
   // The offers list is cached per access scope (lib/data/offer-listing.ts), and
-  // a user outside the internal roles sees only the leads assigned to them. Left
-  // alone, a reassigned lead stayed on its old owner's list and off its new
-  // owner's until the cache expired. The listing also shows the lead's name,
-  // contact details, location and type, so an edit to one of those left the old
-  // value on screen (and in search) just as long.
+  // a user outside the internal roles sees only the leads assigned to them.
+  // Left alone, a reassigned lead stayed on its old owner's list and off its
+  // new owner's until the cache expired. The listing also shows the lead's
+  // name, contact details, location and type, so an edit to one of those left
+  // the old value on screen (and in search) just as long.
   //
-  // The assignee side expires whenever an update SETS it, with no comparison
-  // against the lead read before the transaction: a concurrent reassignment can
-  // commit in between, which made that comparison skip an expiry it owed
-  // (CodeRabbit, #246). The listed-field side compares what is about to be
-  // stored, which no concurrent write can invalidate the same way.
-  //
-  // revalidateTag rather than updateTag, because updateLead also runs from Route
-  // Handlers (the lead PATCH, MCP and booking routes), where updateTag throws.
-  // expire: 0 so nobody gets one more stale read of a list that decides which
-  // offers they can see. The catch keeps a cache failure from failing the save.
-  if (input.assignedId !== undefined || listedFieldsChanged) {
+  // revalidateTag rather than updateTag, because updateLead also runs from
+  // Route Handlers (the lead PATCH, MCP and booking routes), where updateTag
+  // throws. expire: 0 so nobody gets one more stale read of a list that decides
+  // which offers they can see. The catch keeps a cache failure from failing the
+  // save.
+  if (input.assignedId !== undefined || outcome.listedFieldsChanged) {
     try {
       revalidateTag("offers", { expire: 0 });
     } catch (error) {
@@ -1437,11 +900,11 @@ export async function updateLead(
     }
   }
 
-  for (const annotation of annotationInputs) {
+  for (const annotation of input.annotationsToCreate ?? []) {
     try {
       await sendLeadMentionEmails({
         leadId: id,
-        leadName: updated.name,
+        leadName: outcome.lead.name,
         selectedText: annotation.selectedText,
         comment: annotation.comment,
         mentionedUserIds: annotation.mentionedUserIds,
@@ -1451,38 +914,42 @@ export async function updateLead(
     }
   }
 
-  const res = mapLead(updated);
-  if (input.assignedId === existingLead?.assignedId) {
-    const notificationPayload = createNotification("leadUpdated", {
-      leadId: res.id.toString(),
-      leadType: res.type,
-      location: res.location ?? "Not specified",
-      customerName: res.name ?? "Not specified",
-      customerEmail: res.email ?? "Not specified",
-      customerPhone: res.phone ?? "Not specified",
-      status: res.stage,
-      change:
-        mappedStage === existingLead?.stage
-          ? "updated with more information"
-          : undefined,
-    });
+  const res = mapLead(outcome.lead);
+
+  // Which announcement to make is read off what the command reports it did.
+  // Inferring it here by comparing `input.assignedId` with the stored value
+  // told the assignee they had just been given the lead on every unrelated
+  // edit, because an absent `assignedId` is `undefined` and never equals a
+  // real id.
+  if (outcome.assignmentChanged) {
+    if (res.assignedId) {
+      await triggerNotification(
+        [res.assignedId],
+        createNotification("leadAssigned", {
+          leadId: res.id.toString(),
+          leadType: res.type,
+          location: res.location ?? "Not specified",
+          customerName: res.name ?? "Not specified",
+          customerEmail: res.email ?? "Not specified",
+          customerPhone: res.phone ?? "Not specified",
+          assignedTo: res.assignedUser?.name ?? "Unknown",
+        }),
+      );
+    }
+  } else {
     await triggerNotification(
       res.assignedId ? [res.assignedId] : [],
-      notificationPayload,
-    );
-  } else {
-    if (res.assignedId) {
-      const notificationPayload = createNotification("leadAssigned", {
+      createNotification("leadUpdated", {
         leadId: res.id.toString(),
         leadType: res.type,
         location: res.location ?? "Not specified",
         customerName: res.name ?? "Not specified",
         customerEmail: res.email ?? "Not specified",
         customerPhone: res.phone ?? "Not specified",
-        assignedTo: res.assignedUser?.name ?? "Unknown",
-      });
-      await triggerNotification([res.assignedId], notificationPayload);
-    }
+        status: res.stage,
+        change: outcome.stageChanged ? undefined : "updated with more information",
+      }),
+    );
   }
 
   return res;
@@ -1497,7 +964,7 @@ export async function updateLead(
  * @returns Success status.
  */
 export async function deleteLead(id: number) {
-  await prisma.lead.update({ where: { id }, data: { isArchived: true } });
+  await archiveLeadDomain(await currentLeadPrincipal(), id, prisma);
   return { success: true };
 }
 
@@ -1822,6 +1289,25 @@ export async function getForecast(
  *
  * @throws {Error} If the lead does not exist or the email could not be sent.
  */
+/**
+ * The name that signs a lead email.
+ *
+ * Presentation, so it stays in the adapter. The fallback matters: a cron or a
+ * webhook has nobody behind it, and "Royal Constructions" is a better
+ * signature than a crash or an empty line.
+ */
+async function resolveSenderName(): Promise<string> {
+  try {
+    const { userId } = await auth();
+    if (!userId) return "Royal Constructions";
+    const user = await getUserByClerkIdCached(userId);
+    return user?.name?.trim() || "Royal Constructions";
+  } catch (error) {
+    console.error("[Lead email] Could not resolve the sender name", error);
+    return "Royal Constructions";
+  }
+}
+
 export async function sendLeadEmail(
   leadId: number,
   location: string,
@@ -1830,20 +1316,20 @@ export async function sendLeadEmail(
   replyingToEmail?: LeadEmails,
 ): Promise<LeadEmails> {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      throw new Error("User not authenticated");
-    }
-    const user = await getUserByClerkIdCached(userId);
-    if (!user) {
-      throw new Error("Authenticated user not found");
-    }
-    const existingLead = await prisma.lead.findUnique({
-      where: { id: leadId },
-    });
-    if (!existingLead) {
-      throw new Error("Lead not found");
-    }
+    // Who may send, and to whom. The recipient used to come straight from the
+    // browser and was never checked against the lead, so an authorised caller
+    // could send an arbitrary body to an arbitrary address from Royal's
+    // mailbox.
+    const authorized = await authorizeLeadEmail(
+      await currentLeadPrincipal(),
+      { leadId, to },
+      prisma,
+    );
+    to = authorized.to;
+
+    // The signature the client reads. Presentation, so it stays here — and the
+    // fallback matters: a cron or a webhook has no person behind it.
+    const senderName = await resolveSenderName();
 
     const signedBody = `
     <head>
@@ -1889,8 +1375,8 @@ export async function sendLeadEmail(
 <body>
   <div style="background-color:#f7f6f2;margin:0;padding:0">
     ${EMAIL_HEADER_HTML}
-    <p>Hi ${escapeEmailHtml(existingLead.name)},</p>
-    ${buildLeadEmailHtml(body, user.name)}
+    <p>Hi ${escapeEmailHtml(authorized.leadName)},</p>
+    ${buildLeadEmailHtml(body, senderName)}
     ${EMAIL_FOOTER_HTML}
   </div>
 </body>
@@ -1901,46 +1387,73 @@ export async function sendLeadEmail(
     const aiSubject = replyingToEmail
       ? `Re: ${replyingToEmail.subject}`
       : await generateEmailSubject(escapeEmailHtml(signedBody));
-    await sendEmail({
-      to,
-      subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
-      body: signedBody,
-    });
-    const strippedEmailBody = getAllEmailThreads(signedBody, {
-      from: normalizeEmailAddress(
-        process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
-      ),
-      to: normalizeEmailAddress(to),
-      subject: `${aiSubject} - ${location}`,
-      sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
-    });
-    let recordedEmail: LeadEmails | null = null;
-    for (const thread of strippedEmailBody) {
-      const checksum = await generateEmailChecksum(
-        thread.subject,
-        thread.body,
-        normalizeEmailAddress(thread.from),
-        normalizeEmailAddress(thread.to),
-      );
-      const emailRecord = await prisma.leadEmails.create({
-        data: {
-          leadId,
-          subject: `${aiSubject} - ${location}`,
-          body: thread.body,
-          emailTo: normalizeEmailAddress(thread.to),
-          emailFrom: normalizeEmailAddress(thread.from),
-          checksum,
-          sentAt: new Date(),
-        },
-      });
-      console.log(
-        `[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`,
-      );
-      recordedEmail = emailRecord;
-    }
 
+    // The send and the thread record are one durable effect, keyed on the lead,
+    // the recipient and the body. A double-click, or a retry after a slow Graph
+    // call, used to send the client the same message twice.
+    const { alreadySent, result } = await sendLeadEmailOnce(
+      authorized,
+      {
+        bodyFingerprint: createHash("sha256")
+          .update(`${aiSubject}\u0000${location}\u0000${signedBody}`)
+          .digest("hex"),
+      },
+      prisma,
+      async () => {
+        await sendEmail({
+          to,
+          subject: replyingToEmail ? aiSubject : `${aiSubject} - ${location}`,
+          body: signedBody,
+        });
+        const strippedEmailBody = getAllEmailThreads(signedBody, {
+          from: normalizeEmailAddress(
+            process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au",
+          ),
+          to: normalizeEmailAddress(to),
+          subject: `${aiSubject} - ${location}`,
+          sentAt: format(new Date(), "yyyy-MM-dd'T'HH:mm:ssXXX"),
+        });
+        let lastId: string | null = null;
+        for (const thread of strippedEmailBody) {
+          const checksum = await generateEmailChecksum(
+            thread.subject,
+            thread.body,
+            normalizeEmailAddress(thread.from),
+            normalizeEmailAddress(thread.to),
+          );
+          const emailRecord = await prisma.leadEmails.create({
+            data: {
+              leadId,
+              subject: `${aiSubject} - ${location}`,
+              body: thread.body,
+              emailTo: normalizeEmailAddress(thread.to),
+              emailFrom: normalizeEmailAddress(thread.from),
+              checksum,
+              sentAt: new Date(),
+            },
+          });
+          console.log(
+            `[Lead ${leadId}] Email sent and recorded with ID: ${emailRecord.id}`,
+          );
+          lastId = emailRecord.id;
+        }
+        if (!lastId) throw new Error("Failed to record email");
+        // Only the id goes in the intent; a replay reads the row back rather
+        // than reconstructing a stored copy of the message.
+        return { emailId: lastId };
+      },
+    );
+
+    const recordedEmail = await prisma.leadEmails.findUnique({
+      where: { id: result.emailId },
+    });
     if (!recordedEmail) {
       throw new Error("Failed to record email");
+    }
+    if (alreadySent) {
+      console.log(
+        `[Lead ${leadId}] This message already went out today; nothing was sent again.`,
+      );
     }
 
     return recordedEmail;

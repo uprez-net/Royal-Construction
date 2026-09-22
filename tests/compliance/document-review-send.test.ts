@@ -7,8 +7,8 @@ import {
   ComplianceDocumentType,
 } from "@prisma/client";
 
-import { hasSentCurrentDocument } from "../../lib/compliance/required-pack";
-import { buildPartyRevisionBody } from "../../lib/compliance/party-outreach-email";
+import { hasSentCurrentDocument } from "../../lib/domain/compliance/required-pack";
+import { buildPartyRevisionBody } from "../../lib/domain/compliance/party-outreach-email";
 import type {
   CertifierEngagementDetail,
   ComplianceDocumentWithFiles,

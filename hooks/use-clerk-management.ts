@@ -1,9 +1,16 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useIdempotencyKeys } from "@/hooks/use-idempotency-key";
 import { fetchJson } from "@/utils/fetch";
 import type { User, Invitation } from "@clerk/nextjs/server";
 
 export function useClerkManagement(initialQuery = "", initialPage = 1) {
+  // Both the invite and the revoke reach Clerk, which emails the person. The
+  // routes already read an Idempotency-Key and pass it to the domain, which
+  // uses it as the OutboxEvent key; nothing was sending one, so the domain
+  // fell back to a key that buckets an invite by day and address. Keyed by
+  // target so one person's failed invite cannot consume the next person's key.
+  const inviteKeys = useIdempotencyKeys();
   const [query, setQuery] = useState(initialQuery);
   const [userPage, setUserPage] = useState(initialPage);
   const [invitePage, setInvitePage] = useState(initialPage);
@@ -26,6 +33,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Idempotency-Key": inviteKeys.current(`invite:${email}`),
           },
           body: JSON.stringify({ email, role }),
         },
@@ -33,6 +41,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
       );
       if (res.data.success) {
         console.log("Invite sent successfully");
+        inviteKeys.rotate(`invite:${email}`);
         setInvites((prev) => [...prev, res.data.invitation]);
         return;
       } else {
@@ -47,11 +56,15 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
   const handleRevokeInvite = async (invitationId: string) => {
     try {
       const res = await fetchJson<{ success: boolean; message: string }>(
-        "/api/invitations",
+        // Was /api/invitations, which is not a route in this app — the revoke
+        // handler is the DELETE on /api/users, so every revoke from the team
+        // screen 404d and reported "Failed to revoke invite".
+        "/api/users",
         {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
+            "Idempotency-Key": inviteKeys.current(`revoke:${invitationId}`),
           },
           body: JSON.stringify({ invitationId }),
         },
@@ -59,6 +72,7 @@ export function useClerkManagement(initialQuery = "", initialPage = 1) {
       );
       if (res.data.success) {
         console.log("Invite revoked successfully");
+        inviteKeys.rotate(`revoke:${invitationId}`);
         setInvites((prev) =>
           prev.map((invite) =>
             invite.id === invitationId

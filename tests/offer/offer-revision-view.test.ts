@@ -115,20 +115,27 @@ test("the viewer and its loader pass the latest send through", () => {
   assert.match(dialog, /preparedDate=\{revisionPreparedDate\(revision\)\}/);
 
   const data = readFileSync(
-    join(process.cwd(), "lib/data/offer-workspace.ts"),
+    join(process.cwd(), "lib/domain/offers/queries.ts"),
     "utf8",
   );
-  const start = data.indexOf("async function loadOfferRevisionSnapshot(");
+  const start = data.indexOf(
+    "export async function loadOfferRevisionSnapshot(",
+  );
   assert.ok(start >= 0, "loadOfferRevisionSnapshot not found");
   const end = data.indexOf("\n}\n", start);
   // Without this, a missing terminator slices to -1 — the whole rest of the
   // file — and the assertions below would match some other loader and pass.
   assert.ok(end > start, "loadOfferRevisionSnapshot has no closing brace");
   const loader = data.slice(start, end);
-  assert.match(
-    loader,
-    /documentSends:\s*\{\s*select:\s*\{\s*sentAt:\s*true\s*\},\s*orderBy:\s*\{\s*sentAt:\s*"desc"\s*\}/,
+  const sendsStart = loader.indexOf("documentSends:");
+  const sendsEnd = loader.indexOf("take: 1", sendsStart);
+  assert.ok(
+    sendsStart >= 0 && sendsEnd > sendsStart,
+    "latest send query missing",
   );
+  const sendsQuery = loader.slice(sendsStart, sendsEnd);
+  assert.match(sendsQuery, /select:\s*\{\s*sentAt:\s*true\s*\}/);
+  assert.match(sendsQuery, /orderBy:\s*\{\s*sentAt:\s*"desc"\s*\}/);
   assert.match(loader, /lastSentAt:\s*offer\.documentSends\[0\]\?\.sentAt/);
 });
 

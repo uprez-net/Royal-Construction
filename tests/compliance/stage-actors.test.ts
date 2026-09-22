@@ -15,7 +15,7 @@ import { PARTY_LABEL } from "../../constants/complianceDocuments";
 import {
   complianceStageFlow,
   type ComplianceStageId,
-} from "../../lib/compliance/stage-flow";
+} from "../../lib/domain/compliance/stage-flow";
 import type { CertifierEngagementDetail } from "../../types/compliance";
 
 /**

@@ -12,7 +12,11 @@
  * application.
  */
 import { z } from "zod";
-import { activityLogSchemas } from "@/utils/validators";
+// Straight from the activity-log schemas, not the `utils/validators` barrel:
+// that barrel re-exports the route-response helpers, which import
+// `next/server`, and `lib/domain` may not reach Next. Same edge phase 2 cut in
+// `lib/domain/leads/commands.ts`, for the same reason.
+import { activityLogSchemas } from "@/utils/validators/activityLog";
 import { v4 as uuidv4 } from "uuid";
 import { dateFormat } from "@/utils/formatters";
 

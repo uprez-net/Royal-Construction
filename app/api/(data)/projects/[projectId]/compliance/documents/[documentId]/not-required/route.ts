@@ -5,6 +5,7 @@ import {
   requireComplianceAdmin,
 } from "@/lib/compliance/access";
 import { setComplianceDocumentNotRequired } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -15,6 +16,7 @@ import {
   complianceDocumentParamSchema,
   setComplianceDocumentNotRequiredSchema,
 } from "@/utils/validators/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
 
 /**
  * Marks one DA or checklist line as not applying to this job, or puts it back.
@@ -56,6 +58,7 @@ export async function POST(
     const admin = await requireComplianceAdmin(projectId);
 
     const result = await setComplianceDocumentNotRequired({
+      principal: userPrincipal(admin),
       projectId,
       documentId,
       notRequired: body.data.notRequired,
@@ -68,6 +71,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to set a compliance document as not required", error);
     return errorResponse(
       error instanceof Error ? error.message : "Failed to update the document.",

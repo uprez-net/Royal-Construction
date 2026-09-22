@@ -115,6 +115,9 @@ test("saving offer scope uses the write schema", () => {
     source.indexOf("export async function saveOfferContentAction"),
   );
   assert.match(fn, /offerScopeWriteSchema/);
-  assert.match(fn, /updateOfferScope\(parsed\.data\)/);
+  // What must hold is that the WRITE schema's output is what gets saved. The
+  // command gained an explicit principal in issue #301, so the argument list
+  // is matched loosely and `parsed.data` specifically.
+  assert.match(fn, /updateOfferScope\(\s*parsed\.data\b/);
   assert.equal(fn.includes("offerScopeDataSchema"), false);
 });

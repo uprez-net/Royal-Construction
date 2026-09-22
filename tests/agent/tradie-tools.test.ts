@@ -58,8 +58,17 @@ test("incident contracts retain explicit severity and bounded evidence ids", () 
 
 test("tradie operations enforce overlap checks and never expose the MCP adapter", async () => {
   const source = await readFile("agent/lib/tradie-operations.ts", "utf8");
-  assert.match(source, /ensureNoScheduleConflict/);
-  assert.match(source, /siteManagerId/);
+  // The overlap rule itself moved to lib/domain/tradies/schedules.ts (issue
+  // #301) so the App booking paths get it too. What this file must still do is
+  // reach that command instead of writing a booking of its own.
+  assert.match(source, /createTradieSchedule as createTradieScheduleDomain/);
+  assert.doesNotMatch(source, /ensureNoScheduleConflict/);
+  // The site-manager scope moved to lib/domain/access/ with the same rule, so
+  // this file no longer names the column. Asserting the delegation instead of
+  // the string keeps the gate pinned without pinning it to the old location.
+  assert.match(source, /authorizeProject/);
+  assert.match(source, /authorizeTradie/);
+  assert.doesNotMatch(source, /siteManagerId/);
   assert.match(source, /runAuditedAgentOperation/);
   assert.doesNotMatch(source, /app\/\(mcp\)/);
 });

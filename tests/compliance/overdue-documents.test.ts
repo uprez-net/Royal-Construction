@@ -14,7 +14,7 @@ import {
 import {
   isDocumentOverdue,
   overdueComplianceDocuments,
-} from "../../lib/compliance/overdue-documents";
+} from "../../lib/domain/compliance/overdue-documents";
 import type { CertifierEngagementDetail } from "../../types/compliance";
 
 /**

@@ -1,5 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
-import { getUserByClerkId } from "@/lib/data/user";
+
+import prisma from "@/lib/prisma";
+import { findUserByClerkId } from "@/lib/domain/identity/users";
 
 /**
  * Assert the caller is an ADMIN, for code paths the middleware does not cover.
@@ -31,7 +33,11 @@ const LOOKUP_FAILED = "Could not verify your permissions. Try again.";
  *
  * Every staging user is an ADMIN, so the refusal branches cannot be reached by
  * signing in as somebody; keeping the decision pure is what makes them
- * testable at all.
+ * testable at all — which is also why the lookup goes through the Node-safe
+ * domain module rather than `lib/data/user.ts`. That adapter carries
+ * `import "server-only"`, which throws outside a React bundler, so importing
+ * it here took this whole module, and the test of the pure decision, down
+ * with it. `proxy.ts` was moved off it for the same reason.
  */
 export function resolveAdminGuard(
   clerkId: string | null | undefined,
@@ -53,7 +59,7 @@ export async function requireAdminUser(): Promise<AdminGuard> {
   }
 
   try {
-    return resolveAdminGuard(clerkId, await getUserByClerkId(clerkId));
+    return resolveAdminGuard(clerkId, await findUserByClerkId(clerkId, prisma));
   } catch (error) {
     // Fail closed. A lookup failure is not permission.
     console.error("[auth] Admin lookup failed:", error);

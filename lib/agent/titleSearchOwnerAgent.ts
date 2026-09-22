@@ -15,7 +15,7 @@ import { ocrPagesToText, processPDFWithMistral } from "@/lib/ocr";
  *
  * Transcription only. It returns the names as the register prints them and
  * decides nothing — whether those names are the right ones is a rule, and it
- * lives in lib/compliance/title-search-owners.ts where it can be tested without
+ * lives in lib/domain/compliance/title-search-owners.ts where it can be tested without
  * a model call. Asking the model "do these match?" instead would have made the
  * one question that matters unanswerable after the fact.
  */

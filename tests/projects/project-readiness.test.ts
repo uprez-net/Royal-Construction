@@ -5,7 +5,7 @@ import {
   collectProjectDateBlockers,
   partitionBlockers,
   ProjectDateBlockerError,
-} from "../../lib/data/projectReadiness";
+} from "../../lib/domain/projects/readiness";
 
 // ---------------------------------------------------------------------------
 // collectProjectDateBlockers — block severity

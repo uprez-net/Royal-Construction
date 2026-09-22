@@ -1,7 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { isDevAutoSignInEnabled } from "@/lib/auth/dev-auth";
-import { getUserByClerkId } from "./lib/data/user";
+import prisma from "./lib/prisma";
+import { findUserByClerkId } from "./lib/domain/identity/users";
 
 const isPublicRoute = createRouteMatcher([
   "/api/webhook/clerk(.*)",
@@ -100,7 +101,7 @@ export const proxy = clerkMiddleware(async (auth, request) => {
 
   if (
     isAdminRoute(request) &&
-    (await getUserByClerkId(userId ?? ""))?.role !== "ADMIN"
+    (await findUserByClerkId(userId ?? "", prisma))?.role !== "ADMIN"
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

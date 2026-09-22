@@ -8,6 +8,7 @@ import {
   getCertifierEngagement,
   startCertifierEngagement,
 } from "@/lib/data/compliance";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -16,6 +17,7 @@ import {
   successResponse,
 } from "@/utils/validators";
 import { startEngagementSchema } from "@/utils/validators/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
 
 /** The engagement for this project, or null when none has been started. */
 export async function GET(
@@ -37,6 +39,8 @@ export async function GET(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to read the certifier engagement", error);
     return errorResponse("Failed to load the compliance file.");
   }
@@ -62,10 +66,11 @@ export async function POST(
   if (!body.success) return body.response;
 
   try {
-    await requireComplianceAccess(routeParams.data.projectId, {
+    const { user } = await requireComplianceAccess(routeParams.data.projectId, {
       requireEngagement: false,
     });
     const engagement = await startCertifierEngagement(
+      userPrincipal(user),
       routeParams.data.projectId,
       body.data,
     );
@@ -73,6 +78,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to start the certifier engagement", error);
     return errorResponse("Failed to start the certifier engagement.");
   }

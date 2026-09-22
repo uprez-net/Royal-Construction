@@ -11,11 +11,12 @@ import { test } from "node:test";
 // is pinned.
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const sharedPersistence = read("lib/domain/offers/envelope-send.ts");
 
 const SENDS = [
   {
     file: "lib/data/offer-accept-sign.ts",
-    envelope: "envelope = await createOfferAcceptanceEnvelope(",
+    envelope: "envelope = await acceptanceEnvelopePort.send(",
     action: "sendOfferForSignature({ offerId })",
     showsError: "setOfferSignError(result.error)",
     sentStatus: "OfferStatus.OFFER_SENT",
@@ -25,7 +26,7 @@ const SENDS = [
   },
   {
     file: "lib/data/offer-tender-sign.ts",
-    envelope: "envelope = await createTenderEnvelope(",
+    envelope: "envelope = await tenderEnvelopePort.send(",
     action: "sendTenderForSignature({ offerId })",
     showsError: "setTenderSendError(result.error)",
     sentStatus: "OfferStatus.TENDER_SENT",
@@ -35,7 +36,7 @@ const SENDS = [
   },
   {
     file: "lib/data/offer-contract-sign.ts",
-    envelope: "envelope = await createContractEnvelope(",
+    envelope: "envelope = await contractEnvelopePort.send(",
     action: "sendContractForSignature({ offerId })",
     showsError: "setContractSendError(result.error)",
     sentStatus: "OfferStatus.CONTRACT_SENT",
@@ -69,11 +70,13 @@ for (const send of SENDS) {
 
     assert.doesNotMatch(body, /\bthrow\s/);
     assert.match(body, /error: `[^`]*Do not resend/);
+    // An unrecorded send still committed the claim, so the caller must be
+    // told the status it left behind and the screen and lead must follow it.
     assert.match(body, new RegExp(`status: ${send.sentStatus}`));
     assert.match(body, /revalidateTag\(`offer-\$\{offer\.id\}`/);
     assert.match(body, /await syncLeadStageForOffer\(offer\.id\)/);
-    // The operator log line stays.
-    assert.match(body, /sent but persisting it failed:/);
+    // The operator log line moved with the persistence rule, and stays shared.
+    assert.match(sharedPersistence, /sent but persisting it failed:/);
   });
 
   test(`the workspace shows ${send.action.split("(")[0]}'s refusal`, () => {
