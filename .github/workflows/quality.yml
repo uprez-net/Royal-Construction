@@ -68,6 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run_checks: ${{ steps.classify.outputs.run_checks }}
+      run_next_build: ${{ steps.classify.outputs.run_next_build }}
       deploy: ${{ steps.classify.outputs.deploy }}
       reason: ${{ steps.classify.outputs.reason }}
     steps:
@@ -216,7 +217,10 @@ jobs:
 
   next-build:
     name: Next.js build
-    if: needs.decide.outputs.run_checks == 'true'
+    # Gated on its own decision, not on the quality gate. A merged-PR push skips
+    # the suite but still deploys, and the deployment consumes this job's
+    # `.next/cache` entry -- see issue #327.
+    if: needs.decide.outputs.run_next_build == 'true'
     needs: decide
     runs-on: ubuntu-latest
     environment: Preview
@@ -246,6 +250,18 @@ jobs:
         with:
           path: ${{ github.workspace }}/.next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}
+      # The deploy job runs in this same workflow run on this same ref, so it
+      # restores this entry by exact key. Record what was written so a later
+      # cold deployment build can be traced back to a missing save.
+      - name: Record the build cache handoff
+        if: github.event_name == 'push'
+        run: |
+          {
+            echo "### Next.js build cache"
+            echo
+            echo "Saved \`${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.sha }}\`"
+            echo "on \`${{ github.ref }}\` for the deployment in this run."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   prettier:
     name: Prettier (changed files)
@@ -302,6 +318,16 @@ jobs:
           needs['next-build'].result == 'cancelled'
         run: |
           echo "The CI decision or a quality job did not succeed."
+          exit 1
+      # A deployable push must carry a Next.js build, including the merged-PR
+      # path that skips the rest of the suite. Without it the deployment has no
+      # cache to restore and silently builds cold.
+      - name: Verify the deployment has a Next.js build
+        if: >-
+          needs.decide.outputs.deploy == 'true' &&
+          needs['next-build'].result != 'success'
+        run: |
+          echo "A deployable push must complete the Next.js build, but it was ${{ needs['next-build'].result }}."
           exit 1
       - name: Report skipped quality checks
         if: needs.decide.outputs.run_checks != 'true'
