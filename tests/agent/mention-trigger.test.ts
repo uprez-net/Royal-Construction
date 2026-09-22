@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   applyMention,
+  composerKeyAction,
   findMentionTrigger,
 } from "../../components/agent/agent-mentions";
 
@@ -73,4 +74,93 @@ test("choosing a record while editing mid-message leaves the tail intact", () =>
   const next = applyMention(value, trigger, "Lot 14");
 
   assert.equal(next.value, "@Lot 14 needs the updated slab date");
+});
+
+const menuShut = { menuOpen: false, resultCount: 0 };
+const menuSearching = { menuOpen: true, resultCount: 0 };
+const menuWithResults = { menuOpen: true, resultCount: 3 };
+
+function press(
+  key: string,
+  options: { shiftKey?: boolean; isComposing?: boolean } = {},
+) {
+  return {
+    isComposing: options.isComposing ?? false,
+    key,
+    shiftKey: options.shiftKey ?? false,
+  };
+}
+
+test("Enter sends when the picker is shut", () => {
+  assert.deepEqual(composerKeyAction(press("Enter"), menuShut), {
+    kind: "send",
+  });
+});
+
+test("Enter does not send while the picker is still searching", () => {
+  // The regression this guards: the picker only claimed Enter once results had
+  // arrived, so Enter pressed during the search sent the message with a
+  // half-typed `@sm` still in it.
+  assert.deepEqual(composerKeyAction(press("Enter"), menuSearching), {
+    kind: "hold",
+  });
+});
+
+test("Enter picks the highlighted record when there is one", () => {
+  assert.deepEqual(composerKeyAction(press("Enter"), menuWithResults), {
+    kind: "pick",
+  });
+});
+
+test("Shift+Enter is always a new line", () => {
+  for (const state of [menuShut, menuSearching, menuWithResults]) {
+    assert.deepEqual(
+      composerKeyAction(press("Enter", { shiftKey: true }), state),
+      { kind: "ignore" },
+    );
+  }
+});
+
+test("the Enter that commits an IME candidate never sends", () => {
+  for (const state of [menuShut, menuSearching, menuWithResults]) {
+    assert.deepEqual(
+      composerKeyAction(press("Enter", { isComposing: true }), state),
+      { kind: "ignore" },
+    );
+  }
+});
+
+test("Escape dismisses the picker in every open state", () => {
+  assert.deepEqual(composerKeyAction(press("Escape"), menuSearching), {
+    kind: "dismiss",
+  });
+  assert.deepEqual(composerKeyAction(press("Escape"), menuWithResults), {
+    kind: "dismiss",
+  });
+});
+
+test("the arrows only belong to the picker when it has results", () => {
+  assert.deepEqual(composerKeyAction(press("ArrowDown"), menuWithResults), {
+    delta: 1,
+    kind: "move",
+  });
+  assert.deepEqual(composerKeyAction(press("ArrowUp"), menuWithResults), {
+    delta: -1,
+    kind: "move",
+  });
+  assert.deepEqual(composerKeyAction(press("ArrowDown"), menuSearching), {
+    kind: "ignore",
+  });
+});
+
+test("Tab still moves focus when there is nothing to pick", () => {
+  assert.deepEqual(composerKeyAction(press("Tab"), menuWithResults), {
+    kind: "pick",
+  });
+  assert.deepEqual(composerKeyAction(press("Tab"), menuSearching), {
+    kind: "ignore",
+  });
+  assert.deepEqual(composerKeyAction(press("Tab"), menuShut), {
+    kind: "ignore",
+  });
 });

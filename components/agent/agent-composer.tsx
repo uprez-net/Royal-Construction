@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AgentMentionMenu } from "@/components/agent/agent-mention-menu";
 import {
   applyMention,
+  composerKeyAction,
   findMentionTrigger,
   useMentionSearch,
   MAX_ANNOTATIONS,
@@ -140,36 +141,37 @@ export function AgentComposer({
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (menuOpen && results.length > 0) {
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setActiveIndex((index) => (index + 1) % results.length);
-        return;
-      }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
+    const action = composerKeyAction(
+      {
+        isComposing: event.nativeEvent.isComposing,
+        key: event.key,
+        shiftKey: event.shiftKey,
+      },
+      { menuOpen, resultCount: results.length },
+    );
+    if (action.kind === "ignore") return;
+    event.preventDefault();
+    switch (action.kind) {
+      case "move":
         setActiveIndex(
-          (index) => (index - 1 + results.length) % results.length,
+          (index) =>
+            (index + action.delta + results.length) % results.length,
         );
         return;
-      }
-      if (event.key === "Enter" || event.key === "Tab") {
-        // The old composer sent the message here, because Enter-to-send ran
-        // whether or not the picker was open.
-        event.preventDefault();
+      case "pick": {
         const chosen = results[activeIndex];
         if (chosen) selectMention(chosen);
         return;
       }
-    }
-    if (menuOpen && event.key === "Escape") {
-      event.preventDefault();
-      setDismissedAt(trigger.start);
-      return;
-    }
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      if (canSend) onSend();
+      case "dismiss":
+        if (trigger) setDismissedAt(trigger.start);
+        return;
+      case "hold":
+        // The picker is open with nothing to choose yet. Swallow the key rather
+        // than sending a message that still has a half-typed `@token` in it.
+        return;
+      case "send":
+        if (canSend) onSend();
     }
   }
 

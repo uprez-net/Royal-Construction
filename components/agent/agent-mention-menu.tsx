@@ -66,12 +66,18 @@ export function AgentMentionMenu({
       <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
         <p className="border-b border-border/70 px-3 py-1.5 text-[11px] text-muted-foreground">
           {query.length < 2 ? (
-            "Keep typing to search leads, offers, projects and files"
+            "Keep typing to search leads, offers, projects and files · Esc to dismiss"
           ) : (
             <>
               Referencing{" "}
               <span className="font-medium text-foreground">@{query}</span> ·{" "}
-              <span>↑↓ to choose · Enter to add · Esc to dismiss</span>
+              {/* Enter belongs to the picker while it is open, so it is only
+                  advertised as "add" when there is something to add. */}
+              <span>
+                {results.length > 0
+                  ? "↑↓ to choose · Enter to add · Esc to dismiss"
+                  : "Esc to dismiss and keep writing"}
+              </span>
             </>
           )}
         </p>

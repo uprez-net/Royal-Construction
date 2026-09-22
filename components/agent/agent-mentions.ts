@@ -152,3 +152,50 @@ export function useGroupedMentions(
     return groups;
   }, [results]);
 }
+
+/** What a keystroke in the composer should do. */
+export type ComposerKeyAction =
+  | { kind: "dismiss" }
+  | { kind: "hold" }
+  | { kind: "ignore" }
+  | { kind: "move"; delta: 1 | -1 }
+  | { kind: "pick" }
+  | { kind: "send" };
+
+/**
+ * Decides who owns a keystroke: the picker, the composer, or the browser.
+ *
+ * Pure and separately tested because getting this wrong sends a message the
+ * operator did not mean to send. It has been wrong twice — first when
+ * Enter-to-send ran regardless of the picker, then again when the picker only
+ * claimed Enter once results had arrived, so Enter pressed during the search
+ * sent the half-typed `@sm` along with the message.
+ *
+ * While the picker is open, Enter belongs to it whether or not there is
+ * anything to choose yet; `hold` swallows the key and the operator dismisses
+ * with Escape. Tab is only claimed when there is something to pick, so it
+ * still moves focus otherwise.
+ */
+export function composerKeyAction(
+  event: { key: string; shiftKey: boolean; isComposing: boolean },
+  state: { menuOpen: boolean; resultCount: number },
+): ComposerKeyAction {
+  // An IME owns every key while a candidate is being composed, including the
+  // Enter that commits it.
+  if (event.isComposing) return { kind: "ignore" };
+
+  if (state.menuOpen) {
+    if (event.key === "Escape") return { kind: "dismiss" };
+    if (state.resultCount > 0) {
+      if (event.key === "ArrowDown") return { delta: 1, kind: "move" };
+      if (event.key === "ArrowUp") return { delta: -1, kind: "move" };
+      if (event.key === "Tab") return { kind: "pick" };
+      if (event.key === "Enter" && !event.shiftKey) return { kind: "pick" };
+    }
+    if (event.key === "Enter" && !event.shiftKey) return { kind: "hold" };
+    return { kind: "ignore" };
+  }
+
+  if (event.key === "Enter" && !event.shiftKey) return { kind: "send" };
+  return { kind: "ignore" };
+}
