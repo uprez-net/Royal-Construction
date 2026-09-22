@@ -219,9 +219,9 @@ export function AgentWorkspace({
     prepareSend: (payload) => ({
       ...payload,
       clientContext: {
-        ...(payload.clientContext &&
-        typeof payload.clientContext === "object" &&
-        !Array.isArray(payload.clientContext)
+        ...(payload.clientContext
+        && typeof payload.clientContext === "object"
+        && !Array.isArray(payload.clientContext)
           ? payload.clientContext
           : {}),
         route: window.location.pathname,
@@ -231,9 +231,9 @@ export function AgentWorkspace({
   });
 
   const busy =
-    agent.status === "resuming" ||
-    agent.status === "submitted" ||
-    agent.status === "streaming";
+    agent.status === "resuming"
+    || agent.status === "submitted"
+    || agent.status === "streaming";
   const canSend =
     !busy && (composer.trim().length > 0 || attachments.length > 0);
   const annotationQuery = useMemo(
@@ -247,10 +247,10 @@ export function AgentWorkspace({
   const activeSessionId = agent.session?.sessionId ?? selectedSessionId;
   const activeSessionTitle =
     initialSessions.find((session) => session.eveSessionId === activeSessionId)
-      ?.title ??
-    sessions.find((session) => session.eveSessionId === activeSessionId)
-      ?.title ??
-    "New conversation";
+      ?.title
+    ?? sessions.find((session) => session.eveSessionId === activeSessionId)
+      ?.title
+    ?? "New conversation";
 
   useEffect(() => {
     if (!activeSessionId) return;

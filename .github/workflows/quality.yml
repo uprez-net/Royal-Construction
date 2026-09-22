@@ -310,3 +310,19 @@ jobs:
       - name: Report successful quality checks
         if: needs.decide.outputs.run_checks == 'true'
         run: echo "Required checks passed; Prettier is advisory."
+
+
+  deploy:
+    name: Deploy
+    if: >-
+      github.event_name == 'push' &&
+      needs.quality-checks.result == 'success' &&
+      needs.decide.outputs.deploy == 'true' &&
+      contains(fromJSON('["main", "staging"]'), github.ref_name)
+    needs: [decide, quality-checks]
+    uses: ./.github/workflows/deploy.yml
+    with:
+      deploy: ${{ needs.decide.outputs.deploy == 'true' }}
+      branch: ${{ github.ref_name }}
+      sha: ${{ github.sha }}
+    secrets: inherit

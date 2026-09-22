@@ -61,8 +61,8 @@ export function AgentAnnotations({
                   setAnnotations((items) =>
                     items.filter(
                       (item) =>
-                        item.id !== annotation.id ||
-                        item.type !== annotation.type,
+                        item.id !== annotation.id
+                        || item.type !== annotation.type,
                     ),
                   )
                 }

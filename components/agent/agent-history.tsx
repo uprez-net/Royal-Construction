@@ -70,10 +70,10 @@ export function AgentHistory({
               const title =
                 initialSessions.find(
                   (item) => item.eveSessionId === session.eveSessionId,
-                )?.title ||
-                session.title ||
-                (active ? activeSessionTitle : null) ||
-                "New conversation";
+                )?.title
+                || session.title
+                || (active ? activeSessionTitle : null)
+                || "New conversation";
               return (
                 <div className="group relative" key={session.eveSessionId}>
                   <Link

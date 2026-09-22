@@ -1,4 +1,5 @@
 import { defineAgent } from "eve";
+import { OPERATIONS_SESSION_LIMITS } from "@/lib/agent/session-limits";
 
 export default defineAgent({
   model: "zai/glm-5.3-flash",
@@ -8,10 +9,5 @@ export default defineAgent({
   compaction: {
     thresholdPercent: 0.75,
   },
-  limits: {
-    maxInputTokensPerSession: 120_000,
-    maxOutputTokensPerSession: 12_000,
-    maxTokenCostUsdPerSession: 1,
-    sessionTimeoutMs: 7 * 24 * 60 * 60 * 1_000,
-  },
+  limits: OPERATIONS_SESSION_LIMITS,
 });

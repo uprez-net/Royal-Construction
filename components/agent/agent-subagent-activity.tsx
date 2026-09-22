@@ -52,10 +52,10 @@ export function AgentSubagentActivity({
         ? CircleDashed
         : LoaderCircle;
   const progress =
-    activity.summary ??
-    childProgress.label ??
-    activity.progressLabel ??
-    (activity.status === "delegating"
+    activity.summary
+    ?? childProgress.label
+    ?? activity.progressLabel
+    ?? (activity.status === "delegating"
       ? "Preparing the specialist"
       : "Working in a separate session");
 
@@ -169,8 +169,8 @@ function getLatestChildProgress(events: readonly MessageStreamEvent[]) {
           .map((action) =>
             action.kind === "tool-call" || action.kind === "workflow-tool-call"
               ? action.toolName
-              : action.kind === "subagent-call" ||
-                  action.kind === "remote-agent-call"
+              : action.kind === "subagent-call"
+                  || action.kind === "remote-agent-call"
                 ? action.name
                 : action.kind,
           )

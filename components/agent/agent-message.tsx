@@ -116,9 +116,9 @@ export function AgentMessage({
             onAction={onAction}
             part={part}
             showCaret={
-              isStreaming &&
-              message.role === "assistant" &&
-              index === lastTextIndex
+              isStreaming
+              && message.role === "assistant"
+              && index === lastTextIndex
             }
           />
         ))}
@@ -481,19 +481,19 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
   if (
-    typeof candidate.title !== "string" ||
-    typeof candidate.summary !== "string"
+    typeof candidate.title !== "string"
+    || typeof candidate.summary !== "string"
   ) {
     return null;
   }
   const links = Array.isArray(candidate.links)
     ? candidate.links.filter((link): link is { href: string; label: string } =>
         Boolean(
-          link &&
-          typeof link === "object" &&
-          typeof (link as Record<string, unknown>).href === "string" &&
-          isInternalHref((link as Record<string, unknown>).href as string) &&
-          typeof (link as Record<string, unknown>).label === "string",
+          link
+          && typeof link === "object"
+          && typeof (link as Record<string, unknown>).href === "string"
+          && isInternalHref((link as Record<string, unknown>).href as string)
+          && typeof (link as Record<string, unknown>).label === "string",
         ),
       )
     : [];
@@ -501,29 +501,30 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
     ? candidate.actions.filter(
         (action): action is ResultEnvelope["actions"][number] =>
           Boolean(
-            action &&
-            typeof action === "object" &&
-            typeof (action as Record<string, unknown>).id === "string" &&
-            typeof (action as Record<string, unknown>).label === "string" &&
-            typeof (action as Record<string, unknown>).operation === "string",
+            action
+            && typeof action === "object"
+            && typeof (action as Record<string, unknown>).id === "string"
+            && typeof (action as Record<string, unknown>).label === "string"
+            && typeof (action as Record<string, unknown>).operation
+              === "string",
           ),
       )
     : [];
   const outreachValue =
-    candidate.data &&
-    typeof candidate.data === "object" &&
-    !Array.isArray(candidate.data)
+    candidate.data
+    && typeof candidate.data === "object"
+    && !Array.isArray(candidate.data)
       ? (candidate.data as Record<string, unknown>).outreach
       : null;
   const outreach =
-    outreachValue &&
-    typeof outreachValue === "object" &&
-    !Array.isArray(outreachValue)
+    outreachValue
+    && typeof outreachValue === "object"
+    && !Array.isArray(outreachValue)
       ? (() => {
           const value = outreachValue as Record<string, unknown>;
-          return typeof value.body === "string" &&
-            typeof value.party === "string" &&
-            typeof value.subject === "string"
+          return typeof value.body === "string"
+            && typeof value.party === "string"
+            && typeof value.subject === "string"
             ? {
                 body: value.body,
                 contactEmail:
@@ -551,9 +552,9 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
         })()
       : null;
   const data =
-    candidate.data &&
-    typeof candidate.data === "object" &&
-    !Array.isArray(candidate.data)
+    candidate.data
+    && typeof candidate.data === "object"
+    && !Array.isArray(candidate.data)
       ? (candidate.data as Record<string, unknown>)
       : {};
   const entityValue =
@@ -565,16 +566,16 @@ function resultEnvelope(value: unknown): ResultEnvelope | null {
       ? (entityValue.display as Record<string, unknown>)
       : null;
   const entityHref =
-    typeof entityDisplay?.href === "string" &&
-    isInternalHref(entityDisplay.href)
+    typeof entityDisplay?.href === "string"
+    && isInternalHref(entityDisplay.href)
       ? entityDisplay.href
       : undefined;
   const entityRef =
-    entityValue &&
-    typeof entityValue.type === "string" &&
-    typeof entityValue.id === "string" &&
-    entityDisplay &&
-    typeof entityDisplay.label === "string"
+    entityValue
+    && typeof entityValue.type === "string"
+    && typeof entityValue.id === "string"
+    && entityDisplay
+    && typeof entityDisplay.label === "string"
       ? {
           type: entityValue.type,
           id: entityValue.id,

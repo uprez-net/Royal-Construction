@@ -218,8 +218,8 @@ export function AgentTranscript({
                   isStreaming={agentStatus === "streaming"}
                   key={message.id}
                   annotations={
-                    messageAnnotations[message.id] ??
-                    (message.metadata?.optimistic
+                    messageAnnotations[message.id]
+                    ?? (message.metadata?.optimistic
                       ? (pendingMessageAnnotations ?? undefined)
                       : undefined)
                   }
