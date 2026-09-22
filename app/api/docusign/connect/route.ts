@@ -36,6 +36,12 @@ import {
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "@/lib/notification/novu";
 import { signerStatusesBelow } from "@/lib/offer/signing-status";
+import {
+  nonEmptyConnectText,
+  parseConnectPayload,
+  type ConnectPayload,
+  type ConnectRecipient,
+} from "@/lib/docusign/connect-payload";
 
 // DocuSign Connect (JSON SIM) webhook: keeps Envelope + EnvelopeSignature in
 // step with signing progress, and on completion archives the executed PDF and
@@ -65,11 +71,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "HMAC not configured" }, { status: 401 });
   }
 
-  let payload: ConnectPayload;
+  let payload: ConnectPayload | null;
   try {
-    payload = JSON.parse(raw) as ConnectPayload;
+    payload = parseConnectPayload(JSON.parse(raw));
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  if (!payload) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   const event = payload.event;
@@ -124,27 +133,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   return NextResponse.json({ ok: true });
 }
-
-type ConnectRecipient = {
-  recipientId?: string;
-  email?: string;
-  routingOrder?: string;
-  status?: string;
-  signedDateTime?: string;
-  declinedReason?: string;
-};
-
-type ConnectPayload = {
-  event?: string;
-  data?: {
-    envelopeId?: string;
-    envelopeSummary?: {
-      recipients?: { signers?: ConnectRecipient[] };
-      voidedReason?: string;
-    };
-    voidedReason?: string;
-  };
-};
 
 const RECIPIENT_STATUS: Record<string, SignerStatus> = {
   sent: SignerStatus.SENT,
@@ -733,8 +721,8 @@ async function returnOfferToDraftOnVoid(
   }
 
   const voidReason =
-    payload.data?.envelopeSummary?.voidedReason?.trim() ??
-    payload.data?.voidedReason?.trim();
+    nonEmptyConnectText(payload.data?.envelopeSummary?.voidedReason) ??
+    nonEmptyConnectText(payload.data?.voidedReason);
   let voided = false;
   await prisma.$transaction(async (tx) => {
     const latest = await tx.envelope.findFirst({

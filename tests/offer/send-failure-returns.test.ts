@@ -19,6 +19,9 @@ const SENDS = [
     action: "sendOfferForSignature({ offerId })",
     showsError: "setOfferSignError(result.error)",
     sentStatus: "OfferStatus.OFFER_SENT",
+    committedStatusHandler: `if (result.status === OfferStatus.OFFER_SENT) {
+            setStatus("offer_sent");
+          }`,
   },
   {
     file: "lib/data/offer-tender-sign.ts",
@@ -26,6 +29,9 @@ const SENDS = [
     action: "sendTenderForSignature({ offerId })",
     showsError: "setTenderSendError(result.error)",
     sentStatus: "OfferStatus.TENDER_SENT",
+    committedStatusHandler: `if (result.status === OfferStatus.TENDER_SENT) {
+            setStatus("tender_sent");
+          }`,
   },
   {
     file: "lib/data/offer-contract-sign.ts",
@@ -33,6 +39,10 @@ const SENDS = [
     action: "sendContractForSignature({ offerId })",
     showsError: "setContractSendError(result.error)",
     sentStatus: "OfferStatus.CONTRACT_SENT",
+    committedStatusHandler: `if (result.status === OfferStatus.CONTRACT_SENT) {
+            setContractTerms(null);
+            setStatus("contract_sent");
+          }`,
   },
 ] as const;
 
@@ -81,11 +91,8 @@ for (const send of SENDS) {
       handling.includes(send.showsError),
       `${send.action} does not show result.error: ${handling}`,
     );
-    assert.match(
-      handling,
-      new RegExp(
-        `if \\(result\\.status === ${send.sentStatus}\\) \\{\\s*setStatus\\(\\"${send.sentStatus.slice("OfferStatus.".length).toLowerCase()}\\"\\);\\s*\\}`,
-      ),
+    assert.ok(
+      handling.includes(send.committedStatusHandler),
       `${send.action} does not show its committed status`,
     );
   });

@@ -1952,6 +1952,7 @@ export function NewOfferWorkspace({
           setStatus("contract_sent");
         } else {
           if (result.status === OfferStatus.CONTRACT_SENT) {
+            setContractTerms(null);
             setStatus("contract_sent");
           }
           setContractSendError(result.error);
