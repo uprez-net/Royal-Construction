@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 
-import { routeAuth } from "eve/channels/auth";
+import { type AuthFn, routeAuth } from "eve/channels/auth";
 
 import {
   MCP_METADATA_PATH,
@@ -22,6 +22,18 @@ import {
 
 const request = () => new Request("https://royal.test/eve/v1/mcp");
 
+/** The 401/403 an auth refusal carries, or a failure if it did not refuse. */
+async function refusalFrom(auth: AuthFn<Request>): Promise<Response> {
+  try {
+    await auth(request());
+  } catch (caught) {
+    const response = (caught as { response?: unknown }).response;
+    assert.ok(response instanceof Response, "refusal carried no response");
+    return response;
+  }
+  assert.fail("expected a refusal");
+}
+
 function deps(
   overrides: Partial<McpAuthDependencies> = {},
 ): McpAuthDependencies {
@@ -40,25 +52,21 @@ test("a request with no usable credential falls through to Eve's 401", async () 
   // that carries the Bearer challenge, and mcpChannel adds the
   // resource_metadata URL to it. Throwing here would lose that challenge.
   const auth = createMcpUserAuth(deps({ clerkUserIdFor: async () => null }));
-  assert.equal(await auth(request()), null);
+  assert.equal(await Promise.resolve(auth(request())), null);
 });
 
 test("an invalid token is rejected exactly like a missing one", async () => {
   // Clerk verifies by introspection and reports both as "not authenticated",
   // and the endpoint must not tell an anonymous caller which it was.
   const auth = createMcpUserAuth(deps({ clerkUserIdFor: async () => null }));
-  assert.equal(await auth(request()), null);
+  assert.equal(await Promise.resolve(auth(request())), null);
 });
 
 test("a Clerk account with no application user is refused, not retried", async () => {
-  const auth = createMcpUserAuth(deps({ principalFor: async () => null }));
-  const error = await auth(request()).then(
-    () => null,
-    (caught: unknown) => caught,
+  const response = await refusalFrom(
+    createMcpUserAuth(deps({ principalFor: async () => null })),
   );
 
-  assert.ok(error instanceof Error, "expected a refusal");
-  const response = (error as { response: Response }).response;
   assert.equal(response.status, 403);
   assert.equal((await response.json()).code, "agent_access_denied");
 });
@@ -75,13 +83,8 @@ test("the rollout flag closes the endpoint before any credential is read", async
     }),
   );
 
-  const error = await auth(request()).then(
-    () => null,
-    (caught: unknown) => caught,
-  );
+  const response = await refusalFrom(auth);
 
-  assert.ok(error instanceof Error, "expected a refusal");
-  const response = (error as { response: Response }).response;
   assert.equal(response.status, 403);
   assert.equal((await response.json()).code, "agent_disabled");
   assert.equal(reads, 0, "the disabled endpoint still called Clerk");
@@ -93,7 +96,7 @@ test("an accepted caller becomes the application user, not the Clerk subject", a
   // principalId, requireCurrentAgentActor looks it up as a User.id, and Eve
   // binds invocation ownership to it. A Clerk id here would match no row.
   const auth = createMcpUserAuth(deps());
-  const principal = await auth(request());
+  const principal = await Promise.resolve(auth(request()));
 
   assert.deepEqual(principal, {
     attributes: { role: "ADMIN" },
@@ -178,9 +181,7 @@ test("the metadata path stays inside the prefix that reaches the agent", () => {
 
 test("the resource identifier is left to the request unless a gateway rewrites it", () => {
   const key = `pk_test_${Buffer.from("clerk.royal.example$").toString("base64")}`;
-  const derived = mcpResourceConfig({
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key,
-  } as NodeJS.ProcessEnv);
+  const derived = mcpResourceConfig({ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key });
 
   assert.deepEqual(derived, {
     issuer: "https://clerk.royal.example",
@@ -192,14 +193,14 @@ test("the resource identifier is left to the request unless a gateway rewrites i
     EVE_MCP_ISSUER: "https://auth.royal.example",
     EVE_MCP_RESOURCE: "https://royal.example/eve/v1/mcp",
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: key,
-  } as NodeJS.ProcessEnv);
+  });
 
   assert.equal(overridden?.issuer, "https://auth.royal.example");
   assert.equal(overridden?.resource, "https://royal.example/eve/v1/mcp");
 });
 
 test("no Clerk instance means no advertised authorization server", () => {
-  assert.equal(mcpResourceConfig({} as NodeJS.ProcessEnv), null);
+  assert.equal(mcpResourceConfig({}), null);
 });
 
 test("the advertised scopes are ones Clerk actually issues", () => {

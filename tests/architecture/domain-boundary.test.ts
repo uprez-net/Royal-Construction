@@ -24,7 +24,9 @@ import {
 //    next/navigation publish extensionless relative imports only a bundler
 //    resolves; server-only throws on import outside a React bundler;
 //    @clerk/mcp-tools exports no entrypoint Node can resolve. A value import of
-//    any of them from agent/ fails the build (AGENTS.md).
+//    any of them from agent/ fails the build (AGENTS.md). @clerk/mcp-tools
+//    stopped being a dependency with the (mcp) route group in #303; the entry
+//    stays as a tripwire, because reinstalling it is the cheap mistake.
 // 2. A cron, a webhook, a seed script and this test runner are all plain Node
 //    too. A rule that needs a request context is a rule those channels cannot
 //    call, which is how the second implementation gets written.

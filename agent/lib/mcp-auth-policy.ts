@@ -95,7 +95,7 @@ export interface McpResourceConfig {
  * longer carries the identifier the client used.
  */
 export function mcpResourceConfig(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Readonly<Record<string, string | undefined>> = process.env,
 ): McpResourceConfig | null {
   const issuer =
     env.EVE_MCP_ISSUER?.trim()

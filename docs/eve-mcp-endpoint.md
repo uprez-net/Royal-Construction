@@ -21,6 +21,10 @@ rules, one audit trail.
 
 ## Connecting
 
+For the step-by-step version — Claude Code, a hosted client, or a client you
+are writing — see [Connect an MCP client](./connect-an-mcp-client.md). This
+section is the contract it implements.
+
 The endpoint speaks Streamable HTTP. It serves MCP `2026-07-28` and keeps
 stateless `2025-11-25` compatibility; there is no transport session to hold
 open.

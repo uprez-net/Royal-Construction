@@ -118,8 +118,6 @@ const LEADS_RESULT_SHAPE =
   "answers with its own {ok,error} result the lead screens already read; the refusal reaches the operator, just not through the shared mapper (worth reconciling when the lead routes are revisited)";
 const MACHINE_CALLER =
   "answers a machine, not a screen: a cron, a webhook or a Workflow step. Its failures surface through the outbox and the audit trail, which is where somebody can act on them";
-const MCP =
-  "the deprecated chatbot/MCP route (AGENTS.md); its tools answer a model with an error string, not a person with a screen";
 const AGENT_SESSIONS =
   "Eve's own channel, which maps DomainErrorCode rather than an HTTP status (agent/lib/result-contracts.ts)";
 const OAUTH_REDIRECT =
@@ -145,7 +143,6 @@ const UNMAPPED: Record<string, string> = {
   "app/api/graph/notifications/route.ts": MACHINE_CALLER,
   "app/api/webhook/clerk/route.ts": MACHINE_CALLER,
   "app/api/xero/notification/route.ts": MACHINE_CALLER,
-  "app/(mcp)/api/mcp/route.ts": MCP,
   "app/api/agent/sessions/[sessionId]/context/route.ts": AGENT_SESSIONS,
   "app/api/docusign/connect/route.ts": OAUTH_REDIRECT,
   "app/api/graph/book-consultant/route.ts": PUBLIC_BOOKING,

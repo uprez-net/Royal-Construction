@@ -29,10 +29,10 @@ const isPublicRoute = createRouteMatcher([
   // answers with redirects, and `auth()` still resolves inside it because
   // clerkMiddleware runs for public routes too — it just stops enforcing.
   "/api/xero/connect(.*)",
+  // Covers the Workflow package's routes under /.well-known/workflow, and the
+  // RFC 9728 path that redirects to Eve's MCP protected-resource metadata --
+  // an unauthenticated client has to be able to read that to sign in at all.
   "/.well-known(.*)",
-  "/api/mcp(.*)",
-  "/api/sse(.*)",
-  "/api/message(.*)",
   "/api/cron(.*)",
   "/book-consultation",
   "/api/upload(.*)",
@@ -64,10 +64,10 @@ export const proxy = clerkMiddleware(async (auth, request) => {
 
   // Dev: auto-redirect unauthenticated page navigations to the token sign-in flow
   if (
-    isDevAutoSignInEnabled() &&
-    !isPublicRoute(request) &&
-    !isAuthRoute(request) &&
-    !isApiRoute
+    isDevAutoSignInEnabled()
+    && !isPublicRoute(request)
+    && !isAuthRoute(request)
+    && !isApiRoute
   ) {
     const { userId } = await auth();
     if (!userId) {
@@ -100,8 +100,8 @@ export const proxy = clerkMiddleware(async (auth, request) => {
   }
 
   if (
-    isAdminRoute(request) &&
-    (await findUserByClerkId(userId ?? "", prisma))?.role !== "ADMIN"
+    isAdminRoute(request)
+    && (await findUserByClerkId(userId ?? "", prisma))?.role !== "ADMIN"
   ) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
