@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { lockedSnapshotChanges } from "../../lib/offer/offer-editability";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { lockedSnapshotChanges } from "@/lib/offer/offer-editability";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -14,12 +14,12 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferWorkspaceStatus,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   reverseHbcfTotalContractValue,
   withDerivedHbcfPremium,
-} from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-pricing";
 import {
   CURRENT_CALC_VERSION,
   INITIAL_TENDER_GATE,
@@ -32,7 +32,7 @@ import {
   validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
   type PersistedOfferWorkspaceState,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 
 // saveOfferWorkspace wrote the client's whole snapshot at every editable status.
 // A tab still showing an offer as pending after another tab had sent it could

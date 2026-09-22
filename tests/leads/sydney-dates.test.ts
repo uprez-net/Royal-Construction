@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   sydneyDateOnly,
@@ -7,7 +7,7 @@ import {
   sydneyMidnightIn,
   sydneyStartOfDay,
   sydneyTimeOnly,
-} from "../../lib/dates/sydney";
+} from "@/lib/dates/sydney";
 
 test("a UTC date slice and a Sydney date are different calendars", () => {
   // The defect that stopped reminders firing. Anything from 14:00Z onwards is

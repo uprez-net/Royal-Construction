@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { Prisma } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   coerceMoney,
@@ -10,8 +10,8 @@ import {
   probabilityFor,
   weightedValueOf,
   type LeadForMetrics,
-} from "../../lib/leads/pipeline-math";
-import { PIPELINE_STAGES } from "../../lib/leads/pipeline-stages";
+} from "@/lib/leads/pipeline-math";
+import { PIPELINE_STAGES } from "@/lib/leads/pipeline-stages";
 
 function lead(over: Partial<LeadForMetrics> = {}): LeadForMetrics {
   return {

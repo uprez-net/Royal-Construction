@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { Prisma, InvoiceStatus } from "@prisma/client";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { syncInvoiceFromExternal } from "../../lib/domain/invoices/sync";
-import { createStageInvoice } from "../../lib/domain/invoices/stage-creation";
+import { syncInvoiceFromExternal } from "@/lib/domain/invoices/sync";
+import { createStageInvoice } from "@/lib/domain/invoices/stage-creation";
 import { recordingDb } from "./domain-harness";
 
 const fields = {
@@ -22,7 +22,6 @@ const fields = {
   fullyPaidOnDate: new Date("2026-01-10"),
   xeroUpdatedAt: new Date("2026-01-11"),
 };
-
 
 /** An outbox intent that is fresh, claimable and not yet succeeded. */
 function pendingIntent(key: string, kind: string) {
@@ -72,7 +71,9 @@ test("invoice sync refuses a stale status and timestamp without writing", async 
   const result = await syncInvoiceFromExternal(
     "xero_1",
     recorder.db,
-    async () => ({ fields: { ...fields, xeroUpdatedAt: new Date("2026-01-11") } }),
+    async () => ({
+      fields: { ...fields, xeroUpdatedAt: new Date("2026-01-11") },
+    }),
   );
   assert.deepEqual(result, { kind: "stale" });
   assert.deepEqual(recorder.writes(), []);
@@ -103,9 +104,9 @@ test("invoice sync writes the mirror and archives a missing PDF through a port",
     .writes()
     .find(
       (call) =>
-        call.operation === "invoice.update" &&
-        (call.args as { data: Record<string, unknown> }).data.pdfUrl !==
-          undefined,
+        call.operation === "invoice.update"
+        && (call.args as { data: Record<string, unknown> }).data.pdfUrl
+          !== undefined,
     );
   assert.deepEqual((pdfWrite?.args as { data: unknown }).data, {
     pdfUrl: "https://blob.test/invoice.pdf",

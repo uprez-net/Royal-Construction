@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 
 import {
   IncidentSeverity,
@@ -10,6 +9,7 @@ import {
   TradiePriceUnit,
   TradieScheduleStatus,
 } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   createTradie,
@@ -18,26 +18,26 @@ import {
   requestTradieRemoval,
   toggleTradieFavourite,
   updateTradie,
-} from "../../lib/domain/tradies/directory";
-import { reportTradieIncident } from "../../lib/domain/tradies/incidents";
-import { resolveTradieApproval } from "../../lib/domain/tradies/approvals";
-import { sendTradieScheduleReminder } from "../../lib/domain/tradies/reminders";
+} from "@/lib/domain/tradies/directory";
+import { reportTradieIncident } from "@/lib/domain/tradies/incidents";
+import { resolveTradieApproval } from "@/lib/domain/tradies/approvals";
+import { sendTradieScheduleReminder } from "@/lib/domain/tradies/reminders";
 import {
   createTradieSchedules,
   rescheduleTradieSchedule,
   transitionTradieSchedule,
-} from "../../lib/domain/tradies/schedules";
+} from "@/lib/domain/tradies/schedules";
 import {
   changeTeamMemberRole,
   inviteTeamMember,
   revokeTeamInvitation,
-} from "../../lib/domain/identity/team";
+} from "@/lib/domain/identity/team";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
   DomainTransitionError,
   DomainValidationError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import { ROOT } from "./module-graph";
 import {
   adminPrincipal,
@@ -103,8 +103,8 @@ test("bulk scheduling authorizes every project inside one transaction", async ()
 test("schedule overlap checks and creates use serialisable transactions", () => {
   const source = read("lib/domain/tradies/schedules.ts");
   assert.ok(
-    (source.match(/TransactionIsolationLevel\.Serializable/g)?.length ?? 0) >=
-      2,
+    (source.match(/TransactionIsolationLevel\.Serializable/g)?.length ?? 0)
+      >= 2,
     "single and bulk schedule creation must both be serialisable",
   );
 });

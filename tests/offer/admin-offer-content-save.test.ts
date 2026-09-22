@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   markSectionEdited,
   saveReceipt,
   settleSavedSection,
-} from "../../lib/store/slices/admin-offer-content-save";
+} from "@/lib/store/slices/admin-offer-content-save";
 
 // An admin offer-content save sends a snapshot, and the editors stay live while
 // it is in flight. The fulfilled handler cleared the section's dirty flag

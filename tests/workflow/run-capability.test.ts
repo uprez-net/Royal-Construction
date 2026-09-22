@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   RUN_CAPABILITY_SECRET_ENV,
@@ -7,7 +7,7 @@ import {
   runCapabilitySecret,
   signRunCapability,
   verifyRunCapability,
-} from "../../lib/workflow/run-capability";
+} from "@/lib/workflow/run-capability";
 
 // /api/resume-stream/<runId> streamed any workflow run to any signed-in user:
 // the only check was that a session existed, so a run id was a bearer secret

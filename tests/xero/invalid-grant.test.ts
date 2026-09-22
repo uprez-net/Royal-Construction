@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { isInvalidGrant } from "../../lib/xero/token-errors";
+import { isInvalidGrant } from "@/lib/xero/token-errors";
 
 /**
  * This predicate decides whether a failed refresh deactivates the connection.

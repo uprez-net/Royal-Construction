@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   addressTokens,
@@ -11,8 +11,8 @@ import {
   siteAddressCore,
   stripSubjectPrefixes,
   subjectMentionsSiteAddress,
-} from "../../lib/graph/certifier-subject";
-import { isMachineGenerated } from "../../lib/graph/offer-reply-classify";
+} from "@/lib/graph/certifier-subject";
+import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
 
 const TOKEN = "RCCERT-A1B2C3D4E5F6";
 

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { parseRoyalQuoteWorkbook } from "../../lib/offer/workspace-import";
-import { loadExcelJs } from "../../lib/spreadsheet/exceljs-loader";
-import type { WorkbookGrid } from "../../lib/spreadsheet/workbook-grid";
-import { readWorkbookGrid } from "../../lib/spreadsheet/workbook-grid";
+import { test } from "vitest";
+import { parseRoyalQuoteWorkbook } from "@/lib/offer/workspace-import";
+import { loadExcelJs } from "@/lib/spreadsheet/exceljs-loader";
+import type { WorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
+import { readWorkbookGrid } from "@/lib/spreadsheet/workbook-grid";
 
 const sampleQuoteRows = makeRows(90);
 sampleQuoteRows[5][3] = "Plans";

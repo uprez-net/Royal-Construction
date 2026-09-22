@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // A campaign rendered ONE preview iframe from `allLeads[0]`, then scraped that
 // same document for every recipient. renderEmailHtml bakes the lead's values in

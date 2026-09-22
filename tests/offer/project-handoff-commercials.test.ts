@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   buildHandoffCommercials,
   describeMissingExecutedDocuments,
@@ -9,10 +9,10 @@ import {
   paymentScheduleLine,
   tenderExclusionLines,
   resolveSignedTenderExclusions,
-} from "../../lib/offer/project-handoff-commercials";
-import { INITIAL_EXCLUSIONS } from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
+} from "@/lib/offer/project-handoff-commercials";
+import { INITIAL_EXCLUSIONS } from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
+import { buildOfferPrintTemplateData } from "@/lib/offer/workspace-print-template";
 import { individualOwner, snapshotOf } from "./tender-fixtures";
 
 // The BC4 contract send and the project handoff each derived their own figures

@@ -1,34 +1,34 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   describeTenderPriceMismatch,
   resolveContractPaymentSource,
   withTenderPaymentTerms,
-} from "../../lib/offer/contract-payment-source";
+} from "@/lib/offer/contract-payment-source";
 import {
   contractPreviewTerms,
   contractTermsInput,
   resolveContractTerms,
-} from "../../lib/offer/contract-terms";
-import { formatPercent } from "../../lib/offer/format";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+} from "@/lib/offer/contract-terms";
+import { formatPercent } from "@/lib/offer/format";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   formatContractMoney,
   paymentScheduleLine,
   stageAmount,
   resolveSignedTenderExclusions,
-} from "../../lib/offer/project-handoff-commercials";
+} from "@/lib/offer/project-handoff-commercials";
 import {
   INITIAL_PAYMENT_SCHEDULE,
   type OfferPaymentScheduleRow,
-} from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-payment-schedule";
 import {
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 import { individualOwner, snapshotOf } from "./tender-fixtures";
 
 // The Contract step previewed the workspace's payment schedule while the send
@@ -181,8 +181,8 @@ function sendPathValues(
       describeTenderPriceMismatch({
         tenderContractValueIncGst: payment.tenderContractValueIncGst,
         agreedContractValueIncGst: contractValue,
-      }) ??
-      (payment.paymentSchedule.length > 7
+      })
+      ?? (payment.paymentSchedule.length > 7
         ? `The contract template supports up to 7 payment stages, but this schedule has ${payment.paymentSchedule.length}. Consolidate the payment schedule before sending the Contract.`
         : null),
   };

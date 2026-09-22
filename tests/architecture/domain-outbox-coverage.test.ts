@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { test } from "node:test";
 
 import { OutboxEventKind } from "@prisma/client";
+import { test } from "vitest";
 
 import { ROOT } from "./module-graph";
 

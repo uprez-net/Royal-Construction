@@ -1,20 +1,24 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { deleteLeadFile } from "../../lib/domain/files";
+import { deleteLeadFile } from "@/lib/domain/files";
 import {
   deleteEmailAttachment,
   authorizeEmailAttachmentDeletion,
-} from "../../lib/domain/email/operations";
-import { reclaimSupersededComplianceFiles } from "../../lib/domain/compliance/file-reclamation";
+} from "@/lib/domain/email/operations";
+import { reclaimSupersededComplianceFiles } from "@/lib/domain/compliance/file-reclamation";
 import {
   DomainAuthorizationError,
   DomainValidationError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import { ROOT } from "./module-graph";
-import { adminPrincipal, customerPrincipal, recordingDb } from "./domain-harness";
+import {
+  adminPrincipal,
+  customerPrincipal,
+  recordingDb,
+} from "./domain-harness";
 
 // Phase 7: blob storage is a capability the domain is handed, not a package an
 // adapter reaches for after being told a URL is in scope.

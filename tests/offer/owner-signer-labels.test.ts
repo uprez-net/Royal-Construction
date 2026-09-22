@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   collectOfferSignerLabels,
   createCompanyOwner,
   createIndividualOwner,
   type OfferOwner,
-} from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-model";
 
 // Regression for the tender/contract preview + signing-tracker bug: the UI
 // rendered the legacy clientNames/secondaryCustomerName projection, so a company

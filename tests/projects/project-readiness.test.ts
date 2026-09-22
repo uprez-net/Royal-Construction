@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   collectProjectDateBlockers,
   partitionBlockers,
   ProjectDateBlockerError,
-} from "../../lib/domain/projects/readiness";
+} from "@/lib/domain/projects/readiness";
 
 // ---------------------------------------------------------------------------
 // collectProjectDateBlockers — block severity

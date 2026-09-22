@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   canSendOfferForAcceptance,
   describeAcceptanceSendBlock,
-} from "../../lib/offer/offer-acceptance-guard";
+} from "@/lib/offer/offer-acceptance-guard";
 
 const ALL_STATUSES = Object.values(OfferStatus) as OfferStatus[];
 

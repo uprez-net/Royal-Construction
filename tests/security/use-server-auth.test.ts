@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { test } from "node:test";
 import ts from "typescript";
+import { test } from "vitest";
 
 // Every export of a "use server" module is a Server Action: a POST endpoint
 // that runs with whatever arguments the sender chooses, whether or not a screen

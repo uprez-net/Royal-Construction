@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { createProjectWithLeadSchema } from "../../utils/validators/projects";
+import { createProjectWithLeadSchema } from "@/utils/validators/projects";
 
 // createProjectWithLeadAction hands the browser's payload straight to
 // createProjectWithLead, which writes `parties` onto Project.parties, trusts

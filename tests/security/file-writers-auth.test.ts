@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   PROJECT_STAFF_ROLES,
   canAttachToProject,
-} from "../../lib/projects/project-access";
+} from "@/lib/projects/project-access";
 
 // saveFile writes a File row for whatever user, lead, project and milestone it
 // is handed, so each user-facing caller has to derive the user and check the

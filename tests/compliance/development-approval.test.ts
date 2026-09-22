@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   ComplianceAlertStatus,
@@ -8,19 +7,20 @@ import {
   ComplianceDocumentType,
   ComplianceExternalApplicationKind,
 } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   CHECKLIST_MAPPABLE_TYPES,
   EXTERNAL_APPLICATION_DOCUMENT_TYPE,
   isChecklistMappableType,
-} from "../../constants/complianceDocuments";
+} from "@/constants/complianceDocuments";
 import {
   checklistBlockedReason,
   hasDevelopmentApplication,
   hasDevelopmentConsent,
   requiresPlanningCertificate,
   type CertifierEngagementDetail,
-} from "../../types/compliance";
+} from "@/types/compliance";
 
 /**
  * The development approval path, and what it does to the checklist.

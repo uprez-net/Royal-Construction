@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { OutboxEventKind, OutboxEventStatus } from "@prisma/client";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   claimOutboxEvents,
   completeOutboxEvent,
   enqueueOutboxEvent,
   failOutboxEvent,
-} from "../../lib/domain/outbox";
+} from "@/lib/domain/outbox";
 import { recordingDb } from "./domain-harness";
 
 test("outbox intent is idempotent and a pending event can be claimed once", async () => {

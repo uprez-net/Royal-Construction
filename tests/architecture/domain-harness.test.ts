@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import type { DomainDb } from "../../lib/domain/db";
+import type { DomainDb } from "@/lib/domain/db";
 import {
   DomainStaleVersionError,
   domainErrorStatus,
   isDomainError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import {
   attributionUserId,
   anonymousPrincipal,
@@ -14,7 +14,7 @@ import {
   requireAdminPrincipal,
   requireUserPrincipal,
   systemPrincipal,
-} from "../../lib/domain/principal";
+} from "@/lib/domain/principal";
 import {
   adminPrincipal,
   assertSameWrites,

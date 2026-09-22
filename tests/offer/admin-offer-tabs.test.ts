@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { OfferContentHeader } from "../../components/offers/admin/offer-content-header";
+import { OfferContentHeader } from "@/components/offers/admin/offer-content-header";
 import {
   ADMIN_OFFER_TABS,
   TAB_SECTION,
   dirtyByTab,
   type AdminOfferTabs,
-} from "../../components/offers/admin/offer-content-tabs";
+} from "@/components/offers/admin/offer-content-tabs";
 
 // The admin tab strip ticked every tab to the left of the one you clicked, so
 // opening HBCF Claim showed five "complete" sections nobody had saved, while an

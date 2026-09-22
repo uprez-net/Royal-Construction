@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   resolveLeadNotesText,
   resolveLeadNotesTextOr,
-} from "../../lib/leads/notes-text";
-import { createLeadNotesDocument } from "../../lib/rich-text/lead-notes";
+} from "@/lib/leads/notes-text";
+import { createLeadNotesDocument } from "@/lib/rich-text/lead-notes";
 
 // `Lead.notes` stopped being the answer without its readers being told. The
 // Notes tab clears the column and the document on save because a note's home is

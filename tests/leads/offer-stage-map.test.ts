@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   OFFER_STATUS_LEAD_STAGE,
   leadStagePatchForOfferStatus,
-} from "../../lib/leads/offer-stage-map";
-import { stageDef } from "../../lib/leads/pipeline-stages";
+} from "@/lib/leads/offer-stage-map";
+import { stageDef } from "@/lib/leads/pipeline-stages";
 
 const NOW = new Date("2026-08-19T00:00:00.000Z");
 

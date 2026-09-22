@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { insertAt } from "../../lib/store/slices/admin-offer-content-list";
+import { insertAt } from "@/lib/store/slices/admin-offer-content-list";
 
 // Deleting a cost schedule task, allowance, exclusion or bullet in the admin
 // offer-content editors was immediate and silent, with no way back short of

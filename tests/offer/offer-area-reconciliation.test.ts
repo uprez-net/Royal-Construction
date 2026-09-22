@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
+import { OfferWorkspacePrintTemplate } from "@/components/offers/new-workflow/offer-workspace-print-template";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
 import {
   INITIAL_AREA_CALCULATOR,
   offerAreaBasisFromJob,
   rawTotalAreaSqm,
-} from "../../lib/offer/workspace-area";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-area";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -21,15 +21,15 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferWorkspaceJob,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   LEGACY_CALC_VERSION,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { buildAreaBreakdown } from "../../lib/offer/workspace-print-template";
-import { buildWelcomeParagraphs } from "../../lib/offer/workspace-proposal-content";
+} from "@/lib/offer/workspace-persistence";
+import { buildAreaBreakdown } from "@/lib/offer/workspace-print-template";
+import { buildWelcomeParagraphs } from "@/lib/offer/workspace-proposal-content";
 
 // Every renderer summed its own subset of the floor areas. For one job the
 // emailed snapshot printed 415 m² (no balcony, no void) under an "Alfresco +

@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   buildOfferStepDigests,
   compactMoney,
   type OfferStepDigestInput,
-} from "../../lib/offer/step-digests";
+} from "@/lib/offer/step-digests";
 import {
   EMPTY_OFFER_IMAGES,
   OFFER_IMAGE_SLOTS,
-} from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-images";
 import {
   INITIAL_OFFER_JOB,
   type OfferWorkspaceCostLine,
   type OfferWorkspaceScopeItem,
-} from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-model";
 
 const line = (
   id: string,

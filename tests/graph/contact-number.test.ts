@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { normalizeContactNumber } from "../../lib/graph/contact-number";
+import { normalizeContactNumber } from "@/lib/graph/contact-number";
 
 test("an Australian mobile keeps its leading zero", () => {
   // The regression: this ran through Number(), so lead 223 stored 433100349

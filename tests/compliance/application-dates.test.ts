@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { ComplianceExternalApplicationKind } from "@prisma/client";
+import { test } from "vitest";
 
-import { externalApplicationSchema } from "../../utils/validators/compliance";
+import { externalApplicationSchema } from "@/utils/validators/compliance";
 
 /**
  * The dates that start a clock, at the boundary they come in through.

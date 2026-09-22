@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // Once DocuSign has accepted an envelope, a failure to record it threw an error
 // carrying the envelope id and "Do not resend". Next replaces a Server Action's

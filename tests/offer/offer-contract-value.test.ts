@@ -1,23 +1,23 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { resolveOfferContractValue } from "../../lib/offer/offer-contract-value";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+import { resolveOfferContractValue } from "@/lib/offer/offer-contract-value";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   INITIAL_TENDER_GATE,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { calculateOfferWorkspacePricing } from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-persistence";
+import { calculateOfferWorkspacePricing } from "@/lib/offer/workspace-pricing";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferWorkspaceCostLine,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Backs the Versions timeline's price column. Offer.contractValueIncGst used to

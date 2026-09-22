@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   ComplianceAlertStatus,
@@ -12,9 +11,10 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
-import { assessOverdueConditions } from "../../lib/domain/compliance/overdue";
-import type { CertifierEngagementDetail } from "../../types/compliance";
+import { assessOverdueConditions } from "@/lib/domain/compliance/overdue";
+import type { CertifierEngagementDetail } from "@/types/compliance";
 
 /**
  * The nightly sweep, pinned at its boundaries.

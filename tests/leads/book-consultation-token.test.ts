@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 import { createHmac } from "node:crypto";
+import { test } from "vitest";
 
 import {
   bookConsultationTokenSecret,
   signBookConsultationToken,
   verifyBookConsultationToken,
-} from "../../lib/leads/book-consultation-token";
+} from "@/lib/leads/book-consultation-token";
 
 const SECRET = "x".repeat(40);
 

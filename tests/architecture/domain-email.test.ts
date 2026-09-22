@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { Role } from "@prisma/client";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   authorizeEmailAttachmentDeletion,
   sendCampaignEmail,
-} from "../../lib/domain/email/operations";
-import { DomainAuthorizationError } from "../../lib/domain/errors";
+} from "@/lib/domain/email/operations";
+import { DomainAuthorizationError } from "@/lib/domain/errors";
 
 const admin = { kind: "user" as const, role: Role.ADMIN, userId: "u_admin" };
 const customer = {
@@ -52,7 +52,12 @@ test("campaign email is staff-only and sends to the normalized recipient", async
     to: "customer@example.com",
   });
   await assert.rejects(
-    () => sendCampaignEmail(customer, { body: "x", subject: "x", to: "a@b.com" }, async () => {}),
+    () =>
+      sendCampaignEmail(
+        customer,
+        { body: "x", subject: "x", to: "a@b.com" },
+        async () => {},
+      ),
     DomainAuthorizationError,
   );
 });

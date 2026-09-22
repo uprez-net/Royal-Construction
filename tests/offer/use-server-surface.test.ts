@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
+
+import { REPO_ROOT } from "../support/repo-root";
 
 // These modules opened with "use server", which makes every export a Server
 // Action: an endpoint that becomes callable over the network the moment any
@@ -14,7 +16,7 @@ import { test } from "node:test";
 // That closes only the direct endpoints: an action that calls one of them must
 // still authorize its own caller, as lib/actions/projects.ts does.
 
-const ROOT = join(__dirname, "..", "..");
+const ROOT = REPO_ROOT;
 
 const SERVER_HELPERS = [
   "lib/agent/projectCreationAgent.ts",

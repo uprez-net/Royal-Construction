@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import type { OfferScopeData } from "../../types/admin-offer-content";
+import type { OfferScopeData } from "@/types/admin-offer-content";
 import {
   CEILING_UPGRADE_VARIATION_RULE,
   GROUND_FLOOR_CEILING_UPGRADE_NAME,
   fillCeilingUpgradeVariationRule,
-} from "../../lib/offer/fill-ceiling-upgrade-variation-rule";
+} from "@/lib/offer/fill-ceiling-upgrade-variation-rule";
 
 function scope(allowances: OfferScopeData["allowances"]): OfferScopeData {
   return { allowances, exclusions: [] };

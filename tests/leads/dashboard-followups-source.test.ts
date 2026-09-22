@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   CLOSED_LEAD_STAGES,
   LIVE_LEAD,
   dueFollowUpTaskWhere,
-} from "../../lib/leads/followup-due";
+} from "@/lib/leads/followup-due";
 
 // The dashboard was the last screen still answering "what follow-ups are
 // outstanding?" from `Lead.followupDate` / `Lead.followupCompletedAt`. Two

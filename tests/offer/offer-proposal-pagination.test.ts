@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
-import { buildContractSignatureAnnexureHtml } from "../../lib/offer/contract-annexure-html";
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { OfferWorkspacePrintTemplate } from "@/components/offers/new-workflow/offer-workspace-print-template";
+import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   createCompanyOwner,
   createIndividualOwner,
@@ -21,13 +21,13 @@ import {
   INITIAL_OFFER_JOB,
   MAX_OWNER_SIGNERS,
   type OfferOwner,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-persistence";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 function snapshotWithOwners(owners: OfferOwner[]): OfferWorkspaceSnapshot {

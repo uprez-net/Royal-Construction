@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   archiveLead,
   createLead,
   updateLead,
-} from "../../lib/domain/leads/commands";
+} from "@/lib/domain/leads/commands";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
-} from "../../lib/domain/errors";
-import { isLeadValidationError } from "../../lib/leads/lead-validation-error";
+} from "@/lib/domain/errors";
+import { isLeadValidationError } from "@/lib/leads/lead-validation-error";
 import { ROOT } from "./module-graph";
 import {
   adminPrincipal,
@@ -189,7 +189,12 @@ test("a malformed email is refused at the write, not just at the schema", async 
 test("a lead cannot be moved into a closed stage with no reason", async () => {
   await assert.rejects(
     () =>
-      updateLead(adminPrincipal(), 7, { stage: "Lost" } as never, leadDb().transactionalDb),
+      updateLead(
+        adminPrincipal(),
+        7,
+        { stage: "Lost" } as never,
+        leadDb().transactionalDb,
+      ),
     (error) => isLeadValidationError(error),
   );
 });

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   buildFormulaScope,
   evaluateCostFormula,
-} from "../../lib/offer/formula-evaluator";
-import { validateFormula } from "../../lib/offer/formula-validation";
+} from "@/lib/offer/formula-evaluator";
+import { validateFormula } from "@/lib/offer/formula-validation";
 import {
   AREA_MEASUREMENT_KEYS,
   LINE_ITEM_FORMULAS,
@@ -13,7 +13,7 @@ import {
   withDefaultRateConstants,
   type AreaMeasurementKey,
   type RateConstantKey,
-} from "../../lib/offer/formula-variables";
+} from "@/lib/offer/formula-variables";
 
 // Simulated Phase 1 calculated values (what the Area Calculator would produce
 // for a project with the given inputs and default rate constants).

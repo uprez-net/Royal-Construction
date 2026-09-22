@@ -1,41 +1,38 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   authorizeAgentSession,
   findAgentSessionOwner,
-} from "../../lib/domain/access/agent-sessions";
+} from "@/lib/domain/access/agent-sessions";
 import {
   authorizeLead,
   canAccessLead,
   leadListScope,
-} from "../../lib/domain/access/leads";
+} from "@/lib/domain/access/leads";
 import {
   OfferSupersededError,
   authorizeOffer,
-} from "../../lib/domain/access/offers";
+} from "@/lib/domain/access/offers";
 import {
   authorizeFileAttachment,
   authorizeMilestone,
   canAttachFileToProject,
   canManageProject,
   projectManageScope,
-} from "../../lib/domain/access/projects";
+} from "@/lib/domain/access/projects";
 import {
   authorizeTradieSchedule,
   canReadTradieDirectory,
   tradieScheduleListScope,
-} from "../../lib/domain/access/tradies";
+} from "@/lib/domain/access/tradies";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
-} from "../../lib/domain/errors";
-import {
-  anonymousPrincipal,
-  systemPrincipal,
-} from "../../lib/domain/principal";
+} from "@/lib/domain/errors";
+import { anonymousPrincipal, systemPrincipal } from "@/lib/domain/principal";
 import { ROOT } from "./module-graph";
 import {
   adminPrincipal,

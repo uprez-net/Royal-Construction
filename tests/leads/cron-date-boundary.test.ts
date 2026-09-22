@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { fromZonedTime } from "date-fns-tz";
+import { test } from "vitest";
 
-import { dueDateFromPreset } from "../../lib/leads/task-presets";
+import { dueDateFromPreset } from "@/lib/leads/task-presets";
 
 /**
  * The date arithmetic both reminder crons depend on.

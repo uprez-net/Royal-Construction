@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { TenderPanel } from "../../components/offers/new-workflow/offer-workspace-tender";
+import { TenderPanel } from "@/components/offers/new-workflow/offer-workspace-tender";
 import {
   INITIAL_ALLOWANCES,
   INITIAL_EXCLUSIONS,
@@ -11,10 +11,10 @@ import {
   INITIAL_OFFER_JOB,
   type OfferDocumentDraft,
   type OfferWorkspaceScopeItem,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
-import type { OfferCustomerPrice } from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
+import { buildOfferPrintTemplateData } from "@/lib/offer/workspace-print-template";
+import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
 
 // The on-screen Tender listed inclusions and exclusions but no allowances, so
 // the estimator reviewing it before DocuSign never saw the prime-cost and

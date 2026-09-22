@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { buttonVariants } from "../../components/ui/button";
-import { cn } from "../../lib/utils";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   WHITE,
   contrastRatio,
@@ -91,8 +91,8 @@ test("the royal focus ring stands out from the page and from its own fill", () =
   const page = themeColour(css, ":root", "--background");
   const fill = themeColour(css, ":root", "--royal-gold-ink");
   assert.ok(
-    contrastRatio(WHITE, colour) >= NON_TEXT &&
-      contrastRatio(page, colour) >= NON_TEXT,
+    contrastRatio(WHITE, colour) >= NON_TEXT
+      && contrastRatio(page, colour) >= NON_TEXT,
     `the focus ring measures ${contrastRatio(WHITE, colour).toFixed(2)}:1 on white and ${contrastRatio(page, colour).toFixed(2)}:1 on --background`,
   );
   assert.ok(

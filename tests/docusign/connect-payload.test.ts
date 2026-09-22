@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   nonEmptyConnectText,
   parseConnectPayload,
-} from "../../lib/docusign/connect-payload";
+} from "@/lib/docusign/connect-payload";
 
 test("accepts a Connect void reason and falls back from blank summary text", () => {
   const payload = parseConnectPayload({
@@ -17,8 +17,8 @@ test("accepts a Connect void reason and falls back from blank summary text", () 
   });
 
   assert.equal(
-    nonEmptyConnectText(payload?.data?.envelopeSummary?.voidedReason) ??
-      nonEmptyConnectText(payload?.data?.voidedReason),
+    nonEmptyConnectText(payload?.data?.envelopeSummary?.voidedReason)
+      ?? nonEmptyConnectText(payload?.data?.voidedReason),
     "Builder recall",
   );
 });

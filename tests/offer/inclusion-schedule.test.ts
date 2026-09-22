@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   STANDARD_INCLUSION_ENTRIES,
   STANDARD_INCLUSIONS_SCHEDULE,
-} from "../../lib/offer/workspace-proposal-content";
+} from "@/lib/offer/workspace-proposal-content";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -17,31 +17,31 @@ import {
   UNCATEGORISED_INCLUSION_LABEL,
   unreviewedDraftedRows,
   type OfferInclusionEntry,
-} from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-model";
 import {
   buildOfferPrintTemplateData,
   getOfferDocumentExclusions,
   getVisibleExclusionRows,
   getVisibleExclusions,
-} from "../../lib/offer/workspace-print-template";
+} from "@/lib/offer/workspace-print-template";
 import {
   CURRENT_WORKSPACE_SCHEMA_VERSION,
   INITIAL_TENDER_GATE,
   migrateWorkspaceState,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { collectOfferSendBlockers } from "../../lib/offer/offer-readiness";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
+} from "@/lib/offer/workspace-persistence";
+import { collectOfferSendBlockers } from "@/lib/offer/offer-readiness";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
 import {
   buildInclusionSections,
   buildTenderHtml,
   INCLUSION_SECTION_ORDER,
   OTHER_INCLUSIONS_SECTION,
-} from "../../lib/offer/offer-tender-html";
+} from "@/lib/offer/offer-tender-html";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // REGRESSION: the state schema pinned `schemaVersion: z.literal(2)` while

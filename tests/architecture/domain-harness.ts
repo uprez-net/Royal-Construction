@@ -1,5 +1,5 @@
-import type { DomainDb, TransactionalDomainDb } from "../../lib/domain/db";
-import type { DomainPrincipal } from "../../lib/domain/principal";
+import type { DomainDb, TransactionalDomainDb } from "@/lib/domain/db";
+import type { DomainPrincipal } from "@/lib/domain/principal";
 import { Role } from "@prisma/client";
 
 // The harness contract tests use to drive a domain command through more than

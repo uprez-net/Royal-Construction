@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   mergeLeadPage,
   pageAfterQueryChange,
   shownSelection,
-} from "../../lib/leads/lead-search-paging";
+} from "@/lib/leads/lead-search-paging";
 
 // The lead picker never went back to page 1 when the search changed. After
 // scrolling to page 3, typing a name requested page 3 of the matches and
