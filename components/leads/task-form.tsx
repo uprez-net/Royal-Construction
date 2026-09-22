@@ -22,6 +22,8 @@ interface TaskFormProps {
   leadName: string;
   onCreated: (task: LeadTaskRow) => void;
   onCancel?: () => void;
+  /** The type selected when the form opens, e.g. WHATSAPP from the chat. */
+  defaultType?: LeadTaskType;
 }
 
 /**
@@ -37,8 +39,9 @@ export function TaskForm({
   leadName,
   onCreated,
   onCancel,
+  defaultType = "CALL",
 }: TaskFormProps) {
-  const [type, setType] = useState<LeadTaskType>("CALL");
+  const [type, setType] = useState<LeadTaskType>(defaultType);
   /**
    * Two ways to answer "when": a preset interval, or a picked date.
    *

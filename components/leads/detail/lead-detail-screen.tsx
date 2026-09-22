@@ -7,6 +7,7 @@ import type { LeadEmails } from "@prisma/client";
 
 import { DeleteConfirmModal } from "@/components/leads/modal-ui/delete-confirm-modal";
 import LeadCommModal from "@/components/leads/modal-ui/lead-comm-modal";
+import { LeadWhatsAppModal } from "@/components/leads/whatsapp/lead-whatsapp-modal";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import type { Lead } from "@/lib/leads/types";
 
@@ -33,6 +34,7 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
   const [lead, setLead] = useState<Lead>(initialLead);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showCommModal, setShowCommModal] = useState(false);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
 
   const handleLeadUpdate = useCallback((updated: Lead) => {
     setLead(updated);
@@ -61,6 +63,7 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
         lead={lead}
         onArchiveClick={() => setShowArchiveConfirm(true)}
         onSendTextClick={() => setShowCommModal(true)}
+        onWhatsAppClick={() => setShowWhatsApp(true)}
         onLeadUpdate={handleLeadUpdate}
       />
 
@@ -99,6 +102,15 @@ export function LeadDetailScreen({ lead: initialLead }: { lead: Lead }) {
           isOpen={showCommModal}
           onClose={() => setShowCommModal(false)}
           appendEmailToLead={appendEmailToLead}
+        />
+      ) : null}
+
+      {/* The same component the leads list opens — one thread, not two. */}
+      {showWhatsApp ? (
+        <LeadWhatsAppModal
+          key={lead.id}
+          lead={lead}
+          onClose={() => setShowWhatsApp(false)}
         />
       ) : null}
     </div>

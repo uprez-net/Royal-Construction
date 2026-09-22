@@ -8,6 +8,7 @@ import {
   DomainValidationError,
 } from "../../errors";
 import { isInternalPrincipal, type DomainPrincipal } from "../../principal";
+import { WHATSAPP_CONSENT_SOURCE_LABELS } from "./consent-labels";
 import { recordWhatsAppHistory } from "./records";
 
 // Recording, and correcting, a lead's WhatsApp consent (issue #333).
@@ -21,12 +22,7 @@ import { recordWhatsAppHistory } from "./records";
 // what a customer said, and it should come from the person who heard it, not
 // from a model's reading of a transcript.
 
-export const WHATSAPP_CONSENT_SOURCE_LABELS: Record<WhatsAppConsentSource, string> = {
-  CUSTOMER_INITIATED: "Customer messaged us first",
-  VERBAL: "Agreed on a call or in person",
-  WEB_FORM: "Opted in on a web form",
-  WRITTEN: "Agreed in writing (email or letter)",
-};
+export { WHATSAPP_CONSENT_SOURCE_LABELS };
 
 export type LeadWhatsAppConsentInput =
   | {
