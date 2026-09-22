@@ -187,7 +187,7 @@ route, which is the state this change removes.
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | The Clerk instance. The advertised authorization server is derived from it, so it cannot drift from the one the app signs in against |
 | `EVE_MCP_ISSUER` | Overrides that derived issuer |
 | `NEXT_PUBLIC_APP_URL` | The app's public origin. The advertised resource identifier is this plus `/eve/v1/mcp` |
-| `EVE_MCP_RESOURCE` | Overrides that, for a gateway that serves MCP on a different origin or path |
+| `EVE_MCP_RESOURCE` | Overrides that, for a gateway that serves MCP on a different origin or path. Use an HTTPS URL with no credentials, query, or fragment; HTTP is allowed only for loopback development URLs. An invalid override logs a warning and falls back to `NEXT_PUBLIC_APP_URL`. |
 
 The resource identifier is taken from configuration rather than from the
 request on purpose. `withEve` reaches the agent by proxying to a separate

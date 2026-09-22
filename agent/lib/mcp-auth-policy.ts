@@ -50,6 +50,35 @@ const PUBLISHABLE_KEY_PREFIX = /^pk_(test|live)_/;
 const FRONTEND_API_HOST =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
 
+/** Matches Eve's OAuth resource URL rules before calling oauthResource(). */
+export function isValidMcpResourceUrl(value: string | undefined | null): boolean {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    const loopback = isLoopbackHostname(url.hostname);
+    return (url.protocol === "https:" || (url.protocol === "http:" && loopback))
+      && !url.username
+      && !url.password
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1") {
+    return true;
+  }
+
+  const octets = host.split(".").map(Number);
+  return octets.length === 4
+    && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    && octets[0] === 127;
+}
+
 /**
  * Clerk's authorization server, derived from the publishable key.
  *
@@ -108,8 +137,9 @@ export function mcpResourceConfig(
     || clerkIssuerFromPublishableKey(env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   if (!issuer) return null;
 
+  const configuredResource = env.EVE_MCP_RESOURCE?.trim();
   const resource =
-    env.EVE_MCP_RESOURCE?.trim()
+    (isValidMcpResourceUrl(configuredResource) ? configuredResource : null)
     || mcpResourceFromAppUrl(env.NEXT_PUBLIC_APP_URL);
 
   return {
@@ -126,7 +156,8 @@ function mcpResourceFromAppUrl(appUrl: string | undefined): string | null {
   if (!configured) return null;
 
   try {
-    return new URL(MCP_ROUTE, new URL(configured).origin).toString();
+    const resource = new URL(MCP_ROUTE, new URL(configured).origin).toString();
+    return isValidMcpResourceUrl(resource) ? resource : null;
   } catch {
     return null;
   }

@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import {
   MCP_ROUTE,
   createMcpUserAuth,
+  isValidMcpResourceUrl,
   mcpResourceConfig,
 } from "@/agent/lib/mcp-auth-policy";
 import { isAgentFeatureEnabled } from "@/agent/lib/session-identity";
@@ -59,6 +60,17 @@ const auth = createMcpUserAuth({
 // warning is here because the alternative failure is silent -- an endpoint
 // that 401s without ever telling a client where to sign in.
 const resource = mcpResourceConfig();
+
+if (
+  process.env.EVE_MCP_RESOURCE?.trim()
+  && !isValidMcpResourceUrl(process.env.EVE_MCP_RESOURCE.trim())
+) {
+  console.warn(
+    "[eve/mcp] EVE_MCP_RESOURCE must be an HTTPS URL without credentials, "
+      + "query, or fragment (HTTP is allowed only on loopback). Falling back "
+      + "to NEXT_PUBLIC_APP_URL when it is usable.",
+  );
+}
 
 if (!resource) {
   console.warn(
