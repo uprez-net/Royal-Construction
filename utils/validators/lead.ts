@@ -114,7 +114,7 @@ export const historyItemSchema = z.object({
   action: z.string().trim().min(1),
   detail: z.string().optional().default(""),
   type: z
-    .enum(["system", "call", "email", "referral"])
+    .enum(["system", "call", "email", "referral", "whatsapp"])
     .optional()
     .default("system"),
   date: z.string(),
@@ -167,7 +167,7 @@ export const historySchema = z.object({
   action: z.string().trim().min(1),
   detail: z.string().optional().default(""),
   type: z
-    .enum(["system", "call", "email", "referral"])
+    .enum(["system", "call", "email", "referral", "whatsapp"])
     .optional()
     .default("system"),
   actionDate: z.iso.datetime().nullable().describe("Action date").optional(),

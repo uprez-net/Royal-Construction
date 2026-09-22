@@ -53,7 +53,7 @@ export interface HistoryItem {
   time: string;
   action: string;
   detail: string;
-  type: "system" | "call" | "email" | "referral";
+  type: "system" | "call" | "email" | "referral" | "whatsapp";
   author?: {
     id: string;
     name: string;

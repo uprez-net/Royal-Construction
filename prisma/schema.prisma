@@ -110,6 +110,9 @@ enum LeadTaskType {
   EMAIL
   MEETING
   WAITING
+  /// A WhatsApp follow-up (issue #333). Its own type rather than EMAIL so the
+  /// follow-up view and reporting can tell the two channels apart.
+  WHATSAPP
 }
 
 /// Board columns. NEW and DONE cover today's behaviour; IN_PROGRESS exists so
@@ -138,6 +141,9 @@ enum HistoryType {
   CALL
   EMAIL
   REFERRAL
+  /// A WhatsApp message sent or received. The body stays on
+  /// LeadWhatsAppMessage; the history row only says that it happened.
+  WHATSAPP
 }
 
 enum AnnotationStatus {
@@ -508,6 +514,7 @@ enum OutboxEventKind {
   OFFER_DOCUMENT_SEND
   OFFER_IMAGE_GENERATE
   COMPLIANCE_EMAIL_SEND
+  LEAD_WHATSAPP_SEND
 }
 
 enum AgentMemoryProvenance {
@@ -860,21 +867,24 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files               File[]             @relation("UserFiles")
-  siteManagerProjects Project[]          @relation("SiteManagerProjects")
-  siteUpdates         SiteUpdate[]
-  activityLogs        ActivityLog[]
-  assignedLeads       Lead[]             @relation("LeadAssignee")
-  leadHistories       LeadHistory[]      @relation("LeadHistoryAuthor")
-  leadTasks           LeadTask[]         @relation("LeadTaskAssignee")
-  reviews             TradieRating[]
-  approvalRequests    TradieApproval[]
-  createdOffers       Offer[]            @relation("OfferCreatedBy")
-  xeroConnections     XeroConnection[]   @relation("XeroConnections")
-  agentSessions       AgentSession[]
-  agentActionAudits   AgentActionAudit[]
-  agentOperations     AgentOperation[]
-  agentMemories       AgentMemory[]
+  files                     File[]                     @relation("UserFiles")
+  siteManagerProjects       Project[]                  @relation("SiteManagerProjects")
+  siteUpdates               SiteUpdate[]
+  activityLogs              ActivityLog[]
+  assignedLeads             Lead[]                     @relation("LeadAssignee")
+  leadHistories             LeadHistory[]              @relation("LeadHistoryAuthor")
+  leadTasks                 LeadTask[]                 @relation("LeadTaskAssignee")
+  whatsappMessages          LeadWhatsAppMessage[]      @relation("LeadWhatsAppMessageAuthor")
+  whatsappConsentsRecorded  Lead[]                     @relation("LeadWhatsAppConsentRecorder")
+  whatsappUnmatchedResolved WhatsAppUnmatchedMessage[] @relation("WhatsAppUnmatchedResolver")
+  reviews                   TradieRating[]
+  approvalRequests          TradieApproval[]
+  createdOffers             Offer[]                    @relation("OfferCreatedBy")
+  xeroConnections           XeroConnection[]           @relation("XeroConnections")
+  agentSessions             AgentSession[]
+  agentActionAudits         AgentActionAudit[]
+  agentOperations           AgentOperation[]
+  agentMemories             AgentMemory[]
 
   resolvedComplianceAlerts   ComplianceAlert[]    @relation("UserResolvedComplianceAlerts")
   decidedComplianceApprovals ComplianceOutreach[] @relation("UserDecidedComplianceApprovals")
@@ -1009,19 +1019,19 @@ model AgentOperation {
 /// provider may have accepted the request, so reconciliation must happen before
 /// another customer-visible send is attempted.
 model OutboxEvent {
-  id          String           @id @default(uuid())
-  key         String           @unique
+  id          String            @id @default(uuid())
+  key         String            @unique
   kind        OutboxEventKind
   payload     Json
   status      OutboxEventStatus @default(PENDING)
-  attempts    Int              @default(0)
-  availableAt DateTime         @default(now())
+  attempts    Int               @default(0)
+  availableAt DateTime          @default(now())
   lockedAt    DateTime?
   completedAt DateTime?
   result      Json?
-  lastError   String?          @db.Text
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  lastError   String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([status, availableAt])
   @@index([kind, status])
@@ -1101,6 +1111,23 @@ model Lead {
 
   urgent Boolean @default(false)
 
+  // ── WhatsApp (issue #333) ─────────────────────────────────────────
+  /// `phone` normalised to E.164 by lib/domain/leads/whatsapp/phone.ts, or
+  /// null when it does not normalise. Written by every lead write path and
+  /// by `pnpm whatsapp:backfill-phones`; inbound messages are matched on it
+  /// exactly. `phone` stays the displayable raw value.
+  phoneE164                   String?
+  /// When the lead agreed to be contacted on WhatsApp, and how. A valid
+  /// number is not consent: proactive (template) outreach is refused without
+  /// this unless the customer has opened a service window themselves.
+  whatsappConsentAt           DateTime?
+  whatsappConsentSource       WhatsAppConsentSource?
+  whatsappConsentNote         String?
+  whatsappConsentRecordedById String?
+  /// Set when the lead asked not to be contacted on WhatsApp. Blocks every
+  /// send, including replies inside an open window.
+  whatsappOptedOutAt          DateTime?
+
   // ── Deal economics ────────────────────────────────────────────────
   /// Numeric deal value. Auto-filled from the active offer's contract price
   /// unless estimatedValueSource is MANUAL. `budget` above remains a
@@ -1124,15 +1151,18 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  offers          Offer[]
-  chatSessions    ChatSession[]
-  history         LeadHistory[]
-  tasks           LeadTask[]
-  noteAnnotations LeadNoteAnnotation[]
-  files           File[]               @relation("LeadFiles")
-  emails          LeadEmails[]         @relation("LeadEmails")
-  assignedUser    User?                @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
-  project         Project?             @relation("LeadProject")
+  offers                    Offer[]
+  chatSessions              ChatSession[]
+  history                   LeadHistory[]
+  tasks                     LeadTask[]
+  noteAnnotations           LeadNoteAnnotation[]
+  files                     File[]                     @relation("LeadFiles")
+  emails                    LeadEmails[]               @relation("LeadEmails")
+  whatsappConversations     LeadWhatsAppConversation[]
+  whatsappMessages          LeadWhatsAppMessage[]
+  whatsappConsentRecordedBy User?                      @relation("LeadWhatsAppConsentRecorder", fields: [whatsappConsentRecordedById], references: [id])
+  assignedUser              User?                      @relation("LeadAssignee", fields: [assignedId], references: [id]) // <-- THE NEW RELATION
+  project                   Project?                   @relation("LeadProject")
 
   @@index([stage])
   @@index([assignedId])
@@ -1141,6 +1171,7 @@ model Lead {
   @@index([estimatedStartDate])
   @@index([wonAt])
   @@index([lostAt])
+  @@index([phoneE164])
 }
 
 model LeadNoteAnnotation {
@@ -1548,6 +1579,181 @@ model LeadEmails {
   @@index([emailFrom])
   @@index([leadId, sentAt(sort: Desc)])
   @@index([sentAt(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WhatsApp Business outreach (issue #333)
+//
+// Rules live in lib/domain/leads/whatsapp; the Meta Cloud API sits behind
+// lib/domain/ports/whatsapp.ts. Secrets and the business-number catalogue are
+// deployment configuration (lib/whatsapp/config.ts), never rows here — these
+// tables only snapshot which number a message used, so history survives a
+// number being retired.
+// ─────────────────────────────────────────────────────────────────────
+
+/// How a lead's WhatsApp consent was obtained. CUSTOMER_INITIATED is recorded
+/// by an operator who confirms the customer started the conversation; an
+/// inbound message alone opens a service window but is not stored as consent.
+enum WhatsAppConsentSource {
+  VERBAL
+  WRITTEN
+  WEB_FORM
+  CUSTOMER_INITIATED
+}
+
+enum WhatsAppMessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum WhatsAppMessageKind {
+  TEXT
+  TEMPLATE
+  /// Inbound media, reactions, locations… retained with a placeholder body so
+  /// the office knows something arrived and can look in WhatsApp itself.
+  UNSUPPORTED
+}
+
+/// QUEUED → SENT → DELIVERED → READ, or → FAILED. RECEIVED is inbound only.
+/// Transitions only move forward (lib/domain/leads/whatsapp/status.ts).
+enum WhatsAppMessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+enum WhatsAppUnmatchedReason {
+  /// No lead has this number.
+  NO_MATCH
+  /// More than one lead has this number; attaching to either is a guess.
+  AMBIGUOUS
+  /// The message reached a business number this deployment is not configured
+  /// for. Retained rather than dropped so a misconfiguration is visible.
+  UNKNOWN_BUSINESS_NUMBER
+}
+
+enum WhatsAppUnmatchedStatus {
+  PENDING
+  ATTACHED
+  DISMISSED
+}
+
+/// One lead talking to one Royal business number from one customer number.
+/// The unique triple is the correlation key inbound messages resolve to.
+model LeadWhatsAppConversation {
+  id                    String    @id @default(uuid())
+  leadId                Int
+  /// Meta's phone_number_id for the Royal number, and its display form as
+  /// configured when the conversation started.
+  businessPhoneNumberId String
+  businessDisplayNumber String
+  customerPhoneE164     String
+  lastInboundAt         DateTime?
+  lastOutboundAt        DateTime?
+  lastMessageAt         DateTime?
+  /// When free-form replies stop being permitted: the last inbound message
+  /// plus the platform's customer-service window. Null until the customer
+  /// has written in.
+  windowExpiresAt       DateTime?
+  unreadCount           Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  lead     Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  messages LeadWhatsAppMessage[]
+
+  @@unique([leadId, businessPhoneNumberId, customerPhoneE164])
+  @@index([customerPhoneE164])
+  @@index([leadId, lastMessageAt])
+}
+
+model LeadWhatsAppMessage {
+  id                  String                   @id @default(uuid())
+  conversationId      String
+  /// Denormalised from the conversation so a lead's thread is one index scan.
+  leadId              Int
+  direction           WhatsAppMessageDirection
+  kind                WhatsAppMessageKind
+  /// The text as the customer sees or sent it. For a template, the rendered
+  /// body. Never copied into LeadHistory.
+  body                String                   @db.Text
+  templateName        String?
+  templateLanguage    String?
+  templateParameters  Json?
+  /// Meta's wamid. Unique so a replayed webhook cannot insert a second row.
+  providerMessageId   String?                  @unique
+  status              WhatsAppMessageStatus
+  statusAt            DateTime
+  providerErrorCode   String?
+  providerErrorTitle  String?
+  /// The provider may have accepted this send but the answer never arrived.
+  /// Nothing is retried until an operator reconciles it.
+  needsReconciliation Boolean                  @default(false)
+  /// The outbox key of an outbound send. Unique: a replayed request finds the
+  /// row it already made.
+  idempotencyKey      String?                  @unique
+  authorId            String?
+  /// When it was sent (outbound) or sent by the customer (inbound, provider
+  /// timestamp). The thread is ordered on this.
+  occurredAt          DateTime
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  failedAt            DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  conversation LeadWhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  lead         Lead                     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author       User?                    @relation("LeadWhatsAppMessageAuthor", fields: [authorId], references: [id])
+
+  @@index([conversationId, occurredAt])
+  @@index([leadId, occurredAt])
+  @@index([status])
+}
+
+/// Every delivery-status callback, deduplicated. Kept even when no message
+/// matches yet: Meta's "sent" callback can arrive before the send that caused
+/// it has stored the wamid, and the send applies anything waiting here.
+model WhatsAppStatusEvent {
+  id                String                @id @default(uuid())
+  providerMessageId String
+  status            WhatsAppMessageStatus
+  occurredAt        DateTime
+  errorCode         String?
+  errorTitle        String?
+  appliedAt         DateTime?
+  createdAt         DateTime              @default(now())
+
+  @@unique([providerMessageId, status])
+  @@index([appliedAt])
+}
+
+/// An inbound message that could not be attached to exactly one lead. Waits
+/// here for a person; never attached by guess and never discarded.
+model WhatsAppUnmatchedMessage {
+  id                    String                  @id @default(uuid())
+  providerMessageId     String                  @unique
+  businessPhoneNumberId String
+  fromPhoneE164         String
+  profileName           String?
+  kind                  WhatsAppMessageKind
+  body                  String                  @db.Text
+  reason                WhatsAppUnmatchedReason
+  candidateLeadIds      Int[]
+  status                WhatsAppUnmatchedStatus @default(PENDING)
+  resolvedLeadId        Int?
+  resolvedById          String?
+  resolvedAt            DateTime?
+  receivedAt            DateTime
+  createdAt             DateTime                @default(now())
+
+  resolvedBy User? @relation("WhatsAppUnmatchedResolver", fields: [resolvedById], references: [id])
+
+  @@index([status, receivedAt])
+  @@index([fromPhoneE164])
 }
 
 model AdminOfferContent {
