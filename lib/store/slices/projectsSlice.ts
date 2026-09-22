@@ -1438,7 +1438,29 @@ const projectsSlice = createSlice({
         state.complianceMutations = {};
         state.developerPendingDocument = null;
       }
-      state.activeProject = action.payload;
+      // The project arrives here two ways: from the server component, with real
+      // Dates, and from a PATCH of `/api/projects/:id` -- the Overview tab's
+      // save and the insurance-claim-dates modal both hand the whole JSON
+      // project straight to this action. Through JSON every timestamp is a
+      // string, and the engagement is the part of the payload that is read as
+      // a Date rather than reformatted: `complianceStageFlow` measures an
+      // outreach's `sentAt` in Sydney business days, and `Intl` throws
+      // `RangeError: Invalid time value` on a string, which took the whole
+      // project page down as soon as the Compliance tab rendered after a save.
+      // Same normalization the milestone and compliance thunks already do on
+      // their own responses, and a no-op on the Date-carrying payload. The
+      // milestones travel on that PATCH too, and carry the exposure
+      // `reviveMilestoneDates` was written for -- this action is the seed its
+      // header names.
+      state.activeProject = action.payload
+        ? {
+            ...action.payload,
+            milestones: action.payload.milestones.map(reviveMilestoneDates),
+            certifierEngagement: reviveComplianceEngagementDates(
+              action.payload.certifierEngagement,
+            ),
+          }
+        : null;
     },
     syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
       syncProjectState(state, action.payload);
