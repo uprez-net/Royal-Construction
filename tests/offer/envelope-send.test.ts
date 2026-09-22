@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { envelopeSignatureRows } from "../../lib/domain/offers/envelope-send";
+import { envelopeSignatureRows } from "@/lib/domain/offers/envelope-send";
 
 test("unknown DocuSign recipient ids stay unknown for webhook email fallback", () => {
   const rows = envelopeSignatureRows([

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import {
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -14,19 +14,19 @@ import {
   INITIAL_OFFER_JOB,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   type OfferWorkspaceJob,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   deserializeWorkspace,
   INITIAL_TENDER_GATE,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 import {
   formatDwellingSpec,
   grannyDwellingSpec,
-} from "../../lib/offer/workspace-print-template";
+} from "@/lib/offer/workspace-print-template";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // A dual-occupancy build carries a granny home with its own bed/bath/garage

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   LEAD_STAGE_GROUPS,
@@ -13,7 +13,7 @@ import {
   parseLikelihood,
   stageGroupsFor,
   stageOptionsFor,
-} from "../../lib/leads/lead-helpers";
+} from "@/lib/leads/lead-helpers";
 
 test("blank likelihood means no override", () => {
   assert.equal(parseLikelihood(""), null);
@@ -337,9 +337,9 @@ test("every stage the picker offers is classified by every predicate", () => {
   // the ladder gained. Each option must be exactly one of open, won or lost.
   for (const stage of LEAD_STAGE_OPTIONS) {
     const buckets =
-      Number(isWonStage(stage)) +
-      Number(isLostStage(stage)) +
-      Number(!isTerminalStage(stage));
+      Number(isWonStage(stage))
+      + Number(isLostStage(stage))
+      + Number(!isTerminalStage(stage));
     assert.equal(buckets, 1, `${stage} is in ${buckets} buckets`);
   }
 });

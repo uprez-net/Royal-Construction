@@ -114,6 +114,32 @@ These catch new duplication at the boundaries. **They cannot tell you that two
 rules in two places mean the same thing** — that is the part that needs you to
 search first, which is what section 1 of the guide is for.
 
+## The suite runs on Vitest
+
+`node:test` is gone (issue #326). A new test imports `test`/`describe`/`it` and
+the lifecycle hooks from `vitest`, and keeps asserting with
+`node:assert/strict` — the assertions were never the thing being migrated, and
+mixing in `expect` would leave two idioms side by side.
+
+Practical rules, all of which the suite already follows:
+
+- Put the file at `tests/<area>/<name>.test.ts`; that is what
+  `vitest.config.mts` collects. A helper or fixture that is not a test does not
+  end in `.test.ts`, so it is imported rather than run.
+- Reach application code through `@/` (`@/lib/offer/pricing`) and sibling
+  fixtures relatively (`./tender-fixtures`). The distinction carries meaning:
+  relative is "next to this test", `@/` is "the code under test".
+- Need the repository root? Import `REPO_ROOT` from `tests/support/repo-root.ts`.
+  `__dirname` does not exist under the ESM transform, and `process.cwd()` is
+  wherever the command was typed.
+- Mutating `process.env`, or anything else global, still gets restored in
+  `afterEach`. Per-file process isolation is a second line of defence.
+- Anything that needs a real browser belongs in the `print` project in
+  `vitest.config.mts`, not in the CI lane. It must still fail loudly when
+  Chromium is missing — never `skip`.
+
+`pnpm test:unit` is what CI runs; `pnpm test:watch` is the loop to work in.
+
 ## Royal Construction Eve operations agent
 
 The authenticated orchestrator in `agent/agent.ts` routes requests to the

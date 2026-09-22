@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   isDocusignTransportFailure,
   resolveEnvelopeCreateError,
-} from "../../lib/docusign/envelope-send-attempt";
+} from "@/lib/docusign/envelope-send-attempt";
 
 // #289: a send whose outcome the app cannot see. Getting this classification
 // wrong costs money in both directions — call an ambiguous failure "rejected"

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   CertifierEngagementStatus,
@@ -13,6 +12,7 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   certificateCompletionBlockedReason,
@@ -20,12 +20,12 @@ import {
   certificateKindFor,
   certificateLodgementBlockedReason,
   hasCertificate,
-} from "../../lib/domain/compliance/portal-certificates";
+} from "@/lib/domain/compliance/portal-certificates";
 import {
   developerPlansBlockedReason,
   externalApplicationStep,
-} from "../../types/compliance";
-import type { CertifierEngagementDetail } from "../../types/compliance";
+} from "@/types/compliance";
+import type { CertifierEngagementDetail } from "@/types/compliance";
 
 /**
  * Which certificate a file ends on, and what has to be true before it is asked

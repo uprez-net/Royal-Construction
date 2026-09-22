@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { formatSiteParticulars } from "../../lib/offer/workspace-print-template";
+import { formatSiteParticulars } from "@/lib/offer/workspace-print-template";
 import {
   STANDARD_INCLUSION_HIGHLIGHTS,
   OFFER_SPEC_FACTS,
   STANDARD_INCLUSIONS_SCHEDULE,
-} from "../../lib/offer/workspace-proposal-content";
+} from "@/lib/offer/workspace-proposal-content";
 
 // ─── Site particulars (issue #86: "Lot Size showing as 0") ───
 // Lot area / DP / zoning had no form input at all, so every document printed the

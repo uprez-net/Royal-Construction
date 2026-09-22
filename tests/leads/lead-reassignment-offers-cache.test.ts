@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   OFFER_LISTING_LEAD_FIELDS,
   offerListingLeadChanged,
-} from "../../lib/offer/offer-listing-query";
+} from "@/lib/offer/offer-listing-query";
 
 // Reassigning a lead never expired the cached offers listing, which is scoped
 // to the leads a user is assigned. The lead stayed on its old owner's offers

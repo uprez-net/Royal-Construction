@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { getAgentWorkspaceData } from "../../lib/domain/agent/sessions";
+import { getAgentWorkspaceData } from "@/lib/domain/agent/sessions";
 import { adminPrincipal, recordingDb } from "./domain-harness";
 
 test("agent workspace reads only root sessions owned by the principal", async () => {
@@ -54,12 +54,9 @@ test("agent workspace reads only root sessions owned by the principal", async ()
   const query = recorder.calls.find(
     (call) => call.operation === "agentSession.findMany",
   );
-  assert.deepEqual(
-    (query?.args as { where: unknown }).where,
-    {
-      archivedAt: null,
-      ownerUserId: "owner_1",
-      parentEveSessionId: null,
-    },
-  );
+  assert.deepEqual((query?.args as { where: unknown }).where, {
+    archivedAt: null,
+    ownerUserId: "owner_1",
+    parentEveSessionId: null,
+  });
 });

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   CertifierEmailDirection,
@@ -14,14 +13,15 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   complianceStageFlow,
   stageForAlert,
   type ComplianceStage,
   type ComplianceStageId,
-} from "../../lib/domain/compliance/stage-flow";
-import type { CertifierEngagementDetail } from "../../types/compliance";
+} from "@/lib/domain/compliance/stage-flow";
+import type { CertifierEngagementDetail } from "@/types/compliance";
 
 /**
  * The stage header, pinned where it would otherwise lie.

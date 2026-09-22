@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   WHITE,
@@ -260,8 +260,8 @@ test("no class list pairs a base --royal-gold fill with white text", () => {
           ? null
           : elementChildren(source, fill);
         const whiteChild =
-          children !== null &&
-          classListUnits(children).some(
+          children !== null
+          && classListUnits(children).some(
             (child) =>
               WHITE_TEXT.test(child.text) && !OWN_FILL.test(child.text),
           );

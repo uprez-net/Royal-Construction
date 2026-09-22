@@ -29,6 +29,7 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
 | Storage | [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) |
 | Email / leads | Microsoft Graph, [Resend](https://resend.com), [React Email](https://react.email) |
 | AI | [Vercel AI SDK](https://sdk.vercel.ai) + Google Gemini (lead extraction) |
+| Tests | [Vitest](https://vitest.dev) with `node:assert/strict` |
 
 ## Prerequisites
 
@@ -130,9 +131,56 @@ Several module routes (financials, quotations, milestones, catalogue, architect,
 | `pnpm start` | Run production server |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | TypeScript check |
+| `pnpm test` | Whole suite (both Vitest projects, including the Chromium print lane) |
+| `pnpm test:unit` | What CI runs — everything except the two Chromium tests |
+| `pnpm test:print` | The two Chromium print tests; needs a local Chrome |
+| `pnpm test:offer` / `pnpm test:graph` | One directory |
+| `pnpm test:watch` | Vitest watch mode |
 | `pnpm prisma:generate` | Generate Prisma client |
 | `pnpm prisma:seed` | Seed database |
 | `pnpm seed:projects` | Seed projects only |
+
+## Tests
+
+[Vitest](https://vitest.dev) runs the suite in a Node environment — the tests
+are domain, contract and source-shape checks, not browser tests, so there is no
+jsdom and no React Testing Library. Assertions are `node:assert/strict`, which
+is what they were written against; only the runner changed (issue #326).
+
+```bash
+pnpm test:watch          # re-runs the files a change touches
+pnpm test:watch tests/offer/pricing.test.ts
+pnpm test:unit           # one full CI-equivalent run
+```
+
+`vitest run` is the explicit non-watch mode every script above uses, so CI and
+a terminal behave the same way.
+
+The suite is split into two Vitest projects, declared in `vitest.config.mts`:
+
+| Project | Files | Run by |
+| --- | --- | --- |
+| `unit` | `tests/**/*.test.ts` except the two below | `pnpm test:unit` — this is the CI lane |
+| `print` | `offer-document-print-pages`, `offer-tender-print-parity` | `pnpm test:print` |
+
+The `print` project drives a real Chromium through Puppeteer to prove the
+emailed PDF and the browser print view paginate identically. CI sets
+`PUPPETEER_SKIP_DOWNLOAD` and installs no browser, so those two files are not
+in the CI lane — but they **fail loudly** rather than skipping when Chromium is
+missing, because a print test that quietly skips is how a "footer says 10,
+prints 11" bug reaches a client. Run `pnpm test:print` before shipping a change
+to the offer documents.
+
+Conventions:
+
+- Tests import application code through the `@/` alias (`@/lib/offer/pricing`),
+  and each other relatively (`./tender-fixtures`). A relative specifier in a
+  test therefore means "a sibling fixture"; `@/` means "the code under test".
+- A file that reads repository source rather than importing it takes its root
+  from `tests/support/repo-root.ts`, never `__dirname` or `process.cwd()`.
+- Each test file runs in its own process, and tests within a file run in order.
+  Files that mutate `process.env` still restore it in `afterEach`; isolation is
+  a second line of defence, not a reason to drop the cleanup.
 
 ## Project structure
 

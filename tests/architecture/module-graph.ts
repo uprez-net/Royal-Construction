@@ -3,6 +3,8 @@ import { isBuiltin } from "node:module";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 
+import { REPO_ROOT } from "../support/repo-root";
+
 // A small authored-module graph walker, shared by the architecture tests.
 //
 // tests/agent/authored-package-boundary.test.ts walks the same graph from
@@ -16,7 +18,7 @@ import ts from "typescript";
 // Next-coupled file without pulling it in. Dynamic `import()` counts, because
 // it resolves at runtime.
 
-export const ROOT = join(__dirname, "..", "..");
+export const ROOT = REPO_ROOT;
 
 const CODE_EXTENSIONS = [
   ".ts",
@@ -86,25 +88,25 @@ export function valueSpecifiers(file: string): string[] {
 
   const visit = (node: ts.Node): void => {
     if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      ts.isImportDeclaration(node)
+      && ts.isStringLiteral(node.moduleSpecifier)
     ) {
       if (importsValues(node.importClause)) {
         specifiers.push(node.moduleSpecifier.text);
       }
     } else if (
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      ts.isExportDeclaration(node)
+      && node.moduleSpecifier
+      && ts.isStringLiteral(node.moduleSpecifier)
     ) {
       if (exportsValues(node)) specifiers.push(node.moduleSpecifier.text);
     } else if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require")) &&
-      node.arguments.length > 0 &&
-      ts.isStringLiteral(node.arguments[0])
+      ts.isCallExpression(node)
+      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+        || (ts.isIdentifier(node.expression)
+          && node.expression.text === "require"))
+      && node.arguments.length > 0
+      && ts.isStringLiteral(node.arguments[0])
     ) {
       specifiers.push(node.arguments[0].text);
     }
@@ -193,9 +195,9 @@ export function walkGraph(options: GraphOptions): GraphResult {
       if (isBuiltin(specifier) || specifier.startsWith("node:")) continue;
 
       const isPathLike =
-        specifier.startsWith("@/") ||
-        specifier.startsWith(".") ||
-        specifier.startsWith("/");
+        specifier.startsWith("@/")
+        || specifier.startsWith(".")
+        || specifier.startsWith("/");
 
       if (!isPathLike) {
         if (options.forbiddenPackage(specifier)) record(specifier, file);

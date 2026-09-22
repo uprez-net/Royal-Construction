@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { OfferDocumentCanvas } from "../../components/offers/new-workflow/offer-document-canvas";
+import { OfferDocumentCanvas } from "@/components/offers/new-workflow/offer-document-canvas";
 import {
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferInclusionEntry,
-} from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-model";
 
 function render(inclusionSchedule: readonly OfferInclusionEntry[]): string {
   return renderToStaticMarkup(

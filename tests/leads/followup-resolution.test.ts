@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   NEXT_FOLLOWUP_TASK,
   resolveFollowup,
-} from "../../lib/leads/followup-resolution";
+} from "@/lib/leads/followup-resolution";
 import {
   dropEmptyPlaceholders,
   hydrateVariable,
-} from "../../lib/leads/lead-helpers";
-import { EMAIL_TEMPLATES } from "../../lib/leads/variables";
-import type { Lead } from "../../lib/leads/types";
+} from "@/lib/leads/lead-helpers";
+import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
+import type { Lead } from "@/lib/leads/types";
 
 // A completed follow-up used to keep its date forever. `mapLead` resolved
 // task-first, column-second, and every query asked only for OPEN tasks — so a
@@ -211,8 +211,8 @@ test("the Meeting subject quotes the consultation, never the follow-up", () => {
   // name two different dates.
   const meetingSubject = EMAIL_TEMPLATES.find((t) => t.id === 7)?.subject;
   assert.ok(
-    meetingSubject!.includes("{meeting}") &&
-      !meetingSubject!.includes("{followup}"),
+    meetingSubject!.includes("{meeting}")
+      && !meetingSubject!.includes("{followup}"),
     "the Meeting subject is back on the follow-up date",
   );
 
@@ -314,8 +314,8 @@ test("the Meeting template no longer invents a date and time", () => {
 test("LeadPreview carries the meeting pair, or the email cannot see it", () => {
   const source = read("lib/leads/render-email-html.tsx");
   assert.ok(
-    /meetingDate\?: string \| null;/.test(source) &&
-      /meetingTime\?: string \| null;/.test(source),
+    /meetingDate\?: string \| null;/.test(source)
+      && /meetingTime\?: string \| null;/.test(source),
     "renderEmailHtml cannot receive the booked consultation",
   );
 });

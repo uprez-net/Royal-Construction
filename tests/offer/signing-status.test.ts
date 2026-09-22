@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   allCustomersSigned,
@@ -10,7 +10,7 @@ import {
   signerStateFromStatus,
   signerStatusesBelow,
   type OfferSignerStatus,
-} from "../../lib/offer/signing-status";
+} from "@/lib/offer/signing-status";
 
 function customer(
   email: string,

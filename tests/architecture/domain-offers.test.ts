@@ -1,21 +1,21 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 
 import { OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   assertTransitionAllowed,
   commitOfferStatusTransition,
-} from "../../lib/domain/offers/status";
+} from "@/lib/domain/offers/status";
 import {
   OFFER_WORKSPACE_PATCH_KEYS,
   applyOfferWorkspacePatch,
-} from "../../lib/domain/offers/workspace-save";
-import { saveContractParticulars } from "../../lib/domain/offers/contract-particulars";
-import { EMPTY_CONTRACT_PARTICULARS } from "../../lib/offer/contract-particulars";
-import { DomainTransitionError } from "../../lib/domain/errors";
+} from "@/lib/domain/offers/workspace-save";
+import { saveContractParticulars } from "@/lib/domain/offers/contract-particulars";
+import { EMPTY_CONTRACT_PARTICULARS } from "@/lib/offer/contract-particulars";
+import { DomainTransitionError } from "@/lib/domain/errors";
 import { ROOT } from "./module-graph";
 import { adminPrincipal, recordingDb } from "./domain-harness";
 
@@ -356,8 +356,8 @@ test("offer saves sync the lead value only after their transaction commits", () 
     agent.indexOf("export async function recallAuthorizedOfferEnvelope("),
   );
   assert.ok(
-    update.indexOf("await runOfferMutation(") <
-      update.indexOf("await syncLeadDealValue("),
+    update.indexOf("await runOfferMutation(")
+      < update.indexOf("await syncLeadDealValue("),
     "Eve syncs the lead value before its audited transaction commits",
   );
 });
@@ -369,8 +369,8 @@ test("Eve syncs the lead stage after a successful recall transaction", () => {
     source.indexOf("export async function createAuthorizedOfferRevision("),
   );
   assert.ok(
-    recall.indexOf("await runOfferMutation(") <
-      recall.indexOf("await syncLeadStageForOffer("),
+    recall.indexOf("await runOfferMutation(")
+      < recall.indexOf("await syncLeadStageForOffer("),
     "the recall lead-stage sync runs inside the audited transaction",
   );
 });

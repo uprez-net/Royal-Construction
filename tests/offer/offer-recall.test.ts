@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { EnvelopeDocType, OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   decideRecallPullBack,
@@ -9,13 +9,13 @@ import {
   envelopeScopeFilter,
   resolveRecall,
   unconfirmedSendDocTypesForScope,
-} from "../../lib/offer/offer-recall";
+} from "@/lib/offer/offer-recall";
 import {
   OFFER_WORKFLOW_TRANSITIONS,
   RECALL_EDGES,
   classifyOfferTransition,
   requiresOwnerGate,
-} from "../../lib/offer/offer-workflow-transitions";
+} from "@/lib/offer/offer-workflow-transitions";
 
 // recallOfferEnvelope is a Server Action, so every argument comes from the
 // client. It trusted `scope`: a string outside "offer" | "tender" | "contract"

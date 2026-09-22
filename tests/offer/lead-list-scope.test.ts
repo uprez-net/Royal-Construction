@@ -1,12 +1,12 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Role } from "@prisma/client";
+import { test } from "vitest";
 
-import { canAccessLead, leadListScope } from "../../lib/offer/access";
+import { canAccessLead, leadListScope } from "@/lib/offer/access";
 import {
   offerListLeadWhere,
   toOfferListRow,
-} from "../../lib/offer/offer-listing-query";
+} from "@/lib/offer/offer-listing-query";
 
 // The offers listing read every lead's offers with no session check. Its
 // Server Action answered anyone who replayed it, and a signed-in CUSTOMER saw

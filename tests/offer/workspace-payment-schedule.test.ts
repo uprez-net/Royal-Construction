@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   INITIAL_PAYMENT_SCHEDULE,
   getPaymentScheduleTotalPct,
   type OfferPaymentScheduleRow,
-} from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-payment-schedule";
 
 function scheduleFromPercents(
   percents: readonly number[],
@@ -43,8 +43,8 @@ test("an over-allocated schedule does not read as balanced", () => {
 
 test("the balance check (=== 1) is exact for balanced non-default schedules", () => {
   assert.equal(
-    getPaymentScheduleTotalPct(scheduleFromPercents([0.1, 0.2, 0.3, 0.4])) ===
-      1,
+    getPaymentScheduleTotalPct(scheduleFromPercents([0.1, 0.2, 0.3, 0.4]))
+      === 1,
     true,
   );
   assert.equal(

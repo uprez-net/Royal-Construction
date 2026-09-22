@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { OutboxEventStatus, ProjectStage } from "@prisma/client";
+import { test } from "vitest";
 
-import { sendCampaignEmail } from "../../lib/domain/email/operations";
-import { createStageInvoice } from "../../lib/domain/invoices/stage-creation";
+import { sendCampaignEmail } from "@/lib/domain/email/operations";
+import { createStageInvoice } from "@/lib/domain/invoices/stage-creation";
 import {
   listRoleReconciliations,
   recordRoleReconciliation,
   resolveRoleReconciliation,
-} from "../../lib/domain/identity/team";
-import { DomainNotFoundError } from "../../lib/domain/errors";
+} from "@/lib/domain/identity/team";
+import { DomainNotFoundError } from "@/lib/domain/errors";
 import {
   adminPrincipal,
   customerPrincipal,

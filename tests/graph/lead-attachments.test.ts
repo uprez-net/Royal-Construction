@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   GraphRequestError,
   type GraphAttachmentMetadata,
-} from "../../lib/graph/client";
+} from "@/lib/graph/client";
 import {
   collectLeadAttachments,
   hydrateLeadAttachments,
@@ -12,7 +12,7 @@ import {
   selectLeadAttachments,
   type LeadAttachmentSource,
   type OcrReader,
-} from "../../lib/graph/lead-attachments";
+} from "@/lib/graph/lead-attachments";
 
 const MB = 1024 * 1024;
 

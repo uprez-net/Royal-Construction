@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { applyAdminPrefillToSnapshot } from "../../lib/offer/admin-offer-prefill";
-import type { AdminOfferPrefill } from "../../lib/offer/admin-offer-prefill";
-import { isOfferBuildStepEditable } from "../../lib/offer/offer-editability";
-import { collectOfferSendBlockers } from "../../lib/offer/offer-readiness";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+import { applyAdminPrefillToSnapshot } from "@/lib/offer/admin-offer-prefill";
+import type { AdminOfferPrefill } from "@/lib/offer/admin-offer-prefill";
+import { isOfferBuildStepEditable } from "@/lib/offer/offer-editability";
+import { collectOfferSendBlockers } from "@/lib/offer/offer-readiness";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import {
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -16,15 +16,15 @@ import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   type OfferWorkspaceCostLine,
   type OfferWorkspaceScopeItem,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   deserializeWorkspace,
   INITIAL_TENDER_GATE,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Admin offer content is versioned (AdminOfferContent.version) and every offer

@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   authorizeLeadTask,
   authorizeLeadTaskOnLead,
-} from "../../lib/domain/leads/tasks";
-import { listLeadTasks, searchLeads } from "../../lib/domain/leads/queries";
-import { syncLeadStageForOffer } from "../../lib/domain/leads/stage-sync";
+} from "@/lib/domain/leads/tasks";
+import { listLeadTasks, searchLeads } from "@/lib/domain/leads/queries";
+import { syncLeadStageForOffer } from "@/lib/domain/leads/stage-sync";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import { ROOT } from "./module-graph";
 import {
   adminPrincipal,

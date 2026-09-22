@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { Role } from "@prisma/client";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { disconnectXero } from "../../lib/domain/integrations/xero";
-import { DomainAuthorizationError } from "../../lib/domain/errors";
+import { disconnectXero } from "@/lib/domain/integrations/xero";
+import { DomainAuthorizationError } from "@/lib/domain/errors";
 import { recordingDb } from "./domain-harness";
 
 const admin = { kind: "user" as const, role: Role.ADMIN, userId: "u_admin" };

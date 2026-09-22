@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   agentResultEnvelopeSchema,
   entityReferenceSchema,
-} from "../../agent/lib/result-contracts";
+} from "@/agent/lib/result-contracts";
 
 test("entity references use a discriminated, stable ID contract", () => {
   const parsed = entityReferenceSchema.parse({

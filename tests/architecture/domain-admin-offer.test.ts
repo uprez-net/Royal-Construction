@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { Role } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   getAdminOfferContent,
   updateAdminOfferContentSection,
-} from "../../lib/domain/admin/offer-content";
+} from "@/lib/domain/admin/offer-content";
 import {
   DomainAuthorizationError,
   DomainTransitionError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import { recordingDb } from "./domain-harness";
 
 const admin = { kind: "user" as const, role: Role.ADMIN, userId: "u_admin" };

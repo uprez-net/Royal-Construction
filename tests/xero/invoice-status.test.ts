@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   invoiceStatusRank,
   isPendingInvoiceStatus,
   toInvoiceStatus,
-} from "../../lib/xero/invoice-status";
-import { parseXeroDate } from "../../lib/xero/xero-date";
+} from "@/lib/xero/invoice-status";
+import { parseXeroDate } from "@/lib/xero/xero-date";
 
 test("maps every Xero status Xero can send", () => {
   assert.equal(toInvoiceStatus("DRAFT"), "DRAFT");

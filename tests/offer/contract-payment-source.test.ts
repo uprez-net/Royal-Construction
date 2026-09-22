@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   describeLegacyContractScheduleDrift,
   describeTenderPriceMismatch,
   resolveContractPaymentSource,
   withTenderPaymentTerms,
-} from "../../lib/offer/contract-payment-source";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { paymentScheduleLine } from "../../lib/offer/project-handoff-commercials";
+} from "@/lib/offer/contract-payment-source";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { paymentScheduleLine } from "@/lib/offer/project-handoff-commercials";
 import {
   INITIAL_PAYMENT_SCHEDULE,
   type OfferPaymentScheduleRow,
-} from "../../lib/offer/workspace-payment-schedule";
-import type { OfferWorkspaceSnapshot } from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-payment-schedule";
+import type { OfferWorkspaceSnapshot } from "@/lib/offer/workspace-persistence";
 import { individualOwner, snapshotOf } from "./tender-fixtures";
 
 // The BC4 contract and the project took the payment schedule and deposit from

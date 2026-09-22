@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
+import { OfferWorkspacePrintTemplate } from "@/components/offers/new-workflow/offer-workspace-print-template";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
 import {
   buildOfferPrintTemplateData,
   type OfferPrintScopeRow,
-} from "../../lib/offer/workspace-print-template";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-print-template";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import {
   ALLOWANCES_INTRO_LINES,
   ALLOWANCES_LINES_PER_PAGE,
@@ -29,8 +29,8 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferWorkspaceScopeItem,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   deserializeWorkspace,
   INITIAL_TENDER_GATE,
@@ -38,7 +38,7 @@ import {
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 
 // buildOfferPrintTemplateData has always computed `scopeRows` from the
 // allowances the estimator ticks "Show on Offer document" on the Scope step, and
@@ -315,14 +315,14 @@ function downloadRowPx(row: OfferPrintScopeRow): number {
   const lines = (text: string, charsPerLine: number) =>
     estimateWrappedLines(text, charsPerLine) * DOWNLOAD_LINE_PX;
   const item =
-    lines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
-    (row.description.trim()
-      ? DOWNLOAD_DESCRIPTION_GAP_PX +
-        lines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
+    lines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM)
+    + (row.description.trim()
+      ? DOWNLOAD_DESCRIPTION_GAP_PX
+        + lines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
       : 0);
   return (
-    Math.max(item, lines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE)) +
-    DOWNLOAD_ROW_CHROME_PX
+    Math.max(item, lines(row.variationRule, CHARS_PER_LINE_ALLOWANCE_RULE))
+    + DOWNLOAD_ROW_CHROME_PX
   );
 }
 

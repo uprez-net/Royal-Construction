@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   mergeHydratedAdminContent,
   type AdminOfferContentState,
-} from "../../lib/store/slices/admin-offer-content-hydrate";
+} from "@/lib/store/slices/admin-offer-content-hydrate";
 import {
   EMPTY_ADMIN_OFFER_CONTENT,
   type AdminOfferContent,
-} from "../../types/admin-offer-content";
+} from "@/types/admin-offer-content";
 
 // The admin offer page dispatched `hydrated(initialContent)` on every mount, and
 // the reducer replaced the whole store and marked every section clean. The store

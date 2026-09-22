@@ -1,29 +1,29 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { test } from "vitest";
 
-import { collectOfferSendBlockers } from "../../lib/offer/offer-readiness";
-import { buildWelcomeParagraphs } from "../../lib/offer/workspace-proposal-content";
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { INITIAL_OFFER_JOB } from "../../lib/offer/workspace-model";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { LEGACY_CALC_VERSION } from "../../lib/offer/workspace-persistence";
+import { collectOfferSendBlockers } from "@/lib/offer/offer-readiness";
+import { buildWelcomeParagraphs } from "@/lib/offer/workspace-proposal-content";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { INITIAL_OFFER_JOB } from "@/lib/offer/workspace-model";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-persistence";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 
 function zeroAreaSnapshot(): OfferWorkspaceSnapshot {
   return {
@@ -112,8 +112,8 @@ test("every send path refuses a zero-area offer, not just the proposal", () => {
   for (const [file, label] of paths) {
     const source = readFileSync(join(process.cwd(), file), "utf8");
     assert.ok(
-      source.includes("getAreaBasisTotalSqm") &&
-        /totalAreaSqm <= 0/.test(source),
+      source.includes("getAreaBasisTotalSqm")
+        && /totalAreaSqm <= 0/.test(source),
       `${label} (${file}) can still send an offer with no floor area`,
     );
   }

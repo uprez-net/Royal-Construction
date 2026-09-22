@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   coerceCostSchedule,
   coerceHBCFClaim,
   coerceOfferContent,
   coerceOfferScope,
-} from "../../lib/data/admin-offer-content-coerce";
+} from "@/lib/data/admin-offer-content-coerce";
 
 // Production stored a good claimAmount beside two nulls. coerceHBCFClaim used
 // to safeParse the whole object and, on that failure, replace all three fields

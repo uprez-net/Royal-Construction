@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { createNotification } from "../../types/notification";
+import { createNotification } from "@/types/notification";
 
 const PROJECT = { projectId: "p-1", projectName: "12 Example St" };
 

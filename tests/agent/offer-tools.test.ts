@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   getOfferInputSchema,
   getOfferDetailsInputSchema,
   listOfferRevisionsInputSchema,
   searchOffersInputSchema,
   updateOfferDetailsInputSchema,
-} from "../../agent/lib/offer-contracts";
+} from "@/agent/lib/offer-contracts";
 
 test("offer tool inputs require exact bounded identifiers", () => {
   assert.equal(

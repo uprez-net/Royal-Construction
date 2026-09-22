@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // The recall rules are tested in offer-recall.test.ts, but three of the bugs they
 // fix lived in how lib/data/offer-workspace.ts used them, and that file is "use

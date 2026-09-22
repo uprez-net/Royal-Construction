@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   reevaluateFormulaCostLines,
   reevaluateFormulaCostLinesForStatus,
-} from "../../lib/offer/admin-offer-prefill";
+} from "@/lib/offer/admin-offer-prefill";
 import {
   INITIAL_AREA_CALCULATOR,
   calculateOfferArea,
   offerAreaBasisFromJob,
-} from "../../lib/offer/workspace-area";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-area";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import {
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -18,8 +18,8 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   CURRENT_CALC_VERSION,
   INITIAL_TENDER_GATE,
@@ -29,7 +29,7 @@ import {
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 
 // The promise this file exists to enforce: an offer that already had a saved
 // workspace before the calculation pin shipped keeps pricing on the old rules

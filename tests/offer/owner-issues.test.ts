@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   collectOwnerIssues,
@@ -8,7 +8,7 @@ import {
   MAX_OWNER_SIGNERS,
   ownersFromLegacyClientFields,
   type OfferOwner,
-} from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-model";
 
 function individual(
   id: string,

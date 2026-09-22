@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   agentTranscriptReducer,
   type AgentTranscriptData,
-} from "../../components/agent/agent-reducer";
+} from "@/components/agent/agent-reducer";
 
 let eventSequence = 0;
 

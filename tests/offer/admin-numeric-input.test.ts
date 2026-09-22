@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { isRawCurrent } from "../../components/offers/admin/shared/numeric-input";
+import { isRawCurrent } from "@/components/offers/admin/shared/numeric-input";
 
 // The HBCF numeric fields commit NaN while their text is not yet a number, then
 // resync the text from the store whenever the value changes. The resync treated

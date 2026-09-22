@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { Role } from "@prisma/client";
+import { test } from "vitest";
 
-import { updateUserByClerkId } from "../../lib/domain/identity/users";
+import { updateUserByClerkId } from "@/lib/domain/identity/users";
 import { recordingDb } from "./domain-harness";
 
 test("a repeated CUSTOMER update reuses the linked customer", async () => {

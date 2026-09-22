@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import {
-  NORMAL_WORKING_HOURS,
-  scheduleTotalCost,
-} from "../../utils/calculations";
+import { NORMAL_WORKING_HOURS, scheduleTotalCost } from "@/utils/calculations";
 
 test("an hourly price is costed per site day", () => {
   assert.equal(
@@ -39,7 +36,7 @@ test("zero duration costs nothing hourly but still owes a fixed quote", () => {
 
 /* ── display ───────────────────────────────────────────────────────── */
 
-import { formatQuotedPrice } from "../../utils/calculations";
+import { formatQuotedPrice } from "@/utils/calculations";
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
@@ -84,8 +81,8 @@ test("no component renders a tradie price without its unit", async () => {
       const line = raw.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
       // A raw currency format of a price, not routed through the formatter.
       if (
-        /rateCurrency\.format\(/.test(line) &&
-        !/formatQuotedPrice|rateCurrency\.format,/.test(line)
+        /rateCurrency\.format\(/.test(line)
+        && !/formatQuotedPrice|rateCurrency\.format,/.test(line)
       ) {
         offenders.push(`${file}:${i + 1}`);
       }
@@ -104,7 +101,7 @@ test("no component renders a tradie price without its unit", async () => {
 
 /* ── emailed quotes ────────────────────────────────────────────────── */
 
-import { parseQuotedAmount } from "../../utils/calculations";
+import { parseQuotedAmount } from "@/utils/calculations";
 
 test("a quote is parsed out of the text a tradie actually sends", () => {
   // The extractor asks for e.g. "$5000.00", but people write it many ways.
@@ -153,7 +150,7 @@ test("a genuine zero quote is preserved", () => {
 
 /* ── quote basis ───────────────────────────────────────────────────── */
 
-import { normalizeQuoteBasis } from "../../utils/calculations";
+import { normalizeQuoteBasis } from "@/utils/calculations";
 
 test("a day rate is standardised to an hourly one at 8 hours a day", () => {
   // The column only stores HOURLY and FIXED, but tradies quote day rates

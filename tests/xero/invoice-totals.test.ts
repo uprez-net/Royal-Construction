@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { summarizeInvoices } from "../../lib/projects/invoice-totals";
+import { summarizeInvoices } from "@/lib/projects/invoice-totals";
 import {
   buildMilestoneTree,
   groupRootsByStage,
-} from "../../lib/projects/milestone-tree";
+} from "@/lib/projects/milestone-tree";
 
 test("adds up claims across statuses", () => {
   const totals = summarizeInvoices([

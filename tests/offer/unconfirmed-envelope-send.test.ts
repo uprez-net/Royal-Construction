@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // #321: the receiving half of an ambiguous DocuSign send (PR #320) refuses a
 // recall when it sees an UnconfirmedEnvelopeSend row with resolvedAt null —
@@ -239,7 +239,9 @@ const RECONCILER = "lib/domain/offers/send-reconciliation.ts";
  * that moving the counter silently moved the window off the code under test.
  */
 const foundBranchOf = (source: string): string => {
-  const start = source.indexOf("export async function recordFoundOrphanEnvelope(");
+  const start = source.indexOf(
+    "export async function recordFoundOrphanEnvelope(",
+  );
   const end = source.indexOf("export type ReconcileTally", start);
   assert.ok(start > 0, "the found-envelope command moved or was renamed");
   assert.ok(end > start, "could not delimit the found-envelope command");

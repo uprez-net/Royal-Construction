@@ -1,21 +1,21 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { JobSetupPanel } from "../../components/offers/new-workflow/offer-workspace-job";
-import { OfferSummaryStrip } from "../../components/offers/new-workflow/shell/offer-summary-strip";
-import { CURRENT_CALC_VERSION } from "../../lib/offer/calc-version";
-import { INITIAL_OFFER_JOB } from "../../lib/offer/workspace-model";
+import { JobSetupPanel } from "@/components/offers/new-workflow/offer-workspace-job";
+import { OfferSummaryStrip } from "@/components/offers/new-workflow/shell/offer-summary-strip";
+import { CURRENT_CALC_VERSION } from "@/lib/offer/calc-version";
+import { INITIAL_OFFER_JOB } from "@/lib/offer/workspace-model";
 import {
   formatArea,
   formatBuildingArea,
   formatSquares,
-} from "../../lib/offer/workspace-print-template";
+} from "@/lib/offer/workspace-print-template";
 import {
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
-} from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-pricing";
 
 // Australian building squares: 1 square = 100 sq ft = 9.290304 m².
 // Estimators quote the rounded 9.29; the formatter uses the exact figure so

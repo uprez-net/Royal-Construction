@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   generateEmailTemplate,
   isSafeEmailTemplateUrl,
-} from "../../lib/domain/email/template";
+} from "@/lib/domain/email/template";
 import { adminPrincipal, customerPrincipal } from "./domain-harness";
 
 test("email templates only retain web URLs and wrap generated HTML", async () => {

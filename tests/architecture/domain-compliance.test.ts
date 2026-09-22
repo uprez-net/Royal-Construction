@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 
 import {
   CertifierEmailDirection,
@@ -9,13 +8,14 @@ import {
   ComplianceDocumentStatus,
   ComplianceDocumentType,
 } from "@prisma/client";
+import { test } from "vitest";
 
-import { resolveComplianceDocument } from "../../lib/domain/compliance/documents";
+import { resolveComplianceDocument } from "@/lib/domain/compliance/documents";
 import {
   DomainAuthorizationError,
   DomainNotFoundError,
   DomainTransitionError,
-} from "../../lib/domain/errors";
+} from "@/lib/domain/errors";
 import { ROOT } from "./module-graph";
 import {
   adminPrincipal,

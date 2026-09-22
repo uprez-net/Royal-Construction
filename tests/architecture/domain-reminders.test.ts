@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { TradieScheduleStatus } from "@prisma/client";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   markTradieReminderSent,
   sendTradieScheduleReminder,
-} from "../../lib/domain/tradies/reminders";
+} from "@/lib/domain/tradies/reminders";
 import { adminPrincipal, recordingDb } from "./domain-harness";
 
 test("tradie reminder completion advances a confirmed schedule once", async () => {
@@ -18,19 +18,20 @@ test("tradie reminder completion advances a confirmed schedule once", async () =
     "tradieSchedule.updateMany": { count: 1 },
   });
 
-  const result = await markTradieReminderSent("schedule_1", recorder.db, sentAt);
+  const result = await markTradieReminderSent(
+    "schedule_1",
+    recorder.db,
+    sentAt,
+  );
 
   assert.deepEqual(result, {
     alreadySent: false,
     status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
   });
-  assert.deepEqual(
-    (recorder.writes()[0]?.args as { data: unknown }).data,
-    {
-      reminderSentAt: sentAt,
-      status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
-    },
-  );
+  assert.deepEqual((recorder.writes()[0]?.args as { data: unknown }).data, {
+    reminderSentAt: sentAt,
+    status: TradieScheduleStatus.PENDING_FINAL_CONFIRMATION,
+  });
 });
 
 test("manual tradie reminders persist their provider attempt before sending", async () => {
@@ -91,7 +92,7 @@ test("manual tradie reminders persist their provider attempt before sending", as
     .writes()
     .find((write) => write.operation === "outboxEvent.upsert");
   assert.match(
-    ((upsert?.args as { where: { key: string } }).where.key),
+    (upsert?.args as { where: { key: string } }).where.key,
     /^tradie-manual-reminder:2026-09-21:request_1$/,
   );
 });

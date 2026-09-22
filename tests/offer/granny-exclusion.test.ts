@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { readFileSync } from "node:fs";
+import { test } from "vitest";
 
 import {
   findGrannyExclusionConflicts,
   isGrannyOutOfScopeLine,
   withoutGrannyOutOfScopeLines,
   type GrannyExclusionInput,
-} from "../../lib/offer/granny-exclusion";
+} from "@/lib/offer/granny-exclusion";
 import {
   INITIAL_EXCLUSIONS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
-} from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-model";
 
 // Every new offer is seeded with the exclusion "Granny flat (not in current
 // scope)", and admin content can carry it too. An estimator who then added a

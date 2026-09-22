@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   getScreenTitle,
   getShellSectionSlug,
   getShellTrail,
-} from "../../utils/shell-nav";
+} from "@/utils/shell-nav";
 
 // The shell matched nav items against the LAST path segment, so on /offers/123
 // no item was active and aria-current was missing; the header read "Creating

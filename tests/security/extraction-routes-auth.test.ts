@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   blobStoreIdFromToken,
   isBlobStorageUrl,
   isBlobStoreUrl,
-} from "../../lib/blob-url";
+} from "@/lib/blob-url";
 
 // Both extraction routes start a durable run from ids and URLs in the request
 // body. extract-project-data checked only that someone was signed in, so any

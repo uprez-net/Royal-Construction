@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   checklistDocumentDetail,
   checklistItemDetail,
-} from "../../types/compliance";
+} from "@/types/compliance";
 
 // The column is Json, so it holds whatever was written there — including null
 // for every row predating it, and whatever shape an older extraction wrote. A
