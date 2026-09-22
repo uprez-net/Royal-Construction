@@ -1,0 +1,111 @@
+name: Eve staging evals
+
+# Manual only, deliberately.
+#
+# These cases talk to a real deployment, a real model and a real database, and
+# the `writes` tag creates and closes real records. Running them on every pull
+# request would mean every PR mutates shared staging data and every PR pays for
+# a model run. There is also nothing here that a PR could act on: a failure is
+# usually "staging is misconfigured" or "the model moved", not "this diff is
+# wrong".
+#
+# The default is the read-only suite. Choosing `all` is how you opt into the
+# write cases, and it is a decision someone makes on purpose.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Which cases to run"
+        required: true
+        default: read-only
+        type: choice
+        options:
+          - read-only
+          - all
+          - smoke
+      target:
+        description: "Staging URL (defaults to the STAGING_URL secret)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # One staging eval run at a time, across every branch. The write cases share
+  # one fixture lead; two runs would race on it exactly the way
+  # --max-concurrency 1 exists to prevent within a run.
+  group: eve-staging-evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    name: Run staging evals
+    runs-on: ubuntu-latest
+    environment: Preview
+    timeout-minutes: 60
+    env:
+      NODE_ENV: "test"
+      # The evaluator half only. CLERK_SECRET_KEY is deliberately absent: the
+      # deployment mints the session, this runner only proves it holds the
+      # shared secret.
+      AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+      EVE_EVAL_AUTH_SECRET: ${{ secrets.EVE_EVAL_AUTH_SECRET }}
+      EVE_EVAL_EXPECTED_DATABASE_LABEL: ${{ vars.EVE_EVAL_EXPECTED_DATABASE_LABEL }}
+      EVE_EVAL_FIXTURE_VERSION: ${{ vars.EVE_EVAL_FIXTURE_VERSION }}
+      EVE_EVAL_STAGING_HOST: ${{ vars.EVE_EVAL_STAGING_HOST }}
+      STAGING_URL: ${{ inputs.target || secrets.STAGING_URL }}
+      # Fixture labels are repository variables rather than secrets: they are
+      # lookup strings, not credentials. They still name real staging records,
+      # so they stay out of the repository itself.
+      EVE_EVAL_LEAD_LABEL: ${{ vars.EVE_EVAL_LEAD_LABEL }}
+      EVE_EVAL_WRITE_LEAD_LABEL: ${{ vars.EVE_EVAL_WRITE_LEAD_LABEL }}
+      EVE_EVAL_AMBIGUOUS_LEAD_QUERY: ${{ vars.EVE_EVAL_AMBIGUOUS_LEAD_QUERY }}
+      EVE_EVAL_OFFER_LABEL: ${{ vars.EVE_EVAL_OFFER_LABEL }}
+      EVE_EVAL_PROJECT_LABEL: ${{ vars.EVE_EVAL_PROJECT_LABEL }}
+      EVE_EVAL_MILESTONE_PROJECT_LABEL: ${{ vars.EVE_EVAL_MILESTONE_PROJECT_LABEL }}
+      EVE_EVAL_COMPLIANCE_PROJECT_LABEL: ${{ vars.EVE_EVAL_COMPLIANCE_PROJECT_LABEL }}
+      EVE_EVAL_TRADIE_LABEL: ${{ vars.EVE_EVAL_TRADIE_LABEL }}
+      EVE_EVAL_SCHEDULE_TRADIE_LABEL: ${{ vars.EVE_EVAL_SCHEDULE_TRADIE_LABEL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup project
+        uses: ./.github/actions/setup
+        with:
+          prisma: "false"
+
+      - name: Run read-only suite
+        if: inputs.suite == 'read-only'
+        run: pnpm eve:eval:staging -- --tag read-only
+
+      - name: Run smoke suite
+        if: inputs.suite == 'smoke'
+        run: pnpm eve:eval:staging -- smoke
+
+      - name: Run full suite, writes included
+        if: inputs.suite == 'all'
+        run: pnpm eve:eval:staging
+
+      # Transcripts and event streams carry staging CRM text. They are uploaded
+      # as a private workflow artifact with a short retention and are not sent
+      # to any external reporter: issue #335 holds Braintrust and anything like
+      # it behind an explicit data-export approval that has not been given.
+      - name: Upload eval artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: eve-staging-evals-${{ github.run_id }}
+          path: |
+            .eve/evals/
+            .eve/staging-junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Not automatic. The reset needs a staging database credential, which
+      # this job deliberately does not hold — see docs/eve-staging-evals.md.
+      - name: Remind the operator to reset fixtures
+        if: always() && inputs.suite == 'all'
+        run: |
+          echo "::notice::This run included write cases. Run 'pnpm eve:eval:fixtures reset' against staging to collect the records it left behind."

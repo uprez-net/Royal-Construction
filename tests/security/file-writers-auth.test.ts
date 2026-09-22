@@ -10,15 +10,17 @@ import {
 
 // saveFile writes a File row for whatever user, lead, project and milestone it
 // is handed, so each user-facing caller has to derive the user and check the
-// ids itself. /api/upload checked a lead but not a project or milestone, and
-// the MCP upload_file tool checked neither and stored the token's Clerk id as
-// File.uploadedBy, a column that references User.id. Both routes load Clerk and
-// Prisma, so no test can import them; this reads the source.
+// ids itself. /api/upload checked a lead but not a project or milestone.
+//
+// The MCP upload_file tool used to be the second caller here: it checked
+// neither and stored the token's Clerk id as File.uploadedBy, a column that
+// references User.id. That route was deleted with the (mcp) group in #303 and
+// the Eve MCP endpoint takes no uploads, so only /api/upload is left. It loads
+// Clerk and Prisma, so no test can import it; this reads the source.
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 const upload = read("app/api/upload/route.ts");
-const mcp = read("app/(mcp)/api/mcp/route.ts");
 
 function between(text: string, from: string, to: string): string {
   const start = text.indexOf(from);
@@ -116,16 +118,4 @@ test("the completed upload is recorded as the session's user", () => {
     "return NextResponse.json",
   );
   assert.match(after, /saveFile\(\{\s*userId: user\.id,/);
-});
-
-test("MCP upload_file resolves the User row and checks the project before storing", () => {
-  const tool = between(mcp, '"upload_file"', "serverInfo");
-  ordered(
-    tool,
-    "getUserByClerkIdCached(clerkId)",
-    "assertCanAttachToProject(user, { projectId, milestoneId })",
-    "await put(",
-    "await saveFile(",
-  );
-  assert.match(tool, /saveFile\(\{\s*userId: user\.id,/);
 });

@@ -6,7 +6,7 @@ package-boundary test proved Eve's copy _loaded_; nothing proved it agreed.
 
 A domain module owns the rule. Everything else — App pages, Server Actions,
 route handlers, Eve tools, Graph and Workflow handlers, crons, webhooks, the
-public booking route, the legacy MCP adapter — is an adapter that
+public booking route, the MCP channel — is an adapter that
 authenticates, validates its own transport, calls the domain, and formats the
 answer.
 
@@ -42,8 +42,7 @@ A domain module:
 
 ## What a domain module may not import
 
-`app/**`, `agent/**`, `next/*`, `@clerk/nextjs`, `@clerk/mcp-tools`,
-`server-only`, `react`. Enforced by
+`app/**`, `agent/**`, `next/*`, `@clerk/nextjs`, `server-only`, `react`. Enforced by
 `tests/architecture/domain-boundary.test.ts`, which fails in about a second and
 names the import chain.
 

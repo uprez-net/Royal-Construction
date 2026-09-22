@@ -135,23 +135,6 @@ test("the offer path cannot put a lead in a closed stage without a reason", asyn
   );
 });
 
-test("lead-write MCP tools report failures as errors", async () => {
-  const { readFileSync } = await import("node:fs");
-  const mcp = readFileSync("app/(mcp)/api/mcp/route.ts", "utf8");
-  // These tools declare an outputSchema, so a catch that returns neither
-  // isError nor structuredContent fails SDK output validation and the real
-  // message never reaches the agent.
-  for (const verb of ["updating lead", "creating lead", "fetching leads"]) {
-    const at = mcp.indexOf(`Error ${verb}`);
-    assert.ok(at > -1, `no catch found for "${verb}"`);
-    const before = mcp.slice(Math.max(0, at - 400), at);
-    assert.ok(
-      before.includes("isError: true"),
-      `"${verb}" catch is missing isError: true`,
-    );
-  }
-});
-
 /* ── stageOptionsFor ───────────────────────────────────────────────── */
 
 test("a lead on a hidden stage still gets an option to render", () => {

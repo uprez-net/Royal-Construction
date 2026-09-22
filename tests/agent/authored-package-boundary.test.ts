@@ -357,6 +357,8 @@ function nextOnlyReason(specifier: string): string | null {
     specifier === "@clerk/mcp-tools"
     || specifier.startsWith("@clerk/mcp-tools/")
   ) {
+    // Uninstalled with the (mcp) route group in #303. Kept because the
+    // failure it causes is confusing and reinstalling it is one command.
     return "has no exported entrypoint; Node answers ERR_PACKAGE_PATH_NOT_EXPORTED";
   }
   return null;

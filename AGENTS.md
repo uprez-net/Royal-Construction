@@ -156,8 +156,11 @@ use the same model and context window with separate limits of 40,000 input
 tokens, 4,000 output tokens, $0.25 maximum token cost, and a 24-hour timeout.
 
 Use the agent through the feature-flagged `/agent` workspace and its
-authenticated API routes. Do not use the deprecated chatbot/MCP route for
-operations.
+authenticated API routes. The hand-written `(mcp)` route group that used to
+sit at `/api/mcp` is gone (#303): an external MCP client now connects to
+`agent/channels/mcp.ts` at `/eve/v1/mcp` and reaches this same orchestrator,
+so there is one tool catalogue and one set of domain rules rather than two.
+See [`docs/eve-mcp-endpoint.md`](./docs/eve-mcp-endpoint.md).
 
 ### Agent code cannot import Next.js-only packages
 
@@ -165,9 +168,8 @@ operations.
 application modules it imports by value — and leaves installed packages
 external for Node's own ESM loader. `@clerk/nextjs`, `next/headers`,
 `next/cache`, `next/server` and `next/navigation` publish extensionless
-relative imports that only a bundler resolves, `@clerk/mcp-tools` exports no
-entrypoint Node can resolve, and `server-only` throws on import outside a React
-bundler. A value import of any of them from `agent/`
+relative imports that only a bundler resolves, and `server-only` throws on
+import outside a React bundler. A value import of any of them from `agent/`
 fails the build. `build: { externalDependencies: [...] }` does not rescue it;
 that setting makes a package more external, never bundled. `import type` edges
 are erased before the bundler sees them and are safe.
