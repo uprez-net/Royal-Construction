@@ -13,7 +13,7 @@ import { OPERATIONS_SESSION_LIMITS } from "@/lib/agent/session-limits";
 const description = [
   "Royal Constructions operations agent (Australian residential builder, staff-only).",
   "It reads and updates live business records through audited, permission-checked tools:",
-  "leads (search, detail, follow-up tasks: create, complete, reopen);",
+  "leads (search, detail, follow-up tasks: create, complete, reopen; WhatsApp conversation reads, message previews, owner-approved sends and follow-up scheduling);",
   "offers and revisions (search, detail, pricing, cost lines, allowances, exclusions, payment schedule, status transitions, new revisions, change requests, contract particulars, activity, signing status, DocuSign recall);",
   "projects (search, overview, requirements, milestones);",
   "compliance on a project (engagement status, documents, certifier outreach and follow-up);",

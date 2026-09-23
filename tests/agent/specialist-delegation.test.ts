@@ -196,6 +196,7 @@ test("the MCP-visible agent description names what the agent can and cannot do",
   assert.ok(description && description.length > 200);
   assert.match(description, /input_required/);
   assert.match(description, /agent_update/);
+  assert.match(description, /WhatsApp conversation reads/);
   assert.match(description, /Not available/);
 });
 
