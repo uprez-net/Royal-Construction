@@ -150,9 +150,13 @@ function AgentSubagentLiveSummary({
   });
   let progress: string | null = null;
   for (let index = child.events.length - 1; index >= 0; index -= 1) {
-    progress = childProgressLabel(
-      child.events[index] as Parameters<typeof childProgressLabel>[0],
-    );
+    const event = child.events[index] as Parameters<
+      typeof childProgressLabel
+    >[0];
+    // An append carries only its new delta, so the newest one is usually a
+    // word fragment; keep looking for a completed message or an action.
+    if (event.type === "message.appended") continue;
+    progress = childProgressLabel(event);
     if (progress) break;
   }
   return (

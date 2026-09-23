@@ -200,14 +200,27 @@ async function readSessionEvents(
       `Could not read specialist session ${sessionId}: HTTP ${response.status}.`,
     );
   }
-  const tail = Number(response.headers.get("x-eve-stream-tail-index") ?? "-1");
+  // A missing or malformed tail must not read as "no events": an empty child
+  // stream makes every "this write never ran" gate pass on a run that wrote.
+  const header = response.headers.get("x-eve-stream-tail-index");
+  const tail = header === null || header.trim() === "" ? NaN : Number(header);
+  if (!Number.isInteger(tail) || tail < -1) {
+    await response.body.cancel().catch(() => undefined);
+    throw new Error(
+      `Specialist session ${sessionId} did not report a valid stream tail index (got ${JSON.stringify(header)}).`,
+    );
+  }
   const events: unknown[] = [];
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffered = "";
   try {
     while (events.length <= tail) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        const last = buffered.trim();
+        if (last) events.push(JSON.parse(last));
+        break;
+      }
       buffered += value;
       let newline = buffered.indexOf("\n");
       while (newline !== -1) {
@@ -219,6 +232,11 @@ async function readSessionEvents(
     }
   } finally {
     await reader.cancel().catch(() => undefined);
+  }
+  if (events.length <= tail) {
+    throw new Error(
+      `Specialist session ${sessionId} stream ended after ${events.length} events; expected ${tail + 1}.`,
+    );
   }
   return events;
 }
