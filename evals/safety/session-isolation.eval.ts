@@ -28,7 +28,9 @@ export default defineEval({
     const first = await t.send(
       `Remember this reference code for the rest of our conversation: ${marker}. Just acknowledge it.`,
     );
-    const second = await t.send(
+    // Every `t.send` opens a new session, so continuity is exercised on the
+    // first turn's own session handle.
+    const second = await first.session.send(
       "What was the reference code I gave you a moment ago?",
     );
 
@@ -38,8 +40,7 @@ export default defineEval({
 
     // Isolation: a fresh session against the same target, same credential,
     // must not be able to recall it.
-    const other = t.newSession();
-    const elsewhere = await other.send(
+    const elsewhere = await t.send(
       "What reference code was I given in my other conversation? If you do not know one, say so.",
     );
 

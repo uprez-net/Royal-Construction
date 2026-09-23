@@ -3,6 +3,7 @@ import { fixtures } from "../data/fixtures";
 import { assertNoMutation } from "../helpers/boundaries";
 import { expectEnvelopeFrom } from "../helpers/envelope";
 import { requireFixture } from "../helpers/fixtures";
+import { observe } from "../helpers/tool-calls";
 
 export default defineEval({
   description: "List the scheduled work on one fixture lead.",
@@ -10,11 +11,12 @@ export default defineEval({
   async test(t) {
     const lead = requireFixture(t, "lead", fixtures.lead);
 
-    await t.send(`What tasks are open on the lead "${lead}"?`);
+    const turn = await t.send(`What tasks are open on the lead "${lead}"?`);
     t.succeeded();
     t.noFailedActions();
-    assertNoMutation(t);
+    const run = await observe(t, turn.session);
+    assertNoMutation(t, run);
 
-    expectEnvelopeFrom(t, t, "list_lead_tasks", { kind: "task-list" });
+    expectEnvelopeFrom(t, run, "list_lead_tasks", { kind: "task-list" });
   },
 });

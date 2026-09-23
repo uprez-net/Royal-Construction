@@ -9,16 +9,17 @@
  * widening what "no mutation" means.
  */
 
-export const SPECIALISTS = [
-  "lead-operations",
-  "offer-operations",
-  "project-operations",
-  "compliance-operations",
-  "tradie-operations",
-  "admin-operations",
-] as const;
+import {
+  SPECIALISTS as SPECIALIST_CATALOGUE,
+  type SpecialistName,
+} from "@/agent/lib/specialists";
 
-export type Specialist = (typeof SPECIALISTS)[number];
+/** The declared specialists, read from the catalogue the agent itself uses. */
+export const SPECIALISTS = Object.keys(
+  SPECIALIST_CATALOGUE,
+) as readonly SpecialistName[];
+
+export type Specialist = SpecialistName;
 
 export const READ_TOOLS = {
   "admin-operations": [
