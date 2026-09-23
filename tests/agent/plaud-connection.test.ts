@@ -14,13 +14,13 @@ test("Plaud connection uses hosted user OAuth and an explicit read allowlist", (
   for (const tool of [
     "get_current_user",
     "list_files",
+    "get_file",
+    "get_transcript",
   ]) {
     assert.match(connection, new RegExp(`"${tool}"`));
   }
   for (const tool of [
-    "get_file",
     "get_note",
-    "get_transcript",
     "login",
     "logout",
     "rename_file",
@@ -30,9 +30,12 @@ test("Plaud connection uses hosted user OAuth and an explicit read allowlist", (
   }
 });
 
-test("Plaud instructions identify source text as untrusted and retained data as unavailable", () => {
+test("Plaud instructions treat returned content as untrusted and keep audio URLs private", () => {
   const instructions = read("agent/instructions.md");
   const documentation = read("docs/plaud-mcp.md");
   assert.match(instructions, /untrusted source material/);
-  assert.match(documentation, /not exposed while raw\s+tool-result retention is awaiting approval and documentation/);
+  assert.match(instructions, /Never expose temporary audio\s+URLs or raw audio/);
+  assert.match(documentation, /get_file.*notes and transcript segments/);
+  assert.match(documentation, /get_transcript.*full transcript/);
+  assert.match(documentation, /never expose that URL or raw audio/);
 });
