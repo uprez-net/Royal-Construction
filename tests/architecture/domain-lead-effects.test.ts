@@ -12,6 +12,7 @@ import {
 import {
   allowedLeadRecipients,
   authorizeLeadEmail,
+  sendLeadEmailMessage,
   sendLeadEmailOnce,
 } from "@/lib/domain/leads/email";
 import {
@@ -295,6 +296,50 @@ test("pressing Send twice on the same message sends it once", async () => {
   assert.equal(replay.alreadySent, true);
   assert.equal(replay.result.emailId, "email_1");
   assert.equal(sends, 1);
+});
+
+test("a signed lead email uses the supplied staff name and persists in history", async () => {
+  let delivered: { body: string; subject: string; to: string } | undefined;
+  const recorder = recordingDb({
+    ...pendingIntent(),
+    "lead.findUnique": LEAD,
+    "leadEmails.create": { id: "email_1" },
+    "outboxEvent.findUnique": (args: unknown) => ({
+      attempts: 0,
+      id: "effect_1",
+      key: (args as { where: { key: string } }).where.key,
+      kind: "LEAD_EMAIL_SEND",
+      payload: {},
+      status: OutboxEventStatus.PENDING,
+    }),
+  });
+
+  const result = await sendLeadEmailMessage(
+    adminPrincipal(),
+    {
+      body: "Thanks for your **time**.\n\nI'll send the plans shortly.",
+      leadId: 7,
+      senderName: "Sam Staff",
+      subject: "Next steps",
+      to: "CLIENT@example.com",
+    },
+    recorder.db,
+    async (message) => {
+      delivered = message;
+    },
+  );
+
+  assert.equal(result.alreadySent, false);
+  assert.equal(result.emailId, "email_1");
+  assert.deepEqual(delivered, {
+    body: "<html><body><p>Hi Ann Lee,</p><p>Thanks for your <strong>time</strong>.</p><p>I&#039;ll send the plans shortly.</p><p>Thanks &amp; Regards,<br>Sam Staff<br>Royal Constructions.</p></body></html>",
+    subject: "Next steps",
+    to: "client@example.com",
+  });
+  assert.equal(
+    recorder.writes().some((call) => call.operation === "leadEmails.create"),
+    true,
+  );
 });
 
 test("a genuinely new message still goes out", async () => {

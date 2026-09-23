@@ -122,6 +122,9 @@ importers:
       '@vercel/blob':
         specifier: ^2.3.3
         version: 2.4.0
+      '@vercel/connect':
+        specifier: ^2.3.2
+        version: 2.3.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ai@7.0.105(zod@4.4.3))(eve@0.58.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2))
       ai:
         specifier: ^7.0.105
         version: 7.0.105(zod@4.4.3)
@@ -3816,9 +3819,42 @@ packages:
   '@vercel/cli-config@0.2.0':
     resolution: {integrity: sha512-fJRRRB7734BDuXZ89yBEaA2ncYhH7bWX30mk04W80J6VAfQc+4iB8lyzAdaGpFV3/vNlkt9VZt+/uoQoWX6UsQ==}
 
+  '@vercel/cli-config@0.3.0':
+    resolution: {integrity: sha512-kQLt5Pm8wKd7/imzDY9/9u0tf8OuRkAuXI+s7j057FSUrXapAmumJSKwDqnR4ZZqdWoUcNLlFAgVIAdiwcGTcw==}
+
   '@vercel/cli-exec@0.1.1':
     resolution: {integrity: sha512-LMRMEai3Z+BODyxGcU9+KiWrS/UElNiOLKiNRfGNt2Vu3NTEmXgFeXG9wBfocAnTe5yJCX/DY6k3k7S/LkPp/g==}
     engines: {node: '>= 18'}
+
+  '@vercel/cli-exec@1.0.1':
+    resolution: {integrity: sha512-g9XerViJ/paZujufXYcu5XYI2vU2rtB4sgdpjUHde5RnOkdmpu0ngH46LCFGHoPXO/C+qDPSczIHIRN+8Q2YKQ==}
+    engines: {node: '>= 18'}
+
+  '@vercel/connect@2.3.2':
+    resolution: {integrity: sha512-qNRdUI6h2zbTruYU92leapFvBRjwF70gewwuj0rBPBHyu2Bnfzm//k4Sc8kA8e/zQfwKbdpYVk8oWe3fNqImzA==}
+    peerDependencies:
+      '@ai-sdk/mcp': ^1 || ^2
+      '@auth/core': '>=0.37.0'
+      '@chat-adapter/slack': ^4.0.0
+      '@modelcontextprotocol/sdk': ^1.29.0
+      ai: ^6 || ^7.0.0-beta.0
+      better-auth: '>=1.5.0'
+      eve: '>=0.39.1'
+    peerDependenciesMeta:
+      '@ai-sdk/mcp':
+        optional: true
+      '@auth/core':
+        optional: true
+      '@chat-adapter/slack':
+        optional: true
+      '@modelcontextprotocol/sdk':
+        optional: true
+      ai:
+        optional: true
+      better-auth:
+        optional: true
+      eve:
+        optional: true
 
   '@vercel/functions@3.7.1':
     resolution: {integrity: sha512-7PsCL2Vz4MKz4t+Nxu8u4mu/t66y1xv9I0njb3EYoFoFCsXchOChT7YFgXZYFQiUXFEifBpnoLma4e+ep7cKKA==}
@@ -3838,6 +3874,10 @@ packages:
 
   '@vercel/oidc@3.6.1':
     resolution: {integrity: sha512-8ipTFoiX3WBRrvXLjSrmgAiwtMDQk3EgSxe8N7v2rXBz39NBIIyoGXeVbJRoBcP8WEuVnvjvIQsggbGU7ZKrMw==}
+    engines: {node: '>= 20'}
+
+  '@vercel/oidc@3.8.9':
+    resolution: {integrity: sha512-TcbdH3YtGS2KU98T99dN4sbf+E4vbJZsJTRN97wKQ7QWQ0BR7U02QX3KN4+5GHxBtKTj1c5CnvTTitc2ZRad0A==}
     engines: {node: '>= 20'}
 
   '@vercel/queue@0.3.1':
@@ -10462,6 +10502,29 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@modelcontextprotocol/sdk@1.30.0(zod@4.4.3)':
+    dependencies:
+      '@hono/node-server': 2.1.1(hono@4.13.5)
+      ajv: 8.20.0
+      ajv-formats: 3.0.1(ajv@8.20.0)
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.0.8
+      express: 5.2.1
+      express-rate-limit: 8.6.2(express@5.2.1)
+      hono: 4.13.5
+      jose: 6.2.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.4.3
+      zod-to-json-schema: 3.25.2(zod@4.4.3)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
   '@mongodb-js/zstd@7.0.0':
     dependencies:
       node-addon-api: 8.9.2
@@ -13059,9 +13122,26 @@ snapshots:
       xdg-app-paths: 5.5.1
       zod: 4.1.11
 
+  '@vercel/cli-config@0.3.0':
+    dependencies:
+      xdg-app-paths: 5.5.1
+      zod: 4.1.11
+
   '@vercel/cli-exec@0.1.1':
     dependencies:
       execa: 5.1.1
+
+  '@vercel/cli-exec@1.0.1':
+    dependencies:
+      execa: 5.1.1
+
+  '@vercel/connect@2.3.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ai@7.0.105(zod@4.4.3))(eve@0.58.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2))':
+    dependencies:
+      '@vercel/oidc': 3.8.9
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
+      ai: 7.0.105(zod@4.4.3)
+      eve: 0.58.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2)
 
   '@vercel/functions@3.7.1(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3)':
     dependencies:
@@ -13076,6 +13156,12 @@ snapshots:
     dependencies:
       '@vercel/cli-config': 0.2.0
       '@vercel/cli-exec': 0.1.1
+      jose: 5.10.0
+
+  '@vercel/oidc@3.8.9':
+    dependencies:
+      '@vercel/cli-config': 0.3.0
+      '@vercel/cli-exec': 1.0.1
       jose: 5.10.0
 
   '@vercel/queue@0.3.1':

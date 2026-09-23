@@ -22,6 +22,8 @@ import {
   requireCurrentAgentActor,
 } from "@/agent/lib/actor";
 import { agentResultEnvelopeSchema } from "@/agent/lib/result-contracts";
+import { sendLeadEmailMessage } from "@/lib/domain/leads/email";
+import { sendEmail } from "@/lib/azureClient";
 
 const MAX_UNTRUSTED_TEXT = 500;
 
@@ -115,6 +117,34 @@ export async function searchAuthorizedLeads(
       })),
       query,
     },
+  });
+}
+
+export async function sendAuthorizedLeadEmail(
+  ctx: SessionContext,
+  input: { body: string; leadId: number; subject: string; to: string },
+) {
+  const actor = await requireCurrentAgentActor(ctx);
+  const sent = await sendLeadEmailMessage(
+    userPrincipal(actor),
+    { ...input, senderName: actor.name },
+    agentDb,
+    sendEmail,
+  );
+  return agentResultEnvelopeSchema.parse({
+    version: 1,
+    kind: "confirmation",
+    entityRef: {
+      type: "lead",
+      id: String(input.leadId),
+      display: { label: `Lead ${input.leadId}`, href: `/leads/${input.leadId}` },
+    },
+    title: sent.alreadySent ? "Email already sent" : "Email sent",
+    summary: sent.alreadySent
+      ? `This exact email to ${sent.to} was already sent today; it was not sent again.`
+      : `Email sent to ${sent.to} with subject “${sent.subject}”.`,
+    links: [{ label: "Open lead", href: `/leads/${input.leadId}` }],
+    data: { alreadySent: sent.alreadySent, emailId: sent.emailId, to: sent.to },
   });
 }
 

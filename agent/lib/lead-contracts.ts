@@ -34,3 +34,10 @@ export const createLeadTaskInputSchema = z.object({
 export const changeLeadTaskStateInputSchema = z.object({
   taskId: leadTaskIdSchema,
 });
+
+export const sendLeadEmailInputSchema = z.object({
+  leadId: leadIdSchema,
+  to: z.string().trim().email().max(254),
+  subject: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(10_000),
+});
