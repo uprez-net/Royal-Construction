@@ -124,7 +124,7 @@ importers:
         version: 2.4.0
       '@vercel/connect':
         specifier: ^2.3.2
-        version: 2.3.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ai@7.0.105(zod@4.4.3))(eve@0.58.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2))
+        version: 2.3.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ai@7.0.105(zod@4.4.3))(eve@0.64.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2))
       ai:
         specifier: ^7.0.105
         version: 7.0.105(zod@4.4.3)
@@ -13138,13 +13138,13 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  '@vercel/connect@2.3.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ai@7.0.105(zod@4.4.3))(eve@0.58.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2))':
+  '@vercel/connect@2.3.2(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ai@7.0.105(zod@4.4.3))(eve@0.64.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2))':
     dependencies:
       '@vercel/oidc': 3.8.9
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
       ai: 7.0.105(zod@4.4.3)
-      eve: 0.58.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2)
+      eve: 0.64.1(@opentelemetry/api@1.9.1)(ai@7.0.105(zod@4.4.3))(just-bash@3.4.2)
 
   '@vercel/functions@3.7.1(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3)':
     dependencies:

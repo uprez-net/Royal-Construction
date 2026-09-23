@@ -14,21 +14,25 @@ test("Plaud connection uses hosted user OAuth and an explicit read allowlist", (
   for (const tool of [
     "get_current_user",
     "list_files",
-    "get_file",
-    "get_note",
-    "get_transcript",
   ]) {
     assert.match(connection, new RegExp(`"${tool}"`));
   }
-  for (const tool of ["login", "logout", "rename_file", "delete_file"]) {
+  for (const tool of [
+    "get_file",
+    "get_note",
+    "get_transcript",
+    "login",
+    "logout",
+    "rename_file",
+    "delete_file",
+  ]) {
     assert.doesNotMatch(connection, new RegExp(`"${tool}"`));
   }
 });
 
-test("Plaud instructions identify source text as untrusted and URLs as temporary", () => {
+test("Plaud instructions identify source text as untrusted and retained data as unavailable", () => {
   const instructions = read("agent/instructions.md");
   const documentation = read("docs/plaud-mcp.md");
   assert.match(instructions, /untrusted source material/);
-  assert.match(documentation, /valid for 24 hours/);
-  assert.match(documentation, /does not persist the\s+source recording/);
+  assert.match(documentation, /not exposed while raw\s+tool-result retention is awaiting approval and documentation/);
 });
