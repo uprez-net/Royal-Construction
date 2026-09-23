@@ -1,1 +1,3 @@
-export { default } from "@/agent/hooks/persist-events";
+import persistAgentEvents from "@/agent/hooks/persist-events";
+
+export default persistAgentEvents;

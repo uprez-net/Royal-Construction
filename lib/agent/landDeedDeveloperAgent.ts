@@ -215,9 +215,9 @@ export async function readLandDeedDeveloper(file: {
     };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       console.error(
         `  Could not read a developer off "${label}": ${error.message}`,

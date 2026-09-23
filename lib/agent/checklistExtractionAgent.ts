@@ -257,9 +257,9 @@ export async function runChecklistExtraction(
     };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       return {
         items: [],
