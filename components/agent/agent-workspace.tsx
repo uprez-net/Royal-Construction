@@ -12,6 +12,7 @@ import { AgentInspector } from "@/components/agent/agent-inspector";
 import type { AgentAnnotation } from "@/components/agent/agent-mentions";
 import {
   agentTranscriptReducer,
+  isTaskNotification,
   type AgentTranscriptData,
 } from "@/components/agent/agent-reducer";
 import type { AgentResultAction } from "@/components/agent/agent-result";
@@ -23,6 +24,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type {
   AgentSessionListItem,
@@ -133,7 +135,10 @@ export function AgentWorkspace({
       ? { sessionId: selectedSessionId, streamIndex: 0 }
       : undefined,
     onEvent: (event) => {
-      if (event.type !== "message.received") return;
+      // A specialist wake-up is not a message this operator sent, so it must
+      // not claim the annotations waiting for their own next message.
+      if (event.type !== "message.received" || isTaskNotification(event))
+        return;
       const isOwnMessage = pendingUserMessagesRef.current > 0;
       if (isOwnMessage) pendingUserMessagesRef.current -= 1;
       const pending = pendingMessageAnnotationsRef.current;
@@ -407,109 +412,114 @@ export function AgentWorkspace({
   );
 
   return (
-    <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
-      <AgentHeader
-        agentStatus={agent.status}
-        busy={busy}
-        canFork={agent.data.messages.length > 0}
-        historyOpen={historyRailOpen || sheet === "history"}
-        inspectorOpen={inspectorRailOpen || sheet === "inspector"}
-        onCancel={() => void agent.cancel()}
-        onFork={forkConversation}
-        onToggleHistory={() => togglePane("history")}
-        onToggleInspector={() => togglePane("inspector")}
-        pendingCount={agent.data.pendingApprovals.length}
-        sessionTitle={activeSessionTitle}
-        statusLabel={statusLabel}
-        usage={agent.data.usage}
-      />
+    // The header meter, tool cards and approval controls use Radix tooltips,
+    // which throw without a provider above them; the app shell only provides
+    // one around its notifications.
+    <TooltipProvider>
+      <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+        <AgentHeader
+          agentStatus={agent.status}
+          busy={busy}
+          canFork={agent.data.messages.length > 0}
+          historyOpen={historyRailOpen || sheet === "history"}
+          inspectorOpen={inspectorRailOpen || sheet === "inspector"}
+          onCancel={() => void agent.cancel()}
+          onFork={forkConversation}
+          onToggleHistory={() => togglePane("history")}
+          onToggleInspector={() => togglePane("inspector")}
+          pendingCount={agent.data.pendingApprovals.length}
+          sessionTitle={activeSessionTitle}
+          statusLabel={statusLabel}
+          usage={agent.data.usage}
+        />
 
-      <div className="flex min-h-0 min-w-0 flex-1">
-        {historyRailOpen ? (
-          <div className="w-72 shrink-0 border-r border-border/70">
-            {history}
+        <div className="flex min-h-0 min-w-0 flex-1">
+          {historyRailOpen ? (
+            <div className="w-72 shrink-0 border-r border-border/70">
+              {history}
+            </div>
+          ) : null}
+
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <AgentTranscript
+              agentError={agent.error ?? null}
+              agentStatus={agent.status}
+              archiveError={archiveError}
+              busy={busy}
+              data={agent.data}
+              handleMessageScroll={handleMessageScroll}
+              messageAnnotations={messageAnnotations}
+              onAction={runAction}
+              onEditMessage={editMessage}
+              onRespond={respond}
+              onRetry={() => void agent.resume()}
+              onSuggestion={(suggestion) => void sendMessage(suggestion)}
+              pendingMessageAnnotations={pendingMessageAnnotations}
+              scrollToBottom={scrollToBottom}
+              sendError={sendError}
+              // The inspector already shows what is waiting, so the floating bar
+              // is only needed when the inspector is not on screen.
+              showApprovalBar={!inspectorRailOpen}
+              showScrollToBottom={showScrollToBottom}
+              viewportRef={viewportRef}
+            />
+            <AgentComposer
+              annotations={annotations}
+              attachments={attachments}
+              canSend={canSend}
+              composer={composer}
+              composerRef={composerRef}
+              disabled={agent.status === "resuming"}
+              editingMessageId={editingMessageId}
+              onCancelEdit={() => {
+                setEditingMessageId(null);
+                setComposer("");
+              }}
+              onChange={setComposer}
+              onSend={() => void sendMessage(composer)}
+              setAnnotations={setAnnotations}
+              setAttachments={setAttachments}
+              uploading={uploading}
+            />
           </div>
-        ) : null}
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <AgentTranscript
-            agentError={agent.error ?? null}
-            agentStatus={agent.status}
-            archiveError={archiveError}
-            busy={busy}
-            data={agent.data}
-            handleMessageScroll={handleMessageScroll}
-            messageAnnotations={messageAnnotations}
-            onAction={runAction}
-            onEditMessage={editMessage}
-            onRespond={respond}
-            onRetry={() => void agent.resume()}
-            onSuggestion={(suggestion) => void sendMessage(suggestion)}
-            pendingMessageAnnotations={pendingMessageAnnotations}
-            scrollToBottom={scrollToBottom}
-            sendError={sendError}
-            // The inspector already shows what is waiting, so the floating bar
-            // is only needed when the inspector is not on screen.
-            showApprovalBar={!inspectorRailOpen}
-            showScrollToBottom={showScrollToBottom}
-            viewportRef={viewportRef}
-          />
-          <AgentComposer
-            annotations={annotations}
-            attachments={attachments}
-            canSend={canSend}
-            composer={composer}
-            composerRef={composerRef}
-            disabled={agent.status === "resuming"}
-            editingMessageId={editingMessageId}
-            onCancelEdit={() => {
-              setEditingMessageId(null);
-              setComposer("");
-            }}
-            onChange={setComposer}
-            onSend={() => void sendMessage(composer)}
-            setAnnotations={setAnnotations}
-            setAttachments={setAttachments}
-            uploading={uploading}
-          />
+          {inspectorRailOpen ? (
+            <div className="w-80 shrink-0">{inspector}</div>
+          ) : null}
         </div>
 
-        {inspectorRailOpen ? (
-          <div className="w-80 shrink-0">{inspector}</div>
-        ) : null}
-      </div>
+        <Sheet
+          onOpenChange={(open) => setSheet(open ? "history" : null)}
+          open={sheet === "history"}
+        >
+          <SheetContent className="w-76 p-0" side="left">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Conversations</SheetTitle>
+              <SheetDescription>
+                Switch between your agent conversations.
+              </SheetDescription>
+            </SheetHeader>
+            {history}
+          </SheetContent>
+        </Sheet>
 
-      <Sheet
-        onOpenChange={(open) => setSheet(open ? "history" : null)}
-        open={sheet === "history"}
-      >
-        <SheetContent className="w-76 p-0" side="left">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Conversations</SheetTitle>
-            <SheetDescription>
-              Switch between your agent conversations.
-            </SheetDescription>
-          </SheetHeader>
-          {history}
-        </SheetContent>
-      </Sheet>
-
-      <Sheet
-        onOpenChange={(open) => setSheet(open ? "inspector" : null)}
-        open={sheet === "inspector"}
-      >
-        <SheetContent className="w-84 p-0" side="right">
-          <SheetHeader className="sr-only">
-            <SheetTitle>This session</SheetTitle>
-            <SheetDescription>
-              What the agent needs from you, what it has delegated, and what it
-              has spent.
-            </SheetDescription>
-          </SheetHeader>
-          {inspector}
-        </SheetContent>
-      </Sheet>
-    </section>
+        <Sheet
+          onOpenChange={(open) => setSheet(open ? "inspector" : null)}
+          open={sheet === "inspector"}
+        >
+          <SheetContent className="w-84 p-0" side="right">
+            <SheetHeader className="sr-only">
+              <SheetTitle>This session</SheetTitle>
+              <SheetDescription>
+                What the agent needs from you, what it has delegated, and what
+                it has spent.
+              </SheetDescription>
+            </SheetHeader>
+            {inspector}
+          </SheetContent>
+        </Sheet>
+      </section>
+    </TooltipProvider>
   );
 }
 

@@ -5,6 +5,7 @@ import type {
   EveMessage,
 } from "eve/react";
 import type { SubagentChildEventStreamEvent } from "eve/client";
+import { estimateCostUsd } from "@/lib/agent/model";
 
 /** A child stream event, which arrives without the durable `meta` envelope. */
 type AgentChildStreamEvent = SubagentChildEventStreamEvent["data"]["event"];
@@ -138,14 +139,142 @@ export function agentTranscriptReducer(): EveAgentReducer<AgentTranscriptData> {
       messages: messageReducer.initial().messages,
     }),
     reduce: (data, event) => {
+      const next = reduceTranscript(data, event);
+      // A background-task wake-up is runtime input, not something the operator
+      // typed. It settles the specialist it names (above) and never becomes a
+      // chat bubble — otherwise the transcript shows "you" sending the raw
+      // result envelope as JSON.
+      if (isTaskNotification(event)) return next;
       const { messages } = messageReducer.reduce(
         { messages: data.messages },
         event,
       );
-      const next = reduceTranscript(data, event);
       if (messages === data.messages) return next;
       return { ...next, messages };
     },
+  };
+}
+
+/**
+ * The wording eve used for a background-task wake-up before it marked them with
+ * `kind: "execution.background_task"` (eve < 0.61). Sessions recorded then are
+ * still in the history rail, so a reload has to recognise them by text.
+ */
+const LEGACY_TASK_NOTIFICATION =
+  /^Background task (\S+) \(([^)]*)\) (is completed\.|failed\.|is cancelled\.|needs input\.|needs authorization\.|update: )/;
+
+export type TaskNotification = {
+  taskId: string;
+  outcome: "completed" | "failed" | "cancelled" | "other";
+  detail: string | null;
+};
+
+export function isTaskNotification(event: EveAgentReducerEvent): boolean {
+  if (event.type !== "message.received") return false;
+  return (
+    event.data.kind === "execution.background_task"
+    || LEGACY_TASK_NOTIFICATION.test(event.data.message)
+  );
+}
+
+/** The task a legacy wake-up reports on, when its wording names one. */
+export function parseTaskNotification(
+  message: string,
+): TaskNotification | null {
+  const match = LEGACY_TASK_NOTIFICATION.exec(message);
+  if (!match) return null;
+  const taskId = match[1] ?? "";
+  const verb = match[3];
+  const body = (label: string) => {
+    const at = message.indexOf(`\n\n${label}:\n`);
+    return at === -1
+      ? null
+      : message.slice(at + label.length + 4).trim() || null;
+  };
+  switch (verb) {
+    case "is completed.":
+      return { detail: body("Result"), outcome: "completed", taskId };
+    case "failed.":
+      return { detail: body("Error"), outcome: "failed", taskId };
+    case "is cancelled.":
+      return { detail: null, outcome: "cancelled", taskId };
+    default:
+      return { detail: null, outcome: "other", taskId };
+  }
+}
+
+/**
+ * Settle the specialist a `delegate` call started, from the call's own result.
+ *
+ * eve names the child invocation `<delegate callId>:<suffix>`, so the runs a
+ * call owns are found by that prefix. A specialist that fails reports only
+ * through the failed `delegate` result — there is no `subagent.completed` —
+ * and without this its card would say "Working" forever.
+ */
+function withDelegateResult(
+  data: AgentTranscriptData,
+  delegateCallId: string,
+  error: string | null,
+  at: string | null,
+): AgentTranscriptData {
+  let changed = false;
+  const subagents = data.subagents.map((run) => {
+    if (
+      !run.callId.startsWith(`${delegateCallId}:`)
+      || isTerminalSubagent(run.status)
+    ) {
+      return run;
+    }
+    changed = true;
+    return error === null
+      ? { ...run, endedAt: run.endedAt ?? at, status: "completed" as const }
+      : {
+          ...run,
+          endedAt: run.endedAt ?? at,
+          error,
+          status: "failed" as const,
+        };
+  });
+  return changed ? { ...data, subagents } : data;
+}
+
+function withTaskNotification(
+  data: AgentTranscriptData,
+  message: string,
+  at: string | null,
+): AgentTranscriptData {
+  const notification = parseTaskNotification(message);
+  if (!notification || notification.outcome === "other") return data;
+  const index = data.subagents.findIndex(
+    (run) => run.taskId === notification.taskId,
+  );
+  if (index === -1) return data;
+  const run = data.subagents[index] as AgentSubagentRun;
+  if (isTerminalSubagent(run.status)) return data;
+  const endedAt = run.endedAt ?? at;
+  const settled: AgentSubagentRun =
+    notification.outcome === "completed"
+      ? {
+          ...run,
+          endedAt,
+          output: readableOutput(notification.detail) ?? run.output,
+          status: "completed",
+        }
+      : notification.outcome === "failed"
+        ? {
+            ...run,
+            endedAt,
+            error: notification.detail ?? "The specialist failed.",
+            status: "failed",
+          }
+        : { ...run, endedAt, status: "interrupted" };
+  return {
+    ...data,
+    subagents: [
+      ...data.subagents.slice(0, index),
+      settled,
+      ...data.subagents.slice(index + 1),
+    ],
   };
 }
 
@@ -155,6 +284,10 @@ function reduceTranscript(
 ): AgentTranscriptData {
   const at = "meta" in event ? event.meta.at : null;
   switch (event.type) {
+    case "message.received":
+      return isTaskNotification(event)
+        ? withTaskNotification(data, event.data.message, at)
+        : data;
     case "turn.started":
       return {
         ...data,
@@ -189,6 +322,12 @@ function reduceTranscript(
       };
     case "step.completed": {
       const usage = event.data.usage ?? null;
+      // Provider-reported cost when the gateway sends one; list price when it
+      // does not, so the budget meter does not read $0.00 for real spend.
+      const stepCost = usage
+        ? (usage.costUsd
+          ?? estimateCostUsd(usage.inputTokens ?? 0, usage.outputTokens ?? 0))
+        : 0;
       return {
         ...data,
         turns: upsertStep(
@@ -201,7 +340,7 @@ function reduceTranscript(
             status: "completed",
             usage: usage
               ? {
-                  costUsd: usage.costUsd ?? null,
+                  costUsd: stepCost,
                   inputTokens: usage.inputTokens ?? null,
                   outputTokens: usage.outputTokens ?? null,
                 }
@@ -209,7 +348,7 @@ function reduceTranscript(
           }),
         ),
         usage: {
-          costUsd: data.usage.costUsd + (usage?.costUsd ?? 0),
+          costUsd: data.usage.costUsd + stepCost,
           inputTokens: data.usage.inputTokens + (usage?.inputTokens ?? 0),
           outputTokens: data.usage.outputTokens + (usage?.outputTokens ?? 0),
           steps: data.usage.steps + 1,
@@ -286,7 +425,9 @@ function reduceTranscript(
           ...run,
           endedAt: backgroundTask ? run.endedAt : at,
           name: run.name || event.data.subagentName,
-          output: backgroundTask ? run.output : event.data.output,
+          output: backgroundTask
+            ? run.output
+            : readableOutput(event.data.output),
           status: backgroundTask ? "working" : "completed",
           taskId: backgroundTask?.taskId ?? run.taskId,
         })),
@@ -331,6 +472,16 @@ function reduceTranscript(
     case "action.result": {
       const next = withLabels(data, event.data.presentation);
       const result = event.data.result;
+      if (result.kind === "tool-result" && result.toolName === "delegate") {
+        return withDelegateResult(
+          next,
+          result.callId,
+          event.data.status === "failed"
+            ? (event.data.error?.message ?? "The specialist failed.")
+            : null,
+          at,
+        );
+      }
       if (result.kind !== "subagent-result") return next;
       const backgroundTask =
         "backgroundTask" in result ? result.backgroundTask : undefined;
@@ -346,7 +497,7 @@ function reduceTranscript(
           output:
             backgroundTask || result.isError
               ? run.output
-              : stringify(result.output),
+              : readableOutput(result.output),
           status: backgroundTask
             ? "working"
             : result.isError
@@ -456,12 +607,19 @@ function settleTurn(
   at: string | null,
   failure: { code: string; message: string } | null,
 ): AgentTranscriptData {
+  // A specialist waiting on an owner approval parks the parent turn with the
+  // specialist still open; it resumes when the approval is answered, so it has
+  // not failed to report.
+  const awaitingApproval = data.pendingApprovals.some(
+    (pending) => pending.turnId === turnId,
+  );
   return {
     ...data,
     subagents: data.subagents.map((run) =>
       run.turnId === turnId
       && !isTerminalSubagent(run.status)
       && run.taskId === null
+      && !awaitingApproval
         ? { ...run, endedAt: run.endedAt ?? at, status: "interrupted" as const }
         : run,
     ),
@@ -580,6 +738,33 @@ function upsertSubagent(
   return next === current
     ? runs
     : [...runs.slice(0, index), next, ...runs.slice(index + 1)];
+}
+
+/**
+ * A specialist's answer as one readable line.
+ *
+ * Specialists answer with a typed result envelope. Shown verbatim, the panel
+ * prints a JSON object where the operator expects a sentence, so an envelope
+ * (as an object or as its JSON text) is reduced to its title and summary.
+ */
+export function readableOutput(value: unknown): string | null {
+  let candidate = value;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text.startsWith("{")) return text || null;
+    try {
+      candidate = JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+    const { title, summary } = candidate as Record<string, unknown>;
+    if (typeof title === "string" && typeof summary === "string") {
+      return summary.trim() ? `${title} — ${summary.trim()}` : title;
+    }
+  }
+  return stringify(candidate);
 }
 
 function stringify(value: unknown) {
