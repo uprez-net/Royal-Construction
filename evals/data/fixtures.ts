@@ -55,6 +55,8 @@ export const NEVER_APPROVE_ON_STAGING = [
   // approval, so there is nothing to approve.
   "send_compliance_outreach",
   "send_compliance_follow_up",
+  // Emails a real lead from the company mailbox (issue #341).
+  "send_lead_email",
   // Puts a WhatsApp message on a real customer's phone (issue #333).
   // `prepare_lead_whatsapp_message` is absent for the same reason as
   // `prepare_compliance_outreach`: it previews and declares no approval.

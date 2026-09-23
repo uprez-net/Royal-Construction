@@ -70,6 +70,7 @@ export const WRITE_TOOLS = {
     "create_lead_task",
     "reopen_lead_task",
     "schedule_lead_whatsapp_follow_up",
+    "send_lead_email",
     "send_lead_whatsapp_message",
   ],
   "offer-operations": [
@@ -118,7 +119,6 @@ export const ALL_WRITE_TOOLS: readonly string[] =
  * boundary case.
  */
 export const UNAVAILABLE_CAPABILITIES = {
-  leadEmail: "sending or drafting-and-sending email to a lead",
   leadMeeting: "booking or rescheduling a meeting with a lead",
   leadStage: "moving a lead between pipeline stages",
   leadFiles: "uploading, renaming or deleting lead files",
