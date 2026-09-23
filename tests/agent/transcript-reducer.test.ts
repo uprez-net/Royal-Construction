@@ -584,3 +584,84 @@ test("a step without a provider cost is priced at the model's list price", () =>
   // $0.08 per million input + $0.25 per million output.
   assert.equal(Number(data.usage.costUsd.toFixed(4)), 0.105);
 });
+
+test("an unrelated pending approval does not keep a silent specialist open", () => {
+  const staleApproval = stamped({
+    data: {
+      requests: [
+        {
+          action: {
+            callId: "call_old",
+            input: {},
+            kind: "tool-call",
+            toolName: "complete_lead_task",
+          },
+          kind: "tool-approval",
+          options: [{ id: "approve", label: "Approve" }],
+          prompt: "Approve tool call: complete_lead_task",
+          requestId: "req_old",
+        },
+      ],
+      sequence: 0,
+      stepIndex: 0,
+      turnId: "turn_0",
+    },
+    type: "input.requested",
+  });
+
+  // The old approval is left unanswered; a later delegation then ends
+  // without reporting. Only a request raised while that delegation was live
+  // may keep it open.
+  const data = reduceAll([
+    staleApproval,
+    ...blockingDelegation,
+    stamped({ data: { sequence: 3, turnId }, type: "turn.completed" }),
+  ]);
+
+  assert.equal(data.pendingApprovals.length, 1);
+  assert.equal(data.subagents[0]?.status, "interrupted");
+});
+
+test("a specialist is released for interruption once its own approval is answered", () => {
+  const forwarded = stamped({
+    data: {
+      requests: [
+        {
+          action: {
+            callId: "call_task",
+            input: {},
+            kind: "tool-call",
+            toolName: "create_lead_task",
+          },
+          kind: "tool-approval",
+          options: [{ id: "approve", label: "Approve" }],
+          prompt: "Approve tool call: create_lead_task",
+          requestId: "req_task",
+        },
+      ],
+      sequence: 2,
+      stepIndex: 0,
+      turnId: "turn_0",
+    },
+    type: "input.requested",
+  });
+
+  const data = reduceAll([
+    ...blockingDelegation,
+    forwarded,
+    stamped({
+      data: {
+        outcome: "cancelled",
+        requestId: "req_task",
+        responderPrincipalId: "user_1",
+        sequence: 3,
+        stepIndex: 0,
+        turnId: "turn_0",
+      },
+      type: "approval.settled",
+    }),
+    stamped({ data: { sequence: 4, turnId }, type: "turn.completed" }),
+  ]);
+
+  assert.equal(data.subagents[0]?.status, "interrupted");
+});

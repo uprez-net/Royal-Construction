@@ -78,6 +78,8 @@ export function AgentWorkspace({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pendingMessageAnnotationsRef = useRef<AgentAnnotation[] | null>(null);
   const pendingUserMessagesRef = useRef(0);
+  /** The failure eve reported for the submission in flight, if any. */
+  const lastAgentErrorRef = useRef<Error | null>(null);
   const activeSessionIdRef = useRef(selectedSessionId);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
   const stickToBottomRef = useRef(true);
@@ -158,6 +160,9 @@ export function AgentWorkspace({
       );
       pendingMessageAnnotationsRef.current = null;
       setPendingMessageAnnotations(null);
+    },
+    onError: (error) => {
+      lastAgentErrorRef.current = error;
     },
     onSessionChange,
     prepareSend: (payload) => ({
@@ -254,6 +259,11 @@ export function AgentWorkspace({
       pendingMessageAnnotationsRef.current = sentAnnotations;
       setPendingMessageAnnotations(sentAnnotations);
       pendingUserMessagesRef.current += 1;
+      // `onEvent` takes this back down when eve confirms the message with
+      // `message.received`; still at this value after `send` means it never
+      // arrived.
+      const awaitingReceipt = pendingUserMessagesRef.current;
+      lastAgentErrorRef.current = null;
       // `agent.send` resolves when the whole turn settles, which includes any
       // specialist the orchestrator waits on — often a minute or more. The
       // message is already in the transcript, so the composer is cleared as
@@ -278,6 +288,17 @@ export function AgentWorkspace({
           })),
         },
       });
+      // eve's `send` records a failure in its error state and resolves rather
+      // than rejecting, so a rejected promise alone misses a request that
+      // never reached the agent. Confirmed receipt is the test: a message eve
+      // accepted stays sent even if its turn later fails.
+      if (pendingUserMessagesRef.current >= awaitingReceipt) {
+        // Written by `onError` during the await, which the compiler cannot see.
+        const reported = lastAgentErrorRef.current as Error | null;
+        throw new Error(
+          reported?.message ?? "The message did not reach the agent.",
+        );
+      }
       setForkContext(null);
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
@@ -295,6 +316,8 @@ export function AgentWorkspace({
           ...current,
         ]);
       }
+      // Undo this submission's receipt bookkeeping, so a later wake-up or
+      // message is not mistaken for it.
       pendingUserMessagesRef.current = Math.max(
         0,
         pendingUserMessagesRef.current - 1,

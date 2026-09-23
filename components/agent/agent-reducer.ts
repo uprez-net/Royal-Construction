@@ -91,6 +91,16 @@ export type AgentSubagentRun = {
   taskId: string | null;
   remote: boolean;
   progress: string | null;
+  /**
+   * Input requests (approvals, questions) raised while this blocking
+   * delegation was live. eve forwards a specialist's request to the parent
+   * with no link back to the child — no session, delegation or task id, and
+   * the child's own turn id, which can collide with the parent's — so the
+   * association is the delegations that were running when it arrived. The
+   * orchestrator owns no approval-gated tools, so such a request came from
+   * one of them.
+   */
+  pendingRequestIds: readonly string[];
 };
 
 export type AgentPendingApproval = {
@@ -451,6 +461,9 @@ function reduceTranscript(
         toolName: request.action.toolName,
         turnId: event.data.turnId,
       }));
+      const forwarded = added
+        .filter((item) => item.kind !== "session-limit")
+        .map((item) => item.requestId);
       return {
         ...data,
         pendingApprovals: [
@@ -460,6 +473,22 @@ function reduceTranscript(
           ),
           ...added,
         ],
+        subagents:
+          forwarded.length === 0
+            ? data.subagents
+            : data.subagents.map((run) =>
+                isAwaitingDelegation(run)
+                  ? {
+                      ...run,
+                      pendingRequestIds: [
+                        ...run.pendingRequestIds.filter(
+                          (id) => !forwarded.includes(id),
+                        ),
+                        ...forwarded,
+                      ],
+                    }
+                  : run,
+              ),
       };
     }
     case "input.resolved":
@@ -614,16 +643,17 @@ function settleTurn(
 ): AgentTranscriptData {
   // A specialist waiting on an owner approval parks the parent turn with the
   // specialist still open; it resumes when the approval is answered, so it has
-  // not failed to report. The forwarded request carries the specialist's own
-  // turn id, not this one, so any pending approval counts.
-  const awaitingApproval = data.pendingApprovals.length > 0;
+  // not failed to report. Only a run whose own request is still pending is
+  // spared — an unrelated or stale approval does not keep a dead run spinning.
+  const pending = new Set(
+    data.pendingApprovals.map((approval) => approval.requestId),
+  );
   return {
     ...data,
     subagents: data.subagents.map((run) =>
       run.turnId === turnId
-      && !isTerminalSubagent(run.status)
-      && run.taskId === null
-      && !awaitingApproval
+      && isAwaitingDelegation(run)
+      && !run.pendingRequestIds.some((id) => pending.has(id))
         ? { ...run, endedAt: run.endedAt ?? at, status: "interrupted" as const }
         : run,
     ),
@@ -639,6 +669,11 @@ function settleTurn(
       ),
     })),
   };
+}
+
+/** A blocking delegation whose specialist has not reported yet. */
+function isAwaitingDelegation(run: AgentSubagentRun) {
+  return !isTerminalSubagent(run.status) && run.taskId === null;
 }
 
 function isTerminalSubagent(status: AgentSubagentStatus) {
@@ -727,6 +762,7 @@ function upsertSubagent(
         error: null,
         name: "",
         output: null,
+        pendingRequestIds: [],
         progress: null,
         remote: false,
         startedAt: null,
