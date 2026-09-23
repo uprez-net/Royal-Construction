@@ -27,7 +27,10 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { AgentInputResponse } from "@/components/agent/agent-approval";
-import { formatTime } from "@/components/agent/agent-format";
+import {
+  formatDisplayMarkdown,
+  formatTime,
+} from "@/components/agent/agent-format";
 import { AgentReasoning } from "@/components/agent/agent-reasoning";
 import type { AgentSubagentRun } from "@/components/agent/agent-reducer";
 import type { AgentResultAction } from "@/components/agent/agent-result";
@@ -112,6 +115,7 @@ export function AgentMessage({
             onAction={onAction}
             onInputResponses={onInputResponses}
             part={part}
+            role={message.role}
             showCaret={
               isStreaming
               && message.role === "assistant"
@@ -189,6 +193,7 @@ function AgentMessagePart({
   onAction,
   onInputResponses,
   part,
+  role,
   showCaret,
   times,
 }: {
@@ -197,6 +202,7 @@ function AgentMessagePart({
   onAction: (action: AgentResultAction) => Promise<void>;
   onInputResponses: (responses: readonly AgentInputResponse[]) => Promise<void>;
   part: EveMessagePart;
+  role: EveMessage["role"];
   showCaret: boolean;
   times: { startedAt: string | null; endedAt: string | null };
 }) {
@@ -208,7 +214,8 @@ function AgentMessagePart({
     case "text":
       return (
         <MessageResponse caret="block" isAnimating={showCaret}>
-          {part.text}
+          {/* What the operator typed is shown as typed. */}
+          {role === "assistant" ? formatDisplayMarkdown(part.text) : part.text}
         </MessageResponse>
       );
     case "file":

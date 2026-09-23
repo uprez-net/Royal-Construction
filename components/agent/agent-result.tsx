@@ -2,7 +2,11 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { humanize } from "@/components/agent/agent-format";
+import {
+  formatDisplayText,
+  formatDisplayValue,
+  humanize,
+} from "@/components/agent/agent-format";
 import {
   AgentOutreach,
   type AgentOutreachDetails,
@@ -175,8 +179,12 @@ export function AgentResult({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-medium text-foreground">{result.title}</p>
-          <p className="text-sm text-muted-foreground">{result.summary}</p>
+          <p className="font-medium text-foreground">
+            {formatDisplayText(result.title)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {formatDisplayText(result.summary)}
+          </p>
         </div>
         <Badge variant={result.requiresApproval ? "default" : "outline"}>
           {partial
@@ -213,7 +221,7 @@ export function AgentResult({
                 {humanize(key)}
               </dt>
               <dd className="truncate font-medium text-foreground">
-                {String(value)}
+                {formatDisplayValue(value)}
               </dd>
             </div>
           ))}
@@ -227,7 +235,7 @@ export function AgentResult({
           <p className="font-medium">Review notes</p>
           <ul className="mt-1 list-disc pl-4">
             {result.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>{formatDisplayText(warning)}</li>
             ))}
           </ul>
         </div>

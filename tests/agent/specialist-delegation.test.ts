@@ -190,3 +190,19 @@ test("the MCP-visible agent description names what the agent can and cannot do",
   assert.match(description, /agent_update/);
   assert.match(description, /Not available/);
 });
+
+test("the orchestrator and every specialist are told the current Sydney date", () => {
+  for (const dir of [
+    path.join(REPO_ROOT, "agent"),
+    ...declaredSpecialists().map((name) => path.join(SUBAGENTS_DIR, name)),
+  ]) {
+    const file = path.join(dir, "instructions", "current-time.ts");
+    assert.ok(existsSync(file), `${file} is missing`);
+    assert.ok(
+      readFileSync(file, "utf8").includes(
+        'import currentTimeInstructions from "@/agent/lib/current-time-instructions";',
+      ),
+      `${file} imports the shared current-time instruction`,
+    );
+  }
+});
