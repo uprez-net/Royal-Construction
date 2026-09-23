@@ -356,7 +356,7 @@ const leadEnvelope = {
 test("a blocking delegation is live until the specialist answers, then shows its answer as prose", () => {
   const running = reduceAll(blockingDelegation);
   assert.equal(running.subagents.length, 1);
-  assert.equal(running.subagents[0]?.status, "delegating");
+  assert.equal(running.subagents[0]?.status, "working");
   assert.equal(running.subagents[0]?.childSessionId, "wrun_child_lead");
 
   const done = reduceAll([
@@ -502,7 +502,10 @@ test("a specialist waiting on an owner approval is not reported as silent", () =
         ],
         sequence: 2,
         stepIndex: 0,
-        turnId,
+        // Forwarded from the specialist, so it carries the child's turn —
+        // not the parent turn that is about to park. Seen live: the parent
+        // was on turn_1 while the forwarded request said turn_0.
+        turnId: "turn_0",
       },
       type: "input.requested",
     }),
@@ -510,7 +513,32 @@ test("a specialist waiting on an owner approval is not reported as silent", () =
   ]);
 
   assert.equal(data.pendingApprovals.length, 1);
-  assert.equal(data.subagents[0]?.status, "delegating");
+  assert.equal(data.subagents[0]?.status, "working");
+});
+
+test("a specialist marked silent still settles when its delegate call reports", () => {
+  const data = reduceAll([
+    ...blockingDelegation,
+    stamped({ data: { sequence: 3, turnId }, type: "turn.completed" }),
+    stamped({
+      data: {
+        error: { message: "Specialist timed out." },
+        result: {
+          callId: "call_delegate",
+          kind: "tool-result",
+          output: null,
+          toolName: "delegate",
+        },
+        sequence: 4,
+        status: "failed",
+        stepIndex: 0,
+        turnId: "turn_2",
+      },
+      type: "action.result",
+    }),
+  ]);
+
+  assert.equal(data.subagents[0]?.status, "failed");
 });
 
 test("a specialist that fails is shown as failed, not left working", () => {

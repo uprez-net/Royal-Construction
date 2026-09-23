@@ -219,9 +219,12 @@ function withDelegateResult(
 ): AgentTranscriptData {
   let changed = false;
   const subagents = data.subagents.map((run) => {
+    // "interrupted" is a guess made at a turn boundary; the delegate result
+    // is the authoritative answer, so it may overrule it.
     if (
       !run.callId.startsWith(`${delegateCallId}:`)
-      || isTerminalSubagent(run.status)
+      || run.status === "completed"
+      || run.status === "failed"
     ) {
       return run;
     }
@@ -403,7 +406,9 @@ function reduceTranscript(
           // child, so it must not be allowed to clear that.
           remote: event.data.remote !== undefined || run.remote,
           startedAt: run.startedAt ?? at,
-          status: isTerminalSubagent(run.status) ? run.status : "delegating",
+          // The child session exists and is running. (The older
+          // background shape moved on to "working" at subagent.started.)
+          status: isTerminalSubagent(run.status) ? run.status : "working",
           toolName: event.data.toolName,
           turnId: run.turnId ?? event.data.turnId,
         })),
@@ -609,10 +614,9 @@ function settleTurn(
 ): AgentTranscriptData {
   // A specialist waiting on an owner approval parks the parent turn with the
   // specialist still open; it resumes when the approval is answered, so it has
-  // not failed to report.
-  const awaitingApproval = data.pendingApprovals.some(
-    (pending) => pending.turnId === turnId,
-  );
+  // not failed to report. The forwarded request carries the specialist's own
+  // turn id, not this one, so any pending approval counts.
+  const awaitingApproval = data.pendingApprovals.length > 0;
   return {
     ...data,
     subagents: data.subagents.map((run) =>

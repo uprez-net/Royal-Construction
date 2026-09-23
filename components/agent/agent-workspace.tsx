@@ -231,6 +231,7 @@ export function AgentWorkspace({
     setShowScrollToBottom(false);
     setSendError(null);
     setUploading(sentAttachments.length > 0);
+    let sent = false;
     try {
       const uploaded = await Promise.all(sentAttachments.map(uploadAttachment));
       const unreachable = uploaded.filter((file) => file.agentUrl === null);
@@ -253,6 +254,19 @@ export function AgentWorkspace({
       pendingMessageAnnotationsRef.current = sentAnnotations;
       setPendingMessageAnnotations(sentAnnotations);
       pendingUserMessagesRef.current += 1;
+      // `agent.send` resolves when the whole turn settles, which includes any
+      // specialist the orchestrator waits on — often a minute or more. The
+      // message is already in the transcript, so the composer is cleared as
+      // soon as it goes out rather than holding the sent text all that time.
+      // Only what went out is removed; anything typed meanwhile stays.
+      sent = true;
+      setComposer((current) => (current === message ? "" : current));
+      setAttachments((current) =>
+        current.filter((file) => !sentAttachments.includes(file)),
+      );
+      setAnnotations((current) =>
+        current.filter((item) => !sentAnnotations.includes(item)),
+      );
       await agent.send(content, {
         clientContext: {
           route: window.location.pathname,
@@ -264,17 +278,23 @@ export function AgentWorkspace({
           })),
         },
       });
-      setComposer((current) => (current === message ? "" : current));
-      setAttachments((current) =>
-        current.filter((file) => !sentAttachments.includes(file)),
-      );
-      setAnnotations((current) =>
-        current.filter((item) => !sentAnnotations.includes(item)),
-      );
       setForkContext(null);
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
     } catch (error) {
+      if (sent) {
+        // Put the unsent request back so it can be retried, unless the
+        // operator has already started typing something else.
+        setComposer((current) => (current === "" ? message : current));
+        setAttachments((current) => [
+          ...sentAttachments.filter((file) => !current.includes(file)),
+          ...current,
+        ]);
+        setAnnotations((current) => [
+          ...sentAnnotations.filter((item) => !current.includes(item)),
+          ...current,
+        ]);
+      }
       pendingUserMessagesRef.current = Math.max(
         0,
         pendingUserMessagesRef.current - 1,
