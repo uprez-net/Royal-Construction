@@ -184,6 +184,31 @@ const ISO_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ISO_DATE_TIME =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/;
 
+function isValidIsoCalendarDate(value: string): boolean {
+  const match = ISO_DATE_ONLY.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12) return false;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    leap ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day >= 1 && day <= daysInMonth[month - 1];
+}
+
 /**
  * An ISO date or timestamp, as a person should read it; `null` for anything
  * else.
@@ -206,6 +231,7 @@ export function formatIsoForPeople(value: string): string | null {
     return formatSydneyDate(date);
   }
   if (!ISO_DATE_TIME.test(text)) return null;
+  if (!isValidIsoCalendarDate(text.slice(0, 10))) return null;
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return null;
   return sydneyTimeOnly(date) === "00:00"
@@ -220,16 +246,28 @@ export function formatIsoForPeople(value: string): string | null {
  * is left alone.
  */
 export function humanizeIsoDatesInText(text: string): string {
-  return text.replace(
-    /(?<![\w-])\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?![\w-])/g,
-    (match) => {
-      // A timestamp with no zone is ambiguous; leave it rather than guess.
-      if (match.includes("T") && !/(?:Z|[+-]\d{2}:?\d{2})$/.test(match)) {
-        return match;
-      }
-      return formatIsoForPeople(match) ?? match;
-    },
-  );
+  const protectedRanges = /\]\([^\)\n]*\)|(?:https?:\/\/|www\.)[^\s<>]+/gi;
+  const humanize = (prose: string) =>
+    prose.replace(
+      /(?<![\w-])\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?![\w-])/g,
+      (match) => {
+        // A timestamp with no zone is ambiguous; leave it rather than guess.
+        if (match.includes("T") && !/(?:Z|[+-]\d{2}:?\d{2})$/.test(match)) {
+          return match;
+        }
+        return formatIsoForPeople(match) ?? match;
+      },
+    );
+
+  let result = "";
+  let start = 0;
+  for (const protectedRange of text.matchAll(protectedRanges)) {
+    const index = protectedRange.index ?? 0;
+    result += humanize(text.slice(start, index));
+    result += protectedRange[0];
+    start = index + protectedRange[0].length;
+  }
+  return result + humanize(text.slice(start));
 }
 
 /** "+10:00" or "+11:00": Sydney's offset from UTC at that instant. */

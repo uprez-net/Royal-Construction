@@ -4,6 +4,14 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "vitest";
 
 import rootAgent from "@/agent/agent";
+import currentTimeInstructions from "@/agent/lib/current-time-instructions";
+import orchestratorCurrentTime from "@/agent/instructions/current-time";
+import adminCurrentTime from "@/agent/subagents/admin-operations/instructions/current-time";
+import complianceCurrentTime from "@/agent/subagents/compliance-operations/instructions/current-time";
+import leadCurrentTime from "@/agent/subagents/lead-operations/instructions/current-time";
+import offerCurrentTime from "@/agent/subagents/offer-operations/instructions/current-time";
+import projectCurrentTime from "@/agent/subagents/project-operations/instructions/current-time";
+import tradieCurrentTime from "@/agent/subagents/tradie-operations/instructions/current-time";
 import {
   DELEGATE_TARGETS,
   SPECIALISTS,
@@ -191,18 +199,20 @@ test("the MCP-visible agent description names what the agent can and cannot do",
   assert.match(description, /Not available/);
 });
 
-test("the orchestrator and every specialist are told the current Sydney date", () => {
-  for (const dir of [
-    path.join(REPO_ROOT, "agent"),
-    ...declaredSpecialists().map((name) => path.join(SUBAGENTS_DIR, name)),
-  ]) {
-    const file = path.join(dir, "instructions", "current-time.ts");
-    assert.ok(existsSync(file), `${file} is missing`);
-    assert.ok(
-      readFileSync(file, "utf8").includes(
-        'import currentTimeInstructions from "@/agent/lib/current-time-instructions";',
-      ),
-      `${file} imports the shared current-time instruction`,
+test("the orchestrator and every specialist share the current-time instruction object", () => {
+  for (const [name, instructions] of [
+    ["orchestrator", orchestratorCurrentTime],
+    ["admin-operations", adminCurrentTime],
+    ["compliance-operations", complianceCurrentTime],
+    ["lead-operations", leadCurrentTime],
+    ["offer-operations", offerCurrentTime],
+    ["project-operations", projectCurrentTime],
+    ["tradie-operations", tradieCurrentTime],
+  ] as const) {
+    assert.strictEqual(
+      instructions,
+      currentTimeInstructions,
+      `${name} uses the shared current-time instruction`,
     );
   }
 });
