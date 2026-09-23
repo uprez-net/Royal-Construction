@@ -11,7 +11,7 @@ import {
   evalMarker,
   requireFixture,
 } from "../helpers/fixtures";
-import { completedCalls } from "../helpers/tool-calls";
+import { completedCalls, observe } from "../helpers/tool-calls";
 
 /**
  * Retrying an approval does not write twice.
@@ -39,21 +39,21 @@ export default defineEval({
     const lead = requireFixture(t, "writeLead", fixtures.writeLead);
     const marker = evalMarker();
 
-    const { request } = await sendForApproval(
+    const { request, turn } = await sendForApproval(
       t,
       `Create a follow-up task on the lead "${lead}" due tomorrow at 2pm, with the note exactly "${marker}".`,
       "create_lead_task",
     );
 
-    const first = await approve(t, request);
+    const first = await approve(turn.session, request);
     first.expectOk();
-    assertExecutedOnce(t, "create_lead_task");
+    assertExecutedOnce(t, await observe(t, turn.session), "create_lead_task");
 
     // The retry. A rejection here is a pass, not an error, so the failure is
     // caught and recorded rather than thrown.
     let replayRefused = false;
     try {
-      await approve(t, request);
+      await approve(turn.session, request);
     } catch (error) {
       replayRefused = true;
       t.log(
@@ -63,10 +63,9 @@ export default defineEval({
     if (!replayRefused) t.log("replayed approval was accepted and settled");
 
     // Either way, exactly one write.
-    assertExecutedOnce(t, "create_lead_task");
+    assertExecutedOnce(t, await observe(t, turn.session), "create_lead_task");
 
-    const verifier = t.newSession();
-    const readback = await verifier.send(
+    const readback = await t.send(
       `List every task on the lead "${lead}" whose note contains "${marker}". Say how many there are.`,
     );
     readback.expectOk();
@@ -75,7 +74,10 @@ export default defineEval({
     // event stream: the marker is echoed in the reply too, and the specialist
     // may list the tasks more than once, either of which would inflate a
     // naive count. One envelope, one marker, one task.
-    const listing = completedCalls(readback, "list_lead_tasks").at(-1);
+    const listing = completedCalls(
+      await observe(t, readback.session),
+      "list_lead_tasks",
+    ).at(-1);
     await t.require(
       listing,
       satisfies(

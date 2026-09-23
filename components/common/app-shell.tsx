@@ -26,6 +26,7 @@ import Image from "next/image";
 import { Notifications } from "./notifications";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SYDNEY_TZ, sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 type AgentSessionTitleDetail = {
@@ -51,6 +52,7 @@ export function AppShell({
 }) {
   const [queryClient] = useState(() => new QueryClient());
   const [time, setTime] = useState("");
+  const [zone, setZone] = useState<"AEST" | "AEDT">("AEST");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [agentSessionTitle, setAgentSessionTitle] =
     useState<AgentSessionTitleDetail | null>(null);
@@ -90,13 +92,17 @@ export function AppShell({
   useEffect(() => {
     const tick = () => {
       const now = new Date();
+      // Labelled as Sydney time, so it has to be Sydney time: it used the
+      // browser's zone, and read "AEST" even during daylight saving.
       setTime(
-        now.toLocaleTimeString([], {
+        now.toLocaleTimeString("en-AU", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
+          timeZone: SYDNEY_TZ,
         }),
       );
+      setZone(sydneyTimeZoneAbbreviation(now));
     };
 
     tick();
@@ -133,8 +139,8 @@ export function AppShell({
                 href={`/${item.slug}`}
                 className={cn(
                   "group relative grid size-10 place-items-center rounded-lg transition-colors hover:bg-muted hover:text-foreground",
-                  item.slug === sectionSlug &&
-                    "bg-royal-gold-light text-royal-gold-ink",
+                  item.slug === sectionSlug
+                    && "bg-royal-gold-light text-royal-gold-ink",
                   item.checkAdmin && !isAdmin && "hidden",
                 )}
                 aria-label={item.label}
@@ -216,8 +222,8 @@ export function AppShell({
                           aria-hidden="true"
                           className={cn(
                             "grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground",
-                            item.slug === sectionSlug &&
-                              "bg-royal-gold-light text-royal-gold-ink",
+                            item.slug === sectionSlug
+                              && "bg-royal-gold-light text-royal-gold-ink",
                           )}
                         >
                           {item.icon}
@@ -305,8 +311,8 @@ export function AppShell({
                         ) : null}
                         <span
                           className={cn(
-                            index === trail.length - 1 &&
-                              "font-medium text-foreground",
+                            index === trail.length - 1
+                              && "font-medium text-foreground",
                           )}
                         >
                           {segment}
@@ -322,7 +328,7 @@ export function AppShell({
                   <div className="font-medium text-foreground">
                     {time || "--:--:--"}
                   </div>
-                  <div>AEST</div>
+                  <div>{zone}</div>
                 </div>
                 <QueryClientProvider client={queryClient}>
                   <NotificationProvider>

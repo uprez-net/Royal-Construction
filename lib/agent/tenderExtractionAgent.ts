@@ -49,9 +49,9 @@ export async function handleTenderExtractionGeneration(
     };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       return {
         extraction: projectExtractionSchema.parse({}),

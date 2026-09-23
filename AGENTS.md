@@ -149,11 +149,28 @@ must preserve Clerk authentication, owner-scoped sessions, authorization,
 approval, idempotency, and audit boundaries. Variation operations are
 currently unavailable.
 
-The orchestrator uses `zai/glm-5.3-flash`, low reasoning, a 1,000,000-token
-context window, and per-session limits of 120,000 input tokens, 12,000 output
-tokens, $1 maximum token cost, and a seven-day timeout. Dynamic specialists
-use the same model and context window with separate limits of 40,000 input
-tokens, 4,000 output tokens, $0.25 maximum token cost, and a 24-hour timeout.
+The orchestrator reaches a specialist **only** through the blocking
+`agent/tools/delegate.ts` workflow tool, and every specialist sets
+`tool: false`. Do not give a specialist its own model tool back: eve runs a
+declared subagent's tool as a background task, so the orchestrator's turn ends
+on a "working" receipt. An MCP invocation then settles as `completed` with
+"I'll report back" and eve terminates the specialist, and the `/agent`
+workspace detaches and later shows the result as a raw-JSON "user" message.
+The specialist list lives once in `agent/lib/specialists.ts`;
+`tests/agent/specialist-delegation.test.ts` holds these invariants.
+
+The orchestrator uses `zai/glm-5.3-flash` ($0.08 per million input tokens,
+$0.25 per million output), low reasoning, a 1,000,000-token context window, and
+per-session limits of 36,000,000 input tokens, 600,000 output tokens, $3
+maximum token cost, and a seven-day timeout. Dynamic specialists use the same
+model and context window with separate limits of 12,000,000 input tokens,
+200,000 output tokens, $1 maximum token cost, and a 24-hour timeout. The model
+and its price live once in `lib/agent/model.ts`, the ceilings in
+`lib/agent/session-limits.ts`. The token ceilings are sized to cost just over
+the dollar ceiling at list price, so the dollar ceiling is what binds
+(`tests/agent/session-limits.test.ts`). A specialist or MCP invocation that
+reaches a ceiling fails outright rather than pausing, so keep specialist
+ceilings above a full multi-tool request.
 
 Use the agent through the feature-flagged `/agent` workspace and its
 authenticated API routes. The hand-written `(mcp)` route group that used to

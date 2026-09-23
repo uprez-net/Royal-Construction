@@ -13,7 +13,7 @@ import {
   evalMarker,
   requireFixture,
 } from "../helpers/fixtures";
-import { completedCalls } from "../helpers/tool-calls";
+import { completedCalls, observe } from "../helpers/tool-calls";
 
 /**
  * The one disposable write the staging suite actually completes.
@@ -42,7 +42,7 @@ export default defineEval({
     const marker = evalMarker();
 
     // ── 1. Ask, and park ────────────────────────────────────────────────
-    const { request } = await sendForApproval(
+    const { request, turn } = await sendForApproval(
       t,
       `Create a follow-up task on the lead "${lead}" due tomorrow at 9am, with the note exactly "${marker}".`,
       "create_lead_task",
@@ -50,12 +50,13 @@ export default defineEval({
     approvalTargets(t, request, marker);
 
     // ── 2. Approve ──────────────────────────────────────────────────────
-    const written = await approve(t, request);
+    const written = await approve(turn.session, request);
     written.expectOk();
     t.succeeded();
-    assertExecutedOnce(t, "create_lead_task");
+    const afterWrite = await observe(t, turn.session);
+    assertExecutedOnce(t, afterWrite, "create_lead_task");
 
-    const call = completedCalls(t, "create_lead_task").at(-1);
+    const call = completedCalls(afterWrite, "create_lead_task").at(-1);
     await t.require(
       call,
       satisfies(
@@ -75,8 +76,7 @@ export default defineEval({
     // ── 3. Verify from a session that never saw the write ───────────────
     // Reading it back in the same session would prove only that the model
     // remembers what it just said. A second session has to go to the database.
-    const verifier = t.newSession();
-    const readback = await verifier.send(
+    const readback = await t.send(
       `List the open tasks on the lead "${lead}" with their notes.`,
     );
     readback.expectOk();
@@ -94,14 +94,18 @@ export default defineEval({
     // Completing the task is itself an owner-approved write, so the cleanup
     // path exercises the same gate a second time. The row is left behind in a
     // completed state; `eve:eval:fixtures reset` removes it.
-    const { request: closeRequest } = await sendForApproval(
+    const { request: closeRequest, turn: closeTurn } = await sendForApproval(
       t,
       `Mark the task noted "${marker}" on the lead "${lead}" as complete.`,
       "complete_lead_task",
     );
-    const closed = await approve(t, closeRequest);
+    const closed = await approve(closeTurn.session, closeRequest);
     closed.expectOk();
-    assertExecutedOnce(t, "complete_lead_task");
+    assertExecutedOnce(
+      t,
+      await observe(t, closeTurn.session),
+      "complete_lead_task",
+    );
 
     t.log(`created and closed out task marker ${marker}`);
   },

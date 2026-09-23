@@ -141,7 +141,12 @@ export function AgentTranscript({
               <div className="flex flex-col gap-3" key={message.id}>
                 <AgentMessage
                   annotations={
-                    messageAnnotations[message.id]
+                    // Annotations are persisted per turn. eve >= 0.61 ids a
+                    // user message by its delivery event rather than its turn,
+                    // so the turn is the stable key to look them up by.
+                    (message.role === "user" && turnId
+                      ? messageAnnotations[`${turnId}:user`]
+                      : undefined)
                     ?? (message.metadata?.optimistic
                       ? (pendingMessageAnnotations ?? undefined)
                       : undefined)
