@@ -156,7 +156,11 @@ export function AgentWhatsAppThreadView({
       ) : null}
 
       {thread.messages.length > 0 ? (
-        <ol className="flex max-h-80 flex-col gap-1.5 overflow-y-auto px-3 py-2.5">
+        <ol
+          aria-label={`WhatsApp messages${thread.leadName ? ` with ${thread.leadName}` : ""}`}
+          className="flex max-h-80 flex-col gap-1.5 overflow-y-auto px-3 py-2.5"
+          tabIndex={0}
+        >
           {thread.olderMessagesAvailable ? (
             <li className="text-center text-[10px] text-muted-foreground">
               Older messages are in the lead&apos;s WhatsApp thread in the app.
@@ -220,7 +224,7 @@ export function AgentWhatsAppDraftView({
           <span className="text-foreground/80">
             {draft.sender
               ? `${draft.sender.label} (${draft.sender.displayNumber})`
-              : "Royal Constructions' WhatsApp number, chosen when sent"}
+              : `Royal Constructions' WhatsApp number${draft.requestedSenderId ? ` (requested sender ID: ${draft.requestedSenderId})` : ""}, chosen when sent`}
           </span>
         </Row>
         {draft.templateName ? (

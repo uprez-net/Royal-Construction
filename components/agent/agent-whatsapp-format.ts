@@ -54,6 +54,7 @@ export type AgentWhatsAppDraft = {
   parameters: string[];
   destination: string | null;
   sender: { label: string; displayNumber: string } | null;
+  requestedSenderId: string | null;
   allowed: boolean | null;
   reason: string | null;
   windowOpen: boolean | null;
@@ -199,6 +200,7 @@ export function readWhatsAppDraft(value: unknown): AgentWhatsAppDraft | null {
           .slice(0, 10)
       : [],
     reason: str(draft.reason),
+    requestedSenderId: str(draft.requestedSenderId, 200),
     sender: sender(draft.sender),
     templateName: str(draft.templateName, 100),
     windowOpen: typeof draft.windowOpen === "boolean" ? draft.windowOpen : null,
@@ -224,6 +226,7 @@ export function approvalWhatsApp(
   if (!args) return null;
   const draft = readWhatsAppDraft({
     body: args.body,
+    requestedSenderId: args.businessPhoneNumberId,
     leadId: args.leadId,
     mode: args.mode,
     parameters: args.templateParameters,
@@ -235,8 +238,10 @@ export function approvalWhatsApp(
 /** Keys the WhatsApp approval preview already shows. */
 export const WHATSAPP_APPROVAL_KEYS = new Set([
   "body",
+  "businessPhoneNumberId",
   "leadId",
   "mode",
+  "requestedSenderId",
   "templateName",
   "templateParameters",
 ]);

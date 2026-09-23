@@ -786,6 +786,17 @@ describe("delivery statuses", () => {
   });
 });
 
+describe("WhatsApp fake DB pagination", () => {
+  test("rejects pagination the in-memory adapter cannot model", async () => {
+    const { db } = fakeWhatsAppDb();
+
+    await assert.rejects(db.lead.findMany({ skip: 1 }), /unsupported-pagination/);
+    await assert.rejects(db.lead.findMany({ cursor: { id: 1 } }), /unsupported-pagination/);
+    await assert.rejects(db.lead.findMany({ distinct: ["id"] }), /unsupported-pagination/);
+    await assert.rejects(db.lead.findMany({ take: -1 }), /unsupported-pagination/);
+  });
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 describe("consent and reads", () => {
   test("recording consent enables a template; an opt-out blocks everything again", async () => {

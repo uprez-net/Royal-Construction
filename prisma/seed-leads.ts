@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { LeadStage, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { leadPhoneE164 } from "@/lib/domain/leads/whatsapp/phone";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is not set.");
@@ -950,6 +951,7 @@ async function main() {
       data: {
         name: lead.name,
         phone: lead.phone || "",
+        phoneE164: leadPhoneE164(lead.phone || ""),
         email: lead.email || "",
         location: lead.location || "",
         sourceDetail: lead.sourceDetail || null,

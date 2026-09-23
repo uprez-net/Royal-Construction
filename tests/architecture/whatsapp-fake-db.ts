@@ -227,6 +227,16 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
             return row ? withRelations(model, row) : null;
           },
           findMany: async (args: Row = {}) => {
+            if (
+              args.skip !== undefined ||
+              args.cursor !== undefined ||
+              args.distinct !== undefined
+            ) {
+              throw new Error("fake db: unsupported-pagination");
+            }
+            if (typeof args.take === "number" && args.take < 0) {
+              throw new Error("fake db: unsupported-pagination");
+            }
             let rows = table(model).filter((row) => matches(row, args.where as Row));
             const orderBy = args.orderBy
               ? (Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy]) as Row[]

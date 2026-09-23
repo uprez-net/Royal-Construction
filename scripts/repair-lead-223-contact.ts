@@ -34,6 +34,7 @@
 import { Client } from "pg";
 
 import { isOwnMailbox } from "@/lib/graph/mailbox";
+import { leadPhoneE164 } from "@/lib/domain/leads/whatsapp/phone";
 
 /**
  * The production Neon endpoint, in full. An exact match rather than a
@@ -200,11 +201,17 @@ async function main() {
         // The WHERE clause repeats the value read above, so a concurrent edit
         // between that read and this write loses the race rather than being
         // clobbered.
-        const updated = await client.query(
-          `UPDATE "Lead" SET ${repair.column} = $1, "updatedAt" = now()
-           WHERE id = $2 AND ${repair.column} = $3`,
-          [repair.to, leadId, repair.from],
-        );
+        const updated = repair.column === "phone"
+          ? await client.query(
+              `UPDATE "Lead" SET phone = $1, "phoneE164" = $2, "updatedAt" = now()
+               WHERE id = $3 AND phone = $4`,
+              [repair.to, leadPhoneE164(repair.to), leadId, repair.from],
+            )
+          : await client.query(
+              `UPDATE "Lead" SET ${repair.column} = $1, "updatedAt" = now()
+               WHERE id = $2 AND ${repair.column} = $3`,
+              [repair.to, leadId, repair.from],
+            );
 
         if (updated.rowCount === 0) {
           console.warn(`  ${repair.column}: changed under us, not written.`);

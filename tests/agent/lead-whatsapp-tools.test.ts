@@ -18,6 +18,7 @@ import {
   approvalWhatsApp,
   readWhatsAppMessage,
   readWhatsAppThread,
+  WHATSAPP_APPROVAL_KEYS,
   WHATSAPP_SEND_TOOL,
 } from "@/components/agent/agent-whatsapp-format";
 import {
@@ -378,12 +379,16 @@ describe("canvas parsing", () => {
     const draft = approvalWhatsApp(WHATSAPP_SEND_TOOL, {
       leadId: 42,
       mode: "template",
+      businessPhoneNumberId: "business-number-42",
       templateName: "lead_missed_contact",
       templateParameters: ["Sam"],
     });
     assert.ok(draft);
     assert.equal(draft.fromApproval, true);
     assert.equal(draft.leadId, 42);
+    assert.equal(draft.requestedSenderId, "business-number-42");
+    assert.equal(WHATSAPP_APPROVAL_KEYS.has("requestedSenderId"), true);
+    assert.equal(WHATSAPP_APPROVAL_KEYS.has("businessPhoneNumberId"), true);
     assert.deepEqual(draft.parameters, ["Sam"]);
     // Never a number from the arguments: the domain resolves it.
     assert.equal(draft.destination, null);

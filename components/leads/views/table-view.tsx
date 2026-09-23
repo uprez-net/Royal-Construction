@@ -58,6 +58,16 @@ interface TableViewProps {
   };
 }
 
+function whatsappActionLabel(
+  leadName: string,
+  summary: WhatsAppSummaryDto | undefined,
+): string {
+  const unreadCount = summary?.unreadCount ?? 0;
+  return unreadCount > 0
+    ? `WhatsApp ${leadName}, ${unreadCount} unread WhatsApp message${unreadCount === 1 ? "" : "s"}`
+    : `WhatsApp ${leadName}`;
+}
+
 export default function TableView({
   loading,
   leads,
@@ -420,7 +430,10 @@ export default function TableView({
                                     ) ??
                                     `WhatsApp ${lead.name}`
                                   }
-                                  aria-label={`WhatsApp ${lead.name}`}
+                                  aria-label={whatsappActionLabel(
+                                    lead.name,
+                                    whatsappSummaries.get(lead.id),
+                                  )}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setWhatsappLead(lead);
@@ -646,7 +659,10 @@ export default function TableView({
                             ) ??
                             undefined
                           }
-                          aria-label={`WhatsApp ${lead.name}`}
+                          aria-label={whatsappActionLabel(
+                            lead.name,
+                            whatsappSummaries.get(lead.id),
+                          )}
                           disabled={actions.whatsapp.disabled}
                         >
                           <MessageCircle size={15} />
