@@ -3,6 +3,7 @@ import { fixtures } from "../data/fixtures";
 import { assertNoMutation } from "../helpers/boundaries";
 import { expectEnvelopeFrom } from "../helpers/envelope";
 import { requireFixture } from "../helpers/fixtures";
+import { observe } from "../helpers/tool-calls";
 
 export default defineEval({
   description: "Read one fixture tradie from the directory.",
@@ -10,13 +11,16 @@ export default defineEval({
   async test(t) {
     const tradie = requireFixture(t, "tradie", fixtures.tradie);
 
-    await t.send(`Show me the tradie "${tradie}" from our directory.`);
+    const turn = await t.send(
+      `Show me the tradie "${tradie}" from our directory.`,
+    );
     t.succeeded();
     t.noFailedActions();
     t.calledSubagent("tradie-operations");
-    assertNoMutation(t);
+    const run = await observe(t, turn.session);
+    assertNoMutation(t, run);
 
-    expectEnvelopeFrom(t, t, "get_tradie", {
+    expectEnvelopeFrom(t, run, "get_tradie", {
       kind: "tradie-summary",
       mentions: tradie,
     });

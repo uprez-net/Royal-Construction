@@ -1,4 +1,4 @@
-import type { EveEvalContext, EveEvalTurn } from "eve/evals";
+import type { EveEvalContext } from "eve/evals";
 import { matches, satisfies } from "eve/evals/expect";
 import {
   agentResultEnvelopeSchema,
@@ -7,7 +7,7 @@ import {
 import {
   completedCalls,
   describeCalls,
-  observedToolCalls,
+  type Observation,
   type ObservedToolCall,
 } from "./tool-calls";
 
@@ -46,16 +46,16 @@ export function parseEnvelope(value: unknown): AgentResultEnvelope | null {
  */
 export function expectEnvelopeFrom(
   t: EveEvalContext,
-  scope: EveEvalContext | EveEvalTurn,
+  run: Observation,
   tool: string,
   expected: EnvelopeExpectation = {},
 ): AgentResultEnvelope | null {
-  const calls = completedCalls(scope, tool);
+  const calls = completedCalls(run, tool);
   t.check(
     calls.length,
     satisfies(
       (count) => typeof count === "number" && count > 0,
-      `"${tool}" completed at least once; observed ${describeCalls(scope)}`,
+      `"${tool}" completed at least once; observed ${describeCalls(run)}`,
     ),
   ).label(`called ${tool}`);
 
@@ -116,10 +116,8 @@ export function gradeEnvelope(
  * Used by the cases that care about what the agent did overall — a refusal
  * must not have written anything — rather than about one named tool.
  */
-export function envelopesIn(
-  scope: EveEvalContext | EveEvalTurn,
-): readonly AgentResultEnvelope[] {
-  return observedToolCalls(scope).flatMap((call) => {
+export function envelopesIn(run: Observation): readonly AgentResultEnvelope[] {
+  return run.calls.flatMap((call) => {
     const envelope = parseEnvelope(call.output);
     return envelope ? [envelope] : [];
   });

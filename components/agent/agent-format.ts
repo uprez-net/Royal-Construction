@@ -1,5 +1,11 @@
 /** Presentation helpers shared by the operations transcript components. */
 
+import {
+  SYDNEY_TZ,
+  formatIsoForPeople,
+  humanizeIsoDatesInText,
+} from "@/lib/dates/sydney";
+
 /**
  * Session cost is billed in USD (`maxTokenCostUsdPerSession`), so it is
  * rendered as "USD 0.42" rather than with a bare dollar symbol an Australian
@@ -16,9 +22,13 @@ const compactNumber = new Intl.NumberFormat("en-AU", {
   notation: "compact",
 });
 
+// Sydney, not the browser's zone: an operator travelling, or a browser set
+// to another zone, would otherwise see a different time from the one the
+// agent and the rest of the business use.
 const clockTime = new Intl.DateTimeFormat("en-AU", {
   hour: "numeric",
   minute: "2-digit",
+  timeZone: SYDNEY_TZ,
 });
 
 /**
@@ -59,7 +69,7 @@ export function toInputFields(input: unknown): AgentInputField[] {
 }
 
 function formatFieldValue(value: unknown): string {
-  if (typeof value === "string") return stripHtml(value);
+  if (typeof value === "string") return formatDisplayText(stripHtml(value));
   if (typeof value === "number" || typeof value === "boolean")
     return String(value);
   if (Array.isArray(value))
@@ -69,6 +79,34 @@ function formatFieldValue(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+/**
+ * A scalar from a tool or result envelope, as a person reads it. Tools and
+ * the model pass dates through as ISO strings; the office reads them as
+ * "Fri 25 Sept 2026, 9:00 am AEST".
+ */
+export function formatDisplayValue(value: unknown): string {
+  if (typeof value === "string") return formatDisplayText(value);
+  return String(value);
+}
+
+/** Free text with any ISO dates in it rewritten in Australian form. */
+export function formatDisplayText(value: string): string {
+  return formatIsoForPeople(value) ?? humanizeIsoDatesInText(value);
+}
+
+/**
+ * Assistant markdown with its ISO dates rewritten, leaving code alone: a date
+ * inside a code span or block is quoted data, not something to reformat.
+ */
+export function formatDisplayMarkdown(markdown: string): string {
+  return markdown
+    .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/)
+    .map((segment, index) =>
+      index % 2 === 1 ? segment : humanizeIsoDatesInText(segment),
+    )
+    .join("");
 }
 
 /** Renders the email bodies tools build as HTML back into readable text. */

@@ -136,7 +136,29 @@ const SEND_PATHS: ReadonlyArray<{
     evidence: /"Idempotency-Key": inviteKeys\.current\(`invite:\$\{email\}`\)/,
     route: "app/api/(data)/users/route.ts",
   },
+  {
+    // Issue #333. The route refuses a send without the header — there is no
+    // derived fallback for a message on a customer's phone.
+    caller: "lib/leads/whatsapp-service.ts",
+    evidence: /\.\.\.idempotencyHeader\(idempotencyKey\)/,
+    route: "app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts",
+  },
 ];
+
+test("the WhatsApp modal holds one key per message and rotates only after success", () => {
+  const modal = read("components/leads/whatsapp/lead-whatsapp-modal.tsx");
+  assert.match(modal, /useIdempotencyKey\(\)/);
+  assert.match(
+    modal,
+    /await sendWhatsAppMessage\(lead\.id, body, sendKey\.current\(\)\);\s*\n\s*sendKey\.rotate\(\)/,
+    "the send key must rotate immediately after a successful send",
+  );
+  assert.doesNotMatch(
+    modal,
+    /catch \(sendError\)[\s\S]{0,400}?sendKey\.rotate\(\)/,
+    "rotating on a failed send would let a retry message the customer twice",
+  );
+});
 
 test("every route reading an Idempotency-Key has a caller that sends one", () => {
   for (const { route, caller, evidence } of SEND_PATHS) {

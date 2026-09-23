@@ -2,11 +2,28 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { humanize } from "@/components/agent/agent-format";
+import {
+  formatDisplayText,
+  formatDisplayValue,
+  humanize,
+} from "@/components/agent/agent-format";
 import {
   AgentOutreach,
   type AgentOutreachDetails,
 } from "@/components/agent/agent-outreach";
+import {
+  AgentWhatsAppDraftView,
+  AgentWhatsAppMessageView,
+  AgentWhatsAppThreadView,
+} from "@/components/agent/agent-whatsapp";
+import {
+  readWhatsAppDraft,
+  readWhatsAppMessage,
+  readWhatsAppThread,
+  type AgentWhatsAppDraft,
+  type AgentWhatsAppMessage,
+  type AgentWhatsAppThread,
+} from "@/components/agent/agent-whatsapp-format";
 import { isInternalHref } from "@/utils/safe-links";
 
 export type AgentResultAction = {
@@ -21,6 +38,12 @@ export type AgentResultEnvelope = {
   actions: AgentResultAction[];
   links: { href: string; label: string }[];
   outreach: AgentOutreachDetails | null;
+  /** A lead's WhatsApp conversation (`get_lead_whatsapp`). */
+  whatsapp: AgentWhatsAppThread | null;
+  /** A WhatsApp message previewed but not sent. */
+  whatsappDraft: AgentWhatsAppDraft | null;
+  /** The message a WhatsApp send stored, sent or replayed. */
+  whatsappMessage: AgentWhatsAppMessage | null;
   summary: string;
   title: string;
   warnings: string[];
@@ -109,6 +132,9 @@ export function resultEnvelope(value: unknown): AgentResultEnvelope | null {
       typeof candidate.kind === "string" ? candidate.kind : "entity-summary",
     links,
     outreach: readOutreach(data.outreach),
+    whatsapp: readWhatsAppThread(data.whatsapp),
+    whatsappDraft: readWhatsAppDraft(data.whatsappDraft),
+    whatsappMessage: readWhatsAppMessage(data.message),
     requiresApproval: candidate.requiresApproval === true,
     summary: candidate.summary,
     title: candidate.title,
@@ -175,8 +201,12 @@ export function AgentResult({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-medium text-foreground">{result.title}</p>
-          <p className="text-sm text-muted-foreground">{result.summary}</p>
+          <p className="font-medium text-foreground">
+            {formatDisplayText(result.title)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {formatDisplayText(result.summary)}
+          </p>
         </div>
         <Badge variant={result.requiresApproval ? "default" : "outline"}>
           {partial
@@ -213,7 +243,7 @@ export function AgentResult({
                 {humanize(key)}
               </dt>
               <dd className="truncate font-medium text-foreground">
-                {String(value)}
+                {formatDisplayValue(value)}
               </dd>
             </div>
           ))}
@@ -222,12 +252,22 @@ export function AgentResult({
 
       {result.outreach ? <AgentOutreach outreach={result.outreach} /> : null}
 
+      {result.whatsappDraft ? (
+        <AgentWhatsAppDraftView draft={result.whatsappDraft} />
+      ) : result.whatsapp ? (
+        <AgentWhatsAppThreadView thread={result.whatsapp} />
+      ) : null}
+
+      {result.whatsappMessage ? (
+        <AgentWhatsAppMessageView message={result.whatsappMessage} />
+      ) : null}
+
       {result.warnings.length > 0 ? (
         <div className="rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-950">
           <p className="font-medium">Review notes</p>
           <ul className="mt-1 list-disc pl-4">
             {result.warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>{formatDisplayText(warning)}</li>
             ))}
           </ul>
         </div>

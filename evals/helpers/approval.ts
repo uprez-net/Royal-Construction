@@ -1,8 +1,13 @@
-import type { EveEvalContext, EveEvalTurn, InputRequest } from "eve/evals";
+import type {
+  EveEvalContext,
+  EveEvalSession,
+  EveEvalTurn,
+  InputRequest,
+} from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import { NEVER_APPROVE_ON_STAGING } from "../data/fixtures";
 import { assertNotExecuted } from "./boundaries";
-import { describeCalls, observedToolCalls } from "./tool-calls";
+import { describeCalls, observe, type Observation } from "./tool-calls";
 
 /**
  * Helpers for the owner-approval gate.
@@ -16,7 +21,8 @@ import { describeCalls, observedToolCalls } from "./tool-calls";
  *
  * eve forwards a subagent's input request to the parent session, so the park
  * is visible on the primary eval session even though the tool belongs to a
- * specialist.
+ * specialist. Answering it goes through that same session: `approve` and
+ * `cancel` take the session the request was raised on.
  */
 
 const APPROVE = "approve";
@@ -31,7 +37,7 @@ export async function sendForApproval(
   const turn = await t.send(prompt);
   turn.parked().label(`${toolName} parks for owner approval`);
 
-  const request = t.requireInputRequest({ toolName });
+  const request = turn.session.requireInputRequest({ toolName });
   t.check(
     request.kind,
     satisfies(
@@ -51,7 +57,7 @@ export async function sendForApproval(
   ).label(`${toolName} approval prompt is populated`);
 
   // Nothing may have executed yet.
-  assertNotExecuted(t, toolName);
+  assertNotExecuted(t, await observe(t, turn.session), toolName);
 
   return { request, turn };
 }
@@ -85,7 +91,7 @@ export function approvalTargets(
  * one has stopped being a test and become an outbound message.
  */
 export async function approve(
-  t: EveEvalContext,
+  session: EveEvalSession,
   request: InputRequest,
 ): Promise<EveEvalTurn> {
   const tool = request.action.toolName;
@@ -94,27 +100,35 @@ export async function approve(
       `${tool} is on the staging never-approve list and must only be cancelled.`,
     );
   }
-  return await t.respond([{ optionId: APPROVE, requestId: request.requestId }]);
+  return await session.respond([
+    { optionId: APPROVE, requestId: request.requestId },
+  ]);
 }
 
 /** Answer `cancel`, which is how every deny-listed case ends. */
 export async function cancel(
-  t: EveEvalContext,
+  session: EveEvalSession,
   request: InputRequest,
 ): Promise<EveEvalTurn> {
-  return await t.respond([{ optionId: CANCEL, requestId: request.requestId }]);
+  return await session.respond([
+    { optionId: CANCEL, requestId: request.requestId },
+  ]);
 }
 
 /** Assert an approved tool ran exactly once across the whole run. */
-export function assertExecutedOnce(t: EveEvalContext, tool: string): void {
-  const calls = observedToolCalls(t).filter(
+export function assertExecutedOnce(
+  t: EveEvalContext,
+  run: Observation,
+  tool: string,
+): void {
+  const calls = run.calls.filter(
     (call) => call.name === tool && call.status === "completed",
   );
   t.check(
     calls.length,
     satisfies(
       (count) => count === 1,
-      `"${tool}" executed exactly once; observed ${describeCalls(t)}`,
+      `"${tool}" executed exactly once; observed ${describeCalls(run)}`,
     ),
   ).label(`${tool} executed once`);
 }

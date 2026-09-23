@@ -25,6 +25,7 @@ import { leadStatusSchema } from "@/utils/validators/lead";
 
 import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
+import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { LeadPagination } from "./lead-pagination";
 import { Card, CardContent } from "@/components/ui/card";
@@ -362,6 +363,7 @@ export default function Leads() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <UnmatchedWhatsAppButton />
               <Button
                 variant="outline"
                 onClick={() => setShowEmailCampaign(true)}

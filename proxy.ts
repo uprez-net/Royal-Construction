@@ -21,6 +21,10 @@ const isPublicRoute = createRouteMatcher([
   "/api/docusign(.*)",
   // Xero webhook — Xero calls it; authenticated by the x-xero-signature HMAC.
   "/api/xero/notification(.*)",
+  // WhatsApp Cloud API webhook — Meta calls it. The GET handshake checks
+  // WHATSAPP_WEBHOOK_VERIFY_TOKEN; every POST is authenticated by the
+  // X-Hub-Signature-256 HMAC over the raw body (lib/whatsapp/webhook-handler.ts).
+  "/api/whatsapp/webhook(.*)",
   // Xero OAuth consent + callback. "Public" here only means the blanket
   // /api/ JSON-401 below does not apply: both legs are BROWSER navigations
   // (the admin clicks Connect; Xero redirects back with ?code), and answering

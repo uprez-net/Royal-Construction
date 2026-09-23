@@ -9,16 +9,17 @@
  * widening what "no mutation" means.
  */
 
-export const SPECIALISTS = [
-  "lead-operations",
-  "offer-operations",
-  "project-operations",
-  "compliance-operations",
-  "tradie-operations",
-  "admin-operations",
-] as const;
+import {
+  SPECIALISTS as SPECIALIST_CATALOGUE,
+  type SpecialistName,
+} from "@/agent/lib/specialists";
 
-export type Specialist = (typeof SPECIALISTS)[number];
+/** The declared specialists, read from the catalogue the agent itself uses. */
+export const SPECIALISTS = Object.keys(
+  SPECIALIST_CATALOGUE,
+) as readonly SpecialistName[];
+
+export type Specialist = SpecialistName;
 
 export const READ_TOOLS = {
   "admin-operations": [
@@ -28,7 +29,13 @@ export const READ_TOOLS = {
     "list_approvals",
     "list_team",
   ],
-  "lead-operations": ["get_lead", "list_lead_tasks", "search_leads"],
+  "lead-operations": [
+    "get_lead",
+    "get_lead_whatsapp",
+    "list_lead_tasks",
+    "prepare_lead_whatsapp_message",
+    "search_leads",
+  ],
   "offer-operations": [
     "check_offer_lists",
     "draft_offer_highlights",
@@ -62,6 +69,8 @@ export const WRITE_TOOLS = {
     "complete_lead_task",
     "create_lead_task",
     "reopen_lead_task",
+    "schedule_lead_whatsapp_follow_up",
+    "send_lead_whatsapp_message",
   ],
   "offer-operations": [
     "create_offer_revision",

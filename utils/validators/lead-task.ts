@@ -2,7 +2,13 @@ import { z } from "zod";
 
 /** Mirrors the Prisma enum. Kept as a literal list so a schema drift is a
  *  compile error at the call site rather than a runtime 500. */
-export const leadTaskTypes = ["CALL", "EMAIL", "MEETING", "WAITING"] as const;
+export const leadTaskTypes = [
+  "CALL",
+  "EMAIL",
+  "MEETING",
+  "WAITING",
+  "WHATSAPP",
+] as const;
 
 export const createLeadTaskSchema = z.object({
   leadId: z.number().int().positive(),

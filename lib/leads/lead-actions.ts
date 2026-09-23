@@ -1,5 +1,6 @@
 import type { Lead } from "./types";
 import { isQuotingStage, isTerminalStage } from "./lead-helpers";
+import { normaliseLeadPhone } from "@/lib/domain/leads/whatsapp/phone";
 
 /**
  * One source of truth for "may the operator do this to this lead?".
@@ -10,6 +11,10 @@ import { isQuotingStage, isTerminalStage } from "./lead-helpers";
  * not, so an emailless lead offered a messaging surface that cannot address
  * anyone. The desktop rule is the correct one (LeadCommModal is an email
  * thread) and is what this module encodes for every caller.
+ *
+ * That control used to be labelled "Send Text", which read as SMS or
+ * WhatsApp and was neither. It is the email thread, and says so; WhatsApp is
+ * its own action (`whatsapp`), gated on a phone that actually normalises.
  */
 export interface LeadActionState {
   /** Whether the control renders at all. */
@@ -28,8 +33,15 @@ export interface LeadActions {
   call: LeadActionState;
   /** Open the templated follow-up email composer. */
   email: LeadActionState;
-  /** Open the message thread — labelled "Send Text" on the detail page. */
+  /** Open the lead's email thread (LeadCommModal). Email, not text/SMS. */
   sendText: LeadActionState;
+  /**
+   * Open the WhatsApp conversation (issue #333). Always rendered, so a lead
+   * without a usable phone shows why instead of silently lacking the button;
+   * blocked when the primary phone does not normalise to E.164 or the lead
+   * is archived. The domain re-checks both, plus consent and the window.
+   */
+  whatsapp: LeadActionState;
   /** Archive the lead — labelled "Delete Lead" on the detail page. */
   archive: LeadActionState;
   /** Jump to the consultation booking flow. */
@@ -76,10 +88,23 @@ export function leadActions(lead: Lead): LeadActions {
     call: gate(!isTerminalStage(lead.stage)),
     email: gate(Boolean(lead.email)),
     sendText: gate(Boolean(lead.email)),
+    whatsapp: whatsappAction(lead),
     archive,
     bookMeeting: gate(true),
     checkOffer: gate(isQuotingStage(lead.stage)),
   };
+}
+
+/**
+ * The WhatsApp gate: one rule for the desktop row, the mobile card and the
+ * lead page. Archived beats "no phone" because it is the reason nothing else
+ * would fix. The phone rule is `normaliseLeadPhone` — the same function the
+ * domain sends with — not "the field has digits in it".
+ */
+function whatsappAction(lead: Pick<Lead, "isArchived" | "phone">): LeadActionState {
+  if (lead.isArchived) return blocked(ARCHIVED);
+  const phone = normaliseLeadPhone(lead.phone);
+  return phone.usable ? available : blocked(phone.reason);
 }
 
 /**

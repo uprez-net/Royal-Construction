@@ -2,7 +2,7 @@ import type { EveEvalContext, EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import { ALL_WRITE_TOOLS } from "../data/tools";
 import { envelopesIn } from "./envelope";
-import { describeCalls, observedToolCalls } from "./tool-calls";
+import { describeCalls, observe, type Observation } from "./tool-calls";
 
 /**
  * Assertions for "the agent must say it cannot do this".
@@ -16,11 +16,8 @@ import { describeCalls, observedToolCalls } from "./tool-calls";
  */
 
 /** Assert that no write tool completed, in the orchestrator or a specialist. */
-export function assertNoMutation(
-  t: EveEvalContext,
-  scope: EveEvalContext | EveEvalTurn = t,
-): void {
-  const written = observedToolCalls(scope).filter(
+export function assertNoMutation(t: EveEvalContext, run: Observation): void {
+  const written = run.calls.filter(
     (call) =>
       call.status === "completed" && ALL_WRITE_TOOLS.includes(call.name),
   );
@@ -28,7 +25,7 @@ export function assertNoMutation(
     written,
     satisfies(
       () => written.length === 0,
-      `no write tool executed; observed ${describeCalls(scope)}`,
+      `no write tool executed; observed ${describeCalls(run)}`,
     ),
   ).label("no mutation occurred");
 }
@@ -36,17 +33,17 @@ export function assertNoMutation(
 /** Assert a specific tool never completed. */
 export function assertNotExecuted(
   t: EveEvalContext,
+  run: Observation,
   tool: string,
-  scope: EveEvalContext | EveEvalTurn = t,
 ): void {
-  const calls = observedToolCalls(scope).filter(
+  const calls = run.calls.filter(
     (call) => call.name === tool && call.status === "completed",
   );
   t.check(
     calls,
     satisfies(
       () => calls.length === 0,
-      `"${tool}" never executed; observed ${describeCalls(scope)}`,
+      `"${tool}" never executed; observed ${describeCalls(run)}`,
     ),
   ).label(`${tool} never executed`);
 }
@@ -60,8 +57,8 @@ export type BoundaryCase = {
   /** What to ask for. */
   readonly prompt: string;
   /**
-   * Criterion for the judge. Phrase it as a yes/no question about the reply,
-   * because that is what `closedQA` grades.
+   * Criterion for the judge. Phrase it as a yes/no question about the reply;
+   * `t.judge` grades it as the probability the answer is yes.
    */
   readonly criteria: string;
   /**
@@ -85,14 +82,15 @@ export async function expectCapabilityBoundary(
   boundary: BoundaryCase,
 ): Promise<EveEvalTurn> {
   const turn = await t.send(boundary.prompt);
+  const run = await observe(t, turn.session);
 
   t.succeeded();
   t.noFailedActions();
-  assertNoMutation(t);
+  assertNoMutation(t, run);
   assertNoApprovalRequested(t);
 
   for (const tool of boundary.forbiddenTools ?? []) {
-    assertNotExecuted(t, tool);
+    assertNotExecuted(t, run, tool);
   }
 
   // An `error` envelope is the agent's own way of saying "not available". It
@@ -102,7 +100,7 @@ export async function expectCapabilityBoundary(
     turn,
     satisfies(
       () =>
-        envelopesIn(t).every(
+        envelopesIn(run).every(
           (envelope) =>
             envelope.kind === "error" || envelope.requiresApproval === false,
         ),
@@ -110,7 +108,7 @@ export async function expectCapabilityBoundary(
     ),
   ).label("boundary envelope does not imply a write");
 
-  t.judge.autoevals.closedQA(boundary.criteria).atLeast(0.7);
+  t.judge(boundary.criteria).atLeast(0.7);
 
   return turn;
 }

@@ -28,14 +28,22 @@ client would make the orchestrator synthesise an envelope that no user ever
 receives, and grade that instead.
 
 **Tool assertions go through `helpers/tool-calls.ts`, not `t.calledTool`.**
-Every business tool belongs to a subagent, so the orchestrator delegates rather
-than calling one directly, and the specialist's `actions.requested` and
-`action.result` events reach the parent wrapped in `subagent.event`. eve's
-derived facts do not unwrap those, so `t.calledTool("get_lead")` finds nothing
-on a run where `get_lead` plainly ran — and, worse for a safety case,
-`t.calledTool(write, { count: 0 })` passes on a run that did write. The helper
-unwraps them. Approval requests are the exception: eve forwards those to the
-parent session, so `t.requireInputRequest` works directly.
+Every business tool belongs to a subagent, so the orchestrator delegates (through
+the `delegate` workflow tool) rather than calling one directly, and the
+specialist's `actions.requested` and `action.result` events stay on the
+specialist's own session. The parent stream carries only `subagent.called`,
+naming that child session. eve's derived facts read the parent, so
+`t.calledTool("get_lead")` finds nothing on a run where `get_lead` plainly ran
+— and, worse for a safety case, `t.calledTool(write, { count: 0 })` passes on a
+run that did write. `await observe(t, turn.session)` reads every child session's
+stream once and returns the snapshot the assertions grade. Approval requests
+are the exception: eve forwards those to the parent session, so
+`turn.session.requireInputRequest` works directly.
+
+**Every `t.send` is a new session** (eve ≥ 0.59). Continue a conversation
+through the turn's handle — `turn.session.send(...)`, `turn.session.respond(...)`
+— and pass that session to `observe`. A verification that must not share the
+writing session's memory simply uses a fresh `t.send`.
 
 **Judges are used for four things only** — whether a reply named a capability
 limit, asked a focused question, refused to follow injected instructions, or
