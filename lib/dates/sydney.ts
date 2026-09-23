@@ -246,7 +246,27 @@ export function formatIsoForPeople(value: string): string | null {
  * is left alone.
  */
 export function humanizeIsoDatesInText(text: string): string {
-  const protectedRanges = /\]\([^\)\n]*\)|(?:https?:\/\/|www\.)[^\s<>]+/gi;
+  const protectedRanges: Array<{ start: number; end: number }> = [];
+  for (const url of text.matchAll(/(?:https?:\/\/|www\.)[^\s<>]+/gi)) {
+    const start = url.index ?? 0;
+    protectedRanges.push({ start, end: start + url[0].length });
+  }
+
+  // A regex that stops at the first `)` truncates destinations containing
+  // parenthesised path segments, leaving any later dates exposed as prose.
+  for (const link of text.matchAll(/\]\(/g)) {
+    const start = link.index ?? 0;
+    let depth = 0;
+    for (let index = start + 1; index < text.length; index++) {
+      if (text[index] === "\n") break;
+      if (text[index] === "(") depth++;
+      else if (text[index] === ")" && --depth === 0) {
+        protectedRanges.push({ start, end: index + 1 });
+        break;
+      }
+    }
+  }
+  protectedRanges.sort((a, b) => a.start - b.start);
   const humanize = (prose: string) =>
     prose.replace(
       /(?<![\w-])\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?(?![\w-])/g,
@@ -261,11 +281,12 @@ export function humanizeIsoDatesInText(text: string): string {
 
   let result = "";
   let start = 0;
-  for (const protectedRange of text.matchAll(protectedRanges)) {
-    const index = protectedRange.index ?? 0;
+  for (const protectedRange of protectedRanges) {
+    const index = protectedRange.start;
+    if (index < start) continue;
     result += humanize(text.slice(start, index));
-    result += protectedRange[0];
-    start = index + protectedRange[0].length;
+    result += text.slice(index, protectedRange.end);
+    start = protectedRange.end;
   }
   return result + humanize(text.slice(start));
 }

@@ -63,9 +63,9 @@ test("dates inside prose are rewritten; identifiers and zone-less times are not"
 test("dates in URLs and Markdown destinations stay unchanged", () => {
   assert.equal(
     humanizeIsoDatesInText(
-      "Due 2026-09-25; https://example.test/2026-09-25?at=2026-09-25 and [booking 2026-09-25](https://example.test/2026-09-25?day=2026-09-25).",
+      "Due 2026-09-25; https://example.test/2026-09-25?at=2026-09-25 and [booking 2026-09-25](https://example.test/2026-09-25?day=2026-09-25) and [archive](/events/(archive)/2026-09-25).",
     ),
-    "Due Fri 25 Sept 2026; https://example.test/2026-09-25?at=2026-09-25 and [booking Fri 25 Sept 2026](https://example.test/2026-09-25?day=2026-09-25).",
+    "Due Fri 25 Sept 2026; https://example.test/2026-09-25?at=2026-09-25 and [booking Fri 25 Sept 2026](https://example.test/2026-09-25?day=2026-09-25) and [archive](/events/(archive)/2026-09-25).",
   );
 });
 
