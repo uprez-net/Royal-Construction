@@ -1,7 +1,7 @@
 import type { EveEvalContext, EveEvalTurn } from "eve/evals";
 import { satisfies } from "eve/evals/expect";
 import { SPECIALISTS, type Specialist } from "../data/tools";
-import { describeCalls, observedToolCalls } from "./tool-calls";
+import { describeCalls, observe } from "./tool-calls";
 
 /**
  * Routing assertions.
@@ -46,12 +46,13 @@ export async function expectRoutedTo(
 
   if (routing.usingTool !== undefined) {
     const tool = routing.usingTool;
-    const ran = observedToolCalls(t).some(
+    const run = await observe(t, turn.session);
+    const ran = run.calls.some(
       (call) => call.name === tool && call.status === "completed",
     );
     t.check(
       ran,
-      satisfies(() => ran, `"${tool}" ran; observed ${describeCalls(t)}`),
+      satisfies(() => ran, `"${tool}" ran; observed ${describeCalls(run)}`),
     ).label(`used ${tool}`);
   }
 

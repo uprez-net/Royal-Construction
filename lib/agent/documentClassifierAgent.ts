@@ -134,9 +134,9 @@ export async function classifyDocumentMarkdown(
     };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       return {
         documentType: ComplianceDocumentType.UNKNOWN,

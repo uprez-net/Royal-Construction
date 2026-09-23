@@ -140,9 +140,9 @@ export async function readTitleSearchOwners(
     };
   } catch (error) {
     if (
-      NoObjectGeneratedError.isInstance(error) ||
-      TypeValidationError.isInstance(error) ||
-      NoOutputGeneratedError.isInstance(error)
+      NoObjectGeneratedError.isInstance(error)
+      || TypeValidationError.isInstance(error)
+      || NoOutputGeneratedError.isInstance(error)
     ) {
       console.error(
         `  Could not read proprietors off "${fileName ?? url}": ${error.message}`,

@@ -20,7 +20,7 @@ export default defineEval({
     // and claimed by that owner. If any of those fail the channel answers 401
     // or 403 and there is no id to read.
     t.check(
-      t.sessionId,
+      turn.sessionId,
       satisfies(
         (value) => typeof value === "string" && value.length > 0,
         "the authenticated session was created and carries a durable id",

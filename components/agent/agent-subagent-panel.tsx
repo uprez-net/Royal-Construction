@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/collapsible";
 import {
   agentTranscriptReducer,
+  childProgressLabel,
   type AgentSubagentRun,
   type AgentTranscriptData,
 } from "@/components/agent/agent-reducer";
@@ -89,9 +90,16 @@ export function AgentSubagentPanel({ run }: { run: AgentSubagentRun }) {
             <p className="text-sm font-medium text-foreground">{name}</p>
             <StatusChip duration={duration} status={run.status} />
           </div>
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-            {summary}
-          </p>
+          {live && followable && !open ? (
+            <AgentSubagentLiveSummary
+              childSessionId={run.childSessionId as string}
+              fallback={summary}
+            />
+          ) : (
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+              {summary}
+            </p>
+          )}
         </div>
         <ChevronDown
           aria-hidden="true"
@@ -116,6 +124,45 @@ export function AgentSubagentPanel({ run }: { run: AgentSubagentRun }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+/**
+ * One line of what a running specialist is doing, read from its own stream.
+ *
+ * eve publishes a specialist's steps on the child session, not the parent, so
+ * without this the collapsed card says "Working" and nothing else for however
+ * long the specialist takes. Mounted only while the specialist is live and the
+ * card is closed; the open card's timeline attaches to the same stream itself.
+ */
+function AgentSubagentLiveSummary({
+  childSessionId,
+  fallback,
+}: {
+  childSessionId: string;
+  fallback: string;
+}) {
+  const [reducer] = useState(agentTranscriptReducer);
+  const child = useEveAgent<AgentTranscriptData>({
+    initialSession: { sessionId: childSessionId, streamIndex: 0 },
+    reducer,
+    resume: true,
+  });
+  let progress: string | null = null;
+  for (let index = child.events.length - 1; index >= 0; index -= 1) {
+    const event = child.events[index] as Parameters<
+      typeof childProgressLabel
+    >[0];
+    // An append carries only its new delta, so the newest one is usually a
+    // word fragment; keep looking for a completed message or an action.
+    if (event.type === "message.appended") continue;
+    progress = childProgressLabel(event);
+    if (progress) break;
+  }
+  return (
+    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+      {progress ?? fallback}
+    </p>
   );
 }
 

@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AgentSessionListItem } from "@/lib/data/agent-sessions";
+import { SYDNEY_TZ } from "@/lib/dates/sydney";
 import { cn } from "@/lib/utils";
 
 /**
@@ -178,6 +179,7 @@ function formatSessionDate(value: string) {
     hour: "numeric",
     minute: "2-digit",
     month: "short",
+    timeZone: SYDNEY_TZ,
   }).format(new Date(value));
 }
 

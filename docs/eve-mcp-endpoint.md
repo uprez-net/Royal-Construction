@@ -79,6 +79,20 @@ You send natural language to `agent_start`, then poll `agent_get` until the
 invocation reaches a terminal state. While the status is `working`, wait at
 least the returned `pollAfterMs` before polling again.
 
+The `agent_start` tool description opens with what this agent covers, what
+needs approval and what it cannot do (it is the root agent's `description` in
+`agent/agent.ts`), so a connecting model knows what to ask for without a
+separate briefing.
+
+Specialist work happens **inside** the invocation. The orchestrator delegates
+through a blocking workflow tool, so the invocation stays `working` while a
+specialist runs — including while it waits on an owner approval, which surfaces
+as `input_required` — and `completed` carries the finished answer. Before this,
+specialists ran as background tasks: an invocation settled as `completed` with
+"I'll share the results once the task completes" and eve terminated the
+specialist, so the answer never arrived. If you see that wording in a
+`completed` result, the deployment predates the fix.
+
 ### Statuses
 
 - `working` — keep polling.

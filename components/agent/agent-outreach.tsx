@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { humanizeEnum, stripHtml } from "@/components/agent/agent-format";
+import { formatSydneyDateTime } from "@/lib/dates/sydney";
 import { cn } from "@/lib/utils";
 
 export type AgentOutreachDetails = {
@@ -220,7 +221,7 @@ export function AgentOutreach({
       {outreach.lastFollowUpAt ? (
         <p className="border-t border-royal-gold/20 px-3 py-2 text-[11px] text-muted-foreground">
           Last follow-up{" "}
-          {new Date(outreach.lastFollowUpAt).toLocaleString("en-AU")}
+          {formatSydneyDateTime(new Date(outreach.lastFollowUpAt))}
         </p>
       ) : null}
     </section>
