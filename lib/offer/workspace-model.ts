@@ -592,7 +592,9 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
   }
   for (const overlap of findOverlappingOwnerNames(owners)) {
     issues.push(
-      `${overlap.combinedName} already names ${overlap.personName}, who is also listed as a separate owner — the documents would name them twice. Remove them from one of the two.`,
+      isSameOwnerPersonName(overlap.otherName, overlap.personName)
+        ? `${overlap.combinedName} already names ${overlap.personName}, who is also listed as a separate owner — the documents would name them twice. Remove them from one of the two.`
+        : `${overlap.personName} is named in both ${overlap.combinedName} and ${overlap.otherName} — the documents would name them twice. Remove them from one of the two.`,
     );
   }
   return issues;
@@ -618,11 +620,16 @@ export function isSameOwnerPersonName(a: string, b: string): boolean {
   return personNameKey(a) === personNameKey(b);
 }
 
-// The people a combined individual owner name stands for, with a shared
-// trailing surname carried onto a bare first name:
+// The people a combined individual owner name stands for:
 //   "Harpreet & Manpreet Sandhu"        -> ["Harpreet Sandhu", "Manpreet Sandhu"]
 //   "Harpreet Sandhu and Manpreet Kaur" -> ["Harpreet Sandhu", "Manpreet Kaur"]
+//   "Harpreet Sandhu & Manpreet & Jaspreet Kaur"
+//                            -> ["Harpreet Sandhu", "Manpreet", "Jaspreet Kaur"]
 //   "Manpreet Sandhu"                   -> null (one person)
+// A surname is carried onto a bare first name only in the "A & B Surname" form,
+// where every name before the last is bare and the surname can only be shared.
+// Mixed with full names, a bare one could belong to either family, so it is
+// left as written rather than guessed.
 export function splitCombinedOwnerName(name: string): string[] | null {
   const parts = stripOwnerHonorific(name)
     .split(/\s*(?:&|\band\b)\s*/i)
@@ -631,48 +638,68 @@ export function splitCombinedOwnerName(name: string): string[] | null {
   if (parts.length < 2) {
     return null;
   }
+  const leading = parts.slice(0, -1);
   const lastWords = parts[parts.length - 1].split(/\s+/);
-  const surname = lastWords.length > 1 ? lastWords[lastWords.length - 1] : "";
-  return parts.map((part) =>
-    surname && !/\s/.test(part) ? `${part} ${surname}` : part,
-  );
+  const sharesSurname =
+    lastWords.length > 1 && leading.every((part) => !/\s/.test(part));
+  if (!sharesSurname) {
+    return parts;
+  }
+  const surname = lastWords[lastWords.length - 1];
+  return [...leading.map((part) => `${part} ${surname}`), parts.at(-1)!];
 }
 
 export type OverlappingOwnerName = {
-  // The individual owner whose single name covers two or more people.
+  // An individual owner whose single name covers two or more people.
   readonly combinedName: string;
-  // A separate individual owner that combined name already includes.
+  // Another individual owner who is, or whose combined name includes, the same
+  // person.
+  readonly otherName: string;
+  // The person the two share.
   readonly personName: string;
 };
 
 // Issue #344: a lead named "Harpreet & Manpreet Sandhu" with a secondary contact
 // "Manpreet Sandhu" became two owners, and every document named Manpreet twice —
 // on the cover, in the greeting, and in the acceptance clause the client signs.
-// Only a combined name repeating another owner counts: two separate owners who
-// share a name can be two real people (a parent and child), and are left alone.
-// Companies are skipped — "Smith & Jones Pty Ltd" is one legal name.
+// Owners are compared person by person, so two combined names that share one
+// person ("Harpreet & Manpreet Sandhu", "Manpreet & Jaspreet Sandhu") count too,
+// and each shared person is reported once. At least one side must be a combined
+// name: two separate owners who share a name can be two real people (a parent
+// and child), and are left alone. Companies are skipped — "Smith & Jones Pty
+// Ltd" is one legal name.
 export function findOverlappingOwnerNames(
   owners: readonly OfferOwner[],
 ): OverlappingOwnerName[] {
-  const individuals = owners.filter(
-    (owner) =>
-      owner.kind === "individual" && owner.displayName.trim().length > 0,
-  );
+  const individuals = owners
+    .filter(
+      (owner) =>
+        owner.kind === "individual" && owner.displayName.trim().length > 0,
+    )
+    .map((owner) => {
+      const name = owner.displayName.trim();
+      const combined = splitCombinedOwnerName(name);
+      return { combined: combined !== null, name, people: combined ?? [name] };
+    });
   const overlaps: OverlappingOwnerName[] = [];
-  for (const combined of individuals) {
-    const people = splitCombinedOwnerName(combined.displayName);
-    if (!people) continue;
-    const keys = new Set(people.map(personNameKey));
-    for (const other of individuals) {
-      if (other === combined) continue;
-      if (keys.has(personNameKey(other.displayName))) {
+  const reported = new Set<string>();
+  individuals.forEach((a, i) => {
+    individuals.slice(i + 1).forEach((b) => {
+      if (!a.combined && !b.combined) return;
+      const [combined, other] = a.combined ? [a, b] : [b, a];
+      const otherKeys = new Set(other.people.map(personNameKey));
+      for (const person of combined.people) {
+        const key = personNameKey(person);
+        if (!otherKeys.has(key) || reported.has(key)) continue;
+        reported.add(key);
         overlaps.push({
-          combinedName: combined.displayName.trim(),
-          personName: other.displayName.trim(),
+          combinedName: combined.name,
+          otherName: other.name,
+          personName: person,
         });
       }
-    }
-  }
+    });
+  });
   return overlaps;
 }
 

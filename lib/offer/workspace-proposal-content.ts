@@ -382,9 +382,18 @@ export function buildWelcomeParagraphs(
   ];
 }
 
-// "Pendle Hill NSW 2145" -> "Pendle Hill"; also a bare "NSW 2145".
+// "Pendle Hill NSW 2145" -> "Pendle Hill"; also a bare "NSW 2145", and the
+// state spelt out, as some geocoders do ("Pendle Hill New South Wales 2145").
 const LOCALITY_STATE =
-  /^(.*?)\s*\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b(?:\s+\d{4})?$/i;
+  /^(.*?)\s*\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT|New South Wales|Victoria|Queensland|South Australia|Western Australia|Tasmania|Northern Territory|Australian Capital Territory)\b(?:\s+\d{4})?$/i;
+
+// The country, as its own segment or trailing a postcode ("NSW 2145
+// Australia"). Never the end of a state name: "South Australia" stays whole.
+function withoutCountry(segment: string): string {
+  const trimmed = segment.trim();
+  if (/^australia$/i.test(trimmed)) return "";
+  return trimmed.replace(/(\d{4})\s+australia$/i, "$1");
+}
 
 /**
  * The suburb of a site address, or `null` when it cannot be picked out
@@ -394,6 +403,8 @@ const LOCALITY_STATE =
  *   "Kellyville NSW 2155, Australia"                  -> "Kellyville"
  *   "Unit 3, 13 Binalong Road, Pendle Hill NSW 2145"  -> "Pendle Hill"
  *   "13 Binalong Road, Pendle Hill, NSW 2145"         -> "Pendle Hill"
+ *   "13 Binalong Road, Pendle Hill, New South Wales"  -> "Pendle Hill"
+ *   "1 King William St, Adelaide, South Australia"    -> "Adelaide"
  *   "13 Binalong Road Pendle Hill NSW 2145"           -> null (street and
  *                                                        suburb run together)
  *
@@ -401,15 +412,19 @@ const LOCALITY_STATE =
  * "Kellyville NSW 2155, Australia" was the country.
  */
 export function siteLocality(siteAddress: string): string | null {
-  const segments = siteAddress
-    .split(",")
-    .map((segment) => segment.replace(/\baustralia$/i, "").trim())
-    .filter(Boolean);
+  const segments = siteAddress.split(",").map(withoutCountry).filter(Boolean);
   for (let i = segments.length - 1; i >= 0; i -= 1) {
     const match = LOCALITY_STATE.exec(segments[i]);
     if (!match) continue;
-    // "NSW 2145" on its own: the suburb is the segment before it.
-    const locality = match[1].trim() || (i > 0 ? segments[i - 1] : "");
+    let locality = match[1].trim();
+    if (!locality) {
+      // A bare state ("NSW 2145", "South Australia"): the suburb is the
+      // segment before it — unless that segment carries a state of its own
+      // ("Adelaide SA 5000, South Australia"), which the next pass reads.
+      const previous = i > 0 ? segments[i - 1] : "";
+      if (LOCALITY_STATE.test(previous)) continue;
+      locality = previous;
+    }
     // A digit means the street is still attached ("13 Binalong Road Pendle
     // Hill"), and there is no reliable place to cut it.
     return locality && !/\d/.test(locality) ? locality : null;

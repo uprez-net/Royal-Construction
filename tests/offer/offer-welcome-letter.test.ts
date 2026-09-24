@@ -36,6 +36,34 @@ test("the suburb is found wherever the state sits", () => {
   }
 });
 
+test("a state spelt out is skipped, not taken for the suburb", () => {
+  for (const [address, suburb] of [
+    [
+      "13 Binalong Road, Pendle Hill, New South Wales, Australia",
+      "Pendle Hill",
+    ],
+    ["13 Binalong Road, Pendle Hill, New South Wales 2145", "Pendle Hill"],
+    ["13 Binalong Road, Pendle Hill New South Wales 2145", "Pendle Hill"],
+    ["1 Hay St, Victoria Park, Western Australia 6100", "Victoria Park"],
+  ] as const) {
+    assert.equal(siteLocality(address), suburb, address);
+  }
+});
+
+test("Australia is dropped as the country, never cut out of a state name", () => {
+  for (const [address, suburb] of [
+    ["1 King William St, Adelaide, South Australia", "Adelaide"],
+    [
+      "1 King William St, Adelaide, South Australia 5000, Australia",
+      "Adelaide",
+    ],
+    ["1 King William St, Adelaide SA 5000, South Australia", "Adelaide"],
+    ["1 Hay St, Perth, Western Australia", "Perth"],
+  ] as const) {
+    assert.equal(siteLocality(address), suburb, address);
+  }
+});
+
 test("an address with no reliable suburb is quoted whole", () => {
   const address = "13 Binalong Road Pendle Hill NSW 2145";
   assert.equal(siteLocality(address), null);

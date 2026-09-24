@@ -64,10 +64,17 @@ export async function generateOfferInspirationImage(input: {
     // flight) is worded for the estimator; a provider failure is not.
     const refusal = domainActionFailure(error);
     if (refusal) return { error: refusal.error, ok: false };
+    // Selected fields only: a provider error can carry the request body and
+    // response headers, which do not belong in the log.
+    const failure = error instanceof Error ? error : null;
+    const statusCode =
+      failure && "statusCode" in failure ? failure.statusCode : undefined;
     console.error("[offer-image-ai] image generation failed", {
       model: OFFER_IMAGE_MODEL_ID,
       slotKey: input.slotKey,
-      error,
+      name: failure?.name ?? typeof error,
+      message: failure?.message,
+      statusCode,
     });
     return { error: OFFER_IMAGE_GENERATION_FAILED, ok: false };
   }

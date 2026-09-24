@@ -148,6 +148,11 @@ function LeadsWorkspace({
   const [showEmailCampaign, setShowEmailCampaign] = useState(false);
 
   const debouncedSearch = useDebounce(searchTerm, 500);
+  // The query the table is actually filtered by: the search effect waits for
+  // five characters before it applies one, so paging, returning to the tab and
+  // the remembered position must not apply a shorter one either.
+  const trimmedSearch = debouncedSearch.trim();
+  const appliedQuery = trimmedSearch.length > 4 ? trimmedSearch : "";
 
   /* ── Derived ── */
   const conversionRate =
@@ -195,12 +200,9 @@ function LeadsWorkspace({
   /* ── Remember where the table is, for the way back from a lead ── */
   useEffect(() => {
     if (activeTab !== "table" || loading || loadingLeads) return;
-    const q = debouncedSearch.trim();
     saveLeadsTableReturn({
       page: pageInfo.page,
-      // Only a query the list was actually filtered by (the search waits for
-      // five characters), so the way back shows the same rows.
-      query: q.length > 4 ? q : "",
+      query: appliedQuery,
       metric: activeMetric,
       filterTiming: activeFilterTiming,
     });
@@ -209,7 +211,7 @@ function LeadsWorkspace({
     loading,
     loadingLeads,
     pageInfo.page,
-    debouncedSearch,
+    appliedQuery,
     activeMetric,
     activeFilterTiming,
   ]);
@@ -288,8 +290,7 @@ function LeadsWorkspace({
       refreshLeadsData(
         tableListParams(
           {
-            // The same five-character rule the search effect applies.
-            query: debouncedSearch.trim().length > 4 ? debouncedSearch : "",
+            query: appliedQuery,
             metric: activeMetric,
             filterTiming: activeFilterTiming,
           },
@@ -336,7 +337,7 @@ function LeadsWorkspace({
       await refreshLeadsData(
         tableListParams(
           {
-            query: searchTerm,
+            query: appliedQuery,
             metric: activeMetric,
             filterTiming: activeFilterTiming,
           },
@@ -344,7 +345,7 @@ function LeadsWorkspace({
         ),
       );
     },
-    [refreshLeadsData, searchTerm, activeMetric, activeFilterTiming],
+    [refreshLeadsData, appliedQuery, activeMetric, activeFilterTiming],
   );
 
   const handleExport = async () => {

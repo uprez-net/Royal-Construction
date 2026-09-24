@@ -44,6 +44,48 @@ test("a combined name carries its shared surname onto each person", () => {
   assert.equal(splitCombinedOwnerName("Sandra Anderson"), null);
 });
 
+test("a bare name between two families keeps no surname rather than a guessed one", () => {
+  assert.deepEqual(
+    splitCombinedOwnerName("Harpreet Sandhu & Manpreet & Jaspreet Kaur"),
+    ["Harpreet Sandhu", "Manpreet", "Jaspreet Kaur"],
+  );
+  assert.deepEqual(
+    splitCombinedOwnerName("Harpreet & Manpreet & Jaspreet Sandhu"),
+    ["Harpreet Sandhu", "Manpreet Sandhu", "Jaspreet Sandhu"],
+  );
+  // So a Manpreet Kaur listed separately is not mistaken for this Manpreet.
+  const owners = [
+    individual(
+      "o1",
+      "Harpreet Sandhu & Manpreet & Jaspreet Kaur",
+      "h@example.com",
+    ),
+    individual("o2", "Manpreet Kaur", "m@example.com"),
+  ];
+  assert.deepEqual(findOverlappingOwnerNames(owners), []);
+});
+
+test("two combined owners sharing one person are caught, once", () => {
+  const owners = [
+    individual("o1", "Harpreet & Manpreet Sandhu", "h@example.com"),
+    individual("o2", "Manpreet & Jaspreet Sandhu", "j@example.com"),
+    individual("o3", "Manpreet Sandhu", "m@example.com"),
+  ];
+  assert.deepEqual(findOverlappingOwnerNames(owners), [
+    {
+      combinedName: "Harpreet & Manpreet Sandhu",
+      otherName: "Manpreet & Jaspreet Sandhu",
+      personName: "Manpreet Sandhu",
+    },
+  ]);
+  const issues = collectOwnerIssues(owners);
+  assert.equal(issues.length, 1);
+  assert.match(
+    issues[0],
+    /Manpreet Sandhu is named in both Harpreet & Manpreet Sandhu and Manpreet & Jaspreet Sandhu/,
+  );
+});
+
 test("offer 105's owners are refused before any document reaches the client", () => {
   const owners = [
     individual("o1", "Harpreet & Manpreet Sandhu", "harpreet@example.com"),
@@ -52,6 +94,7 @@ test("offer 105's owners are refused before any document reaches the client", ()
   assert.deepEqual(findOverlappingOwnerNames(owners), [
     {
       combinedName: "Harpreet & Manpreet Sandhu",
+      otherName: "Manpreet Sandhu",
       personName: "Manpreet Sandhu",
     },
   ]);
@@ -59,7 +102,7 @@ test("offer 105's owners are refused before any document reaches the client", ()
   assert.equal(issues.length, 1);
   assert.match(
     issues[0],
-    /Harpreet & Manpreet Sandhu already names Manpreet Sandhu/,
+    /Harpreet & Manpreet Sandhu already names Manpreet Sandhu, who is also listed as a separate owner/,
   );
 });
 

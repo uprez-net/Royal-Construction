@@ -61,7 +61,11 @@ async function fetchLeadListPage(params: LeadListParams) {
   // (issue #350: the list shrank while someone was on a lead). The server
   // answers that with an empty page, so step back to the last real one rather
   // than show "page 5" of four with no rows.
-  if (result.items.length === 0 && page > result.totalPages) {
+  if (
+    result.items.length === 0
+    && result.totalPages > 0
+    && page > result.totalPages
+  ) {
     return fetchLeads({ ...request, page: result.totalPages });
   }
   return result;
