@@ -590,7 +590,90 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
       );
     }
   }
+  for (const overlap of findOverlappingOwnerNames(owners)) {
+    issues.push(
+      `${overlap.combinedName} already names ${overlap.personName}, who is also listed as a separate owner — the documents would name them twice. Remove them from one of the two.`,
+    );
+  }
   return issues;
+}
+
+// Leading honorifics, including combined forms like "Mr & Mrs" / "Mr and Ms".
+// Matching a single honorific left the rest behind, greeting "Mr & Mrs Smith"
+// as "Dear & Mrs Smith".
+const OWNER_HONORIFIC_PREFIX =
+  /^(?:(?:Mr|Mrs|Ms|Miss|Dr)\.?)(?:\s*(?:&|and)\s*(?:Mr|Mrs|Ms|Miss|Dr)\.?)*\s+/i;
+
+function stripOwnerHonorific(name: string): string {
+  return name.trim().replace(OWNER_HONORIFIC_PREFIX, "");
+}
+
+function personNameKey(name: string): string {
+  return stripOwnerHonorific(name).toLowerCase().replace(/\s+/g, " ");
+}
+
+// Whether two owner names are the same person's name, ignoring honorifics,
+// case and spacing.
+export function isSameOwnerPersonName(a: string, b: string): boolean {
+  return personNameKey(a) === personNameKey(b);
+}
+
+// The people a combined individual owner name stands for, with a shared
+// trailing surname carried onto a bare first name:
+//   "Harpreet & Manpreet Sandhu"        -> ["Harpreet Sandhu", "Manpreet Sandhu"]
+//   "Harpreet Sandhu and Manpreet Kaur" -> ["Harpreet Sandhu", "Manpreet Kaur"]
+//   "Manpreet Sandhu"                   -> null (one person)
+export function splitCombinedOwnerName(name: string): string[] | null {
+  const parts = stripOwnerHonorific(name)
+    .split(/\s*(?:&|\band\b)\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) {
+    return null;
+  }
+  const lastWords = parts[parts.length - 1].split(/\s+/);
+  const surname = lastWords.length > 1 ? lastWords[lastWords.length - 1] : "";
+  return parts.map((part) =>
+    surname && !/\s/.test(part) ? `${part} ${surname}` : part,
+  );
+}
+
+export type OverlappingOwnerName = {
+  // The individual owner whose single name covers two or more people.
+  readonly combinedName: string;
+  // A separate individual owner that combined name already includes.
+  readonly personName: string;
+};
+
+// Issue #344: a lead named "Harpreet & Manpreet Sandhu" with a secondary contact
+// "Manpreet Sandhu" became two owners, and every document named Manpreet twice —
+// on the cover, in the greeting, and in the acceptance clause the client signs.
+// Only a combined name repeating another owner counts: two separate owners who
+// share a name can be two real people (a parent and child), and are left alone.
+// Companies are skipped — "Smith & Jones Pty Ltd" is one legal name.
+export function findOverlappingOwnerNames(
+  owners: readonly OfferOwner[],
+): OverlappingOwnerName[] {
+  const individuals = owners.filter(
+    (owner) =>
+      owner.kind === "individual" && owner.displayName.trim().length > 0,
+  );
+  const overlaps: OverlappingOwnerName[] = [];
+  for (const combined of individuals) {
+    const people = splitCombinedOwnerName(combined.displayName);
+    if (!people) continue;
+    const keys = new Set(people.map(personNameKey));
+    for (const other of individuals) {
+      if (other === combined) continue;
+      if (keys.has(personNameKey(other.displayName))) {
+        overlaps.push({
+          combinedName: combined.displayName.trim(),
+          personName: other.displayName.trim(),
+        });
+      }
+    }
+  }
+  return overlaps;
 }
 
 // The legacy flat client* projection (primary = owners[0], secondary =
@@ -792,15 +875,7 @@ export function formatOwnerGreetingNames(
     .map((owner) =>
       owner.kind === "company"
         ? owner.displayName.trim()
-        : // Strip the WHOLE leading honorific, including combined forms like
-          // "Mr & Mrs" / "Mr and Ms". Matching a single honorific left the rest
-          // behind, greeting "Mr & Mrs Smith" as "Dear & Mrs Smith".
-          owner.displayName
-            .trim()
-            .replace(
-              /^(?:(?:Mr|Mrs|Ms|Miss|Dr)\.?)(?:\s*(?:&|and)\s*(?:Mr|Mrs|Ms|Miss|Dr)\.?)*\s+/i,
-              "",
-            ),
+        : stripOwnerHonorific(owner.displayName),
     )
     .filter((name) => name.length > 0);
   if (names.length === 0) {
