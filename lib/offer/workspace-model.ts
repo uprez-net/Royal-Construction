@@ -1191,8 +1191,8 @@ type AllowanceRowText = {
 // them, so a row is as tall as the taller of the two, plus its own padding.
 export function allowanceRowLines(row: AllowanceRowText): number {
   const itemLines =
-    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
-    (row.description.trim().length > 0
+    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM)
+    + (row.description.trim().length > 0
       ? estimateWrappedLines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
       : 0);
   return (
@@ -1238,9 +1238,9 @@ export function getIncludedOfferTenderLineItems(
       lines
         .filter(
           (line) =>
-            line.includedInContract &&
-            line.costExGst > 0 &&
-            line.offerTenderLineItem.trim().length > 0,
+            line.includedInContract
+            && line.costExGst > 0
+            && line.offerTenderLineItem.trim().length > 0,
         )
         .map((line) => line.offerTenderLineItem.trim()),
     ),

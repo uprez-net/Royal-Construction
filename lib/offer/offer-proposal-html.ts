@@ -174,8 +174,8 @@ export function buildProposalHtml(
   // table — four blocks of long company names are far taller than four of short
   // individual names, so the count alone never decided this correctly.
   const inlineSignatures =
-    signatureBlocks.length <= INLINE_SIGNATURE_LIMIT &&
-    signatureLines <= INLINE_SIGNATURE_BUDGET;
+    signatureBlocks.length <= INLINE_SIGNATURE_LIMIT
+    && signatureLines <= INLINE_SIGNATURE_BUDGET;
   let signatureChunks: SignatureBlock[][] = [];
   if (!inlineSignatures) {
     // The first signature page also carries the acceptance paragraph, which NAMES
@@ -208,11 +208,11 @@ export function buildProposalHtml(
   const allowancePages = chunkAllowanceRows(data.scopeRows);
 
   const totalPages =
-    5 +
-    inclusionPages.length +
-    (galleryImages.length > 0 ? 1 : 0) +
-    allowancePages.length +
-    signatureChunks.length;
+    5
+    + inclusionPages.length
+    + (galleryImages.length > 0 ? 1 : 0)
+    + allowancePages.length
+    + signatureChunks.length;
   let pageNo = 0;
   const foot = () => {
     pageNo += 1;
