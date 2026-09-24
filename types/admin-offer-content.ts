@@ -69,6 +69,7 @@ export interface OfferScopeData {
 export interface InclusionScheduleRow {
   spec: string;
   category?: string;
+  tenderText?: string;
 }
 
 // ---- Offer Content ----

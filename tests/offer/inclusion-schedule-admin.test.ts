@@ -28,9 +28,20 @@ test("a bare string row becomes {spec}; a categorised row keeps its category", (
   assert.deepEqual(
     normaliseScheduleRows([
       "New row",
-      { spec: "Slab", category: "Concrete Slab" },
+      {
+        spec: "Slab",
+        category: "Concrete Slab",
+        tenderText: "Tender slab detail",
+      },
     ]),
-    [{ spec: "New row" }, { spec: "Slab", category: "Concrete Slab" }],
+    [
+      { spec: "New row" },
+      {
+        spec: "Slab",
+        category: "Concrete Slab",
+        tenderText: "Tender slab detail",
+      },
+    ],
   );
 });
 

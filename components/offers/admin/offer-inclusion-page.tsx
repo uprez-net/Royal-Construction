@@ -35,7 +35,7 @@ export function OfferInclusionsPage() {
     <Card className="border-border/70 bg-white/95 shadow-sm">
       <CardHeader className="border-b border-border/70">
         <OfferCardHeading
-          description="Define the reusable inclusion bullets pre-filled onto every new construction offer."
+          description="Edit each Offer inclusion, its category and optional Tender Text."
           icon={<FilePenLine className="size-4" aria-hidden="true" />}
           title="Offer document inclusions"
         />

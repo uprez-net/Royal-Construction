@@ -101,6 +101,7 @@ export const hbcfClaimDataSchema = z.object({
 export const inclusionScheduleRowSchema = z.object({
   spec: z.string(),
   category: z.string().optional(),
+  tenderText: z.string().optional(),
 });
 
 export const offerContentDataSchema = z.object({

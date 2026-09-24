@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import type { InclusionScheduleRow } from "@/types/admin-offer-content";
 import { INCLUSION_CATEGORY_SUGGESTIONS } from "./inclusion-schedule";
@@ -16,15 +17,6 @@ interface InclusionScheduleEditorProps {
   onRestore: (row: InclusionScheduleRow, index: number) => void;
 }
 
-// An emptied category drops the key rather than storing "", so a cleared row
-// reads the same as one that never had a category.
-function withCategory(
-  row: InclusionScheduleRow,
-  category: string,
-): InclusionScheduleRow {
-  return category === "" ? { spec: row.spec } : { spec: row.spec, category };
-}
-
 export function InclusionScheduleEditor({
   value,
   onChange,
@@ -34,16 +26,26 @@ export function InclusionScheduleEditor({
   const categoryListId = `${id}-categories`;
   const draftSpecId = `${id}-draft-spec`;
   const draftCategoryId = `${id}-draft-category`;
+  const draftTenderTextId = `${id}-draft-tender-text`;
   const [draftSpec, setDraftSpec] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
+  const [draftTenderText, setDraftTenderText] = useState("");
 
   const commitDraft = () => {
     const spec = draftSpec.trim();
-    if (!spec) return;
     const category = draftCategory.trim();
-    onChange([...value, category ? { spec, category } : { spec }]);
+    if (!spec && !category) return;
+    onChange([
+      ...value,
+      {
+        spec,
+        ...(category ? { category } : {}),
+        tenderText: draftTenderText.trim(),
+      },
+    ]);
     setDraftSpec("");
     setDraftCategory("");
+    setDraftTenderText("");
   };
 
   const updateAt = (index: number, row: InclusionScheduleRow) => {
@@ -90,6 +92,7 @@ export function InclusionScheduleEditor({
           {value.map((row, index) => {
             const specId = `${id}-spec-${index}`;
             const categoryId = `${id}-category-${index}`;
+            const tenderTextId = `${id}-tender-text-${index}`;
             return (
               <li
                 key={index}
@@ -104,7 +107,7 @@ export function InclusionScheduleEditor({
                   onChange={(e) =>
                     updateAt(index, { ...row, spec: e.target.value })
                   }
-                  placeholder="Inclusion text"
+                  placeholder="Offer inclusion text"
                   className="min-w-60 flex-1"
                   aiRewrite
                 />
@@ -116,10 +119,28 @@ export function InclusionScheduleEditor({
                   list={categoryListId}
                   value={row.category ?? ""}
                   onChange={(e) =>
-                    updateAt(index, withCategory(row, e.target.value))
+                    updateAt(index, {
+                      ...row,
+                      category: e.target.value || undefined,
+                    })
                   }
                   placeholder="Category"
                   className="w-56"
+                />
+                <Label htmlFor={tenderTextId} className="sr-only">
+                  Inclusion {index + 1} tender text
+                </Label>
+                <Textarea
+                  id={tenderTextId}
+                  value={row.tenderText ?? ""}
+                  onChange={(e) =>
+                    updateAt(index, {
+                      ...row,
+                      tenderText: e.target.value,
+                    })
+                  }
+                  placeholder="Tender Text"
+                  className="w-[28rem] max-w-full"
                 />
                 <button
                   type="button"
@@ -148,7 +169,7 @@ export function InclusionScheduleEditor({
             value={draftSpec}
             onChange={(e) => setDraftSpec(e.target.value)}
             onKeyDown={commitOnEnter}
-            placeholder="Inclusion text"
+            placeholder="Offer inclusion text"
             aiRewrite
           />
         </div>
@@ -166,6 +187,20 @@ export function InclusionScheduleEditor({
             onChange={(e) => setDraftCategory(e.target.value)}
             onKeyDown={commitOnEnter}
             placeholder="e.g. Concrete Slab"
+          />
+        </div>
+        <div className="w-[28rem] max-w-full space-y-1">
+          <Label
+            htmlFor={draftTenderTextId}
+            className="text-xs text-muted-foreground"
+          >
+            Tender Text
+          </Label>
+          <Textarea
+            id={draftTenderTextId}
+            value={draftTenderText}
+            onChange={(e) => setDraftTenderText(e.target.value)}
+            placeholder="Tender Text"
           />
         </div>
         <Button type="button" variant="outline" size="sm" onClick={commitDraft}>

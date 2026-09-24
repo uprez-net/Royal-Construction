@@ -430,8 +430,8 @@ export function OfferWorkspaceScreen({
   const tenderGateStatus = deriveTenderGateStatus(tenderGate);
   const gateUnlocked = tenderGateStatus === "unlocked";
   const tenderPanelUnlocked =
-    isOfferPhaseUnlocked(status, "tender") &&
-    (status !== "agreed" || gateUnlocked);
+    isOfferPhaseUnlocked(status, "tender")
+    && (status !== "agreed" || gateUnlocked);
 
   // Open on the step the offer is actually at, rather than on ten collapsed
   // headers with no "you are here".
@@ -512,8 +512,8 @@ export function OfferWorkspaceScreen({
     [],
   );
   const activeStepIsOfferPhase =
-    OFFER_WORKFLOW_STEPS.find((step) => step.id === activeStepId)?.phase ===
-    "offer";
+    OFFER_WORKFLOW_STEPS.find((step) => step.id === activeStepId)?.phase
+    === "offer";
 
   const phaseUnlocked = useMemo(
     () => ({
@@ -688,12 +688,12 @@ export function OfferWorkspaceScreen({
                     executed={revisionExecuted}
                     documentsEditable={documentsStillEditable}
                     notice={
-                      revisionNotice ??
+                      revisionNotice
                       // Create revision is disabled from the signed Tender on. The
                       // server's refusal used to be what said why.
-                      (!canRevise &&
-                      !revisionExecuted &&
-                      status !== "superseded"
+                      ?? (!canRevise
+                      && !revisionExecuted
+                      && status !== "superseded"
                         ? "The Tender is signed, so a change now is a contract variation, not a new offer revision."
                         : null)
                     }
@@ -908,7 +908,6 @@ export function OfferWorkspaceScreen({
                   title="Tender"
                 >
                   <TenderPanel
-                    allowances={allowances}
                     signerStatuses={signerStatuses}
                     customerPrice={customerPrice}
                     draft={draft}
