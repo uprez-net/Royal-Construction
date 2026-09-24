@@ -150,7 +150,7 @@ test("the WhatsApp modal holds one key per message and rotates only after succes
   assert.match(modal, /useIdempotencyKey\(\)/);
   assert.match(
     modal,
-    /await sendWhatsAppMessage\(lead\.id, body, sendKey\.current\(\)\);\s*\n\s*sendKey\.rotate\(\)/,
+    /await sendWhatsAppMessage\(\s*lead\.id,\s*body,\s*sendKey\.current\(\),?\s*\);\s*\n\s*sendKey\.rotate\(\)/,
     "the send key must rotate immediately after a successful send",
   );
   assert.doesNotMatch(

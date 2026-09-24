@@ -6,9 +6,16 @@ import { createFixedWindowRateLimiter } from "@/lib/http/rate-limit";
 // The limiter guards public routes keyed by a header the caller controls, so
 // its table has to stay bounded however many addresses it is shown.
 
-function counted(options: { limit: number; windowMs: number; maxBuckets?: number }) {
+function counted(options: {
+  limit: number;
+  windowMs: number;
+  maxBuckets?: number;
+}) {
   let clock = 0;
-  const limiter = createFixedWindowRateLimiter({ ...options, now: () => clock });
+  const limiter = createFixedWindowRateLimiter({
+    ...options,
+    now: () => clock,
+  });
   return {
     allow: (key: string) => limiter.allow(key),
     advance: (ms: number) => {

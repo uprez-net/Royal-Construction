@@ -51,7 +51,11 @@ export function UnmatchedWhatsAppButton() {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className="relative">
+      <Button
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="relative"
+      >
         <Inbox className="mr-2 size-4" aria-hidden="true" /> Unmatched WhatsApp
         {pending ? (
           <span
@@ -144,13 +148,17 @@ function UnmatchedWhatsAppModal({ onClose }: { onClose: () => void }) {
       maxWidthClass="max-w-[760px]"
     >
       {error ? (
-        <p role="alert" className="mb-3 rounded-md bg-destructive-light px-3 py-2 text-sm text-destructive-ink">
+        <p
+          role="alert"
+          className="mb-3 rounded-md bg-destructive-light px-3 py-2 text-sm text-destructive-ink"
+        >
           {error}
         </p>
       ) : null}
       {!list && !error ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading…
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />{" "}
+          Loading…
         </div>
       ) : null}
       {list && list.items.length === 0 ? (
@@ -160,7 +168,10 @@ function UnmatchedWhatsAppModal({ onClose }: { onClose: () => void }) {
       ) : null}
       <ul className="flex flex-col gap-3">
         {list?.items.map((item) => (
-          <li key={item.id} className="rounded-lg border border-border p-3.5 text-sm">
+          <li
+            key={item.id}
+            className="rounded-lg border border-border p-3.5 text-sm"
+          >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="font-medium">
                 <span className="font-mono tabular-nums">
@@ -172,7 +183,10 @@ function UnmatchedWhatsAppModal({ onClose }: { onClose: () => void }) {
                   </span>
                 ) : null}
               </p>
-              <time className="text-xs text-muted-foreground" dateTime={item.receivedAt}>
+              <time
+                className="text-xs text-muted-foreground"
+                dateTime={item.receivedAt}
+              >
                 {formatSydneyStamp(item.receivedAt)}
               </time>
             </div>
@@ -192,7 +206,9 @@ function UnmatchedWhatsAppModal({ onClose }: { onClose: () => void }) {
 
             {item.candidates.length > 0 ? (
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                <span className="text-muted-foreground">Leads with this number:</span>
+                <span className="text-muted-foreground">
+                  Leads with this number:
+                </span>
                 {item.candidates.map((candidate) => (
                   <Button
                     key={candidate.id}
@@ -220,7 +236,9 @@ function UnmatchedWhatsAppModal({ onClose }: { onClose: () => void }) {
                 size="sm"
                 variant="ghost"
                 disabled={busyId === item.id}
-                onClick={() => void review(item, { action: "dismiss" }, "Dismissed.")}
+                onClick={() =>
+                  void review(item, { action: "dismiss" }, "Dismissed.")
+                }
               >
                 Dismiss
               </Button>
@@ -229,7 +247,9 @@ function UnmatchedWhatsAppModal({ onClose }: { onClose: () => void }) {
                 size="sm"
                 variant="outline"
                 disabled={busyId === item.id}
-                onClick={() => setAttaching(attaching?.id === item.id ? null : item)}
+                onClick={() =>
+                  setAttaching(attaching?.id === item.id ? null : item)
+                }
               >
                 Attach to a lead…
               </Button>
@@ -290,7 +310,8 @@ function LeadChooser({
       ) : null}
       {leadSearch.loading ? (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Searching…
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />{" "}
+          Searching…
         </p>
       ) : (
         <ul className="max-h-56 space-y-1 overflow-y-auto">

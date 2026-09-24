@@ -64,9 +64,9 @@ function parseDateOnlyInput(value: string): Date | null {
   const parsed = new Date(Date.UTC(year, month - 1, day));
 
   if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
   ) {
     return null;
   }

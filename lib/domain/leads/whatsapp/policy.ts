@@ -88,7 +88,7 @@ export function isWindowOpen(
 ): boolean {
   return Boolean(
     conversation?.windowExpiresAt
-      && conversation.windowExpiresAt.getTime() > now.getTime(),
+    && conversation.windowExpiresAt.getTime() > now.getTime(),
   );
 }
 
@@ -196,7 +196,8 @@ export function evaluateWhatsAppEligibility(input: {
   const textReason =
     common ?? (windowOpen ? null : WHATSAPP_REFUSALS.windowClosed);
   const templateReason =
-    common ?? (windowOpen || consentRecorded ? null : WHATSAPP_REFUSALS.noConsent);
+    common
+    ?? (windowOpen || consentRecorded ? null : WHATSAPP_REFUSALS.noConsent);
 
   return {
     archived: lead.isArchived,

@@ -170,7 +170,8 @@ async function applyStatus(
   // was delivered is still a fact worth keeping.
   const fillDelivered =
     input.status === WhatsAppMessageStatus.DELIVERED && !message.deliveredAt;
-  const fillRead = input.status === WhatsAppMessageStatus.READ && !message.readAt;
+  const fillRead =
+    input.status === WhatsAppMessageStatus.READ && !message.readAt;
 
   if (!next && !fillDelivered && !fillRead) return "stale";
 

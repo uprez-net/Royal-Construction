@@ -31,7 +31,11 @@ export type LeadWhatsAppConsentInput =
       readonly source: WhatsAppConsentSource;
       readonly note?: string | null;
     }
-  | { readonly leadId: number; readonly action: "opt_out"; readonly note?: string | null };
+  | {
+      readonly leadId: number;
+      readonly action: "opt_out";
+      readonly note?: string | null;
+    };
 
 export type LeadWhatsAppConsentState = {
   readonly consentAt: Date | null;

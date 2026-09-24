@@ -137,7 +137,10 @@ export async function sendAuthorizedLeadEmail(
     entityRef: {
       type: "lead",
       id: String(input.leadId),
-      display: { label: `Lead ${input.leadId}`, href: `/leads/${input.leadId}` },
+      display: {
+        label: `Lead ${input.leadId}`,
+        href: `/leads/${input.leadId}`,
+      },
     },
     title: sent.alreadySent ? "Email already sent" : "Email sent",
     summary: sent.alreadySent

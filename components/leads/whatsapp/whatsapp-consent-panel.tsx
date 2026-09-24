@@ -59,7 +59,11 @@ export function WhatsAppConsentPanel({
     }
   }
 
-  const Icon = optedOut ? ShieldOff : consent.recorded ? ShieldCheck : ShieldQuestion;
+  const Icon = optedOut
+    ? ShieldOff
+    : consent.recorded
+      ? ShieldCheck
+      : ShieldQuestion;
   const summary = optedOut
     ? `Opted out${thread.lead.optedOutAt ? ` ${formatSydneyStamp(thread.lead.optedOutAt)}` : ""}.`
     : consent.recorded && consent.source
@@ -73,7 +77,10 @@ export function WhatsAppConsentPanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="flex items-start gap-2">
-          <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Icon
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <span>
             <span className="font-medium">Consent: </span>
             {summary}

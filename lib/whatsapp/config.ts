@@ -61,7 +61,9 @@ export function parseWhatsAppPhoneNumbers(raw: string | null): {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .forEach((entry, index) => {
-      const [id, display, ...labelParts] = entry.split("=").map((part) => part.trim());
+      const [id, display, ...labelParts] = entry
+        .split("=")
+        .map((part) => part.trim());
       const label = labelParts.join("=").trim();
       const e164 = waIdToE164(display);
       if (!id || !/^\d+$/.test(id)) {
@@ -82,7 +84,11 @@ export function parseWhatsAppPhoneNumbers(raw: string | null): {
         );
         return;
       }
-      numbers.push({ displayNumber: e164, label: label || e164, phoneNumberId: id });
+      numbers.push({
+        displayNumber: e164,
+        label: label || e164,
+        phoneNumberId: id,
+      });
     });
   return { numbers, problems };
 }
@@ -90,7 +96,8 @@ export function parseWhatsAppPhoneNumbers(raw: string | null): {
 export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
   const enabled = env.WHATSAPP_ENABLED?.trim() === "true";
   const apiVersion =
-    value(env, "WHATSAPP_GRAPH_API_VERSION") ?? DEFAULT_WHATSAPP_GRAPH_API_VERSION;
+    value(env, "WHATSAPP_GRAPH_API_VERSION")
+    ?? DEFAULT_WHATSAPP_GRAPH_API_VERSION;
   const accessToken = value(env, "WHATSAPP_ACCESS_TOKEN");
   const appSecret = value(env, "WHATSAPP_APP_SECRET");
   const verifyToken = value(env, "WHATSAPP_WEBHOOK_VERIFY_TOKEN");
@@ -110,10 +117,14 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
   }
 
   const problems: string[] = [];
-  const parsed = parseWhatsAppPhoneNumbers(value(env, "WHATSAPP_PHONE_NUMBERS"));
+  const parsed = parseWhatsAppPhoneNumbers(
+    value(env, "WHATSAPP_PHONE_NUMBERS"),
+  );
   problems.push(...parsed.problems);
   if (parsed.numbers.length === 0) {
-    problems.push("WHATSAPP_PHONE_NUMBERS configures no usable business number.");
+    problems.push(
+      "WHATSAPP_PHONE_NUMBERS configures no usable business number.",
+    );
   }
 
   const requestedDefault = value(env, "WHATSAPP_DEFAULT_PHONE_NUMBER_ID");
@@ -126,9 +137,16 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
     );
   }
 
-  if (!accessToken) problems.push("WHATSAPP_ACCESS_TOKEN is not set; sending is unavailable.");
-  if (!appSecret) problems.push("WHATSAPP_APP_SECRET is not set; the webhook rejects every delivery.");
-  if (!verifyToken) problems.push("WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set; webhook verification fails.");
+  if (!accessToken)
+    problems.push("WHATSAPP_ACCESS_TOKEN is not set; sending is unavailable.");
+  if (!appSecret)
+    problems.push(
+      "WHATSAPP_APP_SECRET is not set; the webhook rejects every delivery.",
+    );
+  if (!verifyToken)
+    problems.push(
+      "WHATSAPP_WEBHOOK_VERIFY_TOKEN is not set; webhook verification fails.",
+    );
 
   const templates = value(env, "WHATSAPP_ENABLED_TEMPLATES");
 
@@ -141,8 +159,8 @@ export function readWhatsAppConfig(env: Env = process.env): WhatsAppConfig {
       parsed.numbers.length === 0
         ? null
         : {
-            defaultPhoneNumberId:
-              (defaultNumber ?? parsed.numbers[0]).phoneNumberId,
+            defaultPhoneNumberId: (defaultNumber ?? parsed.numbers[0])
+              .phoneNumberId,
             enabledTemplateNames: templates
               ? templates
                   .split(",")

@@ -68,7 +68,9 @@ export async function listUnmatchedWhatsAppMessages(
     }),
   ]);
 
-  const candidateIds = [...new Set(rows.flatMap((row) => row.candidateLeadIds))];
+  const candidateIds = [
+    ...new Set(rows.flatMap((row) => row.candidateLeadIds)),
+  ];
   const leads = candidateIds.length
     ? await db.lead.findMany({
         select: { id: true, name: true },
@@ -144,7 +146,8 @@ export async function attachUnmatchedWhatsAppMessage(
       }
       return attachInbound(tx, {
         body: row.body,
-        businessDisplayNumber: business?.displayNumber ?? row.businessPhoneNumberId,
+        businessDisplayNumber:
+          business?.displayNumber ?? row.businessPhoneNumberId,
         businessLabel: business?.label ?? "an unconfigured number",
         businessPhoneNumberId: row.businessPhoneNumberId,
         customerPhoneE164: row.fromPhoneE164,

@@ -113,7 +113,9 @@ export function whatsappStatusLabel(
   return STATUS[status] ?? { label: "Unknown", tone: "neutral" };
 }
 
-export function readWhatsAppMessage(value: unknown): AgentWhatsAppMessage | null {
+export function readWhatsAppMessage(
+  value: unknown,
+): AgentWhatsAppMessage | null {
   const message = obj(value);
   if (!message) return null;
   const id = str(message.id, 100);
@@ -174,7 +176,8 @@ export function readWhatsAppThread(value: unknown): AgentWhatsAppThread | null {
     textAllowed: bool(text.allowed),
     textReason: str(text.reason),
     unreadCount:
-      typeof thread.unreadCount === "number" && Number.isFinite(thread.unreadCount)
+      typeof thread.unreadCount === "number"
+      && Number.isFinite(thread.unreadCount)
         ? Math.max(0, Math.floor(thread.unreadCount))
         : 0,
     windowExpiresAt: str(window.expiresAt, 40),

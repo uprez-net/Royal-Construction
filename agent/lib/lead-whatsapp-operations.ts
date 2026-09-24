@@ -1,7 +1,10 @@
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
 
-import { AgentAuthorizationError, requireCurrentAgentActor } from "@/agent/lib/actor";
+import {
+  AgentAuthorizationError,
+  requireCurrentAgentActor,
+} from "@/agent/lib/actor";
 import { runAuditedAgentOperation } from "@/agent/lib/audited-operation";
 import { agentDb } from "@/agent/lib/db";
 import type { LeadWhatsAppMessageInput } from "@/agent/lib/lead-whatsapp-contracts";
@@ -137,7 +140,9 @@ export async function getAuthorizedLeadWhatsApp(
   const thread = await readThread(ctx, input.leadId, input.limit);
   const messages = input.limit === 0 ? [] : thread.messages;
   const { eligibility } = thread;
-  const hasInbound = messages.some((message) => message.direction === "INBOUND");
+  const hasInbound = messages.some(
+    (message) => message.direction === "INBOUND",
+  );
   const last = thread.messages.at(-1);
 
   return envelope({
@@ -213,7 +218,8 @@ export async function prepareAuthorizedLeadWhatsAppMessage(
       )
     : null;
   if (input.businessPhoneNumberId && !requestedSender) {
-    problem ??= "That WhatsApp sender number isn't configured for this deployment.";
+    problem ??=
+      "That WhatsApp sender number isn't configured for this deployment.";
   } else if (
     requestedSender
     && requestedSender.phoneNumberId !== eligibility.sender?.phoneNumberId
@@ -230,8 +236,11 @@ export async function prepareAuthorizedLeadWhatsAppMessage(
   return envelope({
     kind: problem ? "error" : "follow-up-status",
     lead: thread.lead,
-    title: problem ? "WhatsApp message can't be sent" : "WhatsApp message ready",
-    summary: problem
+    title: problem
+      ? "WhatsApp message can't be sent"
+      : "WhatsApp message ready",
+    summary:
+      problem
       ?? `Ready to send to ${eligibility.phone.e164 ? formatE164ForDisplay(eligibility.phone.e164) : "the lead"} from ${sender?.label ?? "the default number"}. Nothing has been sent.`,
     data: {
       whatsapp: serializeThread(thread, []),
@@ -248,7 +257,8 @@ export async function prepareAuthorizedLeadWhatsAppMessage(
         sender: sender
           ? { displayNumber: sender.displayNumber, label: sender.label }
           : null,
-        templateName: input.mode === "template" ? (input.templateName ?? null) : null,
+        templateName:
+          input.mode === "template" ? (input.templateName ?? null) : null,
         windowExpiresAt: iso(eligibility.window.expiresAt),
         windowOpen: eligibility.window.open,
       },

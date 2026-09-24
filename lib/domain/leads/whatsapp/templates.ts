@@ -44,7 +44,11 @@ export const WHATSAPP_TEMPLATES: readonly WhatsAppTemplateDefinition[] = [
     language: "en",
     name: "lead_enquiry_follow_up",
     parameters: [
-      { example: "Sam", label: "Customer first name", prefill: "leadFirstName" },
+      {
+        example: "Sam",
+        label: "Customer first name",
+        prefill: "leadFirstName",
+      },
       {
         example: "your new home in Kellyville",
         label: "What the enquiry was about",
@@ -59,7 +63,11 @@ export const WHATSAPP_TEMPLATES: readonly WhatsAppTemplateDefinition[] = [
     language: "en",
     name: "lead_missed_contact",
     parameters: [
-      { example: "Sam", label: "Customer first name", prefill: "leadFirstName" },
+      {
+        example: "Sam",
+        label: "Customer first name",
+        prefill: "leadFirstName",
+      },
     ],
   },
 ];

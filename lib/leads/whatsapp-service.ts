@@ -30,7 +30,11 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export function fetchWhatsAppThread(
   leadId: number,
-  options: { before?: string | null; limit?: number; signal?: AbortSignal } = {},
+  options: {
+    before?: string | null;
+    limit?: number;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<WhatsAppThreadDto> {
   const params = new URLSearchParams();
   if (options.before) params.set("before", options.before);
@@ -94,7 +98,11 @@ export function reconcileWhatsAppMessage(
 ): Promise<WhatsAppMessageDto> {
   return unwrap<WhatsAppMessageDto>(
     `/api/leads/${leadId}/whatsapp/messages/${encodeURIComponent(messageId)}/reconcile`,
-    { body: JSON.stringify({ outcome }), headers: JSON_HEADERS, method: "POST" },
+    {
+      body: JSON.stringify({ outcome }),
+      headers: JSON_HEADERS,
+      method: "POST",
+    },
     "Could not reconcile the message.",
   );
 }

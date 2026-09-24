@@ -61,8 +61,7 @@ export function AgentApproval({
   const isApproval = request.kind === "tool-approval";
   const isLimit = request.kind === "session-limit";
   const whatsapp = isApproval ? approvalWhatsApp(toolName, input) : null;
-  const outreach =
-    isApproval && !whatsapp ? approvalOutreach(input) : null;
+  const outreach = isApproval && !whatsapp ? approvalOutreach(input) : null;
   // The email or WhatsApp body is the approval when there is one, so it is
   // rendered rather than repeated as a raw argument below the preview.
   const fields = (isApproval ? toInputFields(input) : []).filter(

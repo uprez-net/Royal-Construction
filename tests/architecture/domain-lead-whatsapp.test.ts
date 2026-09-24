@@ -68,7 +68,11 @@ import { fakeWhatsAppDb, type FakeWhatsAppDb } from "./whatsapp-fake-db";
 // second call sees what the first one wrote — a replay, a retry and a
 // duplicate webhook are only meaningful that way.
 
-const admin: DomainPrincipal = { kind: "user", role: Role.ADMIN, userId: "u_admin" };
+const admin: DomainPrincipal = {
+  kind: "user",
+  role: Role.ADMIN,
+  userId: "u_admin",
+};
 const customer: DomainPrincipal = {
   kind: "user",
   role: Role.CUSTOMER,
@@ -141,7 +145,9 @@ function seedLead(overrides: Record<string, unknown> = {}) {
   });
 }
 
-function inbound(overrides: Partial<InboundWhatsAppMessage> = {}): InboundWhatsAppMessage {
+function inbound(
+  overrides: Partial<InboundWhatsAppMessage> = {},
+): InboundWhatsAppMessage {
   return {
     businessPhoneNumberId: OFFICE.phoneNumberId,
     fromWaId: "61412345678",
@@ -202,7 +208,9 @@ describe("consent, window and template policy", () => {
       businessPhoneNumberId: OFFICE.phoneNumberId,
       customerPhoneE164: "+61412345678",
       lastInboundAt: new Date(NOW.getTime() - HOUR),
-      windowExpiresAt: new Date(NOW.getTime() - HOUR + CUSTOMER_SERVICE_WINDOW_MS),
+      windowExpiresAt: new Date(
+        NOW.getTime() - HOUR + CUSTOMER_SERVICE_WINDOW_MS,
+      ),
     },
   ];
 
@@ -223,7 +231,11 @@ describe("consent, window and template policy", () => {
     const result = evaluateWhatsAppEligibility({
       channel,
       conversations: [],
-      lead: { ...baseLead, whatsappConsentAt: NOW, whatsappConsentSource: "VERBAL" },
+      lead: {
+        ...baseLead,
+        whatsappConsentAt: NOW,
+        whatsappConsentSource: "VERBAL",
+      },
       now: NOW,
     });
     assert.equal(result.template.allowed, true);
@@ -255,10 +267,18 @@ describe("consent, window and template policy", () => {
   });
 
   test("archived, opted-out, unusable phone and no provider each block everything", () => {
-    const cases: [Partial<WhatsAppPolicyLead>, WhatsAppChannel | null, string][] = [
+    const cases: [
+      Partial<WhatsAppPolicyLead>,
+      WhatsAppChannel | null,
+      string,
+    ][] = [
       [{ isArchived: true }, channel, WHATSAPP_REFUSALS.archived],
       [{ whatsappOptedOutAt: NOW }, channel, WHATSAPP_REFUSALS.optedOut],
-      [{}, { ...channel, sendingAvailable: false }, WHATSAPP_REFUSALS.noSending],
+      [
+        {},
+        { ...channel, sendingAvailable: false },
+        WHATSAPP_REFUSALS.noSending,
+      ],
       [{}, null, WHATSAPP_REFUSALS.noSender],
     ];
     for (const [patch, withChannel, reason] of cases) {
@@ -278,13 +298,19 @@ describe("consent, window and template policy", () => {
       now: NOW,
     });
     assert.equal(noPhone.text.allowed, false);
-    assert.equal(noPhone.template.reason, noPhone.phone.usable ? null : noPhone.phone.reason);
+    assert.equal(
+      noPhone.template.reason,
+      noPhone.phone.usable ? null : noPhone.phone.reason,
+    );
   });
 
   test("the sender is the number with an open window, else the default; unknown overrides refuse", () => {
-    const toSales = [{ ...openWindow[0], businessPhoneNumberId: SALES.phoneNumberId }];
+    const toSales = [
+      { ...openWindow[0], businessPhoneNumberId: SALES.phoneNumberId },
+    ];
     assert.equal(
-      chooseWhatsAppSender(channel, toSales, "+61412345678", NOW)?.phoneNumberId,
+      chooseWhatsAppSender(channel, toSales, "+61412345678", NOW)
+        ?.phoneNumberId,
       SALES.phoneNumberId,
     );
     assert.equal(
@@ -310,10 +336,17 @@ describe("template catalogue", () => {
   });
 
   test("refuses the variables Meta would refuse, before anything is sent", () => {
-    assert.throws(() => validateWhatsAppTemplateParameters(template, ["Sam"]), DomainValidationError);
-    assert.throws(() => validateWhatsAppTemplateParameters(template, ["Sam", "  "]), DomainValidationError);
     assert.throws(
-      () => validateWhatsAppTemplateParameters(template, ["Sam", "line\nbreak"]),
+      () => validateWhatsAppTemplateParameters(template, ["Sam"]),
+      DomainValidationError,
+    );
+    assert.throws(
+      () => validateWhatsAppTemplateParameters(template, ["Sam", "  "]),
+      DomainValidationError,
+    );
+    assert.throws(
+      () =>
+        validateWhatsAppTemplateParameters(template, ["Sam", "line\nbreak"]),
       DomainValidationError,
     );
     assert.deepEqual(
@@ -333,7 +366,11 @@ describe("template catalogue", () => {
     );
     for (const entry of WHATSAPP_TEMPLATES) {
       const placeholders = entry.body.match(/\{\{\d+\}\}/g) ?? [];
-      assert.equal(new Set(placeholders).size, entry.parameters.length, entry.name);
+      assert.equal(
+        new Set(placeholders).size,
+        entry.parameters.length,
+        entry.name,
+      );
       assert.equal(findWhatsAppTemplate(entry.name), entry);
     }
   });
@@ -349,11 +386,19 @@ describe("sending", () => {
   };
 
   test("a consented template goes to the lead's own number, once, and is recorded", async () => {
-    const lead = seedLead({ whatsappConsentAt: NOW, whatsappConsentSource: "VERBAL" });
+    const lead = seedLead({
+      whatsappConsentAt: NOW,
+      whatsappConsentSource: "VERBAL",
+    });
     const port = fakePort();
     const result = await sendLeadWhatsAppMessage(
       admin,
-      { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW },
+      {
+        idempotencyKey: "k1",
+        leadId: lead.id as number,
+        message: templateMessage,
+        now: NOW,
+      },
       store.transactionalDb,
       { whatsapp: port },
     );
@@ -368,7 +413,10 @@ describe("sending", () => {
 
     const [message] = store.rows("leadWhatsAppMessage");
     assert.equal(message.providerMessageId, "wamid.1");
-    assert.equal(message.idempotencyKey, whatsappOutboxKey(lead.id as number, "k1"));
+    assert.equal(
+      message.idempotencyKey,
+      whatsappOutboxKey(lead.id as number, "k1"),
+    );
     const [intent] = store.rows("outboxEvent");
     assert.equal(intent.status, "SUCCEEDED");
     assert.equal(intent.kind, "LEAD_WHATSAPP_SEND");
@@ -380,13 +428,28 @@ describe("sending", () => {
   });
 
   test("a double-click or retry with the same key reports the earlier send and sends nothing", async () => {
-    const lead = seedLead({ whatsappConsentAt: NOW, whatsappConsentSource: "VERBAL" });
+    const lead = seedLead({
+      whatsappConsentAt: NOW,
+      whatsappConsentSource: "VERBAL",
+    });
     const port = fakePort();
-    const input = { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW };
-    await sendLeadWhatsAppMessage(admin, input, store.transactionalDb, { whatsapp: port });
-    const replay = await sendLeadWhatsAppMessage(admin, input, store.transactionalDb, {
+    const input = {
+      idempotencyKey: "k1",
+      leadId: lead.id as number,
+      message: templateMessage,
+      now: NOW,
+    };
+    await sendLeadWhatsAppMessage(admin, input, store.transactionalDb, {
       whatsapp: port,
     });
+    const replay = await sendLeadWhatsAppMessage(
+      admin,
+      input,
+      store.transactionalDb,
+      {
+        whatsapp: port,
+      },
+    );
 
     assert.equal(replay.alreadySent, true);
     assert.equal(port.sent.length, 1);
@@ -395,12 +458,20 @@ describe("sending", () => {
   });
 
   test("a new key is a new message", async () => {
-    const lead = seedLead({ whatsappConsentAt: NOW, whatsappConsentSource: "VERBAL" });
+    const lead = seedLead({
+      whatsappConsentAt: NOW,
+      whatsappConsentSource: "VERBAL",
+    });
     const port = fakePort();
     for (const key of ["k1", "k2"]) {
       await sendLeadWhatsAppMessage(
         admin,
-        { idempotencyKey: key, leadId: lead.id as number, message: templateMessage, now: NOW },
+        {
+          idempotencyKey: key,
+          leadId: lead.id as number,
+          message: templateMessage,
+          now: NOW,
+        },
         store.transactionalDb,
         { whatsapp: port },
       );
@@ -413,18 +484,63 @@ describe("sending", () => {
     const lead = seedLead();
     const archived = seedLead({ isArchived: true, whatsappConsentAt: NOW });
     const port = fakePort();
-    const attempts: [DomainPrincipal, Record<string, unknown>, WhatsAppPort | null, new (...args: never[]) => Error][] = [
+    const attempts: [
+      DomainPrincipal,
+      Record<string, unknown>,
+      WhatsAppPort | null,
+      new (...args: never[]) => Error,
+    ][] = [
       // Free text with no window open.
-      [admin, { leadId: lead.id, message: { body: "Hi", kind: "text" } }, port, DomainTransitionError],
+      [
+        admin,
+        { leadId: lead.id, message: { body: "Hi", kind: "text" } },
+        port,
+        DomainTransitionError,
+      ],
       // A template with no consent and no window.
-      [admin, { leadId: lead.id, message: templateMessage }, port, DomainTransitionError],
-      [admin, { leadId: archived.id, message: templateMessage }, port, DomainTransitionError],
-      [customer, { leadId: lead.id, message: templateMessage }, port, DomainAuthorizationError],
-      [webhook, { leadId: lead.id, message: templateMessage }, port, DomainAuthorizationError],
-      [admin, { idempotencyKey: "  ", leadId: lead.id, message: templateMessage }, port, DomainValidationError],
-      [admin, { leadId: 999, message: templateMessage }, port, DomainNotFoundError],
+      [
+        admin,
+        { leadId: lead.id, message: templateMessage },
+        port,
+        DomainTransitionError,
+      ],
+      [
+        admin,
+        { leadId: archived.id, message: templateMessage },
+        port,
+        DomainTransitionError,
+      ],
+      [
+        customer,
+        { leadId: lead.id, message: templateMessage },
+        port,
+        DomainAuthorizationError,
+      ],
+      [
+        webhook,
+        { leadId: lead.id, message: templateMessage },
+        port,
+        DomainAuthorizationError,
+      ],
+      [
+        admin,
+        { idempotencyKey: "  ", leadId: lead.id, message: templateMessage },
+        port,
+        DomainValidationError,
+      ],
+      [
+        admin,
+        { leadId: 999, message: templateMessage },
+        port,
+        DomainNotFoundError,
+      ],
       // The provider is unreachable from this runtime (Eve without a token).
-      [admin, { leadId: lead.id, message: templateMessage }, null, DomainSideEffectError],
+      [
+        admin,
+        { leadId: lead.id, message: templateMessage },
+        null,
+        DomainSideEffectError,
+      ],
     ];
     for (const [principal, input, whatsapp, error] of attempts) {
       await assert.rejects(
@@ -446,7 +562,12 @@ describe("sending", () => {
     await assert.rejects(
       sendLeadWhatsAppMessage(
         admin,
-        { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW },
+        {
+          idempotencyKey: "k1",
+          leadId: lead.id as number,
+          message: templateMessage,
+          now: NOW,
+        },
         store.transactionalDb,
         {},
       ),
@@ -459,11 +580,19 @@ describe("sending", () => {
 
   test("an unknown or unapproved template is refused", async () => {
     const lead = seedLead({ whatsappConsentAt: NOW });
-    const narrowed = { ...fakePort(), channel: { ...channel, enabledTemplateNames: [] } };
+    const narrowed = {
+      ...fakePort(),
+      channel: { ...channel, enabledTemplateNames: [] },
+    };
     await assert.rejects(
       sendLeadWhatsAppMessage(
         admin,
-        { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW },
+        {
+          idempotencyKey: "k1",
+          leadId: lead.id as number,
+          message: templateMessage,
+          now: NOW,
+        },
         store.transactionalDb,
         { whatsapp: narrowed },
       ),
@@ -488,24 +617,44 @@ describe("sending", () => {
   test("a definite refusal marks the message failed and the same key may retry", async () => {
     const lead = seedLead({ whatsappConsentAt: NOW });
     const port = fakePort([
-      () => new WhatsAppSendError("WhatsApp's sending rate limit was reached.", "not_sent", { code: "130429" }),
+      () =>
+        new WhatsAppSendError(
+          "WhatsApp's sending rate limit was reached.",
+          "not_sent",
+          { code: "130429" },
+        ),
     ]);
-    const input = { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW };
+    const input = {
+      idempotencyKey: "k1",
+      leadId: lead.id as number,
+      message: templateMessage,
+      now: NOW,
+    };
 
     await assert.rejects(
-      sendLeadWhatsAppMessage(admin, input, store.transactionalDb, { whatsapp: port }),
+      sendLeadWhatsAppMessage(admin, input, store.transactionalDb, {
+        whatsapp: port,
+      }),
       (error: unknown) =>
         error instanceof DomainSideEffectError
         && error.retryable
         && /^Nothing was sent/.test(error.message),
     );
     assert.equal(store.rows("leadWhatsAppMessage")[0].status, "FAILED");
-    assert.equal(store.rows("leadWhatsAppMessage")[0].providerErrorCode, "130429");
+    assert.equal(
+      store.rows("leadWhatsAppMessage")[0].providerErrorCode,
+      "130429",
+    );
     assert.equal(store.rows("outboxEvent")[0].status, "PENDING");
 
-    const retried = await sendLeadWhatsAppMessage(admin, input, store.transactionalDb, {
-      whatsapp: port,
-    });
+    const retried = await sendLeadWhatsAppMessage(
+      admin,
+      input,
+      store.transactionalDb,
+      {
+        whatsapp: port,
+      },
+    );
     assert.equal(retried.alreadySent, false);
     assert.equal(retried.message.status, "SENT");
     assert.equal(port.sent.length, 2);
@@ -517,11 +666,19 @@ describe("sending", () => {
     const port = fakePort([
       () => new WhatsAppSendError("timed out", "ambiguous"),
     ]);
-    const input = { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW };
+    const input = {
+      idempotencyKey: "k1",
+      leadId: lead.id as number,
+      message: templateMessage,
+      now: NOW,
+    };
 
     await assert.rejects(
-      sendLeadWhatsAppMessage(admin, input, store.transactionalDb, { whatsapp: port }),
-      (error: unknown) => error instanceof DomainSideEffectError && !error.retryable,
+      sendLeadWhatsAppMessage(admin, input, store.transactionalDb, {
+        whatsapp: port,
+      }),
+      (error: unknown) =>
+        error instanceof DomainSideEffectError && !error.retryable,
     );
     const [message] = store.rows("leadWhatsAppMessage");
     assert.equal(message.needsReconciliation, true);
@@ -529,14 +686,20 @@ describe("sending", () => {
     assert.equal(store.rows("outboxEvent")[0].status, "FAILED");
 
     await assert.rejects(
-      sendLeadWhatsAppMessage(admin, input, store.transactionalDb, { whatsapp: port }),
+      sendLeadWhatsAppMessage(admin, input, store.transactionalDb, {
+        whatsapp: port,
+      }),
       DomainTransitionError,
     );
     assert.equal(port.sent.length, 1);
 
     const settled = await reconcileLeadWhatsAppMessage(
       admin,
-      { leadId: lead.id as number, messageId: message.id as string, outcome: "not_sent" },
+      {
+        leadId: lead.id as number,
+        messageId: message.id as string,
+        outcome: "not_sent",
+      },
       store.transactionalDb,
     );
     assert.equal(settled.status, "FAILED");
@@ -544,7 +707,11 @@ describe("sending", () => {
     await assert.rejects(
       reconcileLeadWhatsAppMessage(
         admin,
-        { leadId: lead.id as number, messageId: message.id as string, outcome: "sent" },
+        {
+          leadId: lead.id as number,
+          messageId: message.id as string,
+          outcome: "sent",
+        },
         store.transactionalDb,
       ),
       DomainTransitionError,
@@ -567,7 +734,12 @@ describe("sending", () => {
     const key = "k1";
     void sendLeadWhatsAppMessage(
       admin,
-      { idempotencyKey: key, leadId: lead.id as number, message: templateMessage, now: NOW },
+      {
+        idempotencyKey: key,
+        leadId: lead.id as number,
+        message: templateMessage,
+        now: NOW,
+      },
       store.transactionalDb,
       { whatsapp: hung },
     );
@@ -580,7 +752,12 @@ describe("sending", () => {
     const retry = (now: Date) =>
       sendLeadWhatsAppMessage(
         admin,
-        { idempotencyKey: key, leadId: lead.id as number, message: templateMessage, now },
+        {
+          idempotencyKey: key,
+          leadId: lead.id as number,
+          message: templateMessage,
+          now,
+        },
         store.transactionalDb,
         { whatsapp: port },
       );
@@ -590,12 +767,16 @@ describe("sending", () => {
       retry(new Date(lockedAt.getTime() + 20_000)),
       /already being sent/,
     );
-    assert.equal(store.rows("leadWhatsAppMessage")[0].needsReconciliation, false);
+    assert.equal(
+      store.rows("leadWhatsAppMessage")[0].needsReconciliation,
+      false,
+    );
 
     // Well past it: nothing will ever record the outcome, so a person must.
     await assert.rejects(
       retry(new Date(lockedAt.getTime() + 5 * 60_000)),
-      (error: unknown) => error instanceof DomainSideEffectError && !error.retryable,
+      (error: unknown) =>
+        error instanceof DomainSideEffectError && !error.retryable,
     );
     const [message] = store.rows("leadWhatsAppMessage");
     assert.equal(message.needsReconciliation, true);
@@ -604,7 +785,11 @@ describe("sending", () => {
 
     const settled = await reconcileLeadWhatsAppMessage(
       admin,
-      { leadId: lead.id as number, messageId: message.id as string, outcome: "sent" },
+      {
+        leadId: lead.id as number,
+        messageId: message.id as string,
+        outcome: "sent",
+      },
       store.transactionalDb,
     );
     assert.equal(settled.status, "SENT");
@@ -614,14 +799,23 @@ describe("sending", () => {
     const lead = seedLead({ whatsappConsentAt: NOW });
     const early = await recordWhatsAppDeliveryStatus(
       webhook,
-      { occurredAt: NOW, providerMessageId: "wamid.early", status: "DELIVERED" },
+      {
+        occurredAt: NOW,
+        providerMessageId: "wamid.early",
+        status: "DELIVERED",
+      },
       store.transactionalDb,
     );
     assert.equal(early.outcome, "awaiting_message");
 
     const result = await sendLeadWhatsAppMessage(
       admin,
-      { idempotencyKey: "k1", leadId: lead.id as number, message: templateMessage, now: NOW },
+      {
+        idempotencyKey: "k1",
+        leadId: lead.id as number,
+        message: templateMessage,
+        now: NOW,
+      },
       store.transactionalDb,
       { whatsapp: fakePort([() => "wamid.early"]) },
     );
@@ -634,13 +828,23 @@ describe("sending", () => {
 describe("inbound messages", () => {
   test("a message from exactly one lead's number is filed once and opens the window", async () => {
     const lead = seedLead();
-    const first = await recordInboundLeadWhatsAppMessage(webhook, inbound(), store.transactionalDb, {
-      channel,
-    });
+    const first = await recordInboundLeadWhatsAppMessage(
+      webhook,
+      inbound(),
+      store.transactionalDb,
+      {
+        channel,
+      },
+    );
     assert.equal(first.outcome, "attached");
-    const replay = await recordInboundLeadWhatsAppMessage(webhook, inbound(), store.transactionalDb, {
-      channel,
-    });
+    const replay = await recordInboundLeadWhatsAppMessage(
+      webhook,
+      inbound(),
+      store.transactionalDb,
+      {
+        channel,
+      },
+    );
     assert.equal(replay.outcome, "duplicate");
 
     assert.equal(store.rows("leadWhatsAppMessage").length, 1);
@@ -655,7 +859,12 @@ describe("inbound messages", () => {
     // With the window open, free text is allowed without recorded consent.
     const sent = await sendLeadWhatsAppMessage(
       admin,
-      { idempotencyKey: "reply", leadId: lead.id as number, message: { body: "Tuesday works", kind: "text" }, now: NOW },
+      {
+        idempotencyKey: "reply",
+        leadId: lead.id as number,
+        message: { body: "Tuesday works", kind: "text" },
+        now: NOW,
+      },
       store.transactionalDb,
       { whatsapp: fakePort() },
     );
@@ -666,19 +875,24 @@ describe("inbound messages", () => {
   test("a unique clash that stored nothing is rethrown for Meta to redeliver, not called a duplicate", async () => {
     seedLead();
     // Another message from the same customer created the conversation first.
-    const clash = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
-    const racing: typeof store.transactionalDb = new Proxy(store.transactionalDb, {
-      get(target, property, receiver) {
-        const value = Reflect.get(target, property, receiver);
-        if (property === "$transaction") {
-          // The fake hands its own client to the callback; hand this one.
-          return (fn: (tx: typeof racing) => Promise<unknown>) =>
-            target.$transaction(() => fn(racing));
-        }
-        if (property !== "leadWhatsAppConversation") return value;
-        return { ...value, upsert: async () => Promise.reject(clash) };
-      },
+    const clash = Object.assign(new Error("Unique constraint failed"), {
+      code: "P2002",
     });
+    const racing: typeof store.transactionalDb = new Proxy(
+      store.transactionalDb,
+      {
+        get(target, property, receiver) {
+          const value = Reflect.get(target, property, receiver);
+          if (property === "$transaction") {
+            // The fake hands its own client to the callback; hand this one.
+            return (fn: (tx: typeof racing) => Promise<unknown>) =>
+              target.$transaction(() => fn(racing));
+          }
+          if (property !== "leadWhatsAppConversation") return value;
+          return { ...value, upsert: async () => Promise.reject(clash) };
+        },
+      },
+    );
     await assert.rejects(
       recordInboundLeadWhatsAppMessage(webhook, inbound(), racing, { channel }),
       (error: unknown) => error === clash,
@@ -713,13 +927,18 @@ describe("inbound messages", () => {
     );
     const misrouted = await recordInboundLeadWhatsAppMessage(
       webhook,
-      inbound({ businessPhoneNumberId: "555", providerMessageId: "w.misrouted" }),
+      inbound({
+        businessPhoneNumberId: "555",
+        providerMessageId: "w.misrouted",
+      }),
       store.transactionalDb,
       { channel },
     );
 
     assert.deepEqual(
-      [none, two, misrouted].map((result) => result.outcome === "unmatched" && result.reason),
+      [none, two, misrouted].map(
+        (result) => result.outcome === "unmatched" && result.reason,
+      ),
       ["NO_MATCH", "AMBIGUOUS", "UNKNOWN_BUSINESS_NUMBER"],
     );
     assert.equal(store.rows("leadWhatsAppMessage").length, 0);
@@ -744,7 +963,12 @@ describe("inbound messages", () => {
     seedLead();
     for (const principal of [admin, customer]) {
       await assert.rejects(
-        recordInboundLeadWhatsAppMessage(principal, inbound(), store.transactionalDb, { channel }),
+        recordInboundLeadWhatsAppMessage(
+          principal,
+          inbound(),
+          store.transactionalDb,
+          { channel },
+        ),
         DomainAuthorizationError,
       );
     }
@@ -753,14 +977,21 @@ describe("inbound messages", () => {
 
   test("a person can attach or dismiss an unmatched message, once", async () => {
     const lead = seedLead({ phone: "0400 000 00" }); // unusable, so unmatched
-    await recordInboundLeadWhatsAppMessage(webhook, inbound(), store.transactionalDb, { channel });
+    await recordInboundLeadWhatsAppMessage(
+      webhook,
+      inbound(),
+      store.transactionalDb,
+      { channel },
+    );
     await recordInboundLeadWhatsAppMessage(
       webhook,
       inbound({ providerMessageId: "wamid.in.2" }),
       store.transactionalDb,
       { channel },
     );
-    const queue = await listUnmatchedWhatsAppMessages(admin, {}, store.db, { channel });
+    const queue = await listUnmatchedWhatsAppMessages(admin, {}, store.db, {
+      channel,
+    });
     assert.equal(queue.pendingCount, 2);
     assert.equal(queue.items[0].businessLabel, "Office");
 
@@ -784,10 +1015,18 @@ describe("inbound messages", () => {
       DomainTransitionError,
     );
 
-    await dismissUnmatchedWhatsAppMessage(admin, { unmatchedId: second.id as string }, store.db);
+    await dismissUnmatchedWhatsAppMessage(
+      admin,
+      { unmatchedId: second.id as string },
+      store.db,
+    );
     assert.equal(store.rows("whatsAppUnmatchedMessage")[1].status, "DISMISSED");
     await assert.rejects(
-      dismissUnmatchedWhatsAppMessage(customer, { unmatchedId: second.id as string }, store.db),
+      dismissUnmatchedWhatsAppMessage(
+        customer,
+        { unmatchedId: second.id as string },
+        store.db,
+      ),
       DomainAuthorizationError,
     );
   });
@@ -813,14 +1052,21 @@ describe("delivery statuses", () => {
       {
         idempotencyKey: "k1",
         leadId: lead.id as number,
-        message: { kind: "template", parameters: ["Sam", "x"], templateName: WHATSAPP_TEMPLATES[0].name },
+        message: {
+          kind: "template",
+          parameters: ["Sam", "x"],
+          templateName: WHATSAPP_TEMPLATES[0].name,
+        },
         now: NOW,
       },
       store.transactionalDb,
       { whatsapp: fakePort([() => "wamid.s"]) },
     );
     const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
-    const record = (status: "SENT" | "DELIVERED" | "READ" | "FAILED", minutes: number) =>
+    const record = (
+      status: "SENT" | "DELIVERED" | "READ" | "FAILED",
+      minutes: number,
+    ) =>
       recordWhatsAppDeliveryStatus(
         webhook,
         { occurredAt: at(minutes), providerMessageId: "wamid.s", status },
@@ -853,7 +1099,11 @@ describe("delivery statuses", () => {
       {
         idempotencyKey: "k1",
         leadId: lead.id as number,
-        message: { kind: "template", parameters: ["Sam", "x"], templateName: WHATSAPP_TEMPLATES[0].name },
+        message: {
+          kind: "template",
+          parameters: ["Sam", "x"],
+          templateName: WHATSAPP_TEMPLATES[0].name,
+        },
         now: NOW,
       },
       store.transactionalDb,
@@ -881,10 +1131,22 @@ describe("WhatsApp fake DB pagination", () => {
   test("rejects pagination the in-memory adapter cannot model", async () => {
     const { db } = fakeWhatsAppDb();
 
-    await assert.rejects(db.lead.findMany({ skip: 1 }), /unsupported-pagination/);
-    await assert.rejects(db.lead.findMany({ cursor: { id: 1 } }), /unsupported-pagination/);
-    await assert.rejects(db.lead.findMany({ distinct: ["id"] }), /unsupported-pagination/);
-    await assert.rejects(db.lead.findMany({ take: -1 }), /unsupported-pagination/);
+    await assert.rejects(
+      db.lead.findMany({ skip: 1 }),
+      /unsupported-pagination/,
+    );
+    await assert.rejects(
+      db.lead.findMany({ cursor: { id: 1 } }),
+      /unsupported-pagination/,
+    );
+    await assert.rejects(
+      db.lead.findMany({ distinct: ["id"] }),
+      /unsupported-pagination/,
+    );
+    await assert.rejects(
+      db.lead.findMany({ take: -1 }),
+      /unsupported-pagination/,
+    );
   });
 });
 
@@ -899,7 +1161,11 @@ describe("consent and reads", () => {
         {
           idempotencyKey: key,
           leadId: lead.id as number,
-          message: { kind: "template", parameters: ["Sam"], templateName: "lead_missed_contact" },
+          message: {
+            kind: "template",
+            parameters: ["Sam"],
+            templateName: "lead_missed_contact",
+          },
           now: NOW,
         },
         store.transactionalDb,
@@ -909,7 +1175,12 @@ describe("consent and reads", () => {
     await assert.rejects(send("a"), DomainTransitionError);
     const granted = await recordLeadWhatsAppConsent(
       admin,
-      { action: "grant", leadId: lead.id as number, note: "On the phone", source: "VERBAL" },
+      {
+        action: "grant",
+        leadId: lead.id as number,
+        note: "On the phone",
+        source: "VERBAL",
+      },
       store.transactionalDb,
     );
     assert.ok(granted.consentAt);
@@ -921,8 +1192,11 @@ describe("consent and reads", () => {
       { action: "opt_out", leadId: lead.id as number },
       store.transactionalDb,
     );
-    await assert.rejects(send("c"), (error: unknown) =>
-      error instanceof DomainTransitionError && error.message === WHATSAPP_REFUSALS.optedOut,
+    await assert.rejects(
+      send("c"),
+      (error: unknown) =>
+        error instanceof DomainTransitionError
+        && error.message === WHATSAPP_REFUSALS.optedOut,
     );
     assert.equal(port.sent.length, 1);
     await assert.rejects(
@@ -956,7 +1230,10 @@ describe("consent and reads", () => {
       store.db,
       { channel },
     );
-    assert.deepEqual(latest.messages.map((m) => m.body), ["message 3", "message 4"]);
+    assert.deepEqual(
+      latest.messages.map((m) => m.body),
+      ["message 3", "message 4"],
+    );
     assert.ok(latest.olderCursor);
     assert.equal(latest.eligibility.text.allowed, true);
     assert.equal(latest.unreadCount, 5);
@@ -964,11 +1241,19 @@ describe("consent and reads", () => {
 
     const older = await getLeadWhatsAppThread(
       admin,
-      { before: latest.olderCursor, leadId: lead.id as number, limit: 2, now: NOW },
+      {
+        before: latest.olderCursor,
+        leadId: lead.id as number,
+        limit: 2,
+        now: NOW,
+      },
       store.db,
       { channel },
     );
-    assert.deepEqual(older.messages.map((m) => m.body), ["message 1", "message 2"]);
+    assert.deepEqual(
+      older.messages.map((m) => m.body),
+      ["message 1", "message 2"],
+    );
 
     const [summary] = await listLeadWhatsAppSummaries(
       admin,
@@ -989,7 +1274,9 @@ describe("consent and reads", () => {
     assert.equal(after.unreadCount, 0);
 
     await assert.rejects(
-      getLeadWhatsAppThread(customer, { leadId: lead.id as number }, store.db, { channel }),
+      getLeadWhatsAppThread(customer, { leadId: lead.id as number }, store.db, {
+        channel,
+      }),
       DomainAuthorizationError,
     );
   });

@@ -62,8 +62,8 @@ function productionUrl(): string {
   const { host } = new URL(url);
   if (host !== PRODUCTION_HOST) {
     throw new Error(
-      `DATABASE_URL points at ${host}, which is not production. ` +
-        `This lead only exists in production; refusing to run.`,
+      `DATABASE_URL points at ${host}, which is not production. `
+        + `This lead only exists in production; refusing to run.`,
     );
   }
 
@@ -97,8 +97,8 @@ function validatedEmail(): string {
 
   if (isOwnMailbox(email)) {
     throw new Error(
-      `LEAD_EMAIL ("${email}") is one of our own mailboxes. Saving that as a ` +
-        `lead's address is the bug this repair exists to undo.`,
+      `LEAD_EMAIL ("${email}") is one of our own mailboxes. Saving that as a `
+        + `lead's address is the bug this repair exists to undo.`,
     );
   }
 
@@ -201,17 +201,18 @@ async function main() {
         // The WHERE clause repeats the value read above, so a concurrent edit
         // between that read and this write loses the race rather than being
         // clobbered.
-        const updated = repair.column === "phone"
-          ? await client.query(
-              `UPDATE "Lead" SET phone = $1, "phoneE164" = $2, "updatedAt" = now()
+        const updated =
+          repair.column === "phone"
+            ? await client.query(
+                `UPDATE "Lead" SET phone = $1, "phoneE164" = $2, "updatedAt" = now()
                WHERE id = $3 AND phone = $4`,
-              [repair.to, leadPhoneE164(repair.to), leadId, repair.from],
-            )
-          : await client.query(
-              `UPDATE "Lead" SET ${repair.column} = $1, "updatedAt" = now()
+                [repair.to, leadPhoneE164(repair.to), leadId, repair.from],
+              )
+            : await client.query(
+                `UPDATE "Lead" SET ${repair.column} = $1, "updatedAt" = now()
                WHERE id = $2 AND ${repair.column} = $3`,
-              [repair.to, leadId, repair.from],
-            );
+                [repair.to, leadId, repair.from],
+              );
 
         if (updated.rowCount === 0) {
           console.warn(`  ${repair.column}: changed under us, not written.`);
@@ -241,8 +242,8 @@ async function main() {
     // transaction rolled back.
     if (lost.length > 0) {
       throw new Error(
-        `Lost the update race on: ${lost.join(", ")}. Rolled back, nothing written. ` +
-          `Re-run to check current state.`,
+        `Lost the update race on: ${lost.join(", ")}. Rolled back, nothing written. `
+          + `Re-run to check current state.`,
       );
     }
   } finally {

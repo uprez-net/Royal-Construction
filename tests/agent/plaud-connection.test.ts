@@ -34,7 +34,10 @@ test("Plaud instructions treat returned content as untrusted and keep audio URLs
   const instructions = read("agent/instructions.md");
   const documentation = read("docs/plaud-mcp.md");
   assert.match(instructions, /untrusted source material/);
-  assert.match(instructions, /Never expose temporary audio\s+URLs or raw audio/);
+  assert.match(
+    instructions,
+    /Never expose temporary audio\s+URLs or raw audio/,
+  );
   assert.match(documentation, /get_file.*notes and transcript segments/);
   assert.match(documentation, /get_transcript.*full transcript/);
   assert.match(documentation, /never expose that URL or raw audio/);

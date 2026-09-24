@@ -75,7 +75,11 @@ export function LeadWhatsAppModal({
     if (sending) return false;
     setSending(true);
     try {
-      const result = await sendWhatsAppMessage(lead.id, body, sendKey.current());
+      const result = await sendWhatsAppMessage(
+        lead.id,
+        body,
+        sendKey.current(),
+      );
       sendKey.rotate();
       addLocal(result.message);
       if (result.alreadySent) {
@@ -138,14 +142,19 @@ export function LeadWhatsAppModal({
       onClose={onClose}
       title={
         <span className="inline-flex items-center gap-2">
-          <MessageCircle className="size-4 text-emerald-600" aria-hidden="true" />
+          <MessageCircle
+            className="size-4 text-emerald-600"
+            aria-hidden="true"
+          />
           {lead.name} — WhatsApp
         </span>
       }
       subtitle={
         destination
           ? `To ${destination}${eligibility?.sender ? ` · from ${eligibility.sender.label} (${formatE164ForDisplay(eligibility.sender.displayNumber)})` : ""}`
-          : (eligibility?.phone.usable === false ? eligibility.phone.reason : undefined)
+          : eligibility?.phone.usable === false
+            ? eligibility.phone.reason
+            : undefined
       }
       maxWidthClass="max-w-[720px]"
       isFullScreenable
@@ -158,7 +167,12 @@ export function LeadWhatsAppModal({
             <p role="alert" className="text-sm text-destructive-ink">
               {error}
             </p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void refresh()}
+            >
               Try again
             </Button>
           </div>
@@ -198,12 +212,20 @@ export function LeadWhatsAppModal({
           </div>
 
           {error ? (
-            <p role="alert" className="rounded-md bg-destructive-light px-3 py-2 text-xs text-destructive-ink">
+            <p
+              role="alert"
+              className="rounded-md bg-destructive-light px-3 py-2 text-xs text-destructive-ink"
+            >
               {error} Showing the last loaded messages.
             </p>
           ) : null}
 
-          <div className={cn("overflow-y-auto pr-1", isFullScreen ? "flex-1" : "max-h-[45vh]")}>
+          <div
+            className={cn(
+              "overflow-y-auto pr-1",
+              isFullScreen ? "flex-1" : "max-h-[45vh]",
+            )}
+          >
             <WhatsAppThread
               messages={messages}
               hasOlder={hasOlder}
@@ -227,7 +249,10 @@ export function LeadWhatsAppModal({
             onSend={handleSend}
           />
 
-          <WhatsAppConsentPanel thread={thread} onChanged={() => void refresh()} />
+          <WhatsAppConsentPanel
+            thread={thread}
+            onChanged={() => void refresh()}
+          />
 
           <div className="border-t border-border pt-3">
             {schedulingFollowUp ? (

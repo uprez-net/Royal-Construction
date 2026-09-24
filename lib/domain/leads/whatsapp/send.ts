@@ -381,11 +381,7 @@ export async function sendLeadWhatsAppMessage(
   });
 
   if (prepared.stale) {
-    throw new DomainSideEffectError(
-      AMBIGUOUS_SEND_MESSAGE,
-      "whatsapp",
-      false,
-    );
+    throw new DomainSideEffectError(AMBIGUOUS_SEND_MESSAGE, "whatsapp", false);
   }
 
   if (prepared.replay) {
@@ -462,12 +458,9 @@ export async function sendLeadWhatsAppMessage(
         { cause: error },
       );
     }
-    throw new DomainSideEffectError(
-      AMBIGUOUS_SEND_MESSAGE,
-      "whatsapp",
-      false,
-      { cause: error },
-    );
+    throw new DomainSideEffectError(AMBIGUOUS_SEND_MESSAGE, "whatsapp", false, {
+      cause: error,
+    });
   }
 
   const sentAt = new Date();
@@ -559,9 +552,7 @@ export async function reconcileLeadWhatsAppMessage(
     message.direction !== WhatsAppMessageDirection.OUTBOUND
     || !message.needsReconciliation
   ) {
-    throw new DomainTransitionError(
-      "This message doesn't need reconciling.",
-    );
+    throw new DomainTransitionError("This message doesn't need reconciling.");
   }
 
   const now = new Date();
@@ -571,7 +562,8 @@ export async function reconcileLeadWhatsAppMessage(
         input.outcome === "sent"
           ? {
               needsReconciliation: false,
-              providerErrorTitle: "Confirmed sent by staff after checking WhatsApp.",
+              providerErrorTitle:
+                "Confirmed sent by staff after checking WhatsApp.",
               status: WhatsAppMessageStatus.SENT,
               statusAt: now,
             }

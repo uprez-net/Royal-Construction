@@ -24,7 +24,11 @@ const header = read("components/leads/detail/lead-header.tsx");
 test("the list's desktop row and mobile card open the one WhatsApp modal", () => {
   // Both views read the same gate and open the same modal pointer.
   const gates = tableView.match(/actions\.whatsapp\.visible/g) ?? [];
-  assert.equal(gates.length, 2, "desktop and mobile must both gate on actions.whatsapp");
+  assert.equal(
+    gates.length,
+    2,
+    "desktop and mobile must both gate on actions.whatsapp",
+  );
   const opens = tableView.match(/setWhatsappLead\(lead\)/g) ?? [];
   assert.equal(opens.length, 2, "desktop and mobile must both open the modal");
   assert.match(tableView, /<LeadWhatsAppModal/);
@@ -73,7 +77,10 @@ const whatsappRoutes = [
 ];
 
 test("every WhatsApp route calls lib/domain and never writes the tables itself", () => {
-  assert.ok(whatsappRoutes.length >= 7, `found ${whatsappRoutes.length} routes`);
+  assert.ok(
+    whatsappRoutes.length >= 7,
+    `found ${whatsappRoutes.length} routes`,
+  );
   for (const route of whatsappRoutes) {
     const source = read(route);
     assert.match(source, /@\/lib\/domain\/leads\/whatsapp\//, route);
@@ -90,9 +97,14 @@ test("every WhatsApp route calls lib/domain and never writes the tables itself",
 });
 
 test("the send route requires an Idempotency-Key and has no derived fallback", () => {
-  const route = read("app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts");
+  const route = read(
+    "app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts",
+  );
   assert.match(route, /headers\.get\("idempotency-key"\)/);
-  assert.match(route, /if \(!idempotencyKey\) \{\s*return badRequestResponse\(/);
+  assert.match(
+    route,
+    /if \(!idempotencyKey\) \{\s*return badRequestResponse\(/,
+  );
   assert.match(route, /sendLeadWhatsAppMessage\(/);
   assert.match(route, /createWhatsAppPortFromEnv\(\)/);
 });
@@ -136,9 +148,15 @@ test("status labels say what happened, including an unconfirmed send", () => {
 
 test("timestamps are Sydney time, whatever the browser's zone", () => {
   // 03:30 UTC on 22 Sept is 1:30 pm AEST.
-  assert.match(formatSydneyStamp("2026-09-22T03:30:00.000Z"), /1:30\s?pm AEST$/i);
+  assert.match(
+    formatSydneyStamp("2026-09-22T03:30:00.000Z"),
+    /1:30\s?pm AEST$/i,
+  );
   // 03:30 UTC on 22 Dec is 2:30 pm AEDT.
-  assert.match(formatSydneyStamp("2026-12-22T03:30:00.000Z"), /2:30\s?pm AEDT$/i);
+  assert.match(
+    formatSydneyStamp("2026-12-22T03:30:00.000Z"),
+    /2:30\s?pm AEDT$/i,
+  );
   assert.equal(formatSydneyStamp(null), "");
 });
 

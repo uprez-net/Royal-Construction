@@ -160,7 +160,12 @@ export async function sendLeadEmailMessage(
   },
   db: DomainDb,
   send: LeadEmailDeliveryPort,
-): Promise<{ alreadySent: boolean; emailId: string; subject: string; to: string }> {
+): Promise<{
+  alreadySent: boolean;
+  emailId: string;
+  subject: string;
+  to: string;
+}> {
   const authorized = await authorizeLeadEmail(
     principal,
     { leadId: input.leadId, to: input.to },
@@ -169,22 +174,36 @@ export async function sendLeadEmailMessage(
   const subject = input.subject.trim();
   const message = input.body.trim();
   const senderName = input.senderName.trim();
-  if (!subject) throw new DomainValidationError("An email subject is required.", "subject");
-  if (!message) throw new DomainValidationError("An email message is required.", "body");
-  if (!senderName) throw new DomainValidationError("The sender name is unavailable.", "senderName");
+  if (!subject)
+    throw new DomainValidationError("An email subject is required.", "subject");
+  if (!message)
+    throw new DomainValidationError("An email message is required.", "body");
+  if (!senderName)
+    throw new DomainValidationError(
+      "The sender name is unavailable.",
+      "senderName",
+    );
 
   const body = [
     `<p>Hi ${escapeEmailHtml(authorized.leadName)},</p>`,
-    ...message.split(/\n\s*\n/).map((paragraph) =>
-      `<p>${paragraph
-        .split("\n")
-        .map((line) => escapeEmailHtml(line).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"))
-        .join("<br>")}</p>`,
+    ...message.split(/\n\s*\n/).map(
+      (paragraph) =>
+        `<p>${paragraph
+          .split("\n")
+          .map((line) =>
+            escapeEmailHtml(line).replace(
+              /\*\*(.+?)\*\*/g,
+              "<strong>$1</strong>",
+            ),
+          )
+          .join("<br>")}</p>`,
     ),
     `<p>Thanks &amp; Regards,<br>${escapeEmailHtml(senderName)}<br>Royal Constructions.</p>`,
   ].join("");
   const fullBody = `<html><body>${body}</body></html>`;
-  const from = (process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au").trim().toLowerCase();
+  const from = (process.env.BUSINESS_EMAIL ?? "info@royalconstructions.com.au")
+    .trim()
+    .toLowerCase();
   const bodyFingerprint = createHash("sha256")
     .update(`${subject}\u0000${fullBody}`)
     .digest("hex");
@@ -196,7 +215,9 @@ export async function sendLeadEmailMessage(
     async () => {
       await send({ body: fullBody, subject, to: authorized.to });
       const checksum = createHash("sha256")
-        .update(JSON.stringify({ body: fullBody, from, subject, to: authorized.to }))
+        .update(
+          JSON.stringify({ body: fullBody, from, subject, to: authorized.to }),
+        )
         .digest("hex");
       const email = await db.leadEmails.create({
         data: {

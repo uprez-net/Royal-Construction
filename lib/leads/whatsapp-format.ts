@@ -1,7 +1,4 @@
-import {
-  SYDNEY_TZ,
-  sydneyTimeZoneAbbreviation,
-} from "@/lib/dates/sydney";
+import { SYDNEY_TZ, sydneyTimeZoneAbbreviation } from "@/lib/dates/sydney";
 
 import type { WhatsAppMessageDto } from "./whatsapp-types";
 

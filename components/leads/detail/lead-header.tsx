@@ -435,7 +435,10 @@ export function LeadHeader({
               </Button>
             ) : null}
           </div>
-          <WhatsAppDestination lead={lead} reason={actions.whatsapp.disabledReason} />
+          <WhatsAppDestination
+            lead={lead}
+            reason={actions.whatsapp.disabledReason}
+          />
         </div>
       </div>
       <div className="mt-6 ">

@@ -53,7 +53,10 @@ export function WhatsAppThread({
   hasOlder: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => void;
-  onReconcile: (message: WhatsAppMessageDto, outcome: "sent" | "not_sent") => void;
+  onReconcile: (
+    message: WhatsAppMessageDto,
+    outcome: "sent" | "not_sent",
+  ) => void;
   reconcilingId: string | null;
   /** Name the Royal number on each bubble when more than one is configured. */
   showSender: boolean;
@@ -70,7 +73,10 @@ export function WhatsAppThread({
             disabled={loadingOlder}
           >
             {loadingOlder ? (
-              <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+              <Loader2
+                className="mr-1.5 size-3.5 animate-spin"
+                aria-hidden="true"
+              />
             ) : null}
             Load older messages
           </Button>
@@ -111,7 +117,8 @@ export function WhatsAppThread({
                 <p
                   className={cn(
                     "whitespace-pre-wrap break-words",
-                    message.kind === "UNSUPPORTED" && "italic text-muted-foreground",
+                    message.kind === "UNSUPPORTED"
+                      && "italic text-muted-foreground",
                   )}
                 >
                   {message.body}
@@ -125,7 +132,8 @@ export function WhatsAppThread({
                   ) : null}
                   {showSender ? (
                     <span>
-                      · {outbound ? "from" : "to"} {message.businessDisplayNumber}
+                      · {outbound ? "from" : "to"}{" "}
+                      {message.businessDisplayNumber}
                     </span>
                   ) : null}
                   <span
@@ -139,7 +147,8 @@ export function WhatsAppThread({
                   </span>
                 </p>
                 {message.providerErrorTitle
-                && (message.status === "FAILED" || message.needsReconciliation) ? (
+                && (message.status === "FAILED"
+                  || message.needsReconciliation) ? (
                   <p className="mt-1 text-xs text-destructive-ink">
                     {message.providerErrorTitle}
                   </p>

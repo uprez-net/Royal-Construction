@@ -45,7 +45,11 @@ const channel = {
   defaultPhoneNumberId: "1000000000001",
   enabledTemplateNames: null,
   numbers: [
-    { displayNumber: "+61280001234", label: "Office", phoneNumberId: "1000000000001" },
+    {
+      displayNumber: "+61280001234",
+      label: "Office",
+      phoneNumberId: "1000000000001",
+    },
   ],
   sendingAvailable: true,
 };
@@ -74,7 +78,11 @@ type Request = {
 };
 
 /** What app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts does. */
-async function viaApp(store: FakeWhatsAppDb, port: WhatsAppPort, request: Request): Promise<Outcome> {
+async function viaApp(
+  store: FakeWhatsAppDb,
+  port: WhatsAppPort,
+  request: Request,
+): Promise<Outcome> {
   const body = request.message;
   try {
     const result = await sendLeadWhatsAppMessage(
@@ -86,7 +94,11 @@ async function viaApp(store: FakeWhatsAppDb, port: WhatsAppPort, request: Reques
         message:
           body.kind === "text"
             ? { body: body.body, kind: "text" }
-            : { kind: "template", parameters: body.parameters, templateName: body.templateName },
+            : {
+                kind: "template",
+                parameters: body.parameters,
+                templateName: body.templateName,
+              },
       },
       store.transactionalDb,
       { whatsapp: port },
@@ -99,7 +111,11 @@ async function viaApp(store: FakeWhatsAppDb, port: WhatsAppPort, request: Reques
 }
 
 /** What agent/lib/lead-whatsapp-operations.ts#sendAuthorizedLeadWhatsAppMessage does. */
-async function viaEve(store: FakeWhatsAppDb, port: WhatsAppPort, request: Request): Promise<Outcome> {
+async function viaEve(
+  store: FakeWhatsAppDb,
+  port: WhatsAppPort,
+  request: Request,
+): Promise<Outcome> {
   const input = sendLeadWhatsAppMessageInputSchema.parse(
     request.message.kind === "text"
       ? { body: request.message.body, leadId: request.leadId, mode: "text" }
@@ -140,7 +156,11 @@ async function viaEve(store: FakeWhatsAppDb, port: WhatsAppPort, request: Reques
     return { ok: true, result };
   } catch (error) {
     if (!isDomainError(error)) throw error;
-    const envelope = whatsappSendEnvelope(lead, { error, ok: false, providerAvailable: true });
+    const envelope = whatsappSendEnvelope(lead, {
+      error,
+      ok: false,
+      providerAvailable: true,
+    });
     if (envelope !== "forbidden") {
       assert.equal(envelope.kind, "error");
       assert.equal(envelope.summary, error.message);
@@ -152,21 +172,42 @@ async function viaEve(store: FakeWhatsAppDb, port: WhatsAppPort, request: Reques
 /** The persisted state, minus ids, keys and clock readings. */
 function snapshot(store: FakeWhatsAppDb) {
   const strip = (row: Record<string, unknown>, drop: string[]) =>
-    Object.fromEntries(Object.entries(row).filter(([key]) => !drop.includes(key)));
+    Object.fromEntries(
+      Object.entries(row).filter(([key]) => !drop.includes(key)),
+    );
   const volatile = ["id", "createdAt", "updatedAt"];
   return {
     conversations: store
       .rows("leadWhatsAppConversation")
-      .map((row) => strip(row, [...volatile, "lastMessageAt", "lastOutboundAt"])),
+      .map((row) =>
+        strip(row, [...volatile, "lastMessageAt", "lastOutboundAt"]),
+      ),
     history: store
       .rows("leadHistory")
       .map((row) => strip(row, [...volatile, "actionDate"])),
     messages: store
       .rows("leadWhatsAppMessage")
-      .map((row) => strip(row, [...volatile, "conversationId", "idempotencyKey", "occurredAt", "statusAt"])),
+      .map((row) =>
+        strip(row, [
+          ...volatile,
+          "conversationId",
+          "idempotencyKey",
+          "occurredAt",
+          "statusAt",
+        ]),
+      ),
     outbox: store
       .rows("outboxEvent")
-      .map((row) => strip(row, [...volatile, "key", "availableAt", "completedAt", "lockedAt", "result"])),
+      .map((row) =>
+        strip(row, [
+          ...volatile,
+          "key",
+          "availableAt",
+          "completedAt",
+          "lockedAt",
+          "result",
+        ]),
+      ),
   };
 }
 
@@ -206,9 +247,19 @@ describe("App and Eve reach the same WhatsApp send", () => {
     const evePort = recordingPort();
     const scenario: Request[] = [
       // A customer account is refused by both.
-      { attempt: "a0", leadId: 1, message: templateMessage, user: customerUser },
+      {
+        attempt: "a0",
+        leadId: 1,
+        message: templateMessage,
+        user: customerUser,
+      },
       // Free text with no open window: refused by both, same sentence.
-      { attempt: "a1", leadId: 1, message: { body: "Hi Sam", kind: "text" }, user: staffUser },
+      {
+        attempt: "a1",
+        leadId: 1,
+        message: { body: "Hi Sam", kind: "text" },
+        user: staffUser,
+      },
       // A consented template: sent by both.
       { attempt: "a2", leadId: 1, message: templateMessage, user: staffUser },
       // The same attempt again (double click / retried tool call): replayed.
@@ -237,8 +288,20 @@ describe("App and Eve reach the same WhatsApp send", () => {
 
     // Spot-check that the shared answers are the right ones, not merely equal.
     assert.deepEqual(
-      appOutcomes.map((outcome) => (outcome.ok ? (outcome.result.alreadySent ? "replay" : "sent") : outcome.code)),
-      ["domain_unauthorized", "domain_transition_unavailable", "sent", "replay", "domain_not_found"],
+      appOutcomes.map((outcome) =>
+        outcome.ok
+          ? outcome.result.alreadySent
+            ? "replay"
+            : "sent"
+          : outcome.code,
+      ),
+      [
+        "domain_unauthorized",
+        "domain_transition_unavailable",
+        "sent",
+        "replay",
+        "domain_not_found",
+      ],
     );
     assert.equal(
       (appOutcomes[1] as { message: string }).message,
@@ -255,7 +318,12 @@ describe("App and Eve reach the same WhatsApp send", () => {
   test("each adapter keys its own attempts, so an App send and an Eve send are two intents", async () => {
     const port = recordingPort();
     const shared = freshStore();
-    const request = { attempt: "same-id", leadId: 1, message: templateMessage, user: staffUser };
+    const request = {
+      attempt: "same-id",
+      leadId: 1,
+      message: templateMessage,
+      user: staffUser,
+    };
     await viaApp(shared, port, request);
     await viaEve(shared, port, request);
     // "same-id" from a browser header and "same-id" as an Eve call id are
@@ -269,7 +337,9 @@ describe("the real adapters still make this call", () => {
   const read = (path: string) => readFileSync(path, "utf8");
 
   test("the App route sends through the domain with the header key and the injected port", () => {
-    const route = read("app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts");
+    const route = read(
+      "app/api/(data)/leads/[leadId]/whatsapp/messages/route.ts",
+    );
     assert.match(route, /sendLeadWhatsAppMessage\(/);
     assert.match(route, /headers\.get\("idempotency-key"\)/);
     assert.match(route, /\{ whatsapp: createWhatsAppPortFromEnv\(\) \}/);

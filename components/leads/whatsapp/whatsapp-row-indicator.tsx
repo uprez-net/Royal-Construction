@@ -1,7 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { formatRelativeShort, formatSydneyStamp } from "@/lib/leads/whatsapp-format";
+import {
+  formatRelativeShort,
+  formatSydneyStamp,
+} from "@/lib/leads/whatsapp-format";
 import type { WhatsAppSummaryDto } from "@/lib/leads/whatsapp-types";
 
 /**

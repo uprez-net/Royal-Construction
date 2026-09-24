@@ -75,7 +75,9 @@ export function WhatsAppComposer({
       ? renderWhatsAppTemplate(
           definition,
           parameters.map((value, index) =>
-            value.trim() ? value : `[${option.parameters[index]?.label ?? index + 1}]`,
+            value.trim()
+              ? value
+              : `[${option.parameters[index]?.label ?? index + 1}]`,
           ),
         )
       : "";
@@ -86,7 +88,9 @@ export function WhatsAppComposer({
         role="status"
         className="rounded-lg border border-amber-200 bg-warning-light px-3.5 py-3 text-sm text-warning-ink"
       >
-        <p className="font-medium">You can&apos;t send a WhatsApp message to this lead right now.</p>
+        <p className="font-medium">
+          You can&apos;t send a WhatsApp message to this lead right now.
+        </p>
         <p className="mt-1">
           {eligibility.template.reason ?? eligibility.text.reason}
         </p>
@@ -151,7 +155,10 @@ export function WhatsAppComposer({
       ) : null}
 
       {textAllowed && templateAllowed ? (
-        <div className="inline-flex rounded-lg border border-border p-0.5 text-xs" role="tablist">
+        <div
+          className="inline-flex rounded-lg border border-border p-0.5 text-xs"
+          role="tablist"
+        >
           {(["text", "template"] as const).map((value) => (
             <button
               key={value}
@@ -174,7 +181,10 @@ export function WhatsAppComposer({
 
       {senders.length > 1 ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Label htmlFor="whatsapp-sender" className="text-xs text-muted-foreground">
+          <Label
+            htmlFor="whatsapp-sender"
+            className="text-xs text-muted-foreground"
+          >
             Send from
           </Label>
           <select
@@ -238,7 +248,9 @@ export function WhatsAppComposer({
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">{option.description}</p>
+            <p className="text-xs text-muted-foreground">
+              {option.description}
+            </p>
           </div>
           {option.parameters.map((parameter, index) => (
             <div key={`${option.name}:${index}`} className="space-y-1">
@@ -272,7 +284,10 @@ export function WhatsAppComposer({
       <div className="flex justify-end">
         <Button type="submit" disabled={!canSubmit}>
           {sending ? (
-            <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />
+            <Loader2
+              className="mr-1.5 size-4 animate-spin"
+              aria-hidden="true"
+            />
           ) : (
             <Send className="mr-1.5 size-4" aria-hidden="true" />
           )}

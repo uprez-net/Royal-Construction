@@ -1,12 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  AlertTriangle,
-  Clock,
-  MessageCircle,
-  ShieldAlert,
-} from "lucide-react";
+import { AlertTriangle, Clock, MessageCircle, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   sydneyDateTime,
@@ -90,7 +85,8 @@ function Bubble({ message }: { message: AgentWhatsAppMessage }) {
             {message.statusLabel}
           </span>
         </p>
-        {message.providerError && (message.status === "FAILED" || message.needsReconciliation) ? (
+        {message.providerError
+        && (message.status === "FAILED" || message.needsReconciliation) ? (
           <p className={cn("mt-0.5 text-[10px]", TONE[message.tone])}>
             {message.providerError}
           </p>
@@ -143,14 +139,19 @@ export function AgentWhatsAppThreadView({
             <Badge variant="default">{thread.unreadCount} unread</Badge>
           ) : null}
           <Badge variant="outline">
-            {thread.consentRecorded ? "Consent recorded" : "No consent recorded"}
+            {thread.consentRecorded
+              ? "Consent recorded"
+              : "No consent recorded"}
           </Badge>
         </div>
       </header>
 
       {blocked.length > 0 ? (
         <p className="flex items-start gap-1.5 border-b border-emerald-300/40 bg-amber-50 px-3 py-1.5 text-xs text-amber-950 dark:border-emerald-800/40 dark:bg-amber-950/40 dark:text-amber-100">
-          <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 size-3.5 shrink-0"
+          />
           {blocked.join(" ")}
         </p>
       ) : null}
@@ -260,7 +261,10 @@ export function AgentWhatsAppDraftView({
 
       {draft.allowed === false && draft.reason ? (
         <p className="flex items-start gap-1.5 border-t border-emerald-300/40 bg-amber-50 px-3 py-1.5 text-xs text-amber-950 dark:border-emerald-800/40 dark:bg-amber-950/40 dark:text-amber-100">
-          <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <AlertTriangle
+            aria-hidden="true"
+            className="mt-0.5 size-3.5 shrink-0"
+          />
           {draft.reason}
         </p>
       ) : null}

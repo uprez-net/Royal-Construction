@@ -95,7 +95,8 @@ export async function recordInboundLeadWhatsAppMessage(
   const { body, kind } = classify(input);
   // An unparseable sender is kept as given, under the unmatched queue — the
   // office can still read it and decide.
-  const from = waIdToE164(input.fromWaId) ?? `+${input.fromWaId.replace(/\D/g, "")}`;
+  const from =
+    waIdToE164(input.fromWaId) ?? `+${input.fromWaId.replace(/\D/g, "")}`;
   const business =
     context.channel?.numbers.find(
       (number) => number.phoneNumberId === input.businessPhoneNumberId,

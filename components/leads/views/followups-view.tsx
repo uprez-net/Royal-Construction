@@ -254,9 +254,9 @@ function FollowupItem({
     ? isSameDay(parseISO(task.dueDate), todayStr)
     : false;
   const isOverdue =
-    task.dueDate !== null &&
-    isBefore(parseISO(task.dueDate), todayStr) &&
-    !isToday;
+    task.dueDate !== null
+    && isBefore(parseISO(task.dueDate), todayStr)
+    && !isToday;
   const dueLabel = task.dueDate
     ? `${formatDate(task.dueDate)}${task.dueTime ? ` · ${task.dueTime}` : ""}`
     : "No date";
@@ -834,8 +834,8 @@ function FollowupsView({
                 Completed
                 <span className="ml-auto tabular-nums">{doneTasks.length}</span>
               </button>
-              {showDone &&
-                doneTasks.map((task) => (
+              {showDone
+                && doneTasks.map((task) => (
                   <CompletedItem
                     key={task.id}
                     task={task}

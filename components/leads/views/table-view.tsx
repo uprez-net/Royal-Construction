@@ -430,11 +430,11 @@ export default function TableView({
                                   type="button"
                                   className="action-btn-icon relative"
                                   title={
-                                    actions.whatsapp.disabledReason ??
-                                    whatsappSummaryTitle(
+                                    actions.whatsapp.disabledReason
+                                    ?? whatsappSummaryTitle(
                                       whatsappSummaries.get(lead.id),
-                                    ) ??
-                                    `WhatsApp ${lead.name}`
+                                    )
+                                    ?? `WhatsApp ${lead.name}`
                                   }
                                   aria-label={whatsappActionLabel(
                                     lead.name,
@@ -659,11 +659,11 @@ export default function TableView({
                           className="mobile-action-btn relative"
                           onClick={() => setWhatsappLead(lead)}
                           title={
-                            actions.whatsapp.disabledReason ??
-                            whatsappSummaryTitle(
+                            actions.whatsapp.disabledReason
+                            ?? whatsappSummaryTitle(
                               whatsappSummaries.get(lead.id),
-                            ) ??
-                            undefined
+                            )
+                            ?? undefined
                           }
                           aria-label={whatsappActionLabel(
                             lead.name,

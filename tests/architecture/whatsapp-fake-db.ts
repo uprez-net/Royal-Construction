@@ -147,7 +147,12 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
 
   const assertUnique = (model: string, candidate: Row, ignore?: Row) => {
     for (const key of UNIQUE_KEYS[model] ?? [["id"]]) {
-      if (key.some((field) => candidate[field] === null || candidate[field] === undefined)) {
+      if (
+        key.some(
+          (field) =>
+            candidate[field] === null || candidate[field] === undefined,
+        )
+      ) {
         continue;
       }
       const clash = table(model).find(
@@ -156,7 +161,9 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
           && key.every((field) => compare(row[field], candidate[field]) === 0),
       );
       if (clash) {
-        const error = new Error(`Unique constraint failed on ${model}.${key.join("+")}`);
+        const error = new Error(
+          `Unique constraint failed on ${model}.${key.join("+")}`,
+        );
         (error as Error & { code: string }).code = "P2002";
         throw error;
       }
@@ -212,10 +219,12 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
             }
           };
         }
-        if (typeof model !== "string" || model.startsWith("$")) return undefined;
+        if (typeof model !== "string" || model.startsWith("$"))
+          return undefined;
         return {
           count: async (args: Row = {}) =>
-            table(model).filter((row) => matches(row, args.where as Row)).length,
+            table(model).filter((row) => matches(row, args.where as Row))
+              .length,
           create: async (args: Row) => {
             log.push(`${model}.create`);
             return withRelations(model, create(model, args.data as Row));
@@ -228,24 +237,29 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
           },
           findMany: async (args: Row = {}) => {
             if (
-              args.skip !== undefined ||
-              args.cursor !== undefined ||
-              args.distinct !== undefined
+              args.skip !== undefined
+              || args.cursor !== undefined
+              || args.distinct !== undefined
             ) {
               throw new Error("fake db: unsupported-pagination");
             }
             if (typeof args.take === "number" && args.take < 0) {
               throw new Error("fake db: unsupported-pagination");
             }
-            let rows = table(model).filter((row) => matches(row, args.where as Row));
+            let rows = table(model).filter((row) =>
+              matches(row, args.where as Row),
+            );
             const orderBy = args.orderBy
-              ? (Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy]) as Row[]
+              ? ((Array.isArray(args.orderBy)
+                  ? args.orderBy
+                  : [args.orderBy]) as Row[])
               : [];
             rows = [...rows].sort((a, b) => {
               for (const order of orderBy) {
                 const [field, direction] = Object.entries(order)[0];
                 const result = compare(a[field], b[field]);
-                if (result !== 0) return direction === "desc" ? -result : result;
+                if (result !== 0)
+                  return direction === "desc" ? -result : result;
               }
               return 0;
             });
@@ -261,8 +275,11 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
           update: async (args: Row) => {
             log.push(`${model}.update`);
             const rows = table(model);
-            const index = rows.findIndex((row) => matches(row, args.where as Row));
-            if (index < 0) throw new Error(`fake db: ${model}.update matched nothing`);
+            const index = rows.findIndex((row) =>
+              matches(row, args.where as Row),
+            );
+            if (index < 0)
+              throw new Error(`fake db: ${model}.update matched nothing`);
             const updated = applyData(rows[index], args.data as Row);
             assertUnique(model, updated, rows[index]);
             rows[index] = updated;
@@ -282,7 +299,9 @@ export function fakeWhatsAppDb(): FakeWhatsAppDb {
           upsert: async (args: Row) => {
             log.push(`${model}.upsert`);
             const rows = table(model);
-            const index = rows.findIndex((row) => matches(row, args.where as Row));
+            const index = rows.findIndex((row) =>
+              matches(row, args.where as Row),
+            );
             if (index < 0) {
               return withRelations(model, create(model, args.create as Row));
             }
