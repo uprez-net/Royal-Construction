@@ -15,8 +15,10 @@ const params = (query: string) => new URLSearchParams(query);
 
 test("the table reads its place from the URL", () => {
   assert.deepEqual(
-    readLeadsListParams(params("page=4&query=sandhu&status=lost&timing=30d")),
-    { page: 4, query: "sandhu", status: "lost", timing: "30d" },
+    readLeadsListParams(
+      params("page=4&query=sandhu&status=lost&timing=this_week"),
+    ),
+    { page: 4, query: "sandhu", status: "lost", timing: "this_week" },
   );
   assert.deepEqual(readLeadsListParams(params("")), {
     page: 1,
@@ -26,7 +28,7 @@ test("the table reads its place from the URL", () => {
   });
 });
 
-test("a nonsense page or status falls back rather than reaching the API", () => {
+test("a nonsense page, status or timing falls back rather than reaching the API", () => {
   for (const page of ["0", "-2", "2.5", "four", "1e400"]) {
     assert.equal(readLeadsListParams(params(`page=${page}`)).page, 1, page);
   }
@@ -35,6 +37,9 @@ test("a nonsense page or status falls back rather than reaching the API", () => 
     readLeadsListParams(params("status=Archived,Converted")).status,
     "Archived,Converted",
   );
+  for (const timing of ["", "30d", "Today", "all"]) {
+    assert.equal(readLeadsListParams(params(`timing=${timing}`)).timing, "all");
+  }
 });
 
 test("a change sets or removes parameters and keeps the rest", () => {

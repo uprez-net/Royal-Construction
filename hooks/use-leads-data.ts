@@ -162,55 +162,84 @@ export function useLeadsData() {
   }, [tasksVersion, refreshStats]);
 
   /* ── Paginated leads ── */
-  const refreshLeadsData = useCallback(async (params: LeadListParams) => {
-    try {
-      setLoadingLeads(true);
-      const leadsData = await fetchLeadListPage(params);
-      setLeads(leadsData.items);
-      setPageInfo({
-        page: leadsData.page,
-        limit: leadsData.limit,
-        total: leadsData.totalCount,
-        totalPages: leadsData.totalPages,
-      });
-    } catch (err) {
-      console.error(err);
-      setError("Failed to refresh leads data");
-    } finally {
-      setLoadingLeads(false);
-    }
-  }, []);
+  // Paging, filtering and typing each start a request, and they do not
+  // necessarily resolve in the order they were issued: clicking page 2 then
+  // page 3 could leave page 2's rows under a URL that says 3. Only the latest
+  // request, from either loader below, may touch the table.
+  const leadsRun = useRef(0);
+
+  /**
+   * Resolves to the page actually shown — which is not the one asked for when
+   * a remembered page was past the end — or null when a newer request took
+   * over and this one's answer was dropped.
+   */
+  const refreshLeadsData = useCallback(
+    async (params: LeadListParams): Promise<number | null> => {
+      const run = ++leadsRun.current;
+      try {
+        setLoadingLeads(true);
+        const leadsData = await fetchLeadListPage(params);
+        if (run !== leadsRun.current) return null;
+        setLeads(leadsData.items);
+        setPageInfo({
+          page: leadsData.page,
+          limit: leadsData.limit,
+          total: leadsData.totalCount,
+          totalPages: leadsData.totalPages,
+        });
+        return leadsData.page;
+      } catch (err) {
+        if (run !== leadsRun.current) return null;
+        console.error(err);
+        setError("Failed to refresh leads data");
+        return null;
+      } finally {
+        if (run === leadsRun.current) setLoadingLeads(false);
+      }
+    },
+    [],
+  );
 
   /* ── Full load (initial / hard refresh) ── */
-  const loadData = useCallback(async (params: LeadListParams = {}) => {
-    try {
-      setLoading(true);
-      const [leadsData, statsData, analytics] = await Promise.all([
-        // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
-        // an empty array — so without hasOpenTask the initial load for a
-        // bookmarked ?status=pendingFollowup fetched every lead and raced
-        // the filtered request the metric effect fires straight after.
-        fetchLeadListPage(params),
-        fetchLeadsStats(),
-        fetchLeadAnalyticsData(),
-      ]);
-      setLeads(leadsData.items);
-      setPageInfo({
-        page: leadsData.page,
-        limit: leadsData.limit,
-        total: leadsData.totalCount,
-        totalPages: leadsData.totalPages,
-      });
-      setStats(statsData);
-      setAnalyticsData(analytics);
-      setError(null);
-    } catch (err) {
-      setError("Failed to load leads data");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadData = useCallback(
+    async (params: LeadListParams = {}): Promise<number | null> => {
+      const run = ++leadsRun.current;
+      try {
+        setLoading(true);
+        const [leadsData, statsData, analytics] = await Promise.all([
+          // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
+          // an empty array — so without hasOpenTask the initial load for a
+          // bookmarked ?status=pendingFollowup fetched every lead and raced
+          // the filtered request the metric effect fires straight after.
+          fetchLeadListPage(params),
+          fetchLeadsStats(),
+          fetchLeadAnalyticsData(),
+        ]);
+        // The cards are not part of the race; a newer table request only
+        // supersedes this one's rows.
+        setStats(statsData);
+        setAnalyticsData(analytics);
+        if (run !== leadsRun.current) return null;
+        setLeads(leadsData.items);
+        setPageInfo({
+          page: leadsData.page,
+          limit: leadsData.limit,
+          total: leadsData.totalCount,
+          totalPages: leadsData.totalPages,
+        });
+        setError(null);
+        return leadsData.page;
+      } catch (err) {
+        if (run !== leadsRun.current) return null;
+        setError("Failed to load leads data");
+        console.error(err);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   /* ── Mutations ── */
   const updateLeadInList = useCallback(

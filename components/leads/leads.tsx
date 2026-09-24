@@ -182,12 +182,21 @@ function LeadsWorkspace() {
   }, [debouncedSearch]);
 
   /* ── Load what the URL and tab describe ── */
+  // A remembered page past the end is answered with the last real one; put
+  // that in the URL too, or the link a lead is opened from, and a reload,
+  // would carry a page the table is not on. A loader resolves to null when a
+  // newer request superseded it, and that one settles the URL instead.
+  const settleTablePage = (shown: number | null) => {
+    if (shown === null || shown === page) return;
+    updateListParams({ page: shown > 1 ? String(shown) : null });
+  };
+
   const loadedRef = useRef(false);
   useEffect(() => {
     if (!loadedRef.current) {
       // The first load brings the cards and analytics with it.
       loadedRef.current = true;
-      loadData(tableParams);
+      loadData(tableParams).then(settleTablePage);
       return;
     }
     // With cacheComponents, Next hides /leads while a lead is open and re-runs
@@ -196,7 +205,7 @@ function LeadsWorkspace() {
     if (activeTab === "followups") {
       refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
     } else if (activeTab === "table") {
-      refreshLeadsData(tableParams);
+      refreshLeadsData(tableParams).then(settleTablePage);
     }
     // tableParams is rebuilt every render; these are what it is made of.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -311,7 +320,7 @@ function LeadsWorkspace() {
         <div className="leads-error-message">{error}</div>
         <button
           className="btn-primary-custom"
-          onClick={() => loadData(tableParams)}
+          onClick={() => loadData(tableParams).then(settleTablePage)}
         >
           Try Again
         </button>

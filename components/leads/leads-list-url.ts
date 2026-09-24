@@ -8,7 +8,7 @@ import { leadStatusSchema } from "@/utils/validators/lead";
  *   ?page=4        the table page (absent means 1)
  *   ?query=smith   the applied search (five characters or more)
  *   ?status=lost   the metric card or stage chips (comma list of stages)
- *   ?timing=30d    the timing filter (absent means "all")
+ *   ?timing=today  the timing filter (absent means "all")
  */
 export const LEADS_LIST_PARAM_KEYS = [
   "page",
@@ -38,6 +38,17 @@ type SearchParamsLike = {
 
 const STATUS_KEYWORDS = ["total", "converted", "pendingFollowup", "lost"];
 
+// The timing select's options. The server reads any other value as "today", so
+// an unknown one would filter the table while the select showed nothing.
+const TIMING_VALUES = [
+  "today",
+  "this_week",
+  "this_month",
+  "quarter",
+  "this_year",
+  "all",
+];
+
 // The metric-card keywords, or a comma list of stages. "Archived" is a chip but
 // not a stage, and "Converted" is a retired stage a bookmark may still carry;
 // anything else unknown is ignored rather than sent to the API.
@@ -52,13 +63,18 @@ function validStatus(value: string | null): string | null {
   return allValid ? value : null;
 }
 
+function validTiming(value: string | null): string {
+  const timing = value?.trim();
+  return timing && TIMING_VALUES.includes(timing) ? timing : "all";
+}
+
 export function readLeadsListParams(params: SearchParamsLike): LeadsListParams {
   const page = Number(params.get("page"));
   return {
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
     query: params.get("query")?.trim() ?? "",
     status: validStatus(params.get("status")),
-    timing: params.get("timing")?.trim() || "all",
+    timing: validTiming(params.get("timing")),
   };
 }
 
