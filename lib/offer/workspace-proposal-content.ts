@@ -367,27 +367,62 @@ export function buildWelcomeParagraphs(
   // Only assert what we can derive from this job (client, site, area). Specific
   // design features, "photos match your home", and finish guarantees were
   // hard-coded and often wrong (e.g. "double storey" on a single-storey build),
-  // so they're omitted rather than promised.
-  const reviewedLine =
+  // so they're omitted rather than promised. So is "we have reviewed your
+  // plans": an area typed into job setup is not evidence anyone read a plan,
+  // and nothing on the offer records that they did.
+  const excitedLine =
     totalArea !== null
-      ? `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`
-      : "We have reviewed your plans carefully and we're genuinely excited to build your home with the care a proper custom build deserves.";
+      ? `We're genuinely excited to build your home — all ${totalArea} square metres of it — with the care a proper custom build deserves.`
+      : "We're genuinely excited to build your home with the care a proper custom build deserves.";
   return [
-    `Thank you for trusting Royal Constructions to build your forever home at ${shortLocation(job.siteAddress)}. We don't take that lightly.`,
-    reviewedLine,
+    `Thank you for trusting Royal Constructions to build your forever home${siteLocationPhrase(job.siteAddress)}. We don't take that lightly.`,
+    excitedLine,
     "Every finish described in this proposal is part of your inclusions, locked into the fixed price below.",
     "We are here every step of the way.",
   ];
 }
 
-function shortLocation(siteAddress: string): string {
-  // "13 Binalong Road, Pendle Hill NSW 2145" -> "Pendle Hill"
-  const parts = siteAddress.split(",");
-  if (parts.length < 2) {
-    return siteAddress;
+// "Pendle Hill NSW 2145" -> "Pendle Hill"; also a bare "NSW 2145".
+const LOCALITY_STATE =
+  /^(.*?)\s*\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b(?:\s+\d{4})?$/i;
+
+/**
+ * The suburb of a site address, or `null` when it cannot be picked out
+ * reliably. Addresses arrive as typed or as a geocoder formatted them:
+ *
+ *   "13 Binalong Road, Pendle Hill NSW 2145"         -> "Pendle Hill"
+ *   "Kellyville NSW 2155, Australia"                  -> "Kellyville"
+ *   "Unit 3, 13 Binalong Road, Pendle Hill NSW 2145"  -> "Pendle Hill"
+ *   "13 Binalong Road, Pendle Hill, NSW 2145"         -> "Pendle Hill"
+ *   "13 Binalong Road Pendle Hill NSW 2145"           -> null (street and
+ *                                                        suburb run together)
+ *
+ * The old rule took the second comma segment, which for a geocoded
+ * "Kellyville NSW 2155, Australia" was the country.
+ */
+export function siteLocality(siteAddress: string): string | null {
+  const segments = siteAddress
+    .split(",")
+    .map((segment) => segment.replace(/\baustralia$/i, "").trim())
+    .filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    const match = LOCALITY_STATE.exec(segments[i]);
+    if (!match) continue;
+    // "NSW 2145" on its own: the suburb is the segment before it.
+    const locality = match[1].trim() || (i > 0 ? segments[i - 1] : "");
+    // A digit means the street is still attached ("13 Binalong Road Pendle
+    // Hill"), and there is no reliable place to cut it.
+    return locality && !/\d/.test(locality) ? locality : null;
   }
-  const locality = parts[1]
-    .trim()
-    .replace(/\s+(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b.*$/i, "");
-  return locality || siteAddress;
+  // No state at all: "13 Binalong Road, Pendle Hill".
+  const last = segments.at(-1);
+  return segments.length >= 2 && last && !/\d/.test(last) ? last : null;
+}
+
+// " at Kellyville", or the whole address when no suburb can be picked out,
+// or nothing at all when the job has no address yet.
+function siteLocationPhrase(siteAddress: string): string {
+  const address = siteAddress.trim();
+  if (!address) return "";
+  return ` at ${siteLocality(address) ?? address}`;
 }
