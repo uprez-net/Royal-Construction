@@ -2,12 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { GROUP_HEADING_CLASS } from "./offer-workspace-fields";
 import {
   CheckCircle2,
+  ChevronDown,
   Clock,
   MailOpen,
   MessageSquarePlus,
+  Paperclip,
   Reply,
   Send,
 } from "lucide-react";
@@ -18,6 +25,8 @@ import {
 import {
   CHANGE_REQUEST_PREFIX,
   type OfferActivityEvent,
+  type OfferActivityReply,
+  type OfferActivityReplyAttachment,
   type OfferActivitySend,
 } from "@/lib/data/offer-activity-types";
 import {
@@ -163,20 +172,31 @@ export function OfferWorkspaceActivity({
         </p>
       ) : (
         <ol className="grid gap-2">
-          {items.map((item) => (
-            <li
-              key={item.key}
-              className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5 text-xs"
-            >
-              <span className="mt-0.5 shrink-0 text-muted-foreground">
-                {item.icon}
-              </span>
-              <span className="flex-1">{item.label}</span>
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                {formatActivityWhen(item.at, now)}
-              </span>
-            </li>
-          ))}
+          {items.map((item) =>
+            item.detail ? (
+              <Collapsible asChild key={item.key}>
+                <li className="rounded-md border border-border/60 bg-muted/20 text-xs">
+                  <CollapsibleTrigger className="group flex w-full items-start gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40">
+                    <TimelineRow item={item} now={now} />
+                    <ChevronDown
+                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+                      aria-hidden="true"
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="border-t border-border/60 px-2.5 py-2">
+                    {item.detail}
+                  </CollapsibleContent>
+                </li>
+              </Collapsible>
+            ) : (
+              <li
+                key={item.key}
+                className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 px-2.5 py-1.5 text-xs"
+              >
+                <TimelineRow item={item} now={now} />
+              </li>
+            ),
+          )}
         </ol>
       )}
 
@@ -188,7 +208,7 @@ export function OfferWorkspaceActivity({
           Log a change request from the customer&apos;s reply
         </label>
         <textarea
-          className="min-h-[60px] w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+          className="min-h-15 w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
           id="offer-change-request"
           onChange={(event) => setNote(event.target.value)}
           placeholder="e.g. Client asked to drop the pool from exclusions and upgrade the stone benchtop."
@@ -216,7 +236,27 @@ type TimelineItem = {
   readonly at: string;
   readonly icon: React.ReactNode;
   readonly label: React.ReactNode;
+  // Set when the row opens to show more — a send the client replied to.
+  readonly detail?: React.ReactNode;
 };
+
+function TimelineRow({
+  item,
+  now,
+}: {
+  readonly item: TimelineItem;
+  readonly now: Date;
+}) {
+  return (
+    <>
+      <span className="mt-0.5 shrink-0 text-muted-foreground">{item.icon}</span>
+      <span className="flex-1">{item.label}</span>
+      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+        {formatActivityWhen(item.at, now)}
+      </span>
+    </>
+  );
+}
 
 // Merge sends and events into one time-descending list. ISO strings sort
 // lexicographically in chronological order, so a string compare is enough.
@@ -235,9 +275,9 @@ function mergeTimeline(
     // to the minute, so a second reply arriving seconds after the first formats
     // identically and the timeline would hide it.
     const hasLaterReply =
-      send.lastReplyAt !== null &&
-      send.lastReplyAt !== undefined &&
-      send.lastReplyAt !== send.repliedAt;
+      send.lastReplyAt !== null
+      && send.lastReplyAt !== undefined
+      && send.lastReplyAt !== send.repliedAt;
     const lastReplyWhen = hasLaterReply
       ? formatActivityWhen(send.lastReplyAt as string, now)
       : null;
@@ -267,6 +307,10 @@ function mergeTimeline(
           ) : null}
         </span>
       ),
+      detail:
+        send.replies.length > 0 || send.repliedAt ? (
+          <ReplyThread replies={send.replies} now={now} />
+        ) : undefined,
     };
   });
 
@@ -286,6 +330,112 @@ function mergeTimeline(
   return [...sendItems, ...eventItems].sort((a, b) =>
     a.at < b.at ? 1 : a.at > b.at ? -1 : 0,
   );
+}
+
+// The client's replies to one send, oldest first, as they were received.
+function ReplyThread({
+  replies,
+  now,
+}: {
+  readonly replies: readonly OfferActivityReply[];
+  readonly now: Date;
+}) {
+  if (replies.length === 0) {
+    // repliedAt without a stored message: a reply recorded before the message
+    // itself was kept. Said plainly rather than showing an empty panel.
+    return (
+      <p className="text-muted-foreground">
+        This reply arrived before replies were saved here — open it in Outlook
+        to read it.
+      </p>
+    );
+  }
+  return (
+    <ol className="grid gap-3">
+      {replies.map((reply, index) => (
+        <li key={`${index}-${reply.receivedAt}`} className="grid gap-1.5">
+          <p className="flex flex-wrap items-center gap-x-1.5 text-muted-foreground">
+            <Reply className="size-3 text-success" aria-hidden="true" />
+            <span className="font-mono text-foreground">{reply.fromEmail}</span>
+            <span>· {formatActivityWhen(reply.receivedAt, now)}</span>
+          </p>
+          {reply.subject ? (
+            <p className="font-medium text-foreground">{reply.subject}</p>
+          ) : null}
+          <p className="max-h-72 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-border/60 bg-white px-2.5 py-2 leading-relaxed text-foreground">
+            {reply.text || (
+              <span className="text-muted-foreground">(No message text)</span>
+            )}
+          </p>
+          {reply.fullText ? (
+            <details>
+              <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground marker:text-royal-gold">
+                Show the full email, with the quoted thread
+              </summary>
+              <p className="mt-1.5 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-white px-2.5 py-2 leading-relaxed text-muted-foreground">
+                {reply.fullText}
+              </p>
+            </details>
+          ) : null}
+          {reply.attachments.length > 0 ? (
+            <ul className="grid gap-1">
+              {reply.attachments.map((attachment, attachmentIndex) => (
+                <ReplyAttachment
+                  attachment={attachment}
+                  key={`${attachmentIndex}-${attachment.name}`}
+                />
+              ))}
+            </ul>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ReplyAttachment({
+  attachment,
+}: {
+  readonly attachment: OfferActivityReplyAttachment;
+}) {
+  return (
+    <li className="flex items-start gap-1.5">
+      <Paperclip
+        className="mt-0.5 size-3 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1 break-words">
+        {attachment.url ? (
+          <a
+            className="font-medium text-royal-gold-dark hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal-gold/40"
+            href={attachment.url}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {attachment.name}
+          </a>
+        ) : (
+          <span className="font-medium text-foreground">{attachment.name}</span>
+        )}
+        {attachment.size > 0 ? (
+          <span className="text-muted-foreground">
+            {" · "}
+            {formatFileSize(attachment.size)}
+          </span>
+        ) : null}
+        {attachment.note ? (
+          <span className="block text-muted-foreground">{attachment.note}</span>
+        ) : null}
+      </span>
+    </li>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function describeEvent(event: OfferActivityEvent): React.ReactNode {

@@ -15,6 +15,28 @@ export type OfferActivitySend = {
   readonly openedAt: string | null;
   readonly repliedAt: string | null;
   readonly lastReplyAt: string | null;
+  readonly replies: readonly OfferActivityReply[];
+};
+
+// A client's reply as recorded off the mailbox (lib/domain/offers/replies).
+export type OfferActivityReply = {
+  readonly fromEmail: string;
+  readonly subject: string;
+  readonly receivedAt: string;
+  // What the client wrote in this message; fullText adds the quoted thread and
+  // is null when there was none to cut.
+  readonly text: string;
+  readonly fullText: string | null;
+  readonly attachments: readonly OfferActivityReplyAttachment[];
+};
+
+export type OfferActivityReplyAttachment = {
+  readonly name: string;
+  readonly contentType: string;
+  readonly size: number;
+  // Null when the file was not stored; note then says why.
+  readonly url: string | null;
+  readonly note: string | null;
 };
 
 export type OfferActivityEvent = {

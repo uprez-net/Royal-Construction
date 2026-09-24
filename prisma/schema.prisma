@@ -1464,11 +1464,38 @@ model OfferDocumentSend {
   sentAt           DateTime  @default(now())
   openedAt         DateTime?
   // Reply tracking: the subject carries [RCOFR-…] so inbound replies correlate
-  // back to this send (see lib/graph/offer-reply-tracker).
+  // back to this send (see lib/domain/offers/replies).
   repliedAt        DateTime?
   lastReplyAt      DateTime?
+  replies          OfferDocumentReply[]
 
   @@index([offerId])
+}
+
+// The client's reply to an Offer-document send, kept whole so the negotiation
+// can be read in-app rather than only in the builder's mailbox. repliedAt and
+// lastReplyAt on the send stay the cheap "did they answer" signal; this is what
+// they actually said (see lib/domain/offers/replies).
+model OfferDocumentReply {
+  id             String            @id @default(uuid())
+  sendId         String
+  send           OfferDocumentSend @relation(fields: [sendId], references: [id], onDelete: Cascade)
+  /// The Graph message id. Unique so a repeated notification for the same
+  /// message converges on one row instead of showing the reply twice.
+  graphMessageId String            @unique
+  fromEmail      String
+  subject        String
+  /// Plain text, as Graph renders it with outlook.body-content-type="text".
+  /// The whole body, quoted history included; the reader splits it for display.
+  body           String            @db.Text
+  /// [{ name, contentType, size, url, note }] — blob-backed copies of the
+  /// message's attachments. url is null for one that was not stored, and note
+  /// says why, so a missing file reads as missing rather than as never sent.
+  attachments    Json              @default("[]")
+  receivedAt     DateTime
+  createdAt      DateTime          @default(now())
+
+  @@index([sendId, receivedAt])
 }
 
 // One row per lifecycle transition, for accountability + legal trail.

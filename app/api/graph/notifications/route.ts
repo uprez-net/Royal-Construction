@@ -6,10 +6,9 @@ import { extractTradieScheduleInfoFromMessage } from "@/lib/graph/tradie-schedul
 import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
 import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
 import { evaluateEmail } from "@/utils/spam-detector";
-import {
-  extractOfferReplyToken,
-  recordOfferReply,
-} from "@/lib/graph/offer-reply-tracker";
+import { recordOfferReply } from "@/lib/domain/offers/replies";
+import { systemPrincipal } from "@/lib/domain/principal";
+import { put } from "@vercel/blob";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
@@ -21,7 +20,10 @@ import {
   normaliseReference,
   planningReferencesIn,
 } from "@/lib/graph/planning-portal";
-import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
+import {
+  extractOfferReplyToken,
+  isMachineGenerated,
+} from "@/lib/graph/offer-reply-classify";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import {
   CertifierEmailDirection,
@@ -390,8 +392,8 @@ function mailboxForNotification(
     return "admin";
   }
   if (
-    clientState ===
-    (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
+    clientState
+    === (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
   ) {
     return "business";
   }
@@ -491,8 +493,8 @@ async function processNotifications(
             // here means "not visible yet", not "does not exist" — the one
             // place a 404 is worth repeating.
             shouldRetry: (error) =>
-              isRetryableGraphError(error) ||
-              (error as { status?: number })?.status === 404,
+              isRetryableGraphError(error)
+              || (error as { status?: number })?.status === 404,
           },
         );
       } catch {
@@ -523,7 +525,49 @@ async function processNotifications(
               ? extractOfferReplyToken(message.subject)
               : null;
           if (offerReplyToken) {
-            const outcome = await recordOfferReply(offerReplyToken, message);
+            const messageId = message.id;
+            const outcome = await recordOfferReply(
+              systemPrincipal("graph:offer-reply"),
+              {
+                body: content,
+                from: message.from,
+                graphMessageId: messageId,
+                hasAttachments: message.hasAttachments,
+                headers: message.headers,
+                receivedAt: message.receivedDateTime || null,
+                subject: message.subject ?? "",
+                token: offerReplyToken,
+              },
+              prisma,
+              {
+                mail: {
+                  listAttachments: () =>
+                    withGraphRetry("list offer reply attachments", () =>
+                      client.listMessageAttachments(messageId),
+                    ),
+                  downloadAttachment: (attachmentId) =>
+                    withGraphRetry("download offer reply attachment", () =>
+                      client.downloadMessageAttachment(messageId, attachmentId),
+                    ),
+                },
+                put: ({ allowOverwrite, body, contentType, pathname }) =>
+                  put(
+                    pathname,
+                    body instanceof Uint8Array && !Buffer.isBuffer(body)
+                      ? Buffer.from(body)
+                      : body,
+                    {
+                      // Same as every other stored email attachment here: the
+                      // path is already unique, and a suffix would stop a retry
+                      // overwriting its own object.
+                      access: "public",
+                      addRandomSuffix: false,
+                      allowOverwrite,
+                      contentType,
+                    },
+                  ),
+              },
+            );
             // Log the negatives too. An "auto-generated" line here is a
             // bounce or an out-of-office arriving, and today this is the only
             // trace of it — it is what a bounce classifier gets tuned against
@@ -592,15 +636,15 @@ async function processNotifications(
                   body: content,
                   from: message.from,
                   to:
-                    message.to?.[0] ??
-                    config.senderUpn ??
-                    "info@royalconstructions.com.au",
+                    message.to?.[0]
+                    ?? config.senderUpn
+                    ?? "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
               console.log(
-                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} ` +
-                  `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
+                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} `
+                  + `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;
@@ -653,15 +697,15 @@ async function processNotifications(
                   body: content,
                   from: message.from,
                   to:
-                    message.to?.[0] ??
-                    config.senderUpn ??
-                    "info@royalconstructions.com.au",
+                    message.to?.[0]
+                    ?? config.senderUpn
+                    ?? "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
               console.log(
-                `  Certifier ${certifierToken}: workflow started for message ${message.id} ` +
-                  `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
+                `  Certifier ${certifierToken}: workflow started for message ${message.id} `
+                  + `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;
