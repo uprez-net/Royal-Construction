@@ -346,6 +346,7 @@ jobs:
   deploy:
     name: Deploy
     if: >-
+      !cancelled() &&
       github.event_name == 'push' &&
       needs.quality-checks.result == 'success' &&
       needs.decide.outputs.deploy == 'true' &&

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -18,16 +18,20 @@ import {
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
-import { useLeadsData } from "@/hooks/use-leads-data";
+import { useLeadsData, type LeadListParams } from "@/hooks/use-leads-data";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
-import { leadStatusSchema } from "@/utils/validators/lead";
 
 import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { UnmatchedWhatsAppButton } from "@/components/leads/whatsapp/unmatched-whatsapp-review";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { LeadPagination } from "./lead-pagination";
+import {
+  readLeadsListParams,
+  withLeadsListParams,
+  type LeadsListParamChanges,
+} from "./leads-list-url";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import TableView from "./views/table-view";
 import { FollowupsView } from "./views";
 import AnalyticsView from "./views/analytics-view";
@@ -50,10 +54,63 @@ import { useUser } from "@clerk/nextjs";
 
 type TabType = "table" | "followups" | "analytics";
 
+type TableFilters = {
+  readonly query: string;
+  readonly metric: string | null;
+  readonly filterTiming: string;
+};
+
+/**
+ * One request shape for the table, whoever asks: the first load, paging,
+ * filtering and the refresh when the page is shown again. Paging used to build
+ * its own and dropped isArchived, so page 2 of the Archived chip listed leads
+ * that were not archived.
+ */
+function tableListParams(filters: TableFilters, page: number): LeadListParams {
+  const statusParam =
+    filters.metric === "total" ? "total" : (filters.metric ?? undefined);
+  return {
+    page,
+    limit: 10,
+    query: filters.query.trim() || undefined,
+    status:
+      statusParam === "Archived"
+        ? undefined
+        : statusParam
+            ?.split(",")
+            .filter((s) => s && s !== "Archived")
+            .join(",") || undefined,
+    filterTiming: filters.filterTiming,
+    isArchived: statusParam?.includes("Archived") ? true : undefined,
+    // The "Open tasks" card is not a stage filter: it means "leads carrying at
+    // least one open task", which no stage list can express (resolveStatusFilter
+    // maps "pendingFollowup" to no stage filter at all). It has to travel with
+    // every request, or the card said 14 and the table showed every lead.
+    hasOpenTask: filters.metric === "pendingFollowup" ? true : undefined,
+  };
+}
+
 export default function Leads() {
+  // A fresh visit — the sidebar, "Back to all leads", any link — gets a fresh
+  // table (tab, search box). Browser back/forward keeps the one Next preserved
+  // for the hidden page, and paging or filtering only changes search params,
+  // which keep this key. The table's place itself is in the URL.
+  const { bfcacheId } = useRouter();
+  return <LeadsWorkspace key={bfcacheId} />;
+}
+
+function LeadsWorkspace() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const initialQuery = searchParams.get("query");
-  const initialStatus = searchParams.get("status");
+  // The table's place lives in the URL (#350): ?page=, ?query=, ?status= and
+  // ?timing=. Coming back to /leads?page=4 from a lead lands on page 4, a
+  // reload keeps it, and opening Leads fresh from anywhere else starts over.
+  const list = readLeadsListParams(searchParams);
+  const page = list.page;
+  const urlQuery = list.query;
+  const activeMetric = list.status;
+  const activeFilterTiming = list.timing;
   const { user, isLoaded } = useUser();
 
   /* ── Hooks ── */
@@ -79,9 +136,7 @@ export default function Leads() {
 
   /* ── UI state ── */
   const [activeTab, setActiveTab] = useState<TabType>("table");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeMetric, setActiveMetric] = useState<string | null>(null);
-  const [activeFilterTiming, setActiveFilterTiming] = useState("all");
+  const [searchTerm, setSearchTerm] = useState(urlQuery);
   const [showAddLead, setShowAddLead] = useState(false);
   const [showEmailCampaign, setShowEmailCampaign] = useState(false);
 
@@ -93,174 +148,106 @@ export default function Leads() {
       ? ((stats.conversion / stats.total) * 100).toFixed(1)
       : "0.0";
 
-  const statusParam =
-    activeMetric === "total" ? "total" : (activeMetric ?? undefined);
+  const tableParams = tableListParams(
+    { query: urlQuery, metric: activeMetric, filterTiming: activeFilterTiming },
+    page,
+  );
 
-  /**
-   * The "Open tasks" card is not a stage filter.
-   *
-   * It means "leads carrying at least one open task", which no stage list can
-   * express — resolveStatusFilter maps "pendingFollowup" to an empty array,
-   * i.e. no filter at all. It was passed only by the click that set it, so the
-   * search/filter effect immediately fired a second, unfiltered request for
-   * the same click and normally landed last: the card said 14 and the table
-   * showed every lead in the business. Paging then dropped it for good.
-   * Derived from the active metric so it travels with every request.
-   */
-  const hasOpenTaskParam =
-    activeMetric === "pendingFollowup" ? true : undefined;
+  /* ── URL updates ── */
+  // replace, not push: a page or filter change is not a step the back button
+  // should walk through; the entry that matters is the one a lead was opened
+  // from, which is whatever the URL says at that moment.
+  const updateListParams = useCallback(
+    (changes: LeadsListParamChanges) => {
+      router.replace(
+        `${pathname}${withLeadsListParams(searchParams, changes)}`,
+        {
+          scroll: false,
+        },
+      );
+    },
+    [pathname, router, searchParams],
+  );
 
-  /* ── Search + filter effect ── */
+  /* ── Search box → ?query= ── */
   useEffect(() => {
-    const q = debouncedSearch.trim();
-    if (q.length > 4 || q.length === 0) {
-      refreshLeadsData({
-        page: 1,
-        limit: 10,
-        query: q || undefined,
-        status:
-          statusParam === "Archived"
-            ? undefined
-            : statusParam
-                ?.split(",")
-                .filter((s) => s && s !== "Archived")
-                .join(",") || undefined,
-        filterTiming: activeFilterTiming,
-        isArchived: statusParam?.includes("Archived") ? true : undefined,
-        hasOpenTask: hasOpenTaskParam,
-      });
-    }
-  }, [
-    debouncedSearch,
-    refreshLeadsData,
-    statusParam,
-    activeFilterTiming,
-    hasOpenTaskParam,
-  ]);
-
-  /* ── URL params on mount ── */
-  useEffect(() => {
-    if (initialQuery || initialStatus) {
-      const decodedQuery = initialQuery
-        ? decodeURIComponent(initialQuery)
-        : null;
-      const decodedStatus = initialStatus
-        ? decodeURIComponent(initialStatus)
-        : null;
-
-      let validatedStatus: string | null = null;
-      if (decodedStatus) {
-        const knownKeywords = ["total", "converted", "pendingFollowup", "lost"];
-        if (knownKeywords.includes(decodedStatus)) {
-          validatedStatus = decodedStatus;
-        } else {
-          const parts = decodedStatus.split(",");
-          const allValid = parts.every((part) => {
-            const label = part.trim();
-            // "Archived" is a chip but not a stage, and "Converted" is a stage
-            // that was retired — a bookmarked ?status=Converted must keep
-            // working rather than silently falling back to no filter.
-            if (label === "Archived" || label === "Converted") return true;
-            return leadStatusSchema.safeParse(label).success;
-          });
-          if (allValid) {
-            validatedStatus = decodedStatus;
-          }
-        }
-      }
-
-      Promise.resolve().then(() => {
-        const params: {
-          status?: string;
-          query?: string;
-          hasOpenTask?: boolean;
-        } = {};
-        if (validatedStatus) {
-          setActiveMetric(validatedStatus);
-          params.status = validatedStatus;
-          // Same rule as every other request: "pendingFollowup" is not a stage
-          // and needs the open-task filter travelling with it. Without this a
-          // bookmarked ?status=pendingFollowup loaded every lead first and
-          // raced the filtered request the metric effect fires next.
-          if (validatedStatus === "pendingFollowup") params.hasOpenTask = true;
-        }
-        if (decodedQuery && decodedQuery.trim().length > 0) {
-          const query = decodedQuery.trim();
-          setSearchTerm(query);
-          params.query = query;
-        }
-        if (params.status || params.query) {
-          loadData(params);
-        }
-      });
-    } else {
-      loadData();
-    }
+    const typed = debouncedSearch.trim();
+    // A query applies at five characters. Clearing the box, or cutting an
+    // applied "smithx" back to "smi", removes it and returns to page 1; a short
+    // query that was never applied changes nothing.
+    const next = typed.length > 4 || typed === urlQuery ? typed : "";
+    if (next !== urlQuery) updateListParams({ query: next, page: null });
+    // Only the person's typing drives this; the URL changing under it (a
+    // metric card, paging) must not write the box back over it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery, initialStatus]);
+  }, [debouncedSearch]);
+
+  /* ── Load what the URL and tab describe ── */
+  // A remembered page past the end is answered with the last real one; put
+  // that in the URL too, or the link a lead is opened from, and a reload,
+  // would carry a page the table is not on. A loader resolves to null when a
+  // newer request superseded it, and that one settles the URL instead.
+  const settleTablePage = (shown: number | null) => {
+    if (shown === null || shown === page) return;
+    updateListParams({ page: shown > 1 ? String(shown) : null });
+  };
+
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    if (!loadedRef.current) {
+      // The first load brings the cards and analytics with it.
+      loadedRef.current = true;
+      loadData(tableParams).then(settleTablePage);
+      return;
+    }
+    // With cacheComponents, Next hides /leads while a lead is open and re-runs
+    // this effect when it is shown again; the URL still names the same page,
+    // so this refreshes it rather than starting over.
+    if (activeTab === "followups") {
+      refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
+    } else if (activeTab === "table") {
+      refreshLeadsData(tableParams).then(settleTablePage);
+    }
+    // tableParams is rebuilt every render; these are what it is made of.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, urlQuery, activeMetric, activeFilterTiming]);
+
+  // The cards, when the page is shown again after a lead (a stage changed
+  // there should show up). The first load already fetched them.
+  const shownRef = useRef(false);
+  useEffect(() => {
+    if (!shownRef.current) {
+      shownRef.current = true;
+      return;
+    }
+    refreshStats().catch((err: unknown) => {
+      console.error("Failed to refresh lead stats on return", err);
+    });
+  }, [refreshStats]);
 
   /* ── Handlers ── */
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    if (tab === "followups") {
-      refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
-    } else if (tab === "table") {
-      refreshLeadsData({ page: 1, limit: 10 });
-    }
   };
 
   const handleMetricClick = (metric: string | null) => {
     setActiveTab("table");
-    setActiveMetric(metric);
-    const cleanedMetric =
-      metric
-        ?.split(",")
-        .filter((s) => s && s !== "Archived")
-        .join(",") || undefined;
-    refreshLeadsData({
-      page: 1,
-      limit: 10,
-      status:
-        metric === "total" || metric === "Archived" ? "total" : cleanedMetric,
-      filterTiming: activeFilterTiming,
-      query: debouncedSearch.trim() || undefined,
-      isArchived: metric?.includes("Archived") ? true : undefined,
-      hasOpenTask: metric === "pendingFollowup" ? true : undefined,
-    });
+    updateListParams({ status: metric, page: null });
   };
 
   const handleFilterTimingChange = (filterTiming: string) => {
-    setActiveFilterTiming(filterTiming);
-    refreshLeadsData({
-      page: 1,
-      limit: 10,
-      status: statusParam,
-      filterTiming,
-      query: debouncedSearch.trim() || undefined,
-      hasOpenTask: hasOpenTaskParam,
+    updateListParams({
+      timing: filterTiming === "all" ? null : filterTiming,
+      page: null,
     });
   };
 
   const handlePageChange = useCallback(
-    async (page: number) => {
-      await refreshLeadsData({
-        page,
-        limit: pageInfo.limit,
-        query: searchTerm,
-        status: statusParam,
-        filterTiming: activeFilterTiming,
-        hasOpenTask: hasOpenTaskParam,
-      });
+    (nextPage: number) => {
+      updateListParams({ page: nextPage > 1 ? String(nextPage) : null });
     },
-    [
-      refreshLeadsData,
-      statusParam,
-      pageInfo.limit,
-      searchTerm,
-      activeFilterTiming,
-      hasOpenTaskParam,
-    ],
+    [updateListParams],
   );
 
   const handleExport = async () => {
@@ -332,7 +319,10 @@ export default function Leads() {
     return (
       <div className="leads-error-container">
         <div className="leads-error-message">{error}</div>
-        <button className="btn-primary-custom" onClick={() => loadData()}>
+        <button
+          className="btn-primary-custom"
+          onClick={() => loadData(tableParams).then(settleTablePage)}
+        >
           Try Again
         </button>
       </div>
@@ -538,7 +528,9 @@ export default function Leads() {
             {activeTab === "analytics" && (
               <AnalyticsView analytics={analyticsData} />
             )}
-            {activeTab !== "analytics" && (
+            {/* The table's pages only. The Tasks tab lists tasks, not this
+                page of leads, so paging there changed nothing on screen. */}
+            {activeTab === "table" && (
               <LeadPagination
                 leads={{
                   items: leads,

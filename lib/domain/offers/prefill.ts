@@ -6,7 +6,9 @@ import type { DomainPrincipal } from "../principal";
 import { resolveLeadNotesText } from "@/lib/leads/notes-text";
 import {
   deriveOwnerProjection,
+  isSameOwnerPersonName,
   ownersFromLegacyClientFields,
+  splitCombinedOwnerName,
   type OfferDocumentDraft,
   type OfferWorkspaceJob,
 } from "@/lib/offer/workspace-model";
@@ -64,9 +66,13 @@ export async function generateOfferPrefill(
   if (!lead) throw new DomainNotFoundError("Lead not found.");
 
   const job: WritableJobPatch = {};
+  const ownerNames = separateLeadOwnerNames(
+    lead.name.trim(),
+    lead.secondaryName?.trim() ?? "",
+  );
   const owners = ownersFromLegacyClientFields({
     clientEmail: lead.email?.trim() ?? "",
-    clientNames: lead.name.trim(),
+    clientNames: ownerNames.primary,
     clientPhone: lead.phone?.trim() ?? "",
     secondaryCustomerEmail: lead.secondaryEmail?.trim() ?? "",
     secondaryCustomerName: lead.secondaryName?.trim() ?? "",
@@ -113,8 +119,10 @@ export async function generateOfferPrefill(
       confidence: null,
       draft: {},
       job,
-      notes:
+      notes: joinNotes(
+        ownerNames.note,
         "No sales notes, emails or activity to draft from — filled contact details only.",
+      ),
       ok: true,
       sources: ["contact details"],
     };
@@ -140,7 +148,44 @@ export async function generateOfferPrefill(
   } else {
     notes = `AI drafting was skipped (${generated.message}). Filled contact details only.`;
   }
-  return { confidence, draft, job, notes, ok: true, sources };
+  return {
+    confidence,
+    draft,
+    job,
+    notes: joinNotes(ownerNames.note, notes),
+    ok: true,
+    sources,
+  };
+}
+
+function joinNotes(...notes: string[]): string {
+  return notes.filter(Boolean).join(" ");
+}
+
+// Issue #344: a lead named "Harpreet & Manpreet Sandhu" whose secondary contact
+// is "Manpreet Sandhu" made owner 1 "Harpreet & Manpreet Sandhu" and owner 2
+// "Manpreet Sandhu", and the proposal named Manpreet twice — including in the
+// acceptance clause the client signs. The secondary contact is a person with
+// their own email, so they stay a separate owner and come out of the combined
+// name. The change is reported, not made silently, so the estimator can check
+// it against the lead.
+function separateLeadOwnerNames(
+  name: string,
+  secondaryName: string,
+): { primary: string; note: string } {
+  const people = splitCombinedOwnerName(name);
+  if (!people || !secondaryName) return { note: "", primary: name };
+  const remaining = people.filter(
+    (person) => !isSameOwnerPersonName(person, secondaryName),
+  );
+  if (remaining.length === people.length || remaining.length === 0) {
+    return { note: "", primary: name };
+  }
+  const primary = remaining.join(" & ");
+  return {
+    note: `The lead's name "${name}" already includes the secondary contact ${secondaryName}, so owner 1 is "${primary}" and ${secondaryName} is owner 2 — check this against the lead.`,
+    primary,
+  };
 }
 
 function stripToText(body: string): string {

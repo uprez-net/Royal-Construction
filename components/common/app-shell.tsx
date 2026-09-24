@@ -38,6 +38,7 @@ type AgentSessionTitleDetail = {
 export function AppShell({
   isAdmin,
   isSignedIn,
+  operationsAgentEnabled,
   // description,
   breadcrumbs,
   // actions,
@@ -45,12 +46,22 @@ export function AppShell({
 }: {
   isAdmin: boolean;
   isSignedIn: boolean;
+  // EVE_OPERATIONS_AGENT_ENABLED. Off, the agent channel refuses every
+  // request, so a nav entry would only lead to a workspace that cannot answer.
+  operationsAgentEnabled: boolean;
   description?: string;
   breadcrumbs?: string[];
   actions?: ReactNode;
   children: ReactNode;
 }) {
   const [queryClient] = useState(() => new QueryClient());
+  const visibleNavigationItems = useMemo(
+    () =>
+      navigationItems.filter(
+        (item) => item.slug !== "agent" || operationsAgentEnabled,
+      ),
+    [operationsAgentEnabled],
+  );
   const [time, setTime] = useState("");
   const [zone, setZone] = useState<"AEST" | "AEDT">("AEST");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -133,7 +144,7 @@ export function AppShell({
             aria-label="Main"
             className="flex flex-1 flex-col items-center gap-1"
           >
-            {navigationItems.map((item) => (
+            {visibleNavigationItems.map((item) => (
               <Link
                 key={item.slug}
                 href={`/${item.slug}`}
@@ -202,7 +213,7 @@ export function AppShell({
                   aria-label="Main"
                   className="flex flex-1 flex-col gap-1 px-3 py-4"
                 >
-                  {navigationItems.map((item) => (
+                  {visibleNavigationItems.map((item) => (
                     <SheetClose key={item.slug} asChild>
                       <Link
                         onClick={() => setMobileNavOpen(false)}
