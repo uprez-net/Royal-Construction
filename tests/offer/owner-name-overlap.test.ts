@@ -105,7 +105,7 @@ function prefillDb(lead: {
   secondaryName: string | null;
 }): DomainDb {
   const row = {
-    assignedId: 1,
+    assignedId: "user-1",
     budget: null,
     email: "harpreet@example.com",
     emails: [],
@@ -124,7 +124,7 @@ function prefillDb(lead: {
   } as unknown as DomainDb;
 }
 
-const ADMIN = userPrincipal({ id: 1, role: Role.ADMIN });
+const ADMIN = userPrincipal({ id: "user-1", role: Role.ADMIN });
 const noAi = async () => {
   throw new Error("no AI call expected: the lead has nothing to draft from");
 };
