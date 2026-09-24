@@ -367,27 +367,89 @@ export function buildWelcomeParagraphs(
   // Only assert what we can derive from this job (client, site, area). Specific
   // design features, "photos match your home", and finish guarantees were
   // hard-coded and often wrong (e.g. "double storey" on a single-storey build),
-  // so they're omitted rather than promised.
-  const reviewedLine =
+  // so they're omitted rather than promised. So is "we have reviewed your
+  // plans": an area typed into job setup is not evidence anyone read a plan,
+  // and nothing on the offer records that they did.
+  const excitedLine =
     totalArea !== null
-      ? `We have reviewed your plans carefully — all ${totalArea} square metres of them — and we're genuinely excited to build your home with the care a proper custom build deserves.`
-      : "We have reviewed your plans carefully and we're genuinely excited to build your home with the care a proper custom build deserves.";
+      ? `We're genuinely excited to build your home — all ${totalArea} square metres of it — with the care a proper custom build deserves.`
+      : "We're genuinely excited to build your home with the care a proper custom build deserves.";
   return [
-    `Thank you for trusting Royal Constructions to build your forever home at ${shortLocation(job.siteAddress)}. We don't take that lightly.`,
-    reviewedLine,
+    `Thank you for trusting Royal Constructions to build your forever home${siteLocationPhrase(job.siteAddress)}. We don't take that lightly.`,
+    excitedLine,
     "Every finish described in this proposal is part of your inclusions, locked into the fixed price below.",
     "We are here every step of the way.",
   ];
 }
 
-function shortLocation(siteAddress: string): string {
-  // "13 Binalong Road, Pendle Hill NSW 2145" -> "Pendle Hill"
-  const parts = siteAddress.split(",");
-  if (parts.length < 2) {
-    return siteAddress;
+const AU_STATES =
+  "NSW|VIC|QLD|SA|WA|TAS|NT|ACT|New South Wales|Victoria|Queensland|South Australia|Western Australia|Tasmania|Northern Territory|Australian Capital Territory";
+
+// "Pendle Hill NSW 2145" -> "Pendle Hill"; also a bare "NSW 2145", and the
+// state spelt out, as some geocoders do ("Pendle Hill New South Wales 2145").
+const LOCALITY_STATE = new RegExp(
+  String.raw`^(.*?)\s*\b(?:${AU_STATES})\b(?:\s+\d{4})?$`,
+  "i",
+);
+const STATE_THEN_COUNTRY = new RegExp(
+  String.raw`\b(${AU_STATES})\s+australia$`,
+  "i",
+);
+
+// The country, as its own segment or trailing a postcode or a state ("NSW
+// 2145 Australia", "New South Wales Australia"). Never the end of a state
+// name: "South Australia" stays whole.
+function withoutCountry(segment: string): string {
+  const trimmed = segment.trim();
+  if (/^australia$/i.test(trimmed)) return "";
+  return trimmed
+    .replace(/(\d{4})\s+australia$/i, "$1")
+    .replace(STATE_THEN_COUNTRY, "$1");
+}
+
+/**
+ * The suburb of a site address, or `null` when it cannot be picked out
+ * reliably. Addresses arrive as typed or as a geocoder formatted them:
+ *
+ *   "13 Binalong Road, Pendle Hill NSW 2145"         -> "Pendle Hill"
+ *   "Kellyville NSW 2155, Australia"                  -> "Kellyville"
+ *   "Unit 3, 13 Binalong Road, Pendle Hill NSW 2145"  -> "Pendle Hill"
+ *   "13 Binalong Road, Pendle Hill, NSW 2145"         -> "Pendle Hill"
+ *   "13 Binalong Road, Pendle Hill, New South Wales"  -> "Pendle Hill"
+ *   "1 King William St, Adelaide, South Australia"    -> "Adelaide"
+ *   "13 Binalong Road Pendle Hill NSW 2145"           -> null (street and
+ *                                                        suburb run together)
+ *
+ * The old rule took the second comma segment, which for a geocoded
+ * "Kellyville NSW 2155, Australia" was the country.
+ */
+export function siteLocality(siteAddress: string): string | null {
+  const segments = siteAddress.split(",").map(withoutCountry).filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    const match = LOCALITY_STATE.exec(segments[i]);
+    if (!match) continue;
+    let locality = match[1].trim();
+    if (!locality) {
+      // A bare state ("NSW 2145", "South Australia"): the suburb is the
+      // segment before it — unless that segment carries a state of its own
+      // ("Adelaide SA 5000, South Australia"), which the next pass reads.
+      const previous = i > 0 ? segments[i - 1] : "";
+      if (LOCALITY_STATE.test(previous)) continue;
+      locality = previous;
+    }
+    // A digit means the street is still attached ("13 Binalong Road Pendle
+    // Hill"), and there is no reliable place to cut it.
+    return locality && !/\d/.test(locality) ? locality : null;
   }
-  const locality = parts[1]
-    .trim()
-    .replace(/\s+(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b.*$/i, "");
-  return locality || siteAddress;
+  // No state at all: "13 Binalong Road, Pendle Hill".
+  const last = segments.at(-1);
+  return segments.length >= 2 && last && !/\d/.test(last) ? last : null;
+}
+
+// " at Kellyville", or the whole address when no suburb can be picked out,
+// or nothing at all when the job has no address yet.
+function siteLocationPhrase(siteAddress: string): string {
+  const address = siteAddress.trim();
+  if (!address) return "";
+  return ` at ${siteLocality(address) ?? address}`;
 }
