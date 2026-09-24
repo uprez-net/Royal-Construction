@@ -17,10 +17,7 @@ import {
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import {
-  buildOfferPrintTemplateData,
-  getVisibleExclusions,
-} from "@/lib/offer/workspace-print-template";
+import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
 import { FileText, Info, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
@@ -47,9 +44,6 @@ type TenderPanelProps = {
   readonly signerStatuses: readonly OfferSignerStatus[];
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
-  // Listed on the preview, so the estimator sees the sums the documents
-  // disclose before the Tender goes to DocuSign.
-  readonly allowances: readonly OfferWorkspaceScopeItem[];
   readonly exclusions: readonly OfferWorkspaceScopeItem[];
   readonly paymentSchedule: readonly OfferPaymentScheduleRow[];
   readonly onPaymentScheduleChange: (
@@ -72,7 +66,6 @@ export function TenderPanel({
   signerStatuses,
   customerPrice,
   draft,
-  allowances,
   exclusions,
   paymentSchedule,
   onPaymentScheduleChange,
@@ -96,11 +89,11 @@ export function TenderPanel({
   const scheduleBalanced = scheduleTotalPct === 1;
   // tender_signed and every later status means the Tender is executed.
   const isSigned =
-    status === "tender_signed" ||
-    status === "contract_draft" ||
-    status === "contract_sent" ||
-    status === "contract_signed" ||
-    status === "project";
+    status === "tender_signed"
+    || status === "contract_draft"
+    || status === "contract_sent"
+    || status === "contract_signed"
+    || status === "project";
   const hasTender = isDraft || isSent || isSigned;
 
   return (
@@ -132,7 +125,6 @@ export function TenderPanel({
 
           {hasTender ? (
             <TenderPreview
-              allowances={allowances}
               customerPrice={customerPrice}
               draft={draft}
               exclusions={exclusions}
@@ -430,7 +422,6 @@ function TenderActions({
 }
 
 function TenderPreview({
-  allowances,
   job,
   customerPrice,
   draft,
@@ -438,7 +429,6 @@ function TenderPreview({
   paymentSchedule,
   state,
 }: {
-  readonly allowances: readonly OfferWorkspaceScopeItem[];
   readonly job: OfferWorkspaceJob;
   readonly customerPrice: OfferCustomerPrice;
   readonly draft: OfferDocumentDraft;
@@ -457,20 +447,6 @@ function TenderPreview({
   // bullets as an OVERRIDE that suppressed the Scope items, so the on-screen
   // tender showed a shorter exclusion list than the document it represents.
   const exclusionLines = getVisibleExclusions(draft, exclusions);
-  // The allowances the signed TENDER discloses, from the builder that prints
-  // them, so this list and that page agree on which sums show and how each
-  // amount reads. Only scopeRows is read.
-  const allowanceRows = buildOfferPrintTemplateData({
-    allowances,
-    customerPrice,
-    draft,
-    exclusions,
-    job,
-    lines: [],
-    paymentSchedule,
-    priceAdjustmentLabel: "",
-    standardPriceIncGst: null,
-  }).tenderScopeRows;
   const stateLabel =
     state === "signed"
       ? "Executed"
@@ -515,27 +491,6 @@ function TenderPreview({
         numbered
         title="Inclusions"
       />
-      {/* Only when there is something to disclose, as on the printed offer. */}
-      {allowanceRows.length > 0 ? (
-        <div>
-          <p className={cn("mb-2", GROUP_HEADING_CLASS)}>Allowances</p>
-          <ul className="grid gap-1.5 text-[13px]">
-            {allowanceRows.map((row) => (
-              <li key={row.id}>
-                <span className="font-medium">{row.label}</span>
-                {" · "}
-                <span className="font-mono">{row.amountLabel}</span>
-                {row.variationRule ? (
-                  <span className="text-muted-foreground">
-                    {" · "}
-                    {row.variationRule}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
       <TenderList
         emptyLabel="No exclusions listed."
         items={exclusionLines}

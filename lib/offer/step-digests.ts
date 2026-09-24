@@ -167,11 +167,6 @@ export function buildOfferStepDigests(
   const imagesSet = OFFER_IMAGE_SLOTS.filter(
     (slot) => input.images[slot.key],
   ).length;
-  // An allowance left off the Tender is still in the price, so the rail says so.
-  const offTender = input.allowances.filter(
-    (item) => !item.includedInTender,
-  ).length;
-
   return {
     "job-setup": jobDigest(input.job, input.totalAreaSqm),
     "cost-schedule":
@@ -185,7 +180,6 @@ export function buildOfferStepDigests(
     scope: [
       plural(input.allowances.length, "allowance", "allowances"),
       `${input.exclusions.length} excluded`,
-      ...(offTender > 0 ? [`${offTender} not on Tender`] : []),
     ].join(" · "),
     "offer-document": `${imagesSet} of ${OFFER_IMAGE_SLOTS.length} images set`,
     send: sendDigest(input.status, input.sendBlockers),

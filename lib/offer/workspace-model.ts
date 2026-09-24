@@ -177,10 +177,8 @@ export type OfferWorkspaceScopeItem = {
   readonly unit: string;
   readonly variationRule: string;
   readonly includedInOfferDocument: boolean;
-  // Allowances only: whether the signed Tender lists this item. Separate from
-  // includedInOfferDocument so the sales proposal can stay short while the
-  // document the customer signs still discloses every allowance in the price.
-  // Exclusions carry it too, but their single Scope box is includedInOfferDocument.
+  // Legacy flag retained for saved offer snapshots. New Tenders do not print
+  // allowance amounts; exclusions use includedInOfferDocument.
   readonly includedInTender: boolean;
 };
 
@@ -207,6 +205,8 @@ export type OfferInclusionEntry = {
   // "Stone Benchtops"). Rows without one print UNCATEGORISED_INCLUSION_LABEL
   // rather than an empty cell on a contract document.
   readonly category?: string;
+  // Tender-only detail. An empty string deliberately prints the category alone.
+  readonly tenderText?: string;
   // True when this row's wording was drafted by the model for a selling line
   // nothing in the schedule supported, and nobody has edited it since. It is
   // contract text a human did not write, so it stays visibly marked and is
@@ -1155,9 +1155,8 @@ export function createOfferScopeItem(
     amount: 0,
     unit: "",
     variationRule: "",
-    // A new allowance stays off the sales proposal until the estimator ticks it,
-    // and is listed in the signed Tender unless they untick it. An exclusion
-    // keeps its single box, ticked.
+    // A new allowance stays off the Offer until the estimator ticks it.
+    // Keep the legacy Tender flag for snapshot compatibility.
     includedInOfferDocument: !isAllowanceCategory(category),
     includedInTender: true,
   };

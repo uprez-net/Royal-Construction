@@ -149,7 +149,7 @@ export function resolveAllowances(
             ? "lm"
             : "package",
       variationRule: a.variationRule,
-      // Off the sales proposal until the estimator ticks it; on the signed Tender.
+      // Off the Offer until the estimator ticks it; keep the legacy Tender flag.
       includedInOfferDocument: false,
       includedInTender: true,
     } satisfies OfferWorkspaceScopeItem;
@@ -208,8 +208,12 @@ function adminScheduleOrDefault(
   fallback: readonly OfferInclusionEntry[],
 ): readonly OfferInclusionEntry[] {
   const configured = rows
-    .map((row) => ({ spec: row.spec.trim(), category: row.category }))
-    .filter((row) => row.spec.length > 0);
+    .map((row) => ({
+      spec: row.spec.trim(),
+      category: row.category,
+      tenderText: row.tenderText,
+    }))
+    .filter((row) => row.spec.length > 0 || row.category?.trim());
   return configured.length > 0 ? configured : fallback;
 }
 
