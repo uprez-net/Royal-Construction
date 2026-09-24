@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   UserPlus,
   CircleCheckBig,
@@ -18,7 +18,7 @@ import {
 import { fetchAllLeads } from "@/lib/leads/leads-service";
 import { normalizeTypes } from "@/lib/leads/lead-helpers";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
-import { useLeadsData } from "@/hooks/use-leads-data";
+import { useLeadsData, type LeadListParams } from "@/hooks/use-leads-data";
 import { useToast, ToastContainer } from "@/components/common/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { leadStatusSchema } from "@/utils/validators/lead";
@@ -27,6 +27,11 @@ import { AddLeadModal } from "@/components/leads/modal-ui/add-lead-modal";
 import { EmailCampaignModal } from "@/components/leads/modal-ui/email-campaign-modal";
 import { LeadMetricCard } from "@/components/common/lead-onclick-metric-card";
 import { LeadPagination } from "./lead-pagination";
+import {
+  saveLeadsTableReturn,
+  useLeadsTableReturn,
+  type LeadsTableReturn,
+} from "./leads-table-return";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,11 +54,65 @@ import { useUser } from "@clerk/nextjs";
 
 type TabType = "table" | "followups" | "analytics";
 
+type TableFilters = {
+  readonly query: string;
+  readonly metric: string | null;
+  readonly filterTiming: string;
+};
+
+/**
+ * One request shape for the table, whoever asks: the filter effect, paging,
+ * returning to the tab, and resuming where the table was (#350). Paging used
+ * to build its own and dropped isArchived, so page 2 of the Archived chip
+ * listed leads that were not archived.
+ */
+function tableListParams(filters: TableFilters, page: number): LeadListParams {
+  const statusParam =
+    filters.metric === "total" ? "total" : (filters.metric ?? undefined);
+  return {
+    page,
+    limit: 10,
+    query: filters.query.trim() || undefined,
+    status:
+      statusParam === "Archived"
+        ? undefined
+        : statusParam
+            ?.split(",")
+            .filter((s) => s && s !== "Archived")
+            .join(",") || undefined,
+    filterTiming: filters.filterTiming,
+    isArchived: statusParam?.includes("Archived") ? true : undefined,
+    // The "Open tasks" card is not a stage filter; see hasOpenTaskParam.
+    hasOpenTask: filters.metric === "pendingFollowup" ? true : undefined,
+  };
+}
+
 export default function Leads() {
+  // Where the table was when this tab last left it (issue #350). Unknown until
+  // the browser can be asked, so the table's filters are seeded once, from the
+  // real answer, and the server never renders a different set.
+  const resume = useLeadsTableReturn();
+  if (resume === undefined) return <LeadsPageSkeleton />;
+  return <LeadsWorkspace resume={resume} />;
+}
+
+function LeadsWorkspace({
+  resume,
+}: {
+  readonly resume: LeadsTableReturn | null;
+}) {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("query");
   const initialStatus = searchParams.get("status");
   const { user, isLoaded } = useUser();
+  // An explicit ?query= or ?status= link is a fresh request and wins over the
+  // remembered position.
+  const [resumeFrom] = useState(() =>
+    initialQuery || initialStatus ? null : resume,
+  );
+  // Cleared as soon as the filters differ from the remembered ones: page 4 is
+  // only page 4 of the list it was taken from.
+  const resumeRef = useRef(resumeFrom);
 
   /* ── Hooks ── */
   const {
@@ -78,9 +137,13 @@ export default function Leads() {
 
   /* ── UI state ── */
   const [activeTab, setActiveTab] = useState<TabType>("table");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeMetric, setActiveMetric] = useState<string | null>(null);
-  const [activeFilterTiming, setActiveFilterTiming] = useState("all");
+  const [searchTerm, setSearchTerm] = useState(resumeFrom?.query ?? "");
+  const [activeMetric, setActiveMetric] = useState<string | null>(
+    resumeFrom?.metric ?? null,
+  );
+  const [activeFilterTiming, setActiveFilterTiming] = useState(
+    resumeFrom?.filterTiming ?? "all",
+  );
   const [showAddLead, setShowAddLead] = useState(false);
   const [showEmailCampaign, setShowEmailCampaign] = useState(false);
 
@@ -113,28 +176,42 @@ export default function Leads() {
   useEffect(() => {
     const q = debouncedSearch.trim();
     if (q.length > 4 || q.length === 0) {
-      refreshLeadsData({
-        page: 1,
-        limit: 10,
-        query: q || undefined,
-        status:
-          statusParam === "Archived"
-            ? undefined
-            : statusParam
-                ?.split(",")
-                .filter((s) => s && s !== "Archived")
-                .join(",") || undefined,
+      const filters = {
+        query: q,
+        metric: activeMetric,
         filterTiming: activeFilterTiming,
-        isArchived: statusParam?.includes("Archived") ? true : undefined,
-        hasOpenTask: hasOpenTaskParam,
-      });
+      };
+      const resumed = resumeRef.current;
+      const resuming =
+        resumed !== null
+        && resumed.query === q
+        && resumed.metric === activeMetric
+        && resumed.filterTiming === activeFilterTiming;
+      if (!resuming) resumeRef.current = null;
+      refreshLeadsData(tableListParams(filters, resuming ? resumed.page : 1));
     }
+  }, [debouncedSearch, refreshLeadsData, activeMetric, activeFilterTiming]);
+
+  /* ── Remember where the table is, for the way back from a lead ── */
+  useEffect(() => {
+    if (activeTab !== "table" || loading || loadingLeads) return;
+    const q = debouncedSearch.trim();
+    saveLeadsTableReturn({
+      page: pageInfo.page,
+      // Only a query the list was actually filtered by (the search waits for
+      // five characters), so the way back shows the same rows.
+      query: q.length > 4 ? q : "",
+      metric: activeMetric,
+      filterTiming: activeFilterTiming,
+    });
   }, [
+    activeTab,
+    loading,
+    loadingLeads,
+    pageInfo.page,
     debouncedSearch,
-    refreshLeadsData,
-    statusParam,
+    activeMetric,
     activeFilterTiming,
-    hasOpenTaskParam,
   ]);
 
   /* ── URL params on mount ── */
@@ -193,7 +270,8 @@ export default function Leads() {
         }
       });
     } else {
-      loadData();
+      const resumed = resumeRef.current;
+      loadData(resumed ? tableListParams(resumed, resumed.page) : {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, initialStatus]);
@@ -205,7 +283,19 @@ export default function Leads() {
     if (tab === "followups") {
       refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
     } else if (tab === "table") {
-      refreshLeadsData({ page: 1, limit: 10 });
+      // With the filters still shown on the cards and search box, not an
+      // unfiltered list under a highlighted card.
+      refreshLeadsData(
+        tableListParams(
+          {
+            // The same five-character rule the search effect applies.
+            query: debouncedSearch.trim().length > 4 ? debouncedSearch : "",
+            metric: activeMetric,
+            filterTiming: activeFilterTiming,
+          },
+          1,
+        ),
+      );
     }
   };
 
@@ -243,23 +333,18 @@ export default function Leads() {
 
   const handlePageChange = useCallback(
     async (page: number) => {
-      await refreshLeadsData({
-        page,
-        limit: pageInfo.limit,
-        query: searchTerm,
-        status: statusParam,
-        filterTiming: activeFilterTiming,
-        hasOpenTask: hasOpenTaskParam,
-      });
+      await refreshLeadsData(
+        tableListParams(
+          {
+            query: searchTerm,
+            metric: activeMetric,
+            filterTiming: activeFilterTiming,
+          },
+          page,
+        ),
+      );
     },
-    [
-      refreshLeadsData,
-      statusParam,
-      pageInfo.limit,
-      searchTerm,
-      activeFilterTiming,
-      hasOpenTaskParam,
-    ],
+    [refreshLeadsData, searchTerm, activeMetric, activeFilterTiming],
   );
 
   const handleExport = async () => {

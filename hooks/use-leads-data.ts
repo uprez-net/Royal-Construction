@@ -36,6 +36,37 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
     .filter((s) => s && s !== "Archived") as LeadStage[];
 }
 
+export type LeadListParams = {
+  page?: number;
+  limit?: number;
+  query?: string;
+  status?: string;
+  filterTiming?: string;
+  isArchived?: boolean;
+  hasOpenTask?: boolean;
+};
+
+async function fetchLeadListPage(params: LeadListParams) {
+  const request = {
+    limit: params.limit ?? 10,
+    q: params.query?.trim() || undefined,
+    status: resolveStatusFilter(params.status),
+    filterTiming: params.filterTiming,
+    isArchived: params.isArchived,
+    hasOpenTask: params.hasOpenTask,
+  };
+  const page = params.page ?? 1;
+  const result = await fetchLeads({ ...request, page });
+  // A remembered page can be past the end by the time it is asked for again
+  // (issue #350: the list shrank while someone was on a lead). The server
+  // answers that with an empty page, so step back to the last real one rather
+  // than show "page 5" of four with no rows.
+  if (result.items.length === 0 && page > result.totalPages) {
+    return fetchLeads({ ...request, page: result.totalPages });
+  }
+  return result;
+}
+
 export function useLeadsData() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
@@ -127,85 +158,55 @@ export function useLeadsData() {
   }, [tasksVersion, refreshStats]);
 
   /* ── Paginated leads ── */
-  const refreshLeadsData = useCallback(
-    async (params: {
-      page?: number;
-      limit?: number;
-      query?: string;
-      status?: string;
-      filterTiming?: string;
-      isArchived?: boolean;
-      hasOpenTask?: boolean;
-    }) => {
-      try {
-        setLoadingLeads(true);
-        const leadsData = await fetchLeads({
-          page: params.page ?? 1,
-          limit: params.limit ?? 10,
-          q: params.query?.trim() || undefined,
-          status: resolveStatusFilter(params.status),
-          filterTiming: params.filterTiming,
-          isArchived: params.isArchived,
-          hasOpenTask: params.hasOpenTask,
-        });
-        setLeads(leadsData.items);
-        setPageInfo({
-          page: leadsData.page,
-          limit: leadsData.limit,
-          total: leadsData.totalCount,
-          totalPages: leadsData.totalPages,
-        });
-      } catch (err) {
-        console.error(err);
-        setError("Failed to refresh leads data");
-      } finally {
-        setLoadingLeads(false);
-      }
-    },
-    [],
-  );
+  const refreshLeadsData = useCallback(async (params: LeadListParams) => {
+    try {
+      setLoadingLeads(true);
+      const leadsData = await fetchLeadListPage(params);
+      setLeads(leadsData.items);
+      setPageInfo({
+        page: leadsData.page,
+        limit: leadsData.limit,
+        total: leadsData.totalCount,
+        totalPages: leadsData.totalPages,
+      });
+    } catch (err) {
+      console.error(err);
+      setError("Failed to refresh leads data");
+    } finally {
+      setLoadingLeads(false);
+    }
+  }, []);
 
   /* ── Full load (initial / hard refresh) ── */
-  const loadData = useCallback(
-    async (
-      params: { query?: string; status?: string; hasOpenTask?: boolean } = {},
-    ) => {
-      try {
-        setLoading(true);
-        const [leadsData, statsData, analytics] = await Promise.all([
-          fetchLeads({
-            page: 1,
-            limit: 10,
-            q: params.query?.trim() || undefined,
-            status: resolveStatusFilter(params.status),
-            // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
-            // an empty array — so without this the initial load for a
-            // bookmarked ?status=pendingFollowup fetched every lead and raced
-            // the filtered request the metric effect fires straight after.
-            hasOpenTask: params.hasOpenTask,
-          }),
-          fetchLeadsStats(),
-          fetchLeadAnalyticsData(),
-        ]);
-        setLeads(leadsData.items);
-        setPageInfo({
-          page: leadsData.page,
-          limit: leadsData.limit,
-          total: leadsData.totalCount,
-          totalPages: leadsData.totalPages,
-        });
-        setStats(statsData);
-        setAnalyticsData(analytics);
-        setError(null);
-      } catch (err) {
-        setError("Failed to load leads data");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
+  const loadData = useCallback(async (params: LeadListParams = {}) => {
+    try {
+      setLoading(true);
+      const [leadsData, statsData, analytics] = await Promise.all([
+        // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
+        // an empty array — so without hasOpenTask the initial load for a
+        // bookmarked ?status=pendingFollowup fetched every lead and raced
+        // the filtered request the metric effect fires straight after.
+        fetchLeadListPage(params),
+        fetchLeadsStats(),
+        fetchLeadAnalyticsData(),
+      ]);
+      setLeads(leadsData.items);
+      setPageInfo({
+        page: leadsData.page,
+        limit: leadsData.limit,
+        total: leadsData.totalCount,
+        totalPages: leadsData.totalPages,
+      });
+      setStats(statsData);
+      setAnalyticsData(analytics);
+      setError(null);
+    } catch (err) {
+      setError("Failed to load leads data");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   /* ── Mutations ── */
   const updateLeadInList = useCallback(
