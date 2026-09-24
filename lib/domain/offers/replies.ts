@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 
-import type { DomainDb } from "../db";
-import { DomainAuthorizationError } from "../errors";
+import type { DomainDb, TransactionalDomainDb } from "../db";
+import { DomainAuthorizationError, DomainNotFoundError } from "../errors";
 import type { BlobPutPort } from "../ports/blob";
 import type { DomainPrincipal } from "../principal";
 import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
@@ -71,17 +71,26 @@ const FILE_ATTACHMENT_ODATA_TYPE = "#microsoft.graph.fileAttachment";
 const MIN_INLINE_BYTES = 40 * 1024;
 
 // Past this a file is a video or a CAD bundle. It stays in the mailbox and the
-// panel says so, rather than holding the webhook's invocation on the upload.
+// panel says so, rather than holding a workflow step on the upload.
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 // A reply carrying more than this is a document dump; the rest are listed with
 // a note instead of stored.
 const MAX_STORED_ATTACHMENTS = 20;
 
-// Written with the row and overwritten once the upload lands, so a run that
+// Written by the plan and cleared once the upload lands, so a run that
 // dies part-way leaves a file that reads as missing rather than one that reads
 // as never sent.
 const NOT_STORED_NOTE = "Not saved — open the email in Outlook to get it.";
+
+// On the row from the moment it is written, until the attachment workflow has
+// listed the files. If that workflow never runs, this is what the office reads.
+const PENDING_NOTE =
+  "Still being saved — refresh shortly. If this stays, open the email in Outlook.";
+
+export type OfferReplyRecord =
+  | { readonly outcome: "recorded"; readonly replyId: string }
+  | { readonly outcome: Exclude<OfferReplyOutcome, "recorded"> };
 
 /**
  * Records an inbound reply against its OfferDocumentSend.
@@ -93,41 +102,34 @@ const NOT_STORED_NOTE = "Not saved — open the email in Outlook to get it.";
  * guard existed, a bounce stamped repliedAt — recording "the client replied"
  * for an offer that never arrived.
  *
- * The message row is written before any attachment is downloaded. What the
- * client wrote is the part the office cannot do without, and a slow or failed
- * upload must not cost it. Every attachment failure is kept on the row as a
- * note, never thrown: the reply is already recorded by then.
+ * Writes the message and the send's timestamps in one transaction, and
+ * nothing else. The attachments are the slow, failure-prone half, so they are
+ * left to `planOfferReplyAttachments` and `storeOfferReplyAttachment`, which
+ * the adapter runs durably once this has committed.
  */
 export async function recordOfferReply(
   principal: DomainPrincipal,
   input: InboundOfferReply,
-  db: DomainDb,
-  ports: { readonly mail: OfferReplyMailPort; readonly put: BlobPutPort },
-): Promise<OfferReplyOutcome> {
-  // Reached only from the Graph webhook, whose channel authenticated on its
-  // client state. Nothing signed in or anonymous records a client's reply.
-  if (principal.kind !== "system") {
-    throw new DomainAuthorizationError(
-      "Only the mailbox integration can record a client's reply.",
-    );
-  }
+  db: TransactionalDomainDb,
+): Promise<OfferReplyRecord> {
+  requireMailboxIntegration(principal);
 
   const send = await db.offerDocumentSend.findUnique({
     where: { trackedLinkToken: input.token },
-    select: { id: true, offerId: true, recipientEmail: true, repliedAt: true },
+    select: { id: true, recipientEmail: true },
   });
   if (!send) {
-    return "no-matching-send";
+    return { outcome: "no-matching-send" };
   }
 
   if (isMachineGenerated(input.headers)) {
-    return "auto-generated";
+    return { outcome: "auto-generated" };
   }
 
   const sender = normalizeEmailAddress(input.from ?? "");
   const recipient = normalizeEmailAddress(send.recipientEmail);
   if (!sender || !recipient || sender !== recipient) {
-    return "sender-mismatch";
+    return { outcome: "sender-mismatch" };
   }
 
   // Graph can notify twice for one message. The first run owns it.
@@ -136,175 +138,244 @@ export async function recordOfferReply(
     select: { id: true },
   });
   if (existing) {
-    return "already-recorded";
+    return { outcome: "already-recorded" };
   }
 
-  const { toStore, listed } = await planAttachments(input, ports.mail);
-
   const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
-  let replyId: string;
+  const pending: OfferReplyAttachment[] = input.hasAttachments
+    ? [
+        {
+          contentType: "",
+          name: "Attachments",
+          note: PENDING_NOTE,
+          size: 0,
+          url: null,
+        },
+      ]
+    : [];
+
   try {
-    const reply = await db.offerDocumentReply.create({
-      data: {
-        attachments: listed as unknown as Prisma.InputJsonValue,
-        body: input.body,
-        fromEmail: sender,
-        graphMessageId: input.graphMessageId,
-        receivedAt,
-        sendId: send.id,
-        subject: input.subject,
-      },
-      select: { id: true },
+    // One transaction, so a failed timestamp write takes the row with it and
+    // the next notification for this message records both rather than finding
+    // the row and stopping.
+    const replyId = await db.$transaction(async (tx) => {
+      const reply = await tx.offerDocumentReply.create({
+        data: {
+          attachments: pending as unknown as Prisma.InputJsonValue,
+          body: input.body,
+          fromEmail: sender,
+          graphMessageId: input.graphMessageId,
+          receivedAt,
+          sendId: send.id,
+          subject: input.subject,
+        },
+        select: { id: true },
+      });
+
+      // Decided by the database against the row as it stands, not against
+      // what was read above: two replies processed out of order must still
+      // leave the earliest in repliedAt and the latest in lastReplyAt.
+      await tx.offerDocumentSend.updateMany({
+        where: {
+          id: send.id,
+          OR: [{ repliedAt: null }, { repliedAt: { gt: receivedAt } }],
+        },
+        data: { repliedAt: receivedAt },
+      });
+      await tx.offerDocumentSend.updateMany({
+        where: {
+          id: send.id,
+          OR: [{ lastReplyAt: null }, { lastReplyAt: { lt: receivedAt } }],
+        },
+        data: { lastReplyAt: receivedAt },
+      });
+
+      return reply.id;
     });
-    replyId = reply.id;
+    return { outcome: "recorded", replyId };
   } catch (error) {
     // The duplicate notification that lost the race to the one above.
     if (error instanceof Error && "code" in error && error.code === "P2002") {
-      return "already-recorded";
+      return { outcome: "already-recorded" };
     }
     throw error;
   }
-
-  await db.offerDocumentSend.update({
-    where: { id: send.id },
-    data: {
-      lastReplyAt: receivedAt,
-      ...(send.repliedAt ? {} : { repliedAt: receivedAt }),
-    },
-  });
-
-  if (toStore.length > 0) {
-    const stored = await storeAttachments(
-      send.offerId,
-      input.graphMessageId,
-      toStore,
-      listed,
-      ports,
-    );
-    await db.offerDocumentReply.update({
-      where: { id: replyId },
-      data: { attachments: stored as unknown as Prisma.InputJsonValue },
-    });
-  }
-
-  return "recorded";
 }
 
-type PlannedAttachment = {
-  /** Position in `listed`, which the upload result overwrites. */
+/** One file the attachment workflow will download and store. */
+export type PlannedReplyAttachment = {
+  /** Position in the reply's attachment list, which the upload overwrites. */
   readonly index: number;
-  readonly metadata: InboundAttachmentMetadata;
+  readonly attachmentId: string;
+  readonly name: string;
+  readonly contentType: string;
+};
+
+/** Everything the store step needs, plain data so a workflow can carry it. */
+export type OfferReplyAttachmentPlan = {
+  readonly replyId: string;
+  readonly offerId: string;
+  readonly graphMessageId: string;
+  readonly files: readonly PlannedReplyAttachment[];
 };
 
 /**
- * Which attachments to store, and the row's initial description of every one.
+ * Lists the reply's attachments onto its row and says which to store.
  *
  * Signature logos are dropped from the list entirely; everything else the
- * client sent is listed, stored or not, so the panel never hides a file.
+ * client sent is listed, stored or not, so the panel never hides a file. A
+ * file to be stored is written with NOT_STORED_NOTE, which the store step
+ * clears — so a file whose upload never lands reads as missing.
  */
-async function planAttachments(
-  input: InboundOfferReply,
-  mail: OfferReplyMailPort,
-): Promise<{
-  toStore: PlannedAttachment[];
-  listed: OfferReplyAttachment[];
-}> {
-  let metadata: readonly InboundAttachmentMetadata[];
+export async function planOfferReplyAttachments(
+  principal: DomainPrincipal,
+  input: { readonly replyId: string },
+  db: DomainDb,
+  ports: { readonly mail: OfferReplyMailPort },
+): Promise<OfferReplyAttachmentPlan> {
+  requireMailboxIntegration(principal);
+
+  const reply = await db.offerDocumentReply.findUnique({
+    where: { id: input.replyId },
+    select: { graphMessageId: true, send: { select: { offerId: true } } },
+  });
+  if (!reply) {
+    throw new DomainNotFoundError("That offer reply is no longer on file.");
+  }
+
+  const files: PlannedReplyAttachment[] = [];
+  const listed: OfferReplyAttachment[] = [];
   try {
-    metadata = await mail.listAttachments();
+    for (const attachment of await ports.mail.listAttachments()) {
+      if (attachment.isInline && attachment.size < MIN_INLINE_BYTES) {
+        continue;
+      }
+      const base = {
+        contentType: attachment.contentType,
+        name: attachment.name || "Attachment",
+        size: attachment.size,
+        url: null,
+      };
+      if (attachment.odataType !== FILE_ATTACHMENT_ODATA_TYPE) {
+        listed.push({
+          ...base,
+          note: "A forwarded email or cloud link — open the email in Outlook.",
+        });
+      } else if (attachment.size > MAX_ATTACHMENT_BYTES) {
+        listed.push({
+          ...base,
+          note: `Too large to save here (${formatMegabytes(attachment.size)}) — open the email in Outlook.`,
+        });
+      } else if (files.length >= MAX_STORED_ATTACHMENTS) {
+        listed.push({
+          ...base,
+          note: `Only the first ${MAX_STORED_ATTACHMENTS} files are saved — open the email in Outlook.`,
+        });
+      } else {
+        files.push({
+          attachmentId: attachment.id,
+          contentType: attachment.contentType,
+          index: listed.length,
+          name: base.name,
+        });
+        listed.push({ ...base, note: NOT_STORED_NOTE });
+      }
+    }
   } catch (error) {
+    // The Graph port already retried the transient kind. Said on the row
+    // rather than left on the pending note, which promises a result.
     console.error(
-      `  Couldn't list attachments on offer reply ${input.graphMessageId}:`,
+      `  Couldn't list attachments on offer reply ${reply.graphMessageId}:`,
       error,
     );
-    return {
-      listed: input.hasAttachments
-        ? [
-            {
-              contentType: "",
-              name: "Attachments",
-              note: "Couldn't be read from the mailbox — open the email in Outlook.",
-              size: 0,
-              url: null,
-            },
-          ]
-        : [],
-      toStore: [],
-    };
+    files.length = 0;
+    listed.length = 0;
+    listed.push({
+      contentType: "",
+      name: "Attachments",
+      note: "Couldn't be read from the mailbox — open the email in Outlook.",
+      size: 0,
+      url: null,
+    });
   }
 
-  const toStore: PlannedAttachment[] = [];
-  const listed: OfferReplyAttachment[] = [];
-  for (const attachment of metadata) {
-    if (attachment.isInline && attachment.size < MIN_INLINE_BYTES) {
-      continue;
-    }
-    const base = {
-      contentType: attachment.contentType,
-      name: attachment.name || "Attachment",
-      size: attachment.size,
-      url: null,
-    };
-    if (attachment.odataType !== FILE_ATTACHMENT_ODATA_TYPE) {
-      listed.push({
-        ...base,
-        note: "A forwarded email or cloud link — open the email in Outlook.",
-      });
-    } else if (attachment.size > MAX_ATTACHMENT_BYTES) {
-      listed.push({
-        ...base,
-        note: `Too large to save here (${formatMegabytes(attachment.size)}) — open the email in Outlook.`,
-      });
-    } else if (toStore.length >= MAX_STORED_ATTACHMENTS) {
-      listed.push({
-        ...base,
-        note: `Only the first ${MAX_STORED_ATTACHMENTS} files are saved — open the email in Outlook.`,
-      });
-    } else {
-      toStore.push({ index: listed.length, metadata: attachment });
-      listed.push({ ...base, note: NOT_STORED_NOTE });
-    }
-  }
-  return { listed, toStore };
+  await db.offerDocumentReply.update({
+    where: { id: input.replyId },
+    data: { attachments: listed as unknown as Prisma.InputJsonValue },
+  });
+
+  return {
+    files,
+    graphMessageId: reply.graphMessageId,
+    offerId: reply.send.offerId,
+    replyId: input.replyId,
+  };
 }
 
-async function storeAttachments(
-  offerId: string,
-  graphMessageId: string,
-  toStore: readonly PlannedAttachment[],
-  listed: readonly OfferReplyAttachment[],
+/**
+ * Downloads one planned file, stores it, and links it on the reply.
+ *
+ * Throws on failure so the caller's retry can run it again: the blob path is
+ * derived from the message and the attachment, so a second attempt overwrites
+ * its own object instead of orphaning one beside it.
+ */
+export async function storeOfferReplyAttachment(
+  principal: DomainPrincipal,
+  input: {
+    readonly plan: Omit<OfferReplyAttachmentPlan, "files">;
+    readonly file: PlannedReplyAttachment;
+  },
+  db: DomainDb,
   ports: { readonly mail: OfferReplyMailPort; readonly put: BlobPutPort },
-): Promise<OfferReplyAttachment[]> {
-  const result = [...listed];
-  for (const { index, metadata } of toStore) {
-    try {
-      const data = await ports.mail.downloadAttachment(metadata.id);
-      const blob = await ports.put({
-        // Same message and attachment, same path: a retry overwrites its own
-        // object instead of leaving an orphan beside it.
-        allowOverwrite: true,
-        body: data,
-        contentType: metadata.contentType || undefined,
-        pathname: buildBlobPath({
-          fileId: `reply-${deterministicId(graphMessageId, metadata.id)}`,
-          fileName: result[index].name,
-          offerId,
-        }),
-      });
-      result[index] = {
-        ...result[index],
-        note: null,
-        size: data.byteLength,
-        url: blob.url,
-      };
-    } catch (error) {
-      console.error(
-        `  Failed to save offer reply attachment "${metadata.name}":`,
-        error,
-      );
-    }
+): Promise<{ readonly url: string }> {
+  requireMailboxIntegration(principal);
+  const { file, plan } = input;
+
+  const data = await ports.mail.downloadAttachment(file.attachmentId);
+  const blob = await ports.put({
+    allowOverwrite: true,
+    body: data,
+    contentType: file.contentType || undefined,
+    pathname: buildBlobPath({
+      fileId: `reply-${deterministicId(plan.graphMessageId, file.attachmentId)}`,
+      fileName: file.name,
+      offerId: plan.offerId,
+    }),
+  });
+
+  const reply = await db.offerDocumentReply.findUnique({
+    where: { id: plan.replyId },
+    select: { attachments: true },
+  });
+  if (!reply) {
+    throw new DomainNotFoundError("That offer reply is no longer on file.");
   }
-  return result;
+  const attachments = parseOfferReplyAttachments(reply.attachments);
+  const entry = attachments[file.index];
+  if (entry?.name === file.name) {
+    attachments[file.index] = {
+      ...entry,
+      note: null,
+      size: data.byteLength,
+      url: blob.url,
+    };
+    await db.offerDocumentReply.update({
+      where: { id: plan.replyId },
+      data: { attachments: attachments as unknown as Prisma.InputJsonValue },
+    });
+  }
+  return { url: blob.url };
+}
+
+// Reached only from the Graph webhook and the workflow it starts, whose channel
+// authenticated on its client state. Nothing signed in or anonymous records a
+// client's reply.
+function requireMailboxIntegration(principal: DomainPrincipal): void {
+  if (principal.kind !== "system") {
+    throw new DomainAuthorizationError(
+      "Only the mailbox integration can record a client's reply.",
+    );
+  }
 }
 
 function deterministicId(graphMessageId: string, attachmentId: string) {

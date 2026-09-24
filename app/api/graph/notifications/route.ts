@@ -8,7 +8,6 @@ import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
 import { evaluateEmail } from "@/utils/spam-detector";
 import { recordOfferReply } from "@/lib/domain/offers/replies";
 import { systemPrincipal } from "@/lib/domain/principal";
-import { put } from "@vercel/blob";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
@@ -35,6 +34,7 @@ import { processInboundPartyEmail } from "@/lib/workflow/party-email";
 import { isRetryableGraphError, withGraphRetry } from "@/lib/graph/retry";
 import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
 import { processInboundLead } from "@/lib/workflow/lead-extraction";
+import { storeOfferReplyAttachments } from "@/lib/workflow/offer-reply-attachments";
 import { start } from "workflow/api";
 import { after } from "next/server";
 import { isOwnMailbox } from "@/lib/graph/mailbox";
@@ -525,13 +525,12 @@ async function processNotifications(
               ? extractOfferReplyToken(message.subject)
               : null;
           if (offerReplyToken) {
-            const messageId = message.id;
-            const outcome = await recordOfferReply(
+            const record = await recordOfferReply(
               systemPrincipal("graph:offer-reply"),
               {
                 body: content,
                 from: message.from,
-                graphMessageId: messageId,
+                graphMessageId: message.id,
                 hasAttachments: message.hasAttachments,
                 headers: message.headers,
                 receivedAt: message.receivedDateTime || null,
@@ -539,35 +538,27 @@ async function processNotifications(
                 token: offerReplyToken,
               },
               prisma,
-              {
-                mail: {
-                  listAttachments: () =>
-                    withGraphRetry("list offer reply attachments", () =>
-                      client.listMessageAttachments(messageId),
-                    ),
-                  downloadAttachment: (attachmentId) =>
-                    withGraphRetry("download offer reply attachment", () =>
-                      client.downloadMessageAttachment(messageId, attachmentId),
-                    ),
-                },
-                put: ({ allowOverwrite, body, contentType, pathname }) =>
-                  put(
-                    pathname,
-                    body instanceof Uint8Array && !Buffer.isBuffer(body)
-                      ? Buffer.from(body)
-                      : body,
-                    {
-                      // Same as every other stored email attachment here: the
-                      // path is already unique, and a suffix would stop a retry
-                      // overwriting its own object.
-                      access: "public",
-                      addRandomSuffix: false,
-                      allowOverwrite,
-                      contentType,
-                    },
-                  ),
-              },
             );
+            const outcome = record.outcome;
+            if (record.outcome === "recorded") {
+              // The message is committed; its files are the slow half, and
+              // Graph has already been told 202. `start` only enqueues. Should
+              // it fail, the reply still reads "still being saved — if this
+              // stays, open the email in Outlook", which is the truth.
+              try {
+                const run = await start(storeOfferReplyAttachments, [
+                  { graphMessageId: message.id, replyId: record.replyId },
+                ]);
+                console.log(
+                  `  Offer ${offerReplyToken}: attachment workflow started: run ${run.runId}`,
+                );
+              } catch (error) {
+                console.error(
+                  `  Offer ${offerReplyToken}: couldn't start the attachment workflow`,
+                  error,
+                );
+              }
+            }
             // Log the negatives too. An "auto-generated" line here is a
             // bounce or an out-of-office arriving, and today this is the only
             // trace of it — it is what a bounce classifier gets tuned against
