@@ -206,20 +206,37 @@ export function useLeadsData() {
       const run = ++leadsRun.current;
       try {
         setLoading(true);
-        const [leadsData, statsData, analytics] = await Promise.all([
-          // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
-          // an empty array — so without hasOpenTask the initial load for a
-          // bookmarked ?status=pendingFollowup fetched every lead and raced
-          // the filtered request the metric effect fires straight after.
-          fetchLeadListPage(params),
-          fetchLeadsStats(),
-          fetchLeadAnalyticsData(),
-        ]);
-        // The cards are not part of the race; a newer table request only
-        // supersedes this one's rows.
-        setStats(statsData);
-        setAnalyticsData(analytics);
+        // Settled separately: a newer table request supersedes only this
+        // one's rows, so the cards must neither wait on nor be swallowed by
+        // the table's fate.
+        const [leadsResult, statsResult, analyticsResult] =
+          await Promise.allSettled([
+            // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
+            // an empty array — so without hasOpenTask the initial load for a
+            // bookmarked ?status=pendingFollowup fetched every lead and raced
+            // the filtered request the metric effect fires straight after.
+            fetchLeadListPage(params),
+            fetchLeadsStats(),
+            fetchLeadAnalyticsData(),
+          ]);
+        if (statsResult.status === "fulfilled") setStats(statsResult.value);
+        if (analyticsResult.status === "fulfilled") {
+          setAnalyticsData(analyticsResult.value);
+        }
+        const cardFailures = [statsResult, analyticsResult].flatMap((result) =>
+          result.status === "rejected" ? [result.reason] : [],
+        );
+        if (cardFailures.length > 0) {
+          console.error(...cardFailures);
+          setError("Failed to load leads data");
+        }
         if (run !== leadsRun.current) return null;
+        if (leadsResult.status === "rejected") {
+          console.error(leadsResult.reason);
+          setError("Failed to load leads data");
+          return null;
+        }
+        const leadsData = leadsResult.value;
         setLeads(leadsData.items);
         setPageInfo({
           page: leadsData.page,
@@ -227,13 +244,8 @@ export function useLeadsData() {
           total: leadsData.totalCount,
           totalPages: leadsData.totalPages,
         });
-        setError(null);
+        if (cardFailures.length === 0) setError(null);
         return leadsData.page;
-      } catch (err) {
-        if (run !== leadsRun.current) return null;
-        setError("Failed to load leads data");
-        console.error(err);
-        return null;
       } finally {
         setLoading(false);
       }
