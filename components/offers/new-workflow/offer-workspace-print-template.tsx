@@ -4,7 +4,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
-  UNCATEGORISED_INCLUSION_LABEL,
+  printedInclusionCategory,
   type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
@@ -89,8 +89,8 @@ const SIGNATURE_BLOCK_CHROME_LINES = 4;
 
 function signatureBlockLines(whoText: string): number {
   return (
-    SIGNATURE_BLOCK_CHROME_LINES +
-    estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE)
+    SIGNATURE_BLOCK_CHROME_LINES
+    + estimateWrappedLines(whoText, CHARS_PER_LINE_SIGNATURE)
   );
 }
 
@@ -170,8 +170,8 @@ export function OfferWorkspacePrintTemplate(
     0,
   );
   const inlineSignatures =
-    signatureBlocks.length <= INLINE_SIGNATURE_LIMIT &&
-    signatureLines <= INLINE_SIGNATURE_BUDGET;
+    signatureBlocks.length <= INLINE_SIGNATURE_LIMIT
+    && signatureLines <= INLINE_SIGNATURE_BUDGET;
   let signatureChunks: SignatureBlockSpec[][] = [];
   if (!inlineSignatures) {
     const acceptanceLines = estimateWrappedLines(
@@ -705,7 +705,7 @@ function PrintInclusionsPage({
               key={`${startIndex + index}`}
             >
               <td className="py-3 pr-4 align-top font-semibold text-sidebar">
-                {entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL}
+                {printedInclusionCategory(specifications, index)}
               </td>
               <td className="px-4 py-3 align-top text-muted-foreground">
                 {entry.spec}
