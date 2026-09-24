@@ -382,17 +382,29 @@ export function buildWelcomeParagraphs(
   ];
 }
 
+const AU_STATES =
+  "NSW|VIC|QLD|SA|WA|TAS|NT|ACT|New South Wales|Victoria|Queensland|South Australia|Western Australia|Tasmania|Northern Territory|Australian Capital Territory";
+
 // "Pendle Hill NSW 2145" -> "Pendle Hill"; also a bare "NSW 2145", and the
 // state spelt out, as some geocoders do ("Pendle Hill New South Wales 2145").
-const LOCALITY_STATE =
-  /^(.*?)\s*\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT|New South Wales|Victoria|Queensland|South Australia|Western Australia|Tasmania|Northern Territory|Australian Capital Territory)\b(?:\s+\d{4})?$/i;
+const LOCALITY_STATE = new RegExp(
+  String.raw`^(.*?)\s*\b(?:${AU_STATES})\b(?:\s+\d{4})?$`,
+  "i",
+);
+const STATE_THEN_COUNTRY = new RegExp(
+  String.raw`\b(${AU_STATES})\s+australia$`,
+  "i",
+);
 
-// The country, as its own segment or trailing a postcode ("NSW 2145
-// Australia"). Never the end of a state name: "South Australia" stays whole.
+// The country, as its own segment or trailing a postcode or a state ("NSW
+// 2145 Australia", "New South Wales Australia"). Never the end of a state
+// name: "South Australia" stays whole.
 function withoutCountry(segment: string): string {
   const trimmed = segment.trim();
   if (/^australia$/i.test(trimmed)) return "";
-  return trimmed.replace(/(\d{4})\s+australia$/i, "$1");
+  return trimmed
+    .replace(/(\d{4})\s+australia$/i, "$1")
+    .replace(STATE_THEN_COUNTRY, "$1");
 }
 
 /**

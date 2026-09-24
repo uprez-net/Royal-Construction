@@ -59,6 +59,10 @@ test("Australia is dropped as the country, never cut out of a state name", () =>
     ],
     ["1 King William St, Adelaide SA 5000, South Australia", "Adelaide"],
     ["1 Hay St, Perth, Western Australia", "Perth"],
+    // The country after a state with no postcode between them.
+    ["13 Binalong Road, Pendle Hill, New South Wales Australia", "Pendle Hill"],
+    ["13 Binalong Road, Pendle Hill NSW Australia", "Pendle Hill"],
+    ["1 King William St, Adelaide, South Australia Australia", "Adelaide"],
   ] as const) {
     assert.equal(siteLocality(address), suburb, address);
   }
