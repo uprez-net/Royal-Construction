@@ -17,7 +17,10 @@ import {
   type OfferWorkspaceStatus,
 } from "@/lib/offer/workspace-model";
 import type { OfferCustomerPrice } from "@/lib/offer/workspace-pricing";
-import { getVisibleExclusions } from "@/lib/offer/workspace-print-template";
+import {
+  getVisibleExclusions,
+  tenderInclusionDetail,
+} from "@/lib/offer/workspace-print-template";
 import { FileText, Info, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { OfferCardHeading } from "./offer-workspace-card-heading";
@@ -487,7 +490,11 @@ function TenderPreview({
           document. */}
       <TenderList
         emptyLabel="No inclusions captured yet. Add them in the inclusion schedule on the Offer document step."
-        items={draft.inclusionSchedule.map((entry) => entry.spec)}
+        items={draft.inclusionSchedule.map((entry) =>
+          [(entry.category ?? "").trim(), tenderInclusionDetail(entry)]
+            .filter(Boolean)
+            .join(" — "),
+        )}
         numbered
         title="Inclusions"
       />
@@ -572,7 +579,7 @@ function TenderList({
       ) : (
         <ol className="grid gap-1.5 text-[13px]">
           {items.map((item, index) => (
-            <li key={item} className="flex gap-2">
+            <li key={index} className="flex gap-2">
               <span className="shrink-0 font-mono text-muted-foreground">
                 {numbered ? `${index + 1}.` : "•"}
               </span>

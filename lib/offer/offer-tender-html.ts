@@ -3,6 +3,7 @@ import {
   formatArea,
   formatDwellingSpec,
   grannyDwellingSpec,
+  tenderInclusionDetail,
   COMPANY_LINE,
   type OfferPrintPaymentRow,
   type OfferPrintTemplateInput,
@@ -344,7 +345,7 @@ const ACCEPTANCE_CHROME_LINES = 12;
 // is by far the widest and always the tallest cell in the row.
 function inclusionRowLines(row: TenderInclusionRow): number {
   const label = row.label;
-  const spec = (row.entry.tenderText ?? row.entry.spec).trim();
+  const spec = tenderInclusionDetail(row.entry);
   const labelLines =
     label.length > 0
       ? estimateWrappedLines(label, CHARS_PER_LINE_DESCRIPTION)
@@ -963,7 +964,7 @@ function schedulePage(
 // the bold label alone.
 function inclusionRowHtml(row: TenderInclusionRow): string {
   const label = row.label;
-  const spec = (row.entry.tenderText ?? row.entry.spec).trim();
+  const spec = tenderInclusionDetail(row.entry);
   const description =
     label.length > 0 && spec.length > 0
       ? `<b>${esc(label)}</b><span class="t-detail">${esc(spec)}</span>`

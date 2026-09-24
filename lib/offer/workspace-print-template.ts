@@ -1,5 +1,6 @@
 import type {
   OfferDocumentDraft,
+  OfferInclusionEntry,
   OfferScopeAmountType,
   OfferWorkspaceCostLine,
   OfferWorkspaceJob,
@@ -386,6 +387,18 @@ const STANDARD_EXCLUSION_DESCRIPTIONS: Readonly<Record<string, string>> = {
 // The Tender version of getVisibleExclusions, carrying the description and
 // variation rule a Scope item holds. The offer intentionally keeps the short
 // label-only list above; custom free-text bullets have no detail to carry.
+// The detail printed beneath a Tender inclusion's bold category. A row saved
+// before Tender Text existed has no field and prints its Offer wording. The
+// admin editor saves a blank Tender Text as "": a categorised row then prints
+// its heading alone, and an uncategorised one falls back to its Offer wording
+// rather than an empty "Included" row.
+export function tenderInclusionDetail(entry: OfferInclusionEntry): string {
+  if (entry.tenderText === undefined) return entry.spec.trim();
+  const detail = entry.tenderText.trim();
+  if (detail.length > 0) return detail;
+  return (entry.category ?? "").trim().length > 0 ? "" : entry.spec.trim();
+}
+
 export function getVisibleExclusionRows(
   draft: OfferDocumentDraft,
   exclusions: readonly OfferWorkspaceScopeItem[],
@@ -406,11 +419,15 @@ export function getVisibleExclusionRows(
     if (!item.includedInOfferDocument) continue;
     const key = item.label.trim();
     if (key.length === 0) continue;
-    // A Scope item's detail wins over a bare bullet of the same label.
+    // A Scope item's detail wins over a bare bullet of the same label, but a
+    // blank Scope field keeps the standard wording rather than printing a dash.
+    const standard = STANDARD_EXCLUSION_DESCRIPTIONS[key];
     rows.set(key, {
       label: key,
-      description: item.description.trim(),
-      variationRule: item.variationRule.trim(),
+      description: item.description.trim() || (standard ?? ""),
+      variationRule:
+        item.variationRule.trim()
+        || (standard ? "By approved written variation." : ""),
     });
   }
   return [...rows.values()];

@@ -156,7 +156,10 @@ export function buildProposalHtml(
 
   // The schedule the estimator edited on this offer — not a module constant.
   // An empty schedule produces zero pages rather than an empty table.
-  const inclusionPages = chunkInclusionSchedule(input.draft.inclusionSchedule);
+  const inclusionPages = chunkInclusionSchedule(
+    // Category-only rows exist for the Tender; the Offer prints Offer wording.
+    input.draft.inclusionSchedule.filter((entry) => entry.spec.trim()),
+  );
   const inclusionStartIndexes = inclusionPageStartIndexes(inclusionPages);
 
   // Signature blocks (customer signers first, then the builder). A handful fit

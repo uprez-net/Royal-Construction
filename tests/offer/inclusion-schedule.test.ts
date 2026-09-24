@@ -344,6 +344,33 @@ test("the tender keeps the Offer order and blank detail is header-only", () => {
   assert.deepEqual(restored.draft.inclusionSchedule, rows);
 });
 
+// The admin editor saves blank Tender Text as "", so an uncategorised row must
+// fall back to its Offer wording, not print an empty "Included" row.
+test("an uncategorised row with blank Tender Text prints its Offer wording", () => {
+  const html = buildTenderHtml(
+    buildProposalInput(
+      snapshotWithSchedule([{ spec: "Uncategorised wording", tenderText: "" }]),
+    ),
+  );
+  assert.match(html, /<td class="c-desc">Uncategorised wording<\/td>/);
+});
+
+// Category-only rows exist for the Tender; the Offer's Specification column
+// would print them as an empty cell.
+test("the offer PDF leaves out category-only rows", () => {
+  const html = buildProposalHtml(
+    buildProposalInput(
+      snapshotWithSchedule([
+        { spec: "Real spec", category: "Kept" },
+        { spec: "", category: "Tender Only", tenderText: "Detail" },
+      ]),
+    ),
+    EMPTY_OFFER_IMAGES,
+  );
+  assert.match(html, /Real spec/);
+  assert.doesNotMatch(html, /Tender Only/);
+});
+
 test("an empty schedule renders zero sections, not an empty table", () => {
   assert.deepEqual(buildInclusionSections([]), []);
 
@@ -745,6 +772,26 @@ test("a scope exclusion carries its detail through to print", () => {
       label: "Pool, spa and water features",
       description: "Can be priced later as a separate package.",
       variationRule: "Priced as a written variation.",
+    },
+  ]);
+});
+
+test("a blank scope exclusion field keeps the standard wording", () => {
+  const draft = { ...INITIAL_OFFER_DRAFT, exclusionBullets: [] };
+  const item = {
+    ...INITIAL_EXCLUSIONS[0],
+    id: "scope-blank",
+    label: "Boundary or pool fencing",
+    description: "",
+    variationRule: " ",
+    includedInOfferDocument: true,
+    includedInTender: true,
+  };
+  assert.deepEqual(getVisibleExclusionRows(draft, [item]), [
+    {
+      label: "Boundary or pool fencing",
+      description: "Fencing beyond included Colorbond perimeter.",
+      variationRule: "By approved written variation.",
     },
   ]);
 });
