@@ -551,6 +551,65 @@ describe("sending", () => {
     );
   });
 
+  test("an attempt that died mid-send is held for reconciliation once its lock is stale", async () => {
+    const lead = seedLead({ whatsappConsentAt: NOW });
+    // The first attempt claims the intent and never hears back: the process
+    // running it died with the provider call in flight.
+    const sent: Sent[] = [];
+    const hung: WhatsAppPort = {
+      channel,
+      sendTemplate: (message) => {
+        sent.push({ kind: "template", message });
+        return new Promise(() => undefined);
+      },
+      sendText: () => new Promise(() => undefined),
+    };
+    const key = "k1";
+    void sendLeadWhatsAppMessage(
+      admin,
+      { idempotencyKey: key, leadId: lead.id as number, message: templateMessage, now: NOW },
+      store.transactionalDb,
+      { whatsapp: hung },
+    );
+    for (let i = 0; i < 50 && sent.length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assert.equal(sent.length, 1);
+    const lockedAt = store.rows("outboxEvent")[0].lockedAt as Date;
+    const port = fakePort();
+    const retry = (now: Date) =>
+      sendLeadWhatsAppMessage(
+        admin,
+        { idempotencyKey: key, leadId: lead.id as number, message: templateMessage, now },
+        store.transactionalDb,
+        { whatsapp: port },
+      );
+
+    // Still inside the provider timeout: genuinely in flight.
+    await assert.rejects(
+      retry(new Date(lockedAt.getTime() + 20_000)),
+      /already being sent/,
+    );
+    assert.equal(store.rows("leadWhatsAppMessage")[0].needsReconciliation, false);
+
+    // Well past it: nothing will ever record the outcome, so a person must.
+    await assert.rejects(
+      retry(new Date(lockedAt.getTime() + 5 * 60_000)),
+      (error: unknown) => error instanceof DomainSideEffectError && !error.retryable,
+    );
+    const [message] = store.rows("leadWhatsAppMessage");
+    assert.equal(message.needsReconciliation, true);
+    assert.equal(store.rows("outboxEvent")[0].status, "FAILED");
+    assert.equal(port.sent.length, 0);
+
+    const settled = await reconcileLeadWhatsAppMessage(
+      admin,
+      { leadId: lead.id as number, messageId: message.id as string, outcome: "sent" },
+      store.transactionalDb,
+    );
+    assert.equal(settled.status, "SENT");
+  });
+
   test("a status callback that beat the send is applied when the send stores the wamid", async () => {
     const lead = seedLead({ whatsappConsentAt: NOW });
     const early = await recordWhatsAppDeliveryStatus(
@@ -602,6 +661,38 @@ describe("inbound messages", () => {
     );
     assert.equal(sent.message.kind, "TEXT");
     assert.equal(store.rows("leadWhatsAppConversation").length, 1);
+  });
+
+  test("a unique clash that stored nothing is rethrown for Meta to redeliver, not called a duplicate", async () => {
+    seedLead();
+    // Another message from the same customer created the conversation first.
+    const clash = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    const racing: typeof store.transactionalDb = new Proxy(store.transactionalDb, {
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver);
+        if (property === "$transaction") {
+          // The fake hands its own client to the callback; hand this one.
+          return (fn: (tx: typeof racing) => Promise<unknown>) =>
+            target.$transaction(() => fn(racing));
+        }
+        if (property !== "leadWhatsAppConversation") return value;
+        return { ...value, upsert: async () => Promise.reject(clash) };
+      },
+    });
+    await assert.rejects(
+      recordInboundLeadWhatsAppMessage(webhook, inbound(), racing, { channel }),
+      (error: unknown) => error === clash,
+    );
+    assert.equal(store.rows("leadWhatsAppMessage").length, 0);
+
+    // Redelivered, it is filed.
+    const redelivered = await recordInboundLeadWhatsAppMessage(
+      webhook,
+      inbound(),
+      store.transactionalDb,
+      { channel },
+    );
+    assert.equal(redelivered.outcome, "attached");
   });
 
   test("unknown, ambiguous and misrouted messages are kept for review, never attached", async () => {

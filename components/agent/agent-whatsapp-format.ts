@@ -9,6 +9,11 @@
  * check reaches the DOM.
  */
 
+import {
+  findWhatsAppTemplate,
+  renderWhatsAppTemplate,
+} from "@/lib/domain/leads/whatsapp/templates";
+
 export type WhatsAppStatusTone = "neutral" | "good" | "warn" | "bad";
 
 export type AgentWhatsAppMessage = {
@@ -232,7 +237,21 @@ export function approvalWhatsApp(
     parameters: args.templateParameters,
     templateName: args.templateName,
   });
-  return draft ? { ...draft, fromApproval: true } : null;
+  if (!draft) return null;
+  if (draft.mode === "template") {
+    // A template goes out as Meta's approved wording, never as `body`, so the
+    // owner approves that wording. An unknown template or a wrong number of
+    // values shows no body rather than a guess — the send refuses both.
+    const template = draft.templateName
+      ? findWhatsAppTemplate(draft.templateName)
+      : null;
+    const body =
+      template && draft.parameters.length === template.parameters.length
+        ? renderWhatsAppTemplate(template, draft.parameters)
+        : null;
+    return { ...draft, body, fromApproval: true };
+  }
+  return { ...draft, fromApproval: true };
 }
 
 /** Keys the WhatsApp approval preview already shows. */

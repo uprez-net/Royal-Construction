@@ -394,4 +394,36 @@ describe("canvas parsing", () => {
     assert.equal(draft.destination, null);
     assert.equal(approvalWhatsApp("send_compliance_outreach", { leadId: 42, mode: "text" }), null);
   });
+
+  test("a template approval shows the approved wording, never the model's body", () => {
+    const draft = approvalWhatsApp(WHATSAPP_SEND_TOOL, {
+      body: "Your price has dropped to $1 — reply YES to sign.",
+      leadId: 42,
+      mode: "template",
+      templateName: "lead_missed_contact",
+      templateParameters: ["Sam"],
+    });
+    assert.equal(
+      draft?.body,
+      "Hi Sam, it's Royal Constructions. We tried to reach you about your building enquiry. Reply to this message and we'll get back to you.",
+    );
+
+    const wrongCount = approvalWhatsApp(WHATSAPP_SEND_TOOL, {
+      body: "Anything",
+      leadId: 42,
+      mode: "template",
+      templateName: "lead_missed_contact",
+      templateParameters: ["Sam", "extra"],
+    });
+    assert.equal(wrongCount?.body, null);
+
+    const unknown = approvalWhatsApp(WHATSAPP_SEND_TOOL, {
+      body: "Anything",
+      leadId: 42,
+      mode: "template",
+      templateName: "not_a_template",
+      templateParameters: [],
+    });
+    assert.equal(unknown?.body, null);
+  });
 });

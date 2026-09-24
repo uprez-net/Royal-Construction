@@ -161,8 +161,17 @@ export async function recordInboundLeadWhatsAppMessage(
     });
   } catch (error) {
     // Two deliveries of the same message processed at once: the loser's
-    // insert hits the unique wamid. It is the duplicate case, not a failure.
-    if (isUniqueViolation(error)) return { outcome: "duplicate" };
+    // insert hits the unique wamid. It is the duplicate case, not a failure —
+    // but only once the winner's row is really there. Two different messages
+    // from one customer racing on the conversation upsert also violate a
+    // unique key, and calling that a duplicate would acknowledge a message
+    // nobody stored. Rethrowing lets Meta redeliver it.
+    if (
+      isUniqueViolation(error)
+      && (await alreadyRecorded(db, input.providerMessageId))
+    ) {
+      return { outcome: "duplicate" };
+    }
     throw error;
   }
 }

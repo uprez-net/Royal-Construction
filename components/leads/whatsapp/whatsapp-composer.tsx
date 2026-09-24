@@ -55,9 +55,15 @@ export function WhatsAppComposer({
   );
   // Edited values per template; a template not yet touched uses its defaults.
   const [edited, setEdited] = useState<Record<string, string[]>>({});
-  const [senderId, setSenderId] = useState<string>(
-    eligibility.sender?.phoneNumberId ?? senders[0]?.phoneNumberId ?? "",
-  );
+  // Only a number the operator picked. Otherwise the sender follows the
+  // server's current choice, which a poll can change (a reply to another
+  // number opens that number's window).
+  const [senderOverride, setSenderOverride] = useState<string | null>(null);
+  const senderId =
+    senderOverride
+    ?? eligibility.sender?.phoneNumberId
+    ?? senders[0]?.phoneNumberId
+    ?? "";
 
   const option = templates.find((t) => t.name === templateName) ?? templates[0];
   const parameters = option
@@ -89,8 +95,10 @@ export function WhatsAppComposer({
   }
 
   const senderChoice =
-    senders.length > 1 && senderId !== eligibility.sender?.phoneNumberId
-      ? senderId
+    senders.length > 1
+    && senderOverride !== null
+    && senderOverride !== eligibility.sender?.phoneNumberId
+      ? senderOverride
       : null;
 
   async function submit() {
@@ -172,7 +180,7 @@ export function WhatsAppComposer({
           <select
             id="whatsapp-sender"
             value={senderId}
-            onChange={(event) => setSenderId(event.target.value)}
+            onChange={(event) => setSenderOverride(event.target.value)}
             className="h-8 rounded-md border border-input bg-background px-2 text-xs"
           >
             {senders.map((sender) => (

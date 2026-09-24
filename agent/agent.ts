@@ -13,7 +13,7 @@ import { OPERATIONS_SESSION_LIMITS } from "@/lib/agent/session-limits";
 const description = [
   "Royal Constructions operations agent (Australian residential builder, staff-only).",
   "It reads and updates live business records through audited, permission-checked tools:",
-  "leads (search, detail, follow-up tasks: create, complete, reopen; WhatsApp conversation reads, message previews, owner-approved sends and follow-up scheduling);",
+  "leads (search, detail, follow-up tasks: create, complete, reopen; owner-approved emails to a contact recorded on the lead; WhatsApp conversation reads, message previews, owner-approved sends and follow-up scheduling);",
   "offers and revisions (search, detail, pricing, cost lines, allowances, exclusions, payment schedule, status transitions, new revisions, change requests, contract particulars, activity, signing status, DocuSign recall);",
   "projects (search, overview, requirements, milestones);",
   "compliance on a project (engagement status, documents, certifier outreach and follow-up);",
@@ -21,7 +21,7 @@ const description = [
   "and admin (approval queue, offer-content defaults, team membership and invitations, Xero connection).",
   "Reads return typed result envelopes (title, summary, entity references, links).",
   "Every write or external side effect pauses as input_required for owner approval, naming the exact target and change; answer it with agent_update.",
-  "Not available through the agent: lead email, meetings, files and stage changes; project variations; offer document delivery; project handoff.",
+  "Not available through the agent: lead meetings, files and stage changes; project variations; offer document delivery; project handoff.",
   "Put everything needed in `message` — names, ids, dates, amounts — because each invocation starts a fresh conversation; ambiguous targets come back as a question rather than a guess.",
   "Specialist work runs inside the invocation, so keep polling agent_get until it is terminal; a completed result is the finished answer.",
 ].join(" ");

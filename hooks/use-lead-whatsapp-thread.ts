@@ -72,6 +72,15 @@ export function useLeadWhatsAppThread(leadId: number) {
         local: prev.local.filter(
           (message) => !thread.messages.some((m) => m.id === message.id),
         ),
+        // New arrivals push the oldest messages off the newest page, but the
+        // cursor still starts below the first page loaded. Keep what fell off
+        // so it neither vanishes nor waits on "Load older".
+        older: mergeWhatsAppMessages(
+          prev.older,
+          (prev.thread?.messages ?? []).filter(
+            (message) => !thread.messages.some((m) => m.id === message.id),
+          ),
+        ),
         // Only the first load sets the cursor; after that "Load older" owns it.
         olderCursor: prev.thread ? prev.olderCursor : thread.olderCursor,
         refreshing: false,

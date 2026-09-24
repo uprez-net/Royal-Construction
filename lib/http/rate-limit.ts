@@ -24,20 +24,44 @@ export function requestAddress(request: Request): string {
  * signature is the access control, and this exists so a misconfigured loop or
  * a scripted guess costs something. A shared counter would mean a Redis round
  * trip on routes that have to work when everything else is being debugged.
+ *
+ * The routes are public and the key is a header the caller controls, so the
+ * table is bounded: expired windows are dropped on every call, and at most
+ * `maxBuckets` addresses are tracked at once. Past that the oldest window is
+ * evicted, which forgets one address's count early — a brake that loosens
+ * under a flood of addresses rather than an instance that runs out of memory.
  */
+export const DEFAULT_MAX_RATE_LIMIT_BUCKETS = 10_000;
+
 export function createFixedWindowRateLimiter(options: {
   readonly limit: number;
   readonly windowMs: number;
   readonly now?: () => number;
+  readonly maxBuckets?: number;
 }) {
+  // A window is only ever inserted with the current time, so the first entry
+  // is the oldest one — the one evicted when the table is full.
   const buckets = new Map<string, { count: number; startedAt: number }>();
   const now = options.now ?? Date.now;
+  const maxBuckets = Math.max(
+    1,
+    options.maxBuckets ?? DEFAULT_MAX_RATE_LIMIT_BUCKETS,
+  );
 
   return {
     allow(key: string): boolean {
       const current = now();
+      for (const [address, bucket] of buckets) {
+        if (current - bucket.startedAt >= options.windowMs) {
+          buckets.delete(address);
+        }
+      }
       const bucket = buckets.get(key);
-      if (!bucket || current - bucket.startedAt >= options.windowMs) {
+      if (!bucket) {
+        if (buckets.size >= maxBuckets) {
+          const oldest = buckets.keys().next().value;
+          if (oldest !== undefined) buckets.delete(oldest);
+        }
         buckets.set(key, { count: 1, startedAt: current });
         return true;
       }

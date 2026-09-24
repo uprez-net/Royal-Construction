@@ -33,8 +33,11 @@ The connection allowlist exposes only Plaud's read tools:
 - `get_file` (details for one recording, including notes and transcript segments)
 - `get_transcript` (the full transcript with timestamps and speaker labels)
 
-Keep listings to the smallest useful page and apply a name or date filter when
-possible. Retrieve details and transcripts only when requested, and use only
+Keep listings small. Plaud ignores `page` and `page_size` whenever a name
+(`query`) or date (`date_from`, `date_to`) filter is set, so a filtered listing
+returns every match and paging cannot bound it. Narrow a broad filter — a more
+specific name or a shorter date range — before listing; use paging only for
+an unfiltered listing. Retrieve details and transcripts only when requested, and use only
 the relevant content. `get_file` may include a temporary audio download URL;
 never expose that URL or raw audio in a response. The exposed argument schemas
 remain Plaud's schemas, so Eve does not rewrite or broaden their

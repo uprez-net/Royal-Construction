@@ -101,6 +101,17 @@ export type SendLeadWhatsAppResult = {
 
 const MAX_KEY_LENGTH = 200;
 
+/**
+ * How long a claimed send may stay RUNNING before it is treated as abandoned.
+ * The Cloud API adapter gives up after 15 seconds; the rest is margin for the
+ * transactions either side of the call. Past this the claiming attempt died
+ * without recording an outcome.
+ */
+const STALE_SEND_LOCK_MS = 60_000;
+
+const AMBIGUOUS_SEND_MESSAGE =
+  "WhatsApp didn't confirm whether the message was sent, so it has not been retried. Check the conversation in WhatsApp Manager, then mark the message sent or not sent before sending again.";
+
 export function whatsappOutboxKey(leadId: number, idempotencyKey: string) {
   return `lead-whatsapp:${leadId}:${idempotencyKey}`;
 }
@@ -274,12 +285,39 @@ export async function sendLeadWhatsAppMessage(
       },
     });
     if (intent.status === OutboxEventStatus.SUCCEEDED) {
-      return { replay: true as const };
+      return { replay: true as const, stale: false as const };
     }
     if (intent.status === OutboxEventStatus.RUNNING) {
-      throw new DomainTransitionError(
-        "This message is already being sent. Wait for it to finish before trying again.",
-      );
+      const running = await tx.outboxEvent.findUnique({
+        select: { lockedAt: true },
+        where: { id: intent.id },
+      });
+      const lockedFor = running?.lockedAt
+        ? now.getTime() - running.lockedAt.getTime()
+        : 0;
+      if (lockedFor <= STALE_SEND_LOCK_MS) {
+        throw new DomainTransitionError(
+          "This message is already being sent. Wait for it to finish before trying again.",
+        );
+      }
+      // The attempt that claimed this intent stopped before recording an
+      // outcome, so the provider may or may not have accepted it. Close the
+      // intent and flag the message, which is what an ambiguous send does
+      // below; otherwise it stays "being sent" with no way to reconcile it.
+      await failOutboxEvent(tx, intent.id, {
+        message:
+          "The send attempt stopped before WhatsApp's answer was recorded; it may have been delivered.",
+        retryable: false,
+      });
+      await tx.leadWhatsAppMessage.updateMany({
+        data: {
+          needsReconciliation: true,
+          providerErrorTitle:
+            "WhatsApp did not confirm this send. Check WhatsApp Manager before sending again.",
+        },
+        where: { idempotencyKey: outboxKey },
+      });
+      return { replay: false as const, stale: true as const };
     }
     if (intent.status === OutboxEventStatus.FAILED) {
       throw new DomainTransitionError(
@@ -334,8 +372,21 @@ export async function sendLeadWhatsAppMessage(
       update: fields,
       where: { idempotencyKey: outboxKey },
     });
-    return { conversationId: conversation.id, messageId: message.id, replay: false as const };
+    return {
+      conversationId: conversation.id,
+      messageId: message.id,
+      replay: false as const,
+      stale: false as const,
+    };
   });
+
+  if (prepared.stale) {
+    throw new DomainSideEffectError(
+      AMBIGUOUS_SEND_MESSAGE,
+      "whatsapp",
+      false,
+    );
+  }
 
   if (prepared.replay) {
     const stored = await db.leadWhatsAppMessage.findUnique({
@@ -412,7 +463,7 @@ export async function sendLeadWhatsAppMessage(
       );
     }
     throw new DomainSideEffectError(
-      "WhatsApp didn't confirm whether the message was sent, so it has not been retried. Check the conversation in WhatsApp Manager, then mark the message sent or not sent before sending again.",
+      AMBIGUOUS_SEND_MESSAGE,
       "whatsapp",
       false,
       { cause: error },
