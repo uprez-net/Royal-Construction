@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { buildContractSignatureAnnexureHtml } from "../../lib/offer/contract-annexure-html";
-import { buildProposalHtml } from "../../lib/offer/offer-proposal-html";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { buildContractSignatureAnnexureHtml } from "@/lib/offer/contract-annexure-html";
+import { buildProposalHtml } from "@/lib/offer/offer-proposal-html";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
+import { OfferWorkspacePrintTemplate } from "@/components/offers/new-workflow/offer-workspace-print-template";
 import {
   createCompanyOwner,
   createIndividualOwner,
@@ -24,13 +24,13 @@ import {
   MAX_OWNER_SIGNERS,
   type OfferOwner,
   type OfferWorkspaceScopeItem,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-persistence";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Counting `<div class="page">` in the HTML only proves what the document

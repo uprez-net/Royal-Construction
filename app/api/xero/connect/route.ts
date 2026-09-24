@@ -7,6 +7,8 @@ import { getUserByClerkId } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
 import { buildXeroClient, expiryFromTokenSet } from "@/lib/xero/client";
 import { getXeroConfig, XERO_SCOPES } from "@/lib/xero/config";
+import { disconnectXero } from "@/lib/domain/integrations/xero";
+import { userPrincipal } from "@/lib/domain/principal";
 import {
   errorResponse,
   forbiddenResponse,
@@ -80,44 +82,31 @@ export async function DELETE(): Promise<NextResponse> {
     return refuseFetch(guard.reason);
   }
 
-  const connection = await prisma.xeroConnection.findFirst({
-    where: { isActive: true },
-    orderBy: { updatedAt: "desc" },
-  });
-  if (!connection) {
-    return NextResponse.json({ success: true, data: { disconnected: false } });
-  }
-
+  const user = await getUserByClerkId(guard.userId);
+  if (!user) return refuseFetch("lookup_failed");
   try {
-    const xero = buildXeroClient(getXeroConfig());
-    // `revokeToken()` calls straight through to `openIdClient.revoke()` with no
-    // lazy-init guard of its own — unlike `buildConsentUrl` and `apiCallback`,
-    // which initialize on demand. Without this it throws on undefined and the
-    // token is never actually revoked at Xero.
-    await xero.initialize();
-    xero.setTokenSet({
-      access_token: connection.accessToken,
-      refresh_token: connection.refreshToken,
-      token_type: "Bearer",
-    });
-    await xero.revokeToken();
-  } catch (revokeError) {
-    // Xero may already consider the token dead, which is the state we are
-    // heading for anyway. Deactivate locally regardless — leaving the row
-    // active would keep the invoice generator trying to use a token we have
-    // just told the operator is gone.
-    console.error(
-      "[xero] Token revocation failed; deactivating locally:",
-      revokeError,
+    const disconnected = await disconnectXero(
+      userPrincipal(user),
+      prisma,
+      async ({ accessToken, refreshToken }) => {
+        const xero = buildXeroClient(getXeroConfig());
+        await xero.initialize();
+        xero.setTokenSet({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          token_type: "Bearer",
+        });
+        await xero.revokeToken();
+      },
     );
+    return NextResponse.json({ success: true, data: disconnected });
+  } catch (error) {
+    console.error("[xero] Disconnect failed:", error);
+    return errorResponse("Could not disconnect Xero", {
+      status: 502,
+      code: "XERO_DISCONNECT_FAILED",
+    });
   }
-
-  await prisma.xeroConnection.update({
-    where: { id: connection.id },
-    data: { isActive: false },
-  });
-
-  return NextResponse.json({ success: true, data: { disconnected: true } });
 }
 
 /** Send the operator to Xero's consent screen. */

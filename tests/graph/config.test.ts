@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "vitest";
 
-import { getGraphConfig } from "../../lib/graph/config";
+import { getGraphConfig } from "@/lib/graph/config";
 
 const ENV_KEYS = [
   "GRAPH_MODE",

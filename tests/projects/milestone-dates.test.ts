@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { MilestoneStatus } from "@prisma/client";
+import { test } from "vitest";
 
-import { reviveMilestoneDates } from "../../lib/projects/milestone-dates";
+import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
 import {
   partitionActivities,
   sortActivities,
-} from "../../lib/projects/milestone-ledger";
+} from "@/lib/projects/milestone-ledger";
 
 /** A milestone as the RSC payload delivers it: real Dates. */
 const fromServer = (

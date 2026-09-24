@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import type {
   ComplianceStage,
   ComplianceStageId,
-} from "@/lib/compliance/stage-flow";
+} from "@/lib/domain/compliance/stage-flow";
 
 import {
   BRANCH_DROP,

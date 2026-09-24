@@ -6,6 +6,8 @@ import {
 } from "@/lib/compliance/access";
 import { raiseComplianceAlert } from "@/lib/data/compliance-alerts";
 import { getCertifierEngagement } from "@/lib/data/compliance";
+import { userPrincipal } from "@/lib/domain/principal";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -39,13 +41,14 @@ export async function POST(
   const { projectId } = routeParams.data;
 
   try {
-    const { engagement } = await requireComplianceAccess(projectId);
+    const { engagement, user } = await requireComplianceAccess(projectId);
     await raiseComplianceAlert({
       projectId,
       engagementId: engagement!.id,
       type: body.data.type,
       raisedBySource: body.data.raisedBySource ?? null,
       detail: body.data.detail ?? null,
+      principal: userPrincipal(user),
     });
     return successResponse(await getCertifierEngagement(projectId), {
       status: 201,
@@ -53,6 +56,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to raise a compliance alert", error);
     return errorResponse("Failed to raise the alert.", {
       status: 400,

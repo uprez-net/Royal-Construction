@@ -25,7 +25,8 @@ import {
   TradieScheduleWithTradieAndMilestone,
 } from "@/types/project";
 import { reviveMilestoneDates } from "@/lib/projects/milestone-dates";
-import { reviveComplianceEngagementDates } from "@/lib/compliance/engagement-dates";
+import { reviveComplianceEngagementDates } from "@/lib/domain/compliance/engagement-dates";
+import { idempotencyHeader } from "@/lib/idempotency/attempt-key";
 import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 // A value import, not a type one: `complianceScope.party` names the architect
 // at runtime when the waste management request is filed under their thread.
@@ -523,9 +524,12 @@ async function replaceEngagement(
   };
 }
 
-const jsonPost = (body: unknown): RequestInit => ({
+const jsonPost = (body: unknown, idempotencyKey?: string): RequestInit => ({
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    ...idempotencyHeader(idempotencyKey),
+  },
   body: JSON.stringify(body),
 });
 
@@ -814,16 +818,16 @@ export const refreshCertifierEngagement = createAsyncThunk<
  */
 export const startPartyOutreach = createAsyncThunk<
   ComplianceResult,
-  { projectId: string } & StartPartyOutreachInput,
+  { projectId: string; idempotencyKey?: string } & StartPartyOutreachInput,
   { rejectValue: string }
 >(
   "projects/startPartyOutreach",
-  async ({ projectId, ...payload }, thunkApi) => {
+  async ({ projectId, idempotencyKey, ...payload }, thunkApi) => {
     try {
       return await replaceEngagement(
         projectId,
         "/parties",
-        jsonPost({ mode: "OUTREACH", ...payload }),
+        jsonPost({ mode: "OUTREACH", ...payload }, idempotencyKey),
         "Unable to engage this party",
       );
     } catch (error) {
@@ -1005,22 +1009,25 @@ export const recordPartySelfSupplied = createAsyncThunk<
 /** One message on one party's thread. */
 export const sendPartyReply = createAsyncThunk<
   ComplianceResult,
-  { projectId: string } & PartyReplyInput,
+  { projectId: string; idempotencyKey?: string } & PartyReplyInput,
   { rejectValue: string }
->("projects/sendPartyReply", async ({ projectId, ...payload }, thunkApi) => {
-  try {
-    return await replaceEngagement(
-      projectId,
-      "/parties/reply",
-      jsonPost(payload),
-      "Unable to send the message",
-    );
-  } catch (error) {
-    return thunkApi.rejectWithValue(
-      error instanceof Error ? error.message : "Unable to send the message",
-    );
-  }
-});
+>(
+  "projects/sendPartyReply",
+  async ({ projectId, idempotencyKey, ...payload }, thunkApi) => {
+    try {
+      return await replaceEngagement(
+        projectId,
+        "/parties/reply",
+        jsonPost(payload, idempotencyKey),
+        "Unable to send the message",
+      );
+    } catch (error) {
+      return thunkApi.rejectWithValue(
+        error instanceof Error ? error.message : "Unable to send the message",
+      );
+    }
+  },
+);
 
 /**
  * Records where one application to an outside body has got to.
@@ -1232,16 +1239,16 @@ export const resolveComplianceAlert = createAsyncThunk<
  */
 export const sendComplianceFollowUp = createAsyncThunk<
   ComplianceResult,
-  { projectId: string; alertId: string },
+  { projectId: string; alertId: string; idempotencyKey?: string },
   { rejectValue: string }
 >(
   "projects/sendComplianceFollowUp",
-  async ({ projectId, alertId }, thunkApi) => {
+  async ({ projectId, alertId, idempotencyKey }, thunkApi) => {
     try {
       return await replaceEngagement(
         projectId,
         `/alerts/${alertId}/follow-up`,
-        { method: "POST" },
+        { method: "POST", headers: idempotencyHeader(idempotencyKey) },
         "Unable to send the follow-up",
       );
     } catch (error) {
@@ -1431,7 +1438,29 @@ const projectsSlice = createSlice({
         state.complianceMutations = {};
         state.developerPendingDocument = null;
       }
-      state.activeProject = action.payload;
+      // The project arrives here two ways: from the server component, with real
+      // Dates, and from a PATCH of `/api/projects/:id` -- the Overview tab's
+      // save and the insurance-claim-dates modal both hand the whole JSON
+      // project straight to this action. Through JSON every timestamp is a
+      // string, and the engagement is the part of the payload that is read as
+      // a Date rather than reformatted: `complianceStageFlow` measures an
+      // outreach's `sentAt` in Sydney business days, and `Intl` throws
+      // `RangeError: Invalid time value` on a string, which took the whole
+      // project page down as soon as the Compliance tab rendered after a save.
+      // Same normalization the milestone and compliance thunks already do on
+      // their own responses, and a no-op on the Date-carrying payload. The
+      // milestones travel on that PATCH too, and carry the exposure
+      // `reviveMilestoneDates` was written for -- this action is the seed its
+      // header names.
+      state.activeProject = action.payload
+        ? {
+            ...action.payload,
+            milestones: action.payload.milestones.map(reviveMilestoneDates),
+            certifierEngagement: reviveComplianceEngagementDates(
+              action.payload.certifierEngagement,
+            ),
+          }
+        : null;
     },
     syncProjectFromDetail(state, action: PayloadAction<ProjectDetail>) {
       syncProjectState(state, action.payload);
@@ -1542,8 +1571,8 @@ const projectsSlice = createSlice({
       action: PayloadAction<{ projectId: string; tab: ProjectDetailTabKey }>,
     ) {
       const current =
-        state.detailUi.byProjectId[action.payload.projectId] ??
-        defaultDetailUiState;
+        state.detailUi.byProjectId[action.payload.projectId]
+        ?? defaultDetailUiState;
       state.detailUi.byProjectId[action.payload.projectId] = {
         ...current,
         activeTab: action.payload.tab,
@@ -1557,8 +1586,8 @@ const projectsSlice = createSlice({
       }>,
     ) {
       const current =
-        state.detailUi.byProjectId[action.payload.projectId] ??
-        defaultDetailUiState;
+        state.detailUi.byProjectId[action.payload.projectId]
+        ?? defaultDetailUiState;
       state.detailUi.byProjectId[action.payload.projectId] = {
         ...current,
         activityFilter: action.payload.filter,
@@ -1572,8 +1601,8 @@ const projectsSlice = createSlice({
       }>,
     ) {
       const current =
-        state.detailUi.byProjectId[action.payload.projectId] ??
-        defaultDetailUiState;
+        state.detailUi.byProjectId[action.payload.projectId]
+        ?? defaultDetailUiState;
       state.detailUi.byProjectId[action.payload.projectId] = {
         ...current,
         chartRange: action.payload.range,
@@ -1634,9 +1663,9 @@ const projectsSlice = createSlice({
           // `action.error.message` is only "Rejected" on that path, so it is
           // the fallback for an unexpected thrown error, not the source.
           error:
-            action.payload?.message ??
-            action.error.message ??
-            "Unable to create project",
+            action.payload?.message
+            ?? action.error.message
+            ?? "Unable to create project",
         };
       })
       .addCase(createVariation.pending, (state) => {
@@ -1736,9 +1765,9 @@ const projectsSlice = createSlice({
         state.mutations.createTradieSchedule = {
           status: "failed",
           error:
-            (action.payload as string | null) ??
-            action.error.message ??
-            "Failed to create tradie schedule",
+            (action.payload as string | null)
+            ?? action.error.message
+            ?? "Failed to create tradie schedule",
         };
       })
       .addCase(createBulkTradieScheduleForProject.pending, (state) => {
@@ -1800,9 +1829,9 @@ const projectsSlice = createSlice({
         state.mutations.createTradieSchedule = {
           status: "failed",
           error:
-            (action.payload as string | null) ??
-            action.error.message ??
-            "Failed to create tradie schedules",
+            (action.payload as string | null)
+            ?? action.error.message
+            ?? "Failed to create tradie schedules",
         };
       })
       .addCase(addProjectMilestone.pending, (state) => {
@@ -1839,9 +1868,9 @@ const projectsSlice = createSlice({
         state.mutations.addMilestone = {
           status: "failed",
           error:
-            action.payload ??
-            action.error.message ??
-            "Unable to add milestone to project",
+            action.payload
+            ?? action.error.message
+            ?? "Unable to add milestone to project",
         };
       })
       .addCase(updateProjectMilestoneStatus.pending, (state) => {
@@ -1887,8 +1916,8 @@ const projectsSlice = createSlice({
             // and adding the full amount each time inflated the project's
             // "Spent to date" by one milestone per edit. Apply the difference.
             const spendBeforeUpdate =
-              Number(state.activeProject!.milestones[milestoneIndex].spend) ||
-              0;
+              Number(state.activeProject!.milestones[milestoneIndex].spend)
+              || 0;
 
             state.activeProject!.milestones[milestoneIndex] = {
               ...state.activeProject!.milestones[milestoneIndex],
@@ -1899,21 +1928,21 @@ const projectsSlice = createSlice({
             if (action.payload.status === "DONE") {
               const spendAfterUpdate = Number(action.payload.spend) || 0;
               state.activeProject!.spent = (
-                Number(state.activeProject!.spent) -
-                spendBeforeUpdate +
-                spendAfterUpdate
+                Number(state.activeProject!.spent)
+                - spendBeforeUpdate
+                + spendAfterUpdate
               ).toString();
             }
             if (
-              parentId &&
-              (action.payload.status === "DONE" ||
-                action.payload.status === "NOT_REQUIRED")
+              parentId
+              && (action.payload.status === "DONE"
+                || action.payload.status === "NOT_REQUIRED")
             ) {
               const allChildrenMilestonesNotCompleted =
                 state.activeProject!.milestones.filter(
                   (m) =>
-                    m.parentId === parentId &&
-                    !["DONE", "NOT_REQUIRED"].includes(m.status),
+                    m.parentId === parentId
+                    && !["DONE", "NOT_REQUIRED"].includes(m.status),
                 );
               const allChildrenWereNotRequired =
                 state.activeProject!.milestones.filter(
@@ -1936,8 +1965,8 @@ const projectsSlice = createSlice({
                   state.activeProject!.milestones[parentIndex] = {
                     ...state.activeProject!.milestones[parentIndex],
                     status:
-                      allChildrenWereNotRequired.length ===
-                      allChildrenMilestone.length
+                      allChildrenWereNotRequired.length
+                      === allChildrenMilestone.length
                         ? "NOT_REQUIRED"
                         : "DONE",
                     spend: totalChildSpent.toString(),
@@ -1951,8 +1980,9 @@ const projectsSlice = createSlice({
                 (m) => m.id === parentId,
               );
               if (
-                parentIndex !== -1 &&
-                state.activeProject!.milestones[parentIndex].status !== "ACTIVE"
+                parentIndex !== -1
+                && state.activeProject!.milestones[parentIndex].status
+                  !== "ACTIVE"
               ) {
                 state.activeProject!.milestones[parentIndex] = {
                   ...state.activeProject!.milestones[parentIndex],
@@ -1968,9 +1998,9 @@ const projectsSlice = createSlice({
         state.mutations.updateMilestone = {
           status: "failed",
           error:
-            action.payload ??
-            action.error.message ??
-            "Unable to update milestone status",
+            action.payload
+            ?? action.error.message
+            ?? "Unable to update milestone status",
         };
       })
       .addCase(addMilestonePhotos.pending, (state) => {
@@ -1995,9 +2025,9 @@ const projectsSlice = createSlice({
         state.mutations.addMilestonePhotos = {
           status: "failed",
           error:
-            action.payload ??
-            action.error.message ??
-            "Unable to add photos to milestone",
+            action.payload
+            ?? action.error.message
+            ?? "Unable to add photos to milestone",
         };
       })
       // Compliance: every thunk lands the same way — the engagement replaced
@@ -2033,9 +2063,9 @@ const projectsSlice = createSlice({
         state.complianceMutations[complianceScopeOf(action)] = {
           status: "failed",
           error:
-            action.payload ??
-            action.error.message ??
-            "Unable to update the compliance file",
+            action.payload
+            ?? action.error.message
+            ?? "Unable to update the compliance file",
         };
       });
   },

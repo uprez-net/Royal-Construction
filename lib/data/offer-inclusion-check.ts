@@ -1,13 +1,24 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { assertCanAccessLead } from "@/lib/offer/access";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import {
   checkOfferConsistency,
   draftInclusionHighlights,
   type ConsistencyFinding,
 } from "@/lib/offer/inclusion-consistency-ai";
+import {
+  checkOfferLists as checkOfferListsDomain,
+  draftOfferHighlights,
+} from "@/lib/domain/offers/inclusions";
+import { userPrincipal } from "@/lib/domain/principal";
+import prisma from "@/lib/prisma";
+import { isDomainError } from "@/lib/domain/errors";
+
+const inclusionAi = {
+  checkConsistency: checkOfferConsistency,
+  draftHighlights: draftInclusionHighlights,
+};
 
 // Audit the offer's lists: estimated -> schedule -> offer, including what the
 // document explicitly excludes.
@@ -33,17 +44,16 @@ export async function checkOfferLists(input: {
     return { ok: false, message: "No matching user." };
   }
   try {
-    await assertCanAccessLead(user, input.leadId);
-  } catch {
-    return { ok: false, message: "You do not have access to this lead." };
+    return await checkOfferListsDomain(
+      userPrincipal(user),
+      input,
+      prisma,
+      inclusionAi,
+    );
+  } catch (error) {
+    if (isDomainError(error)) return { ok: false, message: error.message };
+    throw error;
   }
-
-  return checkOfferConsistency({
-    estimated: input.estimated,
-    scheduled: input.scheduled,
-    excluded: input.excluded,
-    offered: input.offered,
-  });
 }
 
 export type DraftHighlightsResult =
@@ -65,10 +75,14 @@ export async function draftHighlightsForOffer(input: {
     return { ok: false, message: "No matching user." };
   }
   try {
-    await assertCanAccessLead(user, input.leadId);
-  } catch {
-    return { ok: false, message: "You do not have access to this lead." };
+    return await draftOfferHighlights(
+      userPrincipal(user),
+      input,
+      prisma,
+      inclusionAi,
+    );
+  } catch (error) {
+    if (isDomainError(error)) return { ok: false, message: error.message };
+    throw error;
   }
-
-  return draftInclusionHighlights(input.scheduled);
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { MilestoneStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   type LedgerMilestone,
@@ -18,7 +18,7 @@ import {
   stageClaimAmount,
   stageRollup,
   stageState,
-} from "../../lib/projects/milestone-ledger";
+} from "@/lib/projects/milestone-ledger";
 
 function activity(
   name: string,

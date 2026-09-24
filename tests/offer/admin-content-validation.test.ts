@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   hbcfClaimDataSchema,
   offerScopeDataSchema,
   offerScopeWriteSchema,
-} from "../../lib/validations/admin-offer-content";
+} from "@/lib/validations/admin-offer-content";
 
 const read = (path: string) =>
   readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
@@ -115,6 +115,9 @@ test("saving offer scope uses the write schema", () => {
     source.indexOf("export async function saveOfferContentAction"),
   );
   assert.match(fn, /offerScopeWriteSchema/);
-  assert.match(fn, /updateOfferScope\(parsed\.data\)/);
+  // What must hold is that the WRITE schema's output is what gets saved. The
+  // command gained an explicit principal in issue #301, so the argument list
+  // is matched loosely and `parsed.data` specifically.
+  assert.match(fn, /updateOfferScope\(\s*parsed\.data\b/);
   assert.equal(fn.includes("offerScopeDataSchema"), false);
 });

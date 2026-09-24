@@ -18,6 +18,9 @@ import {
   hbcfClaimDataSchema,
 } from "@/lib/validations/admin-offer-content";
 import { requireAdminUser } from "@/lib/auth/require-admin";
+import prisma from "@/lib/prisma";
+import { findUserById } from "@/lib/domain/identity/users";
+import { userPrincipal, type UserPrincipal } from "@/lib/domain/principal";
 import {
   updateBuildScope,
   updateCostSchedule,
@@ -41,25 +44,30 @@ function invalid(error: string): ActionResult {
  * these: a Server Action POSTs to the caller's current URL, so invoked from any
  * non-admin route the pathname check never fires. Each one authorizes itself.
  */
-async function guard(): Promise<ActionResult | null> {
+async function guard(): Promise<ActionResult | UserPrincipal> {
   const access = await requireAdminUser();
-  return access.ok ? null : invalid(access.error);
+  if (!access.ok) return invalid(access.error);
+  const user = await findUserById(access.userId, prisma);
+  if (!user) return invalid("Could not verify your permissions. Try again.");
+  return userPrincipal(user);
+}
+
+function denied(result: ActionResult | UserPrincipal): result is ActionResult {
+  return "success" in result;
 }
 
 export async function saveBuildScopeAction(
   buildScope: BuildScopeLines,
 ): Promise<ActionResult> {
-  const denied = await guard();
-  if (denied) {
-    return denied;
-  }
+  const principal = await guard();
+  if (denied(principal)) return principal;
 
   const parsed = buildScopeSchema.safeParse(buildScope);
   if (!parsed.success) {
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }
   try {
-    await updateBuildScope(parsed.data);
+    await updateBuildScope(parsed.data, principal);
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
@@ -72,17 +80,15 @@ export async function saveBuildScopeAction(
 export async function saveCostScheduleAction(
   data: CostScheduleData,
 ): Promise<ActionResult> {
-  const denied = await guard();
-  if (denied) {
-    return denied;
-  }
+  const principal = await guard();
+  if (denied(principal)) return principal;
 
   const parsed = costScheduleDataSchema.safeParse(data);
   if (!parsed.success) {
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }
   try {
-    await updateCostSchedule(parsed.data);
+    await updateCostSchedule(parsed.data, principal);
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
@@ -95,17 +101,15 @@ export async function saveCostScheduleAction(
 export async function saveOfferScopeAction(
   data: OfferScopeData,
 ): Promise<ActionResult> {
-  const denied = await guard();
-  if (denied) {
-    return denied;
-  }
+  const principal = await guard();
+  if (denied(principal)) return principal;
 
   const parsed = offerScopeWriteSchema.safeParse(data);
   if (!parsed.success) {
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }
   try {
-    await updateOfferScope(parsed.data);
+    await updateOfferScope(parsed.data, principal);
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
@@ -118,17 +122,15 @@ export async function saveOfferScopeAction(
 export async function saveOfferContentAction(
   data: OfferContentData,
 ): Promise<ActionResult> {
-  const denied = await guard();
-  if (denied) {
-    return denied;
-  }
+  const principal = await guard();
+  if (denied(principal)) return principal;
 
   const parsed = offerContentDataSchema.safeParse(data);
   if (!parsed.success) {
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }
   try {
-    await updateOfferContent(parsed.data);
+    await updateOfferContent(parsed.data, principal);
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {
@@ -141,10 +143,8 @@ export async function saveOfferContentAction(
 export async function saveHBCFClaimAction(
   data: HBCFClaimData,
 ): Promise<ActionResult> {
-  const denied = await guard();
-  if (denied) {
-    return denied;
-  }
+  const principal = await guard();
+  if (denied(principal)) return principal;
 
   // This was the only save of the five with no schema check. `claimAmount` is
   // read as the whole-book HBCF sum assured (lib/data/insurance.ts), so an
@@ -155,7 +155,7 @@ export async function saveHBCFClaimAction(
     return invalid(parsed.error.issues.map((i) => i.message).join("; "));
   }
   try {
-    await updateHBCFClaim(parsed.data);
+    await updateHBCFClaim(parsed.data, principal);
     revalidateTag(ADMIN_OFFER_CONTENT_TAG, CACHE_PROFILES.SHORT);
     return { success: true };
   } catch (error) {

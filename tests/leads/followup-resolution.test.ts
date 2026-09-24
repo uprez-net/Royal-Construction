@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   NEXT_FOLLOWUP_TASK,
   resolveFollowup,
-} from "../../lib/leads/followup-resolution";
+} from "@/lib/leads/followup-resolution";
 import {
   dropEmptyPlaceholders,
   hydrateVariable,
-} from "../../lib/leads/lead-helpers";
-import { EMAIL_TEMPLATES } from "../../lib/leads/variables";
-import type { Lead } from "../../lib/leads/types";
+} from "@/lib/leads/lead-helpers";
+import { EMAIL_TEMPLATES } from "@/lib/leads/variables";
+import type { Lead } from "@/lib/leads/types";
 
 // A completed follow-up used to keep its date forever. `mapLead` resolved
 // task-first, column-second, and every query asked only for OPEN tasks — so a
@@ -106,14 +106,31 @@ test("open work sorts ahead of closed work, so take:1 finds it", () => {
 // ── Every query site loads it ──
 
 test("no query feeding mapLead omits the task", () => {
-  const source = code("lib/data/leads.ts");
-  const mapLeadCalls = (source.match(/mapLead\(/g) ?? []).length;
-  const includes = (source.match(/tasks: NEXT_FOLLOWUP_TASK/g) ?? []).length;
+  // The lead writes moved to lib/domain/leads/commands.ts (issue #301) and
+  // share one LEAD_WRITE_INCLUDE there; the reads stayed in the adapter with
+  // the include written out. Counting only the adapter would have let a moved
+  // query drop the task silently, so both are counted.
+  const adapter = code("lib/data/leads.ts");
+  const command = code("lib/domain/leads/commands.ts");
 
-  // 7 mapLead call sites, 6 distinct queries — two create paths share one
-  // include constant.
+  const mapLeadCalls = (adapter.match(/mapLead\(/g) ?? []).length;
   assert.ok(mapLeadCalls >= 7, `only ${mapLeadCalls} mapLead call sites found`);
-  assert.equal(includes, 6, `expected 6 include sites, found ${includes}`);
+
+  const adapterIncludes = (adapter.match(/tasks: NEXT_FOLLOWUP_TASK/g) ?? [])
+    .length;
+  assert.equal(
+    adapterIncludes,
+    4,
+    `expected 4 adapter include sites, found ${adapterIncludes}`,
+  );
+
+  // One shared constant, used by every query the commands run.
+  assert.match(command, /tasks: NEXT_FOLLOWUP_TASK/);
+  assert.equal(
+    (command.match(/include: LEAD_WRITE_INCLUDE/g) ?? []).length,
+    3,
+    "a lead write is reading relations without the task include",
+  );
 });
 
 test("the tasks field is required, which is what forces the include", () => {
@@ -194,8 +211,8 @@ test("the Meeting subject quotes the consultation, never the follow-up", () => {
   // name two different dates.
   const meetingSubject = EMAIL_TEMPLATES.find((t) => t.id === 7)?.subject;
   assert.ok(
-    meetingSubject!.includes("{meeting}") &&
-      !meetingSubject!.includes("{followup}"),
+    meetingSubject!.includes("{meeting}")
+      && !meetingSubject!.includes("{followup}"),
     "the Meeting subject is back on the follow-up date",
   );
 
@@ -297,8 +314,8 @@ test("the Meeting template no longer invents a date and time", () => {
 test("LeadPreview carries the meeting pair, or the email cannot see it", () => {
   const source = read("lib/leads/render-email-html.tsx");
   assert.ok(
-    /meetingDate\?: string \| null;/.test(source) &&
-      /meetingTime\?: string \| null;/.test(source),
+    /meetingDate\?: string \| null;/.test(source)
+      && /meetingTime\?: string \| null;/.test(source),
     "renderEmailHtml cannot receive the booked consultation",
   );
 });

@@ -1,8 +1,60 @@
 {
+  "$schema": "https://json.schemastore.org/prettierrc.json",
+
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
   "endOfLine": "lf",
+
   "semi": true,
   "singleQuote": false,
-  "tabWidth": 2,
+  "jsxSingleQuote": false,
+  "quoteProps": "as-needed",
   "trailingComma": "all",
-  "useTabs": false
+
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "objectWrap": "preserve",
+  "arrowParens": "always",
+  "singleAttributePerLine": false,
+  "experimentalOperatorPosition": "start",
+
+  "htmlWhitespaceSensitivity": "css",
+  "embeddedLanguageFormatting": "auto",
+  "proseWrap": "preserve",
+
+  "overrides": [
+    {
+      "files": ["*.json"],
+      "options": {
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": [
+        "tsconfig.json",
+        "tsconfig.*.json",
+        "*.jsonc",
+        ".vscode/*.json"
+      ],
+      "options": {
+        "parser": "jsonc",
+        "trailingComma": "none"
+      }
+    },
+    {
+      "files": ["*.yml", "*.yaml"],
+      "options": {
+        "singleQuote": false,
+        "proseWrap": "preserve"
+      }
+    },
+    {
+      "files": ["*.md", "*.mdx"],
+      "options": {
+        "proseWrap": "preserve",
+        "embeddedLanguageFormatting": "off"
+      }
+    }
+  ]
 }

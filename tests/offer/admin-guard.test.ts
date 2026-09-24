@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { resolveAdminGuard } from "../../lib/auth/require-admin";
+import { resolveAdminGuard } from "@/lib/auth/require-admin";
 
 // The five admin offer-content Server Actions had no authorization of any kind.
 // The only gate was proxy.ts:84, which matches request.nextUrl.pathname against

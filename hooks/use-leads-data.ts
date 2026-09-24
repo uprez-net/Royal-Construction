@@ -36,6 +36,41 @@ function resolveStatusFilter(status?: string): LeadStage[] | undefined {
     .filter((s) => s && s !== "Archived") as LeadStage[];
 }
 
+export type LeadListParams = {
+  page?: number;
+  limit?: number;
+  query?: string;
+  status?: string;
+  filterTiming?: string;
+  isArchived?: boolean;
+  hasOpenTask?: boolean;
+};
+
+async function fetchLeadListPage(params: LeadListParams) {
+  const request = {
+    limit: params.limit ?? 10,
+    q: params.query?.trim() || undefined,
+    status: resolveStatusFilter(params.status),
+    filterTiming: params.filterTiming,
+    isArchived: params.isArchived,
+    hasOpenTask: params.hasOpenTask,
+  };
+  const page = params.page ?? 1;
+  const result = await fetchLeads({ ...request, page });
+  // A remembered page can be past the end by the time it is asked for again
+  // (issue #350: the list shrank while someone was on a lead). The server
+  // answers that with an empty page, so step back to the last real one rather
+  // than show "page 5" of four with no rows.
+  if (
+    result.items.length === 0
+    && result.totalPages > 0
+    && page > result.totalPages
+  ) {
+    return fetchLeads({ ...request, page: result.totalPages });
+  }
+  return result;
+}
+
 export function useLeadsData() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats | null>(null);
@@ -127,27 +162,24 @@ export function useLeadsData() {
   }, [tasksVersion, refreshStats]);
 
   /* ── Paginated leads ── */
+  // Paging, filtering and typing each start a request, and they do not
+  // necessarily resolve in the order they were issued: clicking page 2 then
+  // page 3 could leave page 2's rows under a URL that says 3. Only the latest
+  // request, from either loader below, may touch the table.
+  const leadsRun = useRef(0);
+
+  /**
+   * Resolves to the page actually shown — which is not the one asked for when
+   * a remembered page was past the end — or null when a newer request took
+   * over and this one's answer was dropped.
+   */
   const refreshLeadsData = useCallback(
-    async (params: {
-      page?: number;
-      limit?: number;
-      query?: string;
-      status?: string;
-      filterTiming?: string;
-      isArchived?: boolean;
-      hasOpenTask?: boolean;
-    }) => {
+    async (params: LeadListParams): Promise<number | null> => {
+      const run = ++leadsRun.current;
       try {
         setLoadingLeads(true);
-        const leadsData = await fetchLeads({
-          page: params.page ?? 1,
-          limit: params.limit ?? 10,
-          q: params.query?.trim() || undefined,
-          status: resolveStatusFilter(params.status),
-          filterTiming: params.filterTiming,
-          isArchived: params.isArchived,
-          hasOpenTask: params.hasOpenTask,
-        });
+        const leadsData = await fetchLeadListPage(params);
+        if (run !== leadsRun.current) return null;
         setLeads(leadsData.items);
         setPageInfo({
           page: leadsData.page,
@@ -155,11 +187,14 @@ export function useLeadsData() {
           total: leadsData.totalCount,
           totalPages: leadsData.totalPages,
         });
+        return leadsData.page;
       } catch (err) {
+        if (run !== leadsRun.current) return null;
         console.error(err);
         setError("Failed to refresh leads data");
+        return null;
       } finally {
-        setLoadingLeads(false);
+        if (run === leadsRun.current) setLoadingLeads(false);
       }
     },
     [],
@@ -167,26 +202,41 @@ export function useLeadsData() {
 
   /* ── Full load (initial / hard refresh) ── */
   const loadData = useCallback(
-    async (
-      params: { query?: string; status?: string; hasOpenTask?: boolean } = {},
-    ) => {
+    async (params: LeadListParams = {}): Promise<number | null> => {
+      const run = ++leadsRun.current;
       try {
         setLoading(true);
-        const [leadsData, statsData, analytics] = await Promise.all([
-          fetchLeads({
-            page: 1,
-            limit: 10,
-            q: params.query?.trim() || undefined,
-            status: resolveStatusFilter(params.status),
+        // Settled separately: a newer table request supersedes only this
+        // one's rows, so the cards must neither wait on nor be swallowed by
+        // the table's fate.
+        const [leadsResult, statsResult, analyticsResult] =
+          await Promise.allSettled([
             // "pendingFollowup" is not a stage — resolveStatusFilter maps it to
-            // an empty array — so without this the initial load for a
+            // an empty array — so without hasOpenTask the initial load for a
             // bookmarked ?status=pendingFollowup fetched every lead and raced
             // the filtered request the metric effect fires straight after.
-            hasOpenTask: params.hasOpenTask,
-          }),
-          fetchLeadsStats(),
-          fetchLeadAnalyticsData(),
-        ]);
+            fetchLeadListPage(params),
+            fetchLeadsStats(),
+            fetchLeadAnalyticsData(),
+          ]);
+        if (statsResult.status === "fulfilled") setStats(statsResult.value);
+        if (analyticsResult.status === "fulfilled") {
+          setAnalyticsData(analyticsResult.value);
+        }
+        const cardFailures = [statsResult, analyticsResult].flatMap((result) =>
+          result.status === "rejected" ? [result.reason] : [],
+        );
+        if (cardFailures.length > 0) {
+          console.error(...cardFailures);
+          setError("Failed to load leads data");
+        }
+        if (run !== leadsRun.current) return null;
+        if (leadsResult.status === "rejected") {
+          console.error(leadsResult.reason);
+          setError("Failed to load leads data");
+          return null;
+        }
+        const leadsData = leadsResult.value;
         setLeads(leadsData.items);
         setPageInfo({
           page: leadsData.page,
@@ -194,12 +244,8 @@ export function useLeadsData() {
           total: leadsData.totalCount,
           totalPages: leadsData.totalPages,
         });
-        setStats(statsData);
-        setAnalyticsData(analytics);
-        setError(null);
-      } catch (err) {
-        setError("Failed to load leads data");
-        console.error(err);
+        if (cardFailures.length === 0) setError(null);
+        return leadsData.page;
       } finally {
         setLoading(false);
       }

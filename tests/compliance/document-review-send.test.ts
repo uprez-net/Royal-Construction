@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 
 import {
   CertifierEmailDirection,
   ComplianceDocumentStatus,
   ComplianceDocumentType,
 } from "@prisma/client";
+import { test } from "vitest";
 
-import { hasSentCurrentDocument } from "../../lib/compliance/required-pack";
-import { buildPartyRevisionBody } from "../../lib/compliance/party-outreach-email";
+import { hasSentCurrentDocument } from "@/lib/domain/compliance/required-pack";
+import { buildPartyRevisionBody } from "@/lib/domain/compliance/party-outreach-email";
 import type {
   CertifierEngagementDetail,
   ComplianceDocumentWithFiles,
-} from "../../types/compliance";
-import { partyReplySchema } from "../../utils/validators/compliance";
+} from "@/types/compliance";
+import { partyReplySchema } from "@/utils/validators/compliance";
 
 const documentWith = (url?: string) =>
   ({

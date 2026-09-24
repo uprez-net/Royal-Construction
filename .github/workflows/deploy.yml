@@ -1,19 +1,26 @@
 name: Deploy to Vercel
 
 on:
-  # This workflow is deliberately independent from Quality Checks. It consumes
-  # the completed workflow's decision artifact rather than depending on jobs
-  # in another workflow, which GitHub Actions does not support directly.
-  workflow_run:
-    workflows: [Quality Checks]
-    types: [completed]
+  workflow_call:
+    inputs:
+      deploy:
+        description: Deployment decision produced by Quality Checks
+        required: true
+        type: boolean
+      branch:
+        description: Branch associated with the deployment commit
+        required: true
+        type: string
+      sha:
+        description: Commit SHA to deploy
+        required: true
+        type: string
 
 concurrency:
-  group: vercel-deploy-${{ github.event.workflow_run.head_branch }}
+  group: vercel-deploy-${{ inputs.branch }}
   cancel-in-progress: false
 
 permissions:
-  actions: read
   contents: read
 
 env:
@@ -58,26 +65,18 @@ env:
 jobs:
   decide-deployment:
     name: Decide deployment
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      contains(fromJSON('["main", "staging"]'), github.event.workflow_run.head_branch)
+    if: inputs.deploy && contains(fromJSON('["main", "staging"]'), inputs.branch)
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.decision.outputs.deploy }}
-      branch: ${{ github.event.workflow_run.head_branch }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
     steps:
-      - name: Download CI decision
-        uses: actions/download-artifact@v7
-        with:
-          name: ci-decision
-          path: decision
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
-      - name: Read CI decision
+      - name: Set deployment decision
         id: decision
         run: |
-          node -e 'const fs = require("node:fs"); const decision = JSON.parse(fs.readFileSync("decision/ci-decision.json", "utf8")); fs.appendFileSync(process.env.GITHUB_OUTPUT, `deploy=${decision.deploy}\n`); console.log(`Deployment decision: ${decision.reason}.`);'
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+          echo "Deployment decision: ${{ inputs.branch }} deployment requested by Quality Checks."
 
   vercel-deploy-production:
     name: Deploy production
@@ -93,7 +92,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ needs.decide-deployment.outputs.sha }}
       - name: Setup project
         uses: ./.github/actions/setup
       - name: Restore Next.js build cache
@@ -101,7 +100,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.event.workflow_run.head_sha }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ needs.decide-deployment.outputs.sha }}
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
       # `actions/cache/restore` succeeds whether or not it restored anything, so
@@ -149,7 +148,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ needs.decide-deployment.outputs.sha }}
       - name: Setup project
         uses: ./.github/actions/setup
       - name: Restore Next.js build cache
@@ -157,7 +156,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{ github.workspace }}/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ github.event.workflow_run.head_sha }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-${{ needs.decide-deployment.outputs.sha }}
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml', 'next.config.ts') }}-
       # `actions/cache/restore` succeeds whether or not it restored anything, so
@@ -193,5 +192,5 @@ jobs:
           vercel deploy --prebuilt
           --meta githubDeployment=1
           --meta githubCommitRef=${{ needs.decide-deployment.outputs.branch }}
-          --meta githubCommitSha=${{ github.event.workflow_run.head_sha }}
+          --meta githubCommitSha=${{ needs.decide-deployment.outputs.sha }}
           --token=${{ secrets.VERCEL_TOKEN }}

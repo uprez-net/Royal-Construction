@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { NextRequest } from "next/server";
 import { Role } from "@prisma/client";
 import type { OCRPageObject } from "@mistralai/mistralai/models/components";
@@ -114,10 +115,11 @@ export async function POST(
     // Same edit gate as PATCH /api/projects/[projectId]: whoever may write the
     // number by hand may also have it read off a certificate.
     const canEditProject =
-      user.role === Role.ADMIN ||
-      project.siteManagerId === user.id ||
-      project.Lead.assignedId === user.id ||
-      (user.role === Role.CUSTOMER && user.customerId === project.customerId);
+      user.role === Role.ADMIN
+      || project.siteManagerId === user.id
+      || project.Lead.assignedId === user.id
+      || (user.role === Role.CUSTOMER
+        && user.customerId === project.customerId);
 
     if (!canEditProject) {
       return forbiddenResponse(
@@ -151,6 +153,12 @@ export async function POST(
       message: extraction.message,
     });
   } catch (error) {
+    // A domain refusal answers with its own status and its own message —
+    // "You do not have access to this project." is what the operator needs,
+    // and it is useless to them as an opaque 500.
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+
     console.error(`/api/projects/${projectId}/hbcf-extract POST error`, error);
     return errorResponse("Failed to read the HBCF insurance document", {
       status: 500,

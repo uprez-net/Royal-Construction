@@ -5,6 +5,8 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { resolveComplianceAlert } from "@/lib/data/compliance-alerts";
+import { userPrincipal } from "@/lib/domain/principal";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -48,9 +50,9 @@ export async function POST(
   try {
     const { user } = await requireComplianceAccess(projectId);
     const engagement = await resolveComplianceAlert({
+      principal: userPrincipal(user),
       projectId,
       alertId,
-      resolvedById: user.id,
       resolvedByName: user.name,
       resolutionNote: body.data.resolutionNote,
     });
@@ -58,6 +60,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to resolve a compliance alert", error);
     return errorResponse(
       error instanceof Error ? error.message : "Failed to resolve the alert.",

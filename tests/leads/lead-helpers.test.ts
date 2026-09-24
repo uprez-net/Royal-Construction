@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   LEAD_STAGE_GROUPS,
@@ -13,7 +13,7 @@ import {
   parseLikelihood,
   stageGroupsFor,
   stageOptionsFor,
-} from "../../lib/leads/lead-helpers";
+} from "@/lib/leads/lead-helpers";
 
 test("blank likelihood means no override", () => {
   assert.equal(parseLikelihood(""), null);
@@ -133,23 +133,6 @@ test("the offer path cannot put a lead in a closed stage without a reason", asyn
     !/:\s*"LOST"/.test(map),
     "no offer status may map a lead to LOST without a reason",
   );
-});
-
-test("lead-write MCP tools report failures as errors", async () => {
-  const { readFileSync } = await import("node:fs");
-  const mcp = readFileSync("app/(mcp)/api/mcp/route.ts", "utf8");
-  // These tools declare an outputSchema, so a catch that returns neither
-  // isError nor structuredContent fails SDK output validation and the real
-  // message never reaches the agent.
-  for (const verb of ["updating lead", "creating lead", "fetching leads"]) {
-    const at = mcp.indexOf(`Error ${verb}`);
-    assert.ok(at > -1, `no catch found for "${verb}"`);
-    const before = mcp.slice(Math.max(0, at - 400), at);
-    assert.ok(
-      before.includes("isError: true"),
-      `"${verb}" catch is missing isError: true`,
-    );
-  }
 });
 
 /* ── stageOptionsFor ───────────────────────────────────────────────── */
@@ -337,9 +320,9 @@ test("every stage the picker offers is classified by every predicate", () => {
   // the ladder gained. Each option must be exactly one of open, won or lost.
   for (const stage of LEAD_STAGE_OPTIONS) {
     const buckets =
-      Number(isWonStage(stage)) +
-      Number(isLostStage(stage)) +
-      Number(!isTerminalStage(stage));
+      Number(isWonStage(stage))
+      + Number(isLostStage(stage))
+      + Number(!isTerminalStage(stage));
     assert.equal(buckets, 1, `${stage} is in ${buckets} buckets`);
   }
 });

@@ -1,27 +1,27 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { resolveOfferPriceSplit } from "../../lib/offer/offer-contract-value";
+import { resolveOfferPriceSplit } from "@/lib/offer/offer-contract-value";
 import {
   INITIAL_TENDER_GATE,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 import {
   calculateOfferWorkspacePricing,
   splitContractValueByGst,
-} from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-pricing";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferWorkspaceCostLine,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
-import { buildOfferPrintTemplateData } from "../../lib/offer/workspace-print-template";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
+import { buildOfferPrintTemplateData } from "@/lib/offer/workspace-print-template";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Backs the Offers list's Amount / GST / Total columns. Offer.amount,

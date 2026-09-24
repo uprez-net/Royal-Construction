@@ -217,6 +217,18 @@ export type OfferInclusionEntry = {
 // What the Category column prints when an entry has no category of its own.
 export const UNCATEGORISED_INCLUSION_LABEL = "Miscellaneous";
 
+// Show a repeated category once per printed page, where its group begins.
+export function printedInclusionCategory(
+  entries: readonly OfferInclusionEntry[],
+  index: number,
+): string {
+  const category =
+    entries[index].category?.trim() || UNCATEGORISED_INCLUSION_LABEL;
+  const previous =
+    entries[index - 1]?.category?.trim() || UNCATEGORISED_INCLUSION_LABEL;
+  return index > 0 && category === previous ? "" : category;
+}
+
 // Rows whose contract wording was drafted by the model and never reviewed.
 export function unreviewedDraftedRows(
   entries: readonly OfferInclusionEntry[],
@@ -578,7 +590,117 @@ export function collectOwnerIssues(owners: readonly OfferOwner[]): string[] {
       );
     }
   }
+  for (const overlap of findOverlappingOwnerNames(owners)) {
+    issues.push(
+      isSameOwnerPersonName(overlap.otherName, overlap.personName)
+        ? `${overlap.combinedName} already names ${overlap.personName}, who is also listed as a separate owner — the documents would name them twice. Remove them from one of the two.`
+        : `${overlap.personName} is named in both ${overlap.combinedName} and ${overlap.otherName} — the documents would name them twice. Remove them from one of the two.`,
+    );
+  }
   return issues;
+}
+
+// Leading honorifics, including combined forms like "Mr & Mrs" / "Mr and Ms".
+// Matching a single honorific left the rest behind, greeting "Mr & Mrs Smith"
+// as "Dear & Mrs Smith".
+const OWNER_HONORIFIC_PREFIX =
+  /^(?:(?:Mr|Mrs|Ms|Miss|Dr)\.?)(?:\s*(?:&|and)\s*(?:Mr|Mrs|Ms|Miss|Dr)\.?)*\s+/i;
+
+function stripOwnerHonorific(name: string): string {
+  return name.trim().replace(OWNER_HONORIFIC_PREFIX, "");
+}
+
+function personNameKey(name: string): string {
+  return stripOwnerHonorific(name).toLowerCase().replace(/\s+/g, " ");
+}
+
+// Whether two owner names are the same person's name, ignoring honorifics,
+// case and spacing.
+export function isSameOwnerPersonName(a: string, b: string): boolean {
+  return personNameKey(a) === personNameKey(b);
+}
+
+// The people a combined individual owner name stands for:
+//   "Harpreet & Manpreet Sandhu"        -> ["Harpreet Sandhu", "Manpreet Sandhu"]
+//   "Harpreet Sandhu and Manpreet Kaur" -> ["Harpreet Sandhu", "Manpreet Kaur"]
+//   "Harpreet Sandhu & Manpreet & Jaspreet Kaur"
+//                            -> ["Harpreet Sandhu", "Manpreet", "Jaspreet Kaur"]
+//   "Manpreet Sandhu"                   -> null (one person)
+// A surname is carried onto a bare first name only in the "A & B Surname" form,
+// where every name before the last is bare and the surname can only be shared.
+// Mixed with full names, a bare one could belong to either family, so it is
+// left as written rather than guessed.
+export function splitCombinedOwnerName(name: string): string[] | null {
+  const parts = stripOwnerHonorific(name)
+    .split(/\s*(?:&|\band\b)\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) {
+    return null;
+  }
+  const leading = parts.slice(0, -1);
+  const lastWords = parts[parts.length - 1].split(/\s+/);
+  const sharesSurname =
+    lastWords.length > 1 && leading.every((part) => !/\s/.test(part));
+  if (!sharesSurname) {
+    return parts;
+  }
+  const surname = lastWords[lastWords.length - 1];
+  return [...leading.map((part) => `${part} ${surname}`), parts.at(-1)!];
+}
+
+export type OverlappingOwnerName = {
+  // An individual owner whose single name covers two or more people.
+  readonly combinedName: string;
+  // Another individual owner who is, or whose combined name includes, the same
+  // person.
+  readonly otherName: string;
+  // The person the two share.
+  readonly personName: string;
+};
+
+// Issue #344: a lead named "Harpreet & Manpreet Sandhu" with a secondary contact
+// "Manpreet Sandhu" became two owners, and every document named Manpreet twice —
+// on the cover, in the greeting, and in the acceptance clause the client signs.
+// Owners are compared person by person, so two combined names that share one
+// person ("Harpreet & Manpreet Sandhu", "Manpreet & Jaspreet Sandhu") count too,
+// and each shared person is reported once. At least one side must be a combined
+// name: two separate owners who share a name can be two real people (a parent
+// and child), and are left alone. Companies are skipped — "Smith & Jones Pty
+// Ltd" is one legal name.
+export function findOverlappingOwnerNames(
+  owners: readonly OfferOwner[],
+): OverlappingOwnerName[] {
+  const individuals = owners
+    .filter(
+      (owner) =>
+        owner.kind === "individual" && owner.displayName.trim().length > 0,
+    )
+    .map((owner) => {
+      const name = owner.displayName.trim();
+      const combined = splitCombinedOwnerName(name);
+      return { combined: combined !== null, name, people: combined ?? [name] };
+    });
+  const overlaps: OverlappingOwnerName[] = [];
+  const reported = new Set<string>();
+  individuals.forEach((a, i) => {
+    individuals.slice(i + 1).forEach((b) => {
+      if (!a.combined && !b.combined) return;
+      const [combined, other] = a.combined ? [a, b] : [b, a];
+      const otherKeys = new Set(other.people.map(personNameKey));
+      for (const person of combined.people) {
+        const key = personNameKey(person);
+        if (!otherKeys.has(key) || reported.has(key)) continue;
+        reported.add(key);
+        overlaps.push({
+          combinedName: combined.name,
+          otherName: other.name,
+          personName: person,
+        });
+      }
+    });
+  });
+  return overlaps;
 }
 
 // The legacy flat client* projection (primary = owners[0], secondary =
@@ -780,15 +902,7 @@ export function formatOwnerGreetingNames(
     .map((owner) =>
       owner.kind === "company"
         ? owner.displayName.trim()
-        : // Strip the WHOLE leading honorific, including combined forms like
-          // "Mr & Mrs" / "Mr and Ms". Matching a single honorific left the rest
-          // behind, greeting "Mr & Mrs Smith" as "Dear & Mrs Smith".
-          owner.displayName
-            .trim()
-            .replace(
-              /^(?:(?:Mr|Mrs|Ms|Miss|Dr)\.?)(?:\s*(?:&|and)\s*(?:Mr|Mrs|Ms|Miss|Dr)\.?)*\s+/i,
-              "",
-            ),
+        : stripOwnerHonorific(owner.displayName),
     )
     .filter((name) => name.length > 0);
   if (names.length === 0) {
@@ -1179,8 +1293,8 @@ type AllowanceRowText = {
 // them, so a row is as tall as the taller of the two, plus its own padding.
 export function allowanceRowLines(row: AllowanceRowText): number {
   const itemLines =
-    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM) +
-    (row.description.trim().length > 0
+    estimateWrappedLines(row.label, CHARS_PER_LINE_ALLOWANCE_ITEM)
+    + (row.description.trim().length > 0
       ? estimateWrappedLines(row.description, CHARS_PER_LINE_ALLOWANCE_ITEM)
       : 0);
   return (
@@ -1226,9 +1340,9 @@ export function getIncludedOfferTenderLineItems(
       lines
         .filter(
           (line) =>
-            line.includedInContract &&
-            line.costExGst > 0 &&
-            line.offerTenderLineItem.trim().length > 0,
+            line.includedInContract
+            && line.costExGst > 0
+            && line.offerTenderLineItem.trim().length > 0,
         )
         .map((line) => line.offerTenderLineItem.trim()),
     ),

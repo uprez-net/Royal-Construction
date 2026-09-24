@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   LEAD_SUBJECT_LINES,
@@ -8,7 +8,7 @@ import {
   isLeadSubject,
   isOwnDomainSender,
   normalizeSubject,
-} from "../../lib/graph/lead-subject";
+} from "@/lib/graph/lead-subject";
 
 test("the quoted 'I want to build' subject creates a lead", () => {
   // The regression: the allowlist held the quoted form while the normalizer

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   ComplianceAlertStatus,
@@ -9,8 +8,9 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
-import { TRADIE_TYPES } from "../../constants/tradieTypes";
+import { TRADIE_TYPES } from "@/constants/tradieTypes";
 import {
   COMPLIANCE_PARTY_SECTIONS,
   consultantForDocumentType,
@@ -25,23 +25,23 @@ import {
   PARTY_PREREQUISITES,
   partyForDocumentType,
   REQUIRED_COMPLIANCE_DOCUMENTS,
-} from "../../constants/complianceDocuments";
+} from "@/constants/complianceDocuments";
 import {
   applicableRequiredDocuments,
   outreachRequiredDocuments,
-} from "../../lib/compliance/required-pack";
+} from "@/lib/domain/compliance/required-pack";
 import {
   extractPartyRefToken,
   generatePartyRefToken,
   partyForRefToken,
-} from "../../lib/graph/party-subject";
+} from "@/lib/graph/party-subject";
 import {
   hasOpenAlert,
   isPartyEngaged,
   openAlerts,
   outreachForParty,
   requiresPlanningCertificate,
-} from "../../types/compliance";
+} from "@/types/compliance";
 
 // ---------------------------------------------------------------------------
 // The section split

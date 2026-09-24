@@ -1,7 +1,7 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "vitest";
 
-import { offerSearchClauses } from "../../lib/offer/offer-listing-query";
+import { offerSearchClauses } from "@/lib/offer/offer-listing-query";
 
 // The offers table shows each lead by its offer reference, but search only
 // looked at the lead's name, email, phone and location. Pasting the reference
@@ -46,8 +46,8 @@ test("an offer reference searches the revisions' baseReference", () => {
   assert.ok(
     offerSearchClauses("RC-0042").some(
       (clause) =>
-        JSON.stringify(clause) ===
-        JSON.stringify({
+        JSON.stringify(clause)
+        === JSON.stringify({
           offers: {
             some: {
               baseReference: { contains: "RC-0042", mode: "insensitive" },

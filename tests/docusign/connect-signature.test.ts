@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { verifyConnectSignature } from "../../lib/docusign/connect-signature";
+import { verifyConnectSignature } from "@/lib/docusign/connect-signature";
 
 const BODY = JSON.stringify({
   event: "envelope-completed",

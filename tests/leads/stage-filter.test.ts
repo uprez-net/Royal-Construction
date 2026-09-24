@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   parseLeadStageFilter,
   resolveLeadStageFilter,
-} from "../../lib/leads/types";
+} from "@/lib/leads/types";
 
 test("current stage labels resolve to their DB enum member", () => {
   assert.equal(resolveLeadStageFilter("Won"), "WON");

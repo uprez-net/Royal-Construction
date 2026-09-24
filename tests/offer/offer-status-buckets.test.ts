@@ -1,9 +1,9 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
-import { OFFER_STATUS_BUCKETS } from "../../lib/offer/offer-status-buckets";
-import { OfferStatusLabels } from "../../types/offer";
+import { OFFER_STATUS_BUCKETS } from "@/lib/offer/offer-status-buckets";
+import { OfferStatusLabels } from "@/types/offer";
 
 // The tab filter and the KPI query kept separate status lists, and neither had
 // OFFER_SENT or OFFER_SIGNED (ADR 0004). A lead whose acceptance was out for

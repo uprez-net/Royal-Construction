@@ -5,6 +5,7 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { requestWasteManagementPlan } from "@/lib/data/compliance-architect";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -52,6 +53,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to request the waste management plan", error);
     return errorResponse(
       error instanceof Error

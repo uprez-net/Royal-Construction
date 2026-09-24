@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   resolveApprovalInputSchema,
   updateAdminContentInputSchema,
   updateTeamRoleInputSchema,
-} from "../../agent/lib/admin-contracts";
+} from "@/agent/lib/admin-contracts";
 
 const id = "123e4567-e89b-42d3-a456-426614174000";
 
@@ -90,9 +90,10 @@ test("admin operations enforce admin authorization and audited writes", async ()
   assert.doesNotMatch(source, /app\/\(mcp\)/);
 });
 
-test("admin content writes use the shared Node-safe data service", async () => {
+test("admin content writes use the shared Node-safe domain service", async () => {
   const source = await readFile("agent/lib/admin-operations.ts", "utf8");
   assert.match(source, /updateAdminOfferContentSection/);
+  assert.match(source, /@\/lib\/domain\/admin\/offer-content/);
   assert.doesNotMatch(source, /adminOfferContent\.updateMany/);
 });
 

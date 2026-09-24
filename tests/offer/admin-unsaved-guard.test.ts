@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { readFileSync } from "node:fs";
+import { test } from "vitest";
 
 // The store outlives the editor, so unsaved admin edits survive navigating away.
 // The beforeunload guard used to mount with SaveChangesButton, which meant it

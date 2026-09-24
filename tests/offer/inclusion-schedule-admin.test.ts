@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   INCLUSION_CATEGORY_SUGGESTIONS,
   normaliseScheduleRows,
-} from "../../components/offers/admin/shared/inclusion-schedule";
-import { offerContentDataSchema } from "../../lib/validations/admin-offer-content";
+} from "@/components/offers/admin/shared/inclusion-schedule";
+import { offerContentDataSchema } from "@/lib/validations/admin-offer-content";
 
 // The admin Inclusions tab edited its {spec, category} rows with the plain
 // bullet editor. Its draft was a string, so "Add bullet" pushed a bare string

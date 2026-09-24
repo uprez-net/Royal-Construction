@@ -5,6 +5,7 @@ import {
   requireComplianceAccess,
 } from "@/lib/compliance/access";
 import { setEstateDeveloper } from "@/lib/data/compliance-developer";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseBodyWithResponse,
@@ -62,6 +63,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceErrorResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to record the estate developer", error);
     return errorResponse("Failed to record the estate developer.", {
       status: 500,

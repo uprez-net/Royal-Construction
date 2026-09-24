@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { filePreviewModal, isPreviewableImage } from "../../utils/file-preview";
+import { filePreviewModal, isPreviewableImage } from "@/utils/file-preview";
 
 const BLOB = "https://x.public.blob.vercel-storage.com/projects/p1";
 

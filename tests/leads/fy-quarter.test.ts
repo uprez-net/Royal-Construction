@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   fyQuarterBounds,
   fyQuarterOf,
   formatFyQuarter,
-} from "../../lib/leads/fy-quarter";
+} from "@/lib/leads/fy-quarter";
 
 test("August 2026 is FY2027 Q1", () => {
   assert.deepEqual(fyQuarterOf(new Date("2026-08-16T02:00:00.000Z")), {

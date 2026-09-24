@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   isUnsafeToLeave,
   type OfferSaveState,
-} from "../../lib/offer/workspace-save-state";
+} from "@/lib/offer/workspace-save-state";
 
 // The offer workspace only asked the browser to confirm closing the tab while a
 // save was in flight. Once a save had failed, the tab closed silently and the

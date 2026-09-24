@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 test("CreateTradieInput matches the Tradie columns", async () => {
   const { readFileSync } = await import("node:fs");

@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
-import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { randomBytes } from "node:crypto";
 import { resolveMx } from "node:dns/promises";
-import { OfferStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { generatePDF } from "@/lib/utils/generatePDF";
@@ -33,6 +31,12 @@ import {
   canEmailOfferProposal,
   PROPOSAL_STAGE_PASSED_ERROR,
 } from "@/lib/offer/offer-send-guards";
+import {
+  OfferProposalSendError,
+  sendOfferProposal,
+} from "@/lib/domain/offers/proposal-send";
+import { userPrincipal } from "@/lib/domain/principal";
+import { readOfferForSend } from "@/lib/domain/offers/envelope-send";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -110,24 +114,13 @@ export async function sendOfferDocument(input: {
   offerId: string;
   recipientEmail: string;
   secondaryRecipientEmail?: string | null;
+  sendAttemptId: string;
 }): Promise<SendResult> {
   const access = await authorizeOfferAccess(input.offerId);
   if (!access.ok) {
     return { ok: false, error: access.error };
   }
-  const offer = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      id: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      workspaceState: true,
-    },
-  });
-  if (!offer) {
-    return { ok: false, error: "Offer not found." };
-  }
+  const offer = await readOfferForSend(prisma, input.offerId);
   // Before any recipient lookup or PDF render: past the negotiation window the
   // proposal would quote a workspace the Tender or Contract no longer matches.
   if (!canEmailOfferProposal(offer.offerStatus)) {
@@ -250,105 +243,85 @@ export async function sendOfferDocument(input: {
     token: `RCOFR-${randomBytes(6).toString("hex").toUpperCase()}`,
   }));
 
-  const isFirstSend = offer.offerStatus === OfferStatus.PENDING;
-
-  // An Offer document may be sent REPEATEDLY (PR #124 review, finding #1): every
-  // call emails ALL recipients. No per-recipient dedupe — that made an explicit
-  // Resend reject itself once everyone already had the current version.
-  //
-  // The offer stays PENDING throughout delivery and is flipped to SENT only AFTER
-  // an email is actually accepted (finding #2). The previous design flipped to
-  // SENT up front to use the status as a concurrency lock, but that let another
-  // tab reload, observe SENT and advance the offer (e.g. Mark agreed) while
-  // delivery was still in flight — and if delivery then failed, the revert (which
-  // only matched SENT) couldn't undo an already-agreed offer nobody received.
-  const deliveredEmails: string[] = [];
-  let sendError: string | null = null;
+  let messages: Awaited<ReturnType<typeof buildMessage>>[];
   try {
-    const client = await createGraphContext(getGraphConfig());
-    // One email per signatory — same PDF, each with its own tracking token so
-    // replies correlate to the right send record. Persist each OfferDocumentSend
-    // the moment its email is ACCEPTED (never before, never batched), so a mid-loop
-    // failure records exactly who received it and leaves no phantom rows.
-    for (const send of sends) {
-      // The branded React Email template, rendered per recipient so the
-      // greeting names that signatory. The tracking token stays in the SUBJECT
-      // (where the inbound reply tracker reads it from), so the template needs
-      // no slot for it.
-      const body = await render(
-        createElement(
-          QuotationEmail,
-          buildOfferQuotationEmailProps({
-            template: proposalInput,
-            reference,
-            recipientEmail: send.recipientEmail,
+    messages = await Promise.all(
+      sends.map((send) =>
+        buildMessage(send, proposalInput, reference, pdfBase64),
+      ),
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Failed to prepare the offer email: ${(error as Error).message}`,
+    };
+  }
+
+  const client = await createGraphContext(getGraphConfig());
+  let deliveredEmails: readonly string[] = [];
+  try {
+    const result = await sendOfferProposal(
+      userPrincipal(access.user),
+      {
+        attemptId: input.sendAttemptId,
+        offerFileVersion: offer.revisionNumber,
+        offerId: offer.id,
+        recipients: messages,
+      },
+      prisma,
+      {
+        send: (message) =>
+          client.sendMail({
+            ...message,
+            attachments: message.attachments.map((attachment) => ({
+              ...attachment,
+            })),
           }),
-        ),
-      );
-      await client.sendMail({
-        to: send.recipientEmail,
-        subject: `Your Building Proposal — ${reference} [${send.token}]`,
-        body,
+      },
+    );
+    deliveredEmails = result.deliveredEmails;
+  } catch (error) {
+    const partial =
+      error instanceof OfferProposalSendError ? error.deliveredEmails : [];
+    let message = `Failed to send the email: ${(error as Error).message}`;
+    if (partial.length > 0) {
+      message += ` Delivered to ${partial.join(", ")} before the failure — the offer is marked Sent; use a new resend to reach the rest.`;
+    }
+    return { ok: false, error: message };
+  }
+
+  async function buildMessage(
+    send: { recipientEmail: string; token: string },
+    template: ReturnType<typeof buildProposalInput>,
+    offerReference: string,
+    attachment: string,
+  ) {
+    const body = await render(
+      createElement(
+        QuotationEmail,
+        buildOfferQuotationEmailProps({
+          template,
+          reference: offerReference,
+          recipientEmail: send.recipientEmail,
+        }),
+      ),
+    );
+    return {
+      email: send.recipientEmail,
+      token: send.token,
+      message: {
         attachments: [
           {
-            name: `Building-Proposal-${reference}.pdf`,
+            name: `Building-Proposal-${offerReference}.pdf`,
             contentType: "application/pdf",
-            contentBytes: pdfBase64,
+            contentBytes: attachment,
           },
         ],
-      });
-      await prisma.offerDocumentSend.create({
-        data: {
-          offerId: offer.id,
-          offerFileVersion: offer.revisionNumber,
-          recipientEmail: send.recipientEmail,
-          trackedLinkToken: send.token,
-        },
-      });
-      deliveredEmails.push(send.recipientEmail);
-    }
-  } catch (error) {
-    sendError = `Failed to send the email: ${(error as Error).message}`;
-    // Name who DID receive it. A partial send still flips the offer to SENT below,
-    // so an error that only said "sending failed" left the estimator unable to tell
-    // whether anyone got the proposal (PR #124 review).
-    if (deliveredEmails.length > 0) {
-      sendError += ` Delivered to ${deliveredEmails.join(", ")} before the failure — the offer is marked Sent; resend to reach the rest.`;
-    }
-  }
-
-  // Flip PENDING→SENT only AFTER at least one email was accepted, and only on a
-  // first send. The conditional match on PENDING makes the transition + its audit
-  // event exactly-once: a concurrent sender that already flipped it (or a Mark
-  // agreed that moved it on) leaves count 0, so no duplicate event is written.
-  // Concurrent first sends each still email (consistent with repeatable sends);
-  // only the status audit is deduplicated. A zero-delivery send never flips, so
-  // the offer simply stays PENDING and is retryable — no revert needed.
-  if (isFirstSend && deliveredEmails.length > 0) {
-    const flip = await prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.PENDING },
-      data: { offerStatus: OfferStatus.SENT, sentAt: new Date() },
-    });
-    if (flip.count === 1) {
-      await prisma.offerStatusEvent
-        .create({
-          data: {
-            offerId: offer.id,
-            fromStatus: OfferStatus.PENDING,
-            toStatus: OfferStatus.SENT,
-            note: `Emailed to ${deliveredEmails.join(", ")}`,
-            actorId: access.user.id,
-          },
-        })
-        .catch((error) =>
-          console.error("[offer] status event after send failed:", error),
-        );
-      await syncLeadStageForOffer(offer.id);
-    }
-  }
-
-  if (sendError) {
-    return { ok: false, error: sendError };
+        body,
+        subject: `Your Building Proposal — ${offerReference} [${send.token}]`,
+        to: send.recipientEmail,
+      },
+    };
   }
 
   // The mail is away and the status is committed, so nothing past this point

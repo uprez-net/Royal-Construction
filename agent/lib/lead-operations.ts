@@ -1,12 +1,21 @@
 import type { LeadTaskType, Prisma, User } from "@prisma/client";
 import type { SessionContext } from "eve/context";
-import prisma from "@/lib/prisma";
+import { agentDb } from "@/agent/lib/db";
 import {
+  authorizeLeadTask,
+  authorizeLeadTaskOnLead,
   completeLeadTask,
   createLeadTask,
   reopenLeadTask,
-} from "@/lib/data/lead-tasks";
-import { assertCanAccessLead, leadListScope } from "@/lib/offer/access";
+} from "@/lib/domain/leads/tasks";
+import {
+  getLeadDetail,
+  listLeadTasks,
+  searchLeads,
+} from "@/lib/domain/leads/queries";
+import { authorizeLead as authorizeLeadRecord } from "@/lib/domain/access/leads";
+import { isDomainError } from "@/lib/domain/errors";
+import { userPrincipal } from "@/lib/domain/principal";
 import { stageMap } from "@/types/lead";
 import {
   AgentAuthorizationError,
@@ -38,20 +47,15 @@ function leadReference(lead: {
   };
 }
 
-async function authorizeLead(ctx: SessionContext, leadId: number) {
-  const actor = await requireCurrentAgentActor(ctx);
-  await assertAgentCanAccessLead(actor, leadId);
-  return actor;
-}
-
 async function assertAgentCanAccessLead(
   actor: Pick<User, "id" | "role">,
   leadId: number,
-  db: Prisma.TransactionClient | typeof prisma = prisma,
+  db: Prisma.TransactionClient | typeof agentDb = agentDb,
 ) {
   try {
-    await assertCanAccessLead(actor, leadId, db);
-  } catch {
+    await authorizeLeadRecord(userPrincipal(actor), leadId, db);
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
     // Do not reveal whether a forbidden lead exists.
     throw new AgentAuthorizationError();
   }
@@ -66,12 +70,24 @@ export async function authorizeLeadTaskMutation(
   const actor = await requireCurrentAgentActor(ctx, transaction);
   await assertAgentCanAccessLead(actor, leadId, transaction);
   if (taskId !== undefined) {
-    const task = await transaction.leadTask.findUnique({
-      where: { id: taskId },
-      select: { leadId: true },
-    });
-    if (!task || task.leadId !== leadId)
-      throw new Error("The requested task is unavailable.");
+    await requireTaskOnLead(actor, leadId, taskId, transaction);
+  }
+}
+
+// "This task belongs to this lead, and you may read that lead" —
+// lib/domain/leads/tasks.ts. The App task routes had no equivalent check at
+// all until this phase; they act on whatever id arrives.
+async function requireTaskOnLead(
+  actor: Pick<User, "id" | "role">,
+  leadId: number,
+  taskId: number,
+  db: Prisma.TransactionClient | typeof agentDb = agentDb,
+) {
+  try {
+    await authorizeLeadTaskOnLead(userPrincipal(actor), leadId, taskId, db);
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new Error("The requested task is unavailable.");
   }
 }
 
@@ -80,31 +96,8 @@ export async function searchAuthorizedLeads(
   input: { includeArchived: boolean; limit: number; query: string },
 ) {
   const actor = await requireCurrentAgentActor(ctx);
-  const scope = leadListScope(actor);
   const query = input.query.trim();
-  const leads = await prisma.lead.findMany({
-    where: {
-      ...(scope.assignedId === null ? {} : { assignedId: scope.assignedId }),
-      ...(input.includeArchived ? {} : { isArchived: false }),
-      OR: [
-        { name: { contains: query, mode: "insensitive" } },
-        { email: { contains: query, mode: "insensitive" } },
-        { phone: { contains: query, mode: "insensitive" } },
-        { location: { contains: query, mode: "insensitive" } },
-      ],
-    },
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-    take: input.limit,
-    select: {
-      id: true,
-      isArchived: true,
-      location: true,
-      name: true,
-      stage: true,
-      type: true,
-      updatedAt: true,
-    },
-  });
+  const leads = await searchLeads(userPrincipal(actor), input, agentDb);
 
   return agentResultEnvelopeSchema.parse({
     version: 1,
@@ -129,40 +122,21 @@ export async function getAuthorizedLead(
   ctx: SessionContext,
   input: { historyLimit: number; leadId: number },
 ) {
-  await authorizeLead(ctx, input.leadId);
-  const lead = await prisma.lead.findUnique({
-    where: { id: input.leadId },
-    select: {
-      assignedUser: { select: { id: true, name: true } },
-      createdAt: true,
-      email: true,
-      estimatedValue: true,
-      expectedCloseDate: true,
-      history: {
-        orderBy: { actionDate: "desc" },
-        take: input.historyLimit,
-        select: {
-          action: true,
-          actionDate: true,
-          author: { select: { name: true } },
-          detail: true,
-          type: true,
-        },
-      },
-      id: true,
-      isArchived: true,
-      location: true,
-      name: true,
-      phone: true,
-      secondaryEmail: true,
-      secondaryName: true,
-      secondaryPhone: true,
-      stage: true,
-      type: true,
-      updatedAt: true,
-    },
-  });
-  if (!lead) throw new Error("The requested lead is unavailable.");
+  const actor = await requireCurrentAgentActor(ctx);
+  // lib/domain/leads/queries.ts owns the read and its scope; this maps the
+  // domain record into an envelope and bounds the untrusted text.
+  let lead;
+  try {
+    lead = await getLeadDetail(
+      userPrincipal(actor),
+      input.leadId,
+      input.historyLimit,
+      agentDb,
+    );
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new AgentAuthorizationError();
+  }
 
   const entityRef = leadReference(lead);
   return agentResultEnvelopeSchema.parse({
@@ -176,22 +150,16 @@ export async function getAuthorizedLead(
       archived: lead.isArchived,
       assignedUser: lead.assignedUser,
       contacts: {
-        primary: { email: lead.email, name: lead.name, phone: lead.phone },
-        secondary: lead.secondaryName
-          ? {
-              email: lead.secondaryEmail,
-              name: lead.secondaryName,
-              phone: lead.secondaryPhone,
-            }
-          : null,
+        primary: lead.primaryContact,
+        secondary: lead.secondaryContact,
       },
       createdAt: lead.createdAt.toISOString(),
-      estimatedValue: lead.estimatedValue?.toString() ?? null,
+      estimatedValue: lead.estimatedValue,
       expectedCloseDate: lead.expectedCloseDate?.toISOString() ?? null,
       history: lead.history.map((entry) => ({
         action: boundedUntrustedText(entry.action),
         at: entry.actionDate.toISOString(),
-        author: entry.author?.name ?? null,
+        author: entry.authorName,
         detail: boundedUntrustedText(entry.detail),
         type: entry.type,
         untrusted: true,
@@ -213,34 +181,14 @@ export async function listAuthorizedLeadTasks(
   ctx: SessionContext,
   input: { leadId: number; limit: number; state: "all" | "completed" | "open" },
 ) {
-  await authorizeLead(ctx, input.leadId);
-  const completedAt:
-    | Prisma.DateTimeNullableFilter<"LeadTask">
-    | Date
-    | null
-    | undefined =
-    input.state === "open"
-      ? null
-      : input.state === "completed"
-        ? { not: null }
-        : undefined;
-  const tasks = await prisma.leadTask.findMany({
-    where: {
-      leadId: input.leadId,
-      ...(completedAt === undefined ? {} : { completedAt }),
-    },
-    orderBy: [{ dueDate: "asc" }, { id: "asc" }],
-    take: input.limit,
-    select: {
-      completedAt: true,
-      dueDate: true,
-      dueTime: true,
-      id: true,
-      notes: true,
-      status: true,
-      type: true,
-    },
-  });
+  const actor = await requireCurrentAgentActor(ctx);
+  let tasks;
+  try {
+    tasks = await listLeadTasks(userPrincipal(actor), input, agentDb);
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new AgentAuthorizationError();
+  }
 
   return agentResultEnvelopeSchema.parse({
     version: 1,
@@ -298,20 +246,24 @@ export async function createAuthorizedLeadTask(
       notes: input.notes,
       type: input.type,
     },
-    transaction,
+    transaction ?? agentDb,
   );
   return taskConfirmation("Task created", task);
 }
 
 async function authorizedTask(ctx: SessionContext, taskId: number) {
   const actor = await requireCurrentAgentActor(ctx);
-  const task = await prisma.leadTask.findUnique({
-    where: { id: taskId },
-    select: { leadId: true },
-  });
-  if (!task) throw new Error("The requested task is unavailable.");
-  await assertAgentCanAccessLead(actor, task.leadId);
-  return { actor, leadId: task.leadId };
+  try {
+    const { leadId } = await authorizeLeadTask(
+      userPrincipal(actor),
+      taskId,
+      agentDb,
+    );
+    return { actor, leadId };
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new Error("The requested task is unavailable.");
+  }
 }
 
 export async function resolveAuthorizedTask(
@@ -329,14 +281,8 @@ export async function completeAuthorizedLeadTask(
 ) {
   const actor = await requireCurrentAgentActor(ctx, transaction);
   await assertAgentCanAccessLead(actor, leadId, transaction);
-  const db = transaction ?? prisma;
-  const currentTask = await db.leadTask.findUnique({
-    where: { id: taskId },
-    select: { leadId: true },
-  });
-  if (!currentTask || currentTask.leadId !== leadId)
-    throw new Error("The requested task is unavailable.");
-  const task = await completeLeadTask(taskId, transaction);
+  await requireTaskOnLead(actor, leadId, taskId, transaction);
+  const task = await completeLeadTask(taskId, transaction ?? agentDb);
   if (!task || task.leadId !== leadId) {
     throw new Error("The requested task is unavailable.");
   }
@@ -351,14 +297,8 @@ export async function reopenAuthorizedLeadTask(
 ) {
   const actor = await requireCurrentAgentActor(ctx, transaction);
   await assertAgentCanAccessLead(actor, leadId, transaction);
-  const db = transaction ?? prisma;
-  const currentTask = await db.leadTask.findUnique({
-    where: { id: taskId },
-    select: { leadId: true },
-  });
-  if (!currentTask || currentTask.leadId !== leadId)
-    throw new Error("The requested task is unavailable.");
-  const task = await reopenLeadTask(taskId, transaction);
+  await requireTaskOnLead(actor, leadId, taskId, transaction);
+  const task = await reopenLeadTask(taskId, transaction ?? agentDb);
   if (!task || task.leadId !== leadId) {
     throw new Error("The requested task is unavailable.");
   }

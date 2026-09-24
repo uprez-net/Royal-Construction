@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { ComplianceAlertType } from "@prisma/client";
+import { test } from "vitest";
 
-import { COMPLIANCE_ALERT_COPY } from "../../constants/complianceAlerts";
-import { COMPLIANCE_ALERT_PARTY } from "../../lib/compliance/alert-parties";
+import { COMPLIANCE_ALERT_COPY } from "@/constants/complianceAlerts";
+import { COMPLIANCE_ALERT_PARTY } from "@/lib/domain/compliance/alert-parties";
 
 /**
  * The three tables that describe an alert, kept in step.

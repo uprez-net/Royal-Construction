@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   getEveSessionIdFromRequest,
   isAgentFeatureEnabled,
-} from "../../agent/lib/session-identity";
-import { waitForOwnedAgentSession } from "../../agent/lib/session-owner";
+} from "@/agent/lib/session-identity";
+import { waitForOwnedAgentSession } from "@/agent/lib/session-owner";
 
 test("extracts session IDs from send, stream, and control routes", () => {
   for (const path of [

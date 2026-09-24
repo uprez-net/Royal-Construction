@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   ComplianceAlertStatus,
@@ -10,12 +9,13 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   isDocumentOverdue,
   overdueComplianceDocuments,
-} from "../../lib/compliance/overdue-documents";
-import type { CertifierEngagementDetail } from "../../types/compliance";
+} from "@/lib/domain/compliance/overdue-documents";
+import type { CertifierEngagementDetail } from "@/types/compliance";
 
 /**
  * Which rows a red badge lands on.

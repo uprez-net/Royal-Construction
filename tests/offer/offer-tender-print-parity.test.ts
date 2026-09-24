@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { after, test } from "node:test";
 import type { Browser } from "puppeteer";
+import { afterAll, test } from "vitest";
 
 import {
   companyOwner,
@@ -17,15 +17,16 @@ import {
 // Kept apart from offer-tender-template-parity.test.ts (which asserts the same
 // document from its HTML alone and runs everywhere) because CI sets
 // PUPPETEER_SKIP_DOWNLOAD and never installs Chrome. This file is therefore
-// excluded from `test:unit` alongside offer-document-print-pages.test.ts — see
-// the note in package.json and .github/workflows/quality.yml.
+// in Vitest's `print` project rather than `unit`, alongside
+// offer-document-print-pages.test.ts — see vitest.config.mts and
+// .github/workflows/quality.yml.
 //
 // It fails loudly rather than skipping when Chrome is missing: a silently
 // skipped print test is how the "footer says 10, prints 11" class of bug
 // survived a review round. Run it locally before shipping a change to
 // offer-tender-html.ts:
 //
-//   npx tsx --test tests/offer/offer-tender-print-parity.test.ts
+//   pnpm test:print
 //
 // Every measurement below was read out of the Word template's OOXML — they are
 // measurements, not preferences.
@@ -44,7 +45,7 @@ async function browser(): Promise<Browser> {
   }
   return shared;
 }
-after(async () => {
+afterAll(async () => {
   await shared?.close();
   shared = null;
 });

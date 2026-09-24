@@ -7,7 +7,22 @@ import {
 import { createClerkClient } from "@clerk/backend";
 import type { SessionContext } from "eve/context";
 import type { ToolContext } from "eve/tools";
-import prisma from "@/lib/prisma";
+import { agentDb } from "@/agent/lib/db";
+import {
+  changeTeamMemberRole,
+  inviteTeamMember,
+  revokeTeamInvitation,
+} from "@/lib/domain/identity/team";
+import { userPrincipal } from "@/lib/domain/principal";
+import {
+  getTradieApproval,
+  listTradieApprovals,
+  resolveTradieApproval,
+} from "@/lib/domain/tradies/approvals";
+import {
+  findUserByClerkId,
+  findUserById,
+} from "@/lib/domain/identity/users";
 import {
   AgentAuthorizationError,
   requireCurrentAgentActor,
@@ -19,10 +34,11 @@ import {
 } from "@/agent/lib/result-contracts";
 import { getXeroConnectionStatus } from "@/lib/data/xero-connection";
 import { getXeroContext } from "@/lib/xero/client";
+import { disconnectXero } from "@/lib/domain/integrations/xero";
 import {
-  getAdminOfferContentNonCache,
+  getAdminOfferContent,
   updateAdminOfferContentSection,
-} from "@/lib/data/admin-offer-content-writes";
+} from "@/lib/domain/admin/offer-content";
 import {
   buildScopeSchema,
   costScheduleDataSchema,
@@ -100,30 +116,11 @@ export async function listAuthorizedApprovals(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const query = input.query.trim();
-  const approvals = await prisma.tradieApproval.findMany({
-    where: {
-      status: input.status,
-      actionType: input.actionType,
-      ...(query
-        ? {
-            tradie: {
-              OR: [
-                { name: { contains: query, mode: "insensitive" } },
-                { trade: { contains: query, mode: "insensitive" } },
-                { email: { contains: query, mode: "insensitive" } },
-              ],
-            },
-          }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: input.limit,
-    include: {
-      tradie: { select: { id: true, name: true, trade: true } },
-      user: { select: { name: true } },
-    },
-  });
+  const approvals = await listTradieApprovals(
+    userPrincipal(actor),
+    input,
+    agentDb,
+  );
   return result(
     "admin-summary",
     "Admin approvals",
@@ -150,14 +147,11 @@ export async function getAuthorizedApproval(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const approval = await prisma.tradieApproval.findUnique({
-    where: { id: input.approvalId },
-    include: {
-      tradie: { select: { id: true, name: true, trade: true, email: true } },
-      user: { select: { name: true } },
-    },
-  });
-  if (!approval) throw new Error("Approval request not found.");
+  const approval = await getTradieApproval(
+    userPrincipal(actor),
+    input.approvalId,
+    agentDb,
+  );
   return result(
     "admin-summary",
     "Approval request",
@@ -194,152 +188,33 @@ export async function resolveAuthorizedApproval(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const isApproved = input.resolution === "approved";
-  if (!isApproved && !input.rejectionReason)
-    throw new Error("A rejection reason is required.");
-  const resolve = async (tx: Prisma.TransactionClient) => {
-    const claimed = await tx.tradieApproval.updateMany({
-      where: { id: input.approvalId, status: TradieApprovalStatus.PENDING },
-      data: {
-        status: isApproved
-          ? TradieApprovalStatus.APPROVED
-          : TradieApprovalStatus.REJECTED,
-        rejectionReason: isApproved ? null : input.rejectionReason,
-        pendingDeletionKey: null,
-      },
-    });
-    if (claimed.count !== 1)
-      throw new Error(
-        "That approval is no longer pending; refresh the queue before deciding.",
-      );
-    const approval = await tx.tradieApproval.findUnique({
-      where: { id: input.approvalId },
-      include: { tradie: { select: { id: true, name: true, trade: true } } },
-    });
-    if (!approval) throw new Error("Approval request not found.");
-    if (
-      isApproved &&
-      approval.actionType === TradieApprovalActionType.INCIDENT_RESOLUTION &&
-      !input.incidentResolution
-    )
-      throw new Error("An incident resolution note is required.");
-    const payload = approval.updationData as Record<string, unknown> | null;
-    let affected: Record<string, unknown> = {};
-    if (isApproved) {
-      switch (approval.actionType) {
-        case TradieApprovalActionType.PRICE_CHANGE: {
-          const amount =
-            typeof payload?.newHourlyRate === "number"
-              ? payload.newHourlyRate
-              : null;
-          if (amount === null)
-            throw new Error(
-              "This price approval has no valid requested amount.",
-            );
-          await tx.tradie.update({
-            where: { id: approval.tradieId },
-            data: {
-              lastQuotedPrice: amount,
-              ...(payload?.newPriceUnit === "HOURLY" ||
-              payload?.newPriceUnit === "FIXED"
-                ? { lastQuotedPriceUnit: payload.newPriceUnit }
-                : {}),
-            },
-          });
-          affected = { amount, unit: payload?.newPriceUnit ?? null };
-          break;
-        }
-        case TradieApprovalActionType.TRADIE_REMOVAL:
-          await tx.tradie.delete({ where: { id: approval.tradieId } });
-          affected = { deletedTradieId: approval.tradieId };
-          break;
-        case TradieApprovalActionType.INCIDENT_RESOLUTION: {
-          const incidentId =
-            typeof payload?.incidentId === "string" ? payload.incidentId : null;
-          if (!incidentId)
-            throw new Error(
-              "This incident approval has no incident reference.",
-            );
-          const incident = await tx.tradieIncident.findFirst({
-            where: { id: incidentId, tradieId: approval.tradieId },
-          });
-          if (!incident)
-            throw new Error("The incident could not be found for this tradie.");
-          const updatedIncident = await tx.tradieIncident.update({
-            where: { id: incident.id },
-            data: { status: "RESOLVED", resolution: input.incidentResolution },
-          });
-          affected = {
-            incidentId: updatedIncident.id,
-            status: updatedIncident.status,
-          };
-          break;
-        }
-        case TradieApprovalActionType.SCHEDULE_APPROVAL: {
-          const scheduleId =
-            typeof payload?.scheduleId === "string" ? payload.scheduleId : null;
-          if (!scheduleId)
-            throw new Error(
-              "This schedule approval has no schedule reference.",
-            );
-          const schedule = await tx.tradieSchedule.findFirst({
-            where: { id: scheduleId, tradieId: approval.tradieId },
-          });
-          if (!schedule)
-            throw new Error("The schedule could not be found for this tradie.");
-          const updatedSchedule = await tx.tradieSchedule.update({
-            where: { id: schedule.id },
-            data: { status: "CONFIRMED" },
-          });
-          affected = {
-            scheduleId: updatedSchedule.id,
-            status: updatedSchedule.status,
-          };
-          break;
-        }
-        case TradieApprovalActionType.SCHEDULE_DELETION: {
-          const scheduleId =
-            typeof payload?.scheduleId === "string" ? payload.scheduleId : null;
-          if (!scheduleId)
-            throw new Error(
-              "This deletion approval has no schedule reference.",
-            );
-          const deleted = await tx.tradieSchedule.deleteMany({
-            where: { id: scheduleId, tradieId: approval.tradieId },
-          });
-          affected = { scheduleId, deleted: deleted.count > 0 };
-          break;
-        }
-      }
-    } else if (
-      approval.actionType === TradieApprovalActionType.SCHEDULE_APPROVAL &&
-      typeof payload?.scheduleId === "string"
-    ) {
-      await tx.tradieSchedule.updateMany({
-        where: { id: payload.scheduleId, tradieId: approval.tradieId },
-        data: { status: "DECLINED" },
-      });
-      affected = { scheduleId: payload.scheduleId, status: "DECLINED" };
-    }
-    return { approval, affected };
-  };
-  const resolved = transaction
-    ? await resolve(transaction)
-    : await prisma.$transaction(resolve, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      });
+  const incidentResolution =
+    input.incidentResolution?.trim() || undefined;
+  const resolved = await resolveTradieApproval(
+    userPrincipal(actor),
+    {
+      approvalId: input.approvalId,
+      incidentResolution,
+      rejectionReason: input.rejectionReason,
+      resolution: input.resolution,
+    },
+    transaction ?? agentDb,
+  );
   return result(
     "confirmation",
     "Approval resolved",
-    `${resolved.approval.actionType.replaceAll("_", " ")} for ${resolved.approval.tradie.name} was ${input.resolution}.`,
+    `${resolved.actionType.replaceAll("_", " ")} for ${resolved.tradieName} was ${input.resolution}.`,
     {
-      approvalId: resolved.approval.id,
-      actionType: resolved.approval.actionType,
+      approvalId: resolved.approvalId,
+      actionType: resolved.actionType,
       resolution: input.resolution,
       affected: resolved.affected,
     },
     {
-      entityRef: approvalRef(resolved.approval),
+      entityRef: approvalRef({
+        actionType: resolved.actionType,
+        id: resolved.approvalId,
+      }),
       links: [{ label: "Open approval queue", href: "/admin-approvals" }],
     },
   );
@@ -348,7 +223,7 @@ export async function resolveAuthorizedApproval(
 export async function getAuthorizedAdminContent(ctx: SessionContext) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const content = await getAdminOfferContentNonCache();
+  const content = await getAdminOfferContent(userPrincipal(actor), agentDb);
   return result(
     "admin-summary",
     "Offer defaults",
@@ -372,7 +247,7 @@ export async function updateAuthorizedAdminContent(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const current = await getAdminOfferContentNonCache();
+  const current = await getAdminOfferContent(userPrincipal(actor), agentDb);
   if (current.version !== input.expectedVersion)
     throw new Error(
       `Admin offer content changed since review (expected ${input.expectedVersion}, current ${current.version}).`,
@@ -401,10 +276,14 @@ export async function updateAuthorizedAdminContent(
           : input.section === "offerContent"
             ? { offerContent: parsed.data as Prisma.InputJsonValue }
             : { hbcfClaim: parsed.data as Prisma.InputJsonValue };
-  const version = await updateAdminOfferContentSection({
-    data: updateData,
-    expectedVersion: input.expectedVersion,
-  });
+  const version = await updateAdminOfferContentSection(
+    userPrincipal(actor),
+    {
+      data: updateData,
+      expectedVersion: input.expectedVersion,
+    },
+    agentDb,
+  );
   return result(
     "confirmation",
     "Offer defaults updated",
@@ -459,11 +338,12 @@ export async function inviteAuthorizedTeamMember(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const invitation = await clerkClient.invitations.createInvitation({
-    emailAddress: input.email,
-    expiresInDays: 7,
-    publicMetadata: { role: input.role },
-  });
+  const invitation = await inviteTeamMember(
+    userPrincipal(actor),
+    { ...input, idempotencyKey: ctx.callId },
+    agentDb,
+    (request) => clerkClient.invitations.createInvitation(request),
+  );
   return result(
     "confirmation",
     "Invitation sent",
@@ -478,10 +358,7 @@ export async function updateAuthorizedTeamRole(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const target = await prisma.user.findUnique({
-    where: { clerkId: input.userId },
-    select: { id: true, clerkId: true, role: true, name: true },
-  });
+  const target = await findUserByClerkId(input.userId, agentDb);
   if (!target) throw new Error("Team member not found.");
   if (target.id === actor.id && input.newRole !== Role.ADMIN)
     throw new Error(
@@ -501,46 +378,28 @@ export async function updateAuthorizedTeamRole(
     publicMetadata: { role: input.newRole },
   });
   try {
-    const updated = await prisma.$transaction(
-      async (tx) => {
-        const current = await tx.user.findUnique({
-          where: { id: target.id },
-          select: { id: true, name: true, role: true },
-        });
-        if (!current || current.role !== target.role)
-          throw new Error(
-            "The team member changed during this role update; refresh and retry.",
-          );
-        if (
-          current.role === Role.ADMIN &&
-          input.newRole !== Role.ADMIN &&
-          (await tx.user.count({ where: { role: Role.ADMIN } })) <= 1
-        )
-          throw new Error("The last admin cannot be demoted.");
-        const changed = await tx.user.updateMany({
-          where: { id: current.id, role: target.role },
-          data: { role: input.newRole },
-        });
-        if (changed.count !== 1)
-          throw new Error(
-            "The team member changed during this role update; refresh and retry.",
-          );
-        return { id: current.id, name: current.name, role: input.newRole };
+    // The last-admin guard and the optimistic role check are
+    // lib/domain/identity/team.ts. With two or three people on a shared login,
+    // demoting the only ADMIN locks the business out of its own admin surface
+    // with nobody left who can undo it.
+    const updated = await changeTeamMemberRole(
+      userPrincipal(actor),
+      {
+        expectedRole: target.role,
+        newRole: input.newRole,
+        userId: target.id,
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      agentDb,
     );
     return result(
       "confirmation",
       "Team role updated",
       `${updated.name}'s role is now ${updated.role}.`,
-      { userId: updated.id, role: updated.role },
+      { userId: updated.userId, role: updated.role },
     );
   } catch (error) {
     try {
-      const current = await prisma.user.findUnique({
-        where: { id: target.id },
-        select: { role: true },
-      });
+      const current = await findUserById(target.id, agentDb);
       await clerkClient.users.updateUser(target.clerkId, {
         publicMetadata: { role: current?.role ?? target.role },
       });
@@ -564,12 +423,18 @@ export async function revokeAuthorizedTeamInvitation(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  await clerkClient.invitations.revokeInvitation(input.invitationId);
+  const revoked = await revokeTeamInvitation(
+    userPrincipal(actor),
+    input.invitationId,
+    agentDb,
+    (invitationId) => clerkClient.invitations.revokeInvitation(invitationId),
+    ctx.callId,
+  );
   return result(
     "confirmation",
     "Invitation revoked",
     "The pending team invitation was revoked.",
-    { invitationId: input.invitationId },
+    { invitationId: revoked.invitationId },
   );
 }
 
@@ -604,27 +469,27 @@ export async function disconnectAuthorizedXero(
 ) {
   const actor = await requireCurrentAgentActor(ctx);
   requireAdmin(actor);
-  const active = await prisma.xeroConnection.findFirst({
-    where: { isActive: true },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, tenantName: true },
-  });
-  if (!active) throw new Error("No active Xero connection exists.");
   const context = await getXeroContext();
-  try {
-    await context.xero.revokeToken();
-  } catch {
-    /* local deactivation remains the safe fail-closed state */
-  }
-  await prisma.xeroConnection.update({
-    where: { id: active.id },
-    data: { isActive: false },
-  });
+  const disconnected = await disconnectXero(
+    userPrincipal(actor),
+    agentDb,
+    async () => context.xero.revokeToken(),
+  );
+  if (!disconnected.disconnected)
+    throw new Error("No active Xero connection exists.");
   return result(
     "confirmation",
     "Xero disconnected",
-    `${active.tenantName ?? "The Xero organisation"} was disconnected.`,
-    { connectionId: active.id, reason: input.reason },
+    `${disconnected.tenantName ?? "The Xero organisation"} was disconnected.${
+      disconnected.revocationFailed
+        ? " Xero token revocation was already unavailable; the local connection was deactivated."
+        : ""
+    }`,
+    {
+      connectionId: disconnected.connectionId,
+      reason: input.reason,
+      revocationFailed: disconnected.revocationFailed,
+    },
   );
 }
 

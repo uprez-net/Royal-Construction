@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# Line endings
+#
+# This repo is developed on Windows, where `core.autocrlf=true` checks files
+# out as CRLF. Prettier's `endOfLine: "lf"` then rewrites every one of them to
+# LF, git converts them back on commit, and the working tree churns forever:
+# `prettier --check` fails on ~700 files immediately after a fresh clone even
+# though nothing is actually wrong.
+#
+# `eol=lf` pins the WORKING TREE to LF as well as the object store, which ends
+# that loop regardless of each developer's core.autocrlf setting.
+#
+# After pulling this file once: `git add --renormalize .`
+# ---------------------------------------------------------------------------
+
+* text=auto eol=lf
+
+# Shell scripts must stay LF even on Windows or the interpreter chokes.
+*.sh   text eol=lf
+*.bash text eol=lf
+
+# Windows-native scripts are the one exception that needs CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binaries: never convert, never diff as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.zip  binary
+*.dump binary
+
+# Generated / machine-owned: collapse in diffs and in GitHub's language stats.
+pnpm-lock.yaml   linguist-generated=true -diff
+skills-lock.json linguist-generated=true -diff

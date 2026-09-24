@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { test } from "vitest";
 
-import { OfferWorkspacePrintTemplate } from "../../components/offers/new-workflow/offer-workspace-print-template";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
+import { OfferWorkspacePrintTemplate } from "@/components/offers/new-workflow/offer-workspace-print-template";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
 import {
   buildOfferPrintTemplateData,
   formatDateDisplay,
-} from "../../lib/offer/workspace-print-template";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+} from "@/lib/offer/workspace-print-template";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   INITIAL_ALLOWANCES,
   INITIAL_COST_LINES,
@@ -19,17 +19,17 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   deserializeWorkspace,
   INITIAL_TENDER_GATE,
   parseWorkspaceState,
   serializeWorkspace,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
-import { revisionPreparedDate } from "../../lib/offer/revision-prepared-date";
+} from "@/lib/offer/workspace-persistence";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
+import { revisionPreparedDate } from "@/lib/offer/revision-prepared-date";
 import { LEGACY_CALC_VERSION } from "@/lib/offer/workspace-persistence";
 
 // Backs the read-only revision viewer: a superseded revision is re-rendered
@@ -115,20 +115,27 @@ test("the viewer and its loader pass the latest send through", () => {
   assert.match(dialog, /preparedDate=\{revisionPreparedDate\(revision\)\}/);
 
   const data = readFileSync(
-    join(process.cwd(), "lib/data/offer-workspace.ts"),
+    join(process.cwd(), "lib/domain/offers/queries.ts"),
     "utf8",
   );
-  const start = data.indexOf("async function loadOfferRevisionSnapshot(");
+  const start = data.indexOf(
+    "export async function loadOfferRevisionSnapshot(",
+  );
   assert.ok(start >= 0, "loadOfferRevisionSnapshot not found");
   const end = data.indexOf("\n}\n", start);
   // Without this, a missing terminator slices to -1 — the whole rest of the
   // file — and the assertions below would match some other loader and pass.
   assert.ok(end > start, "loadOfferRevisionSnapshot has no closing brace");
   const loader = data.slice(start, end);
-  assert.match(
-    loader,
-    /documentSends:\s*\{\s*select:\s*\{\s*sentAt:\s*true\s*\},\s*orderBy:\s*\{\s*sentAt:\s*"desc"\s*\}/,
+  const sendsStart = loader.indexOf("documentSends:");
+  const sendsEnd = loader.indexOf("take: 1", sendsStart);
+  assert.ok(
+    sendsStart >= 0 && sendsEnd > sendsStart,
+    "latest send query missing",
   );
+  const sendsQuery = loader.slice(sendsStart, sendsEnd);
+  assert.match(sendsQuery, /select:\s*\{\s*sentAt:\s*true\s*\}/);
+  assert.match(sendsQuery, /orderBy:\s*\{\s*sentAt:\s*"desc"\s*\}/);
   assert.match(loader, /lastSentAt:\s*offer\.documentSends\[0\]\?\.sentAt/);
 });
 

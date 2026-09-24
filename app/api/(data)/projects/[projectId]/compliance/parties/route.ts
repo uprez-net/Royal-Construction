@@ -9,6 +9,8 @@ import {
   recordPartySelfSupplied,
   startPartyOutreach,
 } from "@/lib/data/compliance-outreach";
+import { userPrincipal } from "@/lib/domain/principal";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import {
   errorResponse,
   parseRouteParamsWithResponse,
@@ -87,6 +89,7 @@ export async function POST(
         );
       }
       const engagement = await recordPartySelfSupplied(
+        userPrincipal(user),
         projectId,
         body.data.party,
         user.name,
@@ -102,11 +105,18 @@ export async function POST(
       );
     }
 
-    const engagement = await startPartyOutreach(projectId, body.data);
+    const engagement = await startPartyOutreach(
+      userPrincipal(user),
+      projectId,
+      body.data,
+      request.headers.get("idempotency-key") ?? undefined,
+    );
     return successResponse(engagement, { status: 201 });
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error("Failed to engage a compliance party", error);
     // The data layer refuses on an unmet prerequisite and lets Graph's own size
     // assertion through, so both reach the user as the message that actually

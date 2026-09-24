@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import { EnvelopeStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   envelopeStatusRank,
   isLiveEnvelopeStatus,
   readRefusedVoid,
-} from "../../lib/docusign/envelope-status";
+} from "@/lib/docusign/envelope-status";
 
 // Recall and Create revision only looked for envelopes with status SENT. The
 // Connect webhook moves an envelope to DELIVERED as soon as the customer opens
@@ -53,8 +53,8 @@ test("every envelope status is either live or terminal", () => {
 
 test("rank only moves forward: sent, then delivered, then any terminal status", () => {
   assert.ok(
-    envelopeStatusRank(EnvelopeStatus.SENT) <
-      envelopeStatusRank(EnvelopeStatus.DELIVERED),
+    envelopeStatusRank(EnvelopeStatus.SENT)
+      < envelopeStatusRank(EnvelopeStatus.DELIVERED),
   );
   for (const status of TERMINAL) {
     assert.ok(

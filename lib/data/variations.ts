@@ -1,143 +1,122 @@
-import prisma from "@/lib/prisma";
-import { VariationStatus } from "@prisma/client";
-import { applyVariationDelay } from "@/lib/utils/apply-variation-delay";
-import type { CreateVariationInput } from "@/utils/validators";
-import { CACHE_PROFILES } from "@/types/cache";
-import { revalidateTag } from "next/cache";
-import { createNotification } from "@/types/notification";
-import { triggerNotification } from "../notification/novu";
+import "server-only";
+
 import { after } from "next/server";
+import { revalidateTag } from "next/cache";
+
+import prisma from "@/lib/prisma";
+import { currentPrincipal } from "@/lib/data/current-principal";
+import { logAction } from "@/lib/domain/audit/action-log";
+import { attributionUserId } from "@/lib/domain/principal";
+import {
+  createVariation as createVariationCommand,
+  decideVariation,
+  type VariationDecision,
+} from "@/lib/domain/projects/variations";
+import { triggerNotification } from "@/lib/notification/novu";
 import { createActivityLogEntry } from "@/types/activityLog";
-import { logAction } from "./actionLog";
+import { CACHE_PROFILES } from "@/types/cache";
+import { createNotification } from "@/types/notification";
+import type { CreateVariationInput } from "@/utils/validators";
 import { currency } from "@/utils/formatters";
 
-type VariationStatusInput = "APPROVED" | "REJECTED";
-/**
- * Creates a new project variation request.
- *
- * A newly created variation is always initialized with a `PENDING` status.
- * After the database transaction completes, this function:
- * - Notifies the assigned site manager about the new variation.
- * - Revalidates the project's cache.
- *
- * Decimal values are converted to strings before returning to ensure safe
- * serialization across the server/client boundary.
- *
- * @param projectId - ID of the project the variation belongs to.
- * @param input - Validated variation creation payload.
- * @returns The newly created variation with its cost serialized as a string.
- */
+// The Next adapter over `lib/domain/projects/variations.ts`.
+//
+// The rule — who may decide a variation, that it belongs to the project in the
+// URL, that a decided one cannot be decided again, and what an approval does
+// to the remaining programme — is in the domain. Notifications, the activity
+// entry and the cache tag are post-commit work and stay here.
+
 export async function createVariation(
   projectId: string,
   input: CreateVariationInput,
 ) {
-  const { project, ...variation } = await prisma.variation.create({
-    data: {
-      projectId,
-      description: input.description,
+  const principal = await currentPrincipal();
+
+  const variation = await createVariationCommand(
+    principal,
+    {
       cost: input.cost,
-      requestedDate: input.requestedDate ?? new Date(),
-      status: VariationStatus.PENDING,
+      description: input.description,
+      projectId,
+      requestedDate: input.requestedDate,
     },
-    include: {
-      project: {
-        select: { name: true, siteManagerId: true },
-      },
-    },
-  });
+    prisma,
+  );
 
   after(async () => {
-    const siteManagerId = project.siteManagerId;
-    const notificationPayload = createNotification("variationCreated", {
-      projectId: variation.projectId,
-      projectName: project.name,
-      variationDescription: variation.description,
-      variationAmount: variation.cost.toString(),
-    });
-    const activityLogEntry = createActivityLogEntry("variationCreated", {
-      projectId: variation.projectId,
-      projectName: project.name,
-      variationDescription: variation.description,
-      variationAmount: currency.format(parseFloat(variation.cost.toString())),
-    });
-    await logAction(activityLogEntry);
+    await logAction(
+      {
+        ...createActivityLogEntry("variationCreated", {
+          projectId: variation.projectId,
+          projectName: variation.projectName,
+          variationAmount: currency.format(Number(variation.cost)),
+          variationDescription: variation.description,
+        }),
+        authorId: attributionUserId(principal),
+      },
+      prisma,
+    );
     await triggerNotification(
-      siteManagerId ? [siteManagerId] : [],
-      notificationPayload,
+      variation.siteManagerId ? [variation.siteManagerId] : [],
+      createNotification("variationCreated", {
+        projectId: variation.projectId,
+        projectName: variation.projectName,
+        variationAmount: variation.cost,
+        variationDescription: variation.description,
+      }),
     );
     revalidateTag(`project-${projectId}`, CACHE_PROFILES.MEDIUM);
   });
 
-  return {
-    ...variation,
-    cost: variation.cost.toString(),
-  };
+  return variation;
 }
 
 /**
- * Updates the approval status of an existing project variation.
+ * Approve or reject a variation.
  *
- * Depending on the supplied status, this function:
- * - Marks the variation as approved or rejected.
- * - Sets or clears the approval date.
- * - Notifies the assigned site manager of the status change.
- * - Applies project schedule delays for approved variations.
- * - Revalidates the associated project cache.
- *
- * If the variation is approved, any milestone or project delays associated
- * with the variation are automatically applied via `applyVariationDelay`.
- *
- * @param variationId - ID of the variation to update.
- * @param status - New variation status (`APPROVED` or `REJECTED`).
- * @returns The updated variation.
- *
- * @throws Re-throws any database or delay application errors encountered during execution.
+ * `projectId` is required now: the route has it in its own URL, and the
+ * previous signature took only the variation id, so nothing checked the two
+ * matched or that the caller could manage the project.
  */
 export async function updateVariationStatus(
+  projectId: string,
   variationId: string,
-  status: VariationStatusInput,
+  status: VariationDecision,
 ) {
-  const { project, ...variation } = await prisma.variation.update({
-    where: { id: variationId },
-    data:
-      status === "APPROVED"
-        ? { status: VariationStatus.APPROVED, approvedDate: new Date() }
-        : { status: VariationStatus.REJECTED, approvedDate: null },
-    include: {
-      project: {
-        select: { name: true, siteManagerId: true },
-      },
-    },
-  });
+  const principal = await currentPrincipal();
+
+  const outcome = await decideVariation(
+    principal,
+    { decision: status, projectId, variationId },
+    prisma,
+  );
 
   after(async () => {
-    const siteManagerId = project.siteManagerId;
-
-    const notificationPayload = createNotification("variationUpdated", {
-      projectId: variation.projectId,
-      projectName: project.name,
-      variationDescription: variation.description,
-      variationAmount: variation.cost.toString(),
-      status: variation.status,
-    });
-    const activityLogEntry = createActivityLogEntry("variationUpdated", {
-      projectId: variation.projectId,
-      projectName: project.name,
-      variationDescription: variation.description,
-      variationAmount: currency.format(parseFloat(variation.cost.toString())),
-      status: variation.status,
-    });
-    await logAction(activityLogEntry);
-    await triggerNotification(
-      siteManagerId ? [siteManagerId] : [],
-      notificationPayload,
+    await logAction(
+      {
+        ...createActivityLogEntry("variationUpdated", {
+          projectId: outcome.projectId,
+          projectName: outcome.projectName,
+          status: outcome.status,
+          variationAmount: currency.format(Number(outcome.cost)),
+          variationDescription: outcome.description,
+        }),
+        authorId: attributionUserId(principal),
+      },
+      prisma,
     );
-
-    if (status === "APPROVED") {
-      await applyVariationDelay(variation.id);
-    }
-    revalidateTag(`project-${variation.projectId}`, CACHE_PROFILES.MEDIUM);
+    await triggerNotification(
+      outcome.siteManagerId ? [outcome.siteManagerId] : [],
+      createNotification("variationUpdated", {
+        projectId: outcome.projectId,
+        projectName: outcome.projectName,
+        status: outcome.status,
+        variationAmount: outcome.cost,
+        variationDescription: outcome.description,
+      }),
+    );
+    revalidateTag(`project-${outcome.projectId}`, CACHE_PROFILES.MEDIUM);
   });
 
-  return variation;
+  return outcome;
 }

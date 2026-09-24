@@ -1,20 +1,21 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
-import { OfferStatus } from "@prisma/client";
+import { EnvelopeDocType, OfferStatus } from "@prisma/client";
+import { test } from "vitest";
 
 import {
   decideRecallPullBack,
   describeUnconfirmedVoid,
   envelopeScopeFilter,
   resolveRecall,
-} from "../../lib/offer/offer-recall";
+  unconfirmedSendDocTypesForScope,
+} from "@/lib/offer/offer-recall";
 import {
   OFFER_WORKFLOW_TRANSITIONS,
   RECALL_EDGES,
   classifyOfferTransition,
   requiresOwnerGate,
-} from "../../lib/offer/offer-workflow-transitions";
+} from "@/lib/offer/offer-workflow-transitions";
 
 // recallOfferEnvelope is a Server Action, so every argument comes from the
 // client. It trusted `scope`: a string outside "offer" | "tender" | "contract"
@@ -153,6 +154,45 @@ test("every known envelope scope is narrowed to the one offer", () => {
     assert.ok(
       JSON.stringify(filter).includes('"offerId":"offer-1"'),
       `${scope} is not scoped to the offer`,
+    );
+  }
+});
+
+// ── #321: which UnconfirmedEnvelopeSend rows a scope covers ──
+//
+// A parallel mapping to envelopeScopeFilter, because UnconfirmedEnvelopeSend
+// cannot be scoped the same way — it hangs off Offer directly, not off
+// Tender/Contract, precisely because those rows don't exist yet when a send's
+// outcome is unknown. If this mapping ever drifts from envelopeScopeFilter's
+// (a scope missing a doc type, or including one it shouldn't), a recall on
+// that scope would silently stop seeing an unresolved send for it.
+
+test("an unknown scope throws here too, for the same reason", () => {
+  assert.throws(() => unconfirmedSendDocTypesForScope("bogus" as never));
+});
+
+test("a single-document scope maps to exactly that document's type", () => {
+  assert.deepEqual(unconfirmedSendDocTypesForScope("offer"), [
+    EnvelopeDocType.OFFER,
+  ]);
+  assert.deepEqual(unconfirmedSendDocTypesForScope("tender"), [
+    EnvelopeDocType.TENDER,
+  ]);
+  assert.deepEqual(unconfirmedSendDocTypesForScope("contract"), [
+    EnvelopeDocType.CONTRACT,
+  ]);
+});
+
+test("'all' covers every document type envelopeScopeFilter covers", () => {
+  const docTypes = unconfirmedSendDocTypesForScope("all");
+  for (const type of [
+    EnvelopeDocType.TENDER,
+    EnvelopeDocType.CONTRACT,
+    EnvelopeDocType.OFFER,
+  ]) {
+    assert.ok(
+      docTypes.includes(type),
+      `"all" is missing ${type} — a revision would fail to see an unresolved send for it`,
     );
   }
 });

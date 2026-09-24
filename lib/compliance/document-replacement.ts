@@ -1,8 +1,8 @@
 import { ComplianceDocumentType } from "@prisma/client";
-import { del } from "@vercel/blob";
 
 import prisma from "@/lib/prisma";
-import { certifierEmailAttachments } from "@/types/compliance";
+import { vercelBlobDelete } from "@/lib/blob-port";
+import { reclaimSupersededComplianceFiles } from "@/lib/domain/compliance/file-reclamation";
 
 /**
  * What happens to the copy a replacement pushes out.
@@ -42,41 +42,13 @@ export async function discardSupersededFiles(
   engagementId: string,
   files: StoredFile[],
 ): Promise<void> {
-  if (files.length === 0) {
-    return;
-  }
-
   try {
-    const emails = await prisma.certifierEmail.findMany({
-      where: { engagementId },
-      select: { attachments: true },
-    });
-    const onThread = new Set(
-      emails.flatMap((email) =>
-        certifierEmailAttachments(email.attachments).map((item) => item.url),
-      ),
+    await reclaimSupersededComplianceFiles(
+      engagementId,
+      files,
+      prisma,
+      vercelBlobDelete,
     );
-
-    const candidates = files
-      .map((file) => file.url)
-      .filter((url) => !onThread.has(url));
-    if (candidates.length === 0) {
-      return;
-    }
-
-    // Rows that survived this replacement and still point at one of these
-    // blobs. Read after the caller's own delete has committed, so a row this
-    // replacement removed is already gone and cannot vote to keep its own blob.
-    const stillReferenced = await prisma.file.findMany({
-      where: { url: { in: candidates } },
-      select: { url: true },
-    });
-    const shared = new Set(stillReferenced.map((file) => file.url));
-
-    const urls = candidates.filter((url) => !shared.has(url));
-    if (urls.length > 0) {
-      await del(urls);
-    }
   } catch (error) {
     console.error(
       `Could not remove ${files.length} superseded compliance file(s)`,

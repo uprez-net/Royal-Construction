@@ -9,7 +9,8 @@ import {
   MessageSquare,
   Archive,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { leadDetailHref } from "@/components/leads/leads-list-url";
 import { Lead } from "@/lib/leads/types";
 import { useAvailableUsers } from "@/hooks/use-available-users";
 import {
@@ -63,6 +64,7 @@ export default function TableView({
   const { toasts, showToast, dismissToast } = useToast();
   const availableUsers = useAvailableUsers();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   /* ── Modal pointers (only which lead — each modal manages its own state) ── */
   const [leadToDelete, setLeadToDelete] = React.useState<Lead | null>(null);
@@ -169,9 +171,13 @@ export default function TableView({
     );
   };
 
-  /** The lead detail modal was replaced by a full page at /leads/[id]. */
+  /**
+   * The lead detail modal was replaced by a full page at /leads/[id]. It
+   * carries the list's page and filters, so "Back to all leads" returns to
+   * this page of the table (#350).
+   */
   const openLeadDetail = (lead: Lead) => {
-    router.push(`/leads/${lead.id}`);
+    router.push(leadDetailHref(lead.id, searchParams.toString()));
   };
 
   /* ── Render ── */
@@ -327,8 +333,8 @@ export default function TableView({
                                   type="button"
                                   className="action-btn-icon"
                                   title={
-                                    actions.call.disabledReason ??
-                                    `Call ${lead.name}`
+                                    actions.call.disabledReason
+                                    ?? `Call ${lead.name}`
                                   }
                                   aria-label={`Call ${lead.name}`}
                                   onClick={(e) => {
@@ -345,8 +351,8 @@ export default function TableView({
                                   type="button"
                                   className="action-btn-icon"
                                   title={
-                                    actions.email.disabledReason ??
-                                    `Send follow-up email to ${lead.name}`
+                                    actions.email.disabledReason
+                                    ?? `Send follow-up email to ${lead.name}`
                                   }
                                   aria-label={`Send follow-up email to ${lead.name}`}
                                   onClick={(e) => {
@@ -363,8 +369,8 @@ export default function TableView({
                                   type="button"
                                   className="action-btn-icon"
                                   title={
-                                    actions.sendText.disabledReason ??
-                                    `Send message to ${lead.name}`
+                                    actions.sendText.disabledReason
+                                    ?? `Send message to ${lead.name}`
                                   }
                                   aria-label={`Send message to ${lead.name}`}
                                   onClick={(e) => {
@@ -381,8 +387,8 @@ export default function TableView({
                                   type="button"
                                   className="action-btn-icon"
                                   title={
-                                    actions.archive.disabledReason ??
-                                    `Archive ${lead.name}`
+                                    actions.archive.disabledReason
+                                    ?? `Archive ${lead.name}`
                                   }
                                   aria-label={`Archive ${lead.name}`}
                                   onClick={(e) => {
@@ -399,8 +405,8 @@ export default function TableView({
                                   type="button"
                                   className="action-btn-icon"
                                   title={
-                                    actions.bookMeeting.disabledReason ??
-                                    `Meeting schedule for ${lead.name}`
+                                    actions.bookMeeting.disabledReason
+                                    ?? `Meeting schedule for ${lead.name}`
                                   }
                                   aria-label={`Meeting schedule for ${lead.name}`}
                                   onClick={(e) => {
@@ -549,8 +555,8 @@ export default function TableView({
                           type="button"
                           className="mobile-action-btn"
                           title={
-                            actions.archive.disabledReason ??
-                            `Archive ${lead.name}`
+                            actions.archive.disabledReason
+                            ?? `Archive ${lead.name}`
                           }
                           aria-label={`Archive ${lead.name}`}
                           onClick={() => {

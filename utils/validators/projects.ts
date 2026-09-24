@@ -142,67 +142,18 @@ const baseProjectSchema = z.object({
   quoteFile: z.instanceof(File).optional(),
 });
 
-/**
- * Create project request body
- * Requires customer information (either existing or new)
- */
-export const createProjectSchema = baseProjectSchema
-  .transform((data) => ({
-    ...data,
-    propertyType:
-      data.propertyType?.trim() || data.type?.trim() || "Custom Build",
-
-    customerMode: data.customerMode ?? (data.customerId ? "existing" : "new"),
-
-    estimatedEndDate: data.estimatedEndDate ?? data.estEnd ?? null,
-  }))
-  .superRefine((data, ctx) => {
-    if (data.customerMode === "existing") {
-      if (!data.customerId?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["customerId"],
-          message: "Customer ID is required when using existing customer",
-        });
-      }
-    }
-
-    if (data.customerMode === "new") {
-      if (!data.customerName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["customerName"],
-          message: "Customer name is required",
-        });
-      }
-
-      if (!data.customerPhone?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["customerPhone"],
-          message: "Customer phone is required",
-        });
-      }
-
-      if (!data.customerEmail?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["customerEmail"],
-          message: "Customer email is required",
-        });
-      }
-
-      if (!data.quoteFile) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["quoteFile"],
-          message: "Quote file is required",
-        });
-      }
-    }
-  });
-
-export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+// `createProjectSchema` and `CreateProjectInput` were deleted in phase 4 of
+// issue #301, along with the two endpoints that parsed them.
+//
+// They described a "create a project from scratch" payload — customer mode,
+// quote file, property type — for an operation the schema does not allow:
+// `Project.leadId` is a required unique foreign key, so a project exists only
+// as a converted lead. The writer behind them set `leadId: 0` with the comment
+// "To make this function fail", and every POST died on a constraint violation.
+// A validator for a request nothing accepts is the kind of plausible-looking
+// dead code this migration keeps removing. The supported payload is
+// `createProjectWithLeadSchema`, above, which the create-project wizard's
+// Server Action parses.
 
 /**
  * Update project request body
@@ -456,8 +407,8 @@ export const insuranceClaimDatesSchema = z
   })
   .superRefine((data, ctx) => {
     if (
-      new Date(data.insuranceClaimEndDate) <=
-      new Date(data.insuranceClaimStartDate)
+      new Date(data.insuranceClaimEndDate)
+      <= new Date(data.insuranceClaimStartDate)
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

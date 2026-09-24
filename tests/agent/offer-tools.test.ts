@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   getOfferInputSchema,
   getOfferDetailsInputSchema,
   listOfferRevisionsInputSchema,
   searchOffersInputSchema,
   updateOfferDetailsInputSchema,
-} from "../../agent/lib/offer-contracts";
+} from "@/agent/lib/offer-contracts";
 
 test("offer tool inputs require exact bounded identifiers", () => {
   assert.equal(
@@ -48,17 +48,21 @@ test("offer detail mutations require optimistic concurrency and bounded known se
 });
 
 test("offer reads resolve the current actor and shared lead scope", async () => {
-  const source = await readFile("agent/lib/offer-operations.ts", "utf8");
-  assert.match(source, /requireCurrentAgentActor/);
-  assert.match(source, /assertCanAccessLead/);
-  assert.match(source, /leadListScope/);
-  assert.doesNotMatch(source, /clerkId\s*:/);
+  const operations = await readFile("agent/lib/offer-operations.ts", "utf8");
+  const queries = await readFile("lib/domain/offers/queries.ts", "utf8");
+  assert.match(operations, /requireCurrentAgentActor/);
+  assert.match(operations, /searchOffers\(/);
+  assert.match(operations, /listOfferRevisionSummaries\(/);
+  assert.match(queries, /leadListScope\(principal\)/);
+  assert.match(queries, /authorizeLead\(principal,/);
+  assert.doesNotMatch(operations, /clerkId\s*:/);
 });
 
 test("offer results never expose workspace or document bodies", async () => {
-  const source = await readFile("agent/lib/offer-operations.ts", "utf8");
-  assert.match(source, /workspaceState: true/);
-  assert.doesNotMatch(source, /workspaceState:\s*offer\.workspaceState/);
-  assert.doesNotMatch(source, /agreedSnapshot:\s*true/);
-  assert.doesNotMatch(source, /offerFiles:\s*true/);
+  const operations = await readFile("agent/lib/offer-operations.ts", "utf8");
+  const queries = await readFile("lib/domain/offers/queries.ts", "utf8");
+  assert.match(queries, /workspaceState: true/);
+  assert.doesNotMatch(operations, /workspaceState:\s*offer\.workspaceState/);
+  assert.doesNotMatch(operations, /agreedSnapshot:\s*true/);
+  assert.doesNotMatch(operations, /offerFiles:\s*true/);
 });

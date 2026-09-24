@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "vitest";
 
 import {
   DEFAULT_BUSINESS_EMAIL,
   isOwnMailbox,
   resolveLeadEmail,
-} from "../../lib/graph/mailbox";
+} from "@/lib/graph/mailbox";
 
 const ENV_KEYS = [
   "BUSINESS_EMAIL",

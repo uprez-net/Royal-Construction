@@ -47,6 +47,99 @@ are worth solving now:
 When an issue's severity depends on which of these it is, say so explicitly
 instead of assigning a generic priority.
 
+## Business rules live in `lib/domain`, and the guide is the standard
+
+**Before writing or changing any business rule, authorization check, state
+transition, persistence mutation or external-side-effect decision, read
+[`lib/domain/GUIDE.md`](./lib/domain/GUIDE.md) and follow it.**
+[`lib/domain/README.md`](./lib/domain/README.md) says what a domain module is;
+the guide says what to do when you have a change to make — which folder owns
+what, what to call instead of writing it again, the command signature, the
+error taxonomy, and the order to move one rule in.
+
+App routes, Server Actions, Eve tools, cron jobs, webhooks, Graph and Workflow
+steps and the public routes are **adapters**. They authenticate, validate,
+format and call a domain command. They do not decide anything.
+
+### Why this is a rule and not a preference
+
+Because the same business rule used to be written twice — once for the screen
+and once for Eve — and the two copies did not agree. Every one of these was
+found by putting them side by side, and each was live:
+
+- A compliance document could be **approved before the certifier had ever been
+  sent it**. The app checked the outbound mail trail first; Eve had no
+  equivalent check, so an agent could close an engagement on a review that
+  never happened.
+- The app's `createTradieSchedule` wrote the booking **with no overlap check
+  and no check that the milestone belonged to the project** — the same tradie
+  could be booked onto two sites for the same week. Eve had both checks.
+- The **last-admin guard** existed only in Eve's team tool. Everyone here is an
+  ADMIN on a shared login, so demoting the last one locks the business out with
+  nobody left who can undo it.
+- Five send routes read an `Idempotency-Key` header that **no caller sent**, so
+  every send fell back to a derived key bucketed by day or by body checksum. A
+  second follow-up the office meant to send was reported as sent and emailed
+  nobody.
+
+Note what these have in common: they are not abstract layering problems. They
+are a wrong decision in front of a client, an access check that quietly stopped
+checking, a lockout, and a silent failure — the four things the section above
+says are worth more than they look here. One copy of a rule is how you stop
+writing them.
+
+So: a second copy of a rule is a defect in this repo, not a style question. If
+you find a rule that already exists, call it. If you find two that disagree,
+resolve them into one — the stricter one — and say in the change which
+behaviour you kept and which you dropped, because one of the two callers is
+about to start behaving differently.
+
+### The guards, and what they do not catch
+
+- `tests/architecture/domain-boundary.test.ts` — `lib/domain/**` may not reach
+  Next, Clerk's Next bindings, React, Eve, `app/`, `agent/` or `components/`.
+  Transitive, value edges only, prints the import chain.
+- `tests/architecture/agent-operations-prisma.test.ts` — a per-file **ratchet**
+  on direct business Prisma in `agent/lib/*-operations.ts`. The number may only
+  go down. A new specialist file starts at 0.
+- `tests/architecture/domain-error-surfacing.test.ts` — an adapter that catches
+  a domain refusal must surface it (`lib/http/domain-response.ts`) or be listed
+  with a reason, so an operator never reads a generic 500 for a refusal the
+  domain can name.
+- `tests/architecture/idempotency-keys.test.ts` — every route that reads an
+  `Idempotency-Key` must have a caller that sends one.
+- `tests/agent/authored-package-boundary.test.ts` — see the Eve section below.
+
+These catch new duplication at the boundaries. **They cannot tell you that two
+rules in two places mean the same thing** — that is the part that needs you to
+search first, which is what section 1 of the guide is for.
+
+## The suite runs on Vitest
+
+`node:test` is gone (issue #326). A new test imports `test`/`describe`/`it` and
+the lifecycle hooks from `vitest`, and keeps asserting with
+`node:assert/strict` — the assertions were never the thing being migrated, and
+mixing in `expect` would leave two idioms side by side.
+
+Practical rules, all of which the suite already follows:
+
+- Put the file at `tests/<area>/<name>.test.ts`; that is what
+  `vitest.config.mts` collects. A helper or fixture that is not a test does not
+  end in `.test.ts`, so it is imported rather than run.
+- Reach application code through `@/` (`@/lib/offer/pricing`) and sibling
+  fixtures relatively (`./tender-fixtures`). The distinction carries meaning:
+  relative is "next to this test", `@/` is "the code under test".
+- Need the repository root? Import `REPO_ROOT` from `tests/support/repo-root.ts`.
+  `__dirname` does not exist under the ESM transform, and `process.cwd()` is
+  wherever the command was typed.
+- Mutating `process.env`, or anything else global, still gets restored in
+  `afterEach`. Per-file process isolation is a second line of defence.
+- Anything that needs a real browser belongs in the `print` project in
+  `vitest.config.mts`, not in the CI lane. It must still fail loudly when
+  Chromium is missing — never `skip`.
+
+`pnpm test:unit` is what CI runs; `pnpm test:watch` is the loop to work in.
+
 ## Royal Construction Eve operations agent
 
 The authenticated orchestrator in `agent/agent.ts` routes requests to the
@@ -56,15 +149,35 @@ must preserve Clerk authentication, owner-scoped sessions, authorization,
 approval, idempotency, and audit boundaries. Variation operations are
 currently unavailable.
 
-The orchestrator uses `zai/glm-5.3-flash`, low reasoning, a 1,000,000-token
-context window, and per-session limits of 120,000 input tokens, 12,000 output
-tokens, $1 maximum token cost, and a seven-day timeout. Dynamic specialists
-use the same model and context window with separate limits of 40,000 input
-tokens, 4,000 output tokens, $0.25 maximum token cost, and a 24-hour timeout.
+The orchestrator reaches a specialist **only** through the blocking
+`agent/tools/delegate.ts` workflow tool, and every specialist sets
+`tool: false`. Do not give a specialist its own model tool back: eve runs a
+declared subagent's tool as a background task, so the orchestrator's turn ends
+on a "working" receipt. An MCP invocation then settles as `completed` with
+"I'll report back" and eve terminates the specialist, and the `/agent`
+workspace detaches and later shows the result as a raw-JSON "user" message.
+The specialist list lives once in `agent/lib/specialists.ts`;
+`tests/agent/specialist-delegation.test.ts` holds these invariants.
+
+The orchestrator uses `zai/glm-5.3-flash` ($0.08 per million input tokens,
+$0.25 per million output), low reasoning, a 1,000,000-token context window, and
+per-session limits of 36,000,000 input tokens, 600,000 output tokens, $3
+maximum token cost, and a seven-day timeout. Dynamic specialists use the same
+model and context window with separate limits of 12,000,000 input tokens,
+200,000 output tokens, $1 maximum token cost, and a 24-hour timeout. The model
+and its price live once in `lib/agent/model.ts`, the ceilings in
+`lib/agent/session-limits.ts`. The token ceilings are sized to cost just over
+the dollar ceiling at list price, so the dollar ceiling is what binds
+(`tests/agent/session-limits.test.ts`). A specialist or MCP invocation that
+reaches a ceiling fails outright rather than pausing, so keep specialist
+ceilings above a full multi-tool request.
 
 Use the agent through the feature-flagged `/agent` workspace and its
-authenticated API routes. Do not use the deprecated chatbot/MCP route for
-operations.
+authenticated API routes. The hand-written `(mcp)` route group that used to
+sit at `/api/mcp` is gone (#303): an external MCP client now connects to
+`agent/channels/mcp.ts` at `/eve/v1/mcp` and reaches this same orchestrator,
+so there is one tool catalogue and one set of domain rules rather than two.
+See [`docs/eve-mcp-endpoint.md`](./docs/eve-mcp-endpoint.md).
 
 ### Agent code cannot import Next.js-only packages
 
@@ -72,9 +185,8 @@ operations.
 application modules it imports by value — and leaves installed packages
 external for Node's own ESM loader. `@clerk/nextjs`, `next/headers`,
 `next/cache`, `next/server` and `next/navigation` publish extensionless
-relative imports that only a bundler resolves, `@clerk/mcp-tools` exports no
-entrypoint Node can resolve, and `server-only` throws on import outside a React
-bundler. A value import of any of them from `agent/`
+relative imports that only a bundler resolves, and `server-only` throws on
+import outside a React bundler. A value import of any of them from `agent/`
 fails the build. `build: { externalDependencies: [...] }` does not rescue it;
 that setting makes a package more external, never bundled. `import type` edges
 are erased before the bundler sees them and are safe.

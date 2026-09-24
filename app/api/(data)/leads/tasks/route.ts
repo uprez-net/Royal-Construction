@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 
+import prisma from "@/lib/prisma";
 import {
   LeadTaskRejectedError,
   createLeadTask,
   listCompletedTasks,
   listOpenTasks,
-} from "@/lib/data/lead-tasks";
+} from "@/lib/domain/leads/tasks";
 import {
   badRequestResponse,
   createLeadTaskSchema,
@@ -14,6 +15,7 @@ import {
   successResponse,
 } from "@/utils/validators";
 import { resolveActingUserId } from "@/lib/data/acting-user";
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
 
 /**
  * Open work by default; `?state=completed` for the history.
@@ -27,6 +29,11 @@ import { resolveActingUserId } from "@/lib/data/acting-user";
  */
 export async function GET(request: NextRequest) {
   try {
+    const guard = await requireInternalUser();
+    if (!guard.ok) {
+      return errorResponse(guard.error, { status: 403, code: "FORBIDDEN" });
+    }
+
     // Anything other than the two known values is a caller mistake. Silently
     // treating ?state=complete (or a typo) as "open" would hand back the wrong
     // list and look like data loss.
@@ -48,11 +55,11 @@ export async function GET(request: NextRequest) {
           "leadIds is not supported with state=completed",
         );
       }
-      return successResponse(await listCompletedTasks());
+      return successResponse(await listCompletedTasks(prisma));
     }
 
     return successResponse(
-      await listOpenTasks({ leadIds: parsedLeadIds.leadIds }),
+      await listOpenTasks(prisma, { leadIds: parsedLeadIds.leadIds }),
     );
   } catch (error) {
     console.error("/api/leads/tasks GET error", error);
@@ -65,20 +72,29 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await requireInternalUser();
+    if (!guard.ok) {
+      return errorResponse(guard.error, { status: 403, code: "FORBIDDEN" });
+    }
+
     const parsed = createLeadTaskSchema.safeParse(await request.json());
     if (!parsed.success) return badRequestResponse(parsed.error.message);
 
     const { leadId, type, dueDate, dueTime, notes } = parsed.data;
-    const task = await createLeadTask({
-      leadId,
-      type,
-      dueDate: new Date(dueDate),
-      dueTime,
-      notes,
-      // Stamped on the activity entry the task writes. lib/data/lead-tasks.ts
-      // cannot resolve this itself without breaking the eve agent bundle.
-      actingUserId: await resolveActingUserId(),
-    });
+    const task = await createLeadTask(
+      {
+        leadId,
+        type,
+        dueDate: new Date(dueDate),
+        dueTime,
+        notes,
+        // Stamped on the activity entry the task writes. The domain command
+        // takes the actor rather than resolving Clerk itself — that is what
+        // keeps it callable from Eve, the booking route and a cron.
+        actingUserId: await resolveActingUserId(),
+      },
+      prisma,
+    );
     return successResponse(task, { status: 201 });
   } catch (error) {
     // A rule the operator can satisfy — the lead is archived or closed — is a

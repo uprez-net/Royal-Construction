@@ -127,6 +127,11 @@ export function EmailCampaignModal({
     if (!selectedTemplate || emailTargets.length === 0) return;
     setSending(true);
 
+    // One id for this press of Send. It goes to the server with every
+    // recipient, so a retried batch or a second click cannot email the same
+    // lead twice from Royal's mailbox — the server records the intent per
+    // (run, recipient) and replays rather than re-sending.
+    const runId = crypto.randomUUID();
     let successCount = 0;
     const now = new Date();
 
@@ -175,6 +180,7 @@ export function EmailCampaignModal({
                 lead.email,
                 subject,
                 finalHtmlBody,
+                runId,
               );
 
               if (sent) {

@@ -244,7 +244,7 @@ export function parseContractParticulars(raw: unknown): ContractParticulars {
   return result.success ? result.data : EMPTY_CONTRACT_PARTICULARS;
 }
 
-function isContractParticularKey(
+export function isContractParticularKey(
   value: unknown,
 ): value is ContractParticularKey {
   return (
@@ -280,7 +280,7 @@ export function parseContractParticularOverrides(
 // Normalize for persistence: trim every value. Keeps the stored blob canonical
 // so a whitespace-only entry counts as blank everywhere downstream.
 export function normalizeContractParticulars(
-  particulars: ContractParticulars,
+  particulars: unknown,
 ): ContractParticulars {
   const out = { ...EMPTY_CONTRACT_PARTICULARS } as Record<string, string>;
   const source =

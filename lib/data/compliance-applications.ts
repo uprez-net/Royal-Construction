@@ -21,7 +21,7 @@ import {
   raiseComplianceAlert,
   resolveComplianceAlertBySystem,
 } from "@/lib/data/compliance-alerts";
-import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
+import { PORTAL_DOWNLOAD_ALERT } from "@/lib/domain/compliance/portal-certificates";
 import {
   ComplianceDomainError,
   requireComplianceAccess,

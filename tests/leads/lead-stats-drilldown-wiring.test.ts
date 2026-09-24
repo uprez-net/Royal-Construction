@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // getLeads rethrows a failed query since #250, and the stats drilldown chained
 // fetchLeads with .then().finally() and no catch: a failure became an unhandled

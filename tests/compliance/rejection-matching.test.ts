@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 
 import {
   comparableName,
   matchRejection,
   type RejectionCandidate,
-} from "@/lib/compliance/rejection-matching";
+} from "@/lib/domain/compliance/rejection-matching";
 
 /**
  * Landing an objection on the row it is about.

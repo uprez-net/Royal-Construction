@@ -1,16 +1,16 @@
 // Shared fixtures for the tender parity suites.
 //
-// NOT a *.test.ts file on purpose: the runner globs tests/*/*.test.ts, so this
-// module is imported rather than executed. It exists because the parity
+// NOT a *.test.ts file on purpose: the runner collects tests/**/*.test.ts, so
+// this module is imported rather than executed. It exists because the parity
 // assertions are split across two files — offer-tender-template-parity (pure
-// HTML, runs in CI) and offer-tender-print-parity (launches Chromium, excluded
-// from `test:unit`) — and both need the same owner/schedule configurations.
+// HTML, runs in CI) and offer-tender-print-parity (launches Chromium, in the
+// `print` project) — and both need the same owner/schedule configurations.
 // Keeping one copy stops the two suites drifting onto different fixtures and
 // quietly asserting against different documents.
 
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { buildTenderHtml } from "../../lib/offer/offer-tender-html";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { buildTenderHtml } from "@/lib/offer/offer-tender-html";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   createCompanyOwner,
   createIndividualOwner,
@@ -23,13 +23,13 @@ import {
   INITIAL_OFFER_JOB,
   type OfferInclusionEntry,
   type OfferOwner,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   INITIAL_TENDER_GATE,
   type OfferWorkspaceSnapshot,
-} from "../../lib/offer/workspace-persistence";
-import { EMPTY_OFFER_IMAGES } from "../../lib/offer/workspace-images";
+} from "@/lib/offer/workspace-persistence";
+import { EMPTY_OFFER_IMAGES } from "@/lib/offer/workspace-images";
 
 export function snapshotOf(
   owners: OfferOwner[],

@@ -4,6 +4,12 @@ import { Role } from "@prisma/client";
 import { getUserByClerkIdCached } from "@/lib/data/user";
 import prisma from "@/lib/prisma";
 import {
+  authorizeComplianceAccess,
+  authorizeComplianceDecision,
+} from "@/lib/domain/access/compliance";
+import { isDomainError } from "@/lib/domain/errors";
+import { userPrincipal } from "@/lib/domain/principal";
+import {
   errorResponse,
   forbiddenResponse,
   unauthorizedResponse,
@@ -91,44 +97,21 @@ export async function requireComplianceAccess(
   options: { requireEngagement?: boolean } = {},
 ) {
   const user = await requireUser();
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      id: true,
-      customerId: true,
-      siteManagerId: true,
-      location: true,
-      Lead: { select: { assignedId: true } },
-      certifierEngagement: { select: { id: true, status: true } },
-    },
-  });
-
-  if (!project) {
-    throw new ComplianceAccessError("Project not found", 404);
-  }
-
-  const canEditProject =
-    user.role === Role.ADMIN ||
-    project.siteManagerId === user.id ||
-    project.Lead.assignedId === user.id ||
-    (user.role === Role.CUSTOMER && user.customerId === project.customerId);
-
-  if (!canEditProject) {
+  try {
+    const { engagement, project } = await authorizeComplianceAccess(
+      userPrincipal(user),
+      projectId,
+      prisma,
+      options,
+    );
+    return { user, project, engagement };
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
     throw new ComplianceAccessError(
-      "You do not have access to this project's compliance file.",
-      403,
+      error.message,
+      error.status === 404 ? 404 : 403,
     );
   }
-
-  if (options.requireEngagement !== false && !project.certifierEngagement) {
-    throw new ComplianceAccessError(
-      "No certifier engagement has been started for this project.",
-      404,
-    );
-  }
-
-  return { user, project, engagement: project.certifierEngagement };
 }
 
 /**
@@ -144,22 +127,16 @@ export async function requireComplianceAdmin(
 ): Promise<ComplianceActor> {
   const user = await requireUser();
 
-  if (user.role !== Role.ADMIN) {
+  try {
+    await authorizeComplianceDecision(userPrincipal(user), projectId, prisma);
+    return user;
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
     throw new ComplianceAccessError(
-      "Only an admin can approve or reject compliance documents.",
-      403,
+      error.message,
+      error.status === 404 ? 404 : 403,
     );
   }
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { id: true },
-  });
-  if (!project) {
-    throw new ComplianceAccessError("Project not found", 404);
-  }
-
-  return user;
 }
 
 /**

@@ -26,6 +26,23 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
     ignoreIssue: [{ path: "**/node_modules/**/docusign-esign/**" }],
   },
+  // RFC 9728 puts the MCP endpoint's protected-resource metadata at
+  // /.well-known/oauth-protected-resource/eve/v1/mcp, but only /eve/v1/* is
+  // routed to the Eve agent (withEve's rewrite in dev, the generated Vercel
+  // service route in production), so Eve publishes the document one level
+  // inside that prefix instead -- see MCP_METADATA_PATH in
+  // agent/lib/mcp-auth-policy.ts. A compliant MCP client follows the
+  // resource_metadata URL in Eve's Bearer challenge and never needs this; it
+  // is here for a client that goes straight to the well-known path.
+  async redirects() {
+    return [
+      {
+        destination: "/eve/v1/mcp/.well-known/oauth-protected-resource",
+        permanent: true,
+        source: "/.well-known/oauth-protected-resource/eve/v1/mcp",
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

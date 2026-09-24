@@ -1,6 +1,6 @@
 import { CertifierEngagementStatus } from "@prisma/client";
 
-import { assessOverdueConditions } from "@/lib/compliance/overdue";
+import { assessOverdueConditions } from "@/lib/domain/compliance/overdue";
 import {
   raiseComplianceAlert,
   resolveComplianceAlertBySystem,

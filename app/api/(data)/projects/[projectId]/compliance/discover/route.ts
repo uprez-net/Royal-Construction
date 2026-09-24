@@ -10,6 +10,7 @@ import {
   complianceAccessResponse,
   requireComplianceAccess,
 } from "@/lib/compliance/access";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import prisma from "@/lib/prisma";
 import {
   errorResponse,
@@ -140,6 +141,8 @@ export async function POST(
   } catch (error) {
     const refusal = complianceAccessResponse(error);
     if (refusal) return refusal;
+    const domainRefusal = domainErrorResponse(error);
+    if (domainRefusal) return domainRefusal;
     console.error(
       `Discovery failed for ${documentType} on ${projectId}`,
       error,

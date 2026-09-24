@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   findInsuranceTriggerMilestoneId,
@@ -7,12 +7,12 @@ import {
   readInsuranceClaimDates,
   withInsuranceClaimDates,
   type MilestoneStageInfo,
-} from "../../lib/projects/insurance-claim-dates";
-import { projectExtractionSchema } from "../../lib/agent/projectExtraction-validators";
+} from "@/lib/projects/insurance-claim-dates";
+import { projectExtractionSchema } from "@/lib/agent/projectExtraction-validators";
 
 function milestone(
-  overrides: Partial<MilestoneStageInfo> &
-    Pick<MilestoneStageInfo, "id" | "order">,
+  overrides: Partial<MilestoneStageInfo>
+    & Pick<MilestoneStageInfo, "id" | "order">,
 ): MilestoneStageInfo {
   return {
     parentId: null,

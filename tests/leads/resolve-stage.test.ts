@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import {
-  PIPELINE_STAGES,
-  closeDatePatch,
-} from "../../lib/leads/pipeline-stages";
-import { resolveLeadStage } from "../../lib/leads/resolve-stage";
+import { PIPELINE_STAGES, closeDatePatch } from "@/lib/leads/pipeline-stages";
+import { resolveLeadStage } from "@/lib/leads/resolve-stage";
 
 test("nothing to say means nothing is written", () => {
   assert.equal(resolveLeadStage({ currentStage: "QUALIFIED" }), undefined);
@@ -146,12 +143,12 @@ test("the resolved stage and the close-date stamp always agree", () => {
 test("Discovery sits between Contacted and Qualified", () => {
   // The whole advance rule reads off these numbers.
   assert.ok(
-    PIPELINE_STAGES.CONTACTED.probability <
-      PIPELINE_STAGES.DISCOVERY.probability,
+    PIPELINE_STAGES.CONTACTED.probability
+      < PIPELINE_STAGES.DISCOVERY.probability,
   );
   assert.ok(
-    PIPELINE_STAGES.DISCOVERY.probability <
-      PIPELINE_STAGES.QUALIFIED.probability,
+    PIPELINE_STAGES.DISCOVERY.probability
+      < PIPELINE_STAGES.QUALIFIED.probability,
   );
   assert.equal(PIPELINE_STAGES.DISCOVERY.outcome, "OPEN");
 });

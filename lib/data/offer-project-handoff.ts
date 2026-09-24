@@ -1,13 +1,11 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { syncLeadStageForOffer } from "@/lib/data/sync-lead-stage";
 import { revalidateTag } from "next/cache";
-import { EnvelopeStatus, OfferStatus } from "@prisma/client";
+import { EnvelopeStatus } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CACHE_PROFILES } from "@/types/cache";
 import { getUserByClerkId } from "@/lib/data/user";
-import { assertCanAccessLead } from "@/lib/offer/access";
 import { createProjectWithLead } from "@/lib/data/projectsWrite";
 import { archiveExecuted } from "@/lib/docusign/archive-executed";
 import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
@@ -32,6 +30,18 @@ import type {
   ProjectRequirementsPayload,
   ProjectSourceDocumentReference,
 } from "@/types/project-flow";
+import {
+  claimProjectHandoff,
+  createHandoffFile,
+  deleteHandoffFiles,
+  findCommittedHandoffProject,
+  prepareProjectHandoff,
+  recordProjectHandoff,
+  revertProjectHandoffClaim,
+  setHandoffLeadEmail,
+} from "@/lib/domain/offers/project-handoff";
+import { userPrincipal } from "@/lib/domain/principal";
+import { isDomainError } from "@/lib/domain/errors";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -66,84 +76,15 @@ export async function createProjectFromOffer(input: {
     };
   }
 
-  const offer = await prisma.offer.findUnique({
-    where: { id: input.offerId },
-    select: {
-      id: true,
-      leadId: true,
-      baseReference: true,
-      revisionNumber: true,
-      offerStatus: true,
-      workspaceState: true,
-      agreedSnapshot: true,
-      // Each document's latest-sent envelope: the one the Connect webhook treats
-      // as current. An older completed envelope was recalled or replaced and
-      // is never filed as the executed document.
-      tender: {
-        select: {
-          id: true,
-          executedPdfUrl: true,
-          documentData: true,
-          envelopes: {
-            orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
-            take: 1,
-            select: { docusignId: true, status: true },
-          },
-        },
-      },
-      contract: {
-        select: {
-          id: true,
-          executedPdfUrl: true,
-          documentData: true,
-          envelopes: {
-            orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
-            take: 1,
-            select: { docusignId: true, status: true },
-          },
-        },
-      },
-      lead: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          project: { select: { id: true } },
-        },
-      },
-    },
-  });
-  if (!offer || !offer.lead) {
-    return { ok: false, error: "Offer or its lead not found." };
-  }
+  const principal = userPrincipal(actor);
+  let prepared: Awaited<ReturnType<typeof prepareProjectHandoff>>;
   try {
-    await assertCanAccessLead(actor, offer.leadId);
-  } catch {
-    return { ok: false, error: "You do not have access to this offer." };
+    prepared = await prepareProjectHandoff(principal, input.offerId, prisma);
+  } catch (error) {
+    if (isDomainError(error)) return { error: error.message, ok: false };
+    throw error;
   }
-  if (offer.offerStatus === OfferStatus.PROJECT) {
-    return {
-      ok: false,
-      error: "A project has already been created from this offer.",
-    };
-  }
-  if (offer.offerStatus !== OfferStatus.CONTRACT_SIGNED) {
-    return {
-      ok: false,
-      error: `The project can only be created once the Contract is signed (current status: ${offer.offerStatus}).`,
-    };
-  }
-  if (offer.lead.project) {
-    return {
-      ok: false,
-      error: `Lead #${offer.lead.id} already has a project (${offer.lead.project.id}).`,
-    };
-  }
-  const state = offer.agreedSnapshot ?? offer.workspaceState;
-  if (!state) {
-    return { ok: false, error: "No agreed offer snapshot found." };
-  }
+  const { offer, state } = prepared;
 
   // Both executed PDFs must be on file before a project can be created, rather
   // than creating a project with empty documents (issue #90). The Connect
@@ -174,11 +115,7 @@ export async function createProjectFromOffer(input: {
   // conditional write so two concurrent calls can't both pass the guards above
   // and each create a project/files. Only the caller that wins the claim
   // proceeds; any failure below rolls the status back so it can be retried.
-  const claim = await prisma.offer.updateMany({
-    where: { id: offer.id, offerStatus: OfferStatus.CONTRACT_SIGNED },
-    data: { offerStatus: OfferStatus.PROJECT },
-  });
-  if (claim.count !== 1) {
+  if (!(await claimProjectHandoff(offer.id, prisma))) {
     return {
       ok: false,
       error: "This offer is already being handed off to a project.",
@@ -189,12 +126,7 @@ export async function createProjectFromOffer(input: {
   // is the backstop for an offer that reached PROJECT without the webhook ever
   // firing, which is exactly how leads ended up frozen at "Meeting Scheduled"
   // while their project was already running.
-  await syncLeadStageForOffer(offer.id);
-  const revertClaim = () =>
-    prisma.offer.updateMany({
-      where: { id: offer.id, offerStatus: OfferStatus.PROJECT },
-      data: { offerStatus: OfferStatus.CONTRACT_SIGNED },
-    });
+  const revertClaim = () => revertProjectHandoffClaim(offer.id, prisma);
 
   // Executed-PDF File rows are created before createProjectWithLead (it needs
   // their ids to re-parent them onto the project), so they live OUTSIDE that
@@ -219,7 +151,7 @@ export async function createProjectFromOffer(input: {
     }
     if (createdFileIds.length > 0) {
       try {
-        await prisma.file.deleteMany({ where: { id: { in: createdFileIds } } });
+        await deleteHandoffFiles(createdFileIds, prisma);
       } catch (deleteError) {
         console.error("[offer] handoff: file cleanup failed:", deleteError);
         failures.push(
@@ -269,10 +201,7 @@ export async function createProjectFromOffer(input: {
     const jobEmail = job.clientEmail.trim();
     if (!EMAIL_RE.test(leadEmail)) {
       if (EMAIL_RE.test(jobEmail)) {
-        await prisma.lead.update({
-          where: { id: offer.lead.id },
-          data: { email: jobEmail },
-        });
+        await setHandoffLeadEmail(offer.lead.id, jobEmail, prisma);
         warnings.push(
           `Lead email was blank — set to ${jobEmail} from the offer.`,
         );
@@ -305,16 +234,11 @@ export async function createProjectFromOffer(input: {
         );
       }
       const fileName = `Executed-${kind === "tender" ? "Tender" : "Contract"}-${reference}.pdf`;
-      const file = await prisma.file.create({
-        data: {
-          leadId: offer.lead!.id,
-          filename: fileName,
-          fileType: "application/pdf",
-          filesize: 0,
-          url,
-          uploadedBy: actor.id,
-        },
-      });
+      const file = await createHandoffFile(
+        principal,
+        { fileName, leadId: offer.lead!.id, url },
+        prisma,
+      );
       createdFileIds.push(file.id);
       return { fileId: file.id, fileName, url, kind };
     };
@@ -434,10 +358,7 @@ export async function createProjectFromOffer(input: {
       null;
     let verificationFailed = false;
     try {
-      committed = await prisma.lead.findUnique({
-        where: { id: offer.lead.id },
-        select: { project: { select: { id: true, name: true } } },
-      });
+      committed = await findCommittedHandoffProject(offer.lead.id, prisma);
     } catch (verifyError) {
       verificationFailed = true;
       console.error(
@@ -502,19 +423,11 @@ export async function createProjectFromOffer(input: {
   // Record the PROJECT status event (the status itself was flipped by the atomic
   // claim). BEST-EFFORT: a failure here must NOT roll back a real project (finding
   // #3), so log and continue — the offer stays PROJECT with its project intact.
-  await prisma.offerStatusEvent
-    .create({
-      data: {
-        offerId: offer.id,
-        fromStatus: OfferStatus.CONTRACT_SIGNED,
-        toStatus: OfferStatus.PROJECT,
-        actorId: actor.id,
-        note: `Project ${handoff.projectId} created from executed contract`,
-      },
-    })
-    .catch((error) =>
-      console.error("[offer] handoff audit event failed:", error),
-    );
+  await recordProjectHandoff(
+    principal,
+    { offerId: offer.id, projectId: handoff.projectId },
+    prisma,
+  );
 
   // Best-effort cache invalidation — also outside the guarded block so it can
   // never trigger a revert of the project that was just created.

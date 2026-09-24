@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { domainErrorResponse } from "@/lib/http/domain-response";
 import { NextRequest } from "next/server";
 import { getHbcfBreachForProject } from "@/lib/data/insurance";
 import {
@@ -29,6 +30,9 @@ export async function GET(request: NextRequest) {
   try {
     return successResponse(await getHbcfBreachForProject(projectId));
   } catch (error) {
+    const refusal = domainErrorResponse(error);
+    if (refusal) return refusal;
+
     console.error("/api/insurance/hbcf-project-breach GET error", error);
     return errorResponse("Failed to load HBCF capacity check", {
       status: 500,

@@ -1,24 +1,26 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   PROJECT_STAFF_ROLES,
   canAttachToProject,
-} from "../../lib/projects/project-access";
+} from "@/lib/projects/project-access";
 
 // saveFile writes a File row for whatever user, lead, project and milestone it
 // is handed, so each user-facing caller has to derive the user and check the
-// ids itself. /api/upload checked a lead but not a project or milestone, and
-// the MCP upload_file tool checked neither and stored the token's Clerk id as
-// File.uploadedBy, a column that references User.id. Both routes load Clerk and
-// Prisma, so no test can import them; this reads the source.
+// ids itself. /api/upload checked a lead but not a project or milestone.
+//
+// The MCP upload_file tool used to be the second caller here: it checked
+// neither and stored the token's Clerk id as File.uploadedBy, a column that
+// references User.id. That route was deleted with the (mcp) group in #303 and
+// the Eve MCP endpoint takes no uploads, so only /api/upload is left. It loads
+// Clerk and Prisma, so no test can import it; this reads the source.
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 const upload = read("app/api/upload/route.ts");
-const mcp = read("app/(mcp)/api/mcp/route.ts");
 
 function between(text: string, from: string, to: string): string {
   const start = text.indexOf(from);
@@ -71,10 +73,15 @@ test("a customer may attach files only to their own project", () => {
 });
 
 test("the upload staff roles are the roles that read every lead", () => {
-  const access = read("lib/offer/access.ts");
-  const declared = /const INTERNAL_ROLES = new Set<Role>\(\[([^\]]*)\]\)/.exec(
-    access,
-  );
+  // These were two hand-kept lists, and this test held them in step. They are
+  // now one list: PROJECT_STAFF_ROLES is INTERNAL_ROLES from
+  // lib/domain/principal.ts. The test stays to pin the membership itself —
+  // adding a role here silently widens who may upload to any project.
+  const principal = read("lib/domain/principal.ts");
+  const declared =
+    /export const INTERNAL_ROLES: readonly Role\[\] = \[([^\]]*)\]/.exec(
+      principal,
+    );
   assert.ok(declared, "INTERNAL_ROLES moved; point this test at it");
   const internal = declared[1]
     .split(",")
@@ -82,6 +89,7 @@ test("the upload staff roles are the roles that read every lead", () => {
     .filter(Boolean)
     .sort();
   assert.deepEqual([...PROJECT_STAFF_ROLES].sort(), internal);
+  assert.deepEqual(internal, ["ADMIN", "GUEST", "SITE_MANAGER"]);
 });
 
 test("the upload route checks the lead and the project before issuing a token", () => {
@@ -110,16 +118,4 @@ test("the completed upload is recorded as the session's user", () => {
     "return NextResponse.json",
   );
   assert.match(after, /saveFile\(\{\s*userId: user\.id,/);
-});
-
-test("MCP upload_file resolves the User row and checks the project before storing", () => {
-  const tool = between(mcp, '"upload_file"', "serverInfo");
-  ordered(
-    tool,
-    "getUserByClerkIdCached(clerkId)",
-    "assertCanAttachToProject(user, { projectId, milestoneId })",
-    "await put(",
-    "await saveFile(",
-  );
-  assert.match(tool, /saveFile\(\{\s*userId: user\.id,/);
 });

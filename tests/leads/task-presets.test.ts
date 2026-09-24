@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   LEAD_TASK_DUE_PRESETS,
   LEAD_TASK_TYPES,
   dueDateFromPreset,
   taskTypeFromNote,
-} from "../../lib/leads/task-presets";
+} from "@/lib/leads/task-presets";
 import {
   MAX_TASK_LEAD_IDS,
   createLeadTaskSchema,
   parseLeadIdsParam,
-} from "../../utils/validators/lead-task";
-import { openTasksRequest } from "../../lib/leads/task-service";
-import { stageMap } from "../../types/lead";
-import { STAGE_STYLES } from "../../lib/leads/lead-helpers";
+} from "@/utils/validators/lead-task";
+import { openTasksRequest } from "@/lib/leads/task-service";
+import { stageMap } from "@/types/lead";
+import { STAGE_STYLES } from "@/lib/leads/lead-helpers";
 
 test("every note recorded on production classifies", () => {
   // The real strings, verbatim from the production followupNotes column.

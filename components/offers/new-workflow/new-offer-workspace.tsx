@@ -932,6 +932,7 @@ export function NewOfferWorkspace({
   // not settle it, so autosave halts rather than reload in a loop.
   const lockedReloadRef = useRef(false);
   const autosaveHaltedRef = useRef(false);
+  const proposalSendInFlightRef = useRef(false);
   // Tracks the last-persisted particulars JSON so the contract-draft save effect
   // fires only on a real change (and never re-saves what we just hydrated).
   const lastSavedParticularsRef = useRef<string | null>(null);
@@ -1755,6 +1756,12 @@ export function NewOfferWorkspace({
         setSendError("Save the offer against a lead before sending.");
         return;
       }
+      // React state does not update synchronously, so the button can dispatch a
+      // second click before `sending` disables it. The ref closes that local
+      // window; the attempt id closes transport retries on the server.
+      if (proposalSendInFlightRef.current) return;
+      proposalSendInFlightRef.current = true;
+      const sendAttemptId = crypto.randomUUID();
       setSending(true);
       setSendError(null);
       setSentInfo(null);
@@ -1778,6 +1785,7 @@ export function NewOfferWorkspace({
             offerId,
             recipientEmail,
             secondaryRecipientEmail: secondaryRecipientEmail ?? null,
+            sendAttemptId,
           });
           if (result.ok) {
             setStatus("sent");
@@ -1822,6 +1830,7 @@ export function NewOfferWorkspace({
             // Reload failed too — leave the UI as-is.
           }
         } finally {
+          proposalSendInFlightRef.current = false;
           setSending(false);
         }
       })();
@@ -1855,6 +1864,9 @@ export function NewOfferWorkspace({
         if (result.ok) {
           setStatus("offer_sent");
         } else {
+          if (result.status === OfferStatus.OFFER_SENT) {
+            setStatus("offer_sent");
+          }
           setOfferSignError(result.error);
         }
       } catch (error) {
@@ -1897,6 +1909,9 @@ export function NewOfferWorkspace({
         if (result.ok) {
           setStatus("tender_sent");
         } else {
+          if (result.status === OfferStatus.TENDER_SENT) {
+            setStatus("tender_sent");
+          }
           setTenderSendError(result.error);
         }
       } catch (error) {
@@ -1945,6 +1960,10 @@ export function NewOfferWorkspace({
           setContractTerms(null);
           setStatus("contract_sent");
         } else {
+          if (result.status === OfferStatus.CONTRACT_SENT) {
+            setContractTerms(null);
+            setStatus("contract_sent");
+          }
           setContractSendError(result.error);
         }
       } catch (error) {

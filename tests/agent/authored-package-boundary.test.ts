@@ -3,8 +3,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, extname, join, relative, resolve } from "node:path";
-import { test } from "node:test";
 import ts from "typescript";
+import { test } from "vitest";
+
+import { REPO_ROOT } from "../support/repo-root";
 
 // `eve build` compiles authored code -- everything under agent/, plus the
 // application modules it imports -- into one bundle, but leaves installed
@@ -39,7 +41,7 @@ import ts from "typescript";
 // in under a second, locally and on stacked branches that get no CI, and to
 // name the import chain that caused it.
 
-const ROOT = join(__dirname, "..", "..");
+const ROOT = REPO_ROOT;
 const AGENT_DIR = join(ROOT, "agent");
 
 const CODE_EXTENSIONS = [
@@ -108,25 +110,25 @@ function valueSpecifiers(file: string): string[] {
 
   const visit = (node: ts.Node): void => {
     if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      ts.isImportDeclaration(node)
+      && ts.isStringLiteral(node.moduleSpecifier)
     ) {
       if (importsValues(node.importClause)) {
         specifiers.push(node.moduleSpecifier.text);
       }
     } else if (
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      ts.isExportDeclaration(node)
+      && node.moduleSpecifier
+      && ts.isStringLiteral(node.moduleSpecifier)
     ) {
       if (exportsValues(node)) specifiers.push(node.moduleSpecifier.text);
     } else if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require")) &&
-      node.arguments.length > 0 &&
-      ts.isStringLiteral(node.arguments[0])
+      ts.isCallExpression(node)
+      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+        || (ts.isIdentifier(node.expression)
+          && node.expression.text === "require"))
+      && node.arguments.length > 0
+      && ts.isStringLiteral(node.arguments[0])
     ) {
       specifiers.push(node.arguments[0].text);
     }
@@ -171,9 +173,9 @@ function collectReachable(): Reachable {
       if (isBuiltin(specifier) || specifier.startsWith("node:")) continue;
 
       const isPathLike =
-        specifier.startsWith("@/") ||
-        specifier.startsWith(".") ||
-        specifier.startsWith("/");
+        specifier.startsWith("@/")
+        || specifier.startsWith(".")
+        || specifier.startsWith("/");
 
       if (!isPathLike) {
         if (!packages.has(specifier)) {
@@ -352,9 +354,11 @@ function nextOnlyReason(specifier: string): string | null {
     return "a React bundler marker that throws when Node imports it directly";
   }
   if (
-    specifier === "@clerk/mcp-tools" ||
-    specifier.startsWith("@clerk/mcp-tools/")
+    specifier === "@clerk/mcp-tools"
+    || specifier.startsWith("@clerk/mcp-tools/")
   ) {
+    // Uninstalled with the (mcp) route group in #303. Kept because the
+    // failure it causes is confusing and reinstalling it is one command.
     return "has no exported entrypoint; Node answers ERR_PACKAGE_PATH_NOT_EXPORTED";
   }
   return null;
@@ -372,16 +376,16 @@ test("authored agent code never reaches a Next.js-only package", () => {
   assert.deepEqual(
     offenders.map((entry) => entry.specifier),
     [],
-    `Authored agent code value-imports a Next.js-only package, which breaks \`eve build\`:\n` +
-      offenders
+    `Authored agent code value-imports a Next.js-only package, which breaks \`eve build\`:\n`
+      + offenders
         .map(
           (entry) =>
             `  ${entry.specifier} -- ${entry.reason}\n    ${entry.chain.join("\n    -> ")}`,
         )
-        .join("\n") +
-      `\nAgent tools get the acting user from ctx.session.auth.current` +
-      ` (requireCurrentAgentActor); request-scoped Clerk and Next helpers belong in app/ and lib/.` +
-      ` Use \`import type\` if you only need the types.`,
+        .join("\n")
+      + `\nAgent tools get the acting user from ctx.session.auth.current`
+      + ` (requireCurrentAgentActor); request-scoped Clerk and Next helpers belong in app/ and lib/.`
+      + ` Use \`import type\` if you only need the types.`,
   );
 });
 
@@ -392,9 +396,9 @@ test("every package reachable from authored agent code loads under Node's ESM lo
   assert.deepEqual(
     failures,
     [],
-    `\`eve build\` leaves installed packages external and loads them with Node's ESM loader.\n` +
-      `These packages are reachable by value from agent/ but Node cannot load them:\n` +
-      failures
+    `\`eve build\` leaves installed packages external and loads them with Node's ESM loader.\n`
+      + `These packages are reachable by value from agent/ but Node cannot load them:\n`
+      + failures
         .map(
           (failure) =>
             `  ${failure.specifier}: ${failure.detail}\n    ${(reachable.packages.get(failure.specifier) ?? []).join("\n    -> ")}`,

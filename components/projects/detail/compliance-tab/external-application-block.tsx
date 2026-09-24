@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EXTERNAL_APPLICATION_COPY } from "@/constants/complianceDocuments";
-import { PORTAL_DOWNLOAD_ALERT } from "@/lib/compliance/portal-certificates";
+import { PORTAL_DOWNLOAD_ALERT } from "@/lib/domain/compliance/portal-certificates";
 import { businessDaysSince } from "@/lib/dates/business-days";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {

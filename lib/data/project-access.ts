@@ -2,9 +2,12 @@ import "server-only";
 
 import prisma from "@/lib/prisma";
 import {
-  canAttachToProject,
-  type ProjectUploader,
-} from "@/lib/projects/project-access";
+  type FileUploader as ProjectUploader,
+  authorizeFileAttachment,
+} from "@/lib/domain/access/projects";
+import { DomainNotFoundError, isDomainError } from "@/lib/domain/errors";
+
+export type { ProjectUploader };
 
 export class ProjectAccessError extends Error {
   constructor(
@@ -19,42 +22,21 @@ export class ProjectAccessError extends Error {
 /**
  * Assert `user` may attach a file to a project, or to one of its milestones.
  *
- * Both ids arrive from outside (an upload's client payload, an MCP tool call),
- * so a milestone is resolved to the project it actually belongs to rather than
- * trusted to belong to the project named alongside it.
+ * The rule is lib/domain/access/projects.ts#authorizeFileAttachment, which the
+ * upload route and the MCP tool now share. This wrapper keeps the
+ * ProjectAccessError shape the route handlers already map to a status.
  */
 export async function assertCanAttachToProject(
   user: ProjectUploader,
   target: { projectId?: string | null; milestoneId?: string | null },
 ): Promise<{ projectId: string }> {
-  let projectId = target.projectId?.trim() || null;
-  const milestoneId = target.milestoneId?.trim() || null;
-
-  if (milestoneId) {
-    const milestone = await prisma.milestone.findUnique({
-      where: { id: milestoneId },
-      select: { projectId: true },
-    });
-    if (!milestone || (projectId && milestone.projectId !== projectId)) {
-      throw new ProjectAccessError("Milestone not found", 404);
-    }
-    projectId = milestone.projectId;
+  try {
+    return await authorizeFileAttachment(user, target, prisma);
+  } catch (error) {
+    if (!isDomainError(error)) throw error;
+    throw new ProjectAccessError(
+      error.message,
+      error instanceof DomainNotFoundError ? 404 : 403,
+    );
   }
-
-  if (!projectId) {
-    throw new ProjectAccessError("Project not found", 404);
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { customerId: true },
-  });
-  if (!project) {
-    throw new ProjectAccessError("Project not found", 404);
-  }
-  if (!canAttachToProject(user, project)) {
-    throw new ProjectAccessError("You do not have access to this project", 403);
-  }
-
-  return { projectId };
 }

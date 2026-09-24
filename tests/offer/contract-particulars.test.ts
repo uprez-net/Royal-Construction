@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   CONTRACT_PARTICULAR_FIELDS,
@@ -13,7 +13,7 @@ import {
   reconcileContractParticularDefaults,
   serializeContractParticulars,
   type ContractParticulars,
-} from "../../lib/offer/contract-particulars";
+} from "@/lib/offer/contract-particulars";
 
 test("parseContractParticulars returns the empty set for null/garbage", () => {
   assert.deepEqual(parseContractParticulars(null), EMPTY_CONTRACT_PARTICULARS);

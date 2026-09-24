@@ -8,7 +8,7 @@ import {
   certificateLodgementBlockedReason,
   hasCertificate,
   type CertificateApplicationKind,
-} from "@/lib/compliance/portal-certificates";
+} from "@/lib/domain/compliance/portal-certificates";
 import type {
   CertifierEngagementDetail,
   ComplianceDocumentWithFiles,

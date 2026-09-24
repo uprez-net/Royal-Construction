@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { formatMoneyDelta } from "../../components/offers/new-workflow/offer-workspace-format";
-import { buildOfferSummaryFigures } from "../../lib/offer/summary-strip";
+import { formatMoneyDelta } from "@/components/offers/new-workflow/offer-workspace-format";
+import { buildOfferSummaryFigures } from "@/lib/offer/summary-strip";
 import {
   calculateOfferCustomerPrice,
   calculateOfferWorkspacePricing,
   splitContractValueByGst,
   type OfferWorkspacePricingSettings,
-} from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-pricing";
 
 // Pins the summary strip to the price going on the offer. The strip printed the
 // cost build-up's GST and per-m² beside an overridden contract value, so a

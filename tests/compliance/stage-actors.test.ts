@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 
 import {
   ComplianceApprovalDecision,
@@ -10,13 +9,14 @@ import {
   ComplianceOutreachStatus,
   CompliancePartyType,
 } from "@prisma/client";
+import { test } from "vitest";
 
-import { PARTY_LABEL } from "../../constants/complianceDocuments";
+import { PARTY_LABEL } from "@/constants/complianceDocuments";
 import {
   complianceStageFlow,
   type ComplianceStageId,
-} from "../../lib/compliance/stage-flow";
-import type { CertifierEngagementDetail } from "../../types/compliance";
+} from "@/lib/domain/compliance/stage-flow";
+import type { CertifierEngagementDetail } from "@/types/compliance";
 
 /**
  * Who each node says is behind it.

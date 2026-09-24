@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { lockedSnapshotChanges } from "../../lib/offer/offer-editability";
-import { buildProposalInput } from "../../lib/offer/offer-proposal-input";
-import { INITIAL_AREA_CALCULATOR } from "../../lib/offer/workspace-area";
+import { lockedSnapshotChanges } from "@/lib/offer/offer-editability";
+import { buildProposalInput } from "@/lib/offer/offer-proposal-input";
+import { INITIAL_AREA_CALCULATOR } from "@/lib/offer/workspace-area";
 import {
   DEFAULT_WORKSPACE_PRICING_SETTINGS,
   INITIAL_ALLOWANCES,
@@ -14,12 +14,12 @@ import {
   INITIAL_OFFER_DRAFT,
   INITIAL_OFFER_JOB,
   type OfferWorkspaceStatus,
-} from "../../lib/offer/workspace-model";
-import { INITIAL_PAYMENT_SCHEDULE } from "../../lib/offer/workspace-payment-schedule";
+} from "@/lib/offer/workspace-model";
+import { INITIAL_PAYMENT_SCHEDULE } from "@/lib/offer/workspace-payment-schedule";
 import {
   reverseHbcfTotalContractValue,
   withDerivedHbcfPremium,
-} from "../../lib/offer/workspace-pricing";
+} from "@/lib/offer/workspace-pricing";
 import {
   CURRENT_CALC_VERSION,
   INITIAL_TENDER_GATE,
@@ -32,7 +32,7 @@ import {
   validatePersistedWorkspace,
   type OfferWorkspaceSnapshot,
   type PersistedOfferWorkspaceState,
-} from "../../lib/offer/workspace-persistence";
+} from "@/lib/offer/workspace-persistence";
 
 // saveOfferWorkspace wrote the client's whole snapshot at every editable status.
 // A tab still showing an offer as pending after another tab had sent it could
@@ -458,15 +458,24 @@ test("a save that would write a row the read parse refuses is invalid", () => {
   assert.equal(validatePersistedWorkspace(persisted).ok, false);
 });
 
-test("the save action writes the plan and prices the money columns from it", () => {
-  // saveOfferWorkspace is "use server" and loads Prisma, so no test can call it.
+test("the save writes the plan and prices the money columns from it", () => {
   // Writing the tab's own copy instead of the plan is what moved a legacy
   // offer's price, and every test above would stay green.
+  //
+  // The save moved to lib/domain/offers/workspace-save.ts (issue #301), where
+  // the app's autosave and Eve's patch tool both call it. That module is
+  // Node-safe, so unlike the old "use server" one a test can import and run it
+  // — see tests/architecture/domain-offers.test.ts, which drives it against a
+  // recording database. This stays as the cheap structural pin.
+  // Line endings are normalised because the scan below looks for a newline,
+  // and a Windows checkout with core.autocrlf=true writes CRLF — which makes
+  // the scan find nothing and fails the test for a reason that has nothing to
+  // do with the save.
   const text = readFileSync(
-    join(process.cwd(), "lib/data/offer-workspace.ts"),
+    join(process.cwd(), "lib/domain/offers/workspace-save.ts"),
     "utf8",
-  );
-  const start = text.indexOf("async function saveOfferWorkspace(");
+  ).replace(/\r\n/g, "\n");
+  const start = text.indexOf("export async function saveOfferWorkspace(");
   assert.ok(start >= 0, "saveOfferWorkspace not found");
   const end = text.indexOf("\n}\n", start);
   // Without this, a missing terminator slices to -1 — the whole rest of the
@@ -475,7 +484,7 @@ test("the save action writes the plan and prices the money columns from it", () 
   const body = text.slice(start, end);
 
   assert.match(body, /planWorkspaceSave\(/);
-  assert.match(body, /workspaceState:\s*saved\b/);
+  assert.match(body, /workspaceState:\s*plan\.state\b/);
   assert.match(body, /buildProposalInput\([^)]*\bsavedSnapshot\b/);
   assert.doesNotMatch(body, /input\.snapshot\.workspacePricingSettings/);
 });

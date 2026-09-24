@@ -33,9 +33,9 @@ export async function GET(
   if (!file)
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   const canAccess =
-    file.uploadedBy === user.id ||
-    user.role === "ADMIN" ||
-    file.project?.siteManagerId === user.id;
+    file.uploadedBy === user.id
+    || user.role === "ADMIN"
+    || file.project?.siteManagerId === user.id;
   if (!canAccess)
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const blob = await get(file.storagePath ?? file.url, {

@@ -3,23 +3,49 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEveAgent } from "eve/react";
-import type { AgentAnnotation } from "@/components/agent/agent-annotations";
-import type { AgentInputResponse } from "@/components/agent/agent-message";
+import type { MessageStreamEvent } from "eve/client";
+import type { AgentInputResponse } from "@/components/agent/agent-approval";
 import { AgentComposer } from "@/components/agent/agent-composer";
+import { AgentHeader } from "@/components/agent/agent-header";
 import { AgentHistory } from "@/components/agent/agent-history";
-import type { AgentSubagentActivityRecord } from "@/components/agent/agent-subagent-activity";
+import { AgentInspector } from "@/components/agent/agent-inspector";
+import type { AgentAnnotation } from "@/components/agent/agent-mentions";
+import {
+  agentTranscriptReducer,
+  isTaskNotification,
+  type AgentTranscriptData,
+} from "@/components/agent/agent-reducer";
+import type { AgentResultAction } from "@/components/agent/agent-result";
 import { AgentTranscript } from "@/components/agent/agent-transcript";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import type {
   AgentSessionListItem,
   AgentWorkspaceData,
 } from "@/lib/data/agent-sessions";
 
+export type AgentUploadedFile = {
+  agentUrl: string | null;
+  filename: string;
+  fileType: string;
+  url: string;
+};
+
 export function AgentWorkspace({
   initialAnnotationsByTurn,
+  initialEvents,
   initialSessions,
   selectedSessionId,
 }: {
   initialAnnotationsByTurn: AgentWorkspaceData["selectedAnnotationsByTurn"];
+  initialEvents: readonly unknown[];
   initialSessions: AgentSessionListItem[];
   selectedSessionId: string | null;
 }) {
@@ -28,41 +54,41 @@ export function AgentWorkspace({
   const [sendError, setSendError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [annotations, setAnnotations] = useState<AgentAnnotation[]>([]);
-  const [annotationResults, setAnnotationResults] = useState<AgentAnnotation[]>(
-    [],
-  );
   const [messageAnnotations, setMessageAnnotations] = useState<
     Record<string, AgentAnnotation[]>
-  >({});
+  >(() => hydrateAnnotations(initialAnnotationsByTurn));
   const [pendingMessageAnnotations, setPendingMessageAnnotations] = useState<
     AgentAnnotation[] | null
   >(null);
-  const [subagentActivities, setSubagentActivities] = useState<
-    Record<string, AgentSubagentActivityRecord>
-  >({});
-  const [hiddenMessageIds, setHiddenMessageIds] = useState<
-    Record<string, true>
-  >({});
   const [forkContext, setForkContext] = useState<string | null>(() =>
     typeof window === "undefined"
       ? null
       : sessionStorage.getItem("rc-agent-fork-context"),
   );
   const [sessions, setSessions] = useState(initialSessions);
-  const [historyOpen, setHistoryOpen] = useState(true);
+  // Rails are the wide-screen panes; `sheet` is the narrow-screen drawer. Kept
+  // apart so a phone never mounts a drawer just because a rail defaults open.
+  const [rails, setRails] = useState({ history: true, inspector: true });
+  const [sheet, setSheet] = useState<"history" | "inspector" | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pendingMessageAnnotationsRef = useRef<AgentAnnotation[] | null>(null);
   const pendingUserMessagesRef = useRef(0);
-  const subagentActivitiesRef = useRef<
-    Record<string, AgentSubagentActivityRecord>
-  >({});
+  /** The failure eve reported for the submission in flight, if any. */
+  const lastAgentErrorRef = useRef<Error | null>(null);
   const activeSessionIdRef = useRef(selectedSessionId);
   const sessionPathUpdated = useRef(Boolean(selectedSessionId));
   const stickToBottomRef = useRef(true);
+  const [reducer] = useState(agentTranscriptReducer);
+  // Read once, when the hook builds its store. Keeping the identity stable
+  // stops a re-render from discarding the projection mid-turn.
+  const [hydratedEvents] = useState(
+    () => initialEvents as readonly MessageStreamEvent[],
+  );
 
   const onSessionChange = useCallback(
     (session: { sessionId: string; streamIndex: number } | undefined) => {
@@ -88,7 +114,8 @@ export function AgentWorkspace({
       });
       if (!sessionPathUpdated.current) {
         sessionPathUpdated.current = true;
-        // The session is returned before its first hook write. Change only the address bar so the active Eve store is not remounted into a 404.
+        // The session is returned before its first hook write. Change only the
+        // address bar so the active Eve store is not remounted into a 404.
         window.history.replaceState(
           null,
           "",
@@ -99,147 +126,68 @@ export function AgentWorkspace({
     [],
   );
 
-  const updateSubagentActivities = useCallback(
-    (
-      update: (
-        current: Record<string, AgentSubagentActivityRecord>,
-      ) => Record<string, AgentSubagentActivityRecord>,
-    ) => {
-      setSubagentActivities((current) => {
-        const next = update(current);
-        subagentActivitiesRef.current = next;
-        return next;
-      });
-    },
-    [],
-  );
-
-  const agent = useEveAgent({
+  const agent = useEveAgent<AgentTranscriptData>({
+    // Hydrated events are a prefix of this session's stream, and the cursor is
+    // deliberately left at 0. The persisted copy can trail the durable stream by
+    // an event or two, and claiming a cursor past that would skip whatever is
+    // missing. Eve drops any event whose `meta.id` it has already applied, so
+    // the overlapping catch-up costs bandwidth, not correctness.
+    initialEvents: hydratedEvents,
     initialSession: selectedSessionId
       ? { sessionId: selectedSessionId, streamIndex: 0 }
       : undefined,
     onEvent: (event) => {
-      if (event.type === "subagent.called") {
-        updateSubagentActivities((current) => ({
-          ...current,
-          [event.data.callId]: {
-            callId: event.data.callId,
-            childSessionId: event.data.childSessionId,
-            name: event.data.name,
-            status: "delegating",
-            toolName: event.data.toolName,
-            remote: event.data.remote !== undefined,
-          },
-        }));
+      // A specialist wake-up is not a message this operator sent, so it must
+      // not claim the annotations waiting for their own next message.
+      if (event.type !== "message.received" || isTaskNotification(event))
         return;
-      }
-      if (event.type === "subagent.started") {
-        updateSubagentActivities((current) => {
-          const activity = current[event.data.callId];
-          return activity
-            ? {
-                ...current,
-                [event.data.callId]: { ...activity, status: "working" },
-              }
-            : current;
-        });
-        return;
-      }
-      if (event.type === "subagent.completed") {
-        updateSubagentActivities((current) => {
-          const activity = current[event.data.callId];
-          if (!activity) return current;
-          const backgroundTask = event.data.backgroundTask;
-          return {
-            ...current,
-            [event.data.callId]: {
-              ...activity,
-              status: backgroundTask ? "working" : "completed",
-              summary: backgroundTask ? undefined : event.data.output,
-              taskId: backgroundTask?.taskId,
-            },
-          };
-        });
-        return;
-      }
-      if (event.type !== "message.received") return;
       const isOwnMessage = pendingUserMessagesRef.current > 0;
       if (isOwnMessage) pendingUserMessagesRef.current -= 1;
-      const persistedAnnotations = initialAnnotationsByTurn[event.data.turnId];
-      if (persistedAnnotations?.length)
-        setMessageAnnotations((current) => ({
-          ...current,
-          [`${event.data.turnId}:user`]: persistedAnnotations,
-        }));
       const pending = pendingMessageAnnotationsRef.current;
-      if (isOwnMessage && pending !== null) {
-        setMessageAnnotations((current) => ({
-          ...current,
-          [`${event.data.turnId}:user`]: pending,
-        }));
-        void persistTurnAnnotations(
-          activeSessionIdRef.current,
-          event.data.turnId,
-          pending,
-        ).catch(() =>
-          setSendError(
-            "The message was sent, but its references could not be saved.",
-          ),
-        );
-        pendingMessageAnnotationsRef.current = null;
-        setPendingMessageAnnotations(null);
-      }
-      if (!isOwnMessage) {
-        const running = Object.values(subagentActivitiesRef.current).filter(
-          (activity) =>
-            activity.status === "delegating" || activity.status === "working",
-        );
-        if (running.length > 0) {
-          setHiddenMessageIds((current) => ({
-            ...current,
-            [`${event.data.turnId}:user`]: true,
-          }));
-          updateSubagentActivities((current) => {
-            const next = { ...current };
-            for (const activity of running) {
-              const currentActivity = next[activity.callId];
-              if (currentActivity)
-                next[activity.callId] = {
-                  ...currentActivity,
-                  status: "completed",
-                  summary: event.data.message,
-                };
-            }
-            return next;
-          });
-        }
-      }
+      if (!isOwnMessage || pending === null) return;
+      setMessageAnnotations((current) => ({
+        ...current,
+        [`${event.data.turnId}:user`]: pending,
+      }));
+      void persistTurnAnnotations(
+        activeSessionIdRef.current,
+        event.data.turnId,
+        pending,
+      ).catch(() =>
+        setSendError(
+          "The message was sent, but its references could not be saved.",
+        ),
+      );
+      pendingMessageAnnotationsRef.current = null;
+      setPendingMessageAnnotations(null);
+    },
+    onError: (error) => {
+      lastAgentErrorRef.current = error;
     },
     onSessionChange,
     prepareSend: (payload) => ({
       ...payload,
       clientContext: {
-        ...(payload.clientContext &&
-        typeof payload.clientContext === "object" &&
-        !Array.isArray(payload.clientContext)
+        ...(payload.clientContext
+        && typeof payload.clientContext === "object"
+        && !Array.isArray(payload.clientContext)
           ? payload.clientContext
           : {}),
         route: window.location.pathname,
       },
     }),
+    reducer,
     resume: Boolean(selectedSessionId),
   });
 
   const busy =
-    agent.status === "resuming" ||
-    agent.status === "submitted" ||
-    agent.status === "streaming";
+    agent.status === "resuming"
+    || agent.status === "submitted"
+    || agent.status === "streaming";
   const canSend =
-    !busy && (composer.trim().length > 0 || attachments.length > 0);
-  const annotationQuery = useMemo(
-    () => composer.match(/(?:^|\s)@([^\s@]*)$/)?.[1] ?? "",
-    [composer],
-  );
+    !busy
+    && !uploading
+    && (composer.trim().length > 0 || attachments.length > 0);
   const statusLabel = useMemo(
     () => agentStatusLabel(agent.status),
     [agent.status],
@@ -247,10 +195,10 @@ export function AgentWorkspace({
   const activeSessionId = agent.session?.sessionId ?? selectedSessionId;
   const activeSessionTitle =
     initialSessions.find((session) => session.eveSessionId === activeSessionId)
-      ?.title ??
-    sessions.find((session) => session.eveSessionId === activeSessionId)
-      ?.title ??
-    "New conversation";
+      ?.title
+    ?? sessions.find((session) => session.eveSessionId === activeSessionId)
+      ?.title
+    ?? "New conversation";
 
   useEffect(() => {
     if (!activeSessionId) return;
@@ -272,83 +220,104 @@ export function AgentWorkspace({
       viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" }),
     );
     return () => window.cancelAnimationFrame(frame);
-  }, [agent.data.messages, agent.status, subagentActivities]);
-
-  useEffect(() => {
-    if (annotationQuery.length < 2) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void fetch(
-        `/api/agent/annotations?q=${encodeURIComponent(annotationQuery)}`,
-        { signal: controller.signal },
-      )
-        .then((response) =>
-          response.ok ? response.json() : { annotations: [] },
-        )
-        .then((payload: { annotations?: AgentAnnotation[] }) =>
-          setAnnotationResults(payload.annotations ?? []),
-        )
-        .catch(() => undefined);
-    }, 180);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [annotationQuery]);
+  }, [agent.data, agent.status]);
 
   async function sendMessage(message: string) {
     const text = message.trim() || "Please review the attached file(s).";
-    if ((!message.trim() && attachments.length === 0) || busy) return;
+    if ((!message.trim() && attachments.length === 0) || busy || uploading)
+      return;
+    // The turn carries this exact snapshot. Uploading a 10MB attachment takes
+    // long enough for someone to keep typing or drop another file, and clearing
+    // the composer wholesale afterwards would throw that away without sending
+    // it, so only what went out is removed.
+    const sentAnnotations = annotations;
+    const sentAttachments = attachments;
     stickToBottomRef.current = true;
     setShowScrollToBottom(false);
     setSendError(null);
+    setUploading(sentAttachments.length > 0);
+    let sent = false;
     try {
-      const uploaded = await Promise.all(
-        attachments.map(async (file) => {
-          const form = new FormData();
-          form.append("file", file);
-          const response = await fetch("/api/agent/upload", {
-            method: "POST",
-            body: form,
-          });
-          if (!response.ok) throw new Error("Attachment upload failed");
-          return (
-            (await response.json()) as {
-              file: { url: string; filename: string; fileType: string };
-            }
-          ).file;
-        }),
-      );
+      const uploaded = await Promise.all(sentAttachments.map(uploadAttachment));
+      const unreachable = uploaded.filter((file) => file.agentUrl === null);
+      if (unreachable.length > 0) {
+        throw new Error(
+          `The agent cannot read ${unreachable
+            .map((file) => file.filename)
+            .join(", ")}. Nothing was sent — try attaching the file again.`,
+        );
+      }
       const content = [
         { type: "text" as const, text },
         ...uploaded.map((file) => ({
           type: "file" as const,
-          data: new URL(file.url),
+          data: new URL(file.agentUrl as string),
           filename: file.filename,
           mediaType: file.fileType,
         })),
       ];
-      pendingMessageAnnotationsRef.current = annotations;
-      setPendingMessageAnnotations(annotations);
+      pendingMessageAnnotationsRef.current = sentAnnotations;
+      setPendingMessageAnnotations(sentAnnotations);
       pendingUserMessagesRef.current += 1;
+      // `onEvent` takes this back down when eve confirms the message with
+      // `message.received`; still at this value after `send` means it never
+      // arrived.
+      const awaitingReceipt = pendingUserMessagesRef.current;
+      lastAgentErrorRef.current = null;
+      // `agent.send` resolves when the whole turn settles, which includes any
+      // specialist the orchestrator waits on — often a minute or more. The
+      // message is already in the transcript, so the composer is cleared as
+      // soon as it goes out rather than holding the sent text all that time.
+      // Only what went out is removed; anything typed meanwhile stays.
+      sent = true;
+      setComposer((current) => (current === message ? "" : current));
+      setAttachments((current) =>
+        current.filter((file) => !sentAttachments.includes(file)),
+      );
+      setAnnotations((current) =>
+        current.filter((item) => !sentAnnotations.includes(item)),
+      );
       await agent.send(content, {
         clientContext: {
           route: window.location.pathname,
           forkContext,
-          annotations: annotations.map(({ type, id, label }) => ({
+          annotations: sentAnnotations.map(({ type, id, label }) => ({
             type,
             id,
             label,
           })),
         },
       });
-      setComposer("");
-      setAttachments([]);
-      setAnnotations([]);
+      // eve's `send` records a failure in its error state and resolves rather
+      // than rejecting, so a rejected promise alone misses a request that
+      // never reached the agent. Confirmed receipt is the test: a message eve
+      // accepted stays sent even if its turn later fails.
+      if (pendingUserMessagesRef.current >= awaitingReceipt) {
+        // Written by `onError` during the await, which the compiler cannot see.
+        const reported = lastAgentErrorRef.current as Error | null;
+        throw new Error(
+          reported?.message ?? "The message did not reach the agent.",
+        );
+      }
       setForkContext(null);
       setEditingMessageId(null);
       sessionStorage.removeItem("rc-agent-fork-context");
     } catch (error) {
+      if (sent) {
+        // Put the unsent request back so it can be retried, unless the
+        // operator has already started typing something else.
+        setComposer((current) => (current === "" ? message : current));
+        setAttachments((current) => [
+          ...sentAttachments.filter((file) => !current.includes(file)),
+          ...current,
+        ]);
+        setAnnotations((current) => [
+          ...sentAnnotations.filter((item) => !current.includes(item)),
+          ...current,
+        ]);
+      }
+      // Undo this submission's receipt bookkeeping, so a later wake-up or
+      // message is not mistaken for it.
       pendingUserMessagesRef.current = Math.max(
         0,
         pendingUserMessagesRef.current - 1,
@@ -360,6 +329,8 @@ export function AgentWorkspace({
           ? error.message
           : "The message could not be sent.",
       );
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -386,26 +357,10 @@ export function AgentWorkspace({
     await agent.respond(responses);
   }
 
-  async function runAction(action: {
-    id: string;
-    label: string;
-    operation: string;
-  }) {
+  async function runAction(action: AgentResultAction) {
     await sendMessage(
       `Please execute the approved UI action "${action.label}" (${action.operation}, action id ${action.id}) after I review the prepared details.`,
     );
-  }
-
-  function selectAnnotation(annotation: AgentAnnotation) {
-    setAnnotations((current) =>
-      current.some(
-        (item) => item.id === annotation.id && item.type === annotation.type,
-      )
-        ? current
-        : [...current, annotation],
-    );
-    setComposer((current) => current.replace(/(?:^|\s)@[^\s@]*$/, " "));
-    setAnnotationResults([]);
   }
 
   function forkConversation() {
@@ -464,65 +419,178 @@ export function AgentWorkspace({
     }
   }
 
+  const wideEnoughForHistory = useMediaQuery("(min-width: 768px)");
+  const wideEnoughForInspector = useMediaQuery("(min-width: 1280px)");
+  const historyRailOpen = wideEnoughForHistory && rails.history;
+  const inspectorRailOpen = wideEnoughForInspector && rails.inspector;
+
+  function togglePane(pane: "history" | "inspector") {
+    const docked =
+      pane === "history" ? wideEnoughForHistory : wideEnoughForInspector;
+    if (docked) setRails((current) => ({ ...current, [pane]: !current[pane] }));
+    else setSheet((current) => (current === pane ? null : pane));
+  }
+
+  const history = (
+    <AgentHistory
+      activeSessionId={activeSessionId}
+      activeSessionTitle={activeSessionTitle}
+      initialSessions={initialSessions}
+      onArchive={archiveSession}
+      onNavigate={() => setSheet(null)}
+      sessions={sessions}
+    />
+  );
+
+  const inspector = (
+    <AgentInspector
+      data={agent.data}
+      onClose={() =>
+        wideEnoughForInspector
+          ? setRails((current) => ({ ...current, inspector: false }))
+          : setSheet(null)
+      }
+      viewportRef={viewportRef}
+    />
+  );
+
   return (
-    <section
-      className={`grid h-full max-h-full min-h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm transition-[grid-template-columns] duration-200 ${historyOpen ? "md:grid-cols-[18rem_minmax(0,1fr)]" : "md:grid-cols-[0_minmax(0,1fr)]"}`}
-    >
-      <AgentHistory
-        activeSessionId={activeSessionId}
-        activeSessionTitle={activeSessionTitle}
-        historyOpen={historyOpen}
-        initialSessions={initialSessions}
-        onArchive={archiveSession}
-        sessions={sessions}
-      />
-      <AgentTranscript
-        agentError={agent.error ?? null}
-        agentStatus={agent.status}
-        archiveError={archiveError}
-        busy={busy}
-        forkConversation={forkConversation}
-        handleMessageScroll={handleMessageScroll}
-        hiddenMessageIds={hiddenMessageIds}
-        historyOpen={historyOpen}
-        messageAnnotations={messageAnnotations}
-        messages={agent.data.messages}
-        onAction={runAction}
-        onCancel={() => void agent.cancel()}
-        onEditMessage={editMessage}
-        onRespond={respond}
-        onRetry={() => void agent.resume()}
-        onSuggestion={(suggestion) => void sendMessage(suggestion)}
-        onToggleHistory={() => setHistoryOpen((open) => !open)}
-        pendingMessageAnnotations={pendingMessageAnnotations}
-        scrollToBottom={scrollToBottom}
-        sendError={sendError}
-        showScrollToBottom={showScrollToBottom}
-        statusLabel={statusLabel}
-        subagentActivities={Object.values(subagentActivities)}
-        viewportRef={viewportRef}
-      />
-      <AgentComposer
-        annotations={annotations}
-        annotationQuery={annotationQuery}
-        annotationResults={annotationResults}
-        attachments={attachments}
-        canSend={canSend}
-        composer={composer}
-        composerRef={composerRef}
-        disabled={agent.status === "resuming"}
-        editingMessageId={editingMessageId}
-        onCancelEdit={() => {
-          setEditingMessageId(null);
-          setComposer("");
-        }}
-        onChange={setComposer}
-        onSend={() => void sendMessage(composer)}
-        selectAnnotation={selectAnnotation}
-        setAnnotations={setAnnotations}
-        setAttachments={setAttachments}
-      />
-    </section>
+    // The header meter, tool cards and approval controls use Radix tooltips,
+    // which throw without a provider above them; the app shell only provides
+    // one around its notifications.
+    <TooltipProvider>
+      <section className="flex h-full max-h-full min-h-full w-full flex-col overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+        <AgentHeader
+          agentStatus={agent.status}
+          busy={busy}
+          canFork={agent.data.messages.length > 0}
+          historyOpen={historyRailOpen || sheet === "history"}
+          inspectorOpen={inspectorRailOpen || sheet === "inspector"}
+          onCancel={() => void agent.cancel()}
+          onFork={forkConversation}
+          onToggleHistory={() => togglePane("history")}
+          onToggleInspector={() => togglePane("inspector")}
+          pendingCount={agent.data.pendingApprovals.length}
+          sessionTitle={activeSessionTitle}
+          statusLabel={statusLabel}
+          usage={agent.data.usage}
+        />
+
+        <div className="flex min-h-0 min-w-0 flex-1">
+          {historyRailOpen ? (
+            <div className="w-72 shrink-0 border-r border-border/70">
+              {history}
+            </div>
+          ) : null}
+
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <AgentTranscript
+              agentError={agent.error ?? null}
+              agentStatus={agent.status}
+              archiveError={archiveError}
+              busy={busy}
+              data={agent.data}
+              handleMessageScroll={handleMessageScroll}
+              messageAnnotations={messageAnnotations}
+              onAction={runAction}
+              onEditMessage={editMessage}
+              onRespond={respond}
+              onRetry={() => void agent.resume()}
+              onSuggestion={(suggestion) => void sendMessage(suggestion)}
+              pendingMessageAnnotations={pendingMessageAnnotations}
+              scrollToBottom={scrollToBottom}
+              sendError={sendError}
+              // The inspector already shows what is waiting, so the floating bar
+              // is only needed when the inspector is not on screen.
+              showApprovalBar={!inspectorRailOpen}
+              showScrollToBottom={showScrollToBottom}
+              viewportRef={viewportRef}
+            />
+            <AgentComposer
+              annotations={annotations}
+              attachments={attachments}
+              canSend={canSend}
+              composer={composer}
+              composerRef={composerRef}
+              disabled={agent.status === "resuming"}
+              editingMessageId={editingMessageId}
+              onCancelEdit={() => {
+                setEditingMessageId(null);
+                setComposer("");
+              }}
+              onChange={setComposer}
+              onSend={() => void sendMessage(composer)}
+              setAnnotations={setAnnotations}
+              setAttachments={setAttachments}
+              uploading={uploading}
+            />
+          </div>
+
+          {inspectorRailOpen ? (
+            <div className="w-80 shrink-0">{inspector}</div>
+          ) : null}
+        </div>
+
+        <Sheet
+          onOpenChange={(open) => setSheet(open ? "history" : null)}
+          open={sheet === "history"}
+        >
+          <SheetContent className="w-76 p-0" side="left">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Conversations</SheetTitle>
+              <SheetDescription>
+                Switch between your agent conversations.
+              </SheetDescription>
+            </SheetHeader>
+            {history}
+          </SheetContent>
+        </Sheet>
+
+        <Sheet
+          onOpenChange={(open) => setSheet(open ? "inspector" : null)}
+          open={sheet === "inspector"}
+        >
+          <SheetContent className="w-84 p-0" side="right">
+            <SheetHeader className="sr-only">
+              <SheetTitle>This session</SheetTitle>
+              <SheetDescription>
+                What the agent needs from you, what it has delegated, and what
+                it has spent.
+              </SheetDescription>
+            </SheetHeader>
+            {inspector}
+          </SheetContent>
+        </Sheet>
+      </section>
+    </TooltipProvider>
+  );
+}
+
+async function uploadAttachment(file: File): Promise<AgentUploadedFile> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/agent/upload", {
+    body: form,
+    method: "POST",
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(payload?.error ?? `Could not upload ${file.name}.`);
+  }
+  return ((await response.json()) as { file: AgentUploadedFile }).file;
+}
+
+/** Annotations persisted per turn render straight away on a reload. */
+function hydrateAnnotations(
+  byTurn: AgentWorkspaceData["selectedAnnotationsByTurn"],
+) {
+  return Object.fromEntries(
+    Object.entries(byTurn).map(([turnId, turnAnnotations]) => [
+      `${turnId}:user`,
+      turnAnnotations,
+    ]),
   );
 }
 

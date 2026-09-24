@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { withMode } from "../../components/offers/admin/shared/price-mode";
-import { costScheduleRowSchema } from "../../lib/validations/admin-offer-content";
+import { withMode } from "@/components/offers/admin/shared/price-mode";
+import { costScheduleRowSchema } from "@/lib/validations/admin-offer-content";
 import type {
   CostScheduleRow,
   CostScheduleRowBase,
-} from "../../types/admin-offer-content";
+} from "@/types/admin-offer-content";
 
 // Changing a cost schedule row's price mode rebuilt the row with `value: 0` or
 // `formula: ""`. Picking the wrong mode and switching straight back therefore

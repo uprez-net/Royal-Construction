@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 // The image slots' Upload and Replace controls are a <label> around an sr-only
 // file input. The input takes keyboard focus but is invisible, and the label had

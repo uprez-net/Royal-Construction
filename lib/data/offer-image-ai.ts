@@ -1,89 +1,81 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
-import { generateImage } from "ai";
+import { generateText } from "ai";
 import { put } from "@vercel/blob";
-import { createHash } from "node:crypto";
+
+import { requireInternalUser } from "@/lib/auth/require-internal-user";
+import { generateOfferImage } from "@/lib/domain/offers/images";
+import { userPrincipal } from "@/lib/domain/principal";
+import { domainActionFailure } from "@/lib/http/domain-response";
 import { gateway } from "@/lib/model";
+import {
+  OFFER_IMAGE_GENERATION_FAILED,
+  OFFER_IMAGE_MODEL_ID,
+} from "@/lib/offer/offer-image-model";
+import prisma from "@/lib/prisma";
 import type { OfferImageSlotKey } from "@/lib/offer/workspace-images";
-
-// Base prompt per slot. AI images are inspiration/concept only — never real
-// completed work — so the offer captions them accordingly (see offerImageCaption).
-const SLOT_PROMPTS: Record<OfferImageSlotKey, string> = {
-  hero: "Photorealistic street-view exterior of a modern Australian {buildType}, rendered facade, double garage, daytime, no people, no text, no logos.",
-  exterior:
-    "Photorealistic full facade of a modern Australian {buildType}, rendered exterior, feature entry, double garage, no text, no logos.",
-  render:
-    "Architectural 3D render perspective of a modern Australian {buildType} facade, clean render style, no text, no logos.",
-  // Both living-area slots prompt for large-format tile, the finish the
-  // inclusions schedule actually prices. Generating a herringbone-timber floor
-  // showed the client a finish their contract does not include — the same
-  // divergence OFFER_SPEC_FACTS exists to prevent, since a picture contradicts
-  // the schedule just as loudly as a bullet does.
-  kitchen:
-    "Photorealistic modern kitchen with white shaker cabinetry, stone island benchtop, large-format porcelain tile floor, natural light, no text, no logos.",
-  living:
-    "Photorealistic open-plan living room, large-format porcelain tile flooring, neutral palette, large windows, styled, no text, no logos.",
-  bedroom:
-    "Photorealistic master bedroom, soft carpet, tray ceiling, plantation shutters, styled, warm light, no text, no logos.",
-  bathroom:
-    "Photorealistic modern bathroom, floor-to-ceiling stone-look tiles, freestanding bath, semi-frameless shower, no text, no logos.",
-};
-
-const WIDE_SLOTS: ReadonlySet<OfferImageSlotKey> = new Set([
-  "hero",
-  "exterior",
-  "render",
-]);
 
 type GenerateResult = { ok: true; url: string } | { ok: false; error: string };
 
 export async function generateOfferInspirationImage(input: {
+  attemptId: string;
   slotKey: OfferImageSlotKey;
   buildType: string;
-  // Short visual descriptors of this build's façade/finishes for the slot,
-  // from buildOfferImageContext (lib/offer/offer-image-context). Optional —
-  // when empty the base prompt is used unchanged.
   finishContext?: string;
 }): Promise<GenerateResult> {
-  const { isAuthenticated } = await auth();
-  if (!isAuthenticated) {
-    return { ok: false, error: "Unauthorized" };
-  }
-
-  const basePrompt = SLOT_PROMPTS[input.slotKey].replace(
-    "{buildType}",
-    input.buildType || "double storey home",
-  );
-  const finish = input.finishContext?.trim();
-  const prompt = finish
-    ? `${basePrompt} Reflect these selected finishes where visible: ${finish}.`
-    : basePrompt;
-
+  const access = await requireInternalUser();
+  if (!access.ok) return { error: access.error, ok: false };
   try {
-    const { image } = await generateImage({
-      model: gateway.image("google/imagen-4.0-fast-generate-001"),
-      prompt,
-      aspectRatio: WIDE_SLOTS.has(input.slotKey) ? "16:9" : "4:3",
+    return await generateOfferImage(userPrincipal(access.user), input, prisma, {
+      generate: async ({ aspectRatio, prompt }) => {
+        // A Gemini image model is a language model on the gateway: it answers
+        // generateText with image files, and gateway.image() refuses it.
+        const { files } = await generateText({
+          model: gateway(OFFER_IMAGE_MODEL_ID),
+          prompt,
+          providerOptions: {
+            google: {
+              imageConfig: { aspectRatio },
+              responseModalities: ["IMAGE"],
+            },
+          },
+        });
+        const image = files.find((file) => file.mediaType.startsWith("image/"));
+        return {
+          base64: image?.base64 ?? "",
+          mediaType: image?.mediaType ?? null,
+        };
+      },
+      put: async ({ allowOverwrite, body, contentType, pathname }) => {
+        const putBody =
+          body instanceof Uint8Array && !Buffer.isBuffer(body)
+            ? Buffer.from(body)
+            : body;
+        return put(pathname, putBody, {
+          access: "public",
+          addRandomSuffix: false,
+          allowOverwrite,
+          contentType,
+        });
+      },
     });
-    if (!image?.base64) {
-      return { ok: false, error: "Image generation returned no data" };
-    }
-    const contentType = image.mediaType || "image/png";
-    const buffer = Buffer.from(image.base64, "base64");
-    const hash = createHash("sha256").update(buffer).digest("hex");
-    const extension = contentType === "image/jpeg" ? "jpg" : "png";
-    const blob = await put(`offer-ai/${hash}.${extension}`, buffer, {
-      access: "public",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType,
-    });
-    return { ok: true, url: blob.url };
   } catch (error) {
-    return {
-      ok: false,
-      error: (error as Error).message || "Generation failed",
-    };
+    // A refusal the domain can name (no attempt id, an attempt already in
+    // flight) is worded for the estimator; a provider failure is not.
+    const refusal = domainActionFailure(error);
+    if (refusal) return { error: refusal.error, ok: false };
+    // Selected fields only: a provider error can carry the request body and
+    // response headers, which do not belong in the log.
+    const failure = error instanceof Error ? error : null;
+    const statusCode =
+      failure && "statusCode" in failure ? failure.statusCode : undefined;
+    console.error("[offer-image-ai] image generation failed", {
+      model: OFFER_IMAGE_MODEL_ID,
+      slotKey: input.slotKey,
+      name: failure?.name ?? typeof error,
+      message: failure?.message,
+      statusCode,
+    });
+    return { error: OFFER_IMAGE_GENERATION_FAILED, ok: false };
   }
 }

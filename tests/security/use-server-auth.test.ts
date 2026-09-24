@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { test } from "node:test";
 import ts from "typescript";
+import { test } from "vitest";
 
 // Every export of a "use server" module is a Server Action: a POST endpoint
 // that runs with whatever arguments the sender chooses, whether or not a screen
@@ -33,6 +33,32 @@ const CALLER_CHECKS = new Set([
   "requireInternalUser",
   "requireComplianceAccess",
   "requireComplianceAdmin",
+  // lib/domain commands that refuse the caller themselves (issue #301). Each
+  // one calls requireAdminPrincipal or assertCanReadTradieDirectory before it
+  // touches anything, so an export that reaches one has checked a role — the
+  // auth() above it only resolves who is asking.
+  "createTradieDomain",
+  "updateTradieDomain",
+  "toggleTradieFavouriteDomain",
+  "requestTradiePriceChange",
+  "requestTradieRemoval",
+  "rateTradieDomain",
+  "reportTradieIncidentDomain",
+  // Both call authorizeLead before anything reaches blob storage, so the
+  // caller has been checked against the record — the lead — and not merely
+  // proved to be signed in. They also refuse a Blob path outside that lead's
+  // namespace. deleteLeadFile additionally owns the delete itself, so the
+  // refusal and the absence of the effect are the same thing.
+  "authorizeLeadFileDeletion",
+  "deleteLeadFile",
+  // These offer commands authorize the lead/offer or require an internal
+  // principal before reading or mutating anything. The Server Actions resolve
+  // that principal; the shared command owns the record/role decision.
+  "checkOfferListsDomain",
+  "draftOfferHighlights",
+  "generateOfferPrefill",
+  "prepareProjectHandoff",
+  "commitOfferStatusTransition",
 ]);
 
 // auth() alone passes every signed-in user, customers included. An export
@@ -51,55 +77,40 @@ const LOCAL_CHECKS: Record<string, string> = {
 };
 
 // Exports whose only check is sign-in, each with why that is enough for now.
-const TRADIE_REQUEST =
-  "files a tradie approval request that an ADMIN must approve; tradie domain (follow-up: staff only)";
-const SIGNED_IN_ONLY: Record<string, string> = {
-  "lib/data/offer-image-ai.ts#generateOfferInspirationImage":
-    "generates a stock image into Blob storage from a fixed prompt; reads no offer, spends image credits (follow-up: staff only)",
-  "lib/data/offer-image-import.ts#importDropboxImage":
-    "copies an https Dropbox image into Blob storage; reads no offer (follow-up: staff only)",
-  "lib/data/tradie-management.ts#deleteTradie": TRADIE_REQUEST,
-  "lib/data/tradie-management.ts#rateTradie":
-    "writes a tradie rating directly; tradie domain (follow-up: staff only)",
-  "lib/data/tradie-management.ts#reportTradieIncident":
-    "files an incident for ADMIN review and attaches only the reporter's own unattached uploads; tradie domain (follow-up: staff only)",
-  "lib/data/tradie-management.ts#updateTradiePrice": TRADIE_REQUEST,
-};
+const SIGNED_IN_ONLY: Record<string, string> = {};
 
 // Exports that check nobody, each with why it is left for now. None reads or
 // writes offers, leads, files or envelopes, but some return project data: the
 // tradie schedule reads include each schedule's whole project row. Every entry
 // is a follow-up, and the last test fails once one is fixed or removed.
-const CUSTOMERS =
-  "customer records; only server code calls it, so it wants server-only (follow-up)";
-const SITE_MANAGERS =
-  "site manager lookups; only server code calls it, so it wants server-only (follow-up)";
 const TRADIE_APPROVALS =
   "tradie approvals, called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIES =
   "tradie records, some called from the browser; tradie domain, outside this pass (follow-up)";
 const TRADIE_SCHEDULES =
   "tradie schedule reads, some returning whole project rows; only server code calls it, so it wants server-only (follow-up)";
-const USERS =
-  "user accounts; proxy.ts imports this module, so server-only needs a build check first (follow-up)";
+// lib/data/user.ts is no longer a "use server" module (issue #301). Every one
+// of its exports used to be a POST endpoint, updateUser included — so
+// `updateUser(clerkId, { role: "ADMIN" })` was reachable by any signed-in
+// caller. Nothing ever called it from a client component, so dropping the
+// directive closed the surface outright. `import "server-only"` is still not
+// there, and that part of the follow-up stands: proxy.ts imports
+// getUserByClerkId and the middleware runtime cannot load it.
 
 const ALLOWLIST: Record<string, string> = {
   "lib/data/admin-offer-content.ts#getAdminOfferContent":
     "the cached admin boilerplate every offer workspace pre-fills; no customer data, and 'use cache' cannot call auth()",
-  "lib/data/customers.ts#createCustomerForProject": CUSTOMERS,
-  "lib/data/customers.ts#findCustomerByContact": CUSTOMERS,
-  "lib/data/customers.ts#findCustomerById": CUSTOMERS,
-  "lib/data/customers.ts#getCachedCustomersForDropdown": CUSTOMERS,
-  "lib/data/customers.ts#getCustomersForDropdown": CUSTOMERS,
-  "lib/data/siteManagers.ts#getCachedSiteManagersForDropdown": SITE_MANAGERS,
-  "lib/data/siteManagers.ts#getSiteManagerById": SITE_MANAGERS,
-  "lib/data/siteManagers.ts#getSiteManagersForDropdown": SITE_MANAGERS,
+  // lib/data/customers.ts and lib/data/siteManagers.ts were listed here as
+  // known follow-ups: every export was a POST endpoint, and both
+  // `findCustomerById` and `getSiteManagerById` answered a whole record to any
+  // signed-in caller who posted an id at them. Phase 4 of issue #301 dropped
+  // the `"use server"` directive from both, so the surface is gone rather than
+  // guarded — the same fix phase 7 applied to lib/data/user.ts.
   "lib/data/tradie-approvals.ts#fetchApprovalKPI": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchApprovalKPICached": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchTradieApprovalById": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchTradieApprovals": TRADIE_APPROVALS,
   "lib/data/tradie-approvals.ts#fetchTradieApprovalsCached": TRADIE_APPROVALS,
-  "lib/data/tradie-management.ts#createTradie": TRADIES,
   "lib/data/tradie-management.ts#exportTradies": TRADIES,
   "lib/data/tradie-management.ts#fetchFilteredTradies": TRADIES,
   "lib/data/tradie-management.ts#fetchTradieKPIData": TRADIES,
@@ -108,8 +119,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradie-management.ts#getTradieByIdCached": TRADIES,
   "lib/data/tradie-management.ts#getTradieGroupedByCategory": TRADIES,
   "lib/data/tradie-management.ts#getTradieGroupedByCategoryCached": TRADIES,
-  "lib/data/tradie-management.ts#toggleTradieFavourite": TRADIES,
-  "lib/data/tradie-management.ts#updateTradie": TRADIES,
   "lib/data/tradies.ts#getCachedTradieCoordinationDashboard": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getCachedTradieScheduleKPIs": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getCachedTradieSchedules": TRADIE_SCHEDULES,
@@ -118,14 +127,6 @@ const ALLOWLIST: Record<string, string> = {
   "lib/data/tradies.ts#getTradieSchedules": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getTradies": TRADIE_SCHEDULES,
   "lib/data/tradies.ts#getTradiesForLookup": TRADIE_SCHEDULES,
-  "lib/data/user.ts#createUser": USERS,
-  "lib/data/user.ts#deleteUser": USERS,
-  "lib/data/user.ts#getAllAdminUsersIds": USERS,
-  "lib/data/user.ts#getAllUserClerkIds": USERS,
-  "lib/data/user.ts#getUserByClerkId": USERS,
-  "lib/data/user.ts#getUserByClerkIdCached": USERS,
-  "lib/data/user.ts#resolveUserIdsToClerkIds": USERS,
-  "lib/data/user.ts#updateUser": USERS,
   "lib/notification/novu.ts#triggerNotification":
     "sends in-app notifications; only server code calls it, so it wants server-only (follow-up)",
   "utils/generate-email-subject.ts#generateEmailSubject":
@@ -164,8 +165,8 @@ function parse(fileName: string, text: string): ts.SourceFile {
 function isUseServerModule(file: ts.SourceFile): boolean {
   for (const statement of file.statements) {
     if (
-      !ts.isExpressionStatement(statement) ||
-      !ts.isStringLiteral(statement.expression)
+      !ts.isExpressionStatement(statement)
+      || !ts.isStringLiteral(statement.expression)
     ) {
       return false;
     }
@@ -176,8 +177,8 @@ function isUseServerModule(file: ts.SourceFile): boolean {
 
 function isExported(node: ts.Node): boolean {
   return (
-    ts.canHaveModifiers(node) &&
-    (ts.getModifiers(node) ?? []).some(
+    ts.canHaveModifiers(node)
+    && (ts.getModifiers(node) ?? []).some(
       (m) => m.kind === ts.SyntaxKind.ExportKeyword,
     )
   );
@@ -188,10 +189,10 @@ function unwrap(
 ): ts.Expression | undefined {
   let current = expression;
   while (
-    current &&
-    (ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current))
+    current
+    && (ts.isParenthesizedExpression(current)
+      || ts.isAsExpression(current)
+      || ts.isSatisfiesExpression(current))
   ) {
     current = current.expression;
   }
@@ -217,17 +218,17 @@ function readModule(file: ts.SourceFile) {
         const name = declaration.name.text;
         const value = unwrap(declaration.initializer);
         const isFunction =
-          value !== undefined &&
-          (ts.isArrowFunction(value) || ts.isFunctionExpression(value));
+          value !== undefined
+          && (ts.isArrowFunction(value) || ts.isFunctionExpression(value));
         if (isFunction) functions.set(name, value);
         if (isExported(statement))
           exports.push([name, isFunction ? name : null]);
       }
     } else if (
-      ts.isExportDeclaration(statement) &&
-      !statement.isTypeOnly &&
-      statement.exportClause &&
-      ts.isNamedExports(statement.exportClause)
+      ts.isExportDeclaration(statement)
+      && !statement.isTypeOnly
+      && statement.exportClause
+      && ts.isNamedExports(statement.exportClause)
     ) {
       for (const element of statement.exportClause.elements) {
         if (element.isTypeOnly) continue;
@@ -262,9 +263,9 @@ function checkReached(
       const callee = current.expression.text;
       const helper = functions.get(callee);
       if (
-        CALLER_CHECKS.has(callee) ||
-        (helper !== undefined &&
-          Object.hasOwn(LOCAL_CHECKS, `${fileName}#${callee}`))
+        CALLER_CHECKS.has(callee)
+        || (helper !== undefined
+          && Object.hasOwn(LOCAL_CHECKS, `${fileName}#${callee}`))
       ) {
         reached = "caller";
         return;
@@ -389,9 +390,9 @@ test("every Server Action checks its caller or is allowlisted with a reason", ()
   assert.deepEqual(
     unexplained,
     [],
-    `These "use server" exports check nobody. Authorize the caller, move the ` +
-      `function to a server-only module, or allowlist it with a reason:\n` +
-      unexplained.join("\n"),
+    `These "use server" exports check nobody. Authorize the caller, move the `
+      + `function to a server-only module, or allowlist it with a reason:\n`
+      + unexplained.join("\n"),
   );
 });
 
@@ -402,10 +403,10 @@ test("a Server Action that only proves sign-in is listed with what else limits i
   assert.deepEqual(
     unexplained,
     [],
-    `These "use server" exports only call auth(), which every signed-in user ` +
-      `passes, customers included. Check the role or the record, or list the ` +
-      `export in SIGNED_IN_ONLY with why sign-in is enough:\n` +
-      unexplained.join("\n"),
+    `These "use server" exports only call auth(), which every signed-in user `
+      + `passes, customers included. Check the role or the record, or list the `
+      + `export in SIGNED_IN_ONLY with why sign-in is enough:\n`
+      + unexplained.join("\n"),
   );
 });
 

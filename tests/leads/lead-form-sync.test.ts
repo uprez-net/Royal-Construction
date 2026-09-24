@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { rebaseTrackedFields } from "../../lib/leads/lead-form-sync";
+import { rebaseTrackedFields } from "@/lib/leads/lead-form-sync";
 
 // The lead detail page edits one lead from two places at once. The header badge
 // writes the stage on its own; the overview sections each save independently.

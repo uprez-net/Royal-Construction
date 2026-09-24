@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { isAgentFeatureEnabled } from "@/agent/lib/session-identity";
 import { AppShell } from "@/components/common/app-shell";
 import { auth } from "@clerk/nextjs/server";
 import { AppShellLoader } from "@/components/common/app-shell-loader";
@@ -14,6 +15,7 @@ async function LayoutContent({ children }: { children: React.ReactNode }) {
       isAdmin={user?.role === "ADMIN"}
       description="Royal Constructions - One place for all your construction project management needs."
       isSignedIn={!!user}
+      operationsAgentEnabled={isAgentFeatureEnabled()}
     >
       {children}
     </AppShell>

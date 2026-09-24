@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
   Archive,
@@ -34,6 +34,7 @@ import { bookConsultationUrlForLead } from "@/lib/actions/leads";
 import type { Lead, LeadStage } from "@/lib/leads/types";
 import { compactCurrency, dateFormat } from "@/utils/formatters";
 import { StageBadgeSelect } from "./select-stage-badge";
+import { leadsListHref } from "@/components/leads/leads-list-url";
 import { updateLead } from "@/lib/leads/leads-service";
 import { toast } from "sonner";
 
@@ -61,10 +62,10 @@ function resolveDealValue(lead: Lead): DealValue | null {
   const bracket = budgetBracket(lead.budget);
   const recorded = Number(lead.estimatedValue);
   const hasRecorded =
-    lead.estimatedValue != null &&
-    lead.estimatedValue !== "" &&
-    Number.isFinite(recorded) &&
-    recorded > 0;
+    lead.estimatedValue != null
+    && lead.estimatedValue !== ""
+    && Number.isFinite(recorded)
+    && recorded > 0;
 
   if (hasRecorded) {
     return {
@@ -196,6 +197,8 @@ export function LeadHeader({
   onLeadUpdate: (lead: Lead) => void;
 }) {
   const router = useRouter();
+  // Back to the page of the table this lead was opened from (#350).
+  const backToListHref = leadsListHref(useSearchParams().get("list"));
   const { user } = useUser();
   const actions = leadActions(lead);
   const created = formatCreated(lead.created);
@@ -230,7 +233,7 @@ export function LeadHeader({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <Link
-            href="/leads"
+            href={backToListHref}
             className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />

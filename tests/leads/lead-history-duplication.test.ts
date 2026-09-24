@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
-import { dropAlreadyRecorded } from "../../lib/leads/lead-history";
-import { sydneyWallClockToInstant } from "../../lib/dates/sydney";
-import { buildStageChangedHistoryEntry } from "../../lib/leads/lead-helpers";
+import { dropAlreadyRecorded } from "@/lib/leads/lead-history";
+import { sydneyWallClockToInstant } from "@/lib/dates/sydney";
+import { buildStageChangedHistoryEntry } from "@/lib/leads/lead-helpers";
 
 // One booking took lead #105 from four activity entries to nine. Two callers
 // handed `updateLead` the lead's whole history back, every row was inserted a
@@ -244,7 +244,10 @@ test("a stage change records where the lead came from", () => {
 });
 
 test("updateLead writes the stage entry and drops duplicates", () => {
-  const source = read("lib/data/leads.ts");
+  // The rule moved to lib/domain/leads/commands.ts (issue #301) so the routes,
+  // the MCP tool and the booking path all get it. lib/data/leads.ts is the
+  // Next adapter over it now.
+  const source = read("lib/domain/leads/commands.ts");
 
   assert.ok(source.includes("buildStageChangedHistoryEntry("));
   assert.ok(source.includes("dropAlreadyRecorded("));
@@ -259,7 +262,7 @@ test("updateLead writes the stage entry and drops duplicates", () => {
 });
 
 test("tasks write to the activity feed", () => {
-  const source = read("lib/data/lead-tasks.ts");
+  const source = read("lib/domain/leads/tasks.ts");
 
   assert.ok(source.includes("buildTaskAddedHistoryEntry("));
   assert.ok(source.includes("buildTaskCompletedHistoryEntry("));
@@ -270,7 +273,7 @@ test("tasks write to the activity feed", () => {
 // ── What the guard must NOT touch ──
 
 test("the guard filters caller history only, never generated entries", () => {
-  const source = read("lib/data/leads.ts");
+  const source = read("lib/domain/leads/commands.ts");
 
   // dropAlreadyRecorded wraps input.history and nothing else. Applied to the
   // whole list it collapsed two mentions in the same minute into one, and lost

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   getAreaBasisTotalSqm,
   offerAreaBasisFromJob,
   rawTotalAreaSqm,
   type OfferAreaBasis,
-} from "../../lib/offer/workspace-area";
-import { INITIAL_OFFER_JOB } from "../../lib/offer/workspace-model";
+} from "@/lib/offer/workspace-area";
+import { INITIAL_OFFER_JOB } from "@/lib/offer/workspace-model";
 
 // The PR claimed the total-area refactor was "bit-identical over 200,000
 // fractional cases", but the check was a throwaway script — an unreproducible
@@ -30,24 +30,24 @@ const oldPrintTemplateSum = (j: {
   balconySqm: number;
   voidSqm: number;
 }) =>
-  j.groundFloorSqm +
-  j.firstFloorSqm +
-  j.garageSqm +
-  j.alfrescoPorchSqm +
-  j.porchSqm +
-  j.grannyFlatSqm +
-  j.balconySqm +
-  j.voidSqm;
+  j.groundFloorSqm
+  + j.firstFloorSqm
+  + j.garageSqm
+  + j.alfrescoPorchSqm
+  + j.porchSqm
+  + j.grannyFlatSqm
+  + j.balconySqm
+  + j.voidSqm;
 
 const oldTotalAreaVariable = (b: OfferAreaBasis) =>
-  b.groundFloorSqm +
-  b.firstFloorSqm +
-  b.garageSqm +
-  b.alfrescoSqm +
-  b.porchSqm +
-  b.grannyFlatSqm +
-  b.balconySqm +
-  b.voidSqm;
+  b.groundFloorSqm
+  + b.firstFloorSqm
+  + b.garageSqm
+  + b.alfrescoSqm
+  + b.porchSqm
+  + b.grannyFlatSqm
+  + b.balconySqm
+  + b.voidSqm;
 
 function fractionalJob(i: number) {
   return {

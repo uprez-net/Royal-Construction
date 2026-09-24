@@ -89,7 +89,7 @@ export interface DueFollowUpTaskOptions {
    *
    * Taken as a plain id rather than importing `leadListScope` so this module
    * keeps no edge to `lib/offer/access.ts`, which pulls in the Prisma client —
-   * `lib/data/lead-tasks.ts` imports this file and is bundled into the eve
+   * `lib/domain/leads/tasks.ts` imports this file and is bundled into the eve
    * agent. The caller resolves the scope; this only applies it.
    */
   assignedId: string | null;
