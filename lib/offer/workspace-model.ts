@@ -217,6 +217,18 @@ export type OfferInclusionEntry = {
 // What the Category column prints when an entry has no category of its own.
 export const UNCATEGORISED_INCLUSION_LABEL = "Miscellaneous";
 
+// Show a repeated category once per printed page, where its group begins.
+export function printedInclusionCategory(
+  entries: readonly OfferInclusionEntry[],
+  index: number,
+): string {
+  const category =
+    entries[index].category?.trim() || UNCATEGORISED_INCLUSION_LABEL;
+  const previous =
+    entries[index - 1]?.category?.trim() || UNCATEGORISED_INCLUSION_LABEL;
+  return index > 0 && category === previous ? "" : category;
+}
+
 // Rows whose contract wording was drafted by the model and never reviewed.
 export function unreviewedDraftedRows(
   entries: readonly OfferInclusionEntry[],

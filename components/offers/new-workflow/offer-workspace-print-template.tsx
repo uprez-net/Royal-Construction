@@ -4,7 +4,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
-  UNCATEGORISED_INCLUSION_LABEL,
+  printedInclusionCategory,
   type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
@@ -705,7 +705,7 @@ function PrintInclusionsPage({
               key={`${startIndex + index}`}
             >
               <td className="py-3 pr-4 align-top font-semibold text-sidebar">
-                {entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL}
+                {printedInclusionCategory(specifications, index)}
               </td>
               <td className="px-4 py-3 align-top text-muted-foreground">
                 {entry.spec}

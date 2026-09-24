@@ -31,7 +31,7 @@ import {
   chunkByEstimatedHeight,
   chunkInclusionSchedule,
   inclusionPageStartIndexes,
-  UNCATEGORISED_INCLUSION_LABEL,
+  printedInclusionCategory,
   type OfferInclusionEntry,
   collectOfferSigners,
   estimateWrappedLines,
@@ -542,8 +542,8 @@ function inclusionsPage(
 ): string {
   const body = specifications
     .map(
-      (entry) =>
-        `<tr><td class="cat">${esc(entry.category?.trim() || UNCATEGORISED_INCLUSION_LABEL)}</td><td class="muted">${esc(entry.spec)}</td></tr>`,
+      (entry, index) =>
+        `<tr><td class="cat">${esc(printedInclusionCategory(specifications, index))}</td><td class="muted">${esc(entry.spec)}</td></tr>`,
     )
     .join("");
   const intro = continued
