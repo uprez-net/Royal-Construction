@@ -207,7 +207,9 @@ function WhatsAppDestination({
             {formatE164ForDisplay(phone.e164)}
           </span>
         </>
-      ) : null}
+      ) : (
+        <span>{phone.reason}</span>
+      )}
     </p>
   );
 }

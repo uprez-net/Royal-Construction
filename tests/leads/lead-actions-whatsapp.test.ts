@@ -55,22 +55,20 @@ test("an international number with its country code is usable", () => {
   );
 });
 
-test("no phone: the action shows, blocked, and says why", () => {
-  const state = leadActions(lead({ phone: "" })).whatsapp;
-  assert.equal(state.visible, true);
-  assert.equal(state.disabled, true);
-  assert.match(state.disabledReason ?? "", /no phone number/i);
-});
-
-test("digits are not enough: an incomplete number is blocked with a reason", () => {
-  for (const phone of ["0412 345", "call after 5pm", "12345678901234567"]) {
-    const state = leadActions(lead({ phone })).whatsapp;
-    assert.equal(state.disabled, true, phone);
-    assert.match(state.disabledReason ?? "", /not a complete, valid number/i, phone);
+test("an unusable phone still opens the conversation; the composer refuses the send", () => {
+  // A message attached from the review queue can sit on a lead whose phone
+  // does not normalise; blocking the action would hide it. Sending is refused
+  // by the thread's eligibility, which is the server's phone rule.
+  for (const phone of ["", "0412 345", "call after 5pm", "12345678901234567"]) {
+    assert.deepEqual(
+      leadActions(lead({ phone })).whatsapp,
+      { disabled: false, disabledReason: null, visible: true },
+      phone,
+    );
   }
 });
 
-test("archived beats a good phone, and says archived", () => {
+test("an archived lead is blocked, and says archived", () => {
   const state = leadActions(lead({ isArchived: true })).whatsapp;
   assert.equal(state.visible, true);
   assert.equal(state.disabled, true);

@@ -1,6 +1,5 @@
 import type { Lead } from "./types";
 import { isQuotingStage, isTerminalStage } from "./lead-helpers";
-import { normaliseLeadPhone } from "@/lib/domain/leads/whatsapp/phone";
 
 /**
  * One source of truth for "may the operator do this to this lead?".
@@ -14,7 +13,8 @@ import { normaliseLeadPhone } from "@/lib/domain/leads/whatsapp/phone";
  *
  * That control used to be labelled "Send Text", which read as SMS or
  * WhatsApp and was neither. It is the email thread, and says so; WhatsApp is
- * its own action (`whatsapp`), gated on a phone that actually normalises.
+ * its own action (`whatsapp`), which opens the conversation even when the
+ * phone cannot be sent to.
  */
 export interface LeadActionState {
   /** Whether the control renders at all. */
@@ -36,10 +36,11 @@ export interface LeadActions {
   /** Open the lead's email thread (LeadCommModal). Email, not text/SMS. */
   sendText: LeadActionState;
   /**
-   * Open the WhatsApp conversation (issue #333). Always rendered, so a lead
-   * without a usable phone shows why instead of silently lacking the button;
-   * blocked when the primary phone does not normalise to E.164 or the lead
-   * is archived. The domain re-checks both, plus consent and the window.
+   * Open the WhatsApp conversation (issue #333). Always rendered; blocked
+   * only when the lead is archived. An unusable phone does not block it —
+   * a message attached from the review queue can still be read there — and
+   * the composer shows why nothing can be sent. The domain re-checks the
+   * phone, consent and the window on every send.
    */
   whatsapp: LeadActionState;
   /** Archive the lead — labelled "Delete Lead" on the detail page. */
@@ -97,14 +98,12 @@ export function leadActions(lead: Lead): LeadActions {
 
 /**
  * The WhatsApp gate: one rule for the desktop row, the mobile card and the
- * lead page. Archived beats "no phone" because it is the reason nothing else
- * would fix. The phone rule is `normaliseLeadPhone` — the same function the
- * domain sends with — not "the field has digits in it".
+ * lead page. Only archiving closes the conversation. Whether a message can be
+ * sent is the composer's eligibility, which the server computes with the same
+ * phone rule it sends with.
  */
-function whatsappAction(lead: Pick<Lead, "isArchived" | "phone">): LeadActionState {
-  if (lead.isArchived) return blocked(ARCHIVED);
-  const phone = normaliseLeadPhone(lead.phone);
-  return phone.usable ? available : blocked(phone.reason);
+function whatsappAction(lead: Pick<Lead, "isArchived">): LeadActionState {
+  return lead.isArchived ? blocked(ARCHIVED) : available;
 }
 
 /**
