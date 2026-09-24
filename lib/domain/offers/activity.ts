@@ -1,9 +1,14 @@
-import type { OfferStatus } from "@prisma/client";
+import type { OfferStatus, Prisma } from "@prisma/client";
 
 import { authorizeLead } from "../access/leads";
 import type { DomainDb } from "../db";
 import { attributionUserId, type DomainPrincipal } from "../principal";
 import { CHANGE_REQUEST_PREFIX } from "@/lib/offer/offer-activity-marker";
+import { getAllEmailThreads } from "@/utils/email-parser";
+import {
+  parseOfferReplyAttachments,
+  type OfferReplyAttachment,
+} from "./replies";
 
 export type OfferActivityResult = {
   readonly ok: true;
@@ -14,6 +19,7 @@ export type OfferActivityResult = {
     readonly openedAt: string | null;
     readonly repliedAt: string | null;
     readonly lastReplyAt: string | null;
+    readonly replies: readonly OfferActivityReply[];
   }[];
   readonly events: readonly {
     readonly fromStatus: OfferStatus | null;
@@ -21,6 +27,18 @@ export type OfferActivityResult = {
     readonly note: string | null;
     readonly at: string;
   }[];
+};
+
+/** One recorded client reply to a send, oldest first under its send. */
+export type OfferActivityReply = {
+  readonly fromEmail: string;
+  readonly subject: string;
+  readonly receivedAt: string;
+  /** What the client wrote in this message, with the quoted thread cut off. */
+  readonly text: string;
+  /** The whole body, quoted history included. Null when it is just `text`. */
+  readonly fullText: string | null;
+  readonly attachments: readonly OfferReplyAttachment[];
 };
 
 export async function loadOfferActivity(
@@ -46,6 +64,16 @@ export async function loadOfferActivity(
         recipientEmail: true,
         repliedAt: true,
         sentAt: true,
+        replies: {
+          orderBy: { receivedAt: "asc" },
+          select: {
+            attachments: true,
+            body: true,
+            fromEmail: true,
+            receivedAt: true,
+            subject: true,
+          },
+        },
       },
       where: { offerId: offer.id },
     }),
@@ -66,8 +94,33 @@ export async function loadOfferActivity(
       lastReplyAt: send.lastReplyAt?.toISOString() ?? null,
       openedAt: send.openedAt?.toISOString() ?? null,
       repliedAt: send.repliedAt?.toISOString() ?? null,
+      replies: send.replies.map(toActivityReply),
       sentAt: send.sentAt.toISOString(),
     })),
+  };
+}
+
+function toActivityReply(reply: {
+  readonly attachments: Prisma.JsonValue;
+  readonly body: string;
+  readonly fromEmail: string;
+  readonly receivedAt: Date;
+  readonly subject: string;
+}): OfferActivityReply {
+  // Graph's text rendering is CRLF and the splitter's output is not; without
+  // this, every reply would differ from its own "full" text.
+  const fullText = reply.body.replace(/\r\n?/g, "\n").trim();
+  // getAllEmailThreads returns newest first, so [0] is what the client wrote
+  // in this message and the rest is our own offer email quoted back. A split
+  // that finds nothing falls back to the whole body rather than an empty one.
+  const text = getAllEmailThreads(fullText)[0]?.body.trim() || fullText;
+  return {
+    attachments: parseOfferReplyAttachments(reply.attachments),
+    fromEmail: reply.fromEmail,
+    fullText: text === fullText ? null : fullText,
+    receivedAt: reply.receivedAt.toISOString(),
+    subject: reply.subject,
+    text,
   };
 }
 

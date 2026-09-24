@@ -393,11 +393,8 @@ for (const { label, allowances } of ALLOWANCE_CONFIGURATIONS) {
   });
 }
 
-// The Tender puts its allowances beneath the exclusions and Important Notes while
-// they fit (layoutTenderAllowances). These pin that shared sheet against
-// Chromium: seeded allowances that must share it, a long exclusions table that
-// pushes them off it, a sheet filled close to its budget, and a long list split
-// across both.
+// Allowance data no longer changes the Tender's sheets. A long exclusions table
+// still has to fit on its declared page in Chromium.
 const LONG_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = Array.from(
   { length: 7 },
   (_, i) => ({
@@ -410,60 +407,20 @@ const LONG_EXCLUSIONS: readonly OfferWorkspaceScopeItem[] = Array.from(
     includedInTender: true,
   }),
 );
-const SHORT_ALLOWANCES: readonly OfferWorkspaceScopeItem[] = Array.from(
-  { length: 12 },
-  (_, i) => ({
-    ...INITIAL_ALLOWANCES[0],
-    id: `allowance-short-${i + 1}`,
-    label: `PC item ${i + 1}`,
-    description: "",
-    variationRule: "By variation.",
-  }),
-);
-const SHARED_SHEET_CONFIGURATIONS: ReadonlyArray<{
-  readonly label: string;
-  readonly allowances: readonly OfferWorkspaceScopeItem[];
-  readonly exclusions: readonly OfferWorkspaceScopeItem[];
-}> = [
-  {
-    label: "seeded allowances beneath seeded exclusions",
-    allowances: INITIAL_ALLOWANCES,
-    exclusions: INITIAL_EXCLUSIONS,
-  },
-  {
-    label: "seeded allowances beneath a long exclusions table",
-    allowances: INITIAL_ALLOWANCES,
-    exclusions: LONG_EXCLUSIONS,
-  },
-  {
-    label: "12 one-line allowances filling the shared sheet",
-    allowances: SHORT_ALLOWANCES,
-    exclusions: INITIAL_EXCLUSIONS,
-  },
-  {
-    label: "30 long allowances beneath a long exclusions table",
-    allowances: ALLOWANCE_CONFIGURATIONS[0].allowances,
-    exclusions: LONG_EXCLUSIONS,
-  },
-];
 
-for (const { label, allowances, exclusions } of SHARED_SHEET_CONFIGURATIONS) {
-  test(`Tender prints what it declares — ${label}`, async () => {
-    const html = buildTenderHtml(
-      buildProposalInput({
-        ...snapshotWithOwners([individualOwner(1)], allowances),
-        exclusions,
-      }),
-    );
-    const printed = await printedPageCount(html);
-    const declared = declaredPageTotal(html);
-    assert.equal(
-      printed,
-      declared,
-      `Tender printed ${printed} A4 pages but declares ${declared} (${label})`,
-    );
-  });
-}
+test("Tender prints its declared pages with long exclusions and allowances in the offer", async () => {
+  const html = buildTenderHtml(
+    buildProposalInput({
+      ...snapshotWithOwners(
+        [individualOwner(1)],
+        ALLOWANCE_CONFIGURATIONS[0].allowances,
+      ),
+      exclusions: LONG_EXCLUSIONS,
+    }),
+  );
+  assert.equal(await printedPageCount(html), declaredPageTotal(html));
+  assert.doesNotMatch(html, /Prime Cost &amp; Provisional Sums|c-alw-item/);
+});
 
 test("Contract annexure does not overflow its pages at max overflow signers", async () => {
   // The annexure carries MAX_OWNER_SIGNERS - 1 overflow signers and declares no

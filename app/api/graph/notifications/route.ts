@@ -6,10 +6,8 @@ import { extractTradieScheduleInfoFromMessage } from "@/lib/graph/tradie-schedul
 import { updateTradieSchedule } from "@/lib/data/tradieSchedules";
 import { saveLeadEmailTrail } from "@/lib/graph/save-lead-email-trail";
 import { evaluateEmail } from "@/utils/spam-detector";
-import {
-  extractOfferReplyToken,
-  recordOfferReply,
-} from "@/lib/graph/offer-reply-tracker";
+import { recordOfferReply } from "@/lib/domain/offers/replies";
+import { systemPrincipal } from "@/lib/domain/principal";
 import {
   extractCertifierRefToken,
   isPublicMailDomain,
@@ -21,7 +19,10 @@ import {
   normaliseReference,
   planningReferencesIn,
 } from "@/lib/graph/planning-portal";
-import { isMachineGenerated } from "@/lib/graph/offer-reply-classify";
+import {
+  extractOfferReplyToken,
+  isMachineGenerated,
+} from "@/lib/graph/offer-reply-classify";
 import { normalizeEmailAddress } from "@/utils/formatters";
 import {
   CertifierEmailDirection,
@@ -33,6 +34,7 @@ import { processInboundPartyEmail } from "@/lib/workflow/party-email";
 import { isRetryableGraphError, withGraphRetry } from "@/lib/graph/retry";
 import { checkLeadPresentWithEmailPhone } from "@/lib/leads/existing-lead";
 import { processInboundLead } from "@/lib/workflow/lead-extraction";
+import { storeOfferReplyAttachments } from "@/lib/workflow/offer-reply-attachments";
 import { start } from "workflow/api";
 import { after } from "next/server";
 import { isOwnMailbox } from "@/lib/graph/mailbox";
@@ -390,8 +392,8 @@ function mailboxForNotification(
     return "admin";
   }
   if (
-    clientState ===
-    (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
+    clientState
+    === (process.env.GRAPH_WEBHOOK_CLIENT_STATE || "royal-leadgen-webhook")
   ) {
     return "business";
   }
@@ -491,8 +493,8 @@ async function processNotifications(
             // here means "not visible yet", not "does not exist" — the one
             // place a 404 is worth repeating.
             shouldRetry: (error) =>
-              isRetryableGraphError(error) ||
-              (error as { status?: number })?.status === 404,
+              isRetryableGraphError(error)
+              || (error as { status?: number })?.status === 404,
           },
         );
       } catch {
@@ -523,7 +525,40 @@ async function processNotifications(
               ? extractOfferReplyToken(message.subject)
               : null;
           if (offerReplyToken) {
-            const outcome = await recordOfferReply(offerReplyToken, message);
+            const record = await recordOfferReply(
+              systemPrincipal("graph:offer-reply"),
+              {
+                body: content,
+                from: message.from,
+                graphMessageId: message.id,
+                hasAttachments: message.hasAttachments,
+                headers: message.headers,
+                receivedAt: message.receivedDateTime || null,
+                subject: message.subject ?? "",
+                token: offerReplyToken,
+              },
+              prisma,
+            );
+            const outcome = record.outcome;
+            if (record.outcome === "recorded") {
+              // The message is committed; its files are the slow half, and
+              // Graph has already been told 202. `start` only enqueues. Should
+              // it fail, the reply still reads "still being saved — if this
+              // stays, open the email in Outlook", which is the truth.
+              try {
+                const run = await start(storeOfferReplyAttachments, [
+                  { graphMessageId: message.id, replyId: record.replyId },
+                ]);
+                console.log(
+                  `  Offer ${offerReplyToken}: attachment workflow started: run ${run.runId}`,
+                );
+              } catch (error) {
+                console.error(
+                  `  Offer ${offerReplyToken}: couldn't start the attachment workflow`,
+                  error,
+                );
+              }
+            }
             // Log the negatives too. An "auto-generated" line here is a
             // bounce or an out-of-office arriving, and today this is the only
             // trace of it — it is what a bounce classifier gets tuned against
@@ -592,15 +627,15 @@ async function processNotifications(
                   body: content,
                   from: message.from,
                   to:
-                    message.to?.[0] ??
-                    config.senderUpn ??
-                    "info@royalconstructions.com.au",
+                    message.to?.[0]
+                    ?? config.senderUpn
+                    ?? "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
               console.log(
-                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} ` +
-                  `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
+                `  Compliance ${outreach.party} ${partyToken}: workflow started for message ${message.id} `
+                  + `(matched on ${partyMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;
@@ -653,15 +688,15 @@ async function processNotifications(
                   body: content,
                   from: message.from,
                   to:
-                    message.to?.[0] ??
-                    config.senderUpn ??
-                    "info@royalconstructions.com.au",
+                    message.to?.[0]
+                    ?? config.senderUpn
+                    ?? "info@royalconstructions.com.au",
                   receivedDateTime: message.receivedDateTime,
                 },
               ]);
               console.log(
-                `  Certifier ${certifierToken}: workflow started for message ${message.id} ` +
-                  `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
+                `  Certifier ${certifierToken}: workflow started for message ${message.id} `
+                  + `(matched on ${certifierMatch.matchedOn}): run ${run.runId}`,
               );
             }
             continue;

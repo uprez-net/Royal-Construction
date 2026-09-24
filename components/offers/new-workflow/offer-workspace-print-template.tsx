@@ -154,7 +154,10 @@ export function OfferWorkspacePrintTemplate(
   const data = buildOfferPrintTemplateData(props);
   // The schedule the estimator edited on this offer — not a module constant.
   // An empty schedule produces zero pages rather than an empty table.
-  const inclusionPages = chunkInclusionSchedule(props.draft.inclusionSchedule);
+  const inclusionPages = chunkInclusionSchedule(
+    // Category-only rows exist for the Tender; the Offer prints Offer wording.
+    props.draft.inclusionSchedule.filter((entry) => entry.spec.trim()),
+  );
   const inclusionStartIndexes = inclusionPageStartIndexes(inclusionPages);
   const galleryImages = getAttachedOfferImageSlots(props.images).filter(
     (slot) => slot.key !== "hero",

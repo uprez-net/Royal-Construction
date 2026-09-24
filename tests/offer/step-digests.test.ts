@@ -243,7 +243,7 @@ test("every step has a digest, so no rail row can render blank", () => {
   assert.equal(Object.keys(d).length, 10);
 });
 
-test("the scope digest says when an allowance is left off the Tender", () => {
+test("the scope digest does not mention the retired Tender allowance flag", () => {
   const d = buildOfferStepDigests({
     ...BASE,
     allowances: [
@@ -251,5 +251,5 @@ test("the scope digest says when an allowance is left off the Tender", () => {
       scopeItem("pc2"),
     ],
   });
-  assert.equal(d.scope, "2 allowances · 2 excluded · 1 not on Tender");
+  assert.equal(d.scope, "2 allowances · 2 excluded");
 });
