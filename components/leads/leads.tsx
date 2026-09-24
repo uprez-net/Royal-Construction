@@ -113,6 +113,14 @@ function LeadsWorkspace({
   // Cleared as soon as the filters differ from the remembered ones: page 4 is
   // only page 4 of the list it was taken from.
   const resumeRef = useRef(resumeFrom);
+  // With cacheComponents, Next does not unmount /leads when a lead is opened:
+  // it hides the page (React <Activity>), keeps its state, and re-runs its
+  // effects when it is shown again. Both loading effects used to start over
+  // on page 1 each time, which is what threw away the page on the way back
+  // from a lead (#350). These record what the table has already loaded, so a
+  // re-run with nothing changed refreshes the current view instead.
+  const loadedUrlRef = useRef<string | null>(null);
+  const shownFiltersRef = useRef<string | null>(null);
 
   /* ── Hooks ── */
   const {
@@ -181,6 +189,11 @@ function LeadsWorkspace({
   useEffect(() => {
     const q = debouncedSearch.trim();
     if (q.length > 4 || q.length === 0) {
+      // Shown again with the same filters: the mount effect refreshes the
+      // current page; starting this one over would put the table on page 1.
+      const signature = JSON.stringify([q, activeMetric, activeFilterTiming]);
+      if (shownFiltersRef.current === signature) return;
+      shownFiltersRef.current = signature;
       const filters = {
         query: q,
         metric: activeMetric,
@@ -218,6 +231,31 @@ function LeadsWorkspace({
 
   /* ── URL params on mount ── */
   useEffect(() => {
+    const urlKey = JSON.stringify([initialQuery, initialStatus]);
+    if (loadedUrlRef.current === urlKey) {
+      // Shown again (see loadedUrlRef): refresh what is on screen — the same
+      // tab, page and filters — quietly, without the full-page skeleton, so a
+      // stage changed on the lead shows up without losing the place.
+      if (activeTab === "followups") {
+        refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
+      } else {
+        refreshLeadsData(
+          tableListParams(
+            {
+              query: appliedQuery,
+              metric: activeMetric,
+              filterTiming: activeFilterTiming,
+            },
+            resumeRef.current?.page ?? pageInfo.page,
+          ),
+        );
+      }
+      refreshStats().catch((err: unknown) => {
+        console.error("Failed to refresh lead stats on return", err);
+      });
+      return;
+    }
+    loadedUrlRef.current = urlKey;
     if (initialQuery || initialStatus) {
       const decodedQuery = initialQuery
         ? decodeURIComponent(initialQuery)
@@ -281,6 +319,8 @@ function LeadsWorkspace({
   /* ── Handlers ── */
 
   const handleTabChange = (tab: TabType) => {
+    // The person has moved on from the restored position.
+    resumeRef.current = null;
     setActiveTab(tab);
     if (tab === "followups") {
       refreshLeadsData({ page: 1, limit: 50, hasOpenTask: true });
@@ -334,6 +374,7 @@ function LeadsWorkspace({
 
   const handlePageChange = useCallback(
     async (page: number) => {
+      resumeRef.current = null;
       await refreshLeadsData(
         tableListParams(
           {
