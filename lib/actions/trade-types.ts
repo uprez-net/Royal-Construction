@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
 
 import { requireAdminUser } from "@/lib/auth/require-admin";
 import prisma from "@/lib/prisma";
@@ -16,7 +16,6 @@ import {
   domainActionFailure,
   type DomainActionFailure,
 } from "@/lib/http/domain-response";
-import { CACHE_PROFILES } from "@/types/cache";
 import { TRADE_TYPES_TAG } from "@/types/trade-type";
 
 // Admin → Trade types. The rules — who may, what a name may be, what cannot
@@ -58,16 +57,19 @@ async function run(
 
   try {
     const { renamedTradieIds = [] } = await write(principal);
-    revalidateTag(TRADE_TYPES_TAG, CACHE_PROFILES.SHORT);
+    // updateTag, not revalidateTag: the admin page reloads the pickers' list
+    // straight after this returns, and a stale-while-revalidate read would
+    // hand it the list from before the edit.
+    updateTag(TRADE_TYPES_TAG);
     // A rename also rewrote those tradies' `trade`, so every cached read that
     // shows one has to go too, or the directory groups them under a name the
     // list no longer has.
     if (renamedTradieIds.length > 0) {
       for (const tag of ["tradies", "tradie-management", "tradies-schedules"]) {
-        revalidateTag(tag, CACHE_PROFILES.SHORT);
+        updateTag(tag);
       }
       for (const id of renamedTradieIds) {
-        revalidateTag(`tradie-${id}`, CACHE_PROFILES.SHORT);
+        updateTag(`tradie-${id}`);
       }
     }
     return { ok: true, tradiesRenamed: renamedTradieIds.length };

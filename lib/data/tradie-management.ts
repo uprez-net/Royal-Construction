@@ -411,6 +411,16 @@ export async function reportTradieIncident(
 }
 
 /**
+ * The category tile a tradie sits under, and the key its filter matches.
+ *
+ * The label as stored: the trade list is Admin → Trade types, a tradie can
+ * only be given a listed label, and a rename carries its tradies with it.
+ */
+function tradeCategory(trade: string): string {
+  return trade.trim() || "Others";
+}
+
+/**
  * Retrieves all tradies grouped by trade category with aggregated metrics.
  *
  * Calculates:
@@ -468,10 +478,7 @@ export async function getTradieGroupedByCategory(): Promise<
         },
       };
 
-      // Grouped by the label as stored: the trade list is Admin → Trade
-      // types, a tradie can only be given a listed label, and a rename carries
-      // its tradies with it. The tile's name is the filter it applies.
-      const category = tradie.trade.trim() || "Others";
+      const category = tradeCategory(tradie.trade);
       const existing = grouped.get(category);
 
       if (existing) {
@@ -575,7 +582,6 @@ export async function fetchFilteredTradies(
             ],
           }
         : undefined),
-      ...(input.category ? { trade: input.category } : undefined),
       ...(input.rating ? { rating: { gte: input.rating } } : undefined),
       ...(input.favourite !== undefined
         ? { isFavourite: input.favourite }
@@ -605,7 +611,16 @@ export async function fetchFilteredTradies(
       },
     });
 
-    return tradies.map((tradie) => {
+    // The category is matched here rather than in the query so it is the
+    // same key the tiles group by, blank and untrimmed trades included. This
+    // listing is not paginated, so nothing is lost by filtering after.
+    const inCategory = input.category
+      ? tradies.filter(
+          (tradie) => tradeCategory(tradie.trade) === input.category,
+        )
+      : tradies;
+
+    return inCategory.map((tradie) => {
       return {
         ...tradie,
         lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,
