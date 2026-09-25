@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -27,20 +28,26 @@ import {
 } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useDebounce } from "@/hooks/use-debounce";
 import { downloadWorkbook } from "@/lib/spreadsheet/download-workbook";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { resetProjects, setProjects } from "@/lib/store/slices/projectsSlice";
-import {
-  clearProjectFilters,
-  DEFAULT_PROJECT_STATUS_FILTER,
-  openModal,
-} from "@/lib/store/slices/uiSlice";
+import { setProjects } from "@/lib/store/slices/projectsSlice";
+import { openModal } from "@/lib/store/slices/uiSlice";
 import type { ProjectKPIs, ProjectWithStats } from "@/types/project";
 import { compareAsc, isBefore } from "date-fns";
 import { EnhancedProjectCard } from "./enhanced-project-card";
 import { ProjectFilters } from "./project-filters";
 import { ProjectToolbar } from "./project-toolbar";
 import { formatStatus, projectStatusConfig } from "./project-status";
+import {
+  DEFAULT_PROJECT_STATUS_FILTER,
+  projectDetailHref,
+  projectsListKey,
+  projectsListQuery,
+  readProjectsListParams,
+  withProjectsListParams,
+  type ProjectsListParamChanges,
+} from "./projects-list-url";
 import { fetchJson } from "@/utils/fetch";
 import { getAllProjectsForExport } from "@/lib/actions/projects";
 import type { PaginatedProjectsResult } from "@/lib/data/projects";
@@ -67,12 +74,7 @@ const TABLE_ALIGN = [
   "start",
 ] as const;
 
-export function ProjectsClient({
-  role,
-  projects,
-  pagination,
-  kpis,
-}: {
+type ProjectsClientProps = {
   role: Role;
   projects: ProjectWithStats[];
   pagination: {
@@ -82,20 +84,42 @@ export function ProjectsClient({
     totalPages: number;
   };
   kpis: ProjectKPIs;
-}) {
+  /** `projectsListKey` of the list the server rendered `projects` for. */
+  renderedFor: string;
+};
+
+export function ProjectsClient(props: ProjectsClientProps) {
+  // A fresh visit — the sidebar, "Back to all projects", any link — gets a
+  // fresh list (search box included). Browser back/forward keeps the one Next
+  // preserved for the hidden page, and changing a chip, page or search only
+  // changes search params, which keep this key. The list's place itself is in
+  // the URL, the same as the Leads table.
+  const { bfcacheId } = useRouter();
+  return <ProjectsWorkspace key={bfcacheId} {...props} />;
+}
+
+function ProjectsWorkspace({
+  role,
+  projects,
+  pagination,
+  kpis,
+  renderedFor,
+}: ProjectsClientProps) {
   const dispatch = useAppDispatch();
-  const pageInfo = pagination;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // The status chip, page, search and sort live in the URL: open a project
+  // from the Active chip, come back, and the Active chip is still selected.
+  const list = readProjectsListParams(searchParams);
+  const listKey = projectsListKey(list);
+  const currentPage = list.page;
+  const [pageInfo, setPageInfo] = useState(pagination);
   const { projects: projectsInStore, optimisticUpdates } = useAppSelector(
     (state) => state.projects,
   );
-  const {
-    view,
-    status: statusFilter,
-    searchQuery,
-    sortBy,
-    sortOrder,
-  } = useAppSelector((state) => state.ui.projectFilters);
-  const [currentPage, setCurrentPage] = useState(pagination.page);
+  const view = useAppSelector((state) => state.ui.projectFilters.view);
+  const [searchTerm, setSearchTerm] = useState(list.query);
+  const debouncedSearch = useDebounce(searchTerm, 250);
   const [isPageLoading, setIsPageLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   // Hard re-entry guard: `disabled` alone still allows a second call from the
@@ -104,12 +128,11 @@ export function ProjectsClient({
   // Bumped by the toast's Retry action to re-run the fetch effect.
   const [reloadNonce, setReloadNonce] = useState(0);
 
-  const querySignature = `${statusFilter ?? "all"}|${searchQuery.trim()}|${sortBy}|${sortOrder}`;
-  // Measured against the default, not against "no filter at all": the list
-  // opens on ACTIVE, so treating that as a filter would offer "Clear filters"
-  // on an untouched page and never show the "No projects yet" empty state.
+  // Measured against the default, not against "no filter at all", so an
+  // untouched page never offers "Clear filters" and still shows the
+  // "No projects yet" empty state.
   const hasActiveFilters =
-    statusFilter !== DEFAULT_PROJECT_STATUS_FILTER || searchQuery.trim() !== "";
+    list.status !== DEFAULT_PROJECT_STATUS_FILTER || list.query !== "";
 
   const visibleProjects = useMemo(() => {
     return projectsInStore.map((project) => {
@@ -139,38 +162,65 @@ export function ProjectsClient({
     return items;
   }, [currentPage, pageInfo.totalPages]);
 
+  /* ── URL updates ── */
+  // The browser's replaceState rather than router.replace: this component
+  // loads the list itself, so a chip or a keystroke must not also re-render
+  // the server page. Next keeps useSearchParams in step with it. Replace, not
+  // push: a chip is not a step the back button should walk through; the entry
+  // that matters is the one a project was opened from. Read from
+  // window.location so two changes in one tick (a search settling as a chip
+  // is clicked) both land.
+  const updateListParams = useCallback(
+    (changes: ProjectsListParamChanges) => {
+      const current = new URLSearchParams(window.location.search);
+      window.history.replaceState(
+        null,
+        "",
+        `${pathname}${withProjectsListParams(current, changes)}`,
+      );
+    },
+    [pathname],
+  );
+
+  /* ── Search box → ?query= ── */
   useEffect(() => {
+    const typed = debouncedSearch.trim();
+    if (typed !== list.query) updateListParams({ query: typed, page: null });
+    // Only the person's typing drives this; the URL changing under it (a
+    // chip, paging) must not write the box back over it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  // The server's list is only this list when it was rendered for this URL.
+  // With cacheComponents Next hides /projects while a project is open and
+  // re-runs this when it is shown again; by then the chip may have moved on
+  // from the one the page was rendered for, and seeding the store with that
+  // older list would flash the wrong projects until the fetch lands.
+  useEffect(() => {
+    if (renderedFor !== listKey) return;
     dispatch(setProjects(projects));
-  }, [projects, dispatch]);
+  }, [projects, renderedFor, listKey, dispatch]);
 
-  // Cleanup always runs, unconditionally. The previous guard —
-  // `if (!pathname.includes("projects")) resetProjects()` — could never fire:
-  // the cleanup closes over the pathname from the render that scheduled it,
-  // which on this page always contains "projects". So the projects slice was
-  // never reset and leaked across navigations. This component remounts and
-  // re-seeds from server props on every visit, so clearing on unmount is safe.
-  useEffect(() => {
-    return () => {
-      dispatch(resetProjects());
-      dispatch(clearProjectFilters());
-    };
-  }, [dispatch]);
-
+  /* ── Load what the URL describes ── */
+  // Also re-runs when the page is shown again after a project, so a status
+  // changed there shows up in the list.
   useEffect(() => {
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(async () => {
+
+    void (async () => {
       try {
         setIsPageLoading(true);
 
+        const query = projectsListQuery(list, pageInfo.limit);
         const params = new URLSearchParams({
-          page: String(currentPage),
-          limit: String(pageInfo.limit),
-          sortBy,
-          sortOrder,
+          page: String(query.page),
+          limit: String(query.limit),
+          sortBy: query.sortBy ?? "name",
+          sortOrder: query.sortOrder ?? "asc",
         });
 
-        if (statusFilter) params.set("status", statusFilter);
-        if (searchQuery.trim()) params.set("search", searchQuery.trim());
+        if (query.status) params.set("status", query.status);
+        if (query.search) params.set("search", query.search);
 
         const response = await fetchJson<PaginatedProjectsResult>(
           `/api/projects?${params.toString()}`,
@@ -182,12 +232,21 @@ export function ProjectsClient({
         );
         const data = response.data;
 
-        setCurrentPage(data.page);
         dispatch(setProjects(data.items));
+        setPageInfo(data);
+        setIsPageLoading(false);
+        // A remembered page past the end is answered with the last real one;
+        // put that in the URL too, or the link a project is opened from, and a
+        // reload, would carry a page the list is not on.
+        if (data.page !== list.page) {
+          updateListParams({ page: data.page > 1 ? String(data.page) : null });
+        }
       } catch (error) {
-        // An abort is this effect superseding itself, not a failure.
+        // An abort is this effect superseding itself, not a failure, and the
+        // request that superseded it owns the loading state.
         if (error instanceof Error && error.name === "AbortError") return;
 
+        setIsPageLoading(false);
         console.error("Error fetching projects:", error);
         toast.error("Couldn't refresh projects", {
           description:
@@ -199,26 +258,22 @@ export function ProjectsClient({
             onClick: () => setReloadNonce((nonce) => nonce + 1),
           },
         });
-      } finally {
-        setIsPageLoading(false);
       }
-    }, 250);
+    })();
 
-    return () => {
-      window.clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [
-    currentPage,
-    pageInfo.limit,
-    querySignature,
-    searchQuery,
-    sortBy,
-    sortOrder,
-    statusFilter,
-    reloadNonce,
-    dispatch,
-  ]);
+    return () => controller.abort();
+    // `list` is rebuilt every render; listKey is what it is made of.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, pageInfo.limit, reloadNonce, dispatch, updateListParams]);
+
+  const goToPage = (page: number) => {
+    updateListParams({ page: page > 1 ? String(page) : null });
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    updateListParams({ status: null, query: null, sort: null, page: null });
+  };
 
   const openQuickView = useCallback(
     (project: ProjectWithStats, isAdmin: boolean) => {
@@ -262,8 +317,8 @@ export function ProjectsClient({
         const nextUpcomingMilestone = project.milestones
           .filter(
             (m) =>
-              m.id !== currentMilestone?.id &&
-              !isBefore(new Date(m.targetDate), now),
+              m.id !== currentMilestone?.id
+              && !isBefore(new Date(m.targetDate), now),
           )
           .sort((a, b) =>
             compareAsc(new Date(a.targetDate), new Date(b.targetDate)),
@@ -367,10 +422,22 @@ export function ProjectsClient({
         <div className="space-y-4">
           <ProjectFilters
             kpis={kpis}
-            activeFilter={statusFilter}
-            onFilterChange={() => setCurrentPage(1)}
+            activeFilter={list.status}
+            onFilterChange={(status) =>
+              updateListParams({ status, page: null })
+            }
           />
-          <ProjectToolbar onSearchChange={() => setCurrentPage(1)} />
+          <ProjectToolbar
+            searchTerm={searchTerm}
+            onSearchTermChange={setSearchTerm}
+            sort={list.sort}
+            onSortChange={(sort) =>
+              updateListParams({
+                sort: sort === "name" ? null : sort,
+                page: null,
+              })
+            }
+          />
 
           {/* The list stays mounted while a refresh is in flight — dimming keeps
               scroll position, focus and context instead of replacing the
@@ -402,7 +469,7 @@ export function ProjectsClient({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => dispatch(clearProjectFilters())}
+                    onClick={clearFilters}
                     className="mt-3"
                   >
                     Clear filters
@@ -416,6 +483,10 @@ export function ProjectsClient({
                     key={project.id}
                     role={role}
                     project={project}
+                    detailsHref={projectDetailHref(
+                      project.id,
+                      searchParams.toString(),
+                    )}
                     onDetailsClick={() =>
                       openQuickView(project, role === "ADMIN")
                     }
@@ -446,7 +517,10 @@ export function ProjectsClient({
                   return [
                     <Link
                       key={`name-${project.id}`}
-                      href={`/projects/${project.id}`}
+                      href={projectDetailHref(
+                        project.id,
+                        searchParams.toString(),
+                      )}
                       className="font-medium text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       onClick={(event) => event.stopPropagation()}
                     >
@@ -525,7 +599,7 @@ export function ProjectsClient({
                       href="#"
                       onClick={(event) => {
                         event.preventDefault();
-                        setCurrentPage((page) => Math.max(1, page - 1));
+                        goToPage(Math.max(1, currentPage - 1));
                       }}
                       aria-disabled={currentPage === 1}
                     />
@@ -542,7 +616,7 @@ export function ProjectsClient({
                           isActive={item === currentPage}
                           onClick={(event) => {
                             event.preventDefault();
-                            setCurrentPage(item);
+                            goToPage(item);
                           }}
                         >
                           {item}
@@ -555,8 +629,8 @@ export function ProjectsClient({
                       href="#"
                       onClick={(event) => {
                         event.preventDefault();
-                        setCurrentPage((page) =>
-                          Math.min(pageInfo.totalPages, page + 1),
+                        goToPage(
+                          Math.min(pageInfo.totalPages, currentPage + 1),
                         );
                       }}
                       aria-disabled={currentPage >= pageInfo.totalPages}

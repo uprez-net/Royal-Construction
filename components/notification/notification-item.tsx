@@ -114,8 +114,8 @@ export function NotificationItem({
   const title = n.subject ?? "No title";
   const body = n.body ?? "";
   const { url, target } =
-    n.redirect ??
-    ({ url: "#", target: "_blank" } as NonNullable<
+    n.redirect
+    ?? ({ url: "#", target: "_blank" } as NonNullable<
       NotificationItemExtended["redirect"]
     >);
   const createdAt = n.createdAt ? new Date(n.createdAt) : null;
@@ -125,9 +125,9 @@ export function NotificationItem({
   // Gated on the payload parsing, not just on the marker: a notification whose
   // url is missing an id would otherwise show a button that does nothing.
   const isCertifierExtract =
-    !!url &&
-    isCertifierExtractNotification(url) &&
-    certifierExtractPayloadFromUrl(url) !== null;
+    !!url
+    && isCertifierExtractNotification(url)
+    && certifierExtractPayloadFromUrl(url) !== null;
 
   const handleAdminApprovalAction = () => {
     if (isAdminApproval) {
@@ -181,8 +181,8 @@ export function NotificationItem({
       className={cn(
         "group max-w-86 rounded-2xl border p-3 transition-colors",
         "border-[#E2E8F0] bg-white hover:bg-[#F7F4EE]",
-        !n.isRead &&
-          "border-[#C6923A]/25 shadow-[0_0_0_1px_rgba(198,146,58,0.08)]",
+        !n.isRead
+          && "border-[#C6923A]/25 shadow-[0_0_0_1px_rgba(198,146,58,0.08)]",
       )}
     >
       <div className="flex items-start gap-3">
@@ -211,7 +211,15 @@ export function NotificationItem({
               )}
             </div>
 
-            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            {/* The card opens the notification's page and closes the panel;
+                marking read or archiving should do neither, so the office can
+                work down the list in one sitting. Stopped here rather than on
+                each button because a disabled Button has pointer-events:none
+                and its click lands on this wrapper instead. */}
+            <div
+              className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+              onClick={(e) => e.stopPropagation()}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

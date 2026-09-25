@@ -4,6 +4,11 @@ import { connection } from "next/server";
 import type { Metadata } from "next";
 import { auth } from "@clerk/nextjs/server";
 import { getUserByClerkIdCached } from "@/lib/data/user";
+import {
+  projectsListKey,
+  projectsListQuery,
+  readProjectsListParams,
+} from "@/components/projects/projects-list-url";
 
 export const metadata: Metadata = {
   title: "Projects Management",
@@ -12,7 +17,11 @@ export const metadata: Metadata = {
 
 const projectPageSize = 12;
 
-export default async function ProjectPage() {
+export default async function ProjectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   // Render on demand, never at build. Under Cache Components a `'use cache'`
   // fetcher is PREFILLED during `next build`, which runs its DB query at build
   // time -- and CI can't reach Neon, so the build died on ETIMEDOUT. The fix is
@@ -20,13 +29,20 @@ export default async function ProjectPage() {
   // time, and (2) `connection()` to defer this page's render off the build.
   // Mirrors app/(main)/dashboard/page.tsx, which already builds without a DB.
   await connection();
+  // The list's chip, page, search and sort live in the URL, so coming back
+  // from a project to /projects?status=ACTIVE paints the Active list rather
+  // than every project. Absent, it is the client's default: unfiltered since
+  // the project ladder arrived -- see DEFAULT_PROJECT_STATUS_FILTER, which
+  // explains why "Active" stopped meaning "in flight".
+  const query = await searchParams;
+  const list = readProjectsListParams({
+    get: (name) => {
+      const value = query[name];
+      return (Array.isArray(value) ? value[0] : value) ?? null;
+    },
+  });
   const [projectsPage, kpis, user] = await Promise.all([
-    // Matches the client's default status chip so the first paint is already
-    // the list the reader will see, instead of one that narrows when the
-    // client's own fetch lands. Unfiltered since the project ladder arrived --
-    // see DEFAULT_PROJECT_STATUS_FILTER, which explains why "Active" stopped
-    // meaning "in flight".
-    getProjects({ page: 1, limit: projectPageSize }),
+    getProjects(projectsListQuery(list, projectPageSize)),
     getProjectKPIs(),
     auth().then(({ userId }) =>
       userId ? getUserByClerkIdCached(userId) : null,
@@ -42,6 +58,7 @@ export default async function ProjectPage() {
       <ProjectsClient
         projects={projectsPage.items}
         pagination={projectsPage}
+        renderedFor={projectsListKey(list)}
         kpis={kpis}
         role={user!.role}
       />

@@ -4,7 +4,7 @@
  * Why there is no per-trade colour here
  * -------------------------------------
  * This replaces `randomColourHexGenerator(trade)`, which hashed a trade name into
- * a 10-entry *chart* palette. With 27 entries in TRADIE_TYPES that guaranteed
+ * a 10-entry *chart* palette. With 27 trades in the directory that guaranteed
  * collisions (~3 trades per colour), so the colour could never be a reliable
  * identity signal — and because the palette contained near-black (#0F172A) and
  * two greys, some trades rendered as unreadable text on an 8%-alpha tint of
@@ -13,7 +13,7 @@
  * In this design system colour means *status*: teal is action, amber is warning,
  * red is danger (see DESIGN.md §2). Spending 27 hues on trade identity would
  * compete with that vocabulary for no gain, because trade identity is already
- * carried unambiguously by TRADIE_TYPE_ICONS — a distinct lucide glyph per trade.
+ * carried by the icon each trade is given (TRADE_ICONS in constants/tradieTypes.ts).
  *
  * So: icon carries identity, neutral surface carries the chip, and colour stays
  * free to mean status. If per-trade or per-family colour is ever wanted, it

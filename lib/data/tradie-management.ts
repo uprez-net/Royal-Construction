@@ -22,7 +22,6 @@ import { startOfMonth, subMonths } from "date-fns";
 import { calculateTrend, dateFormat } from "@/utils/formatters";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
-import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { getAllAdminUsersIds } from "./user";
 import {
   createTradie as createTradieDomain,
@@ -412,6 +411,16 @@ export async function reportTradieIncident(
 }
 
 /**
+ * The category tile a tradie sits under, and the key its filter matches.
+ *
+ * The label as stored: the trade list is Admin → Trade types, a tradie can
+ * only be given a listed label, and a rename carries its tradies with it.
+ */
+function tradeCategory(trade: string): string {
+  return trade.trim() || "Others";
+}
+
+/**
  * Retrieves all tradies grouped by trade category with aggregated metrics.
  *
  * Calculates:
@@ -469,16 +478,13 @@ export async function getTradieGroupedByCategory(): Promise<
         },
       };
 
-      const existing = grouped.get(
-        convertCategoryToTradieType(tradie.trade) ?? "Others",
-      );
+      const category = tradeCategory(tradie.trade);
+      const existing = grouped.get(category);
 
       if (existing) {
         existing.push(row);
       } else {
-        grouped.set(convertCategoryToTradieType(tradie.trade) ?? "Others", [
-          row,
-        ]);
+        grouped.set(category, [row]);
       }
     }
 
@@ -495,8 +501,8 @@ export async function getTradieGroupedByCategory(): Promise<
             ratings.length > 0
               ? Number(
                   (
-                    ratings.reduce((sum, rating) => sum + rating, 0) /
-                    ratings.length
+                    ratings.reduce((sum, rating) => sum + rating, 0)
+                    / ratings.length
                   ).toFixed(1),
                 )
               : 0,
@@ -576,7 +582,6 @@ export async function fetchFilteredTradies(
             ],
           }
         : undefined),
-      ...(input.category ? { trade: input.category } : undefined),
       ...(input.rating ? { rating: { gte: input.rating } } : undefined),
       ...(input.favourite !== undefined
         ? { isFavourite: input.favourite }
@@ -606,7 +611,16 @@ export async function fetchFilteredTradies(
       },
     });
 
-    return tradies.map((tradie) => {
+    // The category is matched here rather than in the query so it is the
+    // same key the tiles group by, blank and untrimmed trades included. This
+    // listing is not paginated, so nothing is lost by filtering after.
+    const inCategory = input.category
+      ? tradies.filter(
+          (tradie) => tradeCategory(tradie.trade) === input.category,
+        )
+      : tradies;
+
+    return inCategory.map((tradie) => {
       return {
         ...tradie,
         lastQuotedPrice: tradie.lastQuotedPrice?.toString() ?? null,

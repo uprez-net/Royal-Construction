@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   CheckSquare,
+  HardHat,
   LucideIcon,
   PenLine,
   Plug,
@@ -43,6 +44,13 @@ export default function AdminPage() {
       description: "Add, remove, and manage team members and their roles.",
       icon: Users,
       href: "/admin/manage-team",
+    },
+    {
+      label: "Manage Trade Types",
+      description:
+        "Add, rename and archive the trades tradies are listed under.",
+      icon: HardHat,
+      href: "/admin/trade-types",
     },
     {
       label: "Xero Accounting",

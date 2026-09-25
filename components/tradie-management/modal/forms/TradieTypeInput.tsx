@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown, HardHat } from "lucide-react";
+import { Check, ChevronsUpDown, HardHat, Loader2 } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -18,7 +18,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
+import { findTradeType, useTradeTypes } from "@/hooks/use-trade-types";
+import { TradeIconGlyph } from "../../trade-icon";
 
 interface TradeTypeComboboxProps {
   id?: string;
@@ -40,13 +41,10 @@ export function TradeTypeCombobox({
   disabled,
 }: TradeTypeComboboxProps) {
   const [open, setOpen] = useState(false);
-
-  const selectedEntry = Object.entries(TRADIE_TYPES).find(
-    ([, label]) => label === value,
-  );
-  const SelectedIcon = selectedEntry
-    ? TRADIE_TYPE_ICONS[selectedEntry[0] as keyof typeof TRADIE_TYPES]
-    : HardHat;
+  // The list is Admin → Trade types. A load failure says so here rather than
+  // showing an empty list that reads as "there are no trades".
+  const { tradeTypes, status, error: loadError, reload } = useTradeTypes();
+  const selected = findTradeType(tradeTypes, value);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
@@ -72,7 +70,10 @@ export function TradeTypeCombobox({
           )}
         >
           <span className="flex items-center gap-2 truncate">
-            <SelectedIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <TradeIconGlyph
+              icon={selected?.icon}
+              className="h-4 w-4 shrink-0"
+            />
             {value || "Select trade type"}
           </span>
           <ChevronsUpDown
@@ -88,33 +89,56 @@ export function TradeTypeCombobox({
         <Command>
           <CommandInput placeholder="Search trade type..." />
           <CommandList>
-            <CommandEmpty>No trade type found.</CommandEmpty>
+            {status === "error" ? (
+              <div className="space-y-2 px-3 py-4 text-sm" role="alert">
+                <p className="text-destructive">{loadError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void reload()}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : null}
+            {tradeTypes.length === 0
+            && (status === "idle" || status === "loading") ? (
+              <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Loading trades…
+              </div>
+            ) : (
+              <CommandEmpty>
+                No trade type found. An admin can add one under Admin → Trade
+                types.
+              </CommandEmpty>
+            )}
             <CommandGroup>
-              {Object.entries(TRADIE_TYPES).map(([key, label]) => {
-                const Icon =
-                  TRADIE_TYPE_ICONS[key as keyof typeof TRADIE_TYPES];
-                return (
-                  <CommandItem
-                    key={key}
-                    value={label}
-                    onSelect={() => {
-                      onChange(label);
-                      setOpen(false);
-                      onBlur?.();
-                    }}
-                  >
-                    <Icon className="mr-2 h-4 w-4" aria-hidden="true" />
-                    {label}
-                    <Check
-                      className={cn(
-                        "ml-auto h-4 w-4",
-                        value === label ? "opacity-100" : "opacity-0",
-                      )}
-                      aria-hidden="true"
-                    />
-                  </CommandItem>
-                );
-              })}
+              {tradeTypes.map((tradeType) => (
+                <CommandItem
+                  key={tradeType.id}
+                  value={tradeType.label}
+                  onSelect={() => {
+                    onChange(tradeType.label);
+                    setOpen(false);
+                    onBlur?.();
+                  }}
+                >
+                  <TradeIconGlyph
+                    icon={tradeType.icon}
+                    className="mr-2 h-4 w-4"
+                  />
+                  {tradeType.label}
+                  <Check
+                    className={cn(
+                      "ml-auto h-4 w-4",
+                      value === tradeType.label ? "opacity-100" : "opacity-0",
+                    )}
+                    aria-hidden="true"
+                  />
+                </CommandItem>
+              ))}
             </CommandGroup>
           </CommandList>
         </Command>
