@@ -658,6 +658,21 @@ model Tradie {
   @@index([phone])
 }
 
+/// A trade in the tradie directory (Admin → Trade types). `Tradie.trade`
+/// holds the label rather than a foreign key; renaming a trade renames it on
+/// its tradies in the same transaction (lib/domain/tradies/trade-types.ts).
+model TradeType {
+  id         String    @id @default(uuid())
+  label      String    @unique
+  /// A key from TRADE_ICON_KEYS in types/trade-type.ts.
+  icon       String
+  /// Off the pickers. Tradies already under it keep it.
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model TradieIncident {
   id          String           @id @default(uuid())
   tradieId    String

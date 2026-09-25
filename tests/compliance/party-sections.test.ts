@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   ComplianceAlertStatus,
@@ -10,8 +12,9 @@ import {
 } from "@prisma/client";
 import { test } from "vitest";
 
-import { TRADIE_TYPES } from "@/constants/tradieTypes";
+import { isLockedTradeLabel } from "@/lib/domain/tradies/trade-types";
 import {
+  CERTIFIER_TRADE_LABEL,
   COMPLIANCE_PARTY_SECTIONS,
   consultantForDocumentType,
   CONSULTANT_DELIVERABLES,
@@ -42,6 +45,7 @@ import {
   outreachForParty,
   requiresPlanningCertificate,
 } from "@/types/compliance";
+import { REPO_ROOT } from "../support/repo-root";
 
 // ---------------------------------------------------------------------------
 // The section split
@@ -510,14 +514,25 @@ test("outreachForParty finds the row, or nothing", () => {
 // ---------------------------------------------------------------------------
 
 test("every party pickable from the directory names a trade that exists", () => {
-  // `PARTY_TRADE_LABEL` writes these labels out rather than importing
-  // TRADIE_TYPES, because that module carries a lucide icon per trade and
-  // constants/complianceDocuments.ts is read by the nightly overdue sweep — a
-  // cron job has no business pulling in a React icon library. This is the
-  // cheaper half of that trade, and the failure it guards against is silent: a
-  // party whose trade label matches nothing in the directory gets a contact
-  // picker that comes back empty however many firms are on the books.
-  const trades = new Set<string>(Object.values(TRADIE_TYPES));
+  // The trade list is the TradeType table now, which an admin edits. What
+  // guarantees these labels are in it is the migration that seeds it, and
+  // the domain refusing to rename, archive or delete one of them. The failure
+  // this guards against is silent: a party whose trade label matches nothing
+  // in the directory gets a contact picker that comes back empty however many
+  // firms are on the books.
+  const seed = readFileSync(
+    join(
+      REPO_ROOT,
+      "prisma/migrations/20260925100000_trade_types/migration.sql",
+    ),
+    "utf8",
+  );
+  const seeded = new Set(
+    [...seed.matchAll(/^\s*\('([^']+)', '[a-z0-9-]+'\),?$/gm)].map(
+      (match) => match[1],
+    ),
+  );
+  assert.ok(seeded.size > 30, "the seed block was not found");
 
   for (const party of Object.values(CompliancePartyType)) {
     const trade = PARTY_TRADE_LABEL[party];
@@ -526,10 +541,13 @@ test("every party pickable from the directory names a trade that exists", () => 
     if (trade === null) continue;
 
     assert.ok(
-      trades.has(trade),
-      `${party} is picked from "${trade}", which is not a trade in the directory`,
+      seeded.has(trade),
+      `${party} is picked from "${trade}", which the trade list is not seeded with`,
     );
+    assert.ok(isLockedTradeLabel(trade), `"${trade}" can be renamed away`);
   }
+  assert.ok(seeded.has(CERTIFIER_TRADE_LABEL));
+  assert.ok(isLockedTradeLabel(CERTIFIER_TRADE_LABEL));
 });
 
 test("every consultant produces something, and every deliverable has a producer", () => {

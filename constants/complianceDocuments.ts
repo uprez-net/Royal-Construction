@@ -142,8 +142,8 @@ export function documentTypesForParty(
   party: CompliancePartyType,
 ): readonly RequiredComplianceDocumentType[] {
   return (
-    COMPLIANCE_PARTY_SECTIONS.find((section) => section.party === party)
-      ?.types ?? []
+    COMPLIANCE_PARTY_SECTIONS.find((section) => section.party === party)?.types
+    ?? []
   );
 }
 
@@ -398,16 +398,13 @@ export const DEVELOPER_APPROVAL_DOCUMENT =
 /**
  * The trade each party is picked from in the tradie directory.
  *
- * Labels, not keys: `Tradie.trade` stores "Surveying", not "SURVEYOR", which is
- * what TradeTypeCombobox writes.
- *
- * Written out rather than read from TRADIE_TYPES, though every one of these is
- * a value in that table. That module carries an icon per trade and therefore
- * imports lucide-react, and this one is read by the nightly overdue sweep and
- * by every `"use server"` module in the compliance flow — importing it would
- * pull a React icon library into a cron job. The values are asserted equal in
- * tests/compliance/party-sections.test.ts, which is the cheaper half of that
- * trade and the same one `ALERT_TITLE` makes.
+ * Labels: `Tradie.trade` stores "Surveying", which is what TradeTypeCombobox
+ * writes. The trade list itself is the `TradeType` table, which an admin can
+ * edit; every label here is seeded there and locked against rename, archive
+ * and delete (`DIRECTORY_PICKED_TRADE_LABELS`), because a party whose trade
+ * matches nothing gets a contact picker that comes back empty however many
+ * firms are on the books. tests/compliance/party-sections.test.ts asserts the
+ * seed carries each one.
  */
 export const PARTY_TRADE_LABEL: Readonly<
   Record<CompliancePartyType, string | null>
@@ -429,6 +426,20 @@ export const PARTY_TRADE_LABEL: Readonly<
   // sits in rather than by what the firm does.
   [CompliancePartyType.DEVELOPER]: null,
 };
+
+/** The trade the certifier is picked from when an engagement starts. */
+export const CERTIFIER_TRADE_LABEL = "Certifier";
+
+/**
+ * Every trade the compliance flow picks a contact from by name. Admin → Trade
+ * types refuses to rename, archive or delete one of these.
+ */
+export const DIRECTORY_PICKED_TRADE_LABELS: readonly string[] = [
+  CERTIFIER_TRADE_LABEL,
+  ...Object.values(PARTY_TRADE_LABEL).filter(
+    (label): label is string => label !== null,
+  ),
+];
 
 /** How each party is named in headings, buttons and thread tabs. */
 export const PARTY_LABEL: Readonly<Record<CompliancePartyType, string>> = {
@@ -867,12 +878,12 @@ export const MAPPABLE_DOCUMENT_TYPES = Object.values(
   ComplianceDocumentType,
 ).filter(
   (type) =>
-    type !== ComplianceDocumentType.CHECKLIST_ITEM &&
+    type !== ComplianceDocumentType.CHECKLIST_ITEM
     // A council's request for more information is a line of its own list, the
     // same way a checklist item is, and neither can be what another line is
     // asking for.
-    type !== ComplianceDocumentType.DA_ITEM &&
-    type !== ComplianceDocumentType.UNKNOWN,
+    && type !== ComplianceDocumentType.DA_ITEM
+    && type !== ComplianceDocumentType.UNKNOWN,
 ) as [ComplianceDocumentType, ...ComplianceDocumentType[]];
 
 const DOCUMENT_LABELS: Partial<Record<ComplianceDocumentType, string>> = {

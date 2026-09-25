@@ -18,8 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, ChevronsDown, Loader2, Square, Trash2 } from "lucide-react";
-import { TRADIE_TYPE_ICONS, TRADIE_TYPES } from "@/constants/tradieTypes";
+import { Check, ChevronsDown, Loader2, Trash2 } from "lucide-react";
+import { TradeIcon } from "@/components/tradie-management/trade-icon";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,6 @@ import {
 } from "./schedule-tradie-modal";
 import { useAppSelector } from "@/lib/store/hooks";
 import { useEffect, useMemo, useState } from "react";
-import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { generateTradieOutreachEmail } from "@/utils/generate-email";
 import { format } from "date-fns";
 import { CollapsibleEmailContent } from "../tradie-tab/collapsible-email-content";
@@ -53,26 +52,16 @@ interface TradieScheduleRowProps {
 }
 
 /**
- * Display label for a grouped trade category. The grouping key is a
- * `TRADIE_TYPES` key ("ELECTRICIAN") or the literal "Others" for unmapped
- * trades, so an unguarded `TRADIE_TYPES[key]` renders `undefined`.
+ * Display label for a grouped trade category. The grouping key is the trade's
+ * label as the tradies hold it ("Plumbing"), or "Others" for a tradie with no
+ * trade at all.
  */
 function categoryLabel(category: string) {
-  return TRADIE_TYPES[category as keyof typeof TRADIE_TYPES] ?? "Other trades";
+  return category === "Others" ? "Other trades" : category;
 }
 
-function categoryIcon(category: string) {
-  const key = convertCategoryToTradieType(category);
-
-  return (key ? TRADIE_TYPE_ICONS[key] : undefined) ?? Square;
-}
-
-/** Kept as a render helper rather than a `const Icon = …` in the component body,
- * which `react-hooks/static-components` correctly rejects. */
 function renderCategoryIcon(category: string, className: string) {
-  const Icon = categoryIcon(category);
-
-  return <Icon className={className} aria-hidden="true" />;
+  return <TradeIcon trade={category} className={className} />;
 }
 
 function RequiredMark() {
@@ -126,8 +115,8 @@ export function TradieScheduleRow({
     if (!tradieSearchQuery) return selectedCategoryTradies;
     return selectedCategoryTradies.filter(
       (tradie) =>
-        tradie.name.toLowerCase().includes(tradieSearchQuery.toLowerCase()) ||
-        tradie.trade.toLowerCase().includes(tradieSearchQuery.toLowerCase()),
+        tradie.name.toLowerCase().includes(tradieSearchQuery.toLowerCase())
+        || tradie.trade.toLowerCase().includes(tradieSearchQuery.toLowerCase()),
     );
   }, [tradieSearchQuery, selectedCategoryTradies]);
 
@@ -162,8 +151,8 @@ export function TradieScheduleRow({
       projectId: "",
       projectName: activeProject?.name ?? "Project Name",
       taskLabel:
-        milestones.find((m) => m.id === row.milestoneId)?.name ??
-        "Milestone Name",
+        milestones.find((m) => m.id === row.milestoneId)?.name
+        ?? "Milestone Name",
       scheduledDate: row.scheduledDate
         ? format(new Date(row.scheduledDate), "dd MMM yyyy")
         : format(new Date(), "dd MMM yyyy"),
@@ -333,9 +322,9 @@ export function TradieScheduleRow({
                 id={fieldId("tradie")}
                 variant="outline"
                 disabled={
-                  !row.tradeCategory ||
-                  loading ||
-                  selectedCategoryTradies.length === 0
+                  !row.tradeCategory
+                  || loading
+                  || selectedCategoryTradies.length === 0
                 }
                 aria-invalid={Boolean(errors.tradieId)}
                 aria-describedby={describedBy("tradie", errors.tradieId)}
@@ -481,12 +470,14 @@ export function TradieScheduleRow({
             </SelectTrigger>
 
             <SelectContent className="w-auto min-w-full">
-              {selectedProjectStage &&
-                stageToMilestoneMap[selectedProjectStage].map((milestone) => (
-                  <SelectItem key={milestone.id} value={milestone.id}>
-                    {milestone.name}
-                  </SelectItem>
-                ))}
+              {selectedProjectStage
+                && stageToMilestoneMap[selectedProjectStage].map(
+                  (milestone) => (
+                    <SelectItem key={milestone.id} value={milestone.id}>
+                      {milestone.name}
+                    </SelectItem>
+                  ),
+                )}
             </SelectContent>
           </Select>
 
