@@ -14,12 +14,15 @@ interface EnhancedProjectCardProps {
   role: UserRoles;
   project: ProjectWithStats;
   onDetailsClick?: (projectId: string) => void;
+  /** The full project page, carrying the list it was opened from. */
+  detailsHref: string;
 }
 
 export function EnhancedProjectCard({
   role,
   project,
   onDetailsClick,
+  detailsHref,
 }: EnhancedProjectCardProps) {
   const isAdmin = role === "ADMIN";
   const config = projectStatusConfig(project.status);
@@ -170,7 +173,7 @@ export function EnhancedProjectCard({
 
       <div className="flex items-center justify-end border-t border-border/40 bg-muted/30 px-5 py-3">
         <Link
-          href={`/projects/${project.id}`}
+          href={detailsHref}
           className="inline-flex items-center gap-2 rounded-md text-xs font-semibold text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           Details

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ArrowRightCircle, CalendarCheck, MapPin, Phone } from "lucide-react";
 
 import { ProjectWithStats } from "@/types/project";
@@ -8,6 +9,7 @@ import { getBudgetStatus } from "@/lib/utils/project-budget-status";
 import { Button } from "../ui/button";
 import type { TabType } from "./project-detail-modal";
 import { formatStatus, projectStatusConfig } from "./project-status";
+import { projectDetailHref } from "./projects-list-url";
 
 interface ProjectOverviewTabProps {
   isAdmin: boolean;
@@ -31,6 +33,14 @@ export function OverviewTab({
   setActiveTab,
   onClose,
 }: ProjectOverviewTabProps) {
+  // The quick view also opens from the dashboard; only the Projects list has
+  // a place in its URL worth returning to.
+  const searchParams = useSearchParams();
+  const fromList = usePathname() === "/projects";
+  const detailsHref = projectDetailHref(
+    project.id,
+    fromList ? searchParams.toString() : "",
+  );
   // A missing or non-numeric Decimal string must not reach the formatter: it
   // rendered "$NaN" in the tiles and "NaN%" in the label.
   const spentValue = Number(project.spent);
@@ -211,7 +221,7 @@ export function OverviewTab({
 
       <div className="flex flex-wrap gap-2">
         <Button asChild size="lg" onClick={onClose}>
-          <Link href={`/projects/${project.id}`}>
+          <Link href={detailsHref}>
             <ArrowRightCircle aria-hidden="true" />
             Open full details
           </Link>

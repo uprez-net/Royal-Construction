@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
@@ -23,6 +24,7 @@ import { formatDisplayDate, normalizeDateString } from "@/utils/date";
 import { UploadButton } from "@/components/common/upload-button";
 import { appendFileToProject } from "@/lib/store/slices/projectsSlice";
 import { useAppDispatch } from "@/lib/store/hooks";
+import { projectsListHref } from "@/components/projects/projects-list-url";
 
 type ProjectRequirementsHeader = {
   legalAdministration?: {
@@ -47,8 +49,10 @@ const LEGAL_SECTION_ID = "legalAdministration";
 
 export function ProjectHeader({ project }: { project: ProjectDetail }) {
   const dispatch = useAppDispatch();
-  const requirements = (project.requirements ??
-    {}) as ProjectRequirementsHeader;
+  // Back to the chip and page of the list this project was opened from.
+  const backToListHref = projectsListHref(useSearchParams().get("list"));
+  const requirements = (project.requirements
+    ?? {}) as ProjectRequirementsHeader;
   const legal = requirements.legalAdministration ?? {};
 
   const rawSignedDate = legal.signedDate;
@@ -67,11 +71,11 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
 
   const statusTone = projectStatusConfig(project.status);
   const showPcaWarning =
-    pcaMissing &&
-    (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+    pcaMissing
+    && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
   const showHbcfWarning =
-    hbcfInsuranceMissing &&
-    (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
+    hbcfInsuranceMissing
+    && (project.status === "ACTIVE" || project.status === "NEEDS_ATTENTION");
 
   const legalSectionAnchor = `#${LEGAL_SECTION_ID}`;
   const ownerContacts = (
@@ -93,7 +97,7 @@ export function ProjectHeader({ project }: { project: ProjectDetail }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <Link
-            href="/projects"
+            href={backToListHref}
             className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />
