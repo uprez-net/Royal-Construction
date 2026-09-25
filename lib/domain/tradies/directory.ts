@@ -13,6 +13,7 @@ import {
   type DomainPrincipal,
 } from "../principal";
 import { assertCanReadTradieDirectory } from "../access/tradies";
+import { resolveTradeLabel } from "./trade-types";
 
 // The tradie directory: who may read it, who may change it, and what has to go
 // through an approval instead of being written directly.
@@ -54,6 +55,7 @@ export async function createTradie(
   db: DomainDb,
 ): Promise<Tradie> {
   requireAdminPrincipal(principal);
+  const trade = await resolveTradeLabel(input.trade, db);
 
   return db.tradie.create({
     data: {
@@ -66,7 +68,7 @@ export async function createTradie(
       name: input.name,
       note: input.note ?? null,
       phone: input.phone,
-      trade: input.trade,
+      trade,
     },
   });
 }
@@ -86,7 +88,11 @@ export async function updateTradie(
   db: DomainDb,
 ): Promise<Tradie> {
   requireAdminPrincipal(principal);
-  await requireTradie(tradieId, db);
+  const current = await requireTradie(tradieId, db);
+  const trade =
+    input.trade === undefined
+      ? undefined
+      : await resolveTradeLabel(input.trade, db, { current: current.trade });
 
   const data = Object.fromEntries(
     Object.entries({
@@ -103,7 +109,7 @@ export async function updateTradie(
       name: input.name,
       note: input.note,
       phone: input.phone,
-      trade: input.trade,
+      trade,
     }).filter(([, value]) => value !== undefined),
   );
 

@@ -22,7 +22,6 @@ import { startOfMonth, subMonths } from "date-fns";
 import { calculateTrend, dateFormat } from "@/utils/formatters";
 import { createNotification } from "@/types/notification";
 import { triggerNotification } from "../notification/novu";
-import { convertCategoryToTradieType } from "@/utils/normalize-tradie-type";
 import { getAllAdminUsersIds } from "./user";
 import {
   createTradie as createTradieDomain,
@@ -469,16 +468,16 @@ export async function getTradieGroupedByCategory(): Promise<
         },
       };
 
-      const existing = grouped.get(
-        convertCategoryToTradieType(tradie.trade) ?? "Others",
-      );
+      // Grouped by the label as stored: the trade list is Admin → Trade
+      // types, a tradie can only be given a listed label, and a rename carries
+      // its tradies with it. The tile's name is the filter it applies.
+      const category = tradie.trade.trim() || "Others";
+      const existing = grouped.get(category);
 
       if (existing) {
         existing.push(row);
       } else {
-        grouped.set(convertCategoryToTradieType(tradie.trade) ?? "Others", [
-          row,
-        ]);
+        grouped.set(category, [row]);
       }
     }
 
@@ -495,8 +494,8 @@ export async function getTradieGroupedByCategory(): Promise<
             ratings.length > 0
               ? Number(
                   (
-                    ratings.reduce((sum, rating) => sum + rating, 0) /
-                    ratings.length
+                    ratings.reduce((sum, rating) => sum + rating, 0)
+                    / ratings.length
                   ).toFixed(1),
                 )
               : 0,

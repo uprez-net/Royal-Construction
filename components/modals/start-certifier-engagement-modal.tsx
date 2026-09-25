@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TRADIE_TYPES } from "@/constants/tradieTypes";
+import { CERTIFIER_TRADE_LABEL } from "@/constants/complianceDocuments";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   complianceScope,
@@ -109,7 +109,7 @@ export function StartCertifierEngagementModal({
             <div className="space-y-2">
               <Label htmlFor="certifier-contact">Certifier</Label>
               <ContactPicker
-                trade={TRADIE_TYPES.CERTIFIER}
+                trade={CERTIFIER_TRADE_LABEL}
                 label="Certifier"
                 value={certifier}
                 onChange={setCertifier}
