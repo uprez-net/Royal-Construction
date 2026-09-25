@@ -54,7 +54,8 @@ test("only an admin may add a trade, and a refusal writes nothing", async () => 
 test("a new trade is stored tidied, with a known icon", async () => {
   const recorder = recordingDb({
     "tradeType.findFirst": null,
-    "tradeType.create": (args) => row({ ...(args as { data: object }).data }),
+    "tradeType.create": (args: unknown) =>
+      row({ ...(args as { data: object }).data }),
   });
 
   const created = await createTradeType(
