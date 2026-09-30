@@ -123,6 +123,9 @@ export async function findCustomerByContact(
     if (byEmail) return byEmail;
   }
   if (phone) {
+    // `phone` is already in `canonicalPhone` form (the owner rule put it there),
+    // and so is every stored `Customer.phone`, so an exact match is the same
+    // number however either side was typed.
     const byPhone = await db.customer.findUnique({ where: { phone } });
     if (byPhone) return byPhone;
   }

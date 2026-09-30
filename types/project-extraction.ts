@@ -227,7 +227,7 @@ export const projectExtractionSchema = z
       "Contract 'WHERE' section: the string between 'SITE ADDRESS:' and 'FINANCE'. Prevents mobilization to the wrong lot.",
     ),
     legalAdministrationOwners: ownersField.describe(
-      "Contract 'WHO' section: one entry per named owner (Owner 1, Owner 2, ...), in document order, each with that owner's own name, email and phone. Never move a contact detail onto a different owner; leave it blank when it is not printed against this owner.",
+      "Contract 'WHO' section: one entry per named owner (Owner 1, Owner 2, ...), in document order, each with that owner's own name, email, phone and address. Never move a contact detail onto a different owner; leave it blank when it is not printed against this owner.",
     ),
     legalAdministrationCommencementTrigger: blankStringField.describe(
       "Contract Clause 10(a): the 'later of' condition plus list items (i) to (v) that start the build clock.",

@@ -5,6 +5,7 @@ import { DomainValidationError } from "@/lib/domain/errors";
 import { resolveCustomersForProject } from "@/lib/domain/identity/customers";
 import { createProjectFromLead } from "@/lib/domain/projects/creation";
 import {
+  canonicalPhone,
   ownerContactsFromOwners,
   projectOwnerProblems,
   requireProjectOwners,
@@ -108,12 +109,28 @@ describe("the owner rule", () => {
     assert.equal(problems[0].field, "phone");
   });
 
-  test("requireProjectOwners trims, lower-cases the email and drops blank rows", () => {
+  test("requireProjectOwners trims, lower-cases the email, canonicalises the phone and drops blank rows", () => {
     const owners = requireProjectOwners([
       { ...jane, email: "  Jane@Example.com ", name: " Jane Owner " },
       { address: "", email: "", name: "", phone: "" },
     ]);
-    assert.deepEqual(owners, [{ ...jane }]);
+    assert.deepEqual(owners, [{ ...jane, phone: "0400111222" }]);
+  });
+
+  test("a phone is one canonical form however it was typed", () => {
+    assert.equal(canonicalPhone(" 0400 111 222 "), "0400111222");
+    assert.equal(canonicalPhone("(0400) 111-222"), "0400111222");
+    // The "+" is kept, and no country code is guessed for a local number.
+    assert.equal(canonicalPhone("+61 400 111 222"), "+61400111222");
+    assert.equal(canonicalPhone("no digits"), "");
+  });
+
+  test("an owner whose phone has no digits needs a phone number", () => {
+    const problems = projectOwnerProblems([{ ...jane, phone: "TBC" }]);
+    assert.deepEqual(
+      problems.map((problem) => problem.message),
+      ["Owner 1 needs a phone number."],
+    );
   });
 
   test("requireProjectOwners throws a refusal naming the owner field", () => {
@@ -179,6 +196,39 @@ describe("the wizard", () => {
 });
 
 describe("resolving owners to customers", () => {
+  test("a phone typed with spaces finds the customer stored without them", async () => {
+    // The owner arrives with a new email, so the phone is the only match —
+    // the case that used to create a second customer for the same person.
+    const existing = customerRow("c-1", {
+      ...jane,
+      email: "old@example.com",
+      phone: "0400111222",
+    });
+    const recorder = recordingDb({
+      "customer.findFirst": null,
+      "customer.findUnique": (args: unknown) =>
+        (args as { where: { phone: string } }).where.phone === "0400111222"
+          ? existing
+          : null,
+      "customer.update": (args: unknown) => ({
+        ...existing,
+        ...(args as { data: object }).data,
+      }),
+    });
+
+    const [resolved] = await resolveCustomersForProject(
+      requireProjectOwners([jane]),
+      recorder.db,
+    );
+
+    assert.equal(resolved.customer.id, "c-1");
+    assert.equal(resolved.created, false);
+    assert.deepEqual(
+      recorder.writes().map((call) => call.operation),
+      ["customer.update"],
+    );
+  });
+
   test("new owners become new customers, in order, with every field", async () => {
     const recorder = recordingDb({
       "customer.create": (args: unknown) =>
@@ -375,7 +425,7 @@ describe("creating a project from a lead", () => {
     };
     assert.deepEqual(
       requirements.legalAdministration.ownerContacts,
-      ownerContactsFromOwners([jane, john]),
+      ownerContactsFromOwners(requireProjectOwners([jane, john])),
     );
     assert.doesNotMatch(
       JSON.stringify(recorder.writes()),

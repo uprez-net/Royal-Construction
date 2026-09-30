@@ -45,3 +45,32 @@ DROP INDEX "Customer_xeroContactId_key";
 
 -- AlterTable
 ALTER TABLE "Customer" DROP COLUMN "xeroContactId";
+
+-- Customer.phone is an identity (unique), so every row is put in the one form
+-- the app now compares and stores it in: digits only, a leading "+" kept
+-- (lib/domain/projects/owners.ts#canonicalPhone). Without this an existing
+-- "0400 111 222" is missed by a lookup for "0400111222" and the same person
+-- becomes a second customer.
+--
+-- A group of rows that would all become the same number is the same person
+-- stored twice already. Those rows are left exactly as they are for someone to
+-- merge by hand, rather than failing the deploy on the unique index or
+-- guessing which record survives. Leaving them also means no row is ever
+-- rewritten onto a value another row still holds.
+WITH canon AS (
+    SELECT
+        "id",
+        CASE WHEN btrim("phone") LIKE '+%' THEN '+' ELSE '' END
+            || regexp_replace("phone", '[^0-9]', '', 'g') AS "phone"
+    FROM "Customer"
+),
+unshared AS (
+    SELECT "phone" FROM canon GROUP BY "phone" HAVING count(*) = 1
+)
+UPDATE "Customer" AS c
+SET "phone" = canon."phone"
+FROM canon
+JOIN unshared ON unshared."phone" = canon."phone"
+WHERE c."id" = canon."id"
+  AND c."phone" <> canon."phone"
+  AND regexp_replace(canon."phone", '[^0-9]', '', 'g') <> '';

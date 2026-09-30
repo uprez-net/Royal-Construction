@@ -1245,8 +1245,8 @@ export function FieldErrorBoundaryShell({
       data-invalid={error ? "true" : undefined}
       className={cn(
         "scroll-mt-24 rounded-lg transition-shadow",
-        error &&
-          "bg-destructive-light/40 p-2 -m-2 ring-1 ring-destructive/60 ring-offset-0",
+        error
+          && "bg-destructive-light/40 p-2 -m-2 ring-1 ring-destructive/60 ring-offset-0",
       )}
     >
       <div

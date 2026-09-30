@@ -33,7 +33,10 @@ export type ProjectOwnerInput = {
   readonly address?: string | null;
 };
 
-/** An owner that has passed the rule: every field present and trimmed. */
+/**
+ * An owner that has passed the rule: every field present and trimmed, the
+ * email lower-cased and the phone in `canonicalPhone` form.
+ */
 export type ProjectOwner = {
   readonly name: string;
   readonly email: string;
@@ -66,9 +69,24 @@ function clean(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** Digits only, so "0400 111 222" and "0400111222" are the same number. */
-function phoneKey(phone: string): string {
-  return phone.replace(/\D/g, "");
+/**
+ * The one form a phone number is compared, looked up and stored in: digits
+ * only, with a leading "+" kept, so "0400 111 222", "0400-111-222" and
+ * "0400111222" are one customer rather than three.
+ *
+ * Deliberately not E.164: nothing else in the app has adopted it, and
+ * guessing a country code for a number typed without one is a guess.
+ * "+61 400 111 222" and "0400 111 222" therefore stay different numbers.
+ *
+ * Used by the owner rule and by every write of `Customer.phone`, because the
+ * unique constraint on that column is only an identity if every row is in the
+ * same form.
+ */
+export function canonicalPhone(phone: string): string {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
+  return trimmed.startsWith("+") ? `+${digits}` : digits;
 }
 
 function normalizeOwner(input: ProjectOwnerInput): ProjectOwner {
@@ -78,7 +96,7 @@ function normalizeOwner(input: ProjectOwnerInput): ProjectOwner {
     // operator capitalised their address.
     email: clean(input.email).toLowerCase(),
     name: clean(input.name),
-    phone: clean(input.phone),
+    phone: canonicalPhone(clean(input.phone)),
   };
 }
 
@@ -151,9 +169,8 @@ export function projectOwnerProblems(
       }
     }
 
-    const key = phoneKey(owner.phone);
-    if (key) {
-      const first = phoneOwner.get(key);
+    if (owner.phone) {
+      const first = phoneOwner.get(owner.phone);
       if (first !== undefined) {
         problems.push({
           field: "phone",
@@ -161,7 +178,7 @@ export function projectOwnerProblems(
           message: `${label} has the same phone number as Owner ${first + 1}. Each owner needs their own.`,
         });
       } else {
-        phoneOwner.set(key, index);
+        phoneOwner.set(owner.phone, index);
       }
     }
   }
